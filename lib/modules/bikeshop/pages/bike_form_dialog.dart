@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'dart:typed_data';
 
 import '../config/brake_canonical_data.dart';
+import '../config/bottom_bracket_canonical_data.dart';
+import '../config/drivetrain_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import '../widgets/bike_diagram_illustration.dart';
@@ -13,18 +15,6 @@ import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
-
-const Map<String, String> _freehubTypeOptions = {
-  'shimano_hg': 'Shimano HG',
-  'microspline': 'Micro Spline',
-  'sram_xd': 'SRAM XD',
-  'campagnolo': 'Campagnolo',
-  'threaded_freewheel': 'Rueda libre roscada',
-  'bmx_driver': 'Driver BMX',
-  'fixed_threaded': 'Rosca fija / contratuerca',
-  'coaster_hub': 'Maza contrapedal',
-  'unknown': 'Desconocido / sin confirmar',
-};
 
 const Map<String, String> _suspensionLayoutOptions = {
   'rigid': 'Rigida',
@@ -38,16 +28,6 @@ const Map<String, String> _valveTypeOptions = {
   'schrader': 'Schrader',
   'dunlop': 'Dunlop',
   'other': 'Otra',
-  'unknown': 'Desconocido',
-};
-
-const Map<String, String> _bottomBracketFamilyOptions = {
-  'bsa_threaded': 'BSA roscado',
-  'pressfit': 'Pressfit',
-  'bb30_pf30': 'BB30 / PF30',
-  'mid': 'Mid / BMX',
-  'one_piece': 'One-piece',
-  'other': 'Otro',
   'unknown': 'Desconocido',
 };
 
@@ -949,6 +929,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   bool get _hasExplicitFreehubSelection =>
       _freehubType != null && _freehubType!.trim().isNotEmpty;
 
+  bool get _hasExplicitBottomBracketSelection =>
+      _bottomBracketFamily != null && _bottomBracketFamily!.trim().isNotEmpty;
+
   bool get _hasAnyDrivetrainTruth {
     return _currentDrivetrainBreakdown != null ||
         (_legacyDrivetrainConfig?.trim().isNotEmpty ?? false) ||
@@ -1052,7 +1035,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     };
 
     if (_currentDrivetrainBreakdown != null) {
-      return 'La configuración y las velocidades se derivan automáticamente desde platos x piñones para mantener compatibilidad real upstream.$rearDriverNote$explicitRearDriverNote';
+      return 'La configuración y las velocidades se derivan automáticamente desde platos x piñones para mantener compatibilidad real upstream. El pedalier se confirma ahora en su propio sistema para no perderlo dentro de una transmisión genérica.$rearDriverNote$explicitRearDriverNote';
     }
 
     final legacyParts = <String>[];
@@ -1065,10 +1048,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
 
     if (legacyParts.isNotEmpty) {
-      return 'El perfil heredado todavía guarda ${legacyParts.join(' · ')} sin desglose canónico. Confirma platos y piñones para que compatibilidad, diagnóstico y wizard no dependan de texto libre.$rearDriverNote$explicitRearDriverNote';
+      return 'El perfil heredado todavía guarda ${legacyParts.join(' · ')} sin desglose canónico. Confirma platos y piñones para que compatibilidad, diagnóstico y wizard no dependan de texto libre. El pedalier queda fuera de este bloque y se valida como unidad propia.$rearDriverNote$explicitRearDriverNote';
     }
 
-    return 'Confirma platos delanteros y piñones traseros. La multiplicación genera las velocidades totales y la configuración upstream.$rearDriverNote$explicitRearDriverNote';
+    return 'Confirma platos delanteros y piñones traseros. La multiplicación genera las velocidades totales y la configuración upstream. El pedalier se registra aparte como sistema de rodamientos propio.$rearDriverNote$explicitRearDriverNote';
   }
 
   String? _drivetrainKernelAttentionText() {
@@ -1162,7 +1145,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   bool _ensureTechnicalKernelReadyForSave() {
-    if (_currentStep < _technicalStepIndex && !_hasAnyDrivetrainTruth) {
+    if (!_hasAnyDrivetrainTruth) {
       _focusTechnicalStepWithMessage(
         'Antes de guardar, revisa la Ficha Técnica y confirma la base de transmisión. Si conoces platos y piñones, ingrésalos para derivar la configuración upstream.',
       );
@@ -1172,6 +1155,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     if (!_hasExplicitFreehubSelection) {
       _focusTechnicalStepWithMessage(
         'Antes de guardar, confirma el driver/freehub trasero. Si aún no lo sabes, selecciónalo como Desconocido en la Ficha Técnica.',
+      );
+      return false;
+    }
+
+    if (!_hasExplicitBottomBracketSelection) {
+      _focusTechnicalStepWithMessage(
+        'Antes de guardar, confirma la familia de pedalier / BB. Si todavía no la sabes, márcala explícitamente como Desconocido en la Ficha Técnica.',
       );
       return false;
     }
@@ -2447,13 +2437,37 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         return _technicalBrakeSystemStatus(isFront: true);
       case 'rear_brake':
         return _technicalBrakeSystemStatus(isFront: false);
+      case 'front_wheel':
+        final knownCount = [
+          _wheelSizeController.text.trim().isNotEmpty,
+          _parseNullableWholeNumberText(_frontHubSpacingController.text) !=
+              null,
+          _parseNullableIntText(_frontSpokeHolesController.text) != null,
+          _valveType != null && _valveType!.isNotEmpty,
+        ].where((value) => value).length;
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
       case 'drivetrain':
         final knownCount = [
           _effectiveDrivetrainConfig != null &&
               _effectiveDrivetrainConfig!.isNotEmpty,
           _effectiveDrivetrainSpeeds != null,
           _freehubType != null && _freehubType!.isNotEmpty,
-          _bottomBracketFamily != null && _bottomBracketFamily!.isNotEmpty,
+        ].where((value) => value).length;
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 3);
+      case 'bottom_bracket':
+        return _statusFromCompleteness(
+          knownCount:
+              (_bottomBracketFamily != null && _bottomBracketFamily!.isNotEmpty)
+                  ? 1
+                  : 0,
+          totalCount: 1,
+        );
+      case 'rear_wheel':
+        final knownCount = [
+          _wheelSizeController.text.trim().isNotEmpty,
+          _parseNullableWholeNumberText(_rearHubSpacingController.text) != null,
+          _parseNullableIntText(_rearSpokeHolesController.text) != null,
+          _valveType != null && _valveType!.isNotEmpty,
         ].where((value) => value).length;
         return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
       case 'wheels':
@@ -2481,8 +2495,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     const preferredOrder = <String>[
       'suspension',
       'front_brake',
+      'front_wheel',
       'drivetrain',
-      'wheels',
+      'bottom_bracket',
+      'rear_wheel',
       'rear_brake',
       'cockpit',
     ];
@@ -3059,7 +3075,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final freehubField = _buildCodeDropdown(
       value: _freehubType,
       label: _rearDriverFieldLabel,
-      options: _freehubTypeOptions,
+      options: kDrivetrainFreehubTypeOptions,
       icon: Icons.hub_outlined,
       onChanged: (value) {
         setState(() {
@@ -3072,7 +3088,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final bottomBracketField = _buildCodeDropdown(
       value: _bottomBracketFamily,
       label: 'Familia pedalier / BB',
-      options: _bottomBracketFamilyOptions,
+      options: kBottomBracketFamilyOptions,
       icon: Icons.settings_input_component_outlined,
       onChanged: (value) {
         setState(() {
@@ -3200,7 +3216,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'drivetrain' => _buildTechnicalKernelGroup(
           title: 'Transmisión',
           description:
-              'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero.',
+              'Núcleo de compatibilidad para servicio de drivetrain, repuestos y futuros wizards guiados. La configuración se deriva desde el desglose delantero/trasero y el pedalier ya no queda escondido aquí.',
           icon: Icons.settings_input_component_outlined,
           attentionText: _drivetrainKernelAttentionText(),
           fields: [
@@ -3209,15 +3225,54 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             drivetrainSpeedsField,
             drivetrainConfigField,
             freehubField,
-            bottomBracketField,
           ],
           minItemWidth: 220,
           footerText: _drivetrainKernelFooterText(),
         ),
-      'wheels' => _buildTechnicalKernelGroup(
-          title: 'Ruedas y mazas',
+      'front_wheel' => _buildTechnicalKernelGroup(
+          title: 'Rueda delantera',
           description:
-              'Datos base para compatibilidad de ruedas, armado, rayado, válvulas y ancho de mazas.',
+              'Unidad delantera de ruedas y mazas. Aquí viven el ancho de maza, el rayado y el mismo baseline compartido de aro/válvula que downstream reutiliza.',
+          icon: Icons.tire_repair_outlined,
+          fields: [
+            _buildWheelSizeField(),
+            frontHubSpacingField,
+            frontSpokeHolesField,
+            valveTypeField,
+          ],
+          minItemWidth: 220,
+          footerText:
+              'Aro y válvula siguen siendo verdad upstream compartida del wheelset, pero la maza y el rayado delantero ya no deben mezclarse con la unidad trasera.',
+        ),
+      'bottom_bracket' => _buildTechnicalKernelGroup(
+          title: 'Pedalier / BB',
+          description:
+              'Los rodamientos y el estándar del eje pedalier son una unidad propia del backbone. No deben perderse como un detalle secundario de transmisión.',
+          icon: Icons.hub_outlined,
+          fields: [bottomBracketField],
+          minItemWidth: 220,
+          footerText:
+              'Este sistema concentra la familia de pedalier para compatibilidad, diagnóstico y futuros servicios de rodamientos.',
+        ),
+      'rear_wheel' => _buildTechnicalKernelGroup(
+          title: 'Rueda trasera',
+          description:
+              'Unidad trasera de ruedas y mazas. Aquí viven el ancho de maza, el rayado y el mismo baseline compartido de aro/válvula que downstream reutiliza.',
+          icon: Icons.tire_repair_outlined,
+          fields: [
+            _buildWheelSizeField(),
+            rearHubSpacingField,
+            rearSpokeHolesField,
+            valveTypeField,
+          ],
+          minItemWidth: 220,
+          footerText:
+              'Aro y válvula siguen siendo verdad upstream compartida del wheelset, pero la maza y el rayado trasero ya no deben mezclarse con la unidad delantera.',
+        ),
+      'wheels' => _buildTechnicalKernelGroup(
+          title: 'Wheelset agregado',
+          description:
+              'Vista de compatibilidad heredada. Se mantiene solo como respaldo de lectura mientras el backbone migra a rueda delantera y rueda trasera como unidades explícitas.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
@@ -3229,13 +3284,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ],
           minItemWidth: 220,
           footerText:
-              'Este sistema concentra compatibilidad de aro, mazas, rayado y válvula. Luego productos y servicios deben reutilizar estas mismas claves.',
+              'No uses esta vista agregada como destino nuevo. La navegación real del backbone ahora distingue rueda delantera y rueda trasera.',
         ),
       'cockpit' => _buildTechnicalPlaceholderCard(
           theme,
-          title: 'Cockpit',
+          title: 'Cockpit / dirección',
           body:
-              'El shared bike map también navega este sistema aquí para mantener un backbone visual único, pero el kernel upstream todavía no define campos obligatorios para cockpit. Cuando headset, stem, handlebar o controles pasen a ser specs durables, este mismo panel será el lugar correcto para capturarlos.',
+              'Headset y dirección quedan dentro de cockpit como sistema de steering, no escondidos en notas libres. El shared bike map ya los reserva aquí, pero el kernel upstream todavía no define campos obligatorios para headset, stem, handlebar o controles. Cuando esos specs pasen a ser durables, este mismo panel será el lugar correcto para capturarlos.',
         ),
       _ => _buildTechnicalPlaceholderCard(
           theme,

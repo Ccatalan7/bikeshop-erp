@@ -198,20 +198,6 @@ class InventoryService extends ChangeNotifier {
 
   InventoryService(this._db, this._tenantService);
 
-  Map<String, dynamic> _sanitizeProductWritePayload(
-      Map<String, dynamic> payload) {
-    final sanitized = Map<String, dynamic>.from(payload);
-
-    // Remove view-derived and read-only fields that do not belong to products.
-    sanitized.remove('id');
-    sanitized.remove('is_partial');
-    sanitized.remove('full_sets_available');
-    sanitized.remove('set_components');
-    sanitized.remove('parent_set_info');
-
-    return sanitized;
-  }
-
   // Product operations
   Future<List<Product>> getProducts({
     String? searchTerm,
@@ -448,9 +434,7 @@ class InventoryService extends ChangeNotifier {
       }
 
       // Add tenant_id to product data
-      final productData = _sanitizeProductWritePayload(
-        _tenantService.addTenantId(product.toJson()),
-      );
+      final productData = _tenantService.addTenantId(product.toJson());
 
       // Generate embedding BEFORE insert
       try {
@@ -493,9 +477,7 @@ class InventoryService extends ChangeNotifier {
         throw Exception('ID de producto inválido');
       }
 
-      final productData = _sanitizeProductWritePayload(
-        updatedProduct.toJson(includeNulls: true),
-      );
+      final productData = updatedProduct.toJson(includeNulls: true);
 
       // Stock must change only through explicit stock-adjustment workflows.
       productData.remove('inventory_qty');

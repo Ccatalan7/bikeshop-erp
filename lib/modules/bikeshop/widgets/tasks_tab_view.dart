@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/bikeshop_models.dart';
+import '../services/bike_product_compatibility_service.dart';
 import '../services/smart_task_service.dart';
 import '../services/bikeshop_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/models/product_compatibility.dart';
 
 /// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
 ///
@@ -44,12 +46,16 @@ class _TasksTabViewState extends State<TasksTabView> {
   SmartTaskService? _taskService;
   BikeshopService? _bikeshopService;
   TenantService? _tenantService;
+  final _bikeProductCompatibilityService = BikeProductCompatibilityService();
   Map<String, List<MechanicJobTask>> _groupedTasks = {};
   List<MechanicJobItem> _items = [];
   TaskProgress? _progress;
   bool _isLoading = true;
   final Set<String> _collapsedItems = {}; // Track collapsed parent items
   String? _editingTaskId; // Track which task is being edited inline
+  Bike? _compatibilityBike;
+  BikeProfile? _compatibilityBikeProfile;
+  bool _compatibilityContextResolved = false;
 
   @override
   void initState() {
@@ -72,6 +78,10 @@ class _TasksTabViewState extends State<TasksTabView> {
       });
       // Also reload tasks/progress to be safe as they depend on items
       _loadTasks(onlyNonItems: true);
+    }
+
+    if (widget.jobId != oldWidget.jobId) {
+      _resetCompatibilityContext();
     }
   }
 
@@ -99,6 +109,115 @@ class _TasksTabViewState extends State<TasksTabView> {
   void _onTasksChanged() {
     // Don't reload on every change - only reload if we need to sync external changes
     // For checkbox toggles, we use optimistic updates instead
+  }
+
+  void _resetCompatibilityContext() {
+    _compatibilityBike = null;
+    _compatibilityBikeProfile = null;
+    _compatibilityContextResolved = false;
+  }
+
+  Object? get _compatibilityContextKey {
+    final bike = _compatibilityBike;
+    final profile = _compatibilityBikeProfile;
+    if (bike == null || profile == null) {
+      return null;
+    }
+
+    final technicalValues = profile.technicalValues;
+    return [
+      profile.bikeId,
+      profile.updatedAt.toIso8601String(),
+      bike.updatedAt.toIso8601String(),
+      bike.bikeType?.dbValue ?? '',
+      bike.wheelSize ?? '',
+      bike.frontHubSpacingMm?.toString() ?? '',
+      bike.rearHubSpacingMm?.toString() ?? '',
+      technicalValues['brakeType']?.toString() ?? '',
+      technicalValues['rimBrakeFamily']?.toString() ?? '',
+      technicalValues['frontRotorSizeMm']?.toString() ?? '',
+      technicalValues['rearRotorSizeMm']?.toString() ?? '',
+      technicalValues['drivetrainConfig']?.toString() ?? '',
+      technicalValues['drivetrainSpeeds']?.toString() ?? '',
+      technicalValues['freehubType']?.toString() ?? '',
+      technicalValues['frontSpokeHoles']?.toString() ?? '',
+      technicalValues['rearSpokeHoles']?.toString() ?? '',
+      technicalValues['valveType']?.toString() ?? '',
+      technicalValues['bottomBracketFamily']?.toString() ?? '',
+    ].join('|');
+  }
+
+  Future<void> _ensureCompatibilityContext({bool forceRefresh = false}) async {
+    if (_bikeshopService == null) {
+      return;
+    }
+    if (!forceRefresh && _compatibilityContextResolved) {
+      return;
+    }
+
+    _compatibilityContextResolved = true;
+
+    try {
+      final bikeshopService = _bikeshopService!;
+      final job = await bikeshopService.getJobById(widget.jobId);
+
+      Bike? bike;
+      String? bikeId = job?.bikeId;
+
+      if (bikeId == null || bikeId.isEmpty) {
+        final jobBikes = await bikeshopService.getJobBikes(widget.jobId);
+        final primaryJobBike = jobBikes.isNotEmpty ? jobBikes.first : null;
+        bikeId = primaryJobBike?.bikeId;
+        bike = primaryJobBike?.bike;
+      }
+
+      if (bikeId == null || bikeId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _compatibilityBike = null;
+            _compatibilityBikeProfile = null;
+          });
+        }
+        return;
+      }
+
+      bike ??= await bikeshopService.getBikeById(bikeId);
+      final profile = await bikeshopService.getBikeProfile(bikeId);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _compatibilityBike = bike;
+        _compatibilityBikeProfile = profile;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Failed to resolve task-tab compatibility context: $e');
+      if (mounted) {
+        setState(() {
+          _compatibilityBike = null;
+          _compatibilityBikeProfile = null;
+        });
+      }
+    }
+  }
+
+  Future<Map<String, ProductCompatibilityAssessment>>
+      _resolveCurrentBikeCompatibility(List<Product> products) async {
+    await _ensureCompatibilityContext();
+
+    final bike = _compatibilityBike;
+    final profile = _compatibilityBikeProfile;
+    if (bike == null || profile == null) {
+      return const {};
+    }
+
+    return _bikeProductCompatibilityService.buildAutocompleteAssessments(
+      bike: bike,
+      profile: profile,
+      products: products,
+    );
   }
 
   Future<void> _loadTasks({bool onlyNonItems = false}) async {
@@ -755,6 +874,8 @@ class _TasksTabViewState extends State<TasksTabView> {
       return;
     }
 
+    await _ensureCompatibilityContext();
+
     // Otherwise, show our own dialog
     await showDialog(
       context: context,
@@ -784,6 +905,10 @@ class _TasksTabViewState extends State<TasksTabView> {
             labelText: 'Product or Service',
             hintText: 'Buscar en el catálogo por nombre o SKU',
             autoFocus: true,
+            compatibilityContextKey: _compatibilityContextKey,
+            compatibilityResolver: _compatibilityContextKey == null
+                ? null
+                : _resolveCurrentBikeCompatibility,
           ),
         ),
         actions: [
@@ -1325,6 +1450,8 @@ class _TasksTabViewState extends State<TasksTabView> {
   }
 
   void _showEditProductDialog(MechanicJobItem item) async {
+    await _ensureCompatibilityContext();
+
     ProductSelection? selectedProduct = ProductSelection(
       isCatalogProduct: item.productId != null,
       product: null,
@@ -1351,6 +1478,10 @@ class _TasksTabViewState extends State<TasksTabView> {
                 hintText: 'Search or enter custom item',
                 autoFocus: true,
                 initialValue: item.productName,
+                compatibilityContextKey: _compatibilityContextKey,
+                compatibilityResolver: _compatibilityContextKey == null
+                    ? null
+                    : _resolveCurrentBikeCompatibility,
               ),
               const SizedBox(height: 16),
               TextField(

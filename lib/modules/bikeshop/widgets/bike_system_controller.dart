@@ -24,9 +24,10 @@ class BikeSystemControllerSpec {
 const List<BikeSystemControllerSpec> kBikeSystemControllerSpecs = [
   BikeSystemControllerSpec(
     systemKey: 'cockpit',
-    label: 'Cockpit',
+    label: 'Cockpit / dirección',
     icon: Icons.tune,
-    diagnosisSubtitle: 'Mandos, manillar y puesto de conduccion.',
+    diagnosisSubtitle: 'Headset, stem, manillar y controles.',
+    supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(
     systemKey: 'suspension',
@@ -43,16 +44,31 @@ const List<BikeSystemControllerSpec> kBikeSystemControllerSpecs = [
     supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(
-    systemKey: 'wheels',
-    label: 'Ruedas',
+    systemKey: 'front_wheel',
+    label: 'Rueda delantera',
     icon: Icons.trip_origin,
-    diagnosisSubtitle: 'Llantas, neumaticos y rodado.',
+    diagnosisSubtitle: 'Maza, aro, rayado y rodado delantero.',
+    supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(
     systemKey: 'drivetrain',
     label: 'Transmisión',
     icon: Icons.settings_input_component_outlined,
     diagnosisSubtitle: 'Cadena, cassette y tren motriz.',
+    supportsStructuredDiagnosis: true,
+  ),
+  BikeSystemControllerSpec(
+    systemKey: 'bottom_bracket',
+    label: 'Pedalier / BB',
+    icon: Icons.hub_outlined,
+    diagnosisSubtitle: 'Caja, rodamientos y soporte del eje pedalier.',
+    supportsStructuredDiagnosis: true,
+  ),
+  BikeSystemControllerSpec(
+    systemKey: 'rear_wheel',
+    label: 'Rueda trasera',
+    icon: Icons.trip_origin,
+    diagnosisSubtitle: 'Maza, aro, rayado y rodado trasero.',
     supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(
@@ -81,7 +97,9 @@ String bikeSystemControllerLabelFor(String systemKey) {
   const fallbackLabels = {
     'brakes': 'Frenos',
     'front_wheel': 'Rueda delantera',
+    'bottom_bracket': 'Pedalier / BB',
     'rear_wheel': 'Rueda trasera',
+    'cockpit': 'Cockpit / dirección',
     'general': 'General',
   };
   return bikeSystemControllerSpecFor(systemKey)?.label ??
@@ -148,6 +166,7 @@ typedef BikeSystemControllerOverlayBuilder = Widget? Function(
 /// ─────────────────────────────────────────────────────────────────────────
 class BikeSystemController extends StatefulWidget {
   final Bike? bike;
+  final BikeProfile? profile;
   final BikeDiagramVariant? variant;
   final List<BikeSystemControllerEntry> entries;
 
@@ -168,6 +187,7 @@ class BikeSystemController extends StatefulWidget {
   const BikeSystemController({
     super.key,
     required this.bike,
+    this.profile,
     required this.entries,
     required this.selectedSystemKey,
     required this.onSystemSelected,
@@ -266,7 +286,8 @@ class _BikeSystemControllerState extends State<BikeSystemController>
 
     // --- system detail view (exploded component image) ---
     // Only show when the user EXPLICITLY tapped a pin (not auto-resolved by parent).
-    final detailAsset = _kSystemDetailAssets[_explicitSystemKey];
+    final detailConfig = _kSystemDetailAssets[_explicitSystemKey];
+    final detailAssetPath = detailConfig?.resolveAssetPath(widget.bike, widget.profile);
     final detailLabel = _explicitSystemKey != null
         ? bikeSystemControllerLabelFor(_explicitSystemKey!)
         : '';
@@ -279,11 +300,11 @@ class _BikeSystemControllerState extends State<BikeSystemController>
         opacity: animation,
         child: child,
       ),
-      child: detailAsset != null
+      child: detailConfig != null && detailAssetPath != null
           ? _SystemDetailView(
               key: ValueKey('detail_$_explicitSystemKey'),
-              assetPath: detailAsset.assetPath,
-              flipX: detailAsset.flipX,
+              assetPath: detailAssetPath,
+              flipX: detailConfig.flipX,
               label: detailLabel,
               onBack: () {
                 setState(() => _explicitSystemKey = null);
@@ -443,9 +464,31 @@ class _BikeSystemControllerState extends State<BikeSystemController>
 // ---------------------------------------------------------------------------
 
 class _SystemDetailConfig {
-  final String assetPath;
+  final String? assetPath;
+  final String Function(Bike? bike, BikeProfile? profile)? assetPathResolver;
   final bool flipX;
-  const _SystemDetailConfig({required this.assetPath, this.flipX = false});
+
+  const _SystemDetailConfig({
+    this.assetPath,
+    this.assetPathResolver,
+    this.flipX = false,
+  }) : assert(assetPath != null || assetPathResolver != null,
+            'Must provide assetPath or assetPathResolver');
+
+  String resolveAssetPath(Bike? bike, BikeProfile? profile) {
+    if (assetPathResolver != null) {
+      return assetPathResolver!(bike, profile);
+    }
+    return assetPath!;
+  }
+}
+
+String _resolveBottomBracketAsset(Bike? bike, BikeProfile? profile) {
+  final family = profile?.technicalValues['bottomBracketFamily']?.toString();
+  if (family == 'pressfit' || family == 'bb30_pf30') {
+    return 'assets/images/bottom_bracket_hollowtech_exploded.png';
+  }
+  return 'assets/images/bottom_bracket_sealed_exploded.png';
 }
 
 const Map<String, _SystemDetailConfig> _kSystemDetailAssets = {
@@ -457,9 +500,15 @@ const Map<String, _SystemDetailConfig> _kSystemDetailAssets = {
       _SystemDetailConfig(assetPath: 'assets/images/rear_brake_exploded.png'),
   'front_brake': _SystemDetailConfig(
       assetPath: 'assets/images/rear_brake_exploded.png', flipX: true),
-  // Uncomment as images are ready:
-  // 'cockpit': _SystemDetailConfig(assetPath: 'assets/images/cockpit_exploded.png'),
-  // 'wheels':  _SystemDetailConfig(assetPath: 'assets/images/wheels_exploded.png'),
+  'front_wheel':
+      _SystemDetailConfig(assetPath: 'assets/images/front_wheel_exploded.png'),
+  'rear_wheel':
+      _SystemDetailConfig(assetPath: 'assets/images/rear_wheel_exploded.png'),
+  'cockpit':
+      _SystemDetailConfig(assetPath: 'assets/images/headset_exploded.png'),
+  'bottom_bracket': _SystemDetailConfig(
+    assetPathResolver: _resolveBottomBracketAsset,
+  ),
 };
 
 // ---------------------------------------------------------------------------

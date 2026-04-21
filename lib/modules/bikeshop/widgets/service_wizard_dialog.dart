@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../config/diagnosis_field_definitions.dart';
+import '../config/drivetrain_canonical_data.dart';
 import '../services/service_wizard_service.dart';
 import 'bikeshop_multi_select_picker_field.dart';
 
@@ -115,7 +115,9 @@ class _ServiceWizardDialog extends StatefulWidget {
 class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     with SingleTickerProviderStateMixin {
   final Map<String, dynamic> _answers = {};
+  final Set<String> _requiredQuestionErrors = <String>{};
   final _notesController = TextEditingController();
+  bool _hasAutoDerivedRearDerailleur = false;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -137,6 +139,8 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
         }
       }
     }
+
+    _syncDerivedDrivetrainAnswers();
   }
 
   @override
@@ -148,11 +152,20 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
 
   List<ServiceProfileQuestion> get _visibleQuestions {
     final questions = widget.profile?.questions ?? [];
+    final hiddenQuestionKeys = _effectiveHiddenQuestionKeys;
     return questions
         .where(
-          (q) => !q.isAdvanced && !widget.hiddenQuestionKeys.contains(q.key),
+          (q) => !q.isAdvanced && !hiddenQuestionKeys.contains(q.key),
         )
         .toList();
+  }
+
+  Set<String> get _effectiveHiddenQuestionKeys {
+    final hiddenQuestionKeys = <String>{...widget.hiddenQuestionKeys};
+    if (_shouldAutoHideRearOnlyDerailleur) {
+      hiddenQuestionKeys.add('derailleurs');
+    }
+    return hiddenQuestionKeys;
   }
 
   ServiceWizardQuestionOverride? _overrideFor(ServiceProfileQuestion q) {
@@ -167,16 +180,19 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     return _overrideFor(q)?.options ?? q.options;
   }
 
-  bool _isDiagnosisLinked(ServiceProfileQuestion q) {
-    return widget.diagnosisLinkedQuestionKeys.contains(q.key);
+  ServiceProfileQuestion? _questionByKey(String key) {
+    final questions =
+        widget.profile?.questions ?? const <ServiceProfileQuestion>[];
+    for (final question in questions) {
+      if (question.key == key) {
+        return question;
+      }
+    }
+    return null;
   }
 
-  bool _prefersDropdownInput(ServiceProfileQuestion q) {
-    return _overrideFor(q)?.preferDropdownInput == true ||
-        (_isDiagnosisLinked(q) &&
-            isDiagnosisSemanticFieldKey(q.key) &&
-            (q.questionType == 'single_select' ||
-                q.questionType == 'multi_select'));
+  bool _isDiagnosisLinked(ServiceProfileQuestion q) {
+    return widget.diagnosisLinkedQuestionKeys.contains(q.key);
   }
 
   String _resolveQuestionValueLabel(ServiceProfileQuestion q, String rawValue) {
@@ -218,7 +234,109 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     return parts.join(' · ');
   }
 
+  bool _questionHasAnswer(ServiceProfileQuestion q) {
+    final value = _answers[q.key];
+    if (value == null) {
+      return false;
+    }
+    if (value is bool) {
+      return true;
+    }
+    if (value is List) {
+      return value.isNotEmpty;
+    }
+    return value.toString().trim().isNotEmpty;
+  }
+
+  bool get _shouldAutoHideRearOnlyDerailleur {
+    if (widget.profile?.serviceFamily != 'drivetrain') {
+      return false;
+    }
+
+    final frontChainringCount = canonicalDrivetrainFrontChainringCountValue(
+      _answers['front_chainring_count']?.toString(),
+    );
+    if (frontChainringCount != '1') {
+      return false;
+    }
+
+    final derailleursQuestion = _questionByKey('derailleurs');
+    if (derailleursQuestion == null ||
+        derailleursQuestion.questionType != 'multi_select') {
+      return false;
+    }
+
+    final optionValues = _questionOptions(
+      derailleursQuestion,
+    ).map((option) => option.value).toSet();
+    return optionValues.contains('rear');
+  }
+
+  void _syncDerivedDrivetrainAnswers() {
+    if (_shouldAutoHideRearOnlyDerailleur) {
+      _answers['derailleurs'] = const ['rear'];
+      _requiredQuestionErrors.remove('derailleurs');
+      _hasAutoDerivedRearDerailleur = true;
+      return;
+    }
+
+    if (!_hasAutoDerivedRearDerailleur) {
+      return;
+    }
+
+    final currentValue = _answers['derailleurs'];
+    if (currentValue is List &&
+        currentValue.length == 1 &&
+        currentValue.first.toString() == 'rear') {
+      _answers.remove('derailleurs');
+    }
+    _hasAutoDerivedRearDerailleur = false;
+  }
+
+  void _updateAnswer(String key, dynamic value) {
+    setState(() {
+      _answers[key] = value;
+      _syncDerivedDrivetrainAnswers();
+      if (_requiredQuestionErrors.contains(key)) {
+        final normalized = value is String ? value.trim() : value;
+        final hasValue = normalized is bool
+            ? true
+            : normalized is List
+                ? normalized.isNotEmpty
+                : normalized != null && normalized.toString().isNotEmpty;
+        if (hasValue) {
+          _requiredQuestionErrors.remove(key);
+        }
+      }
+    });
+  }
+
+  bool _validateRequiredQuestions() {
+    final missingKeys = _visibleQuestions
+        .where((q) => q.isRequired && !_questionHasAnswer(q))
+        .map((q) => q.key)
+        .toSet();
+
+    if (missingKeys.isEmpty) {
+      if (_requiredQuestionErrors.isNotEmpty) {
+        setState(() => _requiredQuestionErrors.clear());
+      }
+      return true;
+    }
+
+    setState(() {
+      _requiredQuestionErrors
+        ..clear()
+        ..addAll(missingKeys);
+    });
+    return false;
+  }
+
   void _confirm() {
+    if (!_validateRequiredQuestions()) {
+      return;
+    }
+
     final answers = Map<String, dynamic>.from(_answers);
     if (_notesController.text.trim().isNotEmpty) {
       answers['_notes'] = _notesController.text.trim();
@@ -597,6 +715,16 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
           ],
           const SizedBox(height: 10),
           _buildQuestionInput(theme, q),
+          if (_requiredQuestionErrors.contains(q.key)) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Este campo es obligatorio.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -647,22 +775,13 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
   }
 
   Widget _buildQuestionInput(ThemeData theme, ServiceProfileQuestion q) {
-    if (_prefersDropdownInput(q)) {
-      switch (q.questionType) {
-        case 'single_select':
-          return _buildSingleSelectDropdownInput(theme, q);
-        case 'multi_select':
-          return _buildMultiSelectDropdownInput(theme, q);
-      }
-    }
-
     switch (q.questionType) {
       case 'boolean':
         return _buildBooleanInput(theme, q);
       case 'single_select':
-        return _buildSingleSelectInput(theme, q);
+        return _buildSingleSelectDropdownInput(theme, q);
       case 'multi_select':
-        return _buildMultiSelectInput(theme, q);
+        return _buildMultiSelectDropdownInput(theme, q);
       case 'number':
         return _buildNumberInput(theme, q);
       default:
@@ -681,7 +800,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
           (label: 'No', value: false),
         ])
           GestureDetector(
-            onTap: () => setState(() => _answers[q.key] = option.value),
+            onTap: () => _updateAnswer(q.key, option.value),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
@@ -724,58 +843,6 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     );
   }
 
-  Widget _buildSingleSelectInput(ThemeData theme, ServiceProfileQuestion q) {
-    final selected = _answers[q.key] as String?;
-    final options = _questionOptions(q);
-    if (options.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((opt) {
-        final isSelected = selected == opt.value;
-        return GestureDetector(
-          onTap: () => setState(() => _answers[q.key] = opt.value),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color:
-                    isSelected ? theme.colorScheme.primary : theme.dividerColor,
-                width: isSelected ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isSelected) ...[
-                  Icon(Icons.check,
-                      size: 14, color: theme.colorScheme.onPrimary),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  opt.label,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildSingleSelectDropdownInput(
     ThemeData theme,
     ServiceProfileQuestion q,
@@ -791,44 +858,8 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
       value: selected,
       hintText: 'Selecciona una opción',
       onChanged: (value) {
-        setState(() => _answers[q.key] = value);
+        _updateAnswer(q.key, value);
       },
-    );
-  }
-
-  Widget _buildMultiSelectInput(ThemeData theme, ServiceProfileQuestion q) {
-    final selected = (_answers[q.key] as List?)?.cast<String>() ?? <String>[];
-    final options = _questionOptions(q);
-    if (options.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((opt) {
-        final isSelected = selected.contains(opt.value);
-        return FilterChip(
-          label: Text(opt.label),
-          selected: isSelected,
-          onSelected: (val) {
-            setState(() {
-              final current =
-                  List<String>.from((_answers[q.key] as List?) ?? []);
-              if (val) {
-                current.add(opt.value);
-              } else {
-                current.remove(opt.value);
-              }
-              _answers[q.key] = current;
-            });
-          },
-          selectedColor: theme.colorScheme.primaryContainer,
-          checkmarkColor: theme.colorScheme.primary,
-          side: BorderSide(
-            color: isSelected ? theme.colorScheme.primary : theme.dividerColor,
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -843,7 +874,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
       selectedValues: selected,
       dialogTitle: _questionLabel(q),
       onChanged: (updatedValues) {
-        setState(() => _answers[q.key] = updatedValues);
+        _updateAnswer(q.key, updatedValues);
       },
     );
   }
@@ -864,7 +895,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
       onChanged: (v) {
-        setState(() => _answers[q.key] = double.tryParse(v) ?? v);
+        _updateAnswer(q.key, double.tryParse(v) ?? v);
       },
     );
   }
@@ -880,7 +911,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
-      onChanged: (v) => setState(() => _answers[q.key] = v),
+      onChanged: (v) => _updateAnswer(q.key, v),
     );
   }
 

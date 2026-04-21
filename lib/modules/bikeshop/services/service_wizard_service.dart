@@ -308,6 +308,30 @@ class ServiceWizardService {
         continue;
       }
 
+      if (question.key == 'front_chainring_count' ||
+          question.key == 'rear_cog_count' ||
+          question.key == 'freehub_type') {
+        result.add(
+          question.copyWith(
+            label:
+                resolveDrivetrainQuestionLabel(question.key) ?? question.label,
+            options: switch (question.key) {
+              'front_chainring_count' => _optionsFromMap(
+                  kDrivetrainFrontChainringCountOptions,
+                ),
+              'rear_cog_count' => _optionsFromMap(
+                  kDrivetrainRearCogCountOptions,
+                ),
+              'freehub_type' => _optionsFromMap(
+                  kDrivetrainFreehubTypeOptions,
+                ),
+              _ => question.options,
+            },
+          ),
+        );
+        continue;
+      }
+
       result.add(question);
     }
 

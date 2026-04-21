@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_compatibility.dart';
 import 'product_autocomplete_field.dart';
 
 /// Universal smart product field widget that provides consistent behavior across all modules.
@@ -24,6 +25,13 @@ class SmartProductField extends StatefulWidget {
 
   /// Whether to show cost (purchases) or price (sales)
   final bool showCost;
+
+  /// Optional bike-aware compatibility resolver used by workshop flows.
+  final Future<Map<String, ProductCompatibilityAssessment>> Function(
+      List<Product> products)? compatibilityResolver;
+
+  /// Cache-busting key for compatibility state when the selected bike changes.
+  final Object? compatibilityContextKey;
 
   /// Whether to allow ad-hoc/custom items
   final bool allowCustomItems;
@@ -53,11 +61,16 @@ class SmartProductField extends StatefulWidget {
   final TextEditingController? productNameController;
   final TextEditingController? descriptionController;
 
+  /// Optional compact control shown in the selected-product header row.
+  final Widget? selectedHeaderTrailing;
+
   const SmartProductField({
     super.key,
     required this.onProductChanged,
     this.initialData,
     this.showCost = false,
+    this.compatibilityResolver,
+    this.compatibilityContextKey,
     this.allowCustomItems = true,
     this.enabled = true,
     this.onAutoAddLine,
@@ -69,6 +82,7 @@ class SmartProductField extends StatefulWidget {
     this.focusNode,
     this.productNameController,
     this.descriptionController,
+    this.selectedHeaderTrailing,
   });
 
   @override
@@ -260,7 +274,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: theme.colorScheme.outline.withValues(alpha: 0.15),
@@ -269,23 +283,27 @@ class _SmartProductFieldState extends State<SmartProductField> {
           child: _product?.imageUrl != null && _product!.imageUrl!.isNotEmpty
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image.network(
-                    _product!.imageUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.inventory_2_outlined,
-                        size: 20,
-                        color:
-                            theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                      );
-                    },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Image.network(
+                      _product!.imageUrl!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.inventory_2_outlined,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.3),
+                        );
+                      },
+                    ),
                   ),
                 )
               : Icon(
                   Icons.inventory_2_outlined,
                   size: 20,
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                  color:
+                      theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
                 ),
         ),
         const SizedBox(width: 10),
@@ -341,36 +359,38 @@ class _SmartProductFieldState extends State<SmartProductField> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color:
-                    theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: theme.colorScheme.outline.withValues(alpha: 0.15),
                 ),
               ),
-              child: _product?.imageUrl != null &&
-                      _product!.imageUrl!.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.network(
-                        _product!.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.inventory_2_outlined,
-                            size: 24,
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.3),
-                          );
-                        },
-                      ),
-                    )
-                  : Icon(
-                      Icons.inventory_2_outlined,
-                      size: 24,
-                      color:
-                          theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                    ),
+              child:
+                  _product?.imageUrl != null && _product!.imageUrl!.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Image.network(
+                              _product!.imageUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 24,
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.3),
+                                );
+                              },
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Icons.inventory_2_outlined,
+                          size: 24,
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.3),
+                        ),
             ),
             const SizedBox(width: 12),
             // Product details column
@@ -392,6 +412,19 @@ class _SmartProductFieldState extends State<SmartProductField> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (widget.selectedHeaderTrailing != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 190),
+                              child: widget.selectedHeaderTrailing!,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 4),
                       // 3-dot menu button (only for catalog products)
                       if (_product != null &&
@@ -496,7 +529,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
             decoration: InputDecoration(
               hintText: 'Agregue una descripción a su artículo',
               hintStyle: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                color:
+                    theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                 fontSize: 13,
               ),
               border: InputBorder.none,
@@ -538,6 +572,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
       labelText: null,
       hintText: widget.hintText,
       showCost: widget.showCost,
+      compatibilityResolver: widget.compatibilityResolver,
+      compatibilityContextKey: widget.compatibilityContextKey,
       onProductSelected: _selectProduct,
     );
   }

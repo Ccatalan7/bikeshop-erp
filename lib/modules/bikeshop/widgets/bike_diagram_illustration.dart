@@ -160,12 +160,24 @@ const Map<String, BikeDiagramPinPlacement> _fullSuspensionPlacements = {
     position: Offset(0.81, 0.55),
     labelRight: true,
   ),
+  'front_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.82, 0.80),
+    labelRight: true,
+  ),
   'wheels': BikeDiagramPinPlacement(
     position: Offset(0.73, 0.68),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
     position: Offset(0.39, 0.56),
+    labelRight: false,
+  ),
+  'bottom_bracket': BikeDiagramPinPlacement(
+    position: Offset(0.56, 0.70),
+    labelRight: true,
+  ),
+  'rear_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.18, 0.77),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
@@ -187,12 +199,24 @@ const Map<String, BikeDiagramPinPlacement> _hardtailPlacements = {
     position: Offset(0.79, 0.58),
     labelRight: true,
   ),
+  'front_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.81, 0.81),
+    labelRight: true,
+  ),
   'wheels': BikeDiagramPinPlacement(
     position: Offset(0.71, 0.72),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
     position: Offset(0.47, 0.57),
+    labelRight: false,
+  ),
+  'bottom_bracket': BikeDiagramPinPlacement(
+    position: Offset(0.57, 0.70),
+    labelRight: true,
+  ),
+  'rear_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.18, 0.79),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
@@ -214,12 +238,24 @@ const Map<String, BikeDiagramPinPlacement> _roadPlacements = {
     position: Offset(0.80, 0.55),
     labelRight: true,
   ),
+  'front_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.84, 0.81),
+    labelRight: true,
+  ),
   'wheels': BikeDiagramPinPlacement(
     position: Offset(0.80, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
     position: Offset(0.40, 0.70),
+    labelRight: false,
+  ),
+  'bottom_bracket': BikeDiagramPinPlacement(
+    position: Offset(0.52, 0.78),
+    labelRight: true,
+  ),
+  'rear_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.16, 0.81),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
@@ -241,12 +277,24 @@ const Map<String, BikeDiagramPinPlacement> _commuterPlacements = {
     position: Offset(0.80, 0.60),
     labelRight: true,
   ),
+  'front_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.84, 0.82),
+    labelRight: true,
+  ),
   'wheels': BikeDiagramPinPlacement(
     position: Offset(0.80, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
     position: Offset(0.40, 0.70),
+    labelRight: false,
+  ),
+  'bottom_bracket': BikeDiagramPinPlacement(
+    position: Offset(0.52, 0.79),
+    labelRight: true,
+  ),
+  'rear_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.18, 0.82),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(
@@ -268,12 +316,24 @@ const Map<String, BikeDiagramPinPlacement> _bmxPlacements = {
     position: Offset(0.80, 0.60),
     labelRight: true,
   ),
+  'front_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.81, 0.79),
+    labelRight: true,
+  ),
   'wheels': BikeDiagramPinPlacement(
     position: Offset(0.75, 0.75),
     labelRight: true,
   ),
   'drivetrain': BikeDiagramPinPlacement(
     position: Offset(0.45, 0.70),
+    labelRight: false,
+  ),
+  'bottom_bracket': BikeDiagramPinPlacement(
+    position: Offset(0.54, 0.77),
+    labelRight: true,
+  ),
+  'rear_wheel': BikeDiagramPinPlacement(
+    position: Offset(0.18, 0.79),
     labelRight: false,
   ),
   'rear_brake': BikeDiagramPinPlacement(

@@ -25,6 +25,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../config/brake_canonical_data.dart';
+import '../config/bottom_bracket_canonical_data.dart';
 import '../config/diagnosis_field_definitions.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../services/bike_product_compatibility_service.dart';
@@ -307,51 +308,48 @@ class _DiagnosisComponentSelectorStripState
                         borderRadius: BorderRadius.circular(16),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          width: 130,
+                          width: 140,
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? theme.colorScheme.primaryContainer
-                                    .withValues(alpha: 0.15)
-                                : theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(16),
+                                ? theme.colorScheme.surface
+                                : theme.colorScheme.surfaceContainerLowest,
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: isSelected
                                   ? theme.colorScheme.primary
-                                  : theme.colorScheme.outlineVariant
-                                      .withValues(alpha: 0.6),
+                                  : theme.dividerColor.withValues(alpha: 0.1),
                               width: isSelected ? 2 : 1,
                             ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: theme.colorScheme.primary
-                                          .withValues(alpha: 0.1),
-                                      blurRadius: 10,
-                                      spreadRadius: 0,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : [],
+                            boxShadow: [
+                              BoxShadow(
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                        .withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.02),
+                                blurRadius: isSelected ? 12 : 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                height: 100,
+                                height: 90,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  color:
-                                      theme.colorScheme.surfaceContainerLowest,
+                                  color: theme.colorScheme.surfaceContainerLow
+                                      .withValues(alpha: 0.5),
                                   borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(14),
+                                    top: Radius.circular(18),
                                   ),
                                 ),
                                 child: ClipRRect(
                                   borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(14),
+                                    top: Radius.circular(18),
                                   ),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(8),
+                                    padding: const EdgeInsets.all(12),
                                     child: Image.asset(
                                       'assets/images/${spec.componentKey}_icon.png',
                                       fit: BoxFit.contain,
@@ -361,14 +359,14 @@ class _DiagnosisComponentSelectorStripState
                                           spec.icon,
                                           color:
                                               theme.colorScheme.outlineVariant,
-                                          size: 36,
+                                          size: 32,
                                         );
                                       },
                                     ),
                                   ),
                                 ),
                               ),
-                              const Divider(height: 1, thickness: 1),
+                              // Removed divider for a cleaner look
                               Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: Column(
@@ -393,20 +391,21 @@ class _DiagnosisComponentSelectorStripState
                                     const SizedBox(height: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
+                                        horizontal: 8,
+                                        vertical: 3,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: tint.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(4),
+                                        color: tint.withValues(alpha: 0.85),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         status.displayName,
-                                        style:
-                                            theme.textTheme.bodySmall?.copyWith(
-                                          color: tint,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: Colors.white,
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.2,
                                         ),
                                       ),
                                     ),
@@ -924,11 +923,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       debugPrint('✅ Tax treatment loaded: $loadedTaxTreatment');
 
       final Map<String, Product?> productCache = {
-        for (final product in _products) product.id: product,
+        for (final product in [..._products, ..._serviceProducts])
+          product.id: product,
       };
 
+      String normalizeCatalogText(String? rawValue) {
+        return (rawValue ?? '')
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'\s+'), ' ');
+      }
+
+      String? catalogProductIdForItem(MechanicJobItem item) {
+        final directProductId = item.productId;
+        if (directProductId != null && directProductId.isNotEmpty) {
+          return directProductId;
+        }
+
+        final legacyServiceProductId = item.serviceProductId;
+        if (legacyServiceProductId != null &&
+            legacyServiceProductId.isNotEmpty) {
+          return legacyServiceProductId;
+        }
+
+        return null;
+      }
+
       final missingProductIds = allItems
-          .map((item) => item.productId)
+          .map(catalogProductIdForItem)
           .whereType<String>()
           .where((id) => !productCache.containsKey(id))
           .toSet()
@@ -953,30 +975,82 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Helper to find/create product for an item
       Future<Product?> getProductForItem(MechanicJobItem item) async {
-        if (item.productId == null) return null;
+        final catalogProductId = catalogProductIdForItem(item);
+        if (catalogProductId != null) {
+          final cached = productCache[catalogProductId];
+          if (cached != null) {
+            return cached;
+          }
 
-        final cached = productCache[item.productId!];
-        if (cached != null) {
-          return cached;
+          final fallbackProductType =
+              item.itemType == 'service' || item.serviceProductId != null
+                  ? ProductType.service
+                  : ProductType.product;
+
+          return Product(
+            id: catalogProductId,
+            name: item.productName,
+            sku: item.productSku ?? 'N/A',
+            price: item.unitPrice,
+            cost: 0,
+            stockQuantity: 0,
+            category: ProductCategory.other,
+            productType: fallbackProductType,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
         }
 
-        final fallbackProductType =
-            item.itemType == 'service' || item.serviceProductId != null
-                ? ProductType.service
-                : ProductType.product;
+        final normalizedSku = normalizeCatalogText(item.productSku);
+        if (normalizedSku.isNotEmpty) {
+          final skuMatches = productCache.values
+              .whereType<Product>()
+              .where(
+                (product) => normalizeCatalogText(product.sku) == normalizedSku,
+              )
+              .toList();
+          if (skuMatches.length == 1) {
+            return skuMatches.first;
+          }
+        }
 
-        return Product(
-          id: item.productId!,
-          name: item.productName,
-          sku: item.productSku ?? 'N/A',
-          price: item.unitPrice,
-          cost: 0,
-          stockQuantity: 0,
-          category: ProductCategory.other,
-          productType: fallbackProductType,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
+        final normalizedName = normalizeCatalogText(item.productName);
+        if (normalizedName.isEmpty) {
+          return null;
+        }
+
+        final serviceLikeItem =
+            item.itemType == 'service' || item.serviceProductId != null;
+        final candidatePool = serviceLikeItem
+            ? (_serviceProducts.isNotEmpty
+                ? _serviceProducts
+                : productCache.values.whereType<Product>().toList())
+            : productCache.values.whereType<Product>().toList();
+
+        final exactNameMatches = candidatePool
+            .where(
+              (product) => normalizeCatalogText(product.name) == normalizedName,
+            )
+            .toList();
+
+        if (exactNameMatches.length == 1) {
+          return exactNameMatches.first;
+        }
+
+        if (exactNameMatches.length > 1) {
+          const priceTolerance = 0.01;
+          final exactPriceMatches = exactNameMatches
+              .where(
+                (product) =>
+                    (product.price - item.unitPrice).abs() <= priceTolerance,
+              )
+              .toList();
+          if (exactPriceMatches.length == 1) {
+            return exactPriceMatches.first;
+          }
+        }
+
+        return null;
       }
 
       // Build bike tabs from job bikes data
@@ -1035,7 +1109,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               id: item.id,
               product: product,
               name: item.productName,
-              isCatalogProduct: item.productId != null,
+              isCatalogProduct: product != null ||
+                  item.productId != null ||
+                  item.serviceProductId != null,
               isServiceItem: item.itemType == 'service' ||
                   item.serviceProductId != null ||
                   product?.isService == true,
@@ -1074,7 +1150,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             id: item.id,
             product: product,
             name: item.productName,
-            isCatalogProduct: item.productId != null,
+            isCatalogProduct: product != null ||
+                item.productId != null ||
+                item.serviceProductId != null,
             isServiceItem: item.itemType == 'service' ||
                 item.serviceProductId != null ||
                 product?.isService == true,
@@ -1119,7 +1197,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               id: item.id,
               product: product,
               name: item.productName,
-              isCatalogProduct: item.productId != null,
+              isCatalogProduct: product != null ||
+                  item.productId != null ||
+                  item.serviceProductId != null,
               isServiceItem: item.itemType == 'service' ||
                   item.serviceProductId != null ||
                   product?.isService == true,
@@ -1156,7 +1236,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               id: item.id,
               product: product,
               name: item.productName,
-              isCatalogProduct: item.productId != null,
+              isCatalogProduct: product != null ||
+                  item.productId != null ||
+                  item.serviceProductId != null,
               isServiceItem: item.itemType == 'service' ||
                   item.serviceProductId != null ||
                   product?.isService == true,
@@ -1499,6 +1581,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final profile = await bikeshopService.getBikeProfile(bike!.id!);
       final effectiveProfile =
           _pendingBikeProfileOverrides[bike.id!] ?? profile;
+      final tabForBike = _bikeTabForBike(bike);
+      final hydratedPartItems = tabForBike == null
+          ? null
+          : await _hydrateDefaultServiceLocationsForTab(
+              tabForBike,
+              effectiveProfile,
+            );
 
       if (!mounted || _selectedBike?.id != bike.id) {
         return;
@@ -1506,6 +1595,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       setState(() {
         _selectedBikeProfile = effectiveProfile;
+        if (tabForBike != null && hydratedPartItems != null) {
+          tabForBike.partItems
+            ..clear()
+            ..addAll(hydratedPartItems);
+        }
       });
     } catch (e) {
       debugPrint('⚠️ Error loading selected bike profile: $e');
@@ -1829,6 +1923,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   Future<void> _addCatalogPart(Product product) async {
     if (!mounted) return;
+    final wizardProfile = await _loadServiceWizardProfileForProduct(
+      product,
+      isServiceItem: product.isService,
+    );
+    final defaultLocation = _defaultServiceLocationForProfile(
+      wizardProfile,
+      bikeProfile: _bikeProfileForCurrentTab(),
+    );
+
+    if (!mounted) return;
+
     setState(() {
       _currentPartItems.add(_JobPartItem(
         product: product,
@@ -1837,7 +1942,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         isServiceItem: product.isService,
         quantity: 1,
         unitPrice: product.price,
+        location: defaultLocation,
         notes: null,
+        wizardProfile: wizardProfile,
       ));
       _partAutocompleteKey++; // Reset autocomplete field
     });
@@ -3912,6 +4019,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return family == 'brake' || family == 'brakes';
   }
 
+  bool _isBottomBracketServiceFamily(String? family) {
+    return family == 'bottom_bracket';
+  }
+
   BikeProfile? _pendingBikeProfileForBike(Bike? bike) {
     final bikeId = bike?.id;
     if (bikeId == null || bikeId.isEmpty) {
@@ -3935,6 +4046,122 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _selectedBike?.id == currentTab.bike?.id
         ? _selectedBikeProfile
         : null;
+  }
+
+  _BikeTabData? _bikeTabForBike(Bike? bike) {
+    final bikeId = bike?.id;
+    if (bikeId == null || bikeId.isEmpty) {
+      return null;
+    }
+
+    for (final tab in _bikeTabs) {
+      if (!tab.isGeneralTab && tab.bike?.id == bikeId) {
+        return tab;
+      }
+    }
+
+    return null;
+  }
+
+  bool _bikeHasRearOnlyDrivetrain(BikeProfile? bikeProfile) {
+    final drivetrainConfig = bikeProfile?.technicalValues['drivetrainConfig']
+        ?.toString()
+        .trim()
+        .toLowerCase();
+    return drivetrainConfig != null && drivetrainConfig.startsWith('1x');
+  }
+
+  Future<ServiceWizardProfile?> _loadServiceWizardProfileForProduct(
+    Product? product, {
+    required bool isServiceItem,
+  }) async {
+    if (!isServiceItem || product?.id == null) {
+      return null;
+    }
+
+    final profile = await _serviceWizardService
+        .getProfileForProduct(product!.id)
+        .catchError((_) => null);
+    return ServiceWizardService.normalizeProfile(profile);
+  }
+
+  BikeMemoryLocation _defaultServiceLocationForProfile(
+    ServiceWizardProfile? serviceProfile, {
+    required BikeProfile? bikeProfile,
+    BikeMemoryLocation currentLocation = BikeMemoryLocation.none,
+  }) {
+    if (currentLocation != BikeMemoryLocation.none) {
+      return currentLocation;
+    }
+
+    if (serviceProfile?.serviceFamily != 'drivetrain') {
+      return currentLocation;
+    }
+
+    return _bikeHasRearOnlyDrivetrain(bikeProfile)
+        ? BikeMemoryLocation.rear
+        : currentLocation;
+  }
+
+  Future<List<_JobPartItem>?> _hydrateDefaultServiceLocationsForTab(
+    _BikeTabData tab,
+    BikeProfile? bikeProfile,
+  ) async {
+    if (!_bikeHasRearOnlyDrivetrain(bikeProfile)) {
+      return null;
+    }
+
+    var didChange = false;
+    final hydratedItems = <_JobPartItem>[];
+
+    for (final item in tab.partItems) {
+      ServiceWizardProfile? wizardProfile =
+          ServiceWizardService.normalizeProfile(item.wizardProfile);
+
+      if (wizardProfile == null && item.product != null) {
+        wizardProfile = await _loadServiceWizardProfileForProduct(
+          item.product,
+          isServiceItem: item.isServiceItem,
+        );
+      }
+
+      final defaultLocation = _defaultServiceLocationForProfile(
+        wizardProfile,
+        bikeProfile: bikeProfile,
+        currentLocation: item.location,
+      );
+
+      if (wizardProfile != item.wizardProfile ||
+          defaultLocation != item.location) {
+        didChange = true;
+        hydratedItems.add(
+          item.copyWith(
+            wizardProfile: wizardProfile,
+            location: defaultLocation,
+          ),
+        );
+        continue;
+      }
+
+      hydratedItems.add(item);
+    }
+
+    return didChange ? hydratedItems : null;
+  }
+
+  Set<BikeMemoryLocation> _availableServiceLocationsForItem(_JobPartItem item) {
+    final wizardProfile =
+        ServiceWizardService.normalizeProfile(item.wizardProfile);
+    if (wizardProfile?.serviceFamily == 'drivetrain' &&
+        _bikeHasRearOnlyDrivetrain(_bikeProfileForCurrentTab())) {
+      return const {BikeMemoryLocation.rear};
+    }
+
+    return const {
+      BikeMemoryLocation.none,
+      BikeMemoryLocation.front,
+      BikeMemoryLocation.rear,
+    };
   }
 
   String? _selectedRimBrakeFamilyFromWizardAnswers(
@@ -3963,6 +4190,104 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return candidate;
   }
 
+  String? _selectedBottomBracketFamilyFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (!_isBottomBracketServiceFamily(serviceProfile?.serviceFamily) ||
+        bikeProfile == null) {
+      return null;
+    }
+
+    final technicalValues = bikeProfile.technicalValues;
+    final technicalConfirmed = bikeProfile.technicalConfirmed;
+    final currentFamily = technicalValues['bottomBracketFamily']?.toString();
+    if (isKnownBottomBracketFamily(currentFamily) &&
+        technicalConfirmed['bottomBracketFamily'] == true) {
+      return null;
+    }
+
+    final candidate = answers['bottom_bracket_family']?.toString();
+    if (candidate == null ||
+        !kBottomBracketFamilyOptions.containsKey(candidate) ||
+        candidate == 'unknown') {
+      return null;
+    }
+
+    return candidate;
+  }
+
+  String? _selectedDrivetrainConfigFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (serviceProfile?.serviceFamily != 'drivetrain' || bikeProfile == null) {
+      return null;
+    }
+
+    final derivedConfig = drivetrainConfigFromCounts(
+      answers['front_chainring_count'],
+      answers['rear_cog_count'],
+    );
+    if (derivedConfig == null) {
+      return null;
+    }
+
+    final currentConfig =
+        bikeProfile.technicalValues['drivetrainConfig']?.toString();
+    final confirmed =
+        bikeProfile.technicalConfirmed['drivetrainConfig'] == true &&
+            bikeProfile.technicalConfirmed['drivetrainSpeeds'] == true;
+    if (currentConfig == derivedConfig && confirmed) {
+      return null;
+    }
+
+    return derivedConfig;
+  }
+
+  int? _selectedDrivetrainSpeedsFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (serviceProfile?.serviceFamily != 'drivetrain') {
+      return null;
+    }
+
+    return drivetrainSpeedsFromCounts(
+      answers['front_chainring_count'],
+      answers['rear_cog_count'],
+    );
+  }
+
+  String? _selectedDrivetrainFreehubTypeFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (serviceProfile?.serviceFamily != 'drivetrain' || bikeProfile == null) {
+      return null;
+    }
+
+    final candidate = canonicalDrivetrainFreehubTypeValue(
+      answers['freehub_type']?.toString(),
+    );
+    if (candidate == null) {
+      return null;
+    }
+
+    final currentValue = canonicalDrivetrainFreehubTypeValue(
+      bikeProfile.technicalValues['freehubType']?.toString(),
+    );
+    final confirmed = bikeProfile.technicalConfirmed['freehubType'] == true;
+    if (currentValue == candidate && confirmed) {
+      return null;
+    }
+
+    return candidate;
+  }
+
   BikeProfile? _buildPromotedBikeProfileFromServiceWizard({
     required ServiceWizardProfile? serviceProfile,
     required Map<String, dynamic> answers,
@@ -3983,7 +4308,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       currentProfile,
       answers,
     );
-    if (rimBrakeFamily == null) {
+    final bottomBracketFamily = _selectedBottomBracketFamilyFromWizardAnswers(
+      serviceProfile,
+      currentProfile,
+      answers,
+    );
+    final drivetrainConfig = _selectedDrivetrainConfigFromWizardAnswers(
+      serviceProfile,
+      currentProfile,
+      answers,
+    );
+    final drivetrainSpeeds = _selectedDrivetrainSpeedsFromWizardAnswers(
+      serviceProfile,
+      answers,
+    );
+    final drivetrainFreehubType =
+        _selectedDrivetrainFreehubTypeFromWizardAnswers(
+      serviceProfile,
+      currentProfile,
+      answers,
+    );
+    if (rimBrakeFamily == null &&
+        bottomBracketFamily == null &&
+        drivetrainConfig == null &&
+        drivetrainFreehubType == null) {
       return null;
     }
 
@@ -3994,20 +4342,67 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final technicalConfirmed =
         Map<String, dynamic>.from(currentProfile.technicalConfirmed);
 
-    if (technicalValues['rimBrakeFamily']?.toString() == rimBrakeFamily &&
-        technicalConfirmed['rimBrakeFamily'] == true) {
-      return null;
+    var didChange = false;
+
+    if (rimBrakeFamily != null) {
+      if (technicalValues['rimBrakeFamily']?.toString() != rimBrakeFamily ||
+          technicalConfirmed['rimBrakeFamily'] != true ||
+          technicalValues['brakeType']?.toString() != 'rim' ||
+          technicalConfirmed['brakeType'] != true) {
+        technicalValues['brakeType'] = 'rim';
+        technicalValues['rimBrakeFamily'] = rimBrakeFamily;
+        technicalSources['brakeType'] = _normalizeNullableText(
+              technicalSources['brakeType']?.toString() ?? '',
+            ) ??
+            'mechanic';
+        technicalConfirmed['brakeType'] = true;
+        technicalSources['rimBrakeFamily'] = 'mechanic';
+        technicalConfirmed['rimBrakeFamily'] = true;
+        didChange = true;
+      }
     }
 
-    technicalValues['brakeType'] = 'rim';
-    technicalValues['rimBrakeFamily'] = rimBrakeFamily;
-    technicalSources['brakeType'] = _normalizeNullableText(
-          technicalSources['brakeType']?.toString() ?? '',
-        ) ??
-        'mechanic';
-    technicalConfirmed['brakeType'] = true;
-    technicalSources['rimBrakeFamily'] = 'mechanic';
-    technicalConfirmed['rimBrakeFamily'] = true;
+    if (bottomBracketFamily != null) {
+      if (technicalValues['bottomBracketFamily']?.toString() !=
+              bottomBracketFamily ||
+          technicalConfirmed['bottomBracketFamily'] != true) {
+        technicalValues['bottomBracketFamily'] = bottomBracketFamily;
+        technicalSources['bottomBracketFamily'] = 'mechanic';
+        technicalConfirmed['bottomBracketFamily'] = true;
+        didChange = true;
+      }
+    }
+
+    if (drivetrainConfig != null) {
+      if (technicalValues['drivetrainConfig']?.toString() != drivetrainConfig ||
+          technicalValues['drivetrainSpeeds'] != drivetrainSpeeds ||
+          technicalConfirmed['drivetrainConfig'] != true ||
+          technicalConfirmed['drivetrainSpeeds'] != true) {
+        technicalValues['drivetrainConfig'] = drivetrainConfig;
+        if (drivetrainSpeeds != null) {
+          technicalValues['drivetrainSpeeds'] = drivetrainSpeeds;
+        }
+        technicalSources['drivetrainConfig'] = 'mechanic';
+        technicalConfirmed['drivetrainConfig'] = true;
+        technicalSources['drivetrainSpeeds'] = 'mechanic';
+        technicalConfirmed['drivetrainSpeeds'] = true;
+        didChange = true;
+      }
+    }
+
+    if (drivetrainFreehubType != null) {
+      if (technicalValues['freehubType']?.toString() != drivetrainFreehubType ||
+          technicalConfirmed['freehubType'] != true) {
+        technicalValues['freehubType'] = drivetrainFreehubType;
+        technicalSources['freehubType'] = 'mechanic';
+        technicalConfirmed['freehubType'] = true;
+        didChange = true;
+      }
+    }
+
+    if (!didChange) {
+      return null;
+    }
 
     final confirmedAt = DateTime.now();
     final summarySnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
@@ -4214,6 +4609,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _firstMatchingWizardOption(question, hints);
   }
 
+  String? _mappedBottomBracketFamilyWizardAnswer(
+    String? rawBottomBracketFamily,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null ||
+        rawBottomBracketFamily == null ||
+        rawBottomBracketFamily.isEmpty) {
+      return null;
+    }
+
+    return _firstMatchingWizardOption(question, [rawBottomBracketFamily]);
+  }
+
   bool _needsRimBrakeFamilyConfirmation(
     String? rawBrakeType,
     String? rawRimBrakeFamily,
@@ -4260,15 +4668,52 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     final options = question.options.map((option) => option.value).toSet();
-    if (!(options.contains('front') && options.contains('rear'))) {
-      return null;
+    if (normalized.startsWith('1x') && options.contains('rear')) {
+      return const ['rear'];
     }
 
     if (normalized.startsWith('2x') || normalized.startsWith('3x')) {
+      if (!(options.contains('front') && options.contains('rear'))) {
+        return null;
+      }
       return const ['front', 'rear'];
     }
 
     return null;
+  }
+
+  String? _mappedDrivetrainFrontChainringCountWizardAnswer(
+    String? drivetrainConfig,
+    ServiceProfileQuestion? question,
+  ) {
+    final frontCount =
+        drivetrainFrontChainringCountFromConfig(drivetrainConfig);
+    if (frontCount == null) {
+      return null;
+    }
+    return _firstMatchingWizardOption(question, [frontCount]);
+  }
+
+  String? _mappedDrivetrainRearCogCountWizardAnswer(
+    String? drivetrainConfig,
+    ServiceProfileQuestion? question,
+  ) {
+    final rearCount = drivetrainRearCogCountFromConfig(drivetrainConfig);
+    if (rearCount == null) {
+      return null;
+    }
+    return _firstMatchingWizardOption(question, [rearCount]);
+  }
+
+  String? _mappedDrivetrainFreehubTypeWizardAnswer(
+    String? rawFreehubType,
+    ServiceProfileQuestion? question,
+  ) {
+    final freehubType = canonicalDrivetrainFreehubTypeValue(rawFreehubType);
+    if (freehubType == null) {
+      return null;
+    }
+    return _firstMatchingWizardOption(question, [freehubType]);
   }
 
   String? _mappedChainWearWizardAnswerFromDiagnosis(
@@ -4364,6 +4809,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         technicalValues['drivetrainConfig']?.toString() ?? '');
     final speeds = _normalizeNullableText(
         technicalValues['drivetrainSpeeds']?.toString() ?? '');
+    final freehubLabel = drivetrainFreehubTypeLabel(
+      technicalValues['freehubType']?.toString(),
+    );
 
     final parts = <String>[];
     if (config != null) {
@@ -4371,6 +4819,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
     if (speeds != null) {
       parts.add('${speeds}v');
+    }
+    if (freehubLabel != null) {
+      parts.add(freehubLabel);
     }
 
     if (parts.isEmpty) {
@@ -4918,6 +5369,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final currentTab = _currentBikeTab;
     final technicalValues = _bikeProfileForCurrentTab()?.technicalValues ??
         const <String, dynamic>{};
+    final technicalConfirmed =
+        _bikeProfileForCurrentTab()?.technicalConfirmed ??
+            const <String, dynamic>{};
     final questionsByKey = {
       for (final question in profile?.questions ?? <ServiceProfileQuestion>[])
         question.key: question,
@@ -5078,7 +5532,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         helperText = 'Se actualizará la ficha del freno trasero.';
       } else {
         helperText =
-            'Para dejarlo ligado a una ficha concreta, usa “Aplica a” y marca Del. o Tras.';
+            'Para dejarlo ligado a una ficha concreta, usa el selector de lado y marca delantera o trasera.';
       }
 
       if (rawBrakeType != null && !_isDiscBrakeType(rawBrakeType)) {
@@ -5103,8 +5557,49 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     } else if (profile?.serviceFamily == 'drivetrain') {
       diagnosisLinkedQuestionKeys.addAll(compatibleDiagnosisQuestionKeys);
 
+      final drivetrainConfig = technicalValues['drivetrainConfig']?.toString();
+      final drivetrainConfirmed =
+          technicalConfirmed['drivetrainConfig'] == true &&
+              technicalConfirmed['drivetrainSpeeds'] == true;
+      final frontChainringAnswer =
+          _mappedDrivetrainFrontChainringCountWizardAnswer(
+        drivetrainConfig,
+        questionsByKey['front_chainring_count'],
+      );
+      if (frontChainringAnswer != null) {
+        initialAnswers['front_chainring_count'] = frontChainringAnswer;
+        if (drivetrainConfirmed) {
+          hiddenQuestionKeys.add('front_chainring_count');
+        }
+      }
+
+      final rearCogAnswer = _mappedDrivetrainRearCogCountWizardAnswer(
+        drivetrainConfig,
+        questionsByKey['rear_cog_count'],
+      );
+      if (rearCogAnswer != null) {
+        initialAnswers['rear_cog_count'] = rearCogAnswer;
+        if (drivetrainConfirmed) {
+          hiddenQuestionKeys.add('rear_cog_count');
+        }
+      }
+
+      final freehubAnswer = _mappedDrivetrainFreehubTypeWizardAnswer(
+        technicalValues['freehubType']?.toString(),
+        questionsByKey['freehub_type'],
+      );
+      if (freehubAnswer != null) {
+        initialAnswers['freehub_type'] = freehubAnswer;
+        if (technicalConfirmed['freehubType'] == true &&
+            isKnownDrivetrainFreehubType(
+              technicalValues['freehubType']?.toString(),
+            )) {
+          hiddenQuestionKeys.add('freehub_type');
+        }
+      }
+
       final derailleurs = _mappedDerailleursWizardAnswer(
-        technicalValues['drivetrainConfig']?.toString(),
+        drivetrainConfig,
         questionsByKey['derailleurs'],
       );
       if (derailleurs != null) {
@@ -5138,6 +5633,46 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           : 'Esta configuración puede actualizar la ficha técnica de transmisión de esta bicicleta. El perfil upstream ya marca $drivetrainHint.';
       helperText =
           '$helperText Los campos marcados como “Diagnóstico” comparten la misma base que ves en la ficha de transmisión.';
+    } else if (_isBottomBracketServiceFamily(profile?.serviceFamily)) {
+      final rawBottomBracketFamily =
+          technicalValues['bottomBracketFamily']?.toString();
+      final mappedBottomBracketFamily = _mappedBottomBracketFamilyWizardAnswer(
+        rawBottomBracketFamily,
+        questionsByKey['bottom_bracket_family'],
+      );
+      final hasKnownFamily = isKnownBottomBracketFamily(rawBottomBracketFamily);
+      final bikeLabel = currentTab?.displayName ?? 'Bicicleta';
+      final bikeTypeLabel = currentTab?.bike?.bikeType?.displayName;
+      final familyLabel = bottomBracketFamilyLabel(rawBottomBracketFamily);
+
+      contextSummary = ServiceWizardContextSummary(
+        title: bikeLabel,
+        subtitle: 'Pedalier / BB',
+        chips: [
+          if (bikeTypeLabel != null && bikeTypeLabel.isNotEmpty)
+            ServiceWizardContextChip(
+              icon: Icons.directions_bike_outlined,
+              label: 'Tipo de bici: $bikeTypeLabel',
+            ),
+          ServiceWizardContextChip(
+            icon: Icons.settings_input_component_outlined,
+            label: hasKnownFamily && familyLabel != null
+                ? 'Pedalier confirmado: $familyLabel'
+                : 'Pedalier / BB sin confirmar',
+          ),
+        ],
+      );
+
+      if (mappedBottomBracketFamily != null) {
+        initialAnswers['bottom_bracket_family'] = mappedBottomBracketFamily;
+        if (hasKnownFamily) {
+          hiddenQuestionKeys.add('bottom_bracket_family');
+        }
+      }
+
+      helperText = hasKnownFamily && familyLabel != null
+          ? 'La ficha técnica upstream ya confirma pedalier / BB $familyLabel. El wizard usa esa verdad y no vuelve a pedirla.'
+          : 'Si confirmas la familia de pedalier aquí, esa respuesta se promoverá a la ficha técnica upstream al guardar la pega.';
     }
 
     return _ServiceWizardDialogConfig(
@@ -5158,7 +5693,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_isBrakeServiceFamily(profile?.serviceFamily)) {
       final targets = _resolveBrakeDiagnosisTargets(item.location, answers);
       if (targets.isEmpty) {
-        return 'Servicio guardado. Para ligarlo a la ficha técnica, define Del./Tras. en “Aplica a”.';
+        return 'Servicio guardado. Para ligarlo a la ficha técnica, define el lado como delantera o trasera.';
       }
       if (targets.length == 2) {
         return 'Servicio vinculado a la ficha técnica de freno delantero y trasero.';
@@ -5173,6 +5708,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     if (profile?.serviceFamily == 'drivetrain') {
       return 'Servicio vinculado a la ficha técnica de transmisión.';
+    }
+
+    return null;
+  }
+
+  String? _bikeProfilePromotionFeedback(ServiceWizardProfile? profile) {
+    if (_isBrakeServiceFamily(profile?.serviceFamily)) {
+      return 'La familia de freno de llanta quedará confirmada en la ficha técnica al guardar la pega.';
+    }
+
+    if (_isBottomBracketServiceFamily(profile?.serviceFamily)) {
+      return 'La familia de pedalier / BB quedará confirmada en la ficha técnica al guardar la pega.';
     }
 
     return null;
@@ -6594,17 +7141,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ),
                 const SizedBox(height: 14),
                 Wrap(
-                  spacing: 10,
+                  spacing: 12,
                   runSpacing: 10,
                   children: [
                     _buildDiagnosisSummaryChip(
                       theme,
-                      icon: Icons.schema_outlined,
+                      icon: Icons.auto_awesome_mosaic_outlined,
                       label: 'Template ${diagnosisSheet.templateKey}',
                     ),
                     _buildDiagnosisSummaryChip(
                       theme,
-                      icon: Icons.tune_outlined,
+                      icon: Icons.checklist_rtl_rounded,
                       label: '$trackedSystems sistemas revisados',
                     ),
                     _buildDiagnosisSummaryChip(
@@ -6709,22 +7256,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }) {
     final color = tint ?? theme.colorScheme.primary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 18, color: color.withValues(alpha: 0.8)),
           const SizedBox(width: 8),
           Text(
             label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: color,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: color.withValues(alpha: 0.9),
               fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
             ),
           ),
         ],
@@ -6736,8 +7283,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
@@ -6745,16 +7292,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             child: _buildDiagnosisSubtabButton(
               theme: theme,
               tab: _DiagnosisWorkbenchTab.structured,
-              icon: Icons.account_tree_outlined,
+              icon: Icons.auto_awesome_mosaic_rounded,
               label: 'Modelo estructurado',
             ),
           ),
-          const SizedBox(width: 6),
           Expanded(
             child: _buildDiagnosisSubtabButton(
               theme: theme,
               tab: _DiagnosisWorkbenchTab.narrative,
-              icon: Icons.edit_note_outlined,
+              icon: Icons.description_rounded,
               label: 'Ficha narrativa',
             ),
           ),
@@ -6772,10 +7318,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final isSelected = _selectedDiagnosisWorkbenchTab == tab;
 
     return Material(
-      color: isSelected
-          ? theme.colorScheme.secondaryContainer
-          : Colors.transparent,
+      color: isSelected ? theme.colorScheme.surface : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
+      elevation: isSelected ? 1 : 0,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
       child: InkWell(
         onTap: () {
           if (_selectedDiagnosisWorkbenchTab == tab) return;
@@ -6785,7 +7331,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         },
         borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -6793,7 +7339,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 icon,
                 size: 18,
                 color: isSelected
-                    ? theme.colorScheme.onSecondaryContainer
+                    ? theme.colorScheme.primary
                     : theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 8),
@@ -6802,10 +7348,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                     color: isSelected
-                        ? theme.colorScheme.onSecondaryContainer
-                        : theme.colorScheme.onSurface,
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
@@ -7094,7 +7641,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(flex: 4, child: diagramPanel),
-              const SizedBox(width: 18),
+              const SizedBox(width: 32),
               Expanded(flex: 5, child: inspectorPanel),
             ],
           );
@@ -7159,6 +7706,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     switch (systemKey) {
       case 'cockpit':
       case 'suspension':
+      case 'front_wheel':
+      case 'bottom_bracket':
+      case 'rear_wheel':
       case 'wheels':
         return BikeSystemOverallStatus.unknown;
       case 'front_brake':
@@ -7178,6 +7728,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     switch (systemKey) {
       case 'cockpit':
       case 'suspension':
+      case 'front_wheel':
+      case 'bottom_bracket':
+      case 'rear_wheel':
       case 'wheels':
         return false;
       case 'front_brake':
@@ -7365,19 +7918,29 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         : null;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Mapa técnico interactivo',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
             ),
           ),
           const SizedBox(height: 6),
@@ -7392,6 +7955,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             aspectRatio: 1,
             child: BikeSystemController(
               bike: currentTab.bike,
+              profile: _selectedBike?.id == currentTab.bike?.id
+                  ? _selectedBikeProfile
+                  : null,
               variant: bikeVariant,
               entries: kBikeSystemControllerSpecs
                   .map(
@@ -7556,7 +8122,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final rimBrakeFamily =
         profile?.technicalValues['rimBrakeFamily']?.toString();
     switch (activeSpec.systemKey) {
-      case 'cockpit':
       case 'suspension':
       case 'wheels':
         return _buildUnavailableStructuredDiagnosisSystemCard(
@@ -7565,6 +8130,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           profile: profile,
           bike: currentTab.bike,
           templateKey: diagnosisSheet.templateKey,
+        );
+      case 'cockpit':
+      case 'front_wheel':
+      case 'bottom_bracket':
+      case 'rear_wheel':
+        return _buildPlaceholderDiagnosisSystemCard(
+          theme,
+          activeSpec: activeSpec,
         );
       case 'front_brake':
         return _buildDiagnosisSystemCard(
@@ -7706,20 +8279,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             child: Container(
               key: ValueKey('editor_$selectedComponentKey'),
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outlineVariant
-                      .withValues(alpha: 0.5),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
+                    blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -8099,11 +8669,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }) {
     return Container(
       clipBehavior: Clip.antiAlias,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8116,8 +8695,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   children: [
                     Text(
                       title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -8151,10 +8731,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           DropdownButtonFormField<BikeSystemOverallStatus>(
             key: ValueKey('diag_status_${title}_${status.dbValue}'),
             initialValue: status,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Estado general',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.monitor_heart_outlined),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor:
+                  theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+              prefixIcon: const Icon(Icons.monitor_heart_outlined),
             ),
             items: BikeSystemOverallStatus.values.map((value) {
               return DropdownMenuItem(
@@ -8170,6 +8756,110 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           const SizedBox(height: 12),
           child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderDiagnosisSystemCard(
+    ThemeData theme, {
+    required BikeSystemControllerSpec activeSpec,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    activeSpec.icon,
+                    size: 24,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        activeSpec.label,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E293B),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        activeSpec.diagnosisSubtitle,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.construction_rounded,
+                  size: 48,
+                  color: const Color(0xFFCBD5E1),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Componentes en desarrollo',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'El selector de piezas detallado para este sistema estará disponible pronto.\nPor ahora, registra tus observaciones en las notas generales del servicio.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -8194,6 +8884,51 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           contextLines.add('Suspensión confirmada: $suspensionLayout');
         }
         break;
+      case 'front_wheel':
+        if (bike?.wheelSize?.trim().isNotEmpty == true) {
+          contextLines.add('Aro compartido: ${bike!.wheelSize!.trim()}');
+        }
+        if (bike?.frontHubSpacingMm != null) {
+          final spacing = bike!.frontHubSpacingMm!;
+          contextLines.add(
+            'Maza delantera: ${spacing == spacing.roundToDouble() ? spacing.toStringAsFixed(0) : spacing.toStringAsFixed(1)} mm',
+          );
+        }
+        final frontSpokeHoles = technicalValues['frontSpokeHoles']?.toString();
+        if (frontSpokeHoles != null && frontSpokeHoles.isNotEmpty) {
+          contextLines.add('Rayos rueda delantera: $frontSpokeHoles');
+        }
+        final frontValveType = technicalValues['valveType']?.toString();
+        if (frontValveType != null && frontValveType.isNotEmpty) {
+          contextLines.add('Válvula compartida: $frontValveType');
+        }
+        break;
+      case 'bottom_bracket':
+        final bottomBracketFamily =
+            technicalValues['bottomBracketFamily']?.toString();
+        if (bottomBracketFamily != null && bottomBracketFamily.isNotEmpty) {
+          contextLines.add('Pedalier / BB confirmado: $bottomBracketFamily');
+        }
+        break;
+      case 'rear_wheel':
+        if (bike?.wheelSize?.trim().isNotEmpty == true) {
+          contextLines.add('Aro compartido: ${bike!.wheelSize!.trim()}');
+        }
+        if (bike?.rearHubSpacingMm != null) {
+          final spacing = bike!.rearHubSpacingMm!;
+          contextLines.add(
+            'Maza trasera: ${spacing == spacing.roundToDouble() ? spacing.toStringAsFixed(0) : spacing.toStringAsFixed(1)} mm',
+          );
+        }
+        final rearSpokeHoles = technicalValues['rearSpokeHoles']?.toString();
+        if (rearSpokeHoles != null && rearSpokeHoles.isNotEmpty) {
+          contextLines.add('Rayos rueda trasera: $rearSpokeHoles');
+        }
+        final rearValveType = technicalValues['valveType']?.toString();
+        if (rearValveType != null && rearValveType.isNotEmpty) {
+          contextLines.add('Válvula compartida: $rearValveType');
+        }
+        break;
       case 'wheels':
         if (bike?.wheelSize?.trim().isNotEmpty == true) {
           contextLines.add('Aro: ${bike!.wheelSize!.trim()}');
@@ -8212,6 +8947,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
         break;
       case 'cockpit':
+        contextLines.add(
+          'Headset y dirección siguen anclados aquí como sistema de steering, aunque esta visita todavía no tenga ficha estructurada editable.',
+        );
       case 'front_brake':
       case 'rear_brake':
       case 'drivetrain':
@@ -8498,7 +9236,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
+        color: Colors.transparent,
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.5),
+        ),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -8507,14 +9248,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Icon(
             Icons.link_outlined,
             size: 12,
-            color: theme.colorScheme.secondary,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 4),
           Text(
             'Servicio guiado',
             style: theme.textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.w700,
-              color: theme.colorScheme.secondary,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -8533,11 +9274,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8646,11 +9386,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8778,11 +9517,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -10248,8 +10986,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _PartItemRow(
       key: ValueKey('part_${item.id}'),
       item: item,
+      availableServiceLocations: _availableServiceLocationsForItem(item),
       index: index,
       itemIndex: itemIndex,
+      compatibilityContextKey: _partCompatibilityContextKey,
+      compatibilityResolver: _partCompatibilityContextKey == null
+          ? null
+          : _resolveCurrentBikePartCompatibility,
       isFirst: itemIndex == 0,
       isLast: itemIndex == _currentPartItems.length - 1,
       indexWidth: _colIndexWidth,
@@ -10348,6 +11091,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         updatedItem,
         normalizedAnswers,
       );
+      final promotionFeedback = promotedBikeProfile == null
+          ? null
+          : _bikeProfilePromotionFeedback(profile);
 
       setState(() {
         _currentPartItems[itemIndex] = updatedItem;
@@ -10368,8 +11114,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       final feedbackParts = <String>[
         if (syncFeedback != null) syncFeedback,
-        if (promotedBikeProfile != null)
-          'La familia de freno de llanta quedará confirmada en la ficha técnica al guardar la pega.',
+        if (promotionFeedback != null) promotionFeedback,
       ];
 
       if (feedbackParts.isNotEmpty && mounted) {
@@ -10714,7 +11459,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: theme.colorScheme.outline.withValues(alpha: 0.2),
@@ -10723,13 +11468,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(5),
                   child: item.serviceProduct?.imageUrl != null
-                      ? Image.network(
-                          item.serviceProduct!.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.work_outline,
-                            color: Colors.blue,
-                            size: 24,
+                      ? Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Image.network(
+                            item.serviceProduct!.imageUrl!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.work_outline,
+                              color: Colors.blue,
+                              size: 24,
+                            ),
                           ),
                         )
                       : const Icon(
@@ -11136,8 +11884,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
 class _PartItemRow extends StatefulWidget {
   final _JobPartItem item;
+  final Set<BikeMemoryLocation> availableServiceLocations;
   final int index;
   final int itemIndex;
+  final Future<Map<String, ProductCompatibilityAssessment>> Function(
+      List<Product> products)? compatibilityResolver;
+  final Object? compatibilityContextKey;
   final bool isFirst;
   final bool isLast;
   final ValueChanged<_JobPartItem> onChanged;
@@ -11155,8 +11907,15 @@ class _PartItemRow extends StatefulWidget {
   const _PartItemRow({
     super.key,
     required this.item,
+    this.availableServiceLocations = const {
+      BikeMemoryLocation.none,
+      BikeMemoryLocation.front,
+      BikeMemoryLocation.rear,
+    },
     required this.index,
     required this.itemIndex,
+    this.compatibilityResolver,
+    this.compatibilityContextKey,
     required this.isFirst,
     required this.isLast,
     required this.onChanged,
@@ -11273,6 +12032,17 @@ class _PartItemRowState extends State<_PartItemRow> {
                     isCatalogProduct: item.isCatalogProduct,
                     description: item.hasWizardAnswers ? null : item.notes,
                   ),
+                  selectedHeaderTrailing: item.isServiceItem
+                      ? _ServiceLocationDropdown(
+                          value: item.location,
+                          availableLocations: widget.availableServiceLocations,
+                          onChanged: (location) {
+                            widget.onChanged(item.copyWith(location: location));
+                          },
+                        )
+                      : null,
+                  compatibilityContextKey: widget.compatibilityContextKey,
+                  compatibilityResolver: widget.compatibilityResolver,
                   hintText: 'Buscar por nombre...',
                   allowCustomItems: true,
                   showCost:
@@ -11326,15 +12096,6 @@ class _PartItemRowState extends State<_PartItemRow> {
                     }
                   },
                 ),
-                if (item.isServiceItem) ...[
-                  const SizedBox(height: 8),
-                  _ServiceLocationSelector(
-                    value: item.location,
-                    onChanged: (location) {
-                      widget.onChanged(item.copyWith(location: location));
-                    },
-                  ),
-                ],
               ],
             ),
           ),
@@ -11368,25 +12129,29 @@ class _PartItemRowState extends State<_PartItemRow> {
           LineColumn(
             width: widget.priceWidth,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: TextFormField(
-              initialValue: item.unitPrice.toStringAsFixed(0),
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                border: OutlineInputBorder(),
-                prefixText: '\$ ',
+            child: Center(
+              child: TextFormField(
+                initialValue: item.unitPrice.toStringAsFixed(0),
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(),
+                  prefixText: '\$ ',
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'^\d+\.?\d{0,2}'),
+                  ),
+                ],
+                onChanged: (value) {
+                  final newPrice = double.tryParse(value) ?? 0;
+                  widget.onChanged(item.copyWith(unitPrice: newPrice));
+                },
               ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-              ],
-              onChanged: (value) {
-                final newPrice = double.tryParse(value) ?? 0;
-                widget.onChanged(item.copyWith(unitPrice: newPrice));
-              },
             ),
           ),
 
@@ -11395,12 +12160,15 @@ class _PartItemRowState extends State<_PartItemRow> {
             width: widget.totalWidth,
             showRightBorder: false,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Text(
-              NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                  .format(item.quantity * item.unitPrice),
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-              textAlign: TextAlign.right,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                    .format(item.quantity * item.unitPrice),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.right,
+              ),
             ),
           ),
         ],
@@ -11524,63 +12292,110 @@ class _ServiceLineBadge extends StatelessWidget {
   }
 }
 
-class _ServiceLocationSelector extends StatelessWidget {
+class _ServiceLocationDropdown extends StatelessWidget {
   final BikeMemoryLocation value;
+  final Set<BikeMemoryLocation> availableLocations;
   final ValueChanged<BikeMemoryLocation> onChanged;
 
-  const _ServiceLocationSelector({
+  const _ServiceLocationDropdown({
     required this.value,
+    this.availableLocations = const {
+      BikeMemoryLocation.none,
+      BikeMemoryLocation.front,
+      BikeMemoryLocation.rear,
+    },
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final orderedLocations = const [
+      BikeMemoryLocation.none,
+      BikeMemoryLocation.front,
+      BikeMemoryLocation.rear,
+    ].where(availableLocations.contains).toList(growable: false);
+    final dropdownValue = orderedLocations.contains(value)
+        ? value
+        : (orderedLocations.isNotEmpty
+            ? orderedLocations.first
+            : BikeMemoryLocation.none);
+    final isLocked = orderedLocations.length <= 1;
 
-    Widget buildChip(BikeMemoryLocation location, String label) {
-      final isSelected = value == location;
-      return ChoiceChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (_) {
-          if (!isSelected) {
-            onChanged(location);
-          }
-        },
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        labelStyle: theme.textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: isSelected
-              ? theme.colorScheme.onPrimaryContainer
-              : theme.colorScheme.onSurface,
-        ),
-        side: BorderSide(
-          color: isSelected
-              ? theme.colorScheme.primary.withValues(alpha: 0.4)
-              : theme.colorScheme.outline.withValues(alpha: 0.35),
-        ),
-        backgroundColor: theme.colorScheme.surface,
-        selectedColor: theme.colorScheme.primaryContainer,
-      );
-    }
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          'Aplica a',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 170, maxWidth: 190),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.only(left: 10, right: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.28),
           ),
         ),
-        buildChip(BikeMemoryLocation.none, 'Auto'),
-        buildChip(BikeMemoryLocation.front, 'Del.'),
-        buildChip(BikeMemoryLocation.rear, 'Tras.'),
-      ],
+        child: Row(
+          children: [
+            Icon(
+              Icons.link_outlined,
+              size: 15,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Lado',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<BikeMemoryLocation>(
+                  value: dropdownValue,
+                  isDense: true,
+                  isExpanded: true,
+                  borderRadius: BorderRadius.circular(12),
+                  icon: isLocked
+                      ? const SizedBox.shrink()
+                      : Icon(
+                          Icons.expand_more,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                  onChanged: isLocked
+                      ? null
+                      : (location) {
+                          if (location != null && location != dropdownValue) {
+                            onChanged(location);
+                          }
+                        },
+                  items: orderedLocations.map((location) {
+                    return DropdownMenuItem<BikeMemoryLocation>(
+                      value: location,
+                      child: Text(
+                        switch (location) {
+                          BikeMemoryLocation.front => 'Delantera',
+                          BikeMemoryLocation.rear => 'Trasera',
+                          _ => 'Sin fijar',
+                        },
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(growable: false),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

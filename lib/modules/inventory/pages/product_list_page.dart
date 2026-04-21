@@ -3403,18 +3403,24 @@ class _ProductListPageState extends State<ProductListPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: product.imageUrl != null
-                    ? Image.network(
-                        product.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(
-                          Icons.image_not_supported,
-                          size: 20,
-                          color: theme.colorScheme.onSurfaceVariant,
+                    ? Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Image.network(
+                          product.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.image_not_supported,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       )
                     : Icon(
@@ -3793,20 +3799,28 @@ class _ProductListPageState extends State<ProductListPage> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(4),
-                            image: product.imageUrl != null
-                                ? DecorationImage(
-                                    image: NetworkImage(product.imageUrl!),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                            ),
                           ),
-                          child: product.imageUrl == null
-                              ? Icon(Icons.image_not_supported_outlined,
+                          child: product.imageUrl != null
+                              ? Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Image.network(
+                                    product.imageUrl!,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 20,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                )
+                              : Icon(Icons.image_not_supported_outlined,
                                   size: 20,
-                                  color: theme.colorScheme.onSurfaceVariant)
-                              : null,
+                                  color: theme.colorScheme.onSurfaceVariant),
                         ),
                       ),
                       const SizedBox(width: 12),

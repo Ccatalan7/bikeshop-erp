@@ -1,12 +1,6 @@
 -- Core data schema for Vinabike ERP.
 -- Run this script in the Supabase SQL editor to provision base tables.
 -- UUID columns default to gen_random_uuid(); ensure the extension is enabled first.
-
-create extension if not exists "pgcrypto";
-
---------------------------------------------------------------------------------
--- ⚠️ CLEANUP: Remove old legacy task triggers/functions (Nov 18, 2025)
---------------------------------------------------------------------------------
 -- CRITICAL: Drop ALL triggers on mechanic_job_items and mechanic_job_tasks
 -- that reference old task functions (cascade will remove dependencies)
 do $$
@@ -71,6 +65,7 @@ begin
 
   if v_max_number is null then
     v_max_number := 0;
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
   end if;
 
   perform setval('public.mechanic_job_number_seq', v_max_number);
@@ -82,9 +77,6 @@ drop function if exists public.auto_create_task_for_job_labor() cascade;
 drop function if exists public.sync_tasks_with_job_status() cascade;
 drop function if exists public.get_job_task_summary(uuid) cascade;
 
--- Drop old indexes
-drop index if exists idx_mechanic_job_tasks_item cascade;
-drop index if exists idx_mechanic_job_tasks_labor cascade;
 drop index if exists idx_mechanic_job_tasks_status cascade;
 drop index if exists idx_mechanic_job_tasks_assigned cascade;
 
@@ -151,6 +143,7 @@ begin
   alter table mechanic_job_tasks drop column if exists assigned_to cascade;
   alter table mechanic_job_tasks drop column if exists assigned_technician_name cascade;
   alter table mechanic_job_tasks drop column if exists estimated_duration_minutes cascade;
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
   alter table mechanic_job_tasks drop column if exists actual_duration_minutes cascade;
   alter table mechanic_job_tasks drop column if exists started_at cascade;
   alter table mechanic_job_tasks drop column if exists is_auto_generated cascade;
@@ -182,9 +175,6 @@ end $$;
 --
 -- 2. SITE URL:
 --    Set your production domain as the Site URL
---    Example: https://vinabike.cl or https://app.yourdomain.com
---
--- 3. EMAIL TEMPLATES (Optional - Customize in Dashboard):
 --    Authentication → Email Templates → Reset Password
 --    The default template works, but you can customize with your branding.
 --
@@ -24791,6 +24781,15 @@ on conflict (id) do nothing;
 
 insert into service_profile_questions (id, tenant_id, service_profile_id, key, label, question_type, is_required, sort_order, options_json)
 values
+  ('00000000-0003-0001-0000-000000000004', null, '00000000-0003-0000-0000-000000000001',
+   'front_chainring_count', 'Platos delanteros', 'single_select', false, 1,
+   '[{"value":"1","label":"1 plato"},{"value":"2","label":"2 platos"},{"value":"3","label":"3 platos"}]'::jsonb),
+  ('00000000-0003-0001-0000-000000000005', null, '00000000-0003-0000-0000-000000000001',
+   'rear_cog_count', 'Pinones traseros', 'single_select', false, 2,
+   '[{"value":"1","label":"1 pinon"},{"value":"3","label":"3 pinones"},{"value":"5","label":"5 pinones"},{"value":"6","label":"6 pinones"},{"value":"7","label":"7 pinones"},{"value":"8","label":"8 pinones"},{"value":"9","label":"9 pinones"},{"value":"10","label":"10 pinones"},{"value":"11","label":"11 pinones"},{"value":"12","label":"12 pinones"},{"value":"13","label":"13 pinones"},{"value":"14","label":"14 pinones"}]'::jsonb),
+  ('00000000-0003-0001-0000-000000000006', null, '00000000-0003-0000-0000-000000000001',
+   'freehub_type', 'Driver / freehub', 'single_select', false, 3,
+   '[{"value":"shimano_hg","label":"Shimano HG"},{"value":"microspline","label":"Micro Spline"},{"value":"sram_xd","label":"SRAM XD"},{"value":"campagnolo","label":"Campagnolo"},{"value":"threaded_freewheel","label":"Rueda libre roscada"},{"value":"bmx_driver","label":"Driver BMX"},{"value":"fixed_threaded","label":"Rosca fija / contratuerca"},{"value":"coaster_hub","label":"Maza contrapedal"},{"value":"unknown","label":"Desconocido / sin confirmar"}]'::jsonb),
   ('00000000-0003-0001-0000-000000000001', null, '00000000-0003-0000-0000-000000000001',
    'derailleurs', '¿Qué desviadores?', 'multi_select', true, 10,
    '[{"value":"rear","label":"Trasero"},{"value":"front","label":"Delantero"}]'::jsonb),
@@ -24847,6 +24846,186 @@ values
    'rim_damage', 'Daño en el aro', 'single_select', false, 20,
    '[{"value":"none","label":"Sin daño visible"},{"value":"minor","label":"Leve - centrado posible"},{"value":"major","label":"Grave - puede requerir reemplazo"}]'::jsonb)
 on conflict (id) do nothing;
+
+-- ============================================================
+-- Bottom Bracket Adjustment
+-- ============================================================
+insert into service_profiles (
+  id,
+  tenant_id,
+  key,
+  name,
+  service_family,
+  description,
+  customer_summary_template,
+  mechanic_summary_template
+)
+select
+  '00000000-0020-0000-0000-000000000001',
+  null,
+  'bottom_bracket_adjustment',
+  'Ajuste de Motor',
+  'bottom_bracket',
+  'Ajuste de juego, carga y suavidad del pedalier / BB',
+  'Ajuste pedalier · síntoma {{symptom}}',
+  'Pedalier / BB {{bottom_bracket_family}} · Ajuste por {{symptom}}'
+where not exists (
+  select 1
+    from service_profiles
+   where tenant_id is null
+     and key = 'bottom_bracket_adjustment'
+);
+
+update service_profiles
+   set name = 'Ajuste de Motor',
+       service_family = 'bottom_bracket',
+       description = 'Ajuste de juego, carga y suavidad del pedalier / BB',
+       customer_summary_template = 'Ajuste pedalier · síntoma {{symptom}}',
+       mechanic_summary_template = 'Pedalier / BB {{bottom_bracket_family}} · Ajuste por {{symptom}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'bottom_bracket_adjustment';
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0020-0001-0000-000000000001'::uuid, 'bottom_bracket_family', 'Familia pedalier / BB', 'single_select', true, 10,
+     '[{"value":"bsa_threaded","label":"BSA roscado"},{"value":"pressfit","label":"Pressfit"},{"value":"bb30_pf30","label":"BB30 / PF30"},{"value":"mid","label":"Mid / BMX"},{"value":"one_piece","label":"One-piece"},{"value":"other","label":"Otro"},{"value":"unknown","label":"Desconocido"}]'::jsonb),
+    ('00000000-0020-0001-0000-000000000002'::uuid, 'symptom', 'Síntoma principal', 'single_select', true, 20,
+     '[{"value":"play","label":"Juego"},{"value":"noise","label":"Ruido"},{"value":"roughness","label":"Aspereza / roce interno"},{"value":"tightness","label":"Apriete / dureza"},{"value":"preventive","label":"Mantención preventiva"}]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'bottom_bracket_adjustment'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
+
+-- ============================================================
+-- Bottom Bracket Service
+-- ============================================================
+insert into service_profiles (
+  id,
+  tenant_id,
+  key,
+  name,
+  service_family,
+  description,
+  customer_summary_template,
+  mechanic_summary_template
+)
+select
+  '00000000-0021-0000-0000-000000000001',
+  null,
+  'bottom_bracket_service',
+  'Mantención de Motor',
+  'bottom_bracket',
+  'Limpieza, engrase y mantención del pedalier / BB',
+  'Mantención pedalier {{bottom_bracket_family}}',
+  'Pedalier / BB {{bottom_bracket_family}} · Síntoma {{symptom}} · Reemplazo {{replace_unit}}'
+where not exists (
+  select 1
+    from service_profiles
+   where tenant_id is null
+     and key = 'bottom_bracket_service'
+);
+
+update service_profiles
+   set name = 'Mantención de Motor',
+       service_family = 'bottom_bracket',
+       description = 'Limpieza, engrase y mantención del pedalier / BB',
+       customer_summary_template = 'Mantención pedalier {{bottom_bracket_family}}',
+       mechanic_summary_template = 'Pedalier / BB {{bottom_bracket_family}} · Síntoma {{symptom}} · Reemplazo {{replace_unit}}',
+       updated_at = now()
+ where tenant_id is null
+   and key = 'bottom_bracket_service';
+
+insert into service_profile_questions (
+  id,
+  tenant_id,
+  service_profile_id,
+  key,
+  label,
+  question_type,
+  is_required,
+  sort_order,
+  options_json
+)
+select
+  seed.id,
+  null,
+  sp.id,
+  seed.key,
+  seed.label,
+  seed.question_type,
+  seed.is_required,
+  seed.sort_order,
+  seed.options_json
+from service_profiles sp
+join (
+  values
+    ('00000000-0021-0001-0000-000000000001'::uuid, 'bottom_bracket_family', 'Familia pedalier / BB', 'single_select', true, 10,
+     '[{"value":"bsa_threaded","label":"BSA roscado"},{"value":"pressfit","label":"Pressfit"},{"value":"bb30_pf30","label":"BB30 / PF30"},{"value":"mid","label":"Mid / BMX"},{"value":"one_piece","label":"One-piece"},{"value":"other","label":"Otro"},{"value":"unknown","label":"Desconocido"}]'::jsonb),
+    ('00000000-0021-0001-0000-000000000002'::uuid, 'symptom', 'Síntoma principal', 'single_select', false, 20,
+     '[{"value":"play","label":"Juego"},{"value":"noise","label":"Ruido"},{"value":"roughness","label":"Aspereza / roce interno"},{"value":"tightness","label":"Apriete / dureza"},{"value":"preventive","label":"Mantención preventiva"}]'::jsonb),
+    ('00000000-0021-0001-0000-000000000003'::uuid, 'replace_unit', '¿Reemplazar unidad / rodamientos?', 'boolean', false, 30,
+     '[]'::jsonb)
+) as seed(id, key, label, question_type, is_required, sort_order, options_json)
+  on true
+where sp.tenant_id is null
+  and sp.key = 'bottom_bracket_service'
+on conflict (service_profile_id, key) do update set
+  label = excluded.label,
+  question_type = excluded.question_type,
+  is_required = excluded.is_required,
+  sort_order = excluded.sort_order,
+  options_json = excluded.options_json,
+  updated_at = now();
+
+insert into service_profile_targets (
+  tenant_id,
+  service_profile_id,
+  target_family,
+  target_position_mode,
+  target_rules
+)
+select null, sp.id, 'bottom_bracket', 'none', '{}'::jsonb
+from service_profiles sp
+where sp.tenant_id is null
+  and sp.key in ('bottom_bracket_adjustment', 'bottom_bracket_service')
+  and not exists (
+    select 1
+      from service_profile_targets spt
+     where spt.tenant_id is null
+       and spt.service_profile_id = sp.id
+       and spt.target_family = 'bottom_bracket'
+       and spt.target_position_mode = 'none'
+  );
 
 -- ============================================================
 -- Piston Clean & Reset (Limpieza y Elongación de Pistones)

@@ -643,6 +643,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               aspectRatio: 1,
               child: BikeSystemController(
                 bike: widget.snapshot.bike,
+                profile: widget.snapshot.profile,
                 entries: _buildTechnicalControllerEntries(),
                 selectedSystemKey: activeSystemKey,
                 onSystemSelected: (key) {
@@ -751,6 +752,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   aspectRatio: 1,
                   child: BikeSystemController(
                     bike: widget.snapshot.bike,
+                    profile: widget.snapshot.profile,
                     entries: _buildHistoryControllerEntries(history),
                     selectedSystemKey: activeSystemKey,
                     onSystemSelected: (key) {
@@ -971,8 +973,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     const preferredOrder = <String>[
       'suspension',
       'front_brake',
+      'front_wheel',
       'drivetrain',
-      'wheels',
+      'bottom_bracket',
+      'rear_wheel',
       'rear_brake',
       'cockpit',
     ];
@@ -1247,6 +1251,46 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               technicalValues['drivetrainSpeeds']?.toString()),
           profileFact('freehubType', 'Driver / freehub',
               freehubLabel(technicalValues['freehubType']?.toString())),
+        ].whereType<_BikeRecordTechnicalFact>().toList();
+        final knownCount = facts.length;
+        return _BikeRecordTechnicalPanelData(
+          spec: bikeSystemControllerSpecFor(systemKey)!,
+          description:
+              'Este sistema consolida la compatibilidad real de transmisión para servicio, repuestos y lectura histórica. El pedalier ya no queda escondido aquí como detalle secundario.',
+          facts: facts,
+          expectedCount: 3,
+          knownCount: knownCount,
+          missingText: knownCount == 0
+              ? 'La transmisión sigue sin un kernel upstream usable.'
+              : knownCount < 3
+                  ? 'Faltan piezas del kernel de transmisión. El registro aún no es una verdad upstream completa.'
+                  : null,
+        );
+      case 'front_wheel':
+        final facts = [
+          baseFact('Aro compartido', bike.wheelSize),
+          baseFact('Maza delantera', formatSpacing(bike.frontHubSpacingMm)),
+          profileFact('frontSpokeHoles', 'Rayos delanteros',
+              technicalValues['frontSpokeHoles']?.toString()),
+          profileFact('valveType', 'Válvula compartida',
+              valveLabel(technicalValues['valveType']?.toString())),
+        ].whereType<_BikeRecordTechnicalFact>().toList();
+        final knownCount = facts.length;
+        return _BikeRecordTechnicalPanelData(
+          spec: bikeSystemControllerSpecFor(systemKey)!,
+          description:
+              'La unidad delantera separa maza y rayado de la rueda trasera, aunque siga reutilizando el aro y la válvula como baseline upstream compartido.',
+          facts: facts,
+          expectedCount: 4,
+          knownCount: knownCount,
+          missingText: knownCount == 0
+              ? 'Todavía no hay un kernel upstream confirmado para la rueda delantera.'
+              : knownCount < 4
+                  ? 'Faltan datos de la rueda delantera para que la lectura histórica no vuelva a caer en un wheelset genérico.'
+                  : null,
+        );
+      case 'bottom_bracket':
+        final facts = [
           profileFact(
               'bottomBracketFamily',
               'Pedalier / BB',
@@ -1257,14 +1301,35 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
-              'Este sistema consolida la compatibilidad real de transmisión para servicio, repuestos y lectura histórica.',
+              'El pedalier vive como sistema propio porque su estándar y sus rodamientos son relevantes para servicio, compatibilidad y memoria técnica.',
+          facts: facts,
+          expectedCount: 1,
+          knownCount: knownCount,
+          missingText: knownCount == 0
+              ? 'Todavía no hay un kernel upstream confirmado para el pedalier.'
+              : null,
+        );
+      case 'rear_wheel':
+        final facts = [
+          baseFact('Aro compartido', bike.wheelSize),
+          baseFact('Maza trasera', formatSpacing(bike.rearHubSpacingMm)),
+          profileFact('rearSpokeHoles', 'Rayos traseros',
+              technicalValues['rearSpokeHoles']?.toString()),
+          profileFact('valveType', 'Válvula compartida',
+              valveLabel(technicalValues['valveType']?.toString())),
+        ].whereType<_BikeRecordTechnicalFact>().toList();
+        final knownCount = facts.length;
+        return _BikeRecordTechnicalPanelData(
+          spec: bikeSystemControllerSpecFor(systemKey)!,
+          description:
+              'La unidad trasera separa maza y rayado de la rueda delantera, aunque siga reutilizando el aro y la válvula como baseline upstream compartido.',
           facts: facts,
           expectedCount: 4,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'La transmisión sigue sin un kernel upstream usable.'
+              ? 'Todavía no hay un kernel upstream confirmado para la rueda trasera.'
               : knownCount < 4
-                  ? 'Faltan piezas del kernel de transmisión. El registro aún no es una verdad upstream completa.'
+                  ? 'Faltan datos de la rueda trasera para que la lectura histórica no vuelva a caer en un wheelset genérico.'
                   : null,
         );
       case 'wheels':
@@ -1299,12 +1364,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           spec: bikeSystemControllerSpecFor(systemKey) ??
               kBikeSystemControllerSpecs.first,
           description:
-              'El shared controller ya reserva este sistema en la lectura histórica, pero el v1 kernel aún no define una ficha upstream dedicada para cockpit.',
+              'El shared controller ya reserva este sistema en la lectura histórica, pero el v1 kernel aún no define una ficha upstream dedicada para cockpit/dirección. Headset y steering siguen anclados aquí aunque todavía no tengan esquema propio.',
           facts: const [],
           expectedCount: 1,
           knownCount: 0,
           missingText:
-              'Cockpit sigue como placeholder explícito hasta que exista una capa real de esquema/editor para headset, stem, manillar y controles.',
+              'Cockpit / dirección sigue como placeholder explícito hasta que exista una capa real de esquema/editor para headset, stem, manillar y controles.',
         );
     }
   }
@@ -2710,6 +2775,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return Icons.album_outlined;
       case 'drivetrain':
         return Icons.settings_outlined;
+      case 'bottom_bracket':
+        return Icons.hub_outlined;
       case 'front_wheel':
       case 'rear_wheel':
       case 'wheels':
@@ -3192,6 +3259,21 @@ class _BikeRecordHistoryData {
     for (final system in diagnosisSystems) {
       if (system.systemKey == systemKey) return system;
     }
+
+    if (systemKey == 'front_wheel' || systemKey == 'rear_wheel') {
+      for (final system in diagnosisSystems) {
+        if (system.systemKey == 'wheels') {
+          return _BikeDiagnosisSystemView(
+            systemKey: systemKey,
+            state: system.state,
+            observations: system.observations,
+            interventions: system.interventions,
+            componentLifecycles: system.componentLifecycles,
+          );
+        }
+      }
+    }
+
     return null;
   }
 

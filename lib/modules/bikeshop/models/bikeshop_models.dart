@@ -1118,13 +1118,13 @@ enum BikeSystemOverallStatus {
   String get displayName {
     switch (this) {
       case BikeSystemOverallStatus.ok:
-        return 'OK';
+        return 'Sin problemas';
       case BikeSystemOverallStatus.attention:
         return 'Atención';
       case BikeSystemOverallStatus.critical:
         return 'Crítico';
       case BikeSystemOverallStatus.unknown:
-        return 'Desconocido';
+        return 'Sin revisar';
     }
   }
 

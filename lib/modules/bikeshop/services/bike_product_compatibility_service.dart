@@ -40,6 +40,25 @@ class BikeProductCompatibilityService {
     'tool_size_mm',
   };
 
+  static const Set<String> _wheelRelevantSpecKeys = {
+    'bearing_application',
+    'bearing_size_code',
+    'bearing_system',
+    'freehub_type',
+    'headset_standard',
+    'hub_spacing_mm',
+    'sealant_volume_ml',
+    'spoke_bend_type',
+    'spoke_gauge',
+    'spoke_holes',
+    'spoke_length_mm',
+    'steerer_type',
+    'valve_length_mm',
+    'valve_type',
+    'wheel_position',
+    'wheel_size',
+  };
+
   Future<Map<String, ProductCompatibilityAssessment>>
       buildAutocompleteAssessments({
     required Bike bike,
@@ -65,12 +84,14 @@ class BikeProductCompatibilityService {
 
     final assessments = <String, ProductCompatibilityAssessment>{};
     for (final product in products) {
+      final technicalMapping = _technicalMappingForProduct(product);
       final familyAssessment = _assessTechnicalFamilyCompatibility(
         compatibilityContext: compatibilityContext,
-        technicalMapping: _technicalMappingForProduct(product),
+        technicalMapping: technicalMapping,
       );
       final detailedAssessment = _assessDetailedCompatibility(
         compatibilityContext: compatibilityContext,
+        technicalMapping: technicalMapping,
         specValues: _productSpecCache[product.id]?.values ?? const {},
       );
       final resolvedAssessment = _mergeAssessments(
@@ -258,6 +279,37 @@ class BikeProductCompatibilityService {
       switch (semanticKey) {
         case 'rotor':
           return _assessRotorFamilyCompatibility(compatibilityContext);
+        case 'hub':
+        case 'hub_generic':
+        case 'front_hub':
+        case 'rear_hub':
+          return _assessHubFamilyCompatibility(compatibilityContext);
+        case 'rim':
+          return _assessRimFamilyCompatibility(compatibilityContext);
+        case 'spoke':
+          return _assessSpokeFamilyCompatibility(compatibilityContext);
+        case 'tube':
+        case 'tube_anti_pinchazo':
+          return _assessTubeFamilyCompatibility(compatibilityContext);
+        case 'rim_strip':
+          return _assessRimStripFamilyCompatibility(compatibilityContext);
+        case 'tubeless_valve':
+          return _assessTubelessValveFamilyCompatibility(
+            compatibilityContext,
+          );
+        case 'tubeless_consumable':
+        case 'tubeless_sealant':
+          return _assessTubelessConsumableFamilyCompatibility(
+            compatibilityContext,
+          );
+        case 'headset':
+          return _assessHeadsetFamilyCompatibility(compatibilityContext);
+        case 'bearing':
+          return _assessBearingFamilyCompatibility(compatibilityContext);
+        case 'bottom_bracket':
+          return _assessBottomBracketFamilyCompatibility(
+            compatibilityContext,
+          );
         case 'rim_brake':
           return _assessRimBrakeFamilyCompatibility(compatibilityContext);
         case 'hydraulic_disc_brake':
@@ -297,21 +349,444 @@ class BikeProductCompatibilityService {
 
   ProductCompatibilityAssessment? _assessDetailedCompatibility({
     required _BikeCompatibilityContext compatibilityContext,
+    required _CategoryTechMapping? technicalMapping,
     required Map<String, dynamic> specValues,
   }) {
     if (specValues.isEmpty) {
       return null;
     }
 
-    final relevantKeys =
-        specValues.keys.where(_brakeRelevantSpecKeys.contains).toSet();
+    final relevantKeys = specValues.keys
+        .where(
+          (key) =>
+              _brakeRelevantSpecKeys.contains(key) ||
+              _wheelRelevantSpecKeys.contains(key),
+        )
+        .toSet();
     if (relevantKeys.isEmpty) {
       return null;
     }
 
-    return _assessBrakeCompatibility(
-      compatibilityContext: compatibilityContext,
-      specValues: specValues,
+    if (relevantKeys.any(_brakeRelevantSpecKeys.contains)) {
+      return _assessBrakeCompatibility(
+        compatibilityContext: compatibilityContext,
+        specValues: specValues,
+      );
+    }
+
+    final semanticKeys = _semanticKeysForMapping(technicalMapping);
+    if (semanticKeys.isEmpty) {
+      return null;
+    }
+
+    for (final semanticKey in semanticKeys) {
+      switch (semanticKey) {
+        case 'hub':
+        case 'hub_generic':
+        case 'front_hub':
+        case 'rear_hub':
+          return _assessDetailedHubCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+        case 'rim':
+          return _assessDetailedRimCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+        case 'tube':
+        case 'tube_anti_pinchazo':
+          return _assessDetailedTubeCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+        case 'rim_strip':
+          return _assessDetailedRimStripCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+        case 'tubeless_valve':
+          return _assessDetailedTubelessValveCompatibility(
+            compatibilityContext: compatibilityContext,
+            specValues: specValues,
+          );
+      }
+    }
+
+    return null;
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedHubCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final wheelPosition = _canonicalWheelPosition(specValues['wheel_position']);
+    final hubSpacingMm = _parseDoubleValue(specValues['hub_spacing_mm']);
+    final spokeHoles = _parseIntValue(specValues['spoke_holes']);
+    final freehubType = _canonicalFreehubType(specValues['freehub_type']);
+
+    if (wheelPosition == null &&
+        hubSpacingMm == null &&
+        spokeHoles == null &&
+        freehubType == null) {
+      return null;
+    }
+
+    if (wheelPosition == null || wheelPosition == 'both') {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Maza; la ficha debe confirmar si es delantera o trasera',
+        sortPriority: 20,
+      );
+    }
+
+    final isFront = wheelPosition == 'front';
+    final expectedSpacing = isFront
+        ? compatibilityContext.frontHubSpacingMm
+        : compatibilityContext.rearHubSpacingMm;
+    final expectedSpokeHoles = isFront
+        ? compatibilityContext.frontSpokeHoles
+        : compatibilityContext.rearSpokeHoles;
+    final expectedFreehubType = isFront
+        ? null
+        : _canonicalFreehubType(compatibilityContext.freehubType);
+
+    if (hubSpacingMm != null &&
+        expectedSpacing != null &&
+        !_sameNumericValue(hubSpacingMm, expectedSpacing)) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Maza ${_wheelPositionLabel(wheelPosition)} ${_formatMeasurement(hubSpacingMm)} mm no coincide con la bici (${_formatMeasurement(expectedSpacing)} mm)',
+      );
+    }
+
+    if (spokeHoles != null &&
+        expectedSpokeHoles != null &&
+        spokeHoles != expectedSpokeHoles) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Maza ${_wheelPositionLabel(wheelPosition)} ${spokeHoles}H no coincide con la bici (${expectedSpokeHoles}H)',
+      );
+    }
+
+    if (!isFront &&
+        freehubType != null &&
+        expectedFreehubType != null &&
+        freehubType != expectedFreehubType) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Maza trasera con driver ${_freehubTypeLabel(freehubType)} no coincide con la bici (${_freehubTypeLabel(expectedFreehubType)})',
+      );
+    }
+
+    final matchedParts = <String>[];
+    final unresolvedParts = <String>[];
+
+    if (hubSpacingMm != null) {
+      if (expectedSpacing != null) {
+        matchedParts.add('ancho ${_formatMeasurement(hubSpacingMm)} mm');
+      } else {
+        unresolvedParts.add('ancho del cuadro/horquilla');
+      }
+    }
+
+    if (spokeHoles != null) {
+      if (expectedSpokeHoles != null) {
+        matchedParts.add('${spokeHoles}H');
+      } else {
+        unresolvedParts.add('perforaciones de la rueda');
+      }
+    }
+
+    if (!isFront && freehubType != null) {
+      if (expectedFreehubType != null) {
+        matchedParts.add('driver ${_freehubTypeLabel(freehubType)}');
+      } else {
+        unresolvedParts.add('driver / freehub de la bici');
+      }
+    }
+
+    if (matchedParts.isNotEmpty && unresolvedParts.isEmpty) {
+      return ProductCompatibilityAssessment.compatible(
+        detail:
+            'Maza ${_wheelPositionLabel(wheelPosition)} compatible (${matchedParts.join(' · ')})',
+      );
+    }
+
+    final detailParts = <String>[
+      'Maza ${_wheelPositionLabel(wheelPosition)}',
+      if (matchedParts.isNotEmpty) 'coincide ${matchedParts.join(' · ')}',
+      if (unresolvedParts.isNotEmpty)
+        'falta confirmar ${unresolvedParts.join(', ')}',
+    ];
+
+    return ProductCompatibilityAssessment.caution(
+      detail: detailParts.join('; '),
+      sortPriority: 18,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedRimCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
+    final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
+    final productSpokeHoles = _parseIntValue(specValues['spoke_holes']);
+    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
+
+    if (productWheelSize == null &&
+        productSpokeHoles == null &&
+        productValveType == null) {
+      return null;
+    }
+
+    if (productWheelSize != null &&
+        bikeWheelSize != null &&
+        productWheelSize != bikeWheelSize) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Llanta $productWheelSize no coincide con la bici ($bikeWheelSize)',
+      );
+    }
+
+    final matchingSides = <String>[];
+    final knownSpokeSides = <String>[];
+    if (productSpokeHoles != null) {
+      if (compatibilityContext.frontSpokeHoles != null) {
+        knownSpokeSides.add('delantera');
+        if (productSpokeHoles == compatibilityContext.frontSpokeHoles) {
+          matchingSides.add('delantera');
+        }
+      }
+      if (compatibilityContext.rearSpokeHoles != null) {
+        knownSpokeSides.add('trasera');
+        if (productSpokeHoles == compatibilityContext.rearSpokeHoles) {
+          matchingSides.add('trasera');
+        }
+      }
+
+      if (knownSpokeSides.isNotEmpty && matchingSides.isEmpty) {
+        return ProductCompatibilityAssessment.incompatible(
+          detail:
+              'Llanta ${productSpokeHoles}H no coincide con la bici (${knownSpokeSides.join(' / ')})',
+        );
+      }
+    }
+
+    final matchedParts = <String>[];
+    final unresolvedParts = <String>[];
+    final cautionParts = <String>[];
+
+    if (productWheelSize != null) {
+      if (bikeWheelSize != null) {
+        matchedParts.add('aro $productWheelSize');
+      } else {
+        unresolvedParts.add('rodado de la bici');
+      }
+    }
+
+    if (productSpokeHoles != null) {
+      if (matchingSides.isNotEmpty) {
+        final sideHint = matchingSides.length == 2
+            ? 'ambas ruedas'
+            : 'rueda ${matchingSides.first}';
+        matchedParts.add('${productSpokeHoles}H ($sideHint)');
+      } else if (knownSpokeSides.isEmpty) {
+        unresolvedParts.add('perforaciones de la rueda');
+      }
+    }
+
+    if (productValveType != null) {
+      if (bikeValveType != null) {
+        if (productValveType == bikeValveType) {
+          matchedParts.add('válvula ${_valveTypeLabel(productValveType)}');
+        } else {
+          cautionParts.add(
+            'ojo con el taladro de válvula (${_valveTypeLabel(productValveType)} vs ${_valveTypeLabel(bikeValveType)})',
+          );
+        }
+      } else {
+        unresolvedParts.add('tipo de válvula de la bici');
+      }
+    }
+
+    if (matchedParts.length >= 2 &&
+        unresolvedParts.isEmpty &&
+        cautionParts.isEmpty) {
+      return ProductCompatibilityAssessment.compatible(
+        detail: 'Llanta compatible (${matchedParts.join(' · ')})',
+      );
+    }
+
+    final detailParts = <String>[
+      'Llanta',
+      if (matchedParts.isNotEmpty) 'coincide ${matchedParts.join(' · ')}',
+      if (cautionParts.isNotEmpty) cautionParts.join(' · '),
+      if (unresolvedParts.isNotEmpty)
+        'falta confirmar ${unresolvedParts.join(', ')}',
+    ];
+
+    return ProductCompatibilityAssessment.caution(
+      detail: detailParts.join('; '),
+      sortPriority: 18,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedTubeCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
+    final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
+    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
+
+    if (productWheelSize == null && productValveType == null) {
+      return null;
+    }
+
+    if (productWheelSize != null &&
+        bikeWheelSize != null &&
+        productWheelSize != bikeWheelSize) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Cámara $productWheelSize no coincide con la bici ($bikeWheelSize)',
+      );
+    }
+
+    if (productValveType != null &&
+        bikeValveType != null &&
+        productValveType != bikeValveType) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Cámara con válvula ${_valveTypeLabel(productValveType)} no coincide con la bici (${_valveTypeLabel(bikeValveType)})',
+      );
+    }
+
+    final matchedParts = <String>[];
+    final unresolvedParts = <String>[];
+
+    if (productWheelSize != null) {
+      if (bikeWheelSize != null) {
+        matchedParts.add('aro $productWheelSize');
+      } else {
+        unresolvedParts.add('rodado de la bici');
+      }
+    }
+
+    if (productValveType != null) {
+      if (bikeValveType != null) {
+        matchedParts.add('válvula ${_valveTypeLabel(productValveType)}');
+      } else {
+        unresolvedParts.add('tipo de válvula de la bici');
+      }
+    }
+
+    if (matchedParts.isNotEmpty && unresolvedParts.isEmpty) {
+      return ProductCompatibilityAssessment.compatible(
+        detail: 'Cámara compatible (${matchedParts.join(' · ')})',
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Cámara; coincide ${matchedParts.join(' · ')}${matchedParts.isNotEmpty && unresolvedParts.isNotEmpty ? '; ' : ''}${unresolvedParts.isNotEmpty ? 'falta confirmar ${unresolvedParts.join(', ')}' : ''}',
+      sortPriority: 18,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedRimStripCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final productWheelSize = _canonicalWheelSize(specValues['wheel_size']);
+    final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
+    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
+
+    if (productWheelSize == null && productValveType == null) {
+      return null;
+    }
+
+    if (productWheelSize != null &&
+        bikeWheelSize != null &&
+        productWheelSize != bikeWheelSize) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Cubre cámara $productWheelSize no coincide con la bici ($bikeWheelSize)',
+      );
+    }
+
+    if (productValveType != null &&
+        bikeValveType != null &&
+        productValveType != bikeValveType) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Cubre cámara para válvula ${_valveTypeLabel(productValveType)} no coincide con la bici (${_valveTypeLabel(bikeValveType)})',
+      );
+    }
+
+    final matchedParts = <String>[];
+    final unresolvedParts = <String>[];
+
+    if (productWheelSize != null) {
+      if (bikeWheelSize != null) {
+        matchedParts.add('aro $productWheelSize');
+      } else {
+        unresolvedParts.add('rodado de la bici');
+      }
+    }
+
+    if (productValveType != null) {
+      if (bikeValveType != null) {
+        matchedParts.add('válvula ${_valveTypeLabel(productValveType)}');
+      } else {
+        unresolvedParts.add('tipo de válvula de la bici');
+      }
+    }
+
+    if (matchedParts.isNotEmpty && unresolvedParts.isEmpty) {
+      return ProductCompatibilityAssessment.compatible(
+        detail: 'Cubre cámara compatible (${matchedParts.join(' · ')})',
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Cubre cámara; coincide ${matchedParts.join(' · ')}${matchedParts.isNotEmpty && unresolvedParts.isNotEmpty ? '; ' : ''}${unresolvedParts.isNotEmpty ? 'falta confirmar ${unresolvedParts.join(', ')}' : ''}',
+      sortPriority: 20,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessDetailedTubelessValveCompatibility({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final productValveType = _canonicalValveType(specValues['valve_type']);
+    final bikeValveType = _canonicalValveType(compatibilityContext.valveType);
+
+    if (productValveType == null) {
+      return null;
+    }
+
+    if (bikeValveType != null && productValveType != bikeValveType) {
+      return ProductCompatibilityAssessment.incompatible(
+        detail:
+            'Válvula tubeless ${_valveTypeLabel(productValveType)} no coincide con la bici (${_valveTypeLabel(bikeValveType)})',
+      );
+    }
+
+    if (bikeValveType != null) {
+      return ProductCompatibilityAssessment.compatible(
+        detail:
+            'Válvula tubeless compatible (${_valveTypeLabel(productValveType)})',
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail: 'Válvula tubeless; falta confirmar el tipo de válvula de la bici',
+      sortPriority: 18,
     );
   }
 
@@ -336,6 +811,216 @@ class BikeProductCompatibilityService {
 
     return const ProductCompatibilityAssessment.caution(
       detail: 'Rotor para disco; revisar diametro y rueda',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessHubFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final hasHubFacts = compatibilityContext.frontHubSpacingMm != null ||
+        compatibilityContext.rearHubSpacingMm != null ||
+        compatibilityContext.frontSpokeHoles != null ||
+        compatibilityContext.rearSpokeHoles != null ||
+        compatibilityContext.freehubType != null;
+
+    if (!hasHubFacts) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Maza; falta confirmar ancho, perforaciones y driver del wheelset',
+        sortPriority: 36,
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Maza; revisar posición, ancho, perforaciones y compatibilidad del driver',
+      sortPriority: 26,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessRimFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final wheelSize = compatibilityContext.wheelSize;
+    if (wheelSize == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Aro; falta confirmar rodado, perforaciones y sistema de freno',
+        sortPriority: 36,
+      );
+    }
+
+    final brakeType = compatibilityContext.brakeType;
+    final brakeHint =
+        brakeType == null ? 'sistema de freno' : _brakeTypePhrase(brakeType);
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Aro $wheelSize; revisar perforaciones y compatibilidad con $brakeHint',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessSpokeFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final frontSpokeHoles = compatibilityContext.frontSpokeHoles;
+    final rearSpokeHoles = compatibilityContext.rearSpokeHoles;
+    if (frontSpokeHoles == null && rearSpokeHoles == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Rayo; falta confirmar largo, calibre y perforaciones de la rueda',
+        sortPriority: 38,
+      );
+    }
+
+    final knownHoleCounts = <int>{
+      if (frontSpokeHoles != null) frontSpokeHoles,
+      if (rearSpokeHoles != null) rearSpokeHoles,
+    }.toList()
+      ..sort();
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Rayo; revisar largo, calibre y perforaciones (${knownHoleCounts.join('/')}H)',
+      sortPriority: 28,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessTubeFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final wheelSize = compatibilityContext.wheelSize;
+    final valveType = compatibilityContext.valveType;
+
+    if (wheelSize == null && valveType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Cámara; falta confirmar rodado y tipo de válvula de la bici',
+        sortPriority: 36,
+      );
+    }
+
+    final detailParts = <String>[
+      'Cámara',
+      if (wheelSize != null) 'aro $wheelSize',
+      if (valveType != null) 'válvula ${_valveTypeLabel(valveType)}',
+    ];
+
+    return ProductCompatibilityAssessment.caution(
+      detail: '${detailParts.join(' · ')}; revisar ancho exacto del neumático',
+      sortPriority: 24,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessRimStripFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    if (compatibilityContext.wheelSize == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Cubre cámara; falta confirmar rodado y ancho del aro',
+        sortPriority: 36,
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Cubre cámara para aro ${compatibilityContext.wheelSize}; revisar ancho del aro y perforación de válvula',
+      sortPriority: 26,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessTubelessValveFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final wheelSize = compatibilityContext.wheelSize;
+    if (wheelSize == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Válvula tubeless; falta confirmar rodado, largo y compatibilidad del aro',
+        sortPriority: 36,
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Válvula tubeless para aro $wheelSize; revisar largo de válvula y formato del aro',
+      sortPriority: 26,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessTubelessConsumableFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    if (compatibilityContext.wheelSize == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Consumible tubeless; falta confirmar si la bici usa un sistema tubeless compatible',
+        sortPriority: 38,
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Consumible tubeless para aro ${compatibilityContext.wheelSize}; revisar si el aro y neumático trabajan tubeless',
+      sortPriority: 30,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessHeadsetFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    if (compatibilityContext.bikeType == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Juego de dirección; falta confirmar el estándar de dirección de la bici',
+        sortPriority: 40,
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Juego de dirección; revisar estándar, rodamientos superior/inferior y tipo de cuadro',
+      sortPriority: 34,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessBearingFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final hasBearingContext = compatibilityContext.frontHubSpacingMm != null ||
+        compatibilityContext.rearHubSpacingMm != null ||
+        compatibilityContext.bottomBracketFamily != null ||
+        compatibilityContext.bikeType != null;
+
+    if (!hasBearingContext) {
+      return const ProductCompatibilityAssessment.caution(
+        detail:
+            'Rodamiento; falta contexto para saber si corresponde a maza, dirección o pedalier',
+        sortPriority: 40,
+      );
+    }
+
+    return const ProductCompatibilityAssessment.caution(
+      detail:
+          'Rodamiento; revisar si corresponde a maza, dirección o pedalier y confirmar medida exacta',
+      sortPriority: 34,
+    );
+  }
+
+  ProductCompatibilityAssessment? _assessBottomBracketFamilyCompatibility(
+    _BikeCompatibilityContext compatibilityContext,
+  ) {
+    final bottomBracketFamily = compatibilityContext.bottomBracketFamily;
+    if (bottomBracketFamily == null) {
+      return const ProductCompatibilityAssessment.caution(
+        detail: 'Pedalier / BB; falta confirmar el estándar de la bici',
+        sortPriority: 36,
+      );
+    }
+
+    return ProductCompatibilityAssessment.caution(
+      detail:
+          'Pedalier / BB ${_bottomBracketFamilyLabel(bottomBracketFamily)}; revisar estándar, eje y ancho de caja',
       sortPriority: 24,
     );
   }
@@ -840,6 +1525,23 @@ class BikeProductCompatibilityService {
     return int.tryParse(rawValue.toString().trim());
   }
 
+  double? _parseDoubleValue(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+    if (rawValue is double) {
+      return rawValue;
+    }
+    if (rawValue is num) {
+      return rawValue.toDouble();
+    }
+    return double.tryParse(rawValue.toString().trim());
+  }
+
+  bool _sameNumericValue(double left, double right) {
+    return (left - right).abs() < 0.6;
+  }
+
   bool _areBrakeTypesCompatible(String bikeBrakeType, String productBrakeType) {
     if (bikeBrakeType == productBrakeType) {
       return true;
@@ -936,6 +1638,154 @@ class BikeProductCompatibilityService {
     return normalized;
   }
 
+  String? _canonicalWheelSize(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(rawValue.toString()).replaceAll('"', '');
+    if (normalized.isEmpty ||
+        normalized == 'other' ||
+        normalized == 'otra' ||
+        normalized == 'unknown' ||
+        normalized == 'desconocido') {
+      return null;
+    }
+
+    if (normalized.contains('700c')) {
+      return '700c';
+    }
+    if (normalized.contains('650b') || normalized.contains('27.5')) {
+      return '27.5"';
+    }
+    if (RegExp(r'(^|[^0-9])29([^0-9]|$)').hasMatch(normalized)) {
+      return '29"';
+    }
+    if (RegExp(r'(^|[^0-9])26([^0-9]|$)').hasMatch(normalized)) {
+      return '26"';
+    }
+    if (RegExp(r'(^|[^0-9])24([^0-9]|$)').hasMatch(normalized)) {
+      return '24"';
+    }
+    if (RegExp(r'(^|[^0-9])20([^0-9]|$)').hasMatch(normalized)) {
+      return '20"';
+    }
+    if (RegExp(r'(^|[^0-9])16([^0-9]|$)').hasMatch(normalized)) {
+      return '16"';
+    }
+    if (RegExp(r'(^|[^0-9])12([^0-9]|$)').hasMatch(normalized)) {
+      return '12"';
+    }
+
+    return rawValue.toString().trim();
+  }
+
+  String? _canonicalWheelPosition(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(rawValue.toString());
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized.contains('delan') || normalized == 'front') {
+      return 'front';
+    }
+    if (normalized.contains('tras') || normalized == 'rear') {
+      return 'rear';
+    }
+    if (normalized.contains('universal') ||
+        normalized.contains('amb') ||
+        normalized == 'both') {
+      return 'both';
+    }
+
+    return null;
+  }
+
+  String _wheelPositionLabel(String wheelPosition) {
+    switch (wheelPosition) {
+      case 'front':
+        return 'delantera';
+      case 'rear':
+        return 'trasera';
+      case 'both':
+        return 'universal';
+      default:
+        return wheelPosition;
+    }
+  }
+
+  String? _canonicalValveType(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(rawValue.toString());
+    if (normalized.isEmpty ||
+        normalized == 'unknown' ||
+        normalized.contains('desconoc')) {
+      return null;
+    }
+    if (normalized.contains('presta')) {
+      return 'presta';
+    }
+    if (normalized.contains('schrader')) {
+      return 'schrader';
+    }
+    if (normalized.contains('dunlop')) {
+      return 'dunlop';
+    }
+    if (normalized == 'other' || normalized.contains('otra')) {
+      return 'other';
+    }
+
+    return normalized;
+  }
+
+  String? _canonicalFreehubType(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    final normalized = _normalizeText(rawValue.toString());
+    if (normalized.isEmpty ||
+        normalized == 'unknown' ||
+        normalized.contains('desconoc')) {
+      return null;
+    }
+    if (normalized.contains('shimano') && normalized.contains('hg')) {
+      return 'shimano_hg';
+    }
+    if (normalized.contains('micro spline') ||
+        normalized.contains('microspline')) {
+      return 'microspline';
+    }
+    if (normalized.contains('sram') && normalized.contains('xd')) {
+      return 'sram_xd';
+    }
+    if (normalized.contains('campagnolo')) {
+      return 'campagnolo';
+    }
+    if (normalized.contains('roscada') ||
+        normalized.contains('threaded') ||
+        normalized.contains('rueda libre')) {
+      return 'threaded_freewheel';
+    }
+    if (normalized.contains('driver') || normalized.contains('bmx')) {
+      return 'bmx_driver';
+    }
+    if (normalized.contains('fija') || normalized.contains('fixed')) {
+      return 'fixed_threaded';
+    }
+    if (normalized.contains('contrapedal') || normalized.contains('coaster')) {
+      return 'coaster_hub';
+    }
+
+    return _normalizeSemanticToken(rawValue.toString());
+  }
+
   String _brakeTypeLabel(String brakeType) {
     if (brakeType == 'disc') {
       return 'Disco';
@@ -968,6 +1818,70 @@ class BikeProductCompatibilityService {
 
   String _rimBrakeFamilyLabel(String rimBrakeFamily) {
     return kRimBrakeFamilyOptions[rimBrakeFamily] ?? rimBrakeFamily;
+  }
+
+  String _valveTypeLabel(String valveType) {
+    switch (valveType) {
+      case 'presta':
+        return 'Presta';
+      case 'schrader':
+        return 'Schrader';
+      case 'dunlop':
+        return 'Dunlop';
+      case 'other':
+        return 'otra';
+      default:
+        return valveType;
+    }
+  }
+
+  String _freehubTypeLabel(String freehubType) {
+    switch (freehubType) {
+      case 'shimano_hg':
+        return 'Shimano HG';
+      case 'microspline':
+        return 'Micro Spline';
+      case 'sram_xd':
+        return 'SRAM XD';
+      case 'campagnolo':
+        return 'Campagnolo';
+      case 'threaded_freewheel':
+        return 'Rueda libre roscada';
+      case 'bmx_driver':
+        return 'Driver BMX';
+      case 'fixed_threaded':
+        return 'Rosca fija / contratuerca';
+      case 'coaster_hub':
+        return 'Maza contrapedal';
+      default:
+        return freehubType;
+    }
+  }
+
+  String _formatMeasurement(double value) {
+    if (value == value.roundToDouble()) {
+      return value.round().toString();
+    }
+    return value.toStringAsFixed(1);
+  }
+
+  String _bottomBracketFamilyLabel(String bottomBracketFamily) {
+    switch (bottomBracketFamily) {
+      case 'bsa_threaded':
+        return 'BSA roscado';
+      case 'pressfit':
+        return 'Pressfit';
+      case 'bb30_pf30':
+        return 'BB30 / PF30';
+      case 'mid':
+        return 'Mid / BMX';
+      case 'one_piece':
+        return 'One-piece';
+      case 'unknown':
+        return 'sin confirmar';
+      default:
+        return bottomBracketFamily;
+    }
   }
 
   String? _normalizeCompatibilityValue(dynamic rawValue) {

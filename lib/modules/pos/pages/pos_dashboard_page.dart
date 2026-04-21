@@ -3809,27 +3809,30 @@ class _CartItemThumbnail extends StatelessWidget {
       child: Container(
         width: 46,
         height: 46,
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: Colors.white,
         child: imageUrl != null && imageUrl.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.primary,
+            ? Padding(
+                padding: const EdgeInsets.all(4),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
-                ),
-                errorWidget: (_, __, ___) => Icon(
-                  isService
-                      ? Icons.design_services
-                      : Icons.inventory_2_outlined,
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant,
+                  errorWidget: (_, __, ___) => Icon(
+                    isService
+                        ? Icons.design_services
+                        : Icons.inventory_2_outlined,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               )
             : Icon(

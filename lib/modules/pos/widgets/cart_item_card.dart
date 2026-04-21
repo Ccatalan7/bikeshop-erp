@@ -41,7 +41,7 @@ class CartItemCard extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              color: Colors.white,
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                 width: 1,
@@ -49,18 +49,21 @@ class CartItemCard extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: item.product?.imageUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: item.product!.imageUrl!,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 104,
-                    memCacheHeight: 104,
-                    placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    errorWidget: (context, url, error) => Icon(
-                      Icons.pedal_bike,
-                      size: 20,
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                ? Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: CachedNetworkImage(
+                      imageUrl: item.product!.imageUrl!,
+                      fit: BoxFit.contain,
+                      memCacheWidth: 104,
+                      memCacheHeight: 104,
+                      placeholder: (context, url) => const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      errorWidget: (context, url, error) => Icon(
+                        Icons.pedal_bike,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
                     ),
                   )
                 : Icon(
