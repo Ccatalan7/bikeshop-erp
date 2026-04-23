@@ -21,12 +21,17 @@ class InventoryService extends ChangeNotifier {
   // ============================================================
   List<Product>? _cachedProducts;
   DateTime? _productsCacheTime;
+  List<Product>? _cachedListProducts;
+  DateTime? _listProductsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
   bool _isLoadingProducts = false;
+  bool _isLoadingListProducts = false;
 
   // Public getters for cached data (instant access)
   List<Product> get cachedProducts => _cachedProducts ?? [];
   bool get hasProductsCache => _cachedProducts != null;
+  List<Product> get cachedListProducts => _cachedListProducts ?? [];
+  bool get hasListProductsCache => _cachedListProducts != null;
 
   // ============================================================
   // PRODUCT LIST PAGE STATE - Preserve across navigation
@@ -144,37 +149,41 @@ class InventoryService extends ChangeNotifier {
   void invalidateProductsCache() {
     _cachedProducts = null;
     _productsCacheTime = null;
+    _cachedListProducts = null;
+    _listProductsCacheTime = null;
   }
 
   void _updateCachedProductStock(String productId, int stockAfter) {
-    final cachedProducts = _cachedProducts;
-    if (cachedProducts == null) return;
+    void updateCache(List<Product>? cache) {
+      if (cache == null) return;
+      final index = cache.indexWhere((product) => product.id == productId);
+      if (index < 0) return;
+      cache[index] = cache[index].copyWith(
+        inventoryQty: stockAfter,
+        updatedAt: DateTime.now(),
+      );
+    }
 
-    final index =
-        cachedProducts.indexWhere((product) => product.id == productId);
-    if (index < 0) return;
-
-    cachedProducts[index] = cachedProducts[index].copyWith(
-      inventoryQty: stockAfter,
-      updatedAt: DateTime.now(),
-    );
+    updateCache(_cachedProducts);
+    updateCache(_cachedListProducts);
   }
 
   void _updateCachedProductImageFingerprint(
     String productId,
     Map<String, dynamic>? imageFingerprint,
   ) {
-    final cachedProducts = _cachedProducts;
-    if (cachedProducts == null) return;
+    void updateCache(List<Product>? cache) {
+      if (cache == null) return;
+      final index = cache.indexWhere((product) => product.id == productId);
+      if (index < 0) return;
+      cache[index] = cache[index].copyWith(
+        imageFingerprint: imageFingerprint,
+        imageFingerprintHasValue: true,
+      );
+    }
 
-    final index =
-        cachedProducts.indexWhere((product) => product.id == productId);
-    if (index < 0) return;
-
-    cachedProducts[index] = cachedProducts[index].copyWith(
-      imageFingerprint: imageFingerprint,
-      imageFingerprintHasValue: true,
-    );
+    updateCache(_cachedProducts);
+    updateCache(_cachedListProducts);
   }
 
   Future<void> storeProductImageFingerprint({
@@ -320,6 +329,59 @@ class InventoryService extends ChangeNotifier {
         debugPrint('Error fetching products: $e');
       }
       rethrow;
+    }
+  }
+
+  Future<List<Product>> getProductsForList({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      if (!forceRefresh &&
+          _isCacheValid(_listProductsCacheTime) &&
+          _cachedListProducts != null) {
+        debugPrint(
+            '📦 [InventoryService] Using cached product list preview (${_cachedListProducts!.length} items)');
+        return _cachedListProducts!;
+      }
+
+      if (_isLoadingListProducts) {
+        debugPrint(
+            '⏳ [InventoryService] Already loading product list preview, waiting...');
+        while (_isLoadingListProducts) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedListProducts != null) {
+          return _cachedListProducts!;
+        }
+      }
+
+      _isLoadingListProducts = true;
+
+      final data = await _db.select(
+        'products',
+        selectColumns: Product.listPreviewSelect,
+        fetchAll: true,
+      );
+
+      final products = data.map((json) => Product.fromJson(json)).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
+      _cachedListProducts = products;
+      _listProductsCacheTime = DateTime.now();
+
+      if (!kReleaseMode) {
+        debugPrint(
+            '✅ [InventoryService] Cached ${products.length} product list preview rows');
+      }
+
+      return products;
+    } catch (e) {
+      if (!kReleaseMode) {
+        debugPrint('Error fetching product list preview: $e');
+      }
+      rethrow;
+    } finally {
+      _isLoadingListProducts = false;
     }
   }
 

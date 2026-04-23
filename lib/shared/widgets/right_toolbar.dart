@@ -2,26 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../services/query_performance_service.dart';
+import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
+import 'query_performance_gauge.dart';
 import 'quick_bike_finder_panel.dart';
 import 'quick_access_expense_rail.dart';
 import 'quick_purchase_panel.dart';
 import 'quick_sale_panel.dart';
 import 'quick_task_panel.dart';
-
-/// The tools available in the right toolbar.
-/// Add new entries here to extend the toolbar with more tools.
-enum ToolbarTool {
-  newJob,
-  bikeFinder,
-  kiosk,
-  quickSale,
-  expenses,
-  purchases,
-  tasks,
-  calculator,
-}
 
 /// A Zoho Books-style right sidebar toolbar.
 ///
@@ -36,7 +26,6 @@ class RightToolbar extends StatefulWidget {
 }
 
 class _RightToolbarState extends State<RightToolbar> {
-  ToolbarTool? _activeTool;
   double _expandedWidth = 380.0;
   bool _isResizing = false;
 
@@ -64,8 +53,6 @@ class _RightToolbarState extends State<RightToolbar> {
     await prefs.setDouble(_prefKey, _expandedWidth);
   }
 
-  bool get _isExpanded => _activeTool != null;
-
   void _selectTool(ToolbarTool tool) {
     if (tool == ToolbarTool.newJob) {
       context
@@ -73,19 +60,11 @@ class _RightToolbarState extends State<RightToolbar> {
           .navigateActiveWorkspace('/taller/pegas/nueva');
       return;
     }
-    setState(() {
-      if (_activeTool == tool) {
-        _activeTool = null; // toggle off
-      } else {
-        _activeTool = tool;
-      }
-    });
+    context.read<RightToolbarService>().toggleTool(tool);
   }
 
   void _close() {
-    setState(() {
-      _activeTool = null;
-    });
+    context.read<RightToolbarService>().close();
   }
 
   String _toolTitle(ToolbarTool tool) {
@@ -106,6 +85,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Tareas';
       case ToolbarTool.calculator:
         return 'Calculadora';
+      case ToolbarTool.performance:
+        return 'DB Gauge';
     }
   }
 
@@ -127,6 +108,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.task_alt;
       case ToolbarTool.calculator:
         return Icons.calculate_outlined;
+      case ToolbarTool.performance:
+        return Icons.speed_outlined;
     }
   }
 
@@ -151,13 +134,28 @@ class _RightToolbarState extends State<RightToolbar> {
         return const QuickTaskPanel();
       case ToolbarTool.calculator:
         return const CalculatorPanel();
+      case ToolbarTool.performance:
+        return const QueryPerformanceToolbarPanel();
     }
+  }
+
+  List<ToolbarTool> _visibleTools(RightToolbarService toolbarService) {
+    return ToolbarTool.values.where((tool) {
+      if (tool == ToolbarTool.performance) {
+        return QueryPerformanceService.isEnabled &&
+            toolbarService.isGaugePinned;
+      }
+      return true;
+    }).toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final toolbarService = context.watch<RightToolbarService>();
+    final activeTool = toolbarService.activeTool;
+    final visibleTools = _visibleTools(toolbarService);
 
     final barBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F1F3);
     final barBorder =
@@ -166,7 +164,8 @@ class _RightToolbarState extends State<RightToolbar> {
         ? theme.colorScheme.primary.withValues(alpha: 0.2)
         : theme.colorScheme.primary.withValues(alpha: 0.1);
 
-    final double currentWidth = _isExpanded ? _expandedWidth : _collapsedWidth;
+    final bool isExpanded = activeTool != null;
+    final double currentWidth = isExpanded ? _expandedWidth : _collapsedWidth;
 
     return Stack(
       children: [
@@ -181,12 +180,12 @@ class _RightToolbarState extends State<RightToolbar> {
               left: BorderSide(color: barBorder, width: 1),
             ),
           ),
-          child: _isExpanded
-              ? _buildExpanded(theme, isDark)
-              : _buildCollapsed(theme, isDark, activeBg),
+          child: isExpanded
+              ? _buildExpanded(theme, isDark, activeTool, visibleTools)
+              : _buildCollapsed(theme, activeBg, visibleTools),
         ),
         // Resize handle (left edge, only when expanded)
-        if (_isExpanded)
+        if (isExpanded)
           Positioned(
             left: 0,
             top: 0,
@@ -217,12 +216,16 @@ class _RightToolbarState extends State<RightToolbar> {
   }
 
   /// Narrow icon column (collapsed state)
-  Widget _buildCollapsed(ThemeData theme, bool isDark, Color activeBg) {
+  Widget _buildCollapsed(
+    ThemeData theme,
+    Color activeBg,
+    List<ToolbarTool> visibleTools,
+  ) {
     return Column(
       children: [
         const SizedBox(height: 12),
         // Tool icons
-        for (final tool in ToolbarTool.values)
+        for (final tool in visibleTools)
           Tooltip(
             message: _toolTitle(tool),
             preferBelow: false,
@@ -254,8 +257,12 @@ class _RightToolbarState extends State<RightToolbar> {
   }
 
   /// Expanded panel with mini icon rail + header + tool content
-  Widget _buildExpanded(ThemeData theme, bool isDark) {
-    final tool = _activeTool!;
+  Widget _buildExpanded(
+    ThemeData theme,
+    bool isDark,
+    ToolbarTool tool,
+    List<ToolbarTool> visibleTools,
+  ) {
     final railBg = isDark ? const Color(0xFF161616) : const Color(0xFFE8EAED);
     final railBorder =
         isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
@@ -291,6 +298,25 @@ class _RightToolbarState extends State<RightToolbar> {
                       ),
                     ),
                     const Spacer(),
+                    if (tool == ToolbarTool.performance)
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => context
+                              .read<RightToolbarService>()
+                              .unpinGaugeFromToolbar(),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.push_pin_outlined,
+                              size: 18,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ),
+                      ),
                     Material(
                       color: Colors.transparent,
                       child: InkWell(
@@ -327,7 +353,7 @@ class _RightToolbarState extends State<RightToolbar> {
           child: Column(
             children: [
               const SizedBox(height: 12),
-              for (final t in ToolbarTool.values)
+              for (final t in visibleTools)
                 Tooltip(
                   message: _toolTitle(t),
                   preferBelow: false,

@@ -756,7 +756,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (mounted) {
         setState(() {
-          if (customerService.hasCustomersCache && _customers.isEmpty) {
+          if (customerService.hasListCustomersCache && _customers.isEmpty) {
+            _customers =
+                List<Customer>.from(customerService.cachedListCustomers);
+          } else if (customerService.hasCustomersCache && _customers.isEmpty) {
             _customers = List<Customer>.from(customerService.cachedCustomers);
           }
           if (inventoryService.hasLoaded && _products.isEmpty) {
@@ -769,7 +772,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       final results = await Future.wait([
-        customerService.getCustomers(limit: 50),
+        customerService.getCustomersForList(),
         inventoryService.searchProducts('', limit: 50),
         jobStatusService.loadStatuses(),
         bikeshopService.getJobSubjects(),
@@ -859,6 +862,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<BikeshopService>(context, listen: false);
       final inventoryService =
           Provider.of<InventoryService>(context, listen: false);
+      final databaseService =
+          Provider.of<DatabaseService>(context, listen: false);
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
 
       debugPrint('🔍 Loading job with ID: ${widget.jobId}');
       final job = await bikeshopService.getJobById(widget.jobId!);
@@ -879,9 +886,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       String? linkedInvoiceNumber;
       if (job.invoiceId != null) {
         try {
-          final invoiceData =
-              await Provider.of<DatabaseService>(context, listen: false)
-                  .selectById('sales_invoices', job.invoiceId!);
+          final invoiceData = await databaseService.selectById(
+              'sales_invoices', job.invoiceId!);
           linkedInvoiceNumber = invoiceData?['invoice_number']?.toString();
         } catch (e) {
           debugPrint(
@@ -895,8 +901,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       try {
         customer = _customers.firstWhere((c) => c.id == job.customerId);
       } catch (_) {
-        customer = await Provider.of<CustomerService>(context, listen: false)
-            .getCustomerById(job.customerId);
+        customer = await customerService.getCustomerById(job.customerId);
         if (customer != null && mounted) {
           setState(() {
             _customers = [customer!, ..._customers];
@@ -1053,6 +1058,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return null;
       }
 
+      Future<ServiceWizardProfile?> getWizardProfileForLoadedItem(
+        MechanicJobItem item,
+        Product? product,
+      ) async {
+        final isServiceItem = item.itemType == 'service' ||
+            item.serviceProductId != null ||
+            product?.isService == true;
+        if (!isServiceItem || product?.id == null) {
+          return null;
+        }
+
+        return _serviceWizardService
+            .getProfileForProduct(product!.id)
+            .catchError((_) => null);
+      }
+
       // Build bike tabs from job bikes data
       final List<_BikeTabData> loadedBikeTabs = [];
 
@@ -1098,13 +1119,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
           for (final item in bikeItems) {
             final product = await getProductForItem(item);
-            final wizardProfile = item.serviceConfigurationData != null &&
-                    item.serviceConfigurationData!.isNotEmpty &&
-                    product?.id != null
-                ? await _serviceWizardService
-                    .getProfileForProduct(product!.id)
-                    .catchError((_) => null)
-                : null;
+            final wizardProfile =
+                await getWizardProfileForLoadedItem(item, product);
             tab.partItems.add(_JobPartItem(
               id: item.id,
               product: product,
@@ -1139,13 +1155,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             allItems.where((item) => item.jobBikeId == null).toList();
         for (final item in orphanItems) {
           final product = await getProductForItem(item);
-          final wizardProfile = item.serviceConfigurationData != null &&
-                  item.serviceConfigurationData!.isNotEmpty &&
-                  product?.id != null
-              ? await _serviceWizardService
-                  .getProfileForProduct(product!.id)
-                  .catchError((_) => null)
-              : null;
+          final wizardProfile =
+              await getWizardProfileForLoadedItem(item, product);
           generalTab.partItems.add(_JobPartItem(
             id: item.id,
             product: product,
@@ -1186,13 +1197,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Load all items (no jobBikeId filtering for legacy)
           for (final item in allItems) {
             final product = await getProductForItem(item);
-            final wizardProfile = item.serviceConfigurationData != null &&
-                    item.serviceConfigurationData!.isNotEmpty &&
-                    product?.id != null
-                ? await _serviceWizardService
-                    .getProfileForProduct(product!.id)
-                    .catchError((_) => null)
-                : null;
+            final wizardProfile =
+                await getWizardProfileForLoadedItem(item, product);
             tab.partItems.add(_JobPartItem(
               id: item.id,
               product: product,
@@ -1225,13 +1231,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               allItems.where((item) => item.jobBikeId == null).toList();
           for (final item in legacyOrphanItems) {
             final product = await getProductForItem(item);
-            final wizardProfile = item.serviceConfigurationData != null &&
-                    item.serviceConfigurationData!.isNotEmpty &&
-                    product?.id != null
-                ? await _serviceWizardService
-                    .getProfileForProduct(product!.id)
-                    .catchError((_) => null)
-                : null;
+            final wizardProfile =
+                await getWizardProfileForLoadedItem(item, product);
             legacyGeneralTab.partItems.add(_JobPartItem(
               id: item.id,
               product: product,
@@ -1356,6 +1357,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Future<Customer?> _createQuickCustomer(String name) async {
     if (name.trim().isEmpty) return null;
     try {
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
@@ -1367,8 +1370,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         rut: '',
       );
 
-      final customerService =
-          Provider.of<CustomerService>(context, listen: false);
       final created = await customerService.createCustomer(customer);
 
       // Add to cached list
@@ -1582,6 +1583,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final effectiveProfile =
           _pendingBikeProfileOverrides[bike.id!] ?? profile;
       final tabForBike = _bikeTabForBike(bike);
+      final originalPartItems = tabForBike == null
+          ? null
+          : List<_JobPartItem>.from(tabForBike.partItems);
       final hydratedPartItems = tabForBike == null
           ? null
           : await _hydrateDefaultServiceLocationsForTab(
@@ -1601,6 +1605,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ..addAll(hydratedPartItems);
         }
       });
+
+      if (originalPartItems != null && hydratedPartItems != null) {
+        unawaited(_persistHydratedServiceLocationBackfill(
+          originalPartItems,
+          hydratedPartItems,
+        ));
+      }
     } catch (e) {
       debugPrint('⚠️ Error loading selected bike profile: $e');
     } finally {
@@ -4023,6 +4034,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return family == 'bottom_bracket';
   }
 
+  bool _serviceProfileHasNoneOnlyTarget(ServiceWizardProfile? serviceProfile) {
+    return serviceProfile?.targetPositionMode == 'none';
+  }
+
+  BikeMemoryLocation _normalizedLocationForServiceProfile(
+    ServiceWizardProfile? serviceProfile,
+    BikeMemoryLocation location,
+  ) {
+    if (_serviceProfileHasNoneOnlyTarget(serviceProfile)) {
+      return BikeMemoryLocation.none;
+    }
+    return location;
+  }
+
   BikeProfile? _pendingBikeProfileForBike(Bike? bike) {
     final bikeId = bike?.id;
     if (bikeId == null || bikeId.isEmpty) {
@@ -4064,11 +4089,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   bool _bikeHasRearOnlyDrivetrain(BikeProfile? bikeProfile) {
-    final drivetrainConfig = bikeProfile?.technicalValues['drivetrainConfig']
-        ?.toString()
-        .trim()
-        .toLowerCase();
-    return drivetrainConfig != null && drivetrainConfig.startsWith('1x');
+    final drivetrainConfig =
+        bikeProfile?.technicalValues['drivetrainConfig']?.toString();
+    final normalizedConfig = drivetrainConfig?.trim().toLowerCase();
+    if (normalizedConfig == null ||
+        normalizedConfig.isEmpty ||
+        normalizedConfig == 'singlespeed') {
+      return false;
+    }
+
+    return drivetrainFrontChainringCountFromConfig(normalizedConfig) == '1';
   }
 
   Future<ServiceWizardProfile?> _loadServiceWizardProfileForProduct(
@@ -4085,22 +4115,70 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return ServiceWizardService.normalizeProfile(profile);
   }
 
+  Future<void> _persistHydratedServiceLocationBackfill(
+    List<_JobPartItem> previousItems,
+    List<_JobPartItem> hydratedItems,
+  ) async {
+    if (!mounted || previousItems.length != hydratedItems.length) {
+      return;
+    }
+
+    final databaseService = Provider.of<DatabaseService>(
+      context,
+      listen: false,
+    );
+    final persistedIdPattern = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    );
+
+    for (var index = 0; index < hydratedItems.length; index++) {
+      final previousItem = previousItems[index];
+      final hydratedItem = hydratedItems[index];
+      if (previousItem.location == hydratedItem.location ||
+          hydratedItem.location == BikeMemoryLocation.none ||
+          !hydratedItem.isServiceItem ||
+          !persistedIdPattern.hasMatch(hydratedItem.id)) {
+        continue;
+      }
+
+      try {
+        await databaseService.update(
+          'mechanic_job_items',
+          hydratedItem.id,
+          {'location_key': hydratedItem.location.dbValue},
+        );
+      } catch (error) {
+        debugPrint(
+          '⚠️ Could not backfill service location for item ${hydratedItem.id}: $error',
+        );
+      }
+    }
+  }
+
   BikeMemoryLocation _defaultServiceLocationForProfile(
     ServiceWizardProfile? serviceProfile, {
     required BikeProfile? bikeProfile,
     BikeMemoryLocation currentLocation = BikeMemoryLocation.none,
   }) {
+    final normalizedLocation = _normalizedLocationForServiceProfile(
+      serviceProfile,
+      currentLocation,
+    );
+    if (normalizedLocation != BikeMemoryLocation.none) {
+      return normalizedLocation;
+    }
+
     if (currentLocation != BikeMemoryLocation.none) {
-      return currentLocation;
+      return normalizedLocation;
     }
 
     if (serviceProfile?.serviceFamily != 'drivetrain') {
-      return currentLocation;
+      return normalizedLocation;
     }
 
     return _bikeHasRearOnlyDrivetrain(bikeProfile)
         ? BikeMemoryLocation.rear
-        : currentLocation;
+        : normalizedLocation;
   }
 
   Future<List<_JobPartItem>?> _hydrateDefaultServiceLocationsForTab(
@@ -4152,6 +4230,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Set<BikeMemoryLocation> _availableServiceLocationsForItem(_JobPartItem item) {
     final wizardProfile =
         ServiceWizardService.normalizeProfile(item.wizardProfile);
+    if (_serviceProfileHasNoneOnlyTarget(wizardProfile)) {
+      return const {BikeMemoryLocation.none};
+    }
+
     if (wizardProfile?.serviceFamily == 'drivetrain' &&
         _bikeHasRearOnlyDrivetrain(_bikeProfileForCurrentTab())) {
       return const {BikeMemoryLocation.rear};
@@ -5532,7 +5614,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         helperText = 'Se actualizará la ficha del freno trasero.';
       } else {
         helperText =
-            'Para dejarlo ligado a una ficha concreta, usa el selector de lado y marca delantera o trasera.';
+            'Para dejarlo ligado a una ficha concreta, usa el selector de lado y marca delantero o trasero.';
       }
 
       if (rawBrakeType != null && !_isDiscBrakeType(rawBrakeType)) {
@@ -5693,7 +5775,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_isBrakeServiceFamily(profile?.serviceFamily)) {
       final targets = _resolveBrakeDiagnosisTargets(item.location, answers);
       if (targets.isEmpty) {
-        return 'Servicio guardado. Para ligarlo a la ficha técnica, define el lado como delantera o trasera.';
+        return 'Servicio guardado. Para ligarlo a la ficha técnica, define el lado como delantero o trasero.';
       }
       if (targets.length == 2) {
         return 'Servicio vinculado a la ficha técnica de freno delantero y trasero.';
@@ -12382,8 +12464,8 @@ class _ServiceLocationDropdown extends StatelessWidget {
                       value: location,
                       child: Text(
                         switch (location) {
-                          BikeMemoryLocation.front => 'Delantera',
-                          BikeMemoryLocation.rear => 'Trasera',
+                          BikeMemoryLocation.front => 'Delantero',
+                          BikeMemoryLocation.rear => 'Trasero',
                           _ => 'Sin fijar',
                         },
                         overflow: TextOverflow.ellipsis,
@@ -13089,7 +13171,8 @@ class _CustomerSelector extends StatefulWidget {
 }
 
 class _CustomerSelectorState extends State<_CustomerSelector> {
-  late List<Customer> _customers = widget.initialCustomers;
+  late List<Customer> _allCustomers;
+  late List<Customer> _customers;
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   bool _isSearching = false;
@@ -13102,6 +13185,40 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _allCustomers = List<Customer>.from(widget.initialCustomers);
+    _sortCustomers(_allCustomers);
+    _customers = List<Customer>.from(_allCustomers);
+  }
+
+  void _sortCustomers(List<Customer> customers) {
+    customers.sort(
+      (left, right) => left.name.toLowerCase().compareTo(
+            right.name.toLowerCase(),
+          ),
+    );
+  }
+
+  bool _matchesSearch(Customer customer, String normalizedTerm) {
+    return customer.name.toLowerCase().contains(normalizedTerm) ||
+        customer.rut.toLowerCase().contains(normalizedTerm) ||
+        (customer.email?.toLowerCase().contains(normalizedTerm) ?? false) ||
+        (customer.phone?.toLowerCase().contains(normalizedTerm) ?? false);
+  }
+
+  void _applyLocalCustomerFilter(String term) {
+    final normalizedTerm = term.trim().toLowerCase();
+    final filtered = normalizedTerm.isEmpty
+        ? List<Customer>.from(_allCustomers)
+        : _allCustomers
+            .where((customer) => _matchesSearch(customer, normalizedTerm))
+            .toList();
+    _sortCustomers(filtered);
+    _customers = filtered;
+  }
 
   @override
   void dispose() {
@@ -13117,25 +13234,12 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
   void _onSearchChanged(String term) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
-      setState(() => _isSearching = true);
-      try {
-        final results = term.trim().isEmpty
-            ? widget.initialCustomers
-            : await widget.customerService
-                .getCustomers(searchTerm: term, limit: 20);
-        if (mounted) {
-          setState(() => _customers = results);
-        }
-      } catch (_) {
-        if (mounted) {
-          setState(() => _customers = widget.initialCustomers);
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSearching = false);
-        }
-      }
+    _debounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      setState(() {
+        _isSearching = false;
+        _applyLocalCustomerFilter(term);
+      });
     });
   }
 
@@ -13205,13 +13309,13 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
   Future<Customer?> _saveCustomerWithData(Map<String, String> data) async {
     try {
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null || tenantId.isEmpty) {
         throw Exception('No se pudo obtener el tenant_id del usuario');
       }
 
-      final customerService =
-          Provider.of<CustomerService>(context, listen: false);
       final isEditing = _editingCustomer != null;
 
       final normalizedRut = (data['rut'] ?? '').trim();
@@ -13245,17 +13349,14 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
       setState(() {
         final existingIndex =
-            _customers.indexWhere((item) => item.id == saved.id);
+            _allCustomers.indexWhere((item) => item.id == saved.id);
         if (existingIndex >= 0) {
-          _customers[existingIndex] = saved;
+          _allCustomers[existingIndex] = saved;
         } else {
-          _customers.add(saved);
+          _allCustomers.add(saved);
         }
-        _customers.sort(
-          (left, right) => left.name.toLowerCase().compareTo(
-                right.name.toLowerCase(),
-              ),
-        );
+        _sortCustomers(_allCustomers);
+        _applyLocalCustomerFilter(_searchController.text);
       });
 
       if (mounted) {

@@ -1,6 +1,22 @@
 import 'dart:math' as math;
 
 class Product {
+  // Shared preview payload for ERP/POS card/list surfaces.
+  static const String listPreviewSelect =
+      'id,name,sku,barcode,price,cost,inventory_qty,stock_quantity,'
+      'min_stock_level,max_stock_level,image_url,image_url_optimized,'
+      'category,category_id,category_name,brand_id,brand,model,'
+      'supplier_code,product_type,track_stock,is_active,is_published,'
+      'created_at,updated_at';
+
+  // Shared preview payload for storefront/product-card surfaces.
+  static const String storefrontPreviewSelect =
+      'id,name,sku,barcode,price,cost,inventory_qty,stock_quantity,'
+      'image_url,image_url_optimized,image_urls,description,'
+      'website_description,category,category_id,category_name,brand_id,brand,'
+      'model,manufacturer,manufacturer_sku,gtin,product_type,track_stock,'
+      'is_active,is_published,show_on_website,created_at,updated_at';
+
   final String id;
   final String name;
   final String sku; // Unique product identifier

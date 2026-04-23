@@ -35,6 +35,7 @@ class POSDashboardPage extends StatefulWidget {
 
 class _POSDashboardPageState extends State<POSDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
+  static const int _initialProductPreviewLimit = 120;
   String _searchQuery = '';
   String? _selectedCategoryKey;
   Set<String> _selectedCategoryMatchers = const <String>{};
@@ -54,6 +55,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   List<Product> _cachedFilteredProducts = const [];
   bool _inventoryIsLoading = true;
   bool _inventoryHasLoaded = false;
+  bool _isHydratingFullInventory = false;
   InventoryService? _inventoryServiceRef;
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
@@ -88,12 +90,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       inventoryService.addListener(_onInventoryChanged);
       // Seed cache from whatever is already preloaded
       _inventoryIsLoading = inventoryService.isLoading;
-      _inventoryHasLoaded = inventoryService.hasLoaded;
+      _inventoryHasLoaded =
+          inventoryService.hasLoaded || inventoryService.products.isNotEmpty;
       _cachedFilteredProducts = _getFilteredProducts(
         inventoryService.products,
         categoryMatchers: const <String>{},
       );
-      inventoryService.getProducts();
+      unawaited(_loadInitialProductPreview(inventoryService));
       paymentMethodService.loadPaymentMethods();
       _loadCategories(categoryService);
     });
@@ -110,6 +113,62 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     // HardwareKeyboard bypasses the focus system so it works even when
     // the search bar or customer field is focused.
     HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
+  }
+
+  Future<void> _loadInitialProductPreview(
+      [InventoryService? existingService]) async {
+    final service = existingService ?? _inventoryServiceRef;
+    if (service == null) return;
+
+    if (mounted) {
+      setState(() {
+        _inventoryIsLoading = service.products.isEmpty;
+        _inventoryHasLoaded = service.hasLoaded || service.products.isNotEmpty;
+      });
+    }
+
+    try {
+      final initialProducts = await service.searchProducts(
+        '',
+        limit: _initialProductPreviewLimit,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _inventoryIsLoading = false;
+        _inventoryHasLoaded = service.hasLoaded ||
+            initialProducts.isNotEmpty ||
+            service.products.isNotEmpty;
+        _cachedFilteredProducts = _getFilteredProducts(
+          service.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _inventoryIsLoading = false;
+        _inventoryHasLoaded = service.hasLoaded || service.products.isNotEmpty;
+        _cachedFilteredProducts = _getFilteredProducts(
+          service.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+      });
+    }
+  }
+
+  Future<void> _ensureFullInventoryLoaded() async {
+    final service = _inventoryServiceRef;
+    if (service == null || service.hasLoaded || _isHydratingFullInventory) {
+      return;
+    }
+
+    _isHydratingFullInventory = true;
+    try {
+      await service.getProducts();
+    } finally {
+      _isHydratingFullInventory = false;
+    }
   }
 
   @override
@@ -196,12 +255,23 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
         Provider.of<InventoryService>(context, listen: false);
 
     // Search for product by SKU or barcode
-    final product = inventoryService.products.cast<Product?>().firstWhere(
+    Product? product = inventoryService.products.cast<Product?>().firstWhere(
           (p) =>
               p!.sku.toLowerCase() == barcode.toLowerCase() ||
               p.barcode?.toLowerCase() == barcode.toLowerCase(),
           orElse: () => null,
         );
+
+    if (product == null && !inventoryService.hasLoaded) {
+      final matches = await inventoryService.searchProducts(barcode, limit: 10);
+      if (!mounted) return;
+      product = matches.cast<Product?>().firstWhere(
+            (p) =>
+                p!.sku.toLowerCase() == barcode.toLowerCase() ||
+                p.barcode?.toLowerCase() == barcode.toLowerCase(),
+            orElse: () => null,
+          );
+    }
 
     if (product != null) {
       _addToCart(product);
@@ -476,8 +546,12 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
   void _onProductSearchChanged(String value) {
     final svc = _inventoryServiceRef;
+    final trimmedValue = value.trim();
+    if (trimmedValue.isNotEmpty) {
+      unawaited(_ensureFullInventoryLoaded());
+    }
     setState(() {
-      _searchQuery = value.trim();
+      _searchQuery = trimmedValue;
       if (svc != null) {
         _cachedFilteredProducts = _getFilteredProducts(
           svc.products,
@@ -510,7 +584,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     if (svc == null) return;
     setState(() {
       _inventoryIsLoading = svc.isLoading;
-      _inventoryHasLoaded = svc.hasLoaded;
+      _inventoryHasLoaded = svc.hasLoaded || svc.products.isNotEmpty;
       _cachedFilteredProducts = _getFilteredProducts(
         svc.products,
         categoryMatchers: _selectedCategoryMatchers,
@@ -704,6 +778,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                         labelBuilder: (type) => type.displayName,
                         onChanged: (value) {
                           final svc = _inventoryServiceRef;
+                          if (value != null) {
+                            unawaited(_ensureFullInventoryLoaded());
+                          }
                           setState(() {
                             _selectedProductType = value;
                             if (svc != null) {
@@ -745,6 +822,9 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                           labelBuilder: (option) => option.label,
                           onChanged: (value) {
                             final svc = _inventoryServiceRef;
+                            if (value != null) {
+                              unawaited(_ensureFullInventoryLoaded());
+                            }
                             setState(() {
                               _selectedCategoryKey = value?.key;
                               _selectedCategoryMatchers =
@@ -1233,6 +1313,30 @@ class _CashierPanelState extends State<_CashierPanel> {
   @override
   void initState() {
     super.initState();
+    final customerService = context.read<CustomerService>();
+    if (customerService.hasListCustomersCache) {
+      _customers = customerService.cachedListCustomers.map((crmCustomer) {
+        final fallbackId = crmCustomer.id?.toString() ??
+            (crmCustomer.rut.isNotEmpty ? crmCustomer.rut : crmCustomer.name);
+        return Customer(
+          id: fallbackId,
+          name: crmCustomer.name,
+          email: crmCustomer.email,
+          phone: crmCustomer.phone,
+          rut: crmCustomer.rut,
+          address: crmCustomer.address,
+          city: null,
+          region: crmCustomer.region,
+          comuna: null,
+          type: CustomerType.individual,
+          notes: null,
+          isActive: crmCustomer.isActive,
+          createdAt: crmCustomer.createdAt,
+          updatedAt: crmCustomer.updatedAt,
+        );
+      }).toList(growable: false);
+      _isLoadingCustomers = false;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final posService = context.read<POSService>();
       final paymentMethodService = context.read<PaymentMethodService>();
@@ -1241,7 +1345,7 @@ class _CashierPanelState extends State<_CashierPanel> {
         _selectedCustomer = posService.selectedCustomer;
       });
     });
-    _loadCustomers();
+    unawaited(_loadCustomers());
   }
 
   @override
@@ -1257,7 +1361,7 @@ class _CashierPanelState extends State<_CashierPanel> {
     try {
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
-      final crmCustomers = await customerService.getCustomers();
+      final crmCustomers = await customerService.getCustomersForList();
       final customers = crmCustomers.map((crmCustomer) {
         final fallbackId = crmCustomer.id?.toString() ??
             (crmCustomer.rut.isNotEmpty ? crmCustomer.rut : crmCustomer.name);

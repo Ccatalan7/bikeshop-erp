@@ -44,7 +44,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
   // Table state
   final ScrollController _headerScrollController = ScrollController();
   final ScrollController _bodyScrollController = ScrollController();
-  
+
   static const double _minColumnWidth = 80.0;
   static const double _maxColumnWidth = 400.0;
 
@@ -131,9 +131,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
     final bikeshopService = context.read<BikeshopService>();
 
     // 🚀 INSTANT RENDER: Show cached data immediately if available
-    if (_customerService.hasCustomersCache && _customers.isEmpty) {
+    if (_customerService.hasListCustomersCache && _customers.isEmpty) {
       setState(() {
-        _customers = _customerService.cachedCustomers;
+        _customers = _customerService.cachedListCustomers;
         _filteredCustomers = _customers;
         _isLoading = false;
         _currentPage = 1;
@@ -153,8 +153,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
 
     try {
       // Fetch fresh data (will use cache if still valid)
-      final customers = await _customerService.getCustomers();
-      
+      final customers = await _customerService.getCustomersForList();
+
       // Load Bikes mapping
       final allBikes = await bikeshopService.getBikes();
       final Map<String, List<Bike>> bikesMap = {};
@@ -502,9 +502,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     ),
                 ],
               ),
-              
+
               const Spacer(),
-              
+
               // Search Widget (Moved to header)
               SizedBox(
                 width: 300,
@@ -512,7 +512,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
                   onChanged: _onSearchChanged,
                   decoration: InputDecoration(
                     hintText: 'Buscar cliente...',
-                    prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+                    prefixIcon:
+                        const Icon(Icons.search, size: 20, color: Colors.grey),
                     filled: true,
                     fillColor: Colors.grey[100],
                     isDense: true,
@@ -523,14 +524,15 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                      borderSide:
+                          const BorderSide(color: Colors.blue, width: 1.5),
                     ),
                   ),
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // Action Buttons
               Container(
                 height: 38,
@@ -546,45 +548,56 @@ class _CustomerListPageState extends State<CustomerListPage> {
                       tooltip: 'Actualizar',
                       color: Colors.grey[700],
                       onPressed: _loadCustomers,
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+                      constraints:
+                          const BoxConstraints(minWidth: 40, minHeight: 38),
                       padding: EdgeInsets.zero,
                     ),
                     Container(width: 1, color: Colors.grey[300]),
                     PopupMenuButton<String>(
-                      icon: Icon(Icons.view_column_outlined, size: 20, color: Colors.grey[700]),
+                      icon: Icon(Icons.view_column_outlined,
+                          size: 20, color: Colors.grey[700]),
                       tooltip: 'Columnas',
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+                      constraints:
+                          const BoxConstraints(minWidth: 40, minHeight: 38),
                       padding: EdgeInsets.zero,
                       itemBuilder: (context) {
                         return _visibleColumns.keys.map((column) {
                           return CheckedPopupMenuItem<String>(
                             value: column,
                             checked: _visibleColumns[column] ?? false,
-                            child: Text(
-                              column == 'name' ? 'Cliente' :
-                              column == 'rut' ? 'RUT' :
-                              column == 'email' ? 'Email' :
-                              column == 'phone' ? 'Teléfono' :
-                              column == 'region' ? 'Región' :
-                              column == 'bikes' ? 'Bicicletas' :
-                              column == 'status' ? 'Estado' : column
-                            ),
+                            child: Text(column == 'name'
+                                ? 'Cliente'
+                                : column == 'rut'
+                                    ? 'RUT'
+                                    : column == 'email'
+                                        ? 'Email'
+                                        : column == 'phone'
+                                            ? 'Teléfono'
+                                            : column == 'region'
+                                                ? 'Región'
+                                                : column == 'bikes'
+                                                    ? 'Bicicletas'
+                                                    : column == 'status'
+                                                        ? 'Estado'
+                                                        : column),
                           );
                         }).toList();
                       },
                       onSelected: (column) {
                         setState(() {
-                          _visibleColumns[column] = !(_visibleColumns[column] ?? false);
+                          _visibleColumns[column] =
+                              !(_visibleColumns[column] ?? false);
                         });
-                        _saveColumnVisibility(column, _visibleColumns[column] ?? false);
+                        _saveColumnVisibility(
+                            column, _visibleColumns[column] ?? false);
                       },
                     ),
                   ],
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               AppButton(
                 text: 'Nuevo Cliente',
                 icon: Icons.person_add,
@@ -610,8 +623,6 @@ class _CustomerListPageState extends State<CustomerListPage> {
       ],
     );
   }
-
-
 
   Widget _buildCustomersList() {
     if (_filteredCustomers.isEmpty) {
@@ -732,10 +743,11 @@ class _CustomerListPageState extends State<CustomerListPage> {
           child: SingleChildScrollView(
             controller: _headerScrollController,
             scrollDirection: Axis.horizontal,
-            physics: const ClampingScrollPhysics(), // Important to sync properly
+            physics:
+                const ClampingScrollPhysics(), // Important to sync properly
             child: SizedBox(
-              width: totalTableWidth < MediaQuery.of(context).size.width - 32 
-                  ? MediaQuery.of(context).size.width - 32 
+              width: totalTableWidth < MediaQuery.of(context).size.width - 32
+                  ? MediaQuery.of(context).size.width - 32
                   : totalTableWidth,
               child: Row(
                 children: [
@@ -754,7 +766,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     _buildColumnHeaderCell('bikes', 'BICICLETAS'),
                   if (_visibleColumns['status'] == true)
                     _buildColumnHeaderCell('status', 'ESTADO'),
-                  
+
                   // Action column header
                   Container(
                     width: 44,
@@ -766,7 +778,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
             ),
           ),
         ),
-        
+
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadCustomers,
@@ -775,8 +787,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
               scrollDirection: Axis.horizontal,
               physics: const ClampingScrollPhysics(),
               child: SizedBox(
-                width: totalTableWidth < MediaQuery.of(context).size.width - 32 
-                    ? MediaQuery.of(context).size.width - 32 
+                width: totalTableWidth < MediaQuery.of(context).size.width - 32
+                    ? MediaQuery.of(context).size.width - 32
                     : totalTableWidth,
                 child: ListView.builder(
                   itemCount: _paginatedCustomers.length,
@@ -817,7 +829,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 11,
-                        color: isSorted ? theme.colorScheme.primary : Colors.grey[600],
+                        color: isSorted
+                            ? theme.colorScheme.primary
+                            : Colors.grey[600],
                         letterSpacing: 0.5,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -825,7 +839,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
                   ),
                   if (isSorted)
                     Icon(
-                      _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                      _sortAscending
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
                       size: 14,
                       color: theme.colorScheme.primary,
                     ),
@@ -844,8 +860,10 @@ class _CustomerListPageState extends State<CustomerListPage> {
       behavior: HitTestBehavior.translucent,
       onHorizontalDragUpdate: (details) {
         setState(() {
-          final newWidth = (_columnWidths[columnKey] ?? 100.0) + details.delta.dx;
-          _columnWidths[columnKey] = newWidth.clamp(_minColumnWidth, _maxColumnWidth);
+          final newWidth =
+              (_columnWidths[columnKey] ?? 100.0) + details.delta.dx;
+          _columnWidths[columnKey] =
+              newWidth.clamp(_minColumnWidth, _maxColumnWidth);
         });
       },
       onHorizontalDragEnd: (_) {
@@ -889,78 +907,106 @@ class _CustomerListPageState extends State<CustomerListPage> {
           children: [
             const SizedBox(width: 16), // Left padding
             if (_visibleColumns['name'] == true)
-              _buildDataCell('name', Row(
-                children: [
-                  ImageService.buildAvatarImage(
-                    imageUrl: customer.imageUrl,
-                    radius: 14, // Slightly smaller
-                    initials: customer.initials,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      customer.name, 
-                      style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey[900], fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              )),
-            
+              _buildDataCell(
+                  'name',
+                  Row(
+                    children: [
+                      ImageService.buildAvatarImage(
+                        imageUrl: customer.imageUrl,
+                        radius: 14, // Slightly smaller
+                        initials: customer.initials,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          customer.name,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[900],
+                              fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  )),
+
             if (_visibleColumns['rut'] == true)
-              _buildDataCell('rut', Text(
-                customer.rut.isEmpty ? '-' : ChileanUtils.formatRut(customer.rut),
-                style: const TextStyle(fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              )),
-              
+              _buildDataCell(
+                  'rut',
+                  Text(
+                    customer.rut.isEmpty
+                        ? '-'
+                        : ChileanUtils.formatRut(customer.rut),
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+
             if (_visibleColumns['email'] == true)
-              _buildDataCell('email', Text(
-                customer.email ?? '-',
-                style: TextStyle(color: customer.email != null ? Colors.grey[800] : Colors.grey[400], fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              )),
-              
-            if (_visibleColumns['phone'] == true)
-              _buildDataCell('phone', Text(
-                customer.phone ?? '-',
-                style: const TextStyle(fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              )),
-              
-            if (_visibleColumns['region'] == true)
-              _buildDataCell('region', Text(
-                customer.region ?? '-',
-                style: const TextStyle(fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              )),
-              
-            if (_visibleColumns['bikes'] == true)
-              _buildDataCell('bikes', _CustomerBikesCell(
-                bikes: _bikesByCustomer[customer.id] ?? [],
-              )),
-              
-            if (_visibleColumns['status'] == true)
-              _buildDataCell('status', Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: customer.isActive ? Colors.green[50] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    customer.isActive ? 'ACTIVO' : 'INACTIVO',
+              _buildDataCell(
+                  'email',
+                  Text(
+                    customer.email ?? '-',
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: customer.isActive ? Colors.green[700] : Colors.grey[600],
-                      letterSpacing: 0.5,
+                        color: customer.email != null
+                            ? Colors.grey[800]
+                            : Colors.grey[400],
+                        fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+
+            if (_visibleColumns['phone'] == true)
+              _buildDataCell(
+                  'phone',
+                  Text(
+                    customer.phone ?? '-',
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+
+            if (_visibleColumns['region'] == true)
+              _buildDataCell(
+                  'region',
+                  Text(
+                    customer.region ?? '-',
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  )),
+
+            if (_visibleColumns['bikes'] == true)
+              _buildDataCell(
+                  'bikes',
+                  _CustomerBikesCell(
+                    bikes: _bikesByCustomer[customer.id] ?? [],
+                  )),
+
+            if (_visibleColumns['status'] == true)
+              _buildDataCell(
+                  'status',
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: customer.isActive
+                            ? Colors.green[50]
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        customer.isActive ? 'ACTIVO' : 'INACTIVO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: customer.isActive
+                              ? Colors.green[700]
+                              : Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              )),
-              
+                  )),
+
             // Action column
             Container(
               width: 44,
@@ -973,11 +1019,15 @@ class _CustomerListPageState extends State<CustomerListPage> {
                 tooltip: 'Opciones',
                 onSelected: (value) async {
                   if (value == 'edit') {
-                    context.push('/clientes/${customer.id}/editar').then((_) => _loadCustomers());
+                    context
+                        .push('/clientes/${customer.id}/editar')
+                        .then((_) => _loadCustomers());
                   } else if (value == 'delete') {
                     _confirmDelete(customer);
                   } else if (value == 'view') {
-                    context.push('/clientes/${customer.id}').then((_) => _loadCustomers());
+                    context
+                        .push('/clientes/${customer.id}')
+                        .then((_) => _loadCustomers());
                   }
                 },
                 itemBuilder: (BuildContext context) => [
@@ -1360,7 +1410,8 @@ class _CustomerBikesCellState extends State<_CustomerBikesCell> {
   @override
   Widget build(BuildContext context) {
     if (widget.bikes.isEmpty) {
-      return const Text('-', style: TextStyle(fontSize: 13, color: Colors.grey));
+      return const Text('-',
+          style: TextStyle(fontSize: 13, color: Colors.grey));
     }
 
     final currentBike = widget.bikes[_currentIndex];
@@ -1378,8 +1429,13 @@ class _CustomerBikesCellState extends State<_CustomerBikesCell> {
       children: [
         Expanded(
           child: Text(
-            displayString.isEmpty ? 'Bicicleta ${_currentIndex + 1}' : displayString,
-            style: TextStyle(fontSize: 13, color: Colors.blueGrey[800], fontWeight: FontWeight.w500),
+            displayString.isEmpty
+                ? 'Bicicleta ${_currentIndex + 1}'
+                : displayString,
+            style: TextStyle(
+                fontSize: 13,
+                color: Colors.blueGrey[800],
+                fontWeight: FontWeight.w500),
             overflow: TextOverflow.ellipsis,
           ),
         ),

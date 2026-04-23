@@ -16,14 +16,21 @@ class CustomerService extends ChangeNotifier {
   // ============================================================
   List<Customer>? _cachedCustomers;
   DateTime? _customersCacheTime;
+  List<Customer>? _cachedListCustomers;
+  DateTime? _customersListCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
   bool _isLoadingCustomers = false;
+  bool _isLoadingListCustomers = false;
 
   // Public getters for cached data (instant access)
   List<Customer> get cachedCustomers => _cachedCustomers ?? [];
   bool get hasCustomersCache => _cachedCustomers != null;
   bool get isCustomersCacheFresh =>
       _cachedCustomers != null && _isCacheValid(_customersCacheTime);
+  List<Customer> get cachedListCustomers => _cachedListCustomers ?? [];
+  bool get hasListCustomersCache => _cachedListCustomers != null;
+  bool get isListCustomersCacheFresh =>
+      _cachedListCustomers != null && _isCacheValid(_customersListCacheTime);
 
   bool _isCacheValid(DateTime? cacheTime) {
     if (cacheTime == null) return false;
@@ -33,6 +40,8 @@ class CustomerService extends ChangeNotifier {
   void invalidateCustomersCache() {
     _cachedCustomers = null;
     _customersCacheTime = null;
+    _cachedListCustomers = null;
+    _customersListCacheTime = null;
   }
 
   CustomerService(this._db, this._tenantService) {
@@ -113,6 +122,51 @@ class CustomerService extends ChangeNotifier {
     } catch (e) {
       _isLoadingCustomers = false;
       if (kDebugMode) print('Error fetching customers: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Customer>> getCustomersForList(
+      {bool forceRefresh = false}) async {
+    try {
+      if (!forceRefresh &&
+          _isCacheValid(_customersListCacheTime) &&
+          _cachedListCustomers != null) {
+        debugPrint(
+            '📦 [CustomerService] Using cached customer list preview (${_cachedListCustomers!.length} items)');
+        return _cachedListCustomers!;
+      }
+
+      if (_isLoadingListCustomers) {
+        debugPrint(
+            '⏳ [CustomerService] Already loading customer list preview, waiting...');
+        while (_isLoadingListCustomers) {
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+        if (_cachedListCustomers != null) {
+          return _cachedListCustomers!;
+        }
+      }
+
+      _isLoadingListCustomers = true;
+
+      final data = await _db.select(
+        'customers',
+        selectColumns: Customer.listPreviewSelect,
+        fetchAll: true,
+        orderBy: 'name',
+      );
+
+      final customers = data.map((json) => Customer.fromJson(json)).toList();
+      _cachedListCustomers = customers;
+      _customersListCacheTime = DateTime.now();
+      debugPrint(
+          '✅ [CustomerService] Cached ${customers.length} customer list preview rows');
+      _isLoadingListCustomers = false;
+      return customers;
+    } catch (e) {
+      _isLoadingListCustomers = false;
+      if (kDebugMode) print('Error fetching customer list preview: $e');
       rethrow;
     }
   }
@@ -479,14 +533,29 @@ class CustomerService extends ChangeNotifier {
                     _cachedCustomers![index] = updatedCustomer;
                   }
                 }
+
+                if (_cachedListCustomers != null) {
+                  final index = _cachedListCustomers!
+                      .indexWhere((c) => c.id == updatedCustomer.id);
+                  if (index == -1) {
+                    _cachedListCustomers!.add(updatedCustomer);
+                    _cachedListCustomers!.sort((a, b) =>
+                        a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+                  } else {
+                    _cachedListCustomers![index] = updatedCustomer;
+                  }
+                }
                 notifyListeners();
               } else if (payload.eventType == PostgresChangeEvent.delete &&
                   payload.oldRecord.isNotEmpty) {
                 final id = payload.oldRecord['id']?.toString();
                 if (id != null && _cachedCustomers != null) {
                   _cachedCustomers!.removeWhere((c) => c.id == id);
-                  notifyListeners();
                 }
+                if (id != null && _cachedListCustomers != null) {
+                  _cachedListCustomers!.removeWhere((c) => c.id == id);
+                }
+                notifyListeners();
               }
             },
           )

@@ -36,6 +36,15 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
   void initState() {
     super.initState();
     _selectedPaymentMethod = PaymentMethod.cash;
+    final customerService = context.read<CustomerService>();
+    if (customerService.hasListCustomersCache) {
+      _customers = customerService.cachedListCustomers
+          .where((customer) => (customer.id ?? '').isNotEmpty)
+          .map(_mapCrmCustomer)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      _isLoadingCustomers = false;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final posService = context.read<POSService>();
@@ -59,7 +68,7 @@ class _POSPaymentPageState extends State<POSPaymentPage> {
     try {
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
-      final crmCustomers = await customerService.getCustomers();
+      final crmCustomers = await customerService.getCustomersForList();
       final mappedCustomers = crmCustomers
           .where((customer) => (customer.id ?? '').isNotEmpty)
           .map(_mapCrmCustomer)

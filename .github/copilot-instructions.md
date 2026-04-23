@@ -276,6 +276,8 @@ For a fresh chat, the current code-side state is:
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now uses the same shared controller as the upstream technical-step navigator, with system-by-system profile panels and explicit placeholder handling for unmodeled intake systems such as `cockpit`.
 - brake canonical alias normalization now lives in `lib/modules/bikeshop/config/brake_canonical_data.dart` and `lib/modules/bikeshop/services/service_wizard_service.dart`, not in ad hoc page-local branches.
 - global drivetrain service profiles `chain_lube` and `derailleur_adjustment` now have explicit `service_profile_targets` rows with `target_family = drivetrain` and `target_position_mode = none`; do not reintroduce fake front/rear targeting for drivetrain-level services.
+- `lib/modules/bikeshop/services/service_wizard_service.dart` now loads `service_profile_targets` with a tenant-specific-or-global fallback, because live workshop profiles such as drivetrain, wheels, cockpit, and bottom-bracket currently store those target rows globally (`tenant_id = null`) in production.
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now consumes that target metadata when hydrating service rows so `target_position_mode = none` workflows like drivetrain, headset/cockpit, and bottom-bracket stay pinned to `location = none` instead of exposing fake front/rear row targeting in the job editor.
 - first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, but `derailleurs` prefill must still stay conservative until `drivetrainConfig` coverage improves.
 - drivetrain diagnosis-linked wizard answers `chain_wear` and `cable_condition` now round-trip with the structured diagnosis sheet: `chain_wear` prefills from and writes back to `DrivetrainDiagnosisSheet.chainWearPercent`, while `cable_condition` is stored explicitly as `DrivetrainDiagnosisSheet.cableCondition` inside the shifter slice instead of being left in guided-note text.
 - live production audit on 2026-04-18 confirmed that some active mapped wizard vocabularies are still semantically weak, especially drivetrain `cable_condition` with `ok` / `frayed` / `replace` and the label `Ya reemplazados`; future work must normalize these through a shared diagnosis-field definition layer instead of proliferating them into more backbone flows.
@@ -694,7 +696,7 @@ if (tenantId == null) {
 // ✅ CORRECT: Filter by tenant_id
 final products = await Supabase.instance.client
     .from('products')
-    .select()
+  .select('id,name,price,image_url,category_id')
     .eq('tenant_id', tenantId)  // ⚠️ MANDATORY
     .eq('is_active', true);
 
@@ -713,6 +715,51 @@ final orderData = {
 - ✅ `product_detail_page.dart` - Verify product belongs to tenant
 - ✅ `checkout_page.dart` - Include tenant_id in order creation
 - ✅ Any page that queries tenant-scoped data
+
+## 🚨 PUBLIC STORE EGRESS & LIST PAYLOAD DISCIPLINE (CRITICAL)
+
+The Free Plan can be exhausted by **normal navigation** if a public or high-frequency screen over-fetches large rows.
+
+This project must treat **payload width**, **pagination**, and **cache strategy** as first-class product constraints, not cleanup work for later.
+
+### Non-negotiable rules
+
+- **NEVER** use bare `.select()` on large public-facing or high-frequency tables such as `products`, `customers`, `sales_invoices`, `messages`, `website_pages`, or other list/search sources when the UI only renders a subset of fields.
+- Every list/search surface must define at least **two payload shapes**:
+  - **list/preview payload** = only the fields needed to render cards, rows, filters, badges, and search text
+  - **detail payload** = the richer record fetched only when opening the detail page/panel/dialog
+- **Server-side pagination, sorting, and filtering are the default** for catalogs and large ERP lists. Do **not** load full tables into memory “so search works” unless the dataset is proven tiny and bounded.
+- If the UI only needs a count, fetch a **count/lightweight ID query**, not the full row payload.
+- Service caches must be paired with **small payloads**. Caching a 10-20 MB response is not an optimization strategy.
+- Reuse service-level cache and in-flight request dedupe before issuing new list fetches. Avoid `forceRefresh` on page init unless the workflow truly requires it.
+- Public storefront endpoints must be treated as **bot-reachable** even when analytics looks quiet. Anonymous traffic, crawlers, previews, and repeated catalog hits can consume egress without showing up clearly in analytics.
+
+### Specific anti-patterns to avoid
+
+- ❌ Loading the entire product catalog on first paint when the page shows 20 items
+- ❌ Fetching full product rows just to render name/price/image cards
+- ❌ Re-fetching the same list on every navigation when a valid cache already exists
+- ❌ Doing client-side pagination on top of an already downloaded full dataset for large tables
+- ❌ Using detail-grade payloads for autocomplete, dropdown, or related-item previews
+
+### Preferred pattern
+
+- ✅ Small preview query for list screens
+- ✅ Dedicated detail query for record pages
+- ✅ Exact tenant filter on every query
+- ✅ Server-side pagination/sort/filter for large datasets
+- ✅ Instant render from cache when valid, then background refresh when needed
+- ✅ Payload-size awareness before shipping public-store or ERP list changes
+
+### Review expectation for agents
+
+When modifying a list, catalog, search surface, or frequently opened form, explicitly inspect:
+
+1. whether the query is projecting only the fields the UI renders
+2. whether pagination and sorting happen on the server or only in memory
+3. whether a detail fetch is separated from the list fetch
+4. whether cache reuse prevents redundant reloads during navigation
+5. whether the same screen could multiply bandwidth through bots, previews, or repeated open/close flows
 
 ---
 
@@ -2351,8 +2398,14 @@ Future<void> _loadData() async {
 
 **DataPreloadService** (`lib/shared/services/data_preload_service.dart`):
 - Initializes after authentication
-- Preloads ALL cached data in parallel on login
-- Reduces first navigation time from ~500ms to ~50ms
+- Preloads only lightweight shared caches on login
+- Heavy list datasets (products, customers, invoices) remain module-owned and must load on demand
+
+**⚠️ CRITICAL: ERP Preload Discipline**
+- Login preload is NOT allowed to hydrate every large ERP table just to make navigation feel fast later.
+- Only preload lightweight shared/reference data that is reused across many screens.
+- Large list domains like products, customers, sales invoices, and purchase invoices must use module-owned loading, warm-cache instant render, and preview/detail payload splitting instead of full-table login hydration.
+- If a new module needs preload support, prove that its login-time payload is small and broadly reused before adding it to `DataPreloadService`.
 
 ## Cache Configuration
 
@@ -2384,7 +2437,7 @@ When creating a new module:
 4. ✅ **Update fetch method** with cache logic (see pattern above)
 5. ✅ **Add invalidation calls** to ALL CRUD methods (create, update, delete, softDelete, restore)
 6. ✅ **Update page `_loadData()`** to show cached data instantly
-7. ✅ **Add service to DataPreloadService** for preloading on login
+7. ✅ **Only add lightweight shared services to DataPreloadService** after verifying the login-time payload is small; otherwise keep the cache module-owned and load on demand
 8. ✅ **Test navigation** - should feel instant, no loading spinners on second visit
 
 ## Services Pending Optimization

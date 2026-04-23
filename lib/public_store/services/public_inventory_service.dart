@@ -48,6 +48,11 @@ class PublicInventoryService extends ChangeNotifier {
     return _isCacheValid(cacheKey) && _productsCache.containsKey(cacheKey);
   }
 
+  List<Product> getCachedProductsForTenant(String tenantId) {
+    final cacheKey = 'products_$tenantId';
+    return List<Product>.unmodifiable(_productsCache[cacheKey] ?? const []);
+  }
+
   /// Check if categories cache exists and is valid for tenant
   bool hasCategoriesCache(String tenantId) {
     final cacheKey = 'categories_$tenantId';
@@ -94,7 +99,10 @@ class PublicInventoryService extends ChangeNotifier {
         return _productsCache[cacheKey] ?? [];
       }
       // Build base query
-      var query = _supabase.from('products').select().eq('tenant_id', tenantId);
+      var query = _supabase
+          .from('products')
+          .select(Product.storefrontPreviewSelect)
+          .eq('tenant_id', tenantId);
 
       // Filter by stock if requested (RLS only filters is_active=true)
       // NOTE: We avoid applying a stock filter at the SQL level when
@@ -369,7 +377,7 @@ class PublicInventoryService extends ChangeNotifier {
       // Fetch actual product details
       final productsResponse = await _supabase
           .from('products')
-          .select()
+          .select(Product.storefrontPreviewSelect)
           .inFilter('id', productIds)
           .eq('tenant_id', tenantId);
 
@@ -396,7 +404,8 @@ class PublicInventoryService extends ChangeNotifier {
     String? searchQuery,
   }) async {
     try {
-      var query = _supabase.from('products').select().eq('tenant_id', tenantId);
+      var query =
+          _supabase.from('products').select('id').eq('tenant_id', tenantId);
 
       if (categoryId != null && categoryId.isNotEmpty) {
         query = query.eq('category_id', categoryId);

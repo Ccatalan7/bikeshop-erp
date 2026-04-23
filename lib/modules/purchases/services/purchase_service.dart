@@ -23,16 +23,19 @@ class PurchaseService extends ChangeNotifier {
 
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<PurchaseInvoice> _invoiceCache = const [];
+  List<PurchaseInvoice> _listInvoiceCache = const [];
   List<PurchasePayment> _paymentCache = const [];
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
+  bool _isLoadingListInvoices = false;
 
   // ============================================================
   // CACHING - TTL-based cache for performance optimization
   // ============================================================
   DateTime? _suppliersCacheTime;
   DateTime? _invoicesCacheTime;
+  DateTime? _listInvoicesCacheTime;
   DateTime? _paymentsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
 
@@ -40,11 +43,15 @@ class PurchaseService extends ChangeNotifier {
   List<shared_supplier.Supplier> get cachedSuppliers =>
       List.unmodifiable(_supplierCache);
   List<PurchaseInvoice> get cachedInvoices => List.unmodifiable(_invoiceCache);
+  List<PurchaseInvoice> get cachedListInvoices =>
+      List.unmodifiable(_listInvoiceCache);
   List<PurchasePayment> get cachedPayments => List.unmodifiable(_paymentCache);
   bool get hasSuppliersCache =>
       _supplierCache.isNotEmpty && _suppliersCacheTime != null;
   bool get hasInvoicesCache =>
       _invoiceCache.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasListInvoicesCache =>
+      _listInvoiceCache.isNotEmpty && _listInvoicesCacheTime != null;
   bool get hasPaymentsCache =>
       _paymentCache.isNotEmpty && _paymentsCacheTime != null;
 
@@ -64,8 +71,67 @@ class PurchaseService extends ChangeNotifier {
   /// Invalidate invoice cache (call after create/update/delete)
   void invalidateInvoicesCache() {
     _invoicesCacheTime = null;
+    _listInvoicesCacheTime = null;
     _invoicesLoaded = false;
     debugPrint('🗑️ [PurchaseService] Invoices cache invalidated');
+  }
+
+  PurchaseInvoice _toListPreviewInvoice(PurchaseInvoice invoice) {
+    return PurchaseInvoice(
+      id: invoice.id,
+      tenantId: invoice.tenantId,
+      invoiceNumber: invoice.invoiceNumber,
+      supplierId: invoice.supplierId,
+      supplierName: invoice.supplierName,
+      supplierRut: invoice.supplierRut,
+      date: invoice.date,
+      dueDate: invoice.dueDate,
+      reference: invoice.reference,
+      status: invoice.status,
+      subtotal: invoice.subtotal,
+      ivaAmount: invoice.ivaAmount,
+      total: invoice.total,
+      taxTreatment: invoice.taxTreatment,
+      netAmount: invoice.netAmount,
+      discountType: invoice.discountType,
+      discountValue: invoice.discountValue,
+      discountAmount: invoice.discountAmount,
+      isDiscountBeforeTax: invoice.isDiscountBeforeTax,
+      createdAt: invoice.createdAt,
+      updatedAt: invoice.updatedAt,
+      prepaymentModel: invoice.prepaymentModel,
+      sentDate: invoice.sentDate,
+      confirmedDate: invoice.confirmedDate,
+      receivedDate: invoice.receivedDate,
+      paidDate: invoice.paidDate,
+      supplierInvoiceNumber: invoice.supplierInvoiceNumber,
+      supplierInvoiceDate: invoice.supplierInvoiceDate,
+      paidAmount: invoice.paidAmount,
+      balance: invoice.balance,
+    );
+  }
+
+  void _upsertInvoice(PurchaseInvoice invoice) {
+    final fullInvoices = List<PurchaseInvoice>.from(_invoiceCache);
+    final fullIndex = fullInvoices.indexWhere((inv) => inv.id == invoice.id);
+    if (fullIndex >= 0) {
+      fullInvoices[fullIndex] = invoice;
+    } else {
+      fullInvoices.add(invoice);
+    }
+    fullInvoices.sort((a, b) => b.date.compareTo(a.date));
+    _invoiceCache = fullInvoices;
+
+    final listInvoices = List<PurchaseInvoice>.from(_listInvoiceCache);
+    final previewInvoice = _toListPreviewInvoice(invoice);
+    final listIndex = listInvoices.indexWhere((inv) => inv.id == invoice.id);
+    if (listIndex >= 0) {
+      listInvoices[listIndex] = previewInvoice;
+    } else {
+      listInvoices.add(previewInvoice);
+    }
+    listInvoices.sort((a, b) => b.date.compareTo(a.date));
+    _listInvoiceCache = listInvoices;
   }
 
   /// Invalidate payment cache (call after create/update/delete)
@@ -86,6 +152,9 @@ class PurchaseService extends ChangeNotifier {
   // Public getters for reactive UI
   UnmodifiableListView<PurchaseInvoice> get purchaseInvoices =>
       UnmodifiableListView(_invoiceCache);
+  UnmodifiableListView<PurchaseInvoice> get listInvoices =>
+      UnmodifiableListView(_listInvoiceCache);
+  bool get isLoadingListInvoices => _isLoadingListInvoices;
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
@@ -253,14 +322,57 @@ class PurchaseService extends ChangeNotifier {
       final data = await _db.select('purchase_invoices');
       _invoiceCache = data.map((row) => PurchaseInvoice.fromJson(row)).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
+      _listInvoiceCache =
+          _invoiceCache.map(_toListPreviewInvoice).toList(growable: false);
       _invoicesLoaded = true;
       _invoicesCacheTime = DateTime.now();
+      _listInvoicesCacheTime = _invoicesCacheTime;
       debugPrint('✅ [PurchaseService] Cached ${_invoiceCache.length} invoices');
       _setupPurchaseRealtime(); // Setup realtime after first load
       notifyListeners(); // Notify UI to rebuild after loading invoices
       return _invoiceCache;
     } catch (e) {
       throw Exception('No se pudieron cargar las facturas de compra: $e');
+    }
+  }
+
+  Future<List<PurchaseInvoice>> getPurchaseInvoicesForList(
+      {bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _isCacheValid(_listInvoicesCacheTime) &&
+        _listInvoiceCache.isNotEmpty) {
+      debugPrint(
+          '📦 [PurchaseService] Using cached purchase invoice list preview (${_listInvoiceCache.length} items)');
+      return _listInvoiceCache;
+    }
+
+    if (_isLoadingListInvoices) {
+      return _listInvoiceCache;
+    }
+
+    _isLoadingListInvoices = true;
+    notifyListeners();
+
+    try {
+      final data = await _db.select(
+        'purchase_invoices',
+        selectColumns: PurchaseInvoice.listPreviewSelect,
+        fetchAll: true,
+      );
+      _listInvoiceCache = data
+          .map((row) => PurchaseInvoice.fromJson(row))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+      _listInvoicesCacheTime = DateTime.now();
+      debugPrint(
+          '✅ [PurchaseService] Cached ${_listInvoiceCache.length} purchase invoice list preview rows');
+      _setupPurchaseRealtime();
+      return _listInvoiceCache;
+    } catch (e) {
+      throw Exception('No se pudieron cargar las facturas de compra: $e');
+    } finally {
+      _isLoadingListInvoices = false;
+      notifyListeners();
     }
   }
 
@@ -279,14 +391,28 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
-  Future<PurchaseInvoice?> getPurchaseInvoice(String id) async {
+  Future<PurchaseInvoice?> getPurchaseInvoice(String id,
+      {bool refresh = false}) async {
     try {
+      if (!refresh) {
+        for (final invoice in _invoiceCache) {
+          if (invoice.id == id) return invoice;
+        }
+      }
+
       final data = await _db.selectById('purchase_invoices', id);
       if (data == null) return null;
-      return PurchaseInvoice.fromJson(data);
+      final invoice = PurchaseInvoice.fromJson(data);
+      _upsertInvoice(invoice);
+      return invoice;
     } catch (e) {
       throw Exception('No se pudo obtener la factura: $e');
     }
+  }
+
+  Future<PurchaseInvoice?> fetchPurchaseInvoice(String id,
+      {bool refresh = false}) {
+    return getPurchaseInvoice(id, refresh: refresh);
   }
 
   /// Check if an invoice number already exists (for duplicate detection)
@@ -444,10 +570,7 @@ class PurchaseService extends ChangeNotifier {
       final result = await _db.update('purchase_invoices', invoiceId, payload);
       final updated = PurchaseInvoice.fromJson(result);
 
-      // Update cache
-      _invoiceCache = _invoiceCache.map((inv) {
-        return inv.id == invoiceId ? updated : inv;
-      }).toList();
+      _upsertInvoice(updated);
 
       // Refresh accounting if service available
       if (_accountingService != null) {
@@ -456,7 +579,11 @@ class PurchaseService extends ChangeNotifier {
       }
 
       // Fetch fresh data from database
-      final refreshed = await getPurchaseInvoice(invoiceId);
+      final refreshed = await getPurchaseInvoice(invoiceId, refresh: true);
+
+      if (refreshed != null) {
+        _upsertInvoice(refreshed);
+      }
 
       notifyListeners();
       return refreshed ?? updated;
@@ -869,7 +996,13 @@ class PurchaseService extends ChangeNotifier {
             callback: (payload) {
               debugPrint(
                   '🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}');
-              getPurchaseInvoices(forceRefresh: true);
+              if (_invoicesCacheTime != null || _invoiceCache.isNotEmpty) {
+                getPurchaseInvoices(forceRefresh: true);
+              }
+              if (_listInvoicesCacheTime != null ||
+                  _listInvoiceCache.isNotEmpty) {
+                getPurchaseInvoicesForList(forceRefresh: true);
+              }
             },
           )
           .subscribe();

@@ -2,6 +2,15 @@ import '../../../shared/models/product.dart'
     show ProductDimensions, PurchaseTreatment, parsePurchaseTreatment;
 
 class Product {
+  static const String listPreviewSelect =
+      'id,tenant_id,name,sku,category_id,category_name,supplier_id,'
+      'supplier_name,supplier_code,brand_id,brand,model,barcode,price,cost,'
+      'inventory_qty,stock_quantity,min_stock_level,max_stock_level,'
+      'image_url,image_url_optimized,warehouse_location,is_active,'
+      'is_published,is_google_merchant,purchase_treatment,product_type,'
+      'track_stock,is_set,set_type,parent_set_id,component_label,'
+      'component_position,created_at,updated_at';
+
   final String? id;
   final String tenantId;
   final String name;

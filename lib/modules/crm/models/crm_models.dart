@@ -13,6 +13,10 @@ DateTime _parseDate(dynamic value) {
 }
 
 class Customer {
+  static const String listPreviewSelect =
+      'id,tenant_id,name,rut,email,phone,region,image_url,is_active,'
+      'created_at,updated_at';
+
   final String? id;
   final String tenantId;
   final String? authUserId; // Links to auth.users for messaging/portal

@@ -85,6 +85,8 @@ class ServiceWizardProfile {
   final String id;
   final String name;
   final String serviceFamily;
+  final String? targetFamily;
+  final String? targetPositionMode;
   final String? customerSummaryTemplate;
   final List<ServiceProfileQuestion> questions;
 
@@ -92,6 +94,8 @@ class ServiceWizardProfile {
     required this.id,
     required this.name,
     required this.serviceFamily,
+    this.targetFamily,
+    this.targetPositionMode,
     this.customerSummaryTemplate,
     required this.questions,
   });
@@ -114,7 +118,7 @@ class ServiceWizardService {
       final mapping = await _client
           .from('service_product_profile_mappings')
           .select(
-              'service_profile_id, service_profiles(id, name, service_family, customer_summary_template)')
+              'tenant_id, service_profile_id, service_profiles(id, name, service_family, customer_summary_template)')
           .eq('product_id', productId)
           .eq('status', 'active')
           .maybeSingle();
@@ -125,6 +129,27 @@ class ServiceWizardService {
       if (profileData == null) return null;
 
       final profileId = profileData['id'] as String;
+      final tenantId = mapping['tenant_id']?.toString();
+
+      final rawTargets = await _client
+          .from('service_profile_targets')
+          .select('tenant_id, target_family, target_position_mode')
+          .eq('service_profile_id', profileId)
+          .or(
+            tenantId != null && tenantId.isNotEmpty
+                ? 'tenant_id.is.null,tenant_id.eq.$tenantId'
+                : 'tenant_id.is.null',
+          );
+
+      Map<String, dynamic>? selectedTarget;
+      for (final rawTarget in rawTargets as List) {
+        final target = Map<String, dynamic>.from(rawTarget as Map);
+        if (target['tenant_id']?.toString() == tenantId) {
+          selectedTarget = target;
+          break;
+        }
+        selectedTarget ??= target;
+      }
 
       final rawQuestions = await _client
           .from('service_profile_questions')
@@ -142,6 +167,9 @@ class ServiceWizardService {
           id: profileId,
           name: profileData['name'] as String,
           serviceFamily: (profileData['service_family'] as String?) ?? '',
+          targetFamily: selectedTarget?['target_family']?.toString(),
+          targetPositionMode:
+              selectedTarget?['target_position_mode']?.toString(),
           customerSummaryTemplate:
               profileData['customer_summary_template'] as String?,
           questions: questions,
@@ -162,6 +190,8 @@ class ServiceWizardService {
         id: profile.id,
         name: profile.name,
         serviceFamily: 'brake',
+        targetFamily: profile.targetFamily,
+        targetPositionMode: profile.targetPositionMode,
         customerSummaryTemplate: profile.customerSummaryTemplate,
         questions: _normalizeBrakeQuestions(profile.questions),
       );
@@ -172,6 +202,8 @@ class ServiceWizardService {
         id: profile.id,
         name: profile.name,
         serviceFamily: profile.serviceFamily,
+        targetFamily: profile.targetFamily,
+        targetPositionMode: profile.targetPositionMode,
         customerSummaryTemplate: profile.customerSummaryTemplate,
         questions: _normalizeDrivetrainQuestions(profile.questions),
       );

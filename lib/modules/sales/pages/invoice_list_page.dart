@@ -36,6 +36,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   final ScrollController _bodyScrollController = ScrollController();
 
   Invoice? _selectedInvoice;
+  bool _isHydratingSelectedInvoice = false;
   bool _showPaymentTerminal = false;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
@@ -87,7 +88,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SalesService>().loadInvoices();
+      context.read<SalesService>().loadInvoicesForList();
     });
   }
 
@@ -187,7 +188,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
-    final invoices = _getFilteredAndSortedInvoices(salesService.invoices);
+    final invoices = _getFilteredAndSortedInvoices(salesService.listInvoices);
 
     // Use MediaQuery for robust detection, ignoring parent constraints issues
     // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
@@ -226,7 +227,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                await context.read<SalesService>().loadInvoices();
+                await context.read<SalesService>().loadInvoicesForList(
+                      forceRefresh: true,
+                    );
               },
               child: _buildInvoiceCardsList(invoices),
             ),
@@ -301,7 +304,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
               if (value == 'refresh') {
-                context.read<SalesService>().loadInvoices();
+                context.read<SalesService>().loadInvoicesForList(
+                      forceRefresh: true,
+                    );
               }
             },
             itemBuilder: (context) => [
@@ -523,6 +528,38 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     );
   }
 
+  Future<void> _handleInvoiceSelection(
+    Invoice invoice, {
+    required bool isSelected,
+  }) async {
+    if (isSelected) {
+      if (!mounted) return;
+      setState(() {
+        _selectedInvoice = null;
+        _isHydratingSelectedInvoice = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedInvoice = invoice;
+      _isHydratingSelectedInvoice = true;
+    });
+
+    final fullInvoice = await context.read<SalesService>().fetchInvoice(
+          invoice.id!,
+        );
+
+    if (!mounted || _selectedInvoice?.id != invoice.id) {
+      return;
+    }
+
+    setState(() {
+      _selectedInvoice = fullInvoice ?? invoice;
+      _isHydratingSelectedInvoice = false;
+    });
+  }
+
   Widget _buildSplitView(List<Invoice> invoices, SalesService salesService) {
     final theme = Theme.of(context);
     return Row(
@@ -577,7 +614,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
         // Right pane - Invoice preview
         Expanded(
-          child: _buildInvoicePreview(_selectedInvoice!),
+          child: _isHydratingSelectedInvoice
+              ? const Center(child: BrandedLoading())
+              : _buildInvoicePreview(_selectedInvoice!),
         ),
       ],
     );
@@ -774,9 +813,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               context.push('/sales/invoices/${invoice.id}');
             } else {
               // Desktop/Tablet: Select for split view
-              setState(() {
-                _selectedInvoice = isSelected ? null : invoice;
-              });
+              _handleInvoiceSelection(invoice, isSelected: isSelected);
             }
           },
           child: Container(
@@ -917,8 +954,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () =>
-                context.read<SalesService>().loadInvoices(forceRefresh: true),
+            onPressed: () => context.read<SalesService>().loadInvoicesForList(
+                  forceRefresh: true,
+                ),
           ),
         ],
       ),
@@ -927,7 +965,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService,
       {required bool isFullWidth}) {
-    if (salesService.isLoadingInvoices) {
+    if (salesService.isLoadingListInvoices) {
       return const Center(child: BrandedLoading());
     }
 
@@ -1111,9 +1149,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   Widget _buildInvoiceRow(Invoice invoice, bool isSelected, bool isFullWidth) {
     return InkWell(
       onTap: () {
-        setState(() {
-          _selectedInvoice = isSelected ? null : invoice;
-        });
+        _handleInvoiceSelection(invoice, isSelected: isSelected);
       },
       hoverColor: Colors.grey[50],
       child: Container(
@@ -1131,9 +1167,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               child: Checkbox(
                 value: isSelected,
                 onChanged: (value) {
-                  setState(() {
-                    _selectedInvoice = value == true ? invoice : null;
-                  });
+                  _handleInvoiceSelection(
+                    invoice,
+                    isSelected: value != true,
+                  );
                 },
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -1903,8 +1940,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     ScaffoldMessenger.of(context); // Capture before async
 
                 await salesService.deleteInvoice(invoice.id!);
-                setState(() => _selectedInvoice = null);
-                await salesService.loadInvoices(); // Reload list
+                setState(() {
+                  _selectedInvoice = null;
+                  _isHydratingSelectedInvoice = false;
+                });
+                await salesService.loadInvoicesForList(
+                  forceRefresh: true,
+                );
 
                 if (mounted) {
                   messenger.showSnackBar(

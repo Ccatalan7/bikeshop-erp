@@ -3,15 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../modules/bikeshop/services/bikeshop_service.dart';
-import '../../modules/crm/services/customer_service.dart';
-import '../../modules/inventory/services/inventory_service.dart';
 import '../../modules/inventory/services/category_service.dart';
 import '../../modules/inventory/services/brand_service.dart';
-import '../../modules/sales/services/sales_service.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/hr/services/hr_service.dart';
 import '../../modules/tasks/services/task_service.dart';
-import 'inventory_service.dart' as shared_inventory;
 
 /// DataPreloadService - Loads critical data immediately after authentication
 ///
@@ -29,7 +25,6 @@ class DataPreloadService extends ChangeNotifier {
   bool _hasPreloaded = false;
   bool _isEnabled = true; // Can be disabled for public store
   String? _preloadError;
-  DateTime? _lastPreloadTime;
 
   // Preload status
   bool get isPreloading => _isPreloading;
@@ -39,12 +34,8 @@ class DataPreloadService extends ChangeNotifier {
 
   // Service references (set via initialize)
   BikeshopService? _bikeshopService;
-  CustomerService? _customerService;
-  InventoryService? _inventoryService;
-  shared_inventory.InventoryService? _sharedInventoryService;
   CategoryService? _categoryService;
   BrandService? _brandService;
-  SalesService? _salesService;
   PurchaseService? _purchaseService;
   HRService? _hrService;
   TaskService? _taskService;
@@ -64,12 +55,8 @@ class DataPreloadService extends ChangeNotifier {
   /// Set isPublicStore=true to skip preloading (for customer-facing pages)
   void initialize({
     required BikeshopService bikeshopService,
-    required CustomerService customerService,
-    required InventoryService inventoryService,
-    shared_inventory.InventoryService? sharedInventoryService,
     required CategoryService categoryService,
     required BrandService brandService,
-    SalesService? salesService,
     PurchaseService? purchaseService,
     HRService? hrService,
     TaskService? taskService,
@@ -93,12 +80,8 @@ class DataPreloadService extends ChangeNotifier {
     _authSubscription?.cancel();
 
     _bikeshopService = bikeshopService;
-    _customerService = customerService;
-    _inventoryService = inventoryService;
-    _sharedInventoryService = sharedInventoryService;
     _categoryService = categoryService;
     _brandService = brandService;
-    _salesService = salesService;
     _purchaseService = purchaseService;
     _hrService = hrService;
     _taskService = taskService;
@@ -118,7 +101,6 @@ class DataPreloadService extends ChangeNotifier {
         // Reset state on sign out
         _hasPreloaded = false;
         _preloadError = null;
-        _lastPreloadTime = null;
       }
     });
 
@@ -153,25 +135,19 @@ class DataPreloadService extends ChangeNotifier {
 
     try {
       if (!kReleaseMode) {
-        debugPrint('🚀 [DataPreloadService] Starting parallel preload...');
+        debugPrint('🚀 [DataPreloadService] Starting lightweight preload...');
       }
 
-      // Load all data in parallel for maximum speed
+      // Keep login preload constrained to lightweight/shared caches.
+      // Large list datasets such as products, customers, and invoices should
+      // stay module-owned and load on demand when the user actually opens that
+      // workflow.
       await Future.wait([
         // Taller module
         _preloadJobs(),
         _preloadBikes(),
-        // CRM
-        _preloadCustomers(),
-        // Inventory
-        _preloadProducts(),
-        _preloadSharedProducts(),
         _preloadCategories(),
         _preloadBrands(),
-        // Sales
-        _preloadSalesInvoices(),
-        // Purchases
-        _preloadPurchaseInvoices(),
         _preloadSuppliers(),
         // HR
         _preloadEmployees(),
@@ -181,7 +157,6 @@ class DataPreloadService extends ChangeNotifier {
 
       stopwatch.stop();
       _hasPreloaded = true;
-      _lastPreloadTime = DateTime.now();
 
       if (!kReleaseMode) {
         debugPrint(
@@ -235,46 +210,6 @@ class DataPreloadService extends ChangeNotifier {
     }
   }
 
-  Future<void> _preloadCustomers() async {
-    try {
-      final customers = await _customerService?.getCustomers();
-      if (!kReleaseMode) {
-        debugPrint('📦 [Preload] Customers: ${customers?.length ?? 0} items');
-      }
-    } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('⚠️ [Preload] Customers failed: $e');
-      }
-    }
-  }
-
-  Future<void> _preloadProducts() async {
-    try {
-      final products = await _inventoryService?.getProducts();
-      if (!kReleaseMode) {
-        debugPrint('📦 [Preload] Products: ${products?.length ?? 0} items');
-      }
-    } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('⚠️ [Preload] Products failed: $e');
-      }
-    }
-  }
-
-  Future<void> _preloadSharedProducts() async {
-    try {
-      final products = await _sharedInventoryService?.getProducts();
-      if (!kReleaseMode) {
-        debugPrint(
-            '📦 [Preload] Shared POS Products: ${products?.length ?? 0} items');
-      }
-    } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('⚠️ [Preload] Shared POS Products failed: $e');
-      }
-    }
-  }
-
   Future<void> _preloadCategories() async {
     try {
       final categories = await _categoryService?.getCategories();
@@ -297,34 +232,6 @@ class DataPreloadService extends ChangeNotifier {
     } catch (e) {
       if (!kReleaseMode) {
         debugPrint('⚠️ [Preload] Brands failed: $e');
-      }
-    }
-  }
-
-  Future<void> _preloadSalesInvoices() async {
-    try {
-      await _salesService?.loadInvoices();
-      if (!kReleaseMode) {
-        debugPrint(
-            '📦 [Preload] Sales Invoices: ${_salesService?.invoices.length ?? 0} items');
-      }
-    } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('⚠️ [Preload] Sales Invoices failed: $e');
-      }
-    }
-  }
-
-  Future<void> _preloadPurchaseInvoices() async {
-    try {
-      final invoices = await _purchaseService?.getPurchaseInvoices();
-      if (!kReleaseMode) {
-        debugPrint(
-            '📦 [Preload] Purchase Invoices: ${invoices?.length ?? 0} items');
-      }
-    } catch (e) {
-      if (!kReleaseMode) {
-        debugPrint('⚠️ [Preload] Purchase Invoices failed: $e');
       }
     }
   }

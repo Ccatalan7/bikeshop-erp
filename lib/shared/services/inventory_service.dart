@@ -181,6 +181,31 @@ class InventoryService extends ChangeNotifier {
 
   Future<List<Product>> searchProducts(String query, {int limit = 200}) async {
     if (query.trim().isEmpty) {
+      if (_hasLoaded && _products.isNotEmpty) {
+        return _products.take(limit).toList();
+      }
+
+      if (_db != null) {
+        try {
+          final data = await _db.select(
+            'products',
+            selectColumns: Product.listPreviewSelect,
+            orderBy: 'updated_at',
+            descending: true,
+            limit: limit,
+          );
+
+          final results = data.map(_productFromMap).toList();
+          for (final product in results) {
+            _upsertLocalProduct(product);
+          }
+          return results;
+        } catch (e) {
+          debugPrint(
+              '⚠️ [InventoryService] Empty-query preview fetch failed, falling back to full cache load: $e');
+        }
+      }
+
       return await getProducts();
     }
 
@@ -191,7 +216,7 @@ class InventoryService extends ChangeNotifier {
         .toList();
 
     if (searchTerms.isEmpty) {
-      return await getProducts();
+      return await searchProducts('', limit: limit);
     }
 
     // If products are already in local memory, use accent-insensitive filter

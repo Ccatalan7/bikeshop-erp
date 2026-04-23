@@ -26,14 +26,14 @@ class _CategoryNode {
   final String name;
   final String? parentId;
   final List<_CategoryNode> children;
-  
+
   _CategoryNode({
     required this.id,
     required this.name,
     this.parentId,
     List<_CategoryNode>? children,
   }) : children = children ?? [];
-  
+
   /// Get all descendant IDs (children, grandchildren, etc.)
   Set<String> getAllDescendantIds() {
     final result = <String>{id};
@@ -52,10 +52,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   // Hierarchical category tree (only root-level visible categories)
   List<_CategoryNode> _categoryTree = [];
-  
+
   // All categories indexed by ID for quick lookup
   Map<String, _CategoryNode> _allCategoriesById = {};
-  
+
   // Track which parent categories are expanded in the UI
   final Set<String> _expandedCategories = {};
 
@@ -275,7 +275,19 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
 
-    setState(() => _isLoading = true);
+    final hasWarmProductsCache =
+        publicInventoryService.hasProductsCache(tenantId) &&
+            _allProducts.isEmpty;
+    if (hasWarmProductsCache) {
+      _allProducts =
+          publicInventoryService.getCachedProductsForTenant(tenantId);
+      _applyFilters();
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    } else {
+      setState(() => _isLoading = true);
+    }
 
     try {
       // Load ALL products at once (no pagination) so search works across entire catalog
@@ -345,10 +357,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           .select('id, name, parent_id, show_on_website')
           .eq('tenant_id', tenantId)
           .order('name');
-      
+
       final allCategories = <String, Map<String, dynamic>>{};
       final visibleCategoryIds = <String>{};
-      
+
       // First pass: collect all categories and identify visible ones
       for (final row in response as List) {
         final id = row['id'] as String?;
@@ -358,7 +370,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           visibleCategoryIds.add(id);
         }
       }
-      
+
       // Build nodes for all categories
       final nodesById = <String, _CategoryNode>{};
       for (final entry in allCategories.entries) {
@@ -370,19 +382,19 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           parentId: data['parent_id'] as String?,
         );
       }
-      
+
       // Build parent-child relationships
       for (final node in nodesById.values) {
         if (node.parentId != null && nodesById.containsKey(node.parentId)) {
           nodesById[node.parentId]!.children.add(node);
         }
       }
-      
+
       // Sort children alphabetically
       for (final node in nodesById.values) {
         node.children.sort((a, b) => a.name.compareTo(b.name));
       }
-      
+
       // Build root-level tree: only categories with show_on_website = true
       // that are either root OR whose parent is not visible
       final rootCategories = <_CategoryNode>[];
@@ -391,24 +403,26 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // A visible category is a "root" in our display if:
         // - It has no parent, OR
         // - Its parent is not in the visible set
-        if (node.parentId == null || !visibleCategoryIds.contains(node.parentId)) {
+        if (node.parentId == null ||
+            !visibleCategoryIds.contains(node.parentId)) {
           rootCategories.add(node);
         }
       }
       rootCategories.sort((a, b) => a.name.compareTo(b.name));
-      
+
       if (mounted) {
         setState(() {
           _categoryTree = rootCategories;
           _allCategoriesById = nodesById;
         });
       }
-      debugPrint('[ProductCatalogPage] Loaded ${visibleCategoryIds.length} visible categories, ${rootCategories.length} root nodes');
+      debugPrint(
+          '[ProductCatalogPage] Loaded ${visibleCategoryIds.length} visible categories, ${rootCategories.length} root nodes');
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading visible categories: $e');
     }
   }
-  
+
   /// Get all category IDs that should be included when filtering by the given category
   /// This includes the category itself and all its descendants
   Set<String> _getCategoryAndDescendantIds(String categoryId) {
@@ -463,8 +477,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
         // Category filter - includes selected category AND all descendants
         if (_selectedCategoryId != null) {
-          final validCategoryIds = _getCategoryAndDescendantIds(_selectedCategoryId!);
-          if (product.categoryId == null || !validCategoryIds.contains(product.categoryId)) {
+          final validCategoryIds =
+              _getCategoryAndDescendantIds(_selectedCategoryId!);
+          if (product.categoryId == null ||
+              !validCategoryIds.contains(product.categoryId)) {
             return false;
           }
         }
@@ -993,8 +1009,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Widget _buildCategoryFilters() {
     final sourceProducts = _selectedProductType == null
         ? _allProducts
-        : _allProducts.where((p) => p.productType == _selectedProductType).toList();
-    
+        : _allProducts
+            .where((p) => p.productType == _selectedProductType)
+            .toList();
+
     final allCount = sourceProducts.length;
 
     return Column(
@@ -1005,40 +1023,46 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         const SizedBox(height: 4),
         // Hierarchical category tree
         ..._categoryTree.map((node) => _buildCategoryTreeNode(
-          node,
-          sourceProducts,
-          depth: 0,
-        )),
+              node,
+              sourceProducts,
+              depth: 0,
+            )),
       ],
     );
   }
-  
+
   /// Count products in a category and all its descendants
-  int _countProductsInCategoryTree(_CategoryNode node, Iterable<Product> products) {
+  int _countProductsInCategoryTree(
+      _CategoryNode node, Iterable<Product> products) {
     final validIds = node.getAllDescendantIds();
-    return products.where((p) => p.categoryId != null && validIds.contains(p.categoryId)).length;
+    return products
+        .where((p) => p.categoryId != null && validIds.contains(p.categoryId))
+        .length;
   }
-  
+
   Widget _buildCategoryTreeNode(
     _CategoryNode node,
     List<Product> sourceProducts, {
     required int depth,
   }) {
     final productCount = _countProductsInCategoryTree(node, sourceProducts);
-    
+
     // Don't show categories with no products in their tree
     if (productCount == 0) return const SizedBox.shrink();
-    
+
     final hasChildren = node.children.isNotEmpty;
     final isExpanded = _expandedCategories.contains(node.id);
     final isSelected = _selectedCategoryId == node.id;
-    
+
     // Check if any child has products
     final childrenWithProducts = hasChildren
-        ? node.children.where((child) => _countProductsInCategoryTree(child, sourceProducts) > 0).toList()
+        ? node.children
+            .where((child) =>
+                _countProductsInCategoryTree(child, sourceProducts) > 0)
+            .toList()
         : <_CategoryNode>[];
     final hasVisibleChildren = childrenWithProducts.isNotEmpty;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1084,7 +1108,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     ),
                   )
                 else
-                  const SizedBox(width: 22), // Align with items that have arrows
+                  const SizedBox(
+                      width: 22), // Align with items that have arrows
                 // Selection indicator
                 Container(
                   width: 16,
@@ -1109,7 +1134,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     style: TextStyle(
                       fontSize: 13,
                       color: isSelected ? Colors.black : Colors.grey.shade700,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -1120,15 +1146,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // Children (if expanded)
         if (isExpanded && hasVisibleChildren)
           ...childrenWithProducts.map((child) => _buildCategoryTreeNode(
-            child,
-            sourceProducts,
-            depth: depth + 1,
-          )),
+                child,
+                sourceProducts,
+                depth: depth + 1,
+              )),
       ],
     );
   }
 
-  Widget _buildCategoryOption(String? id, String name, int count, {bool isRoot = false}) {
+  Widget _buildCategoryOption(String? id, String name, int count,
+      {bool isRoot = false}) {
     final isSelected = _selectedCategoryId == id;
     return InkWell(
       onTap: () {

@@ -18,6 +18,7 @@ import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 import '../../settings/services/appearance_service.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/widgets/branded_loading.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -43,6 +44,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   String _selectedStatus = 'all'; // all, draft, pending, paid, overdue
 
   PurchaseInvoice? _selectedInvoice;
+  bool _isHydratingSelectedInvoice = false;
   // When true, the right pane shows the inline payment form instead of the PDF
   bool _showingPaymentForm = false;
   // Payment form state
@@ -101,10 +103,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context
-          .read<PurchaseService>()
-          .getPurchaseInvoices(); // Uses cache if valid
-      context.read<InventoryService>().getProducts(); // Ensure cache is loaded
+      context.read<PurchaseService>().getPurchaseInvoicesForList();
     });
   }
 
@@ -246,7 +245,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   Widget build(BuildContext context) {
     final purchaseService = context.watch<PurchaseService>();
     final invoices =
-        _getFilteredAndSortedInvoices(purchaseService.purchaseInvoices);
+        _getFilteredAndSortedInvoices(purchaseService.listInvoices);
 
     return MainLayout(
       title: 'Facturas de Compra',
@@ -311,12 +310,47 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           child: RefreshIndicator(
             onRefresh: () => context
                 .read<PurchaseService>()
-                .getPurchaseInvoices(forceRefresh: true),
+                .getPurchaseInvoicesForList(forceRefresh: true),
             child: _buildInvoiceCardsList(invoices),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _handleInvoiceSelection(
+    PurchaseInvoice invoice, {
+    required bool isSelected,
+  }) async {
+    if (isSelected) {
+      if (!mounted) return;
+      setState(() {
+        _selectedInvoice = null;
+        _showingPaymentForm = false;
+        _isHydratingSelectedInvoice = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedInvoice = invoice;
+      _showingPaymentForm = false;
+      _isHydratingSelectedInvoice = true;
+    });
+
+    final fullInvoice =
+        await context.read<PurchaseService>().fetchPurchaseInvoice(
+              invoice.id!,
+            );
+
+    if (!mounted || _selectedInvoice?.id != invoice.id) {
+      return;
+    }
+
+    setState(() {
+      _selectedInvoice = fullInvoice ?? invoice;
+      _isHydratingSelectedInvoice = false;
+    });
   }
 
   Widget _buildMobileHeader(List<PurchaseInvoice> invoices) {
@@ -513,7 +547,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
         return Column(
           children: [
-            _buildSummaryCards(purchaseService.purchaseInvoices),
+            _buildSummaryCards(purchaseService.listInvoices),
             const SizedBox(height: 16),
             _buildSearchBar(false),
             const SizedBox(height: 8),
@@ -573,7 +607,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
         // Right pane - Invoice preview
         Expanded(
-          child: _buildInvoicePreview(_selectedInvoice!),
+          child: _isHydratingSelectedInvoice
+              ? const Center(child: BrandedLoading())
+              : _buildInvoicePreview(_selectedInvoice!),
         ),
       ],
     );
@@ -712,7 +748,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    color: theme.textTheme.bodySmall?.color
+                        ?.withValues(alpha: 0.7),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -783,11 +820,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 // Mobile: Navigate to details (using same route as edit/view)
                 context.push('/purchases/${invoice.id}');
               } else {
-                // Desktop: Select
-                setState(() {
-                  _selectedInvoice = invoice;
-                  _showingPaymentForm = false;
-                });
+                _handleInvoiceSelection(invoice, isSelected: isSelected);
               }
             },
             child: Padding(
@@ -812,8 +845,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   Text(
                     invoice.supplierName ?? 'Sin proveedor',
                     style: TextStyle(
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                      color: theme.textTheme.bodyMedium?.color
+                          ?.withValues(alpha: 0.8),
                       fontSize: 13,
                     ),
                   ),
@@ -932,7 +965,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             tooltip: 'Actualizar',
             onPressed: () => context
                 .read<PurchaseService>()
-                .getPurchaseInvoices(forceRefresh: true),
+                .getPurchaseInvoicesForList(forceRefresh: true),
           ),
         ],
       ),
@@ -1130,12 +1163,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedInvoice = isSelected ? null : invoice;
-          _showingPaymentForm = false;
-        });
-      },
+      onTap: () => _handleInvoiceSelection(invoice, isSelected: isSelected),
       hoverColor: isDark ? Colors.grey[800] : Colors.grey[50],
       child: Container(
         decoration: BoxDecoration(
@@ -1157,11 +1185,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               height: 38,
               child: Checkbox(
                 value: isSelected,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedInvoice = value == true ? invoice : null;
-                  });
-                },
+                onChanged: (value) =>
+                    _handleInvoiceSelection(invoice, isSelected: value != true),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
@@ -1571,6 +1596,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       );
       return;
     }
+    final purchaseService = context.read<PurchaseService>();
+    final messenger = ScaffoldMessenger.of(context);
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) return;
 
@@ -1589,27 +1616,27 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             ? null
             : _paymentNotesController.text.trim(),
       );
-      await context.read<PurchaseService>().createPayment(payment);
+      await purchaseService.createPayment(payment);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Pago registrado correctamente'),
-              backgroundColor: Colors.green),
-        );
-        // Refresh and go back to PDF view
-        final invoices = await context
-            .read<PurchaseService>()
-            .getPurchaseInvoices(forceRefresh: true);
-        final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
-        setState(() {
-          _selectedInvoice = updated;
-          _showingPaymentForm = false;
-        });
-      }
+      if (!mounted) return;
+
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Pago registrado correctamente'),
+            backgroundColor: Colors.green),
+      );
+
+      final updated = await purchaseService.getPurchaseInvoice(invoice.id!);
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedInvoice = updated ?? invoice;
+        _showingPaymentForm = false;
+      });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
               content: Text('No se pudo registrar el pago: $e'),
               backgroundColor: Colors.red),
@@ -1643,6 +1670,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     payments.sort((a, b) => b.date.compareTo(a.date));
     final lastPayment = payments.first;
 
+    if (!mounted) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1670,19 +1699,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
     try {
       await purchaseService.deletePayment(lastPayment.id!);
-      if (mounted) {
-        final invoices =
-            await purchaseService.getPurchaseInvoices(forceRefresh: true);
-        final updated = invoices.firstWhere((inv) => inv.id == invoice.id);
-        if (mounted) {
-          setState(() => _selectedInvoice = updated);
-          messenger.showSnackBar(
-            const SnackBar(
-                content: Text('Pago eliminado correctamente'),
-                backgroundColor: Colors.green),
-          );
-        }
-      }
+      if (!mounted) return;
+
+      final updated = await purchaseService.getPurchaseInvoice(invoice.id!);
+
+      if (!mounted) return;
+
+      setState(() => _selectedInvoice = updated ?? invoice);
+      messenger.showSnackBar(
+        const SnackBar(
+            content: Text('Pago eliminado correctamente'),
+            backgroundColor: Colors.green),
+      );
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(
@@ -2549,8 +2577,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       (p) => p.id == item.productId,
                       orElse: () => null,
                     );
-                final displayName = _cleanPdfText(product?.name ?? item.productName ?? 'Sin nombre');
-                final displaySku = _cleanPdfText(product?.sku ?? item.productSku ?? '');
+                final displayName = _cleanPdfText(
+                    product?.name ?? item.productName ?? 'Sin nombre');
+                final displaySku =
+                    _cleanPdfText(product?.sku ?? item.productSku ?? '');
 
                 return TableRow(
                   children: [
@@ -2740,11 +2770,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   Future<pw.Document> _generatePurchaseInvoicePDF(
       PurchaseInvoice invoice) async {
     final pdf = pw.Document();
+    final appearanceService = context.read<AppearanceService>();
+    final inventoryService = context.read<InventoryService>();
 
     // Try to load company logo (use cache if available)
     pw.ImageProvider? logoImage;
     try {
-      final appearanceService = context.read<AppearanceService>();
       final logoUrl = appearanceService.companyLogoUrl;
       if (logoUrl != null && logoUrl.isNotEmpty) {
         // Check if we already have cached bytes for this URL
@@ -2765,7 +2796,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
 
     // Load products to use clean names
-    final products = await context.read<InventoryService>().getProducts();
+    final products = await inventoryService.getProducts();
 
     pdf.addPage(
       pw.Page(
@@ -2937,8 +2968,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                         (p) => p.id == item.productId,
                         orElse: () => null,
                       );
-                  final displayName = _cleanPdfText(product?.name ?? item.productName ?? 'Sin nombre');
-                  final displaySku = _cleanPdfText(product?.sku ?? item.productSku ?? '');
+                  final displayName = _cleanPdfText(
+                      product?.name ?? item.productName ?? 'Sin nombre');
+                  final displaySku =
+                      _cleanPdfText(product?.sku ?? item.productSku ?? '');
 
                   final hasDescription =
                       item.description != null && item.description!.isNotEmpty;
@@ -2963,7 +2996,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                             ),
                             if (hasDescription) ...[
                               pw.SizedBox(height: 3),
-                              pw.Text(_cleanPdfText(item.description!), style: const pw.TextStyle(
+                              pw.Text(
+                                _cleanPdfText(item.description!),
+                                style: const pw.TextStyle(
                                   fontSize: 9,
                                   color: PdfColors.grey700,
                                 ),
@@ -3036,13 +3071,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     return pdf;
   }
 
-  
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
+  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: pw.Text(

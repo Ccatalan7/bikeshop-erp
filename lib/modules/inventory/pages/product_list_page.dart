@@ -234,11 +234,11 @@ class _ProductListPageState extends State<ProductListPage> {
     });
 
     // Initial load sequence - SMART: skip full reload if we have cached data
-    if (_shouldRestoreState && _inventoryService.hasProductsCache) {
+    if (_shouldRestoreState && _inventoryService.hasListProductsCache) {
       // Use cached data directly - no network fetch needed!
       debugPrint(
           '⚡ [ProductListPage] Using cached products for restore (skip reload)');
-      _products = _inventoryService.cachedProducts;
+      _products = _inventoryService.cachedListProducts;
       _loadCategories(); // Still need filter options
       _loadSuppliers();
       _loadBrands();
@@ -675,11 +675,11 @@ class _ProductListPageState extends State<ProductListPage> {
     if (!mounted) return;
 
     // 🚀 INSTANT RENDER: Show cached data immediately if available
-    if (_inventoryService.hasProductsCache &&
+    if (_inventoryService.hasListProductsCache &&
         _products.isEmpty &&
         !forceRefresh) {
       setState(() {
-        _products = _inventoryService.cachedProducts;
+        _products = _inventoryService.cachedListProducts;
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
@@ -694,10 +694,7 @@ class _ProductListPageState extends State<ProductListPage> {
     }
 
     try {
-      final products = await _inventoryService.getProducts(
-        categoryId: _selectedCategoryId,
-        // We now filter low stock client-side to allow complex combinations
-        // lowStockOnly: _filterLowStock,
+      final products = await _inventoryService.getProductsForList(
         forceRefresh: forceRefresh,
       );
 
@@ -1016,166 +1013,182 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // Title Section with accent
-          Container(
-            padding: const EdgeInsets.only(right: 24),
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                    color:
-                        theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-                    width: 1),
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final searchWidth = constraints.maxWidth >= 1480
+              ? 320.0
+              : constraints.maxWidth >= 1320
+                  ? 280.0
+                  : 240.0;
+
+          return Row(
+            children: [
+              // Title Section with accent
+              Container(
+                padding: const EdgeInsets.only(right: 24),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.4),
+                        width: 1),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 4,
-                      height: 20,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.primary.withValues(alpha: 0.5)
-                          ],
+                    Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 20,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                theme.colorScheme.primary,
+                                theme.colorScheme.primary.withValues(alpha: 0.5)
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                        Text(
+                          'Productos',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      'Productos',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
+                    if (_filteredProducts.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 14),
+                        child: Text(
+                          '${_filteredProducts.length} productos',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
-                if (_filteredProducts.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 14),
-                    child: Text(
-                      '${_filteredProducts.length} productos',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                      ),
+              ),
+
+              const SizedBox(width: 16),
+
+              // Search Bar - Left-aligned right after title
+              Container(
+                width: searchWidth,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.5)),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  textAlignVertical: TextAlignVertical.center,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por nombre, SKU, marca...',
+                    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.7),
+                    ),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 12, right: 8),
+                      child: Icon(Icons.search_rounded,
+                          size: 20, color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    prefixIconConstraints:
+                        const BoxConstraints(minWidth: 0, minHeight: 0),
+                    suffixIcon: _searchTerm.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close_rounded,
+                                size: 18,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            onPressed: () {
+                              _searchController.clear();
+                              _onSearchChanged('');
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              // Actions with modern styling
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildScannerToggle(theme),
+                        const SizedBox(width: 10),
+                        _buildSecondaryActionButton(
+                          theme: theme,
+                          icon: Icons.file_upload_outlined,
+                          label: 'Importar',
+                          onPressed: () async {
+                            final result = await context
+                                .push('/inventory/products/import');
+                            if (result == true) {
+                              _loadProducts(forceRefresh: true);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        _buildSecondaryActionButton(
+                          theme: theme,
+                          icon: Icons.add_box_outlined,
+                          label: 'Creación masiva',
+                          onPressed: _openBulkCreateWorkspace,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildSecondaryActionButton(
+                          theme: theme,
+                          icon: Icons.rule_folder_outlined,
+                          label: 'Edición masiva',
+                          onPressed: _openBulkEditWorkspace,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildPrimaryCTA(
+                          theme: theme,
+                          icon: Icons.add_rounded,
+                          label: 'Nuevo Producto',
+                          onPressed: () async {
+                            final result =
+                                await context.push('/inventory/products/new');
+                            if (result == true) {
+                              _loadProducts(forceRefresh: true);
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Search Bar - Left-aligned right after title
-          Container(
-            width: 320,
-            height: 42,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color:
-                      theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              textAlignVertical: TextAlignVertical.center,
-              style: theme.textTheme.bodyMedium,
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre, SKU, marca...',
-                hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                  color:
-                      theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.only(left: 12, right: 8),
-                  child: Icon(Icons.search_rounded,
-                      size: 20, color: theme.colorScheme.onSurfaceVariant),
-                ),
-                prefixIconConstraints:
-                    const BoxConstraints(minWidth: 0, minHeight: 0),
-                suffixIcon: _searchTerm.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close_rounded,
-                            size: 18,
-                            color: theme.colorScheme.onSurfaceVariant),
-                        onPressed: () {
-                          _searchController.clear();
-                          _onSearchChanged('');
-                        },
-                      )
-                    : null,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-
-          const Spacer(),
-
-          // Actions with modern styling
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Scanner Toggle
-              _buildScannerToggle(theme),
-              const SizedBox(width: 10),
-
-              // Import Button
-              _buildSecondaryActionButton(
-                theme: theme,
-                icon: Icons.file_upload_outlined,
-                label: 'Importar',
-                onPressed: () async {
-                  final result =
-                      await context.push('/inventory/products/import');
-                  if (result == true) _loadProducts(forceRefresh: true);
-                },
-              ),
-              const SizedBox(width: 10),
-
-              _buildSecondaryActionButton(
-                theme: theme,
-                icon: Icons.add_box_outlined,
-                label: 'Creación masiva',
-                onPressed: _openBulkCreateWorkspace,
-              ),
-              const SizedBox(width: 10),
-
-              _buildSecondaryActionButton(
-                theme: theme,
-                icon: Icons.rule_folder_outlined,
-                label: 'Edición masiva',
-                onPressed: _openBulkEditWorkspace,
-              ),
-              const SizedBox(width: 10),
-
-              // Primary CTA - New Product
-              _buildPrimaryCTA(
-                theme: theme,
-                icon: Icons.add_rounded,
-                label: 'Nuevo Producto',
-                onPressed: () async {
-                  final result = await context.push('/inventory/products/new');
-                  if (result == true) _loadProducts(forceRefresh: true);
-                },
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -3406,7 +3419,8 @@ class _ProductListPageState extends State<ProductListPage> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                   ),
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -3802,7 +3816,8 @@ class _ProductListPageState extends State<ProductListPage> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                              color: theme.colorScheme.outlineVariant
+                                  .withValues(alpha: 0.5),
                             ),
                           ),
                           child: product.imageUrl != null

@@ -3061,117 +3061,6 @@ class WebsiteBlockRenderer {
   }
 
   // ============================================================================
-  // CATEGORY GRID BLOCK
-  // Modern grid of category cards with images (like Commencal's MTB/Road/Kids)
-  // ============================================================================
-  static Widget _buildCategoryGrid({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required Color primaryColor,
-    required Color accentColor,
-    String? headingFont,
-    String? bodyFont,
-    bool previewMode = false,
-    void Function(String route)? onNavigate,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? '').toString().trim();
-    final subtitle = (data['subtitle'] ?? '').toString().trim();
-
-    // Parse categories
-    List<Map<String, dynamic>> categories = [];
-    final rawCategories = data['categories'];
-    if (rawCategories is List) {
-      categories = rawCategories
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    // Default sample categories if empty
-    if (categories.isEmpty) {
-      categories = [
-        {
-          'title': 'Mountain Bike',
-          'subtitle': 'Conquista cualquier terreno',
-          'imageUrl': null,
-          'ctaText': 'Ver colección',
-          'ctaLink': '/productos',
-          'size': 'large', // large, medium, small
-        },
-        {
-          'title': 'Ruta',
-          'subtitle': 'Velocidad y rendimiento',
-          'imageUrl': null,
-          'ctaText': 'Ver colección',
-          'ctaLink': '/productos',
-          'size': 'large',
-        },
-        {
-          'title': 'Urbano',
-          'subtitle': 'Movilidad en la ciudad',
-          'imageUrl': null,
-          'ctaText': 'Ver gama',
-          'ctaLink': '/productos',
-          'size': 'medium',
-        },
-        {
-          'title': 'Accesorios',
-          'subtitle': 'Todo lo que necesitas',
-          'imageUrl': null,
-          'ctaText': 'Explorar',
-          'ctaLink': '/productos',
-          'size': 'medium',
-        },
-      ];
-    }
-
-    return Container(
-      width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: headingFont,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            if (subtitle.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, left: 24, right: 24),
-                child: Text(
-                  subtitle,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontFamily: bodyFont,
-                    color: Colors.black54,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 32),
-          ],
-          _CategoryGridLayout(
-            categories: categories,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            bodyFont: bodyFont,
-            previewMode: previewMode,
-            onNavigate: onNavigate,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================================
   // VIDEO BANNER BLOCK
   // Full-width image/video banner with overlay text
   // ============================================================================
@@ -4928,7 +4817,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           if (_selectedProductIds.isNotEmpty) {
             final response = await supabase
                 .from('products')
-                .select()
+                .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .inFilter('id', _selectedProductIds)
                 .eq('is_active', true);
@@ -4950,7 +4839,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           if (_categoryId != null && _categoryId!.isNotEmpty) {
             final response = await supabase
                 .from('products')
-                .select()
+                .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .eq('category_id', _categoryId!)
                 .eq('is_active', true)
@@ -4966,7 +4855,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           // Fetch newest products
           final response = await supabase
               .from('products')
-              .select()
+              .select(Product.storefrontPreviewSelect)
               .eq('tenant_id', tenantId)
               .eq('is_active', true)
               .eq('show_on_website', true)
@@ -4989,7 +4878,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
             // Fallback: fetch products marked as show_on_website
             final response = await supabase
                 .from('products')
-                .select()
+                .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .eq('is_active', true)
                 .eq('show_on_website', true)

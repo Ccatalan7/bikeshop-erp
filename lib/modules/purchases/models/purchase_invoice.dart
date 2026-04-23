@@ -26,6 +26,11 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 }
 
 class PurchaseInvoice {
+  static const String listPreviewSelect =
+      'id,tenant_id,invoice_number,supplier_id,supplier_name,supplier_rut,'
+      'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
+      'created_at,updated_at';
+
   final String? id;
   final String tenantId;
   final String invoiceNumber;

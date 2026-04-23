@@ -25,9 +25,11 @@ class SalesService extends ChangeNotifier {
   RealtimeChannel? _paymentChannel;
 
   final List<Invoice> _invoices = [];
+  final List<Invoice> _listInvoices = [];
   final List<Payment> _payments = [];
 
   bool _isLoadingInvoices = false;
+  bool _isLoadingListInvoices = false;
   bool _isLoadingPayments = false;
   String? _invoiceError;
   String? _paymentError;
@@ -38,17 +40,22 @@ class SalesService extends ChangeNotifier {
   // CACHING - Avoid refetching on every page navigation
   // ============================================================
   DateTime? _invoicesCacheTime;
+  DateTime? _listInvoicesCacheTime;
   DateTime? _paymentsCacheTime;
   static const Duration _cacheMaxAge = Duration(minutes: 5);
 
   // Public getters for cached data (instant UI access)
   List<Invoice> get cachedInvoices => List.unmodifiable(_invoices);
+  List<Invoice> get cachedListInvoices => List.unmodifiable(_listInvoices);
   List<Payment> get cachedPayments => List.unmodifiable(_payments);
   bool get hasInvoicesCache =>
       _invoices.isNotEmpty && _invoicesCacheTime != null;
+  bool get hasListInvoicesCache =>
+      _listInvoices.isNotEmpty && _listInvoicesCacheTime != null;
   bool get hasPaymentsCache =>
       _payments.isNotEmpty && _paymentsCacheTime != null;
   bool get isInvoicesCacheFresh => _isCacheValid(_invoicesCacheTime);
+  bool get isListInvoicesCacheFresh => _isCacheValid(_listInvoicesCacheTime);
   bool get isPaymentsCacheFresh => _isCacheValid(_paymentsCacheTime);
 
   /// Check if cache is still valid
@@ -60,6 +67,7 @@ class SalesService extends ChangeNotifier {
   /// Invalidate invoice cache (call after create/update/delete)
   void invalidateInvoicesCache() {
     _invoicesCacheTime = null;
+    _listInvoicesCacheTime = null;
     debugPrint('🗑️ [SalesService] Invoices cache invalidated');
   }
 
@@ -70,9 +78,12 @@ class SalesService extends ChangeNotifier {
   }
 
   UnmodifiableListView<Invoice> get invoices => UnmodifiableListView(_invoices);
+  UnmodifiableListView<Invoice> get listInvoices =>
+      UnmodifiableListView(_listInvoices);
   UnmodifiableListView<Payment> get payments => UnmodifiableListView(_payments);
 
   bool get isLoadingInvoices => _isLoadingInvoices;
+  bool get isLoadingListInvoices => _isLoadingListInvoices;
   bool get isLoadingPayments => _isLoadingPayments;
 
   String? get invoiceError => _invoiceError;
@@ -117,6 +128,46 @@ class SalesService extends ChangeNotifier {
       _invoiceError = 'No se pudieron cargar las facturas.';
     } finally {
       _isLoadingInvoices = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadInvoicesForList({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _isCacheValid(_listInvoicesCacheTime) &&
+        _listInvoices.isNotEmpty) {
+      debugPrint(
+          '📦 [SalesService] Using cached invoice list preview (${_listInvoices.length} items)');
+      return;
+    }
+
+    if (_isLoadingListInvoices) return;
+
+    _isLoadingListInvoices = true;
+    _invoiceError = null;
+    notifyListeners();
+
+    try {
+      final data = await _databaseService.select(
+        _invoicesCollection,
+        selectColumns: Invoice.listPreviewSelect,
+        fetchAll: true,
+      );
+      final invoices = data.map((raw) => Invoice.fromJson(raw)).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
+      _listInvoices
+        ..clear()
+        ..addAll(invoices);
+      _listInvoicesCacheTime = DateTime.now();
+      debugPrint(
+          '✅ [SalesService] Cached ${invoices.length} invoice list preview rows');
+      _ensureRealtimeSubscriptions();
+    } catch (e) {
+      debugPrint('SalesService.loadInvoicesForList error: $e');
+      _invoiceError = 'No se pudieron cargar las facturas.';
+    } finally {
+      _isLoadingListInvoices = false;
       notifyListeners();
     }
   }
@@ -615,6 +666,7 @@ class SalesService extends ChangeNotifier {
           final id = rawOld is Map ? rawOld['id']?.toString() : null;
           if (id != null) {
             _invoices.removeWhere((element) => element.id == id);
+            _listInvoices.removeWhere((element) => element.id == id);
             _debouncedNotify(); // Debounced to prevent spam
           }
           break;
@@ -669,6 +721,7 @@ class SalesService extends ChangeNotifier {
 
   void clearCache() {
     _invoices.clear();
+    _listInvoices.clear();
     _payments.clear();
     notifyListeners();
   }
@@ -702,6 +755,15 @@ class SalesService extends ChangeNotifier {
     } else {
       _invoices.add(invoice);
       _invoices.sort((a, b) => b.date.compareTo(a.date));
+    }
+
+    final listIndex =
+        _listInvoices.indexWhere((element) => element.id == invoice.id);
+    if (listIndex >= 0) {
+      _listInvoices[listIndex] = invoice;
+    } else if (_listInvoicesCacheTime != null) {
+      _listInvoices.add(invoice);
+      _listInvoices.sort((a, b) => b.date.compareTo(a.date));
     }
   }
 

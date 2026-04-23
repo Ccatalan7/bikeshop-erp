@@ -65,6 +65,7 @@ import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
 import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'shared/services/window_zoom_service.dart';
+import 'shared/services/right_toolbar_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -72,6 +73,7 @@ import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
 import 'shared/widgets/right_toolbar.dart';
+import 'shared/widgets/query_performance_gauge.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
 
@@ -306,6 +308,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PaymentMethodService()),
         ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
+        ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();
@@ -587,13 +590,8 @@ class VinabikeApp extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               dataPreloadService.initialize(
                 bikeshopService: context.read<BikeshopService>(),
-                customerService: context.read<CustomerService>(),
-                sharedInventoryService: context.read<InventoryService>(),
-                inventoryService:
-                    context.read<module_inventory.InventoryService>(),
                 categoryService: context.read<CategoryService>(),
                 brandService: context.read<BrandService>(),
-                salesService: context.read<SalesService>(),
                 purchaseService: context.read<PurchaseService>(),
                 hrService: context.read<HRService>(),
                 taskService: context.read<TaskService>(),
@@ -694,78 +692,85 @@ class VinabikeApp extends StatelessWidget {
 
                 // Scaffold and tab bar are stable - only IndexedStack rebuilds with workspace changes
                 return Scaffold(
-                  body: SafeArea(
-                    bottom: false, // Only add top padding for iOS status bar
-                    child: Column(
-                      children: [
-                        // Tab bar has its own internal Consumer, stable during rebuilds
-                        const WorkspaceTabBar(),
-                        // Only this part needs to rebuild on workspace changes
-                        Expanded(
-                          child: Selector<WorkspaceManager,
-                              (int, List<String>, bool)>(
-                            selector: (_, wm) => (
-                              wm.activeIndex,
-                              wm.workspaces.map((w) => w.id).toList(),
-                              wm.isAIPanelOpen,
-                            ),
-                            builder: (context, data, _) {
-                              final workspaceManager =
-                                  context.read<WorkspaceManager>();
+                  body: Stack(
+                    children: [
+                      SafeArea(
+                        bottom:
+                            false, // Only add top padding for iOS status bar
+                        child: Column(
+                          children: [
+                            // Tab bar has its own internal Consumer, stable during rebuilds
+                            const WorkspaceTabBar(),
+                            // Only this part needs to rebuild on workspace changes
+                            Expanded(
+                              child: Selector<WorkspaceManager,
+                                  (int, List<String>, bool)>(
+                                selector: (_, wm) => (
+                                  wm.activeIndex,
+                                  wm.workspaces.map((w) => w.id).toList(),
+                                  wm.isAIPanelOpen,
+                                ),
+                                builder: (context, data, _) {
+                                  final workspaceManager =
+                                      context.read<WorkspaceManager>();
 
-                              // Use a Row so the workspace pane stays at
-                              // index 0 regardless of AI panel state. This
-                              // prevents the IndexedStack (and its child
-                              // Routers) from being destroyed and recreated
-                              // every time the AI panel is toggled.
-                              return Row(
-                                children: [
-                                  Expanded(
-                                    // SelectionArea works here (no Overlay
-                                    // wrapper needed) because we are already
-                                    // inside the outer MaterialApp Navigator's
-                                    // own Overlay.
-                                    child: SelectionArea(
-                                      child: IndexedStack(
-                                        index: data.$1,
-                                        sizing: StackFit.expand,
-                                        children: workspaceManager.workspaces
-                                            .map((workspace) {
-                                          return _WorkspaceRouterView(
-                                            key: ValueKey(workspace.id),
-                                            workspace: workspace,
-                                            authService: authService,
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  ),
-                                  // Right panel – only mounted when open, but
-                                  // its addition/removal never shifts the
-                                  // workspace pane above.
-                                  if (data.$3)
-                                    SelectionArea(
-                                      child: Container(
-                                        width: 400,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .scaffoldBackgroundColor,
-                                          border: Border(
-                                            left: BorderSide(
-                                                color: Theme.of(context)
-                                                    .dividerColor),
+                                  // Use a Row so the workspace pane stays at
+                                  // index 0 regardless of AI panel state. This
+                                  // prevents the IndexedStack (and its child
+                                  // Routers) from being destroyed and recreated
+                                  // every time the AI panel is toggled.
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        // SelectionArea works here (no Overlay
+                                        // wrapper needed) because we are already
+                                        // inside the outer MaterialApp Navigator's
+                                        // own Overlay.
+                                        child: SelectionArea(
+                                          child: IndexedStack(
+                                            index: data.$1,
+                                            sizing: StackFit.expand,
+                                            children: workspaceManager
+                                                .workspaces
+                                                .map((workspace) {
+                                              return _WorkspaceRouterView(
+                                                key: ValueKey(workspace.id),
+                                                workspace: workspace,
+                                                authService: authService,
+                                              );
+                                            }).toList(),
                                           ),
                                         ),
-                                        child: const AIChatPanel(jobs: []),
                                       ),
-                                    ),
-                                ],
-                              );
-                            },
-                          ),
+                                      // Right panel – only mounted when open, but
+                                      // its addition/removal never shifts the
+                                      // workspace pane above.
+                                      if (data.$3)
+                                        SelectionArea(
+                                          child: Container(
+                                            width: 400,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .scaffoldBackgroundColor,
+                                              border: Border(
+                                                left: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .dividerColor),
+                                              ),
+                                            ),
+                                            child: const AIChatPanel(jobs: []),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const QueryPerformanceGauge(),
+                    ],
                   ),
                 );
               },

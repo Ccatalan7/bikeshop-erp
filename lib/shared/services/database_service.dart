@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'query_performance_service.dart';
 
 class DatabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
@@ -63,6 +67,7 @@ class DatabaseService extends ChangeNotifier {
   // Generic CRUD operations
   Future<List<Map<String, dynamic>>> select(
     String table, {
+    String? selectColumns,
     String? where,
     List<String>? whereIn,
     String? orderBy,
@@ -70,6 +75,7 @@ class DatabaseService extends ChangeNotifier {
     int? limit,
     bool fetchAll = false, // New parameter to fetch all records with pagination
   }) async {
+    final stopwatch = Stopwatch()..start();
     try {
       if (kDebugMode) {
         debugPrint(
@@ -80,6 +86,7 @@ class DatabaseService extends ChangeNotifier {
       if (fetchAll && limit == null) {
         return await _selectWithPagination(
           table,
+          selectColumns: selectColumns,
           where: where,
           whereIn: whereIn,
           orderBy: orderBy,
@@ -88,7 +95,9 @@ class DatabaseService extends ChangeNotifier {
       }
 
       // Use dynamic to handle different builder types in the chain
-      dynamic query = _client.from(table).select();
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
 
       // Handle simple WHERE clause
       if (where != null && where.contains('=')) {
@@ -123,16 +132,35 @@ class DatabaseService extends ChangeNotifier {
 
       final data = await query;
 
+      stopwatch.stop();
+
       if (kDebugMode) {
         debugPrint(
             '✅ DB Result: ${data == null ? "NULL" : (data as List).length} rows from $table');
       }
 
       if (data == null) {
+        _recordReadMetric(
+          label: table,
+          operation: 'select',
+          rowCount: 0,
+          data: const [],
+          durationMs: stopwatch.elapsedMilliseconds,
+        );
         return [];
       }
 
-      return (data as List)
+      final listData = data as List;
+
+      _recordReadMetric(
+        label: table,
+        operation: 'select',
+        rowCount: listData.length,
+        data: data,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+
+      return listData
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
     } catch (e) {
@@ -146,6 +174,7 @@ class DatabaseService extends ChangeNotifier {
   // Private helper for pagination (fetches all records in batches)
   Future<List<Map<String, dynamic>>> _selectWithPagination(
     String table, {
+    String? selectColumns,
     String? where,
     List<String>? whereIn,
     String? orderBy,
@@ -154,6 +183,7 @@ class DatabaseService extends ChangeNotifier {
     const int batchSize = 1000;
     int offset = 0;
     List<Map<String, dynamic>> allRecords = [];
+    final stopwatch = Stopwatch()..start();
 
     if (kDebugMode) {
       debugPrint(
@@ -161,7 +191,9 @@ class DatabaseService extends ChangeNotifier {
     }
 
     while (true) {
-      dynamic query = _client.from(table).select();
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
 
       // Apply filters
       if (where != null && where.contains('=')) {
@@ -215,6 +247,15 @@ class DatabaseService extends ChangeNotifier {
           '✅ Completed paginated fetch for $table: ${allRecords.length} total rows');
     }
 
+    stopwatch.stop();
+    _recordReadMetric(
+      label: table,
+      operation: 'select_paginated',
+      rowCount: allRecords.length,
+      data: allRecords,
+      durationMs: stopwatch.elapsedMilliseconds,
+    );
+
     return allRecords;
   }
 
@@ -227,6 +268,7 @@ class DatabaseService extends ChangeNotifier {
     String? orderBy,
     bool descending = false,
   }) async {
+    final stopwatch = Stopwatch()..start();
     try {
       dynamic query = _client.from(table).select();
 
@@ -253,6 +295,14 @@ class DatabaseService extends ChangeNotifier {
       query = query.range(from, to);
 
       final data = await query as List;
+      stopwatch.stop();
+      _recordReadMetric(
+        label: table,
+        operation: 'select_range',
+        rowCount: data.length,
+        data: data,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       return data.map((row) => Map<String, dynamic>.from(row as Map)).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -263,9 +313,18 @@ class DatabaseService extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> selectById(String table, String id) async {
+    final stopwatch = Stopwatch()..start();
     try {
       final data =
           await _client.from(table).select().eq('id', id).maybeSingle();
+      stopwatch.stop();
+      _recordReadMetric(
+        label: table,
+        operation: 'select_by_id',
+        rowCount: data == null ? 0 : 1,
+        data: data,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       return data != null ? Map<String, dynamic>.from(data as Map) : null;
     } catch (e) {
       if (kDebugMode) {
@@ -446,11 +505,20 @@ class DatabaseService extends ChangeNotifier {
     String searchColumn,
     String searchTerm,
   ) async {
+    final stopwatch = Stopwatch()..start();
     try {
       final data = await _client
           .from(table)
           .select()
           .ilike(searchColumn, '%${searchTerm.trim()}%');
+      stopwatch.stop();
+      _recordReadMetric(
+        label: table,
+        operation: 'search:$searchColumn',
+        rowCount: (data as List).length,
+        data: data,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       return List<Map<String, dynamic>>.from(data as List);
     } catch (e) {
       if (kDebugMode) {
@@ -468,6 +536,7 @@ class DatabaseService extends ChangeNotifier {
   }) async {
     if (searchTerms.isEmpty || columns.isEmpty) return [];
 
+    final stopwatch = Stopwatch()..start();
     try {
       var query = _client.from(table).select();
 
@@ -481,6 +550,14 @@ class DatabaseService extends ChangeNotifier {
       }
 
       final data = await query.limit(limit);
+      stopwatch.stop();
+      _recordReadMetric(
+        label: table,
+        operation: 'search_multi',
+        rowCount: (data as List).length,
+        data: data,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       return List<Map<String, dynamic>>.from(data as List);
     } catch (e) {
       if (kDebugMode) {
@@ -493,11 +570,20 @@ class DatabaseService extends ChangeNotifier {
   // Generic RPC call for custom PostgreSQL functions
   Future<dynamic> rpc(String functionName,
       {Map<String, dynamic>? params}) async {
+    final stopwatch = Stopwatch()..start();
     try {
       if (kDebugMode) {
         debugPrint('🔧 RPC Call: $functionName | params: $params');
       }
       final result = await _client.rpc(functionName, params: params);
+      stopwatch.stop();
+      _recordReadMetric(
+        label: 'rpc:$functionName',
+        operation: 'rpc',
+        rowCount: _estimateRowCount(result),
+        data: result,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
       if (kDebugMode) {
         debugPrint('✅ RPC Result: $functionName completed');
       }
@@ -542,5 +628,38 @@ class DatabaseService extends ChangeNotifier {
   /// Check if table should be excluded from tenant filtering
   bool _isSystemTable(String table) {
     return _excludedTables.contains(table);
+  }
+
+  void _recordReadMetric({
+    required String label,
+    required String operation,
+    required int rowCount,
+    required Object? data,
+    required int durationMs,
+  }) {
+    if (!QueryPerformanceService.isEnabled) return;
+
+    QueryPerformanceService.instance.recordRead(
+      label: label,
+      operation: operation,
+      rowCount: rowCount,
+      estimatedBytes: _estimatePayloadBytes(data),
+      durationMs: durationMs,
+    );
+  }
+
+  int _estimatePayloadBytes(Object? data) {
+    if (!QueryPerformanceService.isEnabled || data == null) return 0;
+    try {
+      return utf8.encode(jsonEncode(data)).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  int _estimateRowCount(Object? data) {
+    if (data is List) return data.length;
+    if (data is Map) return 1;
+    return data == null ? 0 : 1;
   }
 }
