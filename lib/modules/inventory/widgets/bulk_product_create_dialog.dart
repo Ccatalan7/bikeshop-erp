@@ -3268,28 +3268,28 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                 )),
           ),
           hCell('Img', _wImg),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('SKU', _wSku),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Nombre *', _wName),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Descripción', _wDesc),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Costo', _wCost, align: TextAlign.center),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Precio *', _wPrice, align: TextAlign.center),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Stock', _wStock, align: TextAlign.center),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Categoría', _wCat),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Marca', _wBrand),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Proveedor', _wSupplier),
-          SizedBox(width: _gap),
+          const SizedBox(width: _gap),
           hCell('Taller', _wTaller, align: TextAlign.center),
-          SizedBox(width: _gap),
-          SizedBox(width: _wDel), // delete
+          const SizedBox(width: _gap),
+          const SizedBox(width: _wDel), // delete
         ],
       ),
     );
@@ -3474,7 +3474,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   ),
                 ),
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── SKU ─────────────────────────────────────────────────────
               _textField(
@@ -3491,7 +3491,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                       )
                     : null,
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Name ────────────────────────────────────────────────────
               _textField(
@@ -3511,7 +3511,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                     : null,
                 suffixIcon: _buildDuplicateStatusIcon(draft),
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Description ─────────────────────────────────────────────
               _textField(
@@ -3525,7 +3525,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   setState(() {});
                 },
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Cost ────────────────────────────────────────────────────
               _textField(
@@ -3541,7 +3541,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   setState(() {});
                 },
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Price ───────────────────────────────────────────────────
               _textField(
@@ -3566,7 +3566,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                     ? '> 0'
                     : null,
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Initial Stock ────────────────────────────────────────────
               _textField(
@@ -3581,7 +3581,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   setState(() {});
                 },
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Category ─────────────────────────────────────────────────
               _dropdownMenu<Category>(
@@ -3598,7 +3598,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   setState(() => draft.selectedCategory = v);
                 },
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Brand ────────────────────────────────────────────────────
               _dropdownMenu<ProductBrand>(
@@ -3615,7 +3615,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   setState(() => draft.selectedBrand = v);
                 },
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Supplier ─────────────────────────────────────────────────
               _dropdownMenu<Supplier>(
@@ -3629,7 +3629,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                     .toList(),
                 onSelected: (v) => _onSupplierSelected(draft, v),
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Workshop toggle ───────────────────────────────────────────
               SizedBox(
@@ -3651,7 +3651,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                   ),
                 ),
               ),
-              SizedBox(width: _gap),
+              const SizedBox(width: _gap),
 
               // ── Delete row ───────────────────────────────────────────────
               SizedBox(

@@ -324,13 +324,11 @@ class _SalesByCustomerPageState extends State<SalesByCustomerPage> {
 class _CustomerSalesData {
   final String customerId;
   final String customerName;
-  int invoiceCount;
-  double totalSales;
+  int invoiceCount = 0;
+  double totalSales = 0;
 
   _CustomerSalesData({
     required this.customerId,
     required this.customerName,
-    this.invoiceCount = 0,
-    this.totalSales = 0.0,
   });
 }
