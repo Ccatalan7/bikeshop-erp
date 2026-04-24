@@ -110,7 +110,7 @@ class _PegasListPageState extends State<PegasListPage> {
       // Fetch fresh data (will use cache if still valid)
       final jobs =
           await _bikeshopService.getJobs(includeCompleted: _showCompleted);
-      final customers = await _customerService.getCustomers();
+      final customers = await _customerService.getCustomersForList();
       final bikes = await _bikeshopService.getBikes();
 
       // Create lookup maps

@@ -1318,9 +1318,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (matchedProduct == null && item.description.isNotEmpty) {
       try {
         final normalizedDescription = item.description.trim().toLowerCase();
-        final allProducts = await inventoryService.getProducts();
+        final candidateProducts =
+            await inventoryService.searchProducts(item.description, limit: 25);
 
-        for (final product in allProducts) {
+        for (final product in candidateProducts) {
           final normalizedProductName = product.name.trim().toLowerCase();
           if (normalizedProductName == normalizedDescription) {
             matchedProduct = product;

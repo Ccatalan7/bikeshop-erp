@@ -3536,7 +3536,11 @@ class BikeshopService extends ChangeNotifier {
 
         if (productId != null) {
           // Fetch product details
-          final productData = await _db.selectById('products', productId);
+          final productData = await _db.selectById(
+            'products',
+            productId,
+            selectColumns: 'id,name,sku,price',
+          );
           if (productData != null) {
             final unitPrice =
                 double.tryParse(productData['price']?.toString() ?? '0') ?? 0;

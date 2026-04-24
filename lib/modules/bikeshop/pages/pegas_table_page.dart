@@ -264,8 +264,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     setState(() {
       _jobs = _bikeshopService.cachedJobs;
-      if (_customerService.hasCustomersCache) {
-        _customers = _buildCustomerMap(_customerService.cachedCustomers);
+      if (_customerService.hasListCustomersCache) {
+        _customers = _buildCustomerMap(_customerService.cachedListCustomers);
       }
       if (_bikeshopService.hasBikesCache) {
         _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
@@ -559,7 +559,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   bool get _canUseFreshInstantCache =>
       _bikeshopService.isJobsCacheFresh &&
-      _customerService.isCustomersCacheFresh &&
+      _customerService.isListCustomersCacheFresh &&
       _bikeshopService.isBikesCacheFresh &&
       _bikeshopService.isJobBikesCacheFresh &&
       _salesService.isInvoicesCacheFresh;
@@ -572,7 +572,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       setState(() {
         _jobs = _bikeshopService.cachedJobs;
         _filteredJobs = _jobs;
-        _customers = _buildCustomerMap(_customerService.cachedCustomers);
+        _customers = _buildCustomerMap(_customerService.cachedListCustomers);
         _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
         _jobBikesMap = _bikeshopService.cachedAllJobBikes;
         _invoices = _buildInvoiceMap(_salesService.cachedInvoices);
@@ -586,7 +586,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final results = await Future.wait([
         _bikeshopService.getJobs(includeCompleted: true),
-        _customerService.getCustomers(),
+        _customerService.getCustomersForList(),
         _bikeshopService.getBikes(),
         _loadInvoices(),
         _bikeshopService.getAllJobBikes(), // Single query for all job bikes

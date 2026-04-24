@@ -35,7 +35,8 @@ class POSDashboardPage extends StatefulWidget {
 
 class _POSDashboardPageState extends State<POSDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
-  static const int _initialProductPreviewLimit = 120;
+  static const int _productPreviewPageSize = 80;
+  final ScrollController _productGridController = ScrollController();
   String _searchQuery = '';
   String? _selectedCategoryKey;
   Set<String> _selectedCategoryMatchers = const <String>{};
@@ -55,8 +56,13 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   List<Product> _cachedFilteredProducts = const [];
   bool _inventoryIsLoading = true;
   bool _inventoryHasLoaded = false;
-  bool _isHydratingFullInventory = false;
+  bool _isEnsuringFilteredPreviewCoverage = false;
+  bool _isLoadingMoreProductPreviews = false;
+  bool _isSearchingProducts = false;
+  bool _hasMoreProductPreviewPages = true;
+  int _lastLoadedProductPreviewPage = -1;
   InventoryService? _inventoryServiceRef;
+  Timer? _productSearchDebounce;
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
   final StringBuffer _scanBuffer = StringBuffer();
@@ -113,6 +119,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     // HardwareKeyboard bypasses the focus system so it works even when
     // the search bar or customer field is focused.
     HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
+    _productGridController.addListener(_onProductGridScrolled);
   }
 
   Future<void> _loadInitialProductPreview(
@@ -120,17 +127,44 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     final service = existingService ?? _inventoryServiceRef;
     if (service == null) return;
 
+    if (service.hasLoaded || service.products.isNotEmpty) {
+      final existingLastPage = service.loadedPreviewPageCount > 0
+          ? service.loadedPreviewPageCount - 1
+          : (service.products.isEmpty
+              ? -1
+              : ((service.products.length - 1) ~/ _productPreviewPageSize));
+
+      if (mounted) {
+        setState(() {
+          _inventoryIsLoading = false;
+          _inventoryHasLoaded =
+              service.hasLoaded || service.products.isNotEmpty;
+          _hasMoreProductPreviewPages = service.hasMorePreviewPages;
+          _lastLoadedProductPreviewPage = existingLastPage;
+          _cachedFilteredProducts = _getFilteredProducts(
+            service.products,
+            categoryMatchers: _selectedCategoryMatchers,
+          );
+        });
+      }
+
+      if (service.products.isNotEmpty) {
+        return;
+      }
+    }
+
     if (mounted) {
       setState(() {
-        _inventoryIsLoading = service.products.isEmpty;
+        _inventoryIsLoading = true;
         _inventoryHasLoaded = service.hasLoaded || service.products.isNotEmpty;
       });
     }
 
     try {
-      final initialProducts = await service.searchProducts(
-        '',
-        limit: _initialProductPreviewLimit,
+      final initialProducts = await service.loadProductPreviewPage(
+        page: 0,
+        pageSize: _productPreviewPageSize,
+        reset: true,
       );
 
       if (!mounted) return;
@@ -139,6 +173,8 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
         _inventoryHasLoaded = service.hasLoaded ||
             initialProducts.isNotEmpty ||
             service.products.isNotEmpty;
+        _hasMoreProductPreviewPages = service.hasMorePreviewPages;
+        _lastLoadedProductPreviewPage = initialProducts.isEmpty ? -1 : 0;
         _cachedFilteredProducts = _getFilteredProducts(
           service.products,
           categoryMatchers: _selectedCategoryMatchers,
@@ -149,6 +185,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       setState(() {
         _inventoryIsLoading = false;
         _inventoryHasLoaded = service.hasLoaded || service.products.isNotEmpty;
+        _hasMoreProductPreviewPages = service.hasMorePreviewPages;
         _cachedFilteredProducts = _getFilteredProducts(
           service.products,
           categoryMatchers: _selectedCategoryMatchers,
@@ -157,23 +194,119 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     }
   }
 
-  Future<void> _ensureFullInventoryLoaded() async {
+  Future<void> _loadNextProductPreviewPage() async {
     final service = _inventoryServiceRef;
-    if (service == null || service.hasLoaded || _isHydratingFullInventory) {
+    if (service == null ||
+        service.hasLoaded ||
+        !_hasMoreProductPreviewPages ||
+        _isLoadingMoreProductPreviews ||
+        _searchQuery.isNotEmpty) {
       return;
     }
 
-    _isHydratingFullInventory = true;
+    final nextPage = _lastLoadedProductPreviewPage + 1;
+    if (nextPage < 0) return;
+
+    setState(() {
+      _isLoadingMoreProductPreviews = true;
+    });
+
     try {
-      await service.getProducts();
+      final nextProducts = await service.loadProductPreviewPage(
+        page: nextPage,
+        pageSize: _productPreviewPageSize,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        if (nextProducts.isNotEmpty) {
+          _lastLoadedProductPreviewPage = nextPage;
+        }
+        _hasMoreProductPreviewPages = service.hasMorePreviewPages;
+        _cachedFilteredProducts = _getFilteredProducts(
+          service.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+      });
     } finally {
-      _isHydratingFullInventory = false;
+      if (mounted) {
+        setState(() {
+          _isLoadingMoreProductPreviews = false;
+        });
+      } else {
+        _isLoadingMoreProductPreviews = false;
+      }
+    }
+  }
+
+  void _onProductGridScrolled() {
+    if (!_productGridController.hasClients) return;
+    if (_searchQuery.isNotEmpty || _inventoryServiceRef?.hasLoaded == true) {
+      return;
+    }
+
+    final position = _productGridController.position;
+    if (position.pixels >= position.maxScrollExtent - 320) {
+      unawaited(_loadNextProductPreviewPage());
+    }
+  }
+
+  Future<void> _ensureFilteredPreviewCoverage({
+    int minimumMatches = 12,
+    int maxAdditionalPages = 3,
+  }) async {
+    final service = _inventoryServiceRef;
+    if (service == null ||
+        service.hasLoaded ||
+        _searchQuery.isNotEmpty ||
+        !_hasActiveProductFilters ||
+        !_hasMoreProductPreviewPages ||
+        _isEnsuringFilteredPreviewCoverage) {
+      return;
+    }
+
+    final currentMatches = _getFilteredProducts(
+      service.products,
+      categoryMatchers: _selectedCategoryMatchers,
+    );
+    if (currentMatches.length >= minimumMatches) {
+      return;
+    }
+
+    _isEnsuringFilteredPreviewCoverage = true;
+    if (mounted) {
+      setState(() {});
+    }
+    try {
+      var pagesLoaded = 0;
+      while (mounted &&
+          !service.hasLoaded &&
+          service.hasMorePreviewPages &&
+          pagesLoaded < maxAdditionalPages) {
+        await _loadNextProductPreviewPage();
+        pagesLoaded += 1;
+
+        final updatedMatches = _getFilteredProducts(
+          service.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+        if (updatedMatches.length >= minimumMatches) {
+          break;
+        }
+      }
+    } finally {
+      _isEnsuringFilteredPreviewCoverage = false;
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
   @override
   void dispose() {
     _inventoryServiceRef?.removeListener(_onInventoryChanged);
+    _productGridController.dispose();
+    _productSearchDebounce?.cancel();
     _searchController.dispose();
     _scanSubscription?.cancel();
     HardwareKeyboard.instance.removeHandler(_hardwareKeyHandler);
@@ -547,16 +680,75 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   void _onProductSearchChanged(String value) {
     final svc = _inventoryServiceRef;
     final trimmedValue = value.trim();
-    if (trimmedValue.isNotEmpty) {
-      unawaited(_ensureFullInventoryLoaded());
+    _productSearchDebounce?.cancel();
+
+    if (svc == null) {
+      setState(() {
+        _searchQuery = trimmedValue;
+        _isSearchingProducts = false;
+      });
+      return;
     }
-    setState(() {
-      _searchQuery = trimmedValue;
-      if (svc != null) {
+
+    if (trimmedValue.isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _isSearchingProducts = false;
         _cachedFilteredProducts = _getFilteredProducts(
           svc.products,
           categoryMatchers: _selectedCategoryMatchers,
         );
+      });
+      return;
+    }
+
+    if (svc.hasLoaded) {
+      setState(() {
+        _searchQuery = trimmedValue;
+        _isSearchingProducts = false;
+        _cachedFilteredProducts = _getFilteredProducts(
+          svc.products,
+          categoryMatchers: _selectedCategoryMatchers,
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _searchQuery = trimmedValue;
+      _isSearchingProducts = true;
+    });
+
+    _productSearchDebounce = Timer(const Duration(milliseconds: 180), () async {
+      try {
+        final results = await svc.searchProducts(
+          trimmedValue,
+          limit: _productPreviewPageSize,
+        );
+
+        if (!mounted || _searchQuery != trimmedValue) {
+          return;
+        }
+
+        setState(() {
+          _isSearchingProducts = false;
+          _cachedFilteredProducts = _getFilteredProducts(
+            results,
+            categoryMatchers: _selectedCategoryMatchers,
+          );
+        });
+      } catch (_) {
+        if (!mounted || _searchQuery != trimmedValue) {
+          return;
+        }
+
+        setState(() {
+          _isSearchingProducts = false;
+          _cachedFilteredProducts = _getFilteredProducts(
+            svc.products,
+            categoryMatchers: _selectedCategoryMatchers,
+          );
+        });
       }
     });
   }
@@ -585,6 +777,10 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
     setState(() {
       _inventoryIsLoading = svc.isLoading;
       _inventoryHasLoaded = svc.hasLoaded || svc.products.isNotEmpty;
+      _hasMoreProductPreviewPages = svc.hasMorePreviewPages;
+      if (svc.loadedPreviewPageCount > 0) {
+        _lastLoadedProductPreviewPage = svc.loadedPreviewPageCount - 1;
+      }
       _cachedFilteredProducts = _getFilteredProducts(
         svc.products,
         categoryMatchers: _selectedCategoryMatchers,
@@ -778,9 +974,6 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                         labelBuilder: (type) => type.displayName,
                         onChanged: (value) {
                           final svc = _inventoryServiceRef;
-                          if (value != null) {
-                            unawaited(_ensureFullInventoryLoaded());
-                          }
                           setState(() {
                             _selectedProductType = value;
                             if (svc != null) {
@@ -790,6 +983,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                               );
                             }
                           });
+                          unawaited(_ensureFilteredPreviewCoverage());
                         },
                       ),
                       if (_isLoadingCategories && categoryOptions.isEmpty)
@@ -822,9 +1016,6 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                           labelBuilder: (option) => option.label,
                           onChanged: (value) {
                             final svc = _inventoryServiceRef;
-                            if (value != null) {
-                              unawaited(_ensureFullInventoryLoaded());
-                            }
                             setState(() {
                               _selectedCategoryKey = value?.key;
                               _selectedCategoryMatchers =
@@ -837,6 +1028,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
                                 );
                               }
                             });
+                            unawaited(_ensureFilteredPreviewCoverage());
                           },
                         ),
                       if (_hasActiveProductFilters)
@@ -866,8 +1058,24 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
 
   Widget _buildProductGrid(ThemeData theme) {
     final allProducts = _inventoryServiceRef?.products ?? const [];
+    final showPagingLoaderTile = _searchQuery.isEmpty &&
+        !(_inventoryServiceRef?.hasLoaded ?? false) &&
+        (_hasMoreProductPreviewPages || _isLoadingMoreProductPreviews);
+    final shouldKeepLoadingFilteredPreview = _searchQuery.isEmpty &&
+        _hasActiveProductFilters &&
+        !(_inventoryServiceRef?.hasLoaded ?? false) &&
+        (_isEnsuringFilteredPreviewCoverage ||
+            _isLoadingMoreProductPreviews ||
+            _hasMoreProductPreviewPages);
 
     if (allProducts.isEmpty && (_inventoryIsLoading || !_inventoryHasLoaded)) {
+      return const Center(child: BrandedLoading());
+    }
+    if (_isSearchingProducts && _cachedFilteredProducts.isEmpty) {
+      return const Center(child: BrandedLoading());
+    }
+    if (_cachedFilteredProducts.isEmpty && shouldKeepLoadingFilteredPreview) {
+      unawaited(_ensureFilteredPreviewCoverage());
       return const Center(child: BrandedLoading());
     }
     if (allProducts.isEmpty) {
@@ -907,6 +1115,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
       );
     }
     return GridView.builder(
+      controller: _productGridController,
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 220,
@@ -914,8 +1123,36 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
-      itemCount: _cachedFilteredProducts.length,
+      itemCount:
+          _cachedFilteredProducts.length + (showPagingLoaderTile ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= _cachedFilteredProducts.length) {
+          return Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Center(
+              child: _isLoadingMoreProductPreviews
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : Text(
+                      'Desliza para cargar más',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+            ),
+          );
+        }
+
         final product = _cachedFilteredProducts[index];
         return ProductTile(
           key: ValueKey(product.id),
@@ -1696,6 +1933,7 @@ class _CashierPanelState extends State<_CashierPanel> {
     }
 
     final posService = context.read<POSService>();
+    final tenantService = context.read<TenantService>();
     posService.setCustomer(_selectedCustomer);
 
     if (_amountReceived < posService.cartTotal) {
@@ -1758,7 +1996,6 @@ class _CashierPanelState extends State<_CashierPanel> {
     });
 
     try {
-      final tenantService = Provider.of<TenantService>(context, listen: false);
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) {
         throw Exception('No se pudo obtener el tenant ID');
@@ -2031,9 +2268,10 @@ class _CashierPanelState extends State<_CashierPanel> {
                             ),
                           ),
                           onSelected: (selected) {
-                            if (selected)
+                            if (selected) {
                               setState(
                                   () => _selectedPaymentMethodId = method.id);
+                            }
                           },
                         );
                       }).toList(),
@@ -2165,15 +2403,27 @@ class _CashierPanelState extends State<_CashierPanel> {
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: InkWell(
-                onTap: () {
+                onTap: () async {
+                  final salesService = context.read<SalesService>();
+                  final hydratedInvoice = invoice.id == null
+                      ? null
+                      : await salesService.fetchInvoice(
+                          invoice.id!,
+                          refresh: true,
+                        );
+
+                  if (!mounted) return;
+
+                  final selectedInvoice = hydratedInvoice ?? invoice;
+
                   // Enter invoice payment mode
-                  posService.enterInvoicePaymentMode(invoice);
+                  posService.enterInvoicePaymentMode(selectedInvoice);
                   setState(() {
                     _showPendingInvoices = false;
                     // Pre-fill the payment amount with the invoice balance (only if empty)
                     if (_paymentAmountController.text.isEmpty) {
                       _paymentAmountController.text =
-                          invoice.balance.toStringAsFixed(0);
+                          selectedInvoice.balance.toStringAsFixed(0);
                     }
                   });
                 },

@@ -2795,8 +2795,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       debugPrint('Error loading logo for PDF: $e');
     }
 
-    // Load products to use clean names
-    final products = await inventoryService.getProducts();
+    final products = await inventoryService.getProductsByIds(
+      invoice.items.map((item) => item.productId),
+    );
+    final productsById = {
+      for (final product in products) product.id: product,
+    };
 
     pdf.addPage(
       pw.Page(
@@ -2964,10 +2968,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   final item = entry.value;
 
                   // Lookup clean product name from cache if available (mirrors form view logic)
-                  final product = products.cast<dynamic>().firstWhere(
-                        (p) => p.id == item.productId,
-                        orElse: () => null,
-                      );
+                  final product = productsById[item.productId];
                   final displayName = _cleanPdfText(
                       product?.name ?? item.productName ?? 'Sin nombre');
                   final displaySku =

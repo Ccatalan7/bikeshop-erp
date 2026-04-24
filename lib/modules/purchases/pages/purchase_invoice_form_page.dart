@@ -55,6 +55,7 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
 
 class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   static const double _ivaRate = 0.19;
+  static const int _productPreviewPageSize = 80;
 
   // Table column widths (match sales invoice)
   static const double _colIndexWidth = 40.0;
@@ -170,6 +171,96 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     return _total;
   }
 
+  bool get _hasReusableProductCache =>
+      _inventoryService.products.isNotEmpty &&
+      (_inventoryService.hasLoaded ||
+          _inventoryService.loadedPreviewPageCount > 0);
+
+  void _replaceProductCache(Iterable<Product> products) {
+    final filteredProducts =
+        products.where((product) => product.parentSetId == null).toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _productCache = filteredProducts;
+  }
+
+  void _upsertProductCache(Product product) {
+    if (product.parentSetId != null) return;
+
+    final updatedProducts = List<Product>.from(_productCache);
+    final existingIndex =
+        updatedProducts.indexWhere((candidate) => candidate.id == product.id);
+
+    if (existingIndex == -1) {
+      updatedProducts.add(product);
+    } else {
+      updatedProducts[existingIndex] = product;
+    }
+
+    updatedProducts
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _productCache = updatedProducts;
+  }
+
+  Future<void> _hydrateProductsByIds(Iterable<String> productIds) async {
+    final missingIds = productIds
+        .map((productId) => productId.trim())
+        .where(
+          (productId) =>
+              productId.isNotEmpty &&
+              !_productCache.any((candidate) => candidate.id == productId),
+        )
+        .toSet()
+        .toList(growable: false);
+
+    if (missingIds.isEmpty) {
+      return;
+    }
+
+    final products = await _inventoryService.getProductsByIds(missingIds);
+    for (final product in products) {
+      _upsertProductCache(product);
+    }
+  }
+
+  Product? _findCachedProductByCode(String code) {
+    final normalizedCode = code.trim().toLowerCase();
+    if (normalizedCode.isEmpty) {
+      return null;
+    }
+
+    return _productCache.cast<Product?>().firstWhere(
+          (product) =>
+              product != null &&
+              (product.sku.toLowerCase() == normalizedCode ||
+                  product.barcode?.toLowerCase() == normalizedCode ||
+                  product.supplierCode?.trim().toLowerCase() ==
+                      normalizedCode),
+          orElse: () => null,
+        );
+  }
+
+  Future<Product?> _findProductByExactCode(String code) async {
+    final normalizedCode = code.trim();
+    if (normalizedCode.isEmpty) {
+      return null;
+    }
+
+    final cachedProduct = _findCachedProductByCode(normalizedCode);
+    if (cachedProduct != null) {
+      return cachedProduct;
+    }
+
+    Product? product = await _inventoryService.getProductBySku(normalizedCode);
+    product ??= await _inventoryService.getProductByBarcode(normalizedCode);
+    product ??= await _inventoryService.getProductBySupplierCode(normalizedCode);
+
+    if (product != null) {
+      _upsertProductCache(product);
+    }
+
+    return product;
+  }
+
   Future<void> _toggleScanner() async {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -277,11 +368,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       return;
     }
 
-    // Search for product by SKU
-    final product = _productCache.cast<Product?>().firstWhere(
-          (p) => p!.sku.toLowerCase() == barcode.toLowerCase(),
-          orElse: () => null,
-        );
+    final product = await _findProductByExactCode(barcode);
 
     if (product != null) {
       // Check if product is already in the invoice
@@ -412,7 +499,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         onComplete: (parsedInvoice) async {
                           Navigator.of(dialogContext).pop();
                           await _loadProducts();
-                          _applyOCRData(parsedInvoice);
+                          await _applyOCRData(parsedInvoice);
                         },
                         onError: (error) {
                           debugPrint('OCR Error: $error');
@@ -429,7 +516,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     );
   }
 
-  void _applyOCRData(ParsedInvoice parsedInvoice) {
+  Future<void> _applyOCRData(ParsedInvoice parsedInvoice) async {
+    await _hydrateProductsByIds(
+      parsedInvoice.lineItems
+          .where(
+            (item) =>
+                item.existsInDatabase == true &&
+                item.matchedProductId != null &&
+                item.matchedProductId!.isNotEmpty,
+          )
+          .map((item) => item.matchedProductId!),
+    );
+
     setState(() {
       // 1. Invoice number (if extracted)
       if (parsedInvoice.invoiceNumber != null &&
@@ -710,9 +808,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       // Load suppliers and products in parallel
       debugPrint('🔍 Loading data in parallel (suppliers + products)...');
 
+      if (_hasReusableProductCache) {
+        _replaceProductCache(_inventoryService.products);
+      }
+
       final futures = <Future<dynamic>>[
         _purchaseService.getSuppliers(forceRefresh: false),
-        _inventoryService.getProducts(forceRefresh: false),
+        _hasReusableProductCache
+            ? Future<List<Product>>.value(_inventoryService.products)
+            : _inventoryService.loadProductPreviewPage(
+                page: 0,
+                pageSize: _productPreviewPageSize,
+              ),
       ];
 
       // Also fetch preview number in parallel if this is a new invoice
@@ -727,8 +834,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
       // Helper to process loaded products
       void processProducts(List<Product> products) {
-        // Filter out child products (components) as they should not be purchased directly
-        _productCache = products.where((p) => p.parentSetId == null).toList();
+        // Filter out child products (components) as they should not be purchased directly.
+        _replaceProductCache(products);
         debugPrint(
             '✅ Loaded ${_productCache.length} products (filtered from ${products.length})');
       }
@@ -749,6 +856,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         final invoice =
             await _purchaseService.getPurchaseInvoice(widget.invoiceId!);
         if (invoice != null) {
+          await _hydrateProductsByIds(
+            invoice.items.map((item) => item.productId),
+          );
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
         }
@@ -768,6 +878,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             widget.initialSupplierId ?? pendingData?['supplierId'] as String?;
         final lineItems = widget.initialLineItems ??
             pendingData?['lineItems'] as List<Map<String, dynamic>>?;
+
+        await _hydrateProductsByIds(
+          lineItems
+                  ?.map((item) => item['product_id']?.toString() ?? '')
+                  .toList(growable: false) ??
+              const <String>[],
+        );
 
         if (supplierId != null && _supplierCache.isNotEmpty) {
           try {
@@ -969,11 +1086,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      debugPrint('🔄 Reloading products...');
-      await _inventoryService.getProducts(forceRefresh: true);
-      final products = await _inventoryService.getProducts();
-      _productCache = products.where((p) => p.parentSetId == null).toList();
-      debugPrint('✅ Reloaded ${_productCache.length} products');
+      debugPrint('🔄 Refreshing purchase product preview cache...');
+      final products = _inventoryService.hasLoaded
+          ? _inventoryService.products
+          : await _inventoryService.loadProductPreviewPage(
+              page: 0,
+              pageSize: _productPreviewPageSize,
+              reset: true,
+            );
+      _replaceProductCache(products);
+      debugPrint('✅ Ready with ${_productCache.length} products');
     } catch (e) {
       debugPrint('❌ Error reloading products: $e');
     } finally {
@@ -1581,15 +1703,16 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     // Get all payments for this invoice
     final payments = await _purchaseService.getPaymentsForInvoice(invoiceId);
+    if (!mounted) {
+      return;
+    }
     if (payments.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No hay pagos para deshacer'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay pagos para deshacer'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
@@ -1629,15 +1752,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     try {
       await _purchaseService.deletePayment(lastPayment.id!);
-      if (mounted) {
-        await _refreshInvoiceById(invoiceId);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pago eliminado correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      if (!mounted) return;
+      await _refreshInvoiceById(invoiceId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pago eliminado correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3625,11 +3748,10 @@ enum DiscountType { amount, percentage }
 
 class _PurchaseLineEntry {
   _PurchaseLineEntry(
-      {required PurchaseInvoiceItem line,
+      {required this.line,
       this.product,
       this.shouldAutoFocus = false})
-      : line = line,
-        quantityController =
+      : quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
         unitCostController =
             TextEditingController(text: line.unitCost.toStringAsFixed(0)),

@@ -51,7 +51,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
     setState(() => _isLoading = true);
     try {
       // Load customers
-      final customers = await _customerService.getCustomers();
+      final customers = await _customerService.getCustomersForList();
 
       // Load all bikes and jobs
       final allBikes = await _bikeshopService.getBikes();

@@ -83,12 +83,24 @@ class CustomerService extends ChangeNotifier {
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         // Search by name, RUT, or email
-        final nameResults =
-            await _db.searchRecords('customers', 'name', searchTerm);
-        final rutResults =
-            await _db.searchRecords('customers', 'rut', searchTerm);
-        final emailResults =
-            await _db.searchRecords('customers', 'email', searchTerm);
+        final nameResults = await _db.searchRecords(
+          'customers',
+          'name',
+          searchTerm,
+          selectColumns: Customer.listPreviewSelect,
+        );
+        final rutResults = await _db.searchRecords(
+          'customers',
+          'rut',
+          searchTerm,
+          selectColumns: Customer.listPreviewSelect,
+        );
+        final emailResults = await _db.searchRecords(
+          'customers',
+          'email',
+          searchTerm,
+          selectColumns: Customer.listPreviewSelect,
+        );
 
         // Combine and deduplicate results
         final Set<String> ids = {};

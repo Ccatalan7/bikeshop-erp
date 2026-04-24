@@ -9,9 +9,12 @@ class InventoryService extends ChangeNotifier {
   final DatabaseService? _db;
   final TenantService _tenantService = TenantService();
   final List<Product> _products = [];
+  final Set<int> _loadedPreviewPages = <int>{};
 
   bool _isLoading = false;
   bool _hasLoaded = false;
+  bool _isLoadingPreviewPage = false;
+  bool _hasMorePreviewPages = true;
   Future<void>? _loadProductsFuture;
 
   RealtimeChannel? _stockMovementsChannel;
@@ -31,6 +34,89 @@ class InventoryService extends ChangeNotifier {
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
   bool get hasLoaded => _hasLoaded;
+  bool get isLoadingPreviewPage => _isLoadingPreviewPage;
+  bool get hasMorePreviewPages => _hasMorePreviewPages;
+  int get loadedPreviewPageCount => _loadedPreviewPages.length;
+
+  void _resetPreviewPaginationState() {
+    _loadedPreviewPages.clear();
+    _hasMorePreviewPages = true;
+    _isLoadingPreviewPage = false;
+  }
+
+  Future<List<Product>> loadProductPreviewPage({
+    required int page,
+    int pageSize = 80,
+    bool reset = false,
+  }) async {
+    if (page < 0) return const [];
+
+    if (_hasLoaded) {
+      final from = page * pageSize;
+      final slice = _products.skip(from).take(pageSize).toList(growable: false);
+      _hasMorePreviewPages = _products.length > (from + slice.length);
+      return slice;
+    }
+
+    if (_db == null) {
+      await getProducts();
+      final from = page * pageSize;
+      final slice = _products.skip(from).take(pageSize).toList(growable: false);
+      _hasMorePreviewPages = _products.length > (from + slice.length);
+      return slice;
+    }
+
+    if (reset) {
+      _products.clear();
+      _resetPreviewPaginationState();
+      notifyListeners();
+    }
+
+    if (_loadedPreviewPages.contains(page)) {
+      final from = page * pageSize;
+      return _products.skip(from).take(pageSize).toList(growable: false);
+    }
+
+    if (_isLoadingPreviewPage) {
+      while (_isLoadingPreviewPage) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      if (_loadedPreviewPages.contains(page)) {
+        final from = page * pageSize;
+        return _products.skip(from).take(pageSize).toList(growable: false);
+      }
+    }
+
+    _isLoadingPreviewPage = true;
+    try {
+      final from = page * pageSize;
+      final rawBatch = await _db.selectWithPagination(
+        'products',
+        from: from,
+        to: from + pageSize - 1,
+        selectColumns: Product.listPreviewSelect,
+        orderBy: 'name',
+      );
+
+      final mappedBatch = rawBatch.map(_productFromMap).toList(growable: false);
+      for (final product in mappedBatch) {
+        _upsertLocalProduct(product);
+      }
+
+      _loadedPreviewPages.add(page);
+      _hasMorePreviewPages = rawBatch.length == pageSize;
+      notifyListeners();
+      return mappedBatch;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+            'InventoryService: Error loading product preview page -> $e');
+      }
+      rethrow;
+    } finally {
+      _isLoadingPreviewPage = false;
+    }
+  }
 
   Future<List<Product>> getProducts({bool forceRefresh = false}) async {
     if (!_hasLoaded || forceRefresh) {
@@ -66,16 +152,22 @@ class InventoryService extends ChangeNotifier {
 
   Future<Product?> getProductById(String id,
       {bool forceRefresh = false}) async {
-    if (!_hasLoaded || forceRefresh) {
-      await _loadProducts(force: forceRefresh);
-    }
+    final normalizedId = id.trim();
+    if (normalizedId.isEmpty) return null;
 
     try {
-      return _products.firstWhere((product) => product.id == id);
-    } catch (_) {
-      if (_db == null) return null;
+      if (!forceRefresh) {
+        return _products.firstWhere((product) => product.id == normalizedId);
+      }
+    } catch (_) {}
+
+    if (_db != null) {
       try {
-        final data = await _db.selectById('products', id);
+        final data = await _db.selectById(
+          'products',
+          normalizedId,
+          selectColumns: Product.listPreviewSelect,
+        );
         if (data == null) return null;
         final product = _productFromMap(data);
         _upsertLocalProduct(product);
@@ -84,52 +176,115 @@ class InventoryService extends ChangeNotifier {
       } catch (e) {
         if (kDebugMode) {
           debugPrint(
-              'InventoryService: Error fetching product by id $id -> $e');
+              'InventoryService: Error fetching product by id $normalizedId -> $e');
         }
-        return null;
       }
     }
-  }
 
-  Future<Product?> getProductBySku(String sku) async {
-    await getProducts();
-    try {
-      return _products.firstWhere(
-          (product) => product.sku.toLowerCase() == sku.toLowerCase());
-    } catch (_) {
-      if (_db == null) return null;
-      try {
-        final records = await _db.select('products', where: 'sku=$sku');
-        if (records.isEmpty) return null;
-        final product = _productFromMap(records.first);
-        _upsertLocalProduct(product);
-        notifyListeners();
-        return product;
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint(
-              'InventoryService: Error fetching product by SKU $sku -> $e');
-        }
-        return null;
-      }
+    if (!_hasLoaded || forceRefresh) {
+      await _loadProducts(force: forceRefresh);
     }
-  }
 
-  Future<Product?> getProductByBarcode(String barcode) async {
-    await getProducts();
     try {
-      return _products.firstWhere((product) => product.barcode == barcode);
+      return _products.firstWhere((product) => product.id == normalizedId);
     } catch (_) {
       return null;
     }
   }
 
+  Future<Product?> getProductBySku(String sku) async {
+    final normalizedSku = sku.trim();
+    if (normalizedSku.isEmpty) return null;
+
+    try {
+      return _products.firstWhere((product) =>
+          product.sku.toLowerCase() == normalizedSku.toLowerCase());
+    } catch (_) {
+      if (_db != null) {
+        try {
+          final records = await _db.select(
+            'products',
+            selectColumns: Product.listPreviewSelect,
+            where: 'sku=$normalizedSku',
+            limit: 1,
+          );
+          if (records.isEmpty) return null;
+          final product = _productFromMap(records.first);
+          _upsertLocalProduct(product);
+          notifyListeners();
+          return product;
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+                'InventoryService: Error fetching product by SKU $normalizedSku -> $e');
+          }
+        }
+      }
+
+      if (_db == null && !_hasLoaded) {
+        await getProducts();
+        try {
+          return _products.firstWhere((product) =>
+              product.sku.toLowerCase() == normalizedSku.toLowerCase());
+        } catch (_) {
+          return null;
+        }
+      }
+
+      return null;
+    }
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final normalizedBarcode = barcode.trim();
+    if (normalizedBarcode.isEmpty) return null;
+
+    try {
+      return _products.firstWhere((product) =>
+          product.barcode?.toLowerCase() == normalizedBarcode.toLowerCase());
+    } catch (_) {
+      try {
+        if (_db != null) {
+          final records = await _db.select(
+            'products',
+            selectColumns: Product.listPreviewSelect,
+            where: 'barcode=$normalizedBarcode',
+            limit: 1,
+          );
+          if (records.isEmpty) return null;
+          final product = _productFromMap(records.first);
+          _upsertLocalProduct(product);
+          notifyListeners();
+          return product;
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+              'InventoryService: Error fetching product by barcode $normalizedBarcode -> $e');
+        }
+      }
+
+      if (_db == null && !_hasLoaded) {
+        await getProducts();
+        try {
+          return _products
+              .firstWhere((product) => product.barcode == normalizedBarcode);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      return null;
+    }
+  }
+
   Future<Product?> getProductBySupplierCode(String supplierCode) async {
-    debugPrint('🔎 Finding Product by supplierCode: "$supplierCode"');
-    await getProducts();
+    final cleanCode = supplierCode.trim();
+    if (cleanCode.isEmpty) return null;
+
+    debugPrint('🔎 Finding Product by supplierCode: "$cleanCode"');
     debugPrint('📦 Cache size: ${_products.length}');
 
-    final cleanCode = supplierCode.trim();
     final lowerCode = cleanCode.toLowerCase();
 
     try {
@@ -140,11 +295,26 @@ class InventoryService extends ChangeNotifier {
       return match;
     } catch (_) {
       debugPrint('⚠️ Not in memory. DB Fallback for cleanCode="$cleanCode"...');
-      if (_db == null) return null;
+      if (_db == null) {
+        if (!_hasLoaded) {
+          await getProducts();
+          try {
+            return _products.firstWhere((product) =>
+                product.supplierCode?.trim().toLowerCase() == lowerCode);
+          } catch (_) {
+            return null;
+          }
+        }
+        return null;
+      }
       try {
         debugPrint('🔌 Executing DB Select: supplier_code=$cleanCode');
-        final records =
-            await _db.select('products', where: "supplier_code=$cleanCode");
+        final records = await _db.select(
+          'products',
+          selectColumns: Product.listPreviewSelect,
+          where: "supplier_code=$cleanCode",
+          limit: 1,
+        );
         debugPrint('🔌 DB returned ${records.length} records');
 
         if (records.isEmpty) {
@@ -165,6 +335,70 @@ class InventoryService extends ChangeNotifier {
         return null;
       }
     }
+  }
+
+  Future<List<Product>> getProductsByIds(
+    Iterable<String> productIds, {
+    bool forceRefresh = false,
+  }) async {
+    final requestedIds = productIds
+        .map((productId) => productId.trim())
+        .where((productId) => productId.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (requestedIds.isEmpty) {
+      return const [];
+    }
+
+    final missingIds = <String>[];
+
+    for (final productId in requestedIds) {
+      final localIndex =
+          forceRefresh ? -1 : _products.indexWhere((p) => p.id == productId);
+      if (localIndex != -1) {
+        continue;
+      } else {
+        missingIds.add(productId);
+      }
+    }
+
+    if (missingIds.isNotEmpty) {
+      if (_db != null) {
+        try {
+          final rows = await _db.select(
+            'products',
+            selectColumns: Product.listPreviewSelect,
+            where: 'id',
+            whereIn: missingIds,
+          );
+          for (final row in rows) {
+            final product = _productFromMap(row);
+            _upsertLocalProduct(product);
+          }
+
+          if (rows.isNotEmpty) {
+            notifyListeners();
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+                'InventoryService: Error fetching products by ids $missingIds -> $e');
+          }
+        }
+      } else if (!_hasLoaded) {
+        await getProducts();
+      }
+    }
+
+    return requestedIds
+        .map(
+          (productId) => _products.cast<Product?>().firstWhere(
+                (product) => product?.id == productId,
+                orElse: () => null,
+              ),
+        )
+        .whereType<Product>()
+        .toList(growable: false);
   }
 
   String _normalize(String text) {
@@ -255,6 +489,7 @@ class InventoryService extends ChangeNotifier {
           ],
           searchTerms,
           limit: limit,
+          selectColumns: Product.listPreviewSelect,
         );
 
         final List<Product> results = [];
@@ -316,7 +551,8 @@ class InventoryService extends ChangeNotifier {
           reference,
           adjustmentOrigin: adjustmentOrigin,
         );
-        await getProducts(forceRefresh: true);
+        await getProductById(productId, forceRefresh: true);
+        notifyListeners();
         return true;
       } catch (e) {
         if (kDebugMode) {
@@ -362,7 +598,8 @@ class InventoryService extends ChangeNotifier {
           reference,
           adjustmentOrigin: adjustmentOrigin,
         );
-        await getProducts(forceRefresh: true);
+        await getProductById(productId, forceRefresh: true);
+        notifyListeners();
         return true;
       } catch (e) {
         if (kDebugMode) {
@@ -399,7 +636,8 @@ class InventoryService extends ChangeNotifier {
           reference,
           adjustmentOrigin: adjustmentOrigin,
         );
-        await getProducts(forceRefresh: true);
+        await getProductById(productId, forceRefresh: true);
+        notifyListeners();
         return true;
       } catch (e) {
         if (kDebugMode) {
@@ -454,6 +692,7 @@ class InventoryService extends ChangeNotifier {
 
   Future<void> _loadProductsProgressively({bool force = false}) async {
     _isLoading = true;
+    _resetPreviewPaginationState();
     if (!_hasLoaded && _products.isEmpty) {
       notifyListeners();
     }
@@ -509,6 +748,7 @@ class InventoryService extends ChangeNotifier {
       }
 
       _hasLoaded = true;
+      _hasMorePreviewPages = false;
 
       if (!notifiedDuringLoad || pendingBatches > 0) {
         notifyListeners();
@@ -563,6 +803,7 @@ class InventoryService extends ChangeNotifier {
       minStockLevel: minStock,
       maxStockLevel: maxStock > 0 ? maxStock : 100,
       imageUrl: json['image_url'] as String?,
+      imageUrlOptimized: json['image_url_optimized'] as String?,
       imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? const [],
       description: json['description'] as String?,
       category: ProductCategory.values.firstWhere(
@@ -613,12 +854,18 @@ class InventoryService extends ChangeNotifier {
       isPublished: json['is_published'] as bool? ??
           json['show_on_website'] as bool? ??
           true,
+      purchaseTreatment: parsePurchaseTreatment(
+        json['purchase_treatment'],
+        productType: productTypeValue,
+        trackStock: json['track_stock'] as bool?,
+      ),
       productType: ProductType.values.firstWhere(
         (t) => t.name == productTypeValue,
         orElse: () => ProductType.product,
       ),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      parentSetId: json['parent_set_id']?.toString(),
     );
   }
 
@@ -744,9 +991,5 @@ extension _InventoryServiceRealtime on InventoryService {
     } catch (e) {
       debugPrint('❌ [InventoryService] Failed to setup realtime: $e');
     }
-  }
-
-  void disposeRealtime() {
-    _stockMovementsChannel?.unsubscribe();
   }
 }

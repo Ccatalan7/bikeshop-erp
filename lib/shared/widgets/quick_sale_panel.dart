@@ -126,13 +126,39 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     }
   }
 
+  Future<Product?> _resolveBarcodeProduct(String barcode) async {
+    final normalizedBarcode = barcode.trim();
+    if (normalizedBarcode.isEmpty) {
+      return null;
+    }
+
+    final inventory = context.read<InventoryService>();
+    Product? exactMatch = await inventory.getProductBySku(normalizedBarcode);
+    exactMatch ??= await inventory.getProductByBarcode(normalizedBarcode);
+    exactMatch ??= await inventory.getProductBySupplierCode(normalizedBarcode);
+    if (exactMatch != null) {
+      return exactMatch;
+    }
+
+    final results = await inventory.searchProducts(normalizedBarcode, limit: 10);
+    final normalizedCode = normalizedBarcode.toLowerCase();
+    return results.cast<Product?>().firstWhere(
+          (product) =>
+              product != null &&
+              (product.sku.toLowerCase() == normalizedCode ||
+                  product.barcode?.toLowerCase() == normalizedCode ||
+                  product.supplierCode?.trim().toLowerCase() ==
+                      normalizedCode),
+          orElse: () => null,
+        );
+  }
+
   Future<void> _onBarcodeScanned(String barcode) async {
     if (_step != _QuickSaleStep.cart) return;
     try {
-      final inventory = context.read<InventoryService>();
-      final results = await inventory.searchProducts(barcode.trim());
-      if (results.isNotEmpty && mounted) {
-        _addToCart(results.first);
+      final product = await _resolveBarcodeProduct(barcode);
+      if (product != null && mounted) {
+        _addToCart(product);
       }
     } catch (_) {}
   }
@@ -391,6 +417,8 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
 
   Future<void> _confirmPayment() async {
     if (_isProcessing) return;
+    final salesService = context.read<SalesService>();
+    final tenantService = context.read<TenantService>();
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0 || amount < _total) return;
     if (_selectedPaymentMethod == null) return;
@@ -440,9 +468,6 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     setState(() => _isProcessing = true);
 
     try {
-      final salesService = context.read<SalesService>();
-      final tenantService = context.read<TenantService>();
-      final inventoryService = context.read<InventoryService>();
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) throw Exception('No tenant');
 
@@ -521,10 +546,6 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         date: DateTime.now(),
       );
       await salesService.registerPayment(payment);
-
-      try {
-        await inventoryService.getProducts(forceRefresh: true);
-      } catch (_) {}
 
       if (mounted) {
         setState(() {
@@ -1693,57 +1714,6 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
               style: TextStyle(
                   fontSize: 10,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.48))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricCard({
-    required ThemeData theme,
-    required String title,
-    required String value,
-    required String helper,
-    Color? accentColor,
-  }) {
-    final effectiveColor = accentColor ?? theme.colorScheme.onSurface;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? const Color(0xFF232323)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: theme.colorScheme.outline.withValues(alpha: 0.14)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: effectiveColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            helper,
-            style: TextStyle(
-              fontSize: 11,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
-            ),
-          ),
         ],
       ),
     );

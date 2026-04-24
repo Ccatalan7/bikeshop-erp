@@ -27,6 +27,8 @@ class SalesService extends ChangeNotifier {
   final List<Invoice> _invoices = [];
   final List<Invoice> _listInvoices = [];
   final List<Payment> _payments = [];
+  final Map<String, List<Invoice>> _pendingInvoicesByCustomer = {};
+  final Map<String, DateTime> _pendingInvoicesCacheTimes = {};
 
   bool _isLoadingInvoices = false;
   bool _isLoadingListInvoices = false;
@@ -68,6 +70,8 @@ class SalesService extends ChangeNotifier {
   void invalidateInvoicesCache() {
     _invoicesCacheTime = null;
     _listInvoicesCacheTime = null;
+    _pendingInvoicesByCustomer.clear();
+    _pendingInvoicesCacheTimes.clear();
     debugPrint('🗑️ [SalesService] Invoices cache invalidated');
   }
 
@@ -518,8 +522,38 @@ class SalesService extends ChangeNotifier {
   /// Used for POS invoice payment mode
   Future<List<Invoice>> getPendingInvoices({
     required String customerId,
+    bool refresh = false,
   }) async {
     try {
+      final normalizedCustomerId = customerId.trim();
+      if (normalizedCustomerId.isEmpty) {
+        return [];
+      }
+
+      if (!refresh &&
+          _isCacheValid(_listInvoicesCacheTime) &&
+          _listInvoices.isNotEmpty) {
+        final filtered = _listInvoices
+            .where((invoice) =>
+                invoice.customerId == normalizedCustomerId &&
+                (invoice.status == InvoiceStatus.sent ||
+                    invoice.status == InvoiceStatus.confirmed) &&
+                invoice.balance > 0)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+        _pendingInvoicesByCustomer[normalizedCustomerId] = filtered;
+        _pendingInvoicesCacheTimes[normalizedCustomerId] = DateTime.now();
+        return filtered;
+      }
+
+      final pendingCacheTime = _pendingInvoicesCacheTimes[normalizedCustomerId];
+      if (!refresh &&
+          _isCacheValid(pendingCacheTime) &&
+          _pendingInvoicesByCustomer.containsKey(normalizedCustomerId)) {
+        return _pendingInvoicesByCustomer[normalizedCustomerId]!;
+      }
+
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) {
         return [];
@@ -532,20 +566,26 @@ class SalesService extends ChangeNotifier {
       // - tenant_id = current tenant
       final response = await Supabase.instance.client
           .from(_invoicesCollection)
-          .select()
+          .select(Invoice.listPreviewSelect)
           .eq('tenant_id', tenantId)
-          .eq('customer_id', customerId)
+          .eq('customer_id', normalizedCustomerId)
           .or('status.eq.sent,status.eq.confirmed')
           .gt('balance', 0)
           .order('date', ascending: false);
 
       if ((response as List).isEmpty) {
+        _pendingInvoicesByCustomer[normalizedCustomerId] = const [];
+        _pendingInvoicesCacheTimes[normalizedCustomerId] = DateTime.now();
         return [];
       }
 
-      return (response as List)
+      final invoices = (response as List)
           .map((data) => Invoice.fromJson(data as Map<String, dynamic>))
           .toList();
+
+      _pendingInvoicesByCustomer[normalizedCustomerId] = invoices;
+      _pendingInvoicesCacheTimes[normalizedCustomerId] = DateTime.now();
+      return invoices;
     } catch (e) {
       return [];
     }
@@ -637,6 +677,8 @@ class SalesService extends ChangeNotifier {
 
   void _handleInvoiceChange(PostgresChangePayload payload) {
     try {
+      _pendingInvoicesByCustomer.clear();
+      _pendingInvoicesCacheTimes.clear();
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
@@ -686,6 +728,8 @@ class SalesService extends ChangeNotifier {
 
   void _handlePaymentChange(PostgresChangePayload payload) {
     try {
+      _pendingInvoicesByCustomer.clear();
+      _pendingInvoicesCacheTimes.clear();
       switch (payload.eventType) {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
@@ -723,6 +767,8 @@ class SalesService extends ChangeNotifier {
     _invoices.clear();
     _listInvoices.clear();
     _payments.clear();
+    _pendingInvoicesByCustomer.clear();
+    _pendingInvoicesCacheTimes.clear();
     notifyListeners();
   }
 

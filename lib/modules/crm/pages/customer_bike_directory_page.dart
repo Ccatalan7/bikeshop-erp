@@ -50,7 +50,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
 
       final results = await Future.wait([
         bikeshopService.getBikes(),
-        customerService.getCustomers(),
+        customerService.getCustomersForList(),
       ]);
 
       final bikes = results[0] as List<Bike>;

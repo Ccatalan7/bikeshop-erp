@@ -99,6 +99,17 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
   bool _isDirty = false; // Tracks unsaved changes to protect from rebuilds
+  bool _isGeneratingPdf = false;
+
+  StreamSubscription? _scanSubscription;
+  final _remoteScannerService = RemoteScannerService();
+  bool _scannerEnabled = false;
+
+  final StringBuffer _scanBuffer = StringBuffer();
+  Timer? _hwScanTimer;
+  DateTime? _lastScanKeyTime;
+  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
+  static const int _minBarcodeLen = 3;
 
   // Key to reset autocomplete field after adding product
   int _autocompleteKey = 0;
@@ -120,25 +131,14 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status == InvoiceStatus.draft;
 
-  StreamSubscription? _scanSubscription;
-  final _remoteScannerService = RemoteScannerService();
-  bool _scannerEnabled = false;
-
-  // Hardware keyboard scanner state (for USB/Bluetooth barcode scanners)
-  final StringBuffer _scanBuffer = StringBuffer();
-  Timer? _hwScanTimer;
-  DateTime? _lastScanKeyTime;
-  static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
-  static const int _minBarcodeLen = 3;
-
-  bool _isGeneratingPdf = false;
-
   @override
   void initState() {
     super.initState();
     _isEditing = widget.invoiceId == null;
     _dueDate = _issueDate.add(const Duration(days: 30));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initialize());
+    });
   }
 
   @override
@@ -153,31 +153,27 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   void _resetAndReload() {
-    // Dispose old entries listeners
     for (final entry in _lineEntries) {
       entry.dispose();
     }
     _lineEntries.clear();
 
-    // Reset controllers
     _invoiceNumberController.clear();
     _referenceController.clear();
 
-    // Reset state variables
     setState(() {
       _isLoading = true;
       _isEditing = widget.invoiceId == null;
       _loadedInvoice = null;
       _selectedCustomer = null;
-      _availableJobBikes.clear(); // Reset available job bikes
+      _availableJobBikes.clear();
       _status = InvoiceStatus.draft;
       _issueDate = DateTime.now();
       _dueDate = _issueDate.add(const Duration(days: 30));
       _isDirty = false;
     });
 
-    // Re-initialize
-    _initialize();
+    unawaited(_initialize());
   }
 
   @override
@@ -295,17 +291,37 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   Future<void> _handleBarcodeScan(String barcode) async {
     // Search for product by SKU or barcode field
-    final product = _cachedProducts.cast<Product?>().firstWhere(
+    Product? product = _cachedProducts.cast<Product?>().firstWhere(
           (p) =>
               p!.sku.toLowerCase() == barcode.toLowerCase() ||
               (p.barcode?.toLowerCase() == barcode.toLowerCase()),
           orElse: () => null,
         );
 
-    if (product != null) {
+    if (product == null) {
+      final matches =
+          await _inventoryService.searchProducts(barcode, limit: 20);
+      for (final candidate in matches) {
+        if (candidate.sku.toLowerCase() == barcode.toLowerCase() ||
+            candidate.barcode?.toLowerCase() == barcode.toLowerCase()) {
+          product = candidate;
+          break;
+        }
+      }
+
+      final resolvedProduct = product;
+      if (resolvedProduct != null &&
+          !_cachedProducts
+              .any((candidate) => candidate.id == resolvedProduct.id)) {
+        _cachedProducts.add(resolvedProduct);
+      }
+    }
+
+    final resolvedProduct = product;
+    if (resolvedProduct != null) {
       // Check if product is already in the invoice
       final existingLineIndex = _lineEntries.indexWhere(
-        (entry) => entry.line.product?.id == product.id,
+        (entry) => entry.line.product?.id == resolvedProduct.id,
       );
 
       if (existingLineIndex != -1) {
@@ -317,7 +333,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Cantidad aumentada: ${product.name}'),
+              content: Text('✅ Cantidad aumentada: ${resolvedProduct.name}'),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 1),
             ),
@@ -327,16 +343,16 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         // Add as new line - simplified approach
         setState(() {
           final newLine = _InvoiceLine(
-            productId: product.id,
-            product: product,
-            name: product.name,
-            sku: product.sku,
+            productId: resolvedProduct.id,
+            product: resolvedProduct,
+            name: resolvedProduct.name,
+            sku: resolvedProduct.sku,
             quantity: 1,
-            unitPrice: product.price,
+            unitPrice: resolvedProduct.price,
             discount: 0,
-            cost: product.cost,
-            purchaseTreatment: product.purchaseTreatment,
-            isService: product.isService,
+            cost: resolvedProduct.cost,
+            purchaseTreatment: resolvedProduct.purchaseTreatment,
+            isService: resolvedProduct.isService,
           );
           _applyPreferredJobBike(newLine);
           final newEntry = _InvoiceLineEntry(newLine);
@@ -347,7 +363,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Producto agregado: ${product.name}'),
+              content: Text('✅ Producto agregado: ${resolvedProduct.name}'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 1),
             ),
@@ -375,9 +391,23 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
 
     try {
+      if (_customerService.hasListCustomersCache) {
+        _cachedCustomers
+          ..clear()
+          ..addAll(_customerService.cachedListCustomers);
+      }
+
+      if (_inventoryService.products.isNotEmpty) {
+        _cachedProducts
+          ..clear()
+          ..addAll(_inventoryService.products);
+      }
+
       final futures = <Future<dynamic>>[
-        _customerService.getCustomers(),
-        _inventoryService.getProducts(forceRefresh: false),
+        _customerService.getCustomersForList(),
+        _inventoryService.products.isNotEmpty
+            ? Future<List<Product>>.value(_inventoryService.products)
+            : _inventoryService.loadProductPreviewPage(page: 0, pageSize: 80),
       ];
 
       if (widget.invoiceId == null) {
@@ -403,6 +433,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           final invoice = await _salesService.fetchInvoice(widget.invoiceId!,
               refresh: true);
           if (invoice != null) {
+            await _hydrateMissingInvoiceProducts(invoice);
             _loadedInvoice = invoice;
             _applyInvoice(invoice);
           }
@@ -614,6 +645,40 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     } catch (e) {
       if (kDebugMode) print('Error generating invoice number: $e');
       return _buildSuggestedNumber();
+    }
+  }
+
+  Future<void> _hydrateMissingInvoiceProducts(Invoice invoice) async {
+    final missingProductIds = invoice.items
+        .where((item) => item.isCatalogProduct && item.productId != null)
+        .map((item) => item.productId!)
+        .where(
+          (productId) =>
+              !_cachedProducts.any((candidate) => candidate.id == productId),
+        )
+        .toSet()
+        .toList(growable: false);
+
+    if (missingProductIds.isEmpty) {
+      return;
+    }
+
+    final db = Provider.of<DatabaseService>(context, listen: false);
+    final rows = await Future.wait(
+      missingProductIds.map((productId) => db.selectById(
+            'products',
+            productId,
+            selectColumns: Product.listPreviewSelect,
+          )),
+    );
+
+    for (final row in rows) {
+      if (row == null) continue;
+      final product = Product.fromJson(row);
+      if (_cachedProducts.any((candidate) => candidate.id == product.id)) {
+        continue;
+      }
+      _cachedProducts.add(product);
     }
   }
 
@@ -832,7 +897,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   Future<void> _openCustomerSelector() async {
     if (_cachedCustomers.isEmpty) {
       try {
-        final customers = await _customerService.getCustomers();
+        final customers = await _customerService.getCustomersForList();
         _cachedCustomers
           ..clear()
           ..addAll(customers);

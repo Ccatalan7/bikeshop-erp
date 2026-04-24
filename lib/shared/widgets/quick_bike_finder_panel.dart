@@ -70,7 +70,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     final customerService = context.read<CustomerService>();
 
     final bikes = List<Bike>.from(bikeshopService.cachedBikes);
-    final customers = List<Customer>.from(customerService.cachedCustomers);
+    final customers = List<Customer>.from(customerService.cachedListCustomers);
     final jobs = List<MechanicJob>.from(bikeshopService.cachedJobs);
 
     _bikes = bikes;
@@ -109,7 +109,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
 
       final results = await Future.wait([
         bikeshopService.getBikes(forceRefresh: forceRefresh),
-        customerService.getCustomers(forceRefresh: forceRefresh),
+        customerService.getCustomersForList(forceRefresh: forceRefresh),
       ]);
 
       final bikes = results[0] as List<Bike>;

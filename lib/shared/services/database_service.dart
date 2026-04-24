@@ -264,13 +264,16 @@ class DatabaseService extends ChangeNotifier {
     String table, {
     required int from,
     required int to,
+    String? selectColumns,
     String? where,
     String? orderBy,
     bool descending = false,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
-      dynamic query = _client.from(table).select();
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
 
       // Apply tenant filter
       final tenantId = await getTenantId();
@@ -312,11 +315,17 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>?> selectById(String table, String id) async {
+  Future<Map<String, dynamic>?> selectById(
+    String table,
+    String id, {
+    String? selectColumns,
+  }) async {
     final stopwatch = Stopwatch()..start();
     try {
-      final data =
-          await _client.from(table).select().eq('id', id).maybeSingle();
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
+      final data = await query.eq('id', id).maybeSingle();
       stopwatch.stop();
       _recordReadMetric(
         label: table,
@@ -503,23 +512,25 @@ class DatabaseService extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> searchRecords(
     String table,
     String searchColumn,
-    String searchTerm,
-  ) async {
+    String searchTerm, {
+    String? selectColumns,
+  }) async {
     final stopwatch = Stopwatch()..start();
     try {
-      final data = await _client
-          .from(table)
-          .select()
-          .ilike(searchColumn, '%${searchTerm.trim()}%');
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
+      final data = await query.ilike(searchColumn, '%${searchTerm.trim()}%');
+      final rows = List<Map<String, dynamic>>.from(data);
       stopwatch.stop();
       _recordReadMetric(
         label: table,
         operation: 'search:$searchColumn',
-        rowCount: (data as List).length,
-        data: data,
+        rowCount: rows.length,
+        data: rows,
         durationMs: stopwatch.elapsedMilliseconds,
       );
-      return List<Map<String, dynamic>>.from(data as List);
+      return rows;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Search error: $e');
@@ -533,12 +544,15 @@ class DatabaseService extends ChangeNotifier {
     List<String> columns,
     List<String> searchTerms, {
     int limit = 50,
+    String? selectColumns,
   }) async {
     if (searchTerms.isEmpty || columns.isEmpty) return [];
 
     final stopwatch = Stopwatch()..start();
     try {
-      var query = _client.from(table).select();
+      dynamic query = selectColumns == null
+          ? _client.from(table).select()
+          : _client.from(table).select(selectColumns);
 
       // For every search token, it MUST be present in AT LEAST ONE of the columns
       for (final term in searchTerms) {
@@ -550,15 +564,16 @@ class DatabaseService extends ChangeNotifier {
       }
 
       final data = await query.limit(limit);
+      final rows = List<Map<String, dynamic>>.from(data);
       stopwatch.stop();
       _recordReadMetric(
         label: table,
         operation: 'search_multi',
-        rowCount: (data as List).length,
-        data: data,
+        rowCount: rows.length,
+        data: rows,
         durationMs: stopwatch.elapsedMilliseconds,
       );
-      return List<Map<String, dynamic>>.from(data as List);
+      return rows;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('searchRecordsMultiToken error: $e');

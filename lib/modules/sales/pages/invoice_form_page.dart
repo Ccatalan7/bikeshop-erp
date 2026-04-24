@@ -284,17 +284,37 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   Future<void> _handleBarcodeScan(String barcode) async {
     // Search for product by SKU or barcode field
-    final product = _cachedProducts.cast<Product?>().firstWhere(
+    Product? product = _cachedProducts.cast<Product?>().firstWhere(
           (p) =>
               p!.sku.toLowerCase() == barcode.toLowerCase() ||
               (p.barcode?.toLowerCase() == barcode.toLowerCase()),
           orElse: () => null,
         );
 
-    if (product != null) {
+    if (product == null) {
+      final matches =
+          await _inventoryService.searchProducts(barcode, limit: 20);
+      for (final candidate in matches) {
+        if (candidate.sku.toLowerCase() == barcode.toLowerCase() ||
+            candidate.barcode?.toLowerCase() == barcode.toLowerCase()) {
+          product = candidate;
+          break;
+        }
+      }
+
+      final resolvedProduct = product;
+      if (resolvedProduct != null &&
+          !_cachedProducts
+              .any((candidate) => candidate.id == resolvedProduct.id)) {
+        _cachedProducts.add(resolvedProduct);
+      }
+    }
+
+    final resolvedProduct = product;
+    if (resolvedProduct != null) {
       // Check if product is already in the invoice
       final existingLineIndex = _lineEntries.indexWhere(
-        (entry) => entry.line.product?.id == product.id,
+        (entry) => entry.line.product?.id == resolvedProduct.id,
       );
 
       if (existingLineIndex != -1) {
@@ -306,7 +326,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Cantidad aumentada: ${product.name}'),
+              content: Text('✅ Cantidad aumentada: ${resolvedProduct.name}'),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 1),
             ),
@@ -316,16 +336,16 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         // Add as new line - simplified approach
         setState(() {
           final newLine = _InvoiceLine(
-            productId: product.id,
-            product: product,
-            name: product.name,
-            sku: product.sku,
+            productId: resolvedProduct.id,
+            product: resolvedProduct,
+            name: resolvedProduct.name,
+            sku: resolvedProduct.sku,
             quantity: 1,
-            unitPrice: product.price,
+            unitPrice: resolvedProduct.price,
             discount: 0,
-            cost: product.cost,
-            purchaseTreatment: product.purchaseTreatment,
-            isService: product.isService,
+            cost: resolvedProduct.cost,
+            purchaseTreatment: resolvedProduct.purchaseTreatment,
+            isService: resolvedProduct.isService,
           );
           _applyPreferredJobBike(newLine);
           final newEntry = _InvoiceLineEntry(newLine);
@@ -337,7 +357,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Producto agregado: ${product.name}'),
+              content: Text('✅ Producto agregado: ${resolvedProduct.name}'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 1),
             ),
@@ -367,11 +387,23 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     _inventoryService = context.read<shared_inventory.InventoryService>();
 
     try {
-      // Don't force refresh - use cached data if available for faster loading
-      // Don't force refresh - use cached data if available for faster loading
+      if (_customerService.hasListCustomersCache) {
+        _cachedCustomers
+          ..clear()
+          ..addAll(_customerService.cachedListCustomers);
+      }
+
+      if (_inventoryService.products.isNotEmpty) {
+        _cachedProducts
+          ..clear()
+          ..addAll(_inventoryService.products);
+      }
+
       final futures = <Future<dynamic>>[
-        _customerService.getCustomers(),
-        _inventoryService.getProducts(forceRefresh: false),
+        _customerService.getCustomersForList(),
+        _inventoryService.products.isNotEmpty
+            ? Future<List<Product>>.value(_inventoryService.products)
+            : _inventoryService.loadProductPreviewPage(page: 0, pageSize: 80),
       ];
 
       // Also fetch preview number in parallel if this is a new invoice
@@ -403,6 +435,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           debugPrint(
             '✅ [InvoiceFormPage] _initialize fetched invoice | id=${invoice.id} | itemCount=${invoice.items.length} | subtotal=${invoice.subtotal} | total=${invoice.total}',
           );
+          await _hydrateMissingInvoiceProducts(invoice);
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
         } else {
@@ -693,6 +726,40 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       }
     } catch (e) {
       debugPrint('Error loading job for invoice: $e');
+    }
+  }
+
+  Future<void> _hydrateMissingInvoiceProducts(Invoice invoice) async {
+    final missingProductIds = invoice.items
+        .where((item) => item.isCatalogProduct && item.productId != null)
+        .map((item) => item.productId!)
+        .where(
+          (productId) =>
+              !_cachedProducts.any((candidate) => candidate.id == productId),
+        )
+        .toSet()
+        .toList(growable: false);
+
+    if (missingProductIds.isEmpty) {
+      return;
+    }
+
+    final db = Provider.of<DatabaseService>(context, listen: false);
+    final rows = await Future.wait(
+      missingProductIds.map((productId) => db.selectById(
+            'products',
+            productId,
+            selectColumns: Product.listPreviewSelect,
+          )),
+    );
+
+    for (final row in rows) {
+      if (row == null) continue;
+      final product = Product.fromJson(row);
+      if (_cachedProducts.any((candidate) => candidate.id == product.id)) {
+        continue;
+      }
+      _cachedProducts.add(product);
     }
   }
 
@@ -1041,7 +1108,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Future<void> _openCustomerSelector() async {
     if (_cachedCustomers.isEmpty) {
       try {
-        final customers = await _customerService.getCustomers();
+        final customers = await _customerService.getCustomersForList();
         _cachedCustomers
           ..clear()
           ..addAll(customers);

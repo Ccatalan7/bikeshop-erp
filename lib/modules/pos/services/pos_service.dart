@@ -476,8 +476,6 @@ class POSService extends ChangeNotifier {
         remaining -= appliedAmount;
       }
 
-      await _inventoryService.getProducts(forceRefresh: true);
-
       final transaction = POSTransaction(
         id: invoiceId,
         tenantId: tenantId,
@@ -557,17 +555,5 @@ class POSService extends ChangeNotifier {
     return PaymentMethod.defaultMethods
         .where((method) => method.isActive)
         .toList();
-  }
-
-  // Deprecated: Old invoice numbering (kept for reference)
-  // Now uses NumberGenerationService.nextSalesInvoiceNumber()
-  String _buildInvoiceNumber(DateTime timestamp) {
-    final datePortion =
-        '${timestamp.year}${timestamp.month.toString().padLeft(2, '0')}${timestamp.day.toString().padLeft(2, '0')}';
-    final millisPortion = timestamp.millisecondsSinceEpoch
-        .toString()
-        .padLeft(13, '0')
-        .substring(7);
-    return 'POS-$datePortion-$millisPortion';
   }
 }

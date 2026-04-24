@@ -170,7 +170,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       final customerService = context.read<CustomerService>();
 
       final jobs = await bikeshopService.getJobs();
-      final customers = await customerService.getCustomers();
+      final customers = await customerService.getCustomersForList();
 
       final customerNameMap = <String, String>{};
       for (final customer in customers) {

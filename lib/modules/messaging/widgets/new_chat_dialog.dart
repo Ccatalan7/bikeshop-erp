@@ -44,15 +44,18 @@ class _NewChatDialogState extends State<NewChatDialog> {
   Future<void> _loadAllData() async {
     try {
       final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      final userManagementService = context.read<UserManagementService>();
+      final hrService = context.read<HRService>();
+      final customerService = context.read<CustomerService>();
 
       // 1. Fetch Internals (Users + Employees)
       final internalResults = await Future.wait([
-        context.read<UserManagementService>().getTenantUsers(),
-        context.read<HRService>().getEmployees(forceRefresh: true),
+        userManagementService.getTenantUsers(),
+        hrService.getEmployees(forceRefresh: true),
       ]);
 
       // 2. Fetch Customers
-      final customers = await context.read<CustomerService>().getCustomers();
+      final customers = await customerService.getCustomersForList();
 
       // Process Internals
       final users = internalResults[0] as List<Map<String, dynamic>>;
@@ -158,6 +161,7 @@ class _NewChatDialogState extends State<NewChatDialog> {
   void _createCustomerChat(String authUserId) async {
     // Find candidate for display name
     final candidate = _customerCandidates.firstWhere((c) => c.id == authUserId);
+    final navigator = Navigator.of(context);
 
     // Show specialized dialog
     showDialog(
@@ -166,7 +170,7 @@ class _NewChatDialogState extends State<NewChatDialog> {
     ).then((result) {
       if (result == true) {
         // If dialog returned true, it handled the creation. Just close parent.
-        Navigator.of(context).pop();
+        navigator.pop();
       }
     });
   }
@@ -434,6 +438,10 @@ class _ContextSelectionDialogState extends State<ContextSelectionDialog> {
 
   Future<void> _loadContexts() async {
     try {
+      final customerService = context.read<CustomerService>();
+      final bikeshopService = context.read<BikeshopService>();
+      final salesService = context.read<SalesService>();
+
       // 1. Fetch Open Jobs
       // Note: customerId in bikeshop is usually the CRM numeric ID, not auth ID.
       // But ChatCandidate ID is authId.
@@ -446,22 +454,21 @@ class _ContextSelectionDialogState extends State<ContextSelectionDialog> {
       // We need the CRM ID.
 
       // We need to fetch the customer record by authId to get the numeric ID.
-      final customerService = context.read<CustomerService>();
-      final customers = await customerService.getCustomers();
+      final customers = await customerService.getCustomersForList();
       final customer =
           customers.firstWhere((c) => c.authUserId == widget.candidate.id);
 
       final crmId = customer.id;
 
       if (crmId != null) {
-        final jobs = await context.read<BikeshopService>().getJobs(
-              customerId: crmId,
-              includeCompleted: false, // Only active jobs
-            );
+        final jobs = await bikeshopService.getJobs(
+          customerId: crmId,
+          includeCompleted: false, // Only active jobs
+        );
 
-        final invoices = await context.read<SalesService>().getPendingInvoices(
-              customerId: crmId,
-            );
+        final invoices = await salesService.getPendingInvoices(
+          customerId: crmId,
+        );
 
         _options.addAll(jobs.map((j) => ChatContextOption(
               label: 'Job #${j.jobNumber ?? "Sin N°"}',
