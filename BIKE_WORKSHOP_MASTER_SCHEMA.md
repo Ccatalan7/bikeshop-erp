@@ -152,7 +152,7 @@ Fresh agents must preserve these exact rules unless they are deliberately redesi
 - `front_wheel` and `rear_wheel` are now the primary interactive wheel units. Legacy aggregate `wheels` remains only as a family/compatibility alias and backward-compatible history fallback; do not keep building new UI or targeting flows around a single undifferentiated wheel bucket.
 - `bottom_bracket` is now a dedicated shared-controller system because pedalier bearings and standards matter operationally on their own, even though `bottomBracketFamily` still lives in `bike_profiles.technical_profile.values` as upstream truth.
 - `cockpit` now explicitly means cockpit/steering. Headset belongs under this system until a richer schema/editor layer exists; do not leave headset semantics stranded in vague placeholder copy or freeform notes.
-- only `drivetrain`, `front_brake`, and `rear_brake` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` intentionally route to explicit unavailable-system placeholders instead of a second reduced controller.
+- `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, and `rear_wheel` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, and `bottom_bracket` intentionally route to explicit unavailable-system placeholders instead of a second reduced controller.
 
 ### Mandatory Live Verification Protocol
 
@@ -914,11 +914,11 @@ Target rule:
 
 Current implementation direction:
 
-- the structured diagnosis editor can present drivetrain/front brake/rear brake through an interactive bike diagram
+- the structured diagnosis editor can present drivetrain, front/rear brake, and front/rear wheel systems through an interactive bike diagram
 - the visual diagram is a UI layer over the existing `basic_workshop_v1` diagnosis systems, not a new schema
 - the bike-system controller itself must be a shared code-side widget + registry across diagnosis, bike record/history, and any future bike-profile/service surfaces; labels, pins, iconography, placements, hover/selection behavior, and system ordering must not fork into separate local implementations per screen
 - context-specific panels may differ, but they must sit on top of the same shared controller instead of re-implementing the bike map locally
-- live inspection on 2026-04-15 confirmed that `mechanic_job_bikes.diagnosis_sheet_data` currently exposes only `drivetrain`, `front_brake`, `rear_brake`, and `template_key`, while `bike_system_states` / `mechanic_job_items` already use a broader downstream vocabulary including `wheels`, `front_wheel`, `rear_wheel`, and `brakes`
+- live inspection on 2026-04-25 confirmed that recent production `mechanic_job_bikes.diagnosis_sheet_data` still used the pre-wheel shape (`drivetrain`, `front_brake`, `rear_brake`, and `template_key`) with no legacy key drift; the app model now extends that same JSONB visit truth with `front_wheel` and `rear_wheel` instead of adding a second store
 - therefore the diagnosis UI may render the full shared controller, but only systems actually modeled by the active diagnosis template should expose structured visit editors; unmodeled systems must show an explicit placeholder state instead of a second controller or fake fields
 - drivetrain now has a first component-driven editor slice in the mechanic job form:
   - selectable component targets: `chain`, `cassette`, `chainring`, `rear_derailleur`, `front_derailleur`, `shifter`
@@ -934,8 +934,13 @@ Current implementation direction:
   - brake symptoms are captured as a structured multi-select set at the system layer for each front or rear brake
   - rim-brake bikes suppress the rotor target entirely at the component-selector layer, not just with passive helper copy
   - active brake component selection is now scoped per bike tab and per brake system so front, rear, and drivetrain selectors do not bleed into each other
+- front and rear wheels now follow the same component-target pattern for the currently modeled wheel fields:
+  - selectable component targets: `tire`, `rim`, `spokes`, and `hub`
+  - tire state also carries the narrow visit-specific tubeless state
+  - wheel-size, hub-spacing, spoke-hole, and valve profile facts are shown as upstream context, not re-collected as visit diagnosis truth
 - drivetrain component states are now synced into bike memory as per-component observations, not only left inside the diagnosis JSON blob
 - brake component states and symptom sets are now also synced into bike memory as brake-specific observations
+- wheel component states are now synced into bike memory as front/rear wheel observations and system states
 - rim-brake bikes hide rotor-thickness input based on upstream `technical_profile.values.brakeType`
 - the original `mtb_diagnostic_bg.png` full-suspension asset is the canonical MTB visual for `bike_type = mountain`; other variants must use real assets from the repo, not generated vector placeholders
 
@@ -1320,6 +1325,7 @@ Important rule:
 - the shared `BikeSystemController` + registry now drives mechanic-job diagnosis, bike record/history, and the bike form technical step instead of separate map implementations
 - the bike form technical step now uses the shared controller as an upstream system navigator and keeps explicit placeholder states for systems such as `cockpit` where the v1 profile kernel still has no dedicated intake fields
 - the shared controller now treats wheel work as `front_wheel` and `rear_wheel` units instead of one undifferentiated `wheels` bucket, while preserving legacy `wheels` history only as a compatibility alias
+- front and rear wheels now have structured visit diagnosis editors for tire, rim, spoke, hub-bearing, and tubeless state; those fields persist under `mechanic_job_bikes.diagnosis_sheet_data.front_wheel` / `rear_wheel` and sync into bike-memory observations/system states without adding a parallel table
 - `bottom_bracket` is now a first-class shared-controller system so pedalier/bearing work is not buried inside drivetrain copy or generic notes
 - bottom-bracket service wizards can now consume upstream `bike_profiles.technical_profile.values.bottomBracketFamily`, hide that question when it is already confirmed, and promote a newly confirmed family back into the bike profile on job save instead of stranding it in service notes
 - the bike record technical specs tab now uses that same shared controller as a system-organized upstream read model for `bike_profiles.technical_profile.values`, instead of a flat generic highlight grid
@@ -1338,7 +1344,7 @@ Important rule:
 - diagnosis fields are still too sparse, too manual, and too note-heavy for a workshop-grade shared visit model
 - diagnosis and service flows do not yet run on a schema-driven semantic field system with typed controls and guided customization
 - bike profile is not yet the hard gating layer for diagnosis field visibility
-- only `drivetrain`, `front_brake`, and `rear_brake` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` are still intentional placeholders waiting for a real schema/editor pass
+- `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, and `rear_wheel` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, and `bottom_bracket` are still intentional placeholders waiting for a real schema/editor pass
 - type-driven gating is stronger at intake now, but downstream service/product compatibility still does not fully consume the richer base kernel
 - the brake-first compatibility scorer now consumes the already-existing `category_tech_mappings.technical_family` / `spec_templates.key` bridge as a coarse fallback for live brake families such as `rotor`, `rim_brake`, `hydraulic_disc_brake`, `brake_pad`, `brake_caliper`, and `brake_lever`; detailed `product_spec_values` still remain the stronger within-family refinement layer
 - live production inspection on 2026-04-20 confirmed that this bridge matters because real Viñabike product populations still rely on family-level mappings for categories such as `Pastillas`, `Calipers`, `Manillas`, `Herraduras`, `Rotores`, and `Frenos hidráulicos completos`
@@ -1364,6 +1370,8 @@ These are important because they explain why the system currently looks the way 
 - the `rim` ficha is no longer the thin three-field placeholder; it now includes the first useful workshop-grade rim detail set in the product form: `rim_tubeless_ready`, `rim_internal_width_mm`, `rim_external_width_mm`, `rim_etrto`, `rim_erd_mm`, `rim_material`, `rim_eyelet_type`, `rim_wall_type`, `rim_symmetry`, and `rim_asymmetric_offset_mm`, grouped into `Dimensiones`, `Construcción`, and `Tubeless` sections.
 - `DEPLOY_VINABIKE_SAFE_WHEEL_PRODUCT_SPECS.sql` is live for a deliberately conservative first tenant seed: only explicit truths written in live product names were persisted, such as rodado, spoke-hole count, valve family/length, rear driver family, `TR` / `TL`, `622x30` ETRTO text, `Doble pared`, `Pared simple`, `Aluminio`, and clear headset labels like `Semi-integrado` / `1 1/8`.
 - `lib/modules/bikeshop/services/bike_product_compatibility_service.dart` still emits the first non-brake coarse family hints for that same bridge, but it now also upgrades to detailed spec-driven comparisons for `hub`, `rim`, `tube`, `rim_strip`, and `tubeless_valve` when `product_spec_values` exist. `headset`, `bearing`, and `tubeless_consumable` are now template-backed in the catalog but remain coarse in compatibility until the upstream bike/profile truth grows further.
+- live production validation on 2026-04-25 found no drift in the current structured diagnosis JSON keys for recent job bikes: the active visit truth was still limited to the expected `template_key`, `drivetrain`, `front_brake`, and `rear_brake` shape before the wheel slice landed. Recent production job items also had no persisted `service_configuration_data` blobs, so there was no historical wizard-answer JSON to migrate before continuing.
+- front/rear wheel structured diagnosis is now the next shared-controller slice: the mechanic job form exposes tire/rim/spoke/hub/tubeless fields, stores them in the existing `diagnosis_sheet_data.front_wheel` / `rear_wheel` JSON sections, includes them in diagnosis narrative generation, and syncs per-component wheel observations into bike memory.
 
 ### 1. Central memory UI visibility
 
@@ -1419,6 +1427,9 @@ Problem:
 Fix:
 
 - service rows now carry inline target metadata via `Aplica a`
+- service/labor rows created from the mechanic job form now persist structured wizard answers in `mechanic_job_items.service_configuration_data` instead of relying only on editable row notes
+- in multi-bike jobs, service/labor rows belong to the active bike tab and save through the same `mechanic_job_items.job_bike_id` assignment path as parts/products, so executed labor remains tied to `mechanic_job_bikes` for bike-level rollups and later bike-memory projection
+- this strengthens centralization around the existing backbone: no new service truth store was added; job-level general services still use `job_bike_id = null`, while bike-specific services use the relevant `mechanic_job_bikes.id`
 
 ### 6. Wizard-to-diagnosis linkage fixes
 
@@ -1540,12 +1551,13 @@ The same rule must hold for drivetrain, wheels, suspension, steering, tires, fra
 
 Current implementation status:
 
-- the first deliberate prototype system is now brakes
+- the first deliberate prototype system was brakes, and the first follow-on shared-controller slice is now front/rear wheels
 - front and rear brake diagnosis no longer behave as one thin paired pad/rotor row with passive rotor hiding
 - the brake workflow now includes component-target selection, typed brake-semantic controls, structured symptom chips, and downstream bike-memory sync
-- the mechanic job form still contains a drivetrain slice, but the brake path is now the refinement target to mirror later into the other systems
+- the mechanic job form also contains drivetrain and front/rear wheel slices; the wheel slice follows the same component-first pattern with tire, rim, spoke, hub, and tubeless state
 - this is still a v1 slice, not the finished schema-driven field-definition engine
-- the next remaining work is validating this brake workflow against real brake services and then mirroring the same component-first field-definition logic into the rest of the workshop systems
+- live validation on 2026-04-25 showed the current brake diagnosis/profile data is clean enough to continue, and there is no recent production `service_configuration_data` backlog to migrate before expanding
+- the next remaining work is mirroring the same component-first field-definition logic into cockpit/steering, suspension, and bottom bracket without forking the shared controller
 
 Field-definition model:
 
@@ -1596,15 +1608,15 @@ Brake example:
 
 This strengthens centralization because diagnosis, service guidance, product suggestions, and bike memory all operate on one component-centric visit model instead of parallel questionnaires.
 
-## Next Session Priority Queue (2026-04-16)
+## Next Session Priority Queue (2026-04-25)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
 
-1. Validate the brake prototype against live production service profiles, question keys, mappings, and real visit data before expanding it further.
-2. Extend structured diagnosis deliberately to the remaining shared-controller systems (`cockpit`, `suspension`, `wheels`) only when there is a real schema/editor plan. Until then, keep the explicit unavailable-system placeholders and do not fork a second controller.
-3. Push upstream bike-profile truth deeper into more service families. Drivetrain is the next likely target, but do not guess on `1x`/`2x` behavior beyond what the live `derailleurs` multi-select template can actually represent.
-4. Start wiring product compatibility and product suggestions to the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
-5. Keep the bike record panel as a read-model consumer of bike memory kernel + shared controller behavior. Do not move hover/detail selection logic into parent widgets when extending the shared bike map.
+1. Extend structured diagnosis deliberately to the remaining shared-controller placeholders (`cockpit`, `suspension`, and `bottom_bracket`) only when there is a real schema/editor plan. Keep the explicit unavailable-system state until each slice has structured fields and memory sync.
+2. Push upstream bike-profile truth deeper into more service families. Drivetrain remains a priority, but do not guess on `1x`/`2x` behavior beyond what the live `derailleurs` multi-select template can actually represent.
+3. Start wiring product compatibility and product suggestions to the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
+4. Keep the bike record panel as a read-model consumer of bike memory kernel + shared controller behavior. Do not move hover/detail selection logic into parent widgets when extending the shared bike map.
+5. Continue validating each new diagnosis slice against live profile/question/mapping data before promoting wizard answers into diagnosis or bike-profile truth.
 
 ## The Most Important Direction From Here
 

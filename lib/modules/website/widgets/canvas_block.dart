@@ -125,12 +125,19 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
     _isLoadingProducts = true;
     try {
-      final response = await Supabase.instance.client
+      var query = Supabase.instance.client
           .from('products')
-          .select('id,name,price,image_url,show_on_website,is_active')
+          .select(
+              'id,name,price,image_url,show_on_website,is_active,is_published')
           .eq('tenant_id', tenantId)
-          .inFilter('id', missing)
-          .limit(50);
+          .inFilter('id', missing);
+      if (!widget.editable) {
+        query = query
+            .eq('show_on_website', true)
+            .eq('is_published', true)
+            .eq('is_active', true);
+      }
+      final response = await query.limit(50);
       for (final row in response as List) {
         final m = Map<String, dynamic>.from(row as Map);
         final id = m['id']?.toString();
@@ -150,9 +157,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
     try {
       final response = await Supabase.instance.client
           .from('products')
-          .select('id,name,price,image_url,show_on_website,is_active')
+          .select(
+              'id,name,price,image_url,show_on_website,is_active,is_published')
           .eq('tenant_id', tenantId)
           .eq('show_on_website', true)
+          .eq('is_published', true)
           .eq('is_active', true)
           .order('updated_at', ascending: false)
           .limit(limit.clamp(1, 24));
@@ -1016,7 +1025,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       _buildElement(
                         context: context,
                         el: el,
-                        isActive: _activeElementIdLocal != null && el['id'] == _activeElementIdLocal,
+                        isActive: _activeElementIdLocal != null &&
+                            el['id'] == _activeElementIdLocal,
                         canvasW: canvasW,
                         canvasH: canvasH,
                       ),

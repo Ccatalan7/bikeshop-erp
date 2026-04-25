@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -35,6 +36,8 @@ class _LabelPrinterPageState extends State<LabelPrinterPage> {
   bool _isSearching = false;
   bool _isOcrScanning = false;
   String? _ocrRawText;
+  Timer? _searchDebounce;
+  int _searchToken = 0;
 
   Product? _selectedProduct;
   Uint8List? _labelPreview;
@@ -54,6 +57,7 @@ class _LabelPrinterPageState extends State<LabelPrinterPage> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -62,25 +66,43 @@ class _LabelPrinterPageState extends State<LabelPrinterPage> {
   // ── Search ────────────────────────────────────────────────────────────────
 
   Future<void> _onSearchChanged(String query) async {
+    _searchDebounce?.cancel();
+    final token = ++_searchToken;
+
     if (query.trim().length < 2) {
-      setState(() => _searchResults = []);
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
       return;
     }
 
     setState(() => _isSearching = true);
 
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      _runProductSearch(query, token);
+    });
+  }
+
+  Future<void> _runProductSearch(String query, int token) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) return;
+
     try {
-      final products = await _inventoryService.getProducts(
-        searchTerm: query.trim(),
+      final products = await _inventoryService.searchProductPreviews(
+        normalizedQuery,
+        limit: 20,
       );
-      if (mounted) {
+      if (mounted && token == _searchToken) {
         setState(() {
-          _searchResults = products.take(20).toList();
+          _searchResults = products;
           _isSearching = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted && token == _searchToken) {
+        setState(() => _isSearching = false);
+      }
     }
   }
 

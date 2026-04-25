@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -49,12 +51,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
+  int _totalProductCount = 0;
+  int _categoryTotalCount = 0;
+  int _loadToken = 0;
+  String _lastCategoryCountsSignature = '';
+  Timer? _searchDebounce;
 
   // Hierarchical category tree (only root-level visible categories)
   List<_CategoryNode> _categoryTree = [];
 
   // All categories indexed by ID for quick lookup
   Map<String, _CategoryNode> _allCategoriesById = {};
+  Map<String, int> _directCategoryProductCounts = {};
 
   // Track which parent categories are expanded in the UI
   final Set<String> _expandedCategories = {};
@@ -164,7 +172,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         }
       });
 
-      _applyFilters();
+      _handleFiltersChanged();
     });
   }
 
@@ -193,35 +201,17 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // If it's already an ID, accept it.
     if (_looksLikeUuid(trimmed)) return trimmed;
 
-    // Best-effort mapping by category name.
-    if (_allProducts.isEmpty) return null;
-
     final wanted = _normalizeForSearch(trimmed);
     if (wanted.isEmpty) return null;
 
-    // If a type filter is active, prefer matching within that subset.
-    final sourceProducts = _selectedProductType == null
-        ? _allProducts
-        : _allProducts
-            .where((p) => p.productType == _selectedProductType)
-            .toList();
-
-    final categoriesMap = <String, String>{};
-    for (final p in sourceProducts) {
-      final id = p.categoryId;
-      if (id == null) continue;
-      categoriesMap[id] = p.categoryName ?? 'Sin categoría';
-    }
-
-    String? bestId;
-    for (final entry in categoriesMap.entries) {
-      final normalizedName = _normalizeForSearch(entry.value);
+    for (final entry in _allCategoriesById.entries) {
+      final normalizedName = _normalizeForSearch(entry.value.name);
       if (normalizedName == wanted || normalizedName.contains(wanted)) {
-        bestId = entry.key;
-        break;
+        return entry.key;
       }
     }
-    return bestId;
+
+    return null;
   }
 
   void _clearSearch() {
@@ -230,7 +220,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _searchQuery = '';
       _filtersSearchController.clear();
     });
-    _applyFilters();
+    _handleFiltersChanged();
 
     // Best-effort: remove q/search from the URL so refresh/share is consistent.
     try {
@@ -250,7 +240,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadProducts({bool resetPage = false}) async {
+    final token = ++_loadToken;
+
     // Check if we're in edit mode (admin editing website)
     final editProvider = context.read<WebsiteEditModeProvider>();
 
@@ -275,37 +267,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
 
-    final hasWarmProductsCache =
-        publicInventoryService.hasProductsCache(tenantId) &&
-            _allProducts.isEmpty;
-    if (hasWarmProductsCache) {
-      _allProducts =
-          publicInventoryService.getCachedProductsForTenant(tenantId);
-      _applyFilters();
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    } else {
+    if (resetPage) {
+      _currentPage = 1;
+    }
+
+    if (_allProducts.isEmpty || resetPage) {
       setState(() => _isLoading = true);
     }
 
     try {
-      // Load ALL products at once (no pagination) so search works across entire catalog
-      var products = await publicInventoryService.getProductsForTenant(
-        tenantId: tenantId,
-        onlyInStock: !editProvider
-            .isInEditorContext, // Show all products in edit/preview mode
-        // No limit - fetch all products
-      );
-
-      _allProducts = products;
-      debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
-
       // Load visible categories (show_on_website = true)
       await _loadVisibleCategories(tenantId);
+      if (!mounted || token != _loadToken) return;
 
       // If the URL carried a category filter we couldn't resolve earlier (e.g.
-      // because products weren't loaded yet), resolve it now.
+      // because categories weren't loaded yet), resolve it now.
       if (_pendingRouteCategoryValue != null) {
         final resolved =
             _resolveCategoryIdFromValue(_pendingRouteCategoryValue!);
@@ -338,14 +314,79 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         }
       }
 
-      _applyFilters();
+      if (editProvider.isInEditorContext) {
+        // Editor/preview still needs the full editable product set.
+        final products = await publicInventoryService.getProductsForTenant(
+          tenantId: tenantId,
+          onlyInStock: false,
+          includeUnpublished: true,
+        );
+        if (!mounted || token != _loadToken) return;
+
+        _allProducts = products;
+        _totalProductCount = products.length;
+        debugPrint('[ProductCatalogPage] Loaded ${products.length} products');
+        _applyLocalFilters();
+        return;
+      }
+
+      await _loadCategoryCounts(
+        tenantId: tenantId,
+        service: publicInventoryService,
+      );
+      if (!mounted || token != _loadToken) return;
+
+      final selectedCategoryIds = _selectedCategoryId == null
+          ? null
+          : _getCategoryAndDescendantIds(_selectedCategoryId!).toList();
+      final page = await publicInventoryService.getProductPageForTenant(
+        tenantId: tenantId,
+        categoryIds: selectedCategoryIds,
+        searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
+        productType: _selectedProductType,
+        onlyInStock: true,
+        sortBy: _sortBy,
+        limit: _itemsPerPage,
+        offset: (_currentPage - 1) * _itemsPerPage,
+      );
+      if (!mounted || token != _loadToken) return;
+
+      setState(() {
+        _allProducts = page.products;
+        _filteredProducts = page.products;
+        _totalProductCount = page.totalCount;
+      });
+
+      debugPrint(
+          '[ProductCatalogPage] Loaded page ${page.products.length}/${page.totalCount} products');
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
     } finally {
-      if (mounted) {
+      if (mounted && token == _loadToken) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadCategoryCounts({
+    required String tenantId,
+    required PublicInventoryService service,
+  }) async {
+    final signature = '$tenantId|${_selectedProductType?.name ?? 'all'}';
+    if (signature == _lastCategoryCountsSignature) return;
+
+    final snapshot = await service.getCategoryCountsForTenant(
+      tenantId: tenantId,
+      productType: _selectedProductType,
+      onlyInStock: true,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _directCategoryProductCounts = snapshot.directCountsByCategoryId;
+      _categoryTotalCount = snapshot.totalCount;
+      _lastCategoryCountsSignature = signature;
+    });
   }
 
   Future<void> _loadVisibleCategories(String tenantId) async {
@@ -356,6 +397,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           .from('product_categories')
           .select('id, name, parent_id, show_on_website')
           .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .eq('show_on_website', true)
           .order('name');
 
       final allCategories = <String, Map<String, dynamic>>{};
@@ -431,7 +474,27 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return node.getAllDescendantIds();
   }
 
-  void _applyFilters() {
+  void _handleFiltersChanged({bool debounce = false}) {
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    if (editProvider.isInEditorContext) {
+      _applyLocalFilters();
+      return;
+    }
+
+    _searchDebounce?.cancel();
+    if (debounce) {
+      _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _loadProducts(resetPage: true);
+        }
+      });
+      return;
+    }
+
+    _loadProducts(resetPage: true);
+  }
+
+  void _applyLocalFilters() {
     setState(() {
       // Reset to first page when filters change
       _currentPage = 1;
@@ -503,6 +566,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           _filteredProducts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           break;
       }
+      _totalProductCount = _filteredProducts.length;
     });
   }
 
@@ -681,7 +745,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           isSelected ? const Icon(Icons.check, color: Colors.black) : null,
       onTap: () {
         setState(() => _sortBy = value);
-        _applyFilters();
+        _handleFiltersChanged();
         Navigator.pop(context);
       },
     );
@@ -690,6 +754,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void dispose() {
     // Debug: dispose
+    _searchDebounce?.cancel();
     _filtersSearchController.dispose();
     super.dispose();
   }
@@ -796,7 +861,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${_filteredProducts.length} productos',
+                            '$_totalProductCount productos',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade600,
@@ -983,7 +1048,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           style: const TextStyle(fontSize: 14),
           onChanged: (value) {
             _searchQuery = value;
-            _applyFilters();
+            _handleFiltersChanged(debounce: true);
           },
         ),
 
@@ -1007,13 +1072,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   }
 
   Widget _buildCategoryFilters() {
-    final sourceProducts = _selectedProductType == null
-        ? _allProducts
-        : _allProducts
-            .where((p) => p.productType == _selectedProductType)
-            .toList();
-
-    final allCount = sourceProducts.length;
+    final editProvider = context.watch<WebsiteEditModeProvider>();
+    final sourceProducts = editProvider.isInEditorContext
+        ? (_selectedProductType == null
+            ? _allProducts
+            : _allProducts
+                .where((p) => p.productType == _selectedProductType)
+                .toList())
+        : null;
+    final allCount = sourceProducts?.length ?? _categoryTotalCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1033,8 +1100,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   /// Count products in a category and all its descendants
   int _countProductsInCategoryTree(
-      _CategoryNode node, Iterable<Product> products) {
+    _CategoryNode node,
+    Iterable<Product>? products,
+  ) {
     final validIds = node.getAllDescendantIds();
+    if (products == null) {
+      return validIds.fold<int>(
+        0,
+        (sum, categoryId) =>
+            sum + (_directCategoryProductCounts[categoryId] ?? 0),
+      );
+    }
+
     return products
         .where((p) => p.categoryId != null && validIds.contains(p.categoryId))
         .length;
@@ -1042,7 +1119,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   Widget _buildCategoryTreeNode(
     _CategoryNode node,
-    List<Product> sourceProducts, {
+    List<Product>? sourceProducts, {
     required int depth,
   }) {
     final productCount = _countProductsInCategoryTree(node, sourceProducts);
@@ -1076,7 +1153,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 _expandedCategories.add(node.id);
               }
             });
-            _applyFilters();
+            _handleFiltersChanged();
           },
           child: Padding(
             padding: EdgeInsets.only(
@@ -1160,7 +1237,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return InkWell(
       onTap: () {
         setState(() => _selectedCategoryId = id);
-        _applyFilters();
+        _handleFiltersChanged();
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1200,7 +1277,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   }
 
   Widget _buildHeader() {
-    final totalProducts = _filteredProducts.length;
+    final totalProducts = _totalProductCount;
     final startIndex = ((_currentPage - 1) * _itemsPerPage) + 1;
     final endIndex = (_currentPage * _itemsPerPage).clamp(0, totalProducts);
     final isServicesView = _selectedProductType == ProductType.service;
@@ -1279,6 +1356,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                             _itemsPerPage = value;
                             _currentPage = 1;
                           });
+                          _handleFiltersChanged();
                         }
                       },
                     ),
@@ -1318,7 +1396,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                       onChanged: (value) {
                         if (value != null) {
                           setState(() => _sortBy = value);
-                          _applyFilters();
+                          _handleFiltersChanged();
                         }
                       },
                     ),
@@ -1367,12 +1445,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       );
     }
 
-    // Calculate pagination
-    final totalProducts = _filteredProducts.length;
+    // Calculate pagination. Public mode is already paged by the database;
+    // editor mode still uses local pagination over the full editable set.
+    final isServerPaged =
+        !context.read<WebsiteEditModeProvider>().isInEditorContext;
+    final totalProducts =
+        isServerPaged ? _totalProductCount : _filteredProducts.length;
     final totalPages = (totalProducts / _itemsPerPage).ceil();
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     final endIndex = (startIndex + _itemsPerPage).clamp(0, totalProducts);
-    final paginatedProducts = _filteredProducts.sublist(startIndex, endIndex);
+    final paginatedProducts = isServerPaged
+        ? _filteredProducts
+        : _filteredProducts.sublist(startIndex, endIndex);
 
     return MediaQueryLayoutBuilder(
       key: ValueKey('product_grid_layout_$modeKey'),
@@ -1434,6 +1518,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
+  void _goToPage(int page) {
+    final nextPage = page < 1 ? 1 : page;
+    setState(() => _currentPage = nextPage);
+
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    if (!editProvider.isInEditorContext) {
+      _loadProducts();
+    }
+  }
+
   Widget _buildPaginationControls(int totalPages) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1441,7 +1535,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // Previous button
         if (_currentPage > 1)
           TextButton(
-            onPressed: () => setState(() => _currentPage--),
+            onPressed: () => _goToPage(_currentPage - 1),
             child: Row(
               children: [
                 Icon(Icons.chevron_left, size: 20, color: Colors.grey.shade700),
@@ -1462,7 +1556,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // Next button
         if (_currentPage < totalPages)
           TextButton(
-            onPressed: () => setState(() => _currentPage++),
+            onPressed: () => _goToPage(_currentPage + 1),
             child: Row(
               children: [
                 Text('Siguiente',
@@ -1535,7 +1629,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: InkWell(
-        onTap: () => setState(() => _currentPage = page),
+        onTap: () => _goToPage(page),
         child: Container(
           width: 36,
           height: 36,

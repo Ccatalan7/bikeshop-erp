@@ -3,6 +3,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/product.dart';
 import '../../modules/inventory/models/category_models.dart';
 
+class PublicProductPage {
+  final List<Product> products;
+  final int totalCount;
+
+  const PublicProductPage({
+    required this.products,
+    required this.totalCount,
+  });
+}
+
+class PublicCategoryCountSnapshot {
+  final Map<String, int> directCountsByCategoryId;
+  final int totalCount;
+
+  const PublicCategoryCountSnapshot({
+    required this.directCountsByCategoryId,
+    required this.totalCount,
+  });
+}
+
 /// Public-facing inventory service for the storefront
 ///
 /// This service does NOT require authentication - it works for anonymous users.
@@ -53,6 +73,105 @@ class PublicInventoryService extends ChangeNotifier {
     return List<Product>.unmodifiable(_productsCache[cacheKey] ?? const []);
   }
 
+  Map<String, dynamic> _cleanRpcParams(Map<String, dynamic> params) {
+    final cleaned = <String, dynamic>{};
+    for (final entry in params.entries) {
+      final value = entry.value;
+      if (value == null) continue;
+      if (value is Iterable && value.isEmpty) continue;
+      cleaned[entry.key] = value;
+    }
+    return cleaned;
+  }
+
+  Future<PublicProductPage> getProductPageForTenant({
+    required String tenantId,
+    List<String>? categoryIds,
+    List<String>? productIds,
+    String? sku,
+    String? searchQuery,
+    ProductType? productType,
+    bool onlyInStock = true,
+    String sortBy = 'name',
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final sw = Stopwatch()..start();
+    try {
+      final response = await _supabase.rpc(
+        'get_public_products',
+        params: _cleanRpcParams({
+          'p_tenant_id': tenantId,
+          'p_category_ids': categoryIds,
+          'p_product_ids': productIds,
+          'p_sku': sku,
+          'p_search_term': searchQuery?.trim(),
+          'p_product_type': productType?.name,
+          'p_only_in_stock': onlyInStock,
+          'p_sort_by': sortBy,
+          'p_limit': limit,
+          'p_offset': offset,
+        }),
+      );
+
+      final rows = (response as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      final products = rows.map(Product.fromJson).toList();
+      final totalCount = rows.isEmpty
+          ? 0
+          : (rows.first['total_count'] as num?)?.toInt() ?? products.length;
+
+      debugPrint(
+          '⏱️ [PublicInventory] Product page RPC: ${sw.elapsedMilliseconds}ms (${products.length}/$totalCount products)');
+      return PublicProductPage(products: products, totalCount: totalCount);
+    } catch (e) {
+      debugPrint(
+          '❌ PublicInventoryService: Error fetching product page: $e (${sw.elapsedMilliseconds}ms)');
+      return const PublicProductPage(products: [], totalCount: 0);
+    }
+  }
+
+  Future<PublicCategoryCountSnapshot> getCategoryCountsForTenant({
+    required String tenantId,
+    ProductType? productType,
+    bool onlyInStock = true,
+  }) async {
+    try {
+      final response = await _supabase.rpc(
+        'get_public_product_category_counts',
+        params: _cleanRpcParams({
+          'p_tenant_id': tenantId,
+          'p_product_type': productType?.name,
+          'p_only_in_stock': onlyInStock,
+        }),
+      );
+
+      final counts = <String, int>{};
+      var total = 0;
+      for (final row in response as List) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final count = (map['product_count'] as num?)?.toInt() ?? 0;
+        total += count;
+        final categoryId = map['category_id']?.toString();
+        if (categoryId != null && categoryId.isNotEmpty) {
+          counts[categoryId] = count;
+        }
+      }
+
+      return PublicCategoryCountSnapshot(
+        directCountsByCategoryId: counts,
+        totalCount: total,
+      );
+    } catch (e) {
+      debugPrint('❌ PublicInventoryService: Error fetching counts: $e');
+      return const PublicCategoryCountSnapshot(
+        directCountsByCategoryId: {},
+        totalCount: 0,
+      );
+    }
+  }
+
   /// Check if categories cache exists and is valid for tenant
   bool hasCategoriesCache(String tenantId) {
     final cacheKey = 'categories_$tenantId';
@@ -68,8 +187,9 @@ class PublicInventoryService extends ChangeNotifier {
   /// - [onlyInStock]: Show only products with inventory_qty > 0 (default: true)
   /// - [minPrice]: Optional - filter products with price >= minPrice
   /// - [maxPrice]: Optional - filter products with price <= maxPrice
-  /// - [limit]: Max number of results (default: 100)
+  /// - [limit]: Max number of results (null uses a bounded public fallback)
   /// - [offset]: Pagination offset (default: 0)
+  /// - [includeUnpublished]: Admin/editor preview bypass for unpublished items
   ///
   /// Returns list of products or empty list on error
   Future<List<Product>> getProductsForTenant({
@@ -79,11 +199,33 @@ class PublicInventoryService extends ChangeNotifier {
     bool onlyInStock = true,
     double? minPrice,
     double? maxPrice,
-    int? limit, // null = no limit (fetch all)
+    int? limit,
     int offset = 0,
+    bool includeUnpublished = false,
   }) async {
     final sw = Stopwatch()..start();
     try {
+      if (!includeUnpublished) {
+        final page = await getProductPageForTenant(
+          tenantId: tenantId,
+          categoryIds:
+              categoryId == null || categoryId.isEmpty ? null : [categoryId],
+          searchQuery: searchQuery,
+          onlyInStock: onlyInStock,
+          sortBy: 'name',
+          limit: limit ?? 100,
+          offset: offset,
+        );
+        var products = page.products;
+        if (minPrice != null) {
+          products = products.where((p) => p.price >= minPrice).toList();
+        }
+        if (maxPrice != null) {
+          products = products.where((p) => p.price <= maxPrice).toList();
+        }
+        return products;
+      }
+
       // Check cache first (only if no filters/pagination applied)
       final cacheKey = 'products_$tenantId';
       if (categoryId == null &&
@@ -93,6 +235,7 @@ class PublicInventoryService extends ChangeNotifier {
           maxPrice == null &&
           offset == 0 &&
           limit == null &&
+          !includeUnpublished &&
           _isCacheValid(cacheKey)) {
         debugPrint(
             '⏱️ [PublicInventory] Products from cache: ${sw.elapsedMilliseconds}ms');
@@ -103,6 +246,13 @@ class PublicInventoryService extends ChangeNotifier {
           .from('products')
           .select(Product.storefrontPreviewSelect)
           .eq('tenant_id', tenantId);
+
+      if (!includeUnpublished) {
+        query = query
+            .eq('is_active', true)
+            .eq('is_published', true)
+            .eq('show_on_website', true);
+      }
 
       // Filter by stock if requested (RLS only filters is_active=true)
       // NOTE: We avoid applying a stock filter at the SQL level when
@@ -174,7 +324,8 @@ class PublicInventoryService extends ChangeNotifier {
           minPrice == null &&
           maxPrice == null &&
           offset == 0 &&
-          limit == null) {
+          limit == null &&
+          !includeUnpublished) {
         _productsCache[cacheKey] = products;
         _cacheTimestamps[cacheKey] = DateTime.now();
       }
@@ -274,19 +425,19 @@ class PublicInventoryService extends ChangeNotifier {
       debugPrint(
           '🔍 PublicInventoryService: Fetching product $productId for tenant $tenantId');
 
-      final response = await _supabase
-          .from('products')
-          .select()
-          .eq('id', productId)
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
+      final page = await getProductPageForTenant(
+        tenantId: tenantId,
+        productIds: [productId],
+        onlyInStock: false,
+        limit: 1,
+      );
 
-      if (response == null) {
+      if (page.products.isEmpty) {
         debugPrint('⚠️ PublicInventoryService: Product $productId not found');
         return null;
       }
 
-      final product = Product.fromJson(response);
+      final product = page.products.first;
       debugPrint('✅ PublicInventoryService: Found product: ${product.name}');
       return product;
     } catch (e) {
@@ -310,29 +461,20 @@ class PublicInventoryService extends ChangeNotifier {
       debugPrint(
           '🔍 PublicInventoryService: Fetching product by SKU $sku for tenant $tenantId');
 
-      // Try exact match first, then case-insensitive
-      var response = await _supabase
-          .from('products')
-          .select()
-          .eq('sku', sku)
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
+      final page = await getProductPageForTenant(
+        tenantId: tenantId,
+        sku: sku,
+        onlyInStock: false,
+        limit: 1,
+      );
 
-      // Try with uppercase if not found (common pattern: s56467 -> S56467)
-      response ??= await _supabase
-          .from('products')
-          .select()
-          .eq('sku', sku.toUpperCase())
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
-
-      if (response == null) {
+      if (page.products.isEmpty) {
         debugPrint(
             '⚠️ PublicInventoryService: Product with SKU $sku not found');
         return null;
       }
 
-      final product = Product.fromJson(response);
+      final product = page.products.first;
       debugPrint(
           '✅ PublicInventoryService: Found product by SKU: ${product.name}');
       return product;
@@ -357,33 +499,16 @@ class PublicInventoryService extends ChangeNotifier {
       debugPrint(
           '🔍 PublicInventoryService: Fetching featured products for tenant: $tenantId');
 
-      // Query featured_products table (schema uses `order_index`, not `display_order`)
-      final featuredResponse = await _supabase
-          .from('featured_products')
-          .select('product_id')
-          .eq('tenant_id', tenantId)
-          .eq('active', true)
-          .order('order_index', ascending: true)
-          .limit(limit);
+      final response = await _supabase.rpc(
+        'get_public_featured_products',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_limit': limit,
+        },
+      );
 
-      final productIds =
-          featuredResponse.map((item) => item['product_id'] as String).toList();
-
-      if (productIds.isEmpty) {
-        debugPrint('⚠️ PublicInventoryService: No featured products found');
-        return [];
-      }
-
-      // Fetch actual product details
-      final productsResponse = await _supabase
-          .from('products')
-          .select(Product.storefrontPreviewSelect)
-          .inFilter('id', productIds)
-          .eq('tenant_id', tenantId);
-
-      final products = (productsResponse as List)
-          .map((json) => Product.fromJson(json))
-          .toList();
+      final products =
+          (response as List).map((json) => Product.fromJson(json)).toList();
 
       debugPrint(
           '✅ PublicInventoryService: Found ${products.length} featured products');
@@ -404,21 +529,14 @@ class PublicInventoryService extends ChangeNotifier {
     String? searchQuery,
   }) async {
     try {
-      var query =
-          _supabase.from('products').select('id').eq('tenant_id', tenantId);
-
-      if (categoryId != null && categoryId.isNotEmpty) {
-        query = query.eq('category_id', categoryId);
-      }
-
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        query = query.or('name.ilike.%$searchQuery%,'
-            'sku.ilike.%$searchQuery%,'
-            'description.ilike.%$searchQuery%');
-      }
-
-      final response = await query.count();
-      final count = response.count;
+      final page = await getProductPageForTenant(
+        tenantId: tenantId,
+        categoryIds:
+            categoryId == null || categoryId.isEmpty ? null : [categoryId],
+        searchQuery: searchQuery,
+        limit: 1,
+      );
+      final count = page.totalCount;
 
       debugPrint('📊 PublicInventoryService: Product count = $count');
       return count;
@@ -482,7 +600,7 @@ class PublicInventoryService extends ChangeNotifier {
       debugPrint('🔍 PublicInventoryService: Fuzzy search for "$searchTerm"');
 
       final response = await _supabase.rpc(
-        'search_products',
+        'search_public_products',
         params: {
           'p_search_term': searchTerm,
           'p_tenant_id': tenantId,
@@ -492,19 +610,24 @@ class PublicInventoryService extends ChangeNotifier {
 
       final products =
           (response as List).map((json) => Product.fromJson(json)).toList();
+      final visibleProducts = products.where(_isPubliclyVisible).toList();
 
       debugPrint(
-          '✅ PublicInventoryService: Found ${products.length} matches for "$searchTerm"');
-      return products;
+          '✅ PublicInventoryService: Found ${visibleProducts.length} matches for "$searchTerm"');
+      return visibleProducts;
     } catch (e) {
       debugPrint('❌ PublicInventoryService: Error in fuzzy search: $e');
-      // Fallback to client-side filtering if RPC fails (e.g. migration not run)
-      // This is a safety degradation
+      // Fallback to the visibility-filtered storefront query if the public RPC
+      // is not deployed yet.
       return getProductsForTenant(
         tenantId: tenantId,
         searchQuery: searchTerm,
         limit: limit,
       );
     }
+  }
+
+  bool _isPubliclyVisible(Product product) {
+    return product.isActive && product.isPublished;
   }
 }

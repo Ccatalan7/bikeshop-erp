@@ -2100,8 +2100,10 @@ class WebsiteService extends ChangeNotifier {
     try {
       final response = await _supabase
           .from('products')
-          .select()
+          .select(Product.storefrontPreviewSelect)
           .eq('show_on_website', true)
+          .eq('is_published', true)
+          .eq('is_active', true)
           .gt('inventory_qty', 0)
           .order('name');
 
@@ -2528,8 +2530,10 @@ class WebsiteService extends ChangeNotifier {
     String? pageSlug,
   }) async {
     // Save category visibility changes first
-    if (pendingCategoryVisibility != null && pendingCategoryVisibility.isNotEmpty) {
-      debugPrint('📁 [WebsiteService] Saving ${pendingCategoryVisibility.length} category visibility changes');
+    if (pendingCategoryVisibility != null &&
+        pendingCategoryVisibility.isNotEmpty) {
+      debugPrint(
+          '📁 [WebsiteService] Saving ${pendingCategoryVisibility.length} category visibility changes');
       for (final entry in pendingCategoryVisibility.entries) {
         try {
           await _supabase
@@ -2537,9 +2541,11 @@ class WebsiteService extends ChangeNotifier {
               .update({'show_on_website': entry.value})
               .eq('id', entry.key)
               .eq('tenant_id', tenantId);
-          debugPrint('✅ [WebsiteService] Category ${entry.key} show_on_website = ${entry.value}');
+          debugPrint(
+              '✅ [WebsiteService] Category ${entry.key} show_on_website = ${entry.value}');
         } catch (e) {
-          debugPrint('❌ [WebsiteService] Failed to update category visibility: $e');
+          debugPrint(
+              '❌ [WebsiteService] Failed to update category visibility: $e');
         }
       }
     }

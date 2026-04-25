@@ -65,10 +65,13 @@ begin
 
   if v_max_number is null then
     v_max_number := 0;
-) as seed(id, key, label, question_type, is_required, sort_order, options_json)
   end if;
 
-  perform setval('public.mechanic_job_number_seq', v_max_number);
+  if v_max_number < 1 then
+    perform setval('public.mechanic_job_number_seq', 1, false);
+  else
+    perform setval('public.mechanic_job_number_seq', v_max_number, true);
+  end if;
 end $$;
 
 -- Drop old functions explicitly
@@ -143,7 +146,6 @@ begin
   alter table mechanic_job_tasks drop column if exists assigned_to cascade;
   alter table mechanic_job_tasks drop column if exists assigned_technician_name cascade;
   alter table mechanic_job_tasks drop column if exists estimated_duration_minutes cascade;
-) as seed(id, key, label, question_type, is_required, sort_order, options_json)
   alter table mechanic_job_tasks drop column if exists actual_duration_minutes cascade;
   alter table mechanic_job_tasks drop column if exists started_at cascade;
   alter table mechanic_job_tasks drop column if exists is_auto_generated cascade;
@@ -3005,6 +3007,8 @@ end;
 $$;
 
 -- View: Products with set information (enriches products with component data)
+drop view if exists public.products_with_sets cascade;
+
 create or replace view public.products_with_sets as
 select 
   p.*,
@@ -7016,14 +7020,30 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_invoice_number text;
+  v_tenant_id uuid;
 begin
   if p_invoice_id is null then
     return;
   end if;
 
+  select si.invoice_number, si.tenant_id
+    into v_invoice_number, v_tenant_id
+    from public.sales_invoices si
+   where si.id = p_invoice_id;
+
+  if v_tenant_id is null then
+    return;
+  end if;
+
   delete from public.journal_entries
-   where source_module = 'sales_invoices'
-     and source_reference = p_invoice_id::text;
+   where tenant_id = v_tenant_id
+     and source_module = 'sales_invoices'
+     and source_reference in (
+       coalesce(nullif(v_invoice_number, ''), p_invoice_id::text),
+       p_invoice_id::text
+     );
 end;
 $$;
 
@@ -10517,6 +10537,68 @@ begin
   end if;
 end $$;
 
+create or replace function public.recalculate_journal_entry_totals(
+  p_entry_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_entry_id is null then
+    return;
+  end if;
+
+  update public.journal_entries je
+     set total_debit = coalesce(lines.total_debit, 0),
+         total_credit = coalesce(lines.total_credit, 0),
+         updated_at = now()
+    from (
+      select
+        coalesce(sum(coalesce(jl.debit_amount, 0)), 0)::numeric(14, 2)
+          as total_debit,
+        coalesce(sum(coalesce(jl.credit_amount, 0)), 0)::numeric(14, 2)
+          as total_credit
+      from public.journal_lines jl
+      where jl.entry_id = p_entry_id
+    ) lines
+   where je.id = p_entry_id;
+end;
+$$;
+
+grant execute on function public.recalculate_journal_entry_totals(uuid)
+  to authenticated;
+
+create or replace function public.sync_journal_entry_totals_from_lines()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'DELETE' then
+    perform public.recalculate_journal_entry_totals(old.entry_id);
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE' and old.entry_id is distinct from new.entry_id then
+    perform public.recalculate_journal_entry_totals(old.entry_id);
+  end if;
+
+  perform public.recalculate_journal_entry_totals(new.entry_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_journal_entry_totals_from_lines
+  on public.journal_lines;
+
+create trigger trg_sync_journal_entry_totals_from_lines
+after insert or update or delete on public.journal_lines
+for each row
+execute function public.sync_journal_entry_totals_from_lines();
+
 create index if not exists idx_stock_movements_product_id
   on stock_movements(product_id);
 
@@ -11242,6 +11324,30 @@ begin
     and source_reference = p_invoice_number;
 
   raise notice 'delete_purchase_invoice_journal_entry: deleted entries for invoice %', p_invoice_number;
+end;
+$$;
+
+create or replace function public.handle_purchase_invoice_reversal()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if tg_op <> 'UPDATE' then
+    return new;
+  end if;
+
+  -- The active AFTER trigger handles received -> draft/confirmed inventory
+  -- restoration. The old BEFORE trigger called stale helper functions that
+  -- reference legacy columns and can block normal reversals.
+  if old.status = 'paid' and new.status = 'draft' then
+    raise exception
+      'Cannot revert paid purchase invoice % directly to draft; reverse payment/receipt state first',
+      coalesce(new.invoice_number, new.id::text)
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
 end;
 $$;
 
@@ -19805,10 +19911,26 @@ end $$;
 
 -- Journal Entries: Tenant isolation (accounting)
 do $$ begin
+  drop policy if exists "Authenticated users can delete journal_entries" on journal_entries;
+  drop policy if exists "journal_entries_select" on journal_entries;
+  drop policy if exists "journal_entries_insert" on journal_entries;
+  drop policy if exists "journal_entries_update" on journal_entries;
+  drop policy if exists "journal_entries_delete" on journal_entries;
+  drop policy if exists journal_entries_delete on journal_entries;
+
   create policy "journal_entries_select" on journal_entries for select to authenticated using (tenant_id = public.user_tenant_id());
   create policy "journal_entries_insert" on journal_entries for insert to authenticated with check (tenant_id = public.user_tenant_id());
   create policy "journal_entries_update" on journal_entries for update to authenticated using (tenant_id = public.user_tenant_id());
-  create policy "journal_entries_delete" on journal_entries for delete to authenticated using (tenant_id = public.user_tenant_id());
+  create policy journal_entries_delete on journal_entries for delete to authenticated using (
+    tenant_id = public.user_tenant_id()
+    and exists (
+      select 1
+      from public.user_profiles up
+      where up.user_id = auth.uid()
+        and up.tenant_id = journal_entries.tenant_id
+        and up.role in ('admin', 'manager', 'accountant')
+    )
+  );
   raise notice '✓ Created RLS policies for journal_entries';
 exception
   when undefined_table then raise notice '⚠ Table journal_entries does not exist yet';
@@ -21183,6 +21305,8 @@ drop policy if exists "public_orders_insert" on orders;
 drop policy if exists "public_order_items_insert" on order_items;
 drop policy if exists "public_online_orders_insert" on online_orders;
 drop policy if exists "public_online_order_items_insert" on online_order_items;
+drop policy if exists "public_online_orders_insert_authenticated" on online_orders;
+drop policy if exists "public_online_order_items_insert_authenticated" on online_order_items;
 drop policy if exists "public_online_orders_select_authenticated" on online_orders;
 drop policy if exists "public_online_order_items_select_authenticated" on online_order_items;
 drop policy if exists "public_featured_products_select" on featured_products;
@@ -21240,7 +21364,11 @@ create policy "public_website_blocks_select_authenticated" on website_blocks
 create policy "public_products_select" on products 
   for select 
   to anon
-  using (is_active = true);
+  using (
+    is_active = true
+    and coalesce(is_published, false) = true
+    and coalesce(show_on_website, false) = true
+  );
 
 -- Products: Authenticated website customers can also browse
 -- This is SEPARATE from ERP products_select which uses user_tenant_id()
@@ -21249,7 +21377,9 @@ create policy "public_products_select_authenticated" on products
   for select 
   to authenticated
   using (
-    is_active = true 
+    is_active = true
+    and coalesce(is_published, false) = true
+    and coalesce(show_on_website, false) = true
     -- Allow if user is ERP user (has user_profiles) OR is website customer
     -- ERP users already have products_select policy, but this won't conflict
     -- because PostgreSQL RLS policies are OR'd together
@@ -21460,6 +21590,387 @@ begin
     execute 'create policy "public_order_items_insert" on order_items for insert to anon with check (tenant_id is not null)';
   end if;
 end $$;
+
+drop function if exists public.search_public_products(text, uuid, integer);
+
+create or replace function public.get_public_products(
+  p_tenant_id uuid,
+  p_category_ids uuid[] default null,
+  p_product_ids uuid[] default null,
+  p_sku text default null,
+  p_search_term text default null,
+  p_product_type text default null,
+  p_only_in_stock boolean default true,
+  p_sort_by text default 'name',
+  p_limit integer default 20,
+  p_offset integer default 0
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  name text,
+  sku text,
+  barcode text,
+  price numeric,
+  cost numeric,
+  inventory_qty integer,
+  stock_quantity integer,
+  image_url text,
+  image_url_optimized text,
+  image_urls text[],
+  description text,
+  website_description text,
+  category text,
+  category_id uuid,
+  category_name text,
+  brand_id uuid,
+  brand text,
+  model text,
+  manufacturer text,
+  manufacturer_sku text,
+  gtin text,
+  product_type text,
+  track_stock boolean,
+  is_active boolean,
+  is_published boolean,
+  show_on_website boolean,
+  created_at timestamptz,
+  updated_at timestamptz,
+  total_count bigint
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with args as (
+    select
+      trim(coalesce(p_search_term, '')) as term,
+      regexp_split_to_array(lower(trim(coalesce(p_search_term, ''))), '\s+')
+        as tokens,
+      greatest(coalesce(p_limit, 20), 0) as page_limit,
+      greatest(coalesce(p_offset, 0), 0) as page_offset,
+      lower(coalesce(nullif(trim(p_sort_by), ''), 'name')) as sort_by,
+      nullif(trim(coalesce(p_sku, '')), '') as wanted_sku,
+      nullif(trim(coalesce(p_product_type, '')), '') as wanted_product_type
+  ),
+  filtered as (
+    select p.*
+    from public.products p
+    cross join args a
+    where p.tenant_id = p_tenant_id
+      and p.is_active = true
+      and coalesce(p.is_published, false) = true
+      and coalesce(p.show_on_website, false) = true
+      and (
+        p_product_ids is null
+        or cardinality(p_product_ids) = 0
+        or p.id = any(p_product_ids)
+      )
+      and (
+        p_category_ids is null
+        or cardinality(p_category_ids) = 0
+        or p.category_id = any(p_category_ids)
+      )
+      and (
+        a.wanted_sku is null
+        or lower(p.sku) = lower(a.wanted_sku)
+      )
+      and (
+        a.wanted_product_type is null
+        or p.product_type = a.wanted_product_type
+      )
+      and (
+        not p_only_in_stock
+        or p.product_type = 'service'
+        or coalesce(p.track_stock, true) = false
+        or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
+      )
+      and (
+        a.term = ''
+        or not exists (
+          select 1
+          from unnest(a.tokens) token
+          where token <> ''
+            and lower(
+              concat_ws(
+                ' ',
+                p.name,
+                p.sku,
+                p.barcode,
+                p.description,
+                p.website_description,
+                p.brand,
+                p.model,
+                p.manufacturer,
+                p.manufacturer_sku,
+                p.gtin
+              )
+            ) not like '%' || token || '%'
+        )
+      )
+  ),
+  counted as (
+    select p.*, count(*) over() as row_total
+    from filtered p
+  )
+  select
+    p.id,
+    p.tenant_id,
+    p.name,
+    p.sku,
+    p.barcode,
+    p.price,
+    0::numeric as cost,
+    p.inventory_qty,
+    p.stock_quantity,
+    p.image_url,
+    p.image_url_optimized,
+    p.image_urls,
+    p.description,
+    p.website_description,
+    p.category,
+    p.category_id,
+    p.category_name,
+    p.brand_id,
+    p.brand,
+    p.model,
+    p.manufacturer,
+    p.manufacturer_sku,
+    p.gtin,
+    p.product_type,
+    p.track_stock,
+    p.is_active,
+    p.is_published,
+    p.show_on_website,
+    p.created_at,
+    p.updated_at,
+    p.row_total as total_count
+  from counted p
+  cross join args a
+  order by
+    case when a.sort_by = 'price_asc' then p.price end asc nulls last,
+    case when a.sort_by = 'price_desc' then p.price end desc nulls last,
+    case when a.sort_by = 'newest' then p.created_at end desc nulls last,
+    p.name asc,
+    p.id asc
+  limit (select page_limit from args)
+  offset (select page_offset from args);
+$$;
+
+grant execute on function public.get_public_products(
+  uuid, uuid[], uuid[], text, text, text, boolean, text, integer, integer
+) to anon, authenticated;
+
+create or replace function public.search_public_products(
+  p_search_term text,
+  p_tenant_id uuid,
+  p_limit integer default 10
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  name text,
+  sku text,
+  barcode text,
+  price numeric,
+  cost numeric,
+  inventory_qty integer,
+  stock_quantity integer,
+  image_url text,
+  image_url_optimized text,
+  image_urls text[],
+  description text,
+  website_description text,
+  category text,
+  category_id uuid,
+  category_name text,
+  brand_id uuid,
+  brand text,
+  model text,
+  manufacturer text,
+  manufacturer_sku text,
+  gtin text,
+  product_type text,
+  track_stock boolean,
+  is_active boolean,
+  is_published boolean,
+  show_on_website boolean,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    gp.id,
+    gp.tenant_id,
+    gp.name,
+    gp.sku,
+    gp.barcode,
+    gp.price,
+    gp.cost,
+    gp.inventory_qty,
+    gp.stock_quantity,
+    gp.image_url,
+    gp.image_url_optimized,
+    gp.image_urls,
+    gp.description,
+    gp.website_description,
+    gp.category,
+    gp.category_id,
+    gp.category_name,
+    gp.brand_id,
+    gp.brand,
+    gp.model,
+    gp.manufacturer,
+    gp.manufacturer_sku,
+    gp.gtin,
+    gp.product_type,
+    gp.track_stock,
+    gp.is_active,
+    gp.is_published,
+    gp.show_on_website,
+    gp.created_at,
+    gp.updated_at
+  from public.get_public_products(
+    p_tenant_id := p_tenant_id,
+    p_search_term := p_search_term,
+    p_only_in_stock := true,
+    p_sort_by := 'name',
+    p_limit := p_limit,
+    p_offset := 0
+  ) gp;
+$$;
+
+grant execute on function public.search_public_products(text, uuid, integer)
+  to anon, authenticated;
+
+create or replace function public.get_public_featured_products(
+  p_tenant_id uuid,
+  p_limit integer default 10
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  name text,
+  sku text,
+  barcode text,
+  price numeric,
+  cost numeric,
+  inventory_qty integer,
+  stock_quantity integer,
+  image_url text,
+  image_url_optimized text,
+  image_urls text[],
+  description text,
+  website_description text,
+  category text,
+  category_id uuid,
+  category_name text,
+  brand_id uuid,
+  brand text,
+  model text,
+  manufacturer text,
+  manufacturer_sku text,
+  gtin text,
+  product_type text,
+  track_stock boolean,
+  is_active boolean,
+  is_published boolean,
+  show_on_website boolean,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    p.id,
+    p.tenant_id,
+    p.name,
+    p.sku,
+    p.barcode,
+    p.price,
+    0::numeric as cost,
+    p.inventory_qty,
+    p.stock_quantity,
+    p.image_url,
+    p.image_url_optimized,
+    p.image_urls,
+    p.description,
+    p.website_description,
+    p.category,
+    p.category_id,
+    p.category_name,
+    p.brand_id,
+    p.brand,
+    p.model,
+    p.manufacturer,
+    p.manufacturer_sku,
+    p.gtin,
+    p.product_type,
+    p.track_stock,
+    p.is_active,
+    p.is_published,
+    p.show_on_website,
+    p.created_at,
+    p.updated_at
+  from public.featured_products fp
+  join public.products p on p.id = fp.product_id
+  where fp.tenant_id = p_tenant_id
+    and fp.active = true
+    and p.tenant_id = p_tenant_id
+    and p.is_active = true
+    and coalesce(p.is_published, false) = true
+    and coalesce(p.show_on_website, false) = true
+  order by fp.order_index asc, p.name asc
+  limit greatest(coalesce(p_limit, 10), 0);
+$$;
+
+grant execute on function public.get_public_featured_products(uuid, integer)
+  to anon, authenticated;
+
+create or replace function public.get_public_product_category_counts(
+  p_tenant_id uuid,
+  p_product_type text default null,
+  p_only_in_stock boolean default true
+)
+returns table (
+  category_id uuid,
+  product_count bigint
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select p.category_id, count(*) as product_count
+  from public.products p
+  where p.tenant_id = p_tenant_id
+    and p.is_active = true
+    and coalesce(p.is_published, false) = true
+    and coalesce(p.show_on_website, false) = true
+    and (
+      nullif(trim(coalesce(p_product_type, '')), '') is null
+      or p.product_type = nullif(trim(coalesce(p_product_type, '')), '')
+    )
+    and (
+      not p_only_in_stock
+      or p.product_type = 'service'
+      or coalesce(p.track_stock, true) = false
+      or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
+    )
+  group by p.category_id;
+$$;
+
+grant execute on function public.get_public_product_category_counts(
+  uuid, text, boolean
+) to anon, authenticated;
 
 notify pgrst, 'reload schema';
 
@@ -22153,6 +22664,35 @@ end;
 $$;
 
 grant execute on function public.calculate_payroll(uuid, uuid, integer, integer) to authenticated;
+
+do $$
+declare
+  v_function_signature text;
+begin
+  foreach v_function_signature in array array[
+    'public.reverse_purchase_invoice_inventory(uuid)',
+    'public.reverse_purchase_invoice_journal_entry(uuid)',
+    'public.create_prepaid_purchase_confirmation_entry(uuid)',
+    'public.settle_prepaid_inventory_on_order(uuid)',
+    'public.migrate_accounts_to_uuid()',
+    'public.create_sales_invoice_journal_entry(jsonb)',
+    'public.create_sales_invoice_journal_entry(public.sales_invoices)',
+    'public.create_purchase_invoice_journal_entry(uuid)',
+    'public.create_purchase_invoice_journal_entry(public.purchase_invoices)',
+    'public.cancel_online_order(uuid,text,numeric)',
+    'public.update_online_order_status(uuid,text,text,text,text,text)',
+    'public.calculate_payroll(uuid,uuid,integer,integer)',
+    'public.parse_description_to_tasks(uuid,uuid,uuid,text)',
+    'public.parse_description_to_tasks(uuid,uuid,uuid,uuid,text)'
+  ] loop
+    if to_regprocedure(v_function_signature) is not null then
+      execute format(
+        'revoke execute on function %s from public, anon, authenticated',
+        v_function_signature
+      );
+    end if;
+  end loop;
+end $$;
 
 comment on function public.generate_f29_from_accounting is 
 'Auto-generates F29 declaration from accounting data. Future enhancement: integrate with payroll_records for employee withholdings (línea 72).';
@@ -23122,6 +23662,8 @@ create index if not exists idx_conv_contexts_lookup on public.conversation_conte
 create index if not exists idx_conv_contexts_conversation on public.conversation_contexts(conversation_id);
 
 -- Helper function to check if user is a conversation participant
+drop function if exists is_conversation_participant(uuid);
+
 create or replace function is_conversation_participant(conv_id uuid)
 returns boolean as $$
 begin
@@ -23316,8 +23858,6 @@ BEGIN
     -- 1. Participant can delete (Standard)
     -- 2. Employee can delete 'support' chats (Shared Inbox)
     
-    END IF;
-
     -- Get user role
     SELECT role INTO v_user_role FROM user_profiles WHERE user_id = v_user_id;
     
@@ -23380,7 +23920,11 @@ END;
 $$;
 -- Enable RLS on sales_invoices if not already enabled (it should be)
 ALTER TABLE public.sales_invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sales_invoice_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Customers can view their own invoices"
+ON public.sales_invoices;
+DROP POLICY IF EXISTS "Employees can view all invoices"
+ON public.sales_invoices;
 
 -- 1. Sales Invoices: Customers can view their own invoices
 CREATE POLICY "Customers can view their own invoices"
@@ -23400,27 +23944,38 @@ USING (
   EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
 );
 
--- 3. Sales Invoice Items: Customers can view items of their invoices
-CREATE POLICY "Customers can view their own invoice items"
-ON public.sales_invoice_items
-FOR SELECT
-TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.sales_invoices i
-    WHERE i.id = sales_invoice_items.invoice_id
-    AND i.customer_id = auth.uid()
-  )
-);
+-- 3. Optional Sales Invoice Items policies
+DO $$
+BEGIN
+  IF to_regclass('public.sales_invoice_items') IS NOT NULL THEN
+    ALTER TABLE public.sales_invoice_items ENABLE ROW LEVEL SECURITY;
 
--- 4. Sales Invoice Items: Employees can view all items
-CREATE POLICY "Employees can view all invoice items"
-ON public.sales_invoice_items
-FOR SELECT
-TO authenticated
-USING (
-  EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
-);
+    DROP POLICY IF EXISTS "Customers can view their own invoice items"
+    ON public.sales_invoice_items;
+    DROP POLICY IF EXISTS "Employees can view all invoice items"
+    ON public.sales_invoice_items;
+
+    CREATE POLICY "Customers can view their own invoice items"
+    ON public.sales_invoice_items
+    FOR SELECT
+    TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.sales_invoices i
+        WHERE i.id = sales_invoice_items.invoice_id
+        AND i.customer_id = auth.uid()
+      )
+    );
+
+    CREATE POLICY "Employees can view all invoice items"
+    ON public.sales_invoice_items
+    FOR SELECT
+    TO authenticated
+    USING (
+      EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid())
+    );
+  END IF;
+END $$;
 -- Secure RPC to handle action request responses (bypassing RLS for specific updates)
 create or replace function public.respond_to_action_request(
   p_message_id uuid,

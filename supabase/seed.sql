@@ -1,0 +1,2 @@
+-- Intentionally empty local seed file.
+-- The local Supabase config expects this path during db reset/start.

@@ -62,6 +62,7 @@ class _BikeTabData {
 
   // Per-bike items
   final List<_JobPartItem> partItems = [];
+  final List<_JobServiceItem> serviceItems = [];
 
   // Per-bike flags
   bool isWarrantyWork = false;
@@ -91,7 +92,8 @@ class _BikeTabData {
   }
 
   double get subtotal =>
-      partItems.fold(0, (sum, item) => sum + item.quantity * item.unitPrice);
+      partItems.fold(0.0, (sum, item) => sum + item.quantity * item.unitPrice) +
+      serviceItems.fold(0.0, (sum, item) => sum + item.total);
 }
 
 enum _JobWorkbenchTab { general, diagnosis, products }
@@ -506,6 +508,54 @@ const List<_StructuredDiagnosisComponentSpec>
     label: 'Shifter',
     icon: Icons.touch_app_outlined,
   ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'tire',
+    label: 'Cubierta',
+    icon: Icons.trip_origin,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'rim',
+    label: 'Aro',
+    icon: Icons.circle_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'spokes',
+    label: 'Rayos',
+    icon: Icons.blur_circular_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'hub',
+    label: 'Maza',
+    icon: Icons.settings_input_component_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'tire',
+    label: 'Cubierta',
+    icon: Icons.trip_origin,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'rim',
+    label: 'Aro',
+    icon: Icons.circle_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'spokes',
+    label: 'Rayos',
+    icon: Icons.blur_circular_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'hub',
+    label: 'Maza',
+    icon: Icons.settings_input_component_outlined,
+  ),
 ];
 
 const Map<String, String> _kChainLubricationOptions = {
@@ -536,11 +586,53 @@ const Map<String, String> _kShifterConditionOptions = {
   'replace': 'Reemplazar',
 };
 
+const Map<String, String> _kWheelTireConditionOptions = {
+  'ok': 'Buen estado',
+  'worn': 'Desgastada',
+  'damaged': 'Dañada / cortada',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelRimConditionOptions = {
+  'ok': 'Recto / sin daño',
+  'attention': 'Descentrado leve',
+  'bent': 'Golpeado / desviado',
+  'cracked': 'Fisurado',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelSpokeConditionOptions = {
+  'ok': 'Tensión pareja',
+  'loose': 'Rayos sueltos',
+  'uneven': 'Tensión dispareja',
+  'broken': 'Rayos cortados',
+};
+
+const Map<String, String> _kWheelHubBearingConditionOptions = {
+  'ok': 'Gira suave',
+  'rough': 'Áspero',
+  'play': 'Con juego',
+  'service': 'Requiere servicio',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelTubelessStatusOptions = {
+  'ok': 'Sellado correcto',
+  'leaking': 'Pierde aire',
+  'dry_sealant': 'Líquido seco',
+  'not_applicable': 'No aplica',
+};
+
 final List<ServiceQuestionOption> _kBrakeSymptomOptions =
     serviceQuestionOptionsFromMap(kBrakeSymptomLabels);
 
 typedef _BrakeDiagnosisSheetUpdater = void Function(
   BrakeDiagnosisSheet Function(BrakeDiagnosisSheet current) transform, {
+  bool refresh,
+});
+
+typedef _WheelDiagnosisSheetUpdater = void Function(
+  WheelDiagnosisSheet Function(WheelDiagnosisSheet current) transform, {
   bool refresh,
 });
 
@@ -1074,6 +1166,60 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             .catchError((_) => null);
       }
 
+      bool isLoadedServiceItem(MechanicJobItem item, Product? product) {
+        return item.itemType == 'service' ||
+            item.serviceProductId != null ||
+            product?.isService == true;
+      }
+
+      Map<String, dynamic>? wizardAnswersForLoadedItem(MechanicJobItem item) {
+        return item.serviceConfigurationData == null ||
+                item.serviceConfigurationData!.isEmpty
+            ? null
+            : Map<String, dynamic>.from(item.serviceConfigurationData!);
+      }
+
+      Future<void> addLoadedItemToTab(
+        _BikeTabData tab,
+        MechanicJobItem item,
+      ) async {
+        final product = await getProductForItem(item);
+        final wizardProfile =
+            await getWizardProfileForLoadedItem(item, product);
+        final wizardAnswers = wizardAnswersForLoadedItem(item);
+
+        if (isLoadedServiceItem(item, product)) {
+          tab.serviceItems.add(_JobServiceItem(
+            serviceProduct: product,
+            description: item.productName,
+            hours: item.quantity,
+            hourlyRate: item.unitPrice,
+            date: item.createdAt,
+            notes: item.notes,
+            location: item.location,
+            wizardAnswers: wizardAnswers,
+            wizardProfile: wizardProfile,
+          ));
+          return;
+        }
+
+        tab.partItems.add(_JobPartItem(
+          id: item.id,
+          product: product,
+          name: item.productName,
+          isCatalogProduct: product != null ||
+              item.productId != null ||
+              item.serviceProductId != null,
+          isServiceItem: false,
+          quantity: item.quantity.toInt(),
+          unitPrice: item.unitPrice,
+          location: item.location,
+          notes: item.notes,
+          wizardAnswers: wizardAnswers,
+          wizardProfile: wizardProfile,
+        ));
+      }
+
       // Build bike tabs from job bikes data
       final List<_BikeTabData> loadedBikeTabs = [];
 
@@ -1118,29 +1264,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               allItems.where((item) => item.jobBikeId == jobBike.id).toList();
 
           for (final item in bikeItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            tab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
+            await addLoadedItemToTab(tab, item);
           }
 
           loadedBikeTabs.add(tab);
@@ -1154,29 +1278,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final orphanItems =
             allItems.where((item) => item.jobBikeId == null).toList();
         for (final item in orphanItems) {
-          final product = await getProductForItem(item);
-          final wizardProfile =
-              await getWizardProfileForLoadedItem(item, product);
-          generalTab.partItems.add(_JobPartItem(
-            id: item.id,
-            product: product,
-            name: item.productName,
-            isCatalogProduct: product != null ||
-                item.productId != null ||
-                item.serviceProductId != null,
-            isServiceItem: item.itemType == 'service' ||
-                item.serviceProductId != null ||
-                product?.isService == true,
-            quantity: item.quantity.toInt(),
-            unitPrice: item.unitPrice,
-            location: item.location,
-            notes: item.notes,
-            wizardAnswers: item.serviceConfigurationData == null ||
-                    item.serviceConfigurationData!.isEmpty
-                ? null
-                : Map<String, dynamic>.from(item.serviceConfigurationData!),
-            wizardProfile: wizardProfile,
-          ));
+          await addLoadedItemToTab(generalTab, item);
         }
         loadedBikeTabs.add(generalTab);
       } else {
@@ -1196,29 +1298,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
           // Load all items (no jobBikeId filtering for legacy)
           for (final item in allItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            tab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
+            await addLoadedItemToTab(tab, item);
           }
 
           loadedBikeTabs.add(tab);
@@ -1230,29 +1310,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           final legacyOrphanItems =
               allItems.where((item) => item.jobBikeId == null).toList();
           for (final item in legacyOrphanItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            legacyGeneralTab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
+            await addLoadedItemToTab(legacyGeneralTab, item);
           }
           loadedBikeTabs.add(legacyGeneralTab);
           debugPrint(
@@ -1932,6 +1990,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return tab != null ? tab.partItems : _partItems;
   }
 
+  List<_JobServiceItem> _serviceItemsForTab(_BikeTabData? tab) {
+    return tab != null ? tab.serviceItems : _serviceItems;
+  }
+
+  /// Get the current service/labor items list (from bike tab or legacy)
+  List<_JobServiceItem> get _currentServiceItems {
+    return _serviceItemsForTab(_currentBikeTab);
+  }
+
   Future<void> _addCatalogPart(Product product) async {
     if (!mounted) return;
     final wizardProfile = await _loadServiceWizardProfileForProduct(
@@ -2008,9 +2075,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       builder: (context) => _ServiceEntryDialog(
         serviceProducts: _serviceProducts,
         onServiceAdded: (serviceProduct, description, hours, rate, date) {
+          final targetTab = _currentBikeTab;
+          final targetServiceItems = _serviceItemsForTab(targetTab);
+          final newIndex = targetServiceItems.length;
           setState(() {
             final trimmedDescription = description.trim();
-            _serviceItems.add(_JobServiceItem(
+            targetServiceItems.add(_JobServiceItem(
               serviceProduct: serviceProduct,
               description: trimmedDescription.isNotEmpty
                   ? trimmedDescription
@@ -2020,6 +2090,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               date: date,
             ));
           });
+
+          if (serviceProduct != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final serviceItems = _serviceItemsForTab(targetTab);
+              if (!mounted || newIndex < 0 || newIndex >= serviceItems.length) {
+                return;
+              }
+              unawaited(_editServiceWizardForServiceItem(
+                newIndex,
+                tab: targetTab,
+              ));
+            });
+          }
         },
       ),
     );
@@ -2051,14 +2134,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   double get _currentBikeSubtotal {
     final tab = _currentBikeTab;
     if (tab != null) {
-      return tab.partItems
-          .fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+      return tab.subtotal;
     }
     return _partItems.fold(
-        0.0, (sum, item) => sum + (item.quantity * item.unitPrice));
+            0.0, (sum, item) => sum + (item.quantity * item.unitPrice)) +
+        _serviceItems.fold(0.0, (sum, item) => sum + item.total);
   }
 
   double get _serviceCost {
+    if (_bikeTabs.isNotEmpty) {
+      return _bikeTabs.fold(0.0, (sum, tab) {
+        return sum +
+            tab.serviceItems.fold(0.0, (sum, item) => sum + item.total);
+      });
+    }
     return _serviceItems.fold(0.0, (sum, item) => sum + item.total);
   }
 
@@ -2097,6 +2186,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   int get _debugLocalPersistableServiceCount {
+    if (_bikeTabs.isNotEmpty) {
+      return _bikeTabs.fold<int>(0, (sum, tab) {
+        return sum +
+            tab.serviceItems
+                .where((item) => item.displayName.trim().isNotEmpty)
+                .length;
+      });
+    }
+
     return _serviceItems
         .where((item) => item.displayName.trim().isNotEmpty)
         .length;
@@ -2166,6 +2264,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final localLabels = <String>[
         ..._bikeTabs.expand(
           (tab) => tab.partItems.map((item) => item.displayName),
+        ),
+        ..._bikeTabs.expand(
+          (tab) => tab.serviceItems.map((item) => item.displayName),
         ),
         ..._serviceItems.map((item) => item.displayName),
       ];
@@ -2427,6 +2528,61 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       final taskService = Provider.of<SmartTaskService>(context, listen: false);
 
+      Future<void> saveServiceItem(
+        _JobServiceItem service, {
+        required String? jobBikeId,
+      }) async {
+        if (service.displayName.trim().isEmpty) return;
+
+        final hoursWorked = service.hours;
+        final hourlyRate = service.hourlyRate;
+        final serviceProduct = service.serviceProduct;
+        final name = service.description.isNotEmpty
+            ? service.description
+            : serviceProduct?.name ?? 'Servicio';
+        final fallbackLaborNotes =
+            'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr';
+
+        final jobServiceItem = MechanicJobItem(
+          jobId: jobId,
+          jobBikeId: jobBikeId,
+          tenantId: tenantId,
+          productId: serviceProduct?.id,
+          serviceProductId: serviceProduct?.id,
+          productName: name,
+          productSku: serviceProduct?.sku,
+          quantity: hoursWorked,
+          unitPrice: hourlyRate,
+          totalPrice: service.total,
+          notes: service.notes ?? fallbackLaborNotes,
+          serviceConfigurationData: service.wizardAnswers,
+          itemType: 'service',
+          location: service.location,
+        );
+
+        final created = await bikeshopService.createJobItem(
+          jobServiceItem,
+          syncBikeMemory: false,
+        );
+
+        if (serviceProduct != null &&
+            serviceProduct.description != null &&
+            serviceProduct.description!.isNotEmpty &&
+            created.id != null) {
+          try {
+            await taskService.generateAutoTasksFromDescription(
+              jobId: jobId,
+              parentItemId: created.id!,
+              description: serviceProduct.description!,
+            );
+            debugPrint('✅ Auto-tasks generated for service $name');
+          } catch (e) {
+            debugPrint(
+                '⚠️ Failed to generate auto-tasks for service $name: $e');
+          }
+        }
+      }
+
       // Save each bike tab
       for (int i = 0; i < _bikeTabs.length; i++) {
         final tab = _bikeTabs[i];
@@ -2476,6 +2632,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                     '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
               }
             }
+          }
+
+          for (final service in tab.serviceItems) {
+            await saveServiceItem(service, jobBikeId: null);
           }
           continue; // Skip MechanicJobBike creation
         }
@@ -2569,10 +2729,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             }
           }
         }
+
+        for (final service in tab.serviceItems) {
+          await saveServiceItem(service, jobBikeId: jobBikeId);
+        }
       }
 
-      // For non-service jobs (no bike tabs): save items from legacy _partItems
-      if (_bikeTabs.isEmpty && _partItems.isNotEmpty) {
+      // For non-service jobs (no bike tabs): save items from legacy lists.
+      if (_bikeTabs.isEmpty) {
         for (final item in _partItems) {
           if (item.name.isEmpty) continue;
           final quantity = item.quantity.toDouble();
@@ -2613,51 +2777,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             }
           }
         }
-      }
 
-      // Add services (job-level, not per-bike for now)
-      for (final service in _serviceItems) {
-        final hoursWorked = service.hours;
-        final hourlyRate = service.hourlyRate;
-        final serviceProduct = service.serviceProduct;
-        final name = service.description.isNotEmpty
-            ? service.description
-            : serviceProduct?.name ?? 'Servicio';
-
-        final jobServiceItem = MechanicJobItem(
-          jobId: jobId,
-          tenantId: tenantId,
-          productId: serviceProduct?.id,
-          serviceProductId: serviceProduct?.id,
-          productName: name,
-          productSku: serviceProduct?.sku,
-          quantity: hoursWorked,
-          unitPrice: hourlyRate,
-          totalPrice: service.total,
-          notes:
-              'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr',
-        );
-
-        final created = await bikeshopService.createJobItem(
-          jobServiceItem,
-          syncBikeMemory: false,
-        );
-
-        if (serviceProduct != null &&
-            serviceProduct.description != null &&
-            serviceProduct.description!.isNotEmpty &&
-            created.id != null) {
-          try {
-            await taskService.generateAutoTasksFromDescription(
-              jobId: jobId,
-              parentItemId: created.id!,
-              description: serviceProduct.description!,
-            );
-            debugPrint('✅ Auto-tasks generated for service $name');
-          } catch (e) {
-            debugPrint(
-                '⚠️ Failed to generate auto-tasks for service $name: $e');
-          }
+        for (final service in _serviceItems) {
+          await saveServiceItem(service, jobBikeId: null);
         }
       }
 
@@ -6505,6 +6627,38 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           hasCriticalRisk || _brakeHasCriticalRisk(sheet.rearBrake);
     }
 
+    final frontWheelNarrative =
+        _buildWheelNarrativeFromSheet('rueda delantera', sheet.frontWheel);
+    if (frontWheelNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Rueda delantera',
+          body: frontWheelNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildWheelRecommendationHints('rueda delantera', sheet.frontWheel),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _wheelHasCriticalRisk(sheet.frontWheel);
+    }
+
+    final rearWheelNarrative =
+        _buildWheelNarrativeFromSheet('rueda trasera', sheet.rearWheel);
+    if (rearWheelNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Rueda trasera',
+          body: rearWheelNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildWheelRecommendationHints('rueda trasera', sheet.rearWheel),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _wheelHasCriticalRisk(sheet.rearWheel);
+    }
+
     return _DiagnosisNarrativeSource(
       sections: sections,
       recommendationHints: recommendations.toList(growable: false),
@@ -6822,6 +6976,72 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return sentences.isEmpty ? null : sentences.join(' ');
   }
 
+  String? _buildWheelNarrativeFromSheet(
+    String wheelLabel,
+    WheelDiagnosisSheet sheet,
+  ) {
+    if (!sheet.hasMeaningfulData) {
+      return null;
+    }
+
+    final sentences = <String>[];
+
+    switch (sheet.overallStatus) {
+      case BikeSystemOverallStatus.ok:
+        sentences.add('La $wheelLabel se encuentra en buen estado general.');
+        break;
+      case BikeSystemOverallStatus.attention:
+        sentences.add('La $wheelLabel presenta detalles que conviene revisar.');
+        break;
+      case BikeSystemOverallStatus.critical:
+        sentences.add(
+          'La $wheelLabel muestra hallazgos importantes que requieren atención pronta.',
+        );
+        break;
+      case BikeSystemOverallStatus.unknown:
+        break;
+    }
+
+    final tire = _describeWheelComponentSentence(
+      'La cubierta',
+      sheet.tireCondition,
+    );
+    if (tire != null) {
+      sentences.add(tire);
+    }
+
+    final rim = _describeWheelComponentSentence('El aro', sheet.rimCondition);
+    if (rim != null) {
+      sentences.add(rim);
+    }
+
+    final spokes =
+        _describeWheelComponentSentence('Los rayos', sheet.spokeCondition);
+    if (spokes != null) {
+      sentences.add(spokes);
+    }
+
+    final hub = _describeWheelComponentSentence(
+      'La maza',
+      sheet.hubBearingCondition,
+    );
+    if (hub != null) {
+      sentences.add(hub);
+    }
+
+    final tubeless = _describeTubelessStatusSentence(sheet.tubelessStatus);
+    if (tubeless != null) {
+      sentences.add(tubeless);
+    }
+
+    final notes = _normalizeNullableText(sheet.notes ?? '');
+    if (notes != null) {
+      sentences.add('Además, en la inspección se consignó: $notes');
+    }
+
+    return sentences.isEmpty ? null : sentences.join(' ');
+  }
+
   List<String> _buildDrivetrainRecommendationHints(
     DrivetrainDiagnosisSheet sheet,
   ) {
@@ -6936,6 +7156,50 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return recommendations.toList(growable: false);
   }
 
+  List<String> _buildWheelRecommendationHints(
+    String wheelLabel,
+    WheelDiagnosisSheet sheet,
+  ) {
+    final recommendations = <String>{};
+
+    if (sheet.tireCondition == 'worn') {
+      recommendations.add('evaluar cambio de cubierta en la $wheelLabel');
+    }
+    if (sheet.tireCondition == 'damaged' || sheet.tireCondition == 'replace') {
+      recommendations.add('reemplazar la cubierta de la $wheelLabel');
+    }
+
+    if (sheet.rimCondition == 'attention' || sheet.rimCondition == 'bent') {
+      recommendations.add('centrar y revisar el aro de la $wheelLabel');
+    }
+    if (sheet.rimCondition == 'cracked' || sheet.rimCondition == 'replace') {
+      recommendations.add('reemplazar el aro de la $wheelLabel');
+    }
+
+    if (sheet.spokeCondition == 'loose' || sheet.spokeCondition == 'uneven') {
+      recommendations.add('tensionar y centrar rayos de la $wheelLabel');
+    }
+    if (sheet.spokeCondition == 'broken') {
+      recommendations.add('reemplazar rayos cortados de la $wheelLabel');
+    }
+
+    if (sheet.hubBearingCondition == 'rough' ||
+        sheet.hubBearingCondition == 'play' ||
+        sheet.hubBearingCondition == 'service') {
+      recommendations.add('realizar servicio de maza en la $wheelLabel');
+    }
+    if (sheet.hubBearingCondition == 'replace') {
+      recommendations.add('reemplazar rodamientos o maza de la $wheelLabel');
+    }
+
+    if (sheet.tubelessStatus == 'leaking' ||
+        sheet.tubelessStatus == 'dry_sealant') {
+      recommendations.add('revisar sellado tubeless de la $wheelLabel');
+    }
+
+    return recommendations.toList(growable: false);
+  }
+
   bool _drivetrainHasCriticalRisk(DrivetrainDiagnosisSheet sheet) {
     return sheet.overallStatus == BikeSystemOverallStatus.critical ||
         (sheet.chainWearPercent != null && sheet.chainWearPercent! >= 75) ||
@@ -6954,6 +7218,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         sheet.rotorTruenessStatus == 'replace' ||
         sheet.padContaminationStatus == 'replace' ||
         sheet.rotorContaminationStatus == 'replace';
+  }
+
+  bool _wheelHasCriticalRisk(WheelDiagnosisSheet sheet) {
+    return sheet.overallStatus == BikeSystemOverallStatus.critical ||
+        sheet.tireCondition == 'replace' ||
+        sheet.tireCondition == 'damaged' ||
+        sheet.rimCondition == 'cracked' ||
+        sheet.rimCondition == 'replace' ||
+        sheet.spokeCondition == 'broken' ||
+        sheet.hubBearingCondition == 'replace';
   }
 
   String? _describeChainLubricationSentence(String? status) {
@@ -7111,6 +7385,53 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  String? _describeWheelComponentSentence(String subject, String? status) {
+    switch (status) {
+      case 'ok':
+        return null;
+      case 'attention':
+        return '$subject requiere revisión.';
+      case 'worn':
+        return '$subject presenta desgaste.';
+      case 'damaged':
+        return '$subject presenta daño visible.';
+      case 'bent':
+        return '$subject se encuentra golpeado o desviado.';
+      case 'cracked':
+        return '$subject presenta fisura.';
+      case 'loose':
+        return '$subject presentan soltura.';
+      case 'uneven':
+        return '$subject presentan tensión dispareja.';
+      case 'broken':
+        return '$subject presentan cortes o roturas.';
+      case 'rough':
+        return '$subject gira áspera.';
+      case 'play':
+        return '$subject presenta juego.';
+      case 'service':
+        return '$subject requiere servicio.';
+      case 'replace':
+        return '$subject requiere reemplazo.';
+      default:
+        return null;
+    }
+  }
+
+  String? _describeTubelessStatusSentence(String? status) {
+    switch (status) {
+      case 'ok':
+      case 'not_applicable':
+        return null;
+      case 'leaking':
+        return 'El sistema tubeless pierde aire o no está sellando correctamente.';
+      case 'dry_sealant':
+        return 'El líquido tubeless se encuentra seco o insuficiente.';
+      default:
+        return null;
+    }
+  }
+
   String _joinNaturalList(Iterable<String> values) {
     final items = values
         .map((value) => value.trim())
@@ -7157,6 +7478,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       diagnosisSheet.drivetrain.overallStatus,
       diagnosisSheet.frontBrake.overallStatus,
       diagnosisSheet.rearBrake.overallStatus,
+      diagnosisSheet.frontWheel.overallStatus,
+      diagnosisSheet.rearWheel.overallStatus,
     ];
     final trackedSystems = statuses
         .where((status) => status != BikeSystemOverallStatus.unknown)
@@ -7788,11 +8111,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     switch (systemKey) {
       case 'cockpit':
       case 'suspension':
-      case 'front_wheel':
       case 'bottom_bracket':
-      case 'rear_wheel':
       case 'wheels':
         return BikeSystemOverallStatus.unknown;
+      case 'front_wheel':
+        return sheet.frontWheel.overallStatus;
+      case 'rear_wheel':
+        return sheet.rearWheel.overallStatus;
       case 'front_brake':
         return sheet.frontBrake.overallStatus;
       case 'rear_brake':
@@ -7810,11 +8135,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     switch (systemKey) {
       case 'cockpit':
       case 'suspension':
-      case 'front_wheel':
       case 'bottom_bracket':
-      case 'rear_wheel':
       case 'wheels':
         return false;
+      case 'front_wheel':
+        return sheet.frontWheel.hasMeaningfulData;
+      case 'rear_wheel':
+        return sheet.rearWheel.hasMeaningfulData;
       case 'front_brake':
         return sheet.frontBrake.hasMeaningfulData;
       case 'rear_brake':
@@ -7905,6 +8232,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       case 'bent':
       case 'damaged':
       case 'contaminated':
+      case 'broken':
+      case 'cracked':
         return BikeSystemOverallStatus.critical;
       case 'attention':
       case 'worn':
@@ -7914,6 +8243,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       case 'high_friction':
       case 'corroded':
       case 'housing_damaged':
+      case 'loose':
+      case 'uneven':
+      case 'rough':
+      case 'play':
+      case 'service':
+      case 'leaking':
+      case 'dry_sealant':
         return BikeSystemOverallStatus.attention;
       case 'ok':
         return BikeSystemOverallStatus.ok;
@@ -7948,6 +8284,27 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _statusFromConditionValue(sheet.shifterCondition),
           _drivetrainCableConditionStatus(sheet.cableCondition),
         ]);
+      default:
+        return BikeSystemOverallStatus.unknown;
+    }
+  }
+
+  BikeSystemOverallStatus _wheelComponentStatus(
+    WheelDiagnosisSheet sheet,
+    String componentKey,
+  ) {
+    switch (componentKey) {
+      case 'tire':
+        return _maxSystemStatus([
+          _statusFromConditionValue(sheet.tireCondition),
+          _statusFromConditionValue(sheet.tubelessStatus),
+        ]);
+      case 'rim':
+        return _statusFromConditionValue(sheet.rimCondition);
+      case 'spokes':
+        return _statusFromConditionValue(sheet.spokeCondition);
+      case 'hub':
+        return _statusFromConditionValue(sheet.hubBearingCondition);
       default:
         return BikeSystemOverallStatus.unknown;
     }
@@ -8214,12 +8571,70 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           templateKey: diagnosisSheet.templateKey,
         );
       case 'cockpit':
-      case 'front_wheel':
       case 'bottom_bracket':
-      case 'rear_wheel':
         return _buildPlaceholderDiagnosisSystemCard(
           theme,
           activeSpec: activeSpec,
+        );
+      case 'front_wheel':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.frontWheel.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.frontWheel.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              frontWheel: current.frontWheel.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildWheelDiagnosisFields(
+            currentTab,
+            systemKey: 'front_wheel',
+            wheelSheet: diagnosisSheet.frontWheel,
+            profile: profile,
+            bike: currentTab.bike,
+            title: 'delantera',
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(frontWheel: transform(current.frontWheel)),
+              refresh: refresh,
+            ),
+          ),
+        );
+      case 'rear_wheel':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.rearWheel.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.rearWheel.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              rearWheel: current.rearWheel.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildWheelDiagnosisFields(
+            currentTab,
+            systemKey: 'rear_wheel',
+            wheelSheet: diagnosisSheet.rearWheel,
+            profile: profile,
+            bike: currentTab.bike,
+            title: 'trasera',
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(rearWheel: transform(current.rearWheel)),
+              refresh: refresh,
+            ),
+          ),
         );
       case 'front_brake':
         return _buildDiagnosisSystemCard(
@@ -8585,6 +9000,265 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  Widget _buildWheelDiagnosisFields(
+    _BikeTabData currentTab, {
+    required String systemKey,
+    required WheelDiagnosisSheet wheelSheet,
+    required BikeProfile? profile,
+    required Bike? bike,
+    required String title,
+    required _WheelDiagnosisSheetUpdater update,
+  }) {
+    final theme = Theme.of(context);
+    final selectionScopeKey = _diagnosisComponentSelectionScopeKey(
+      currentTab.tabId,
+      systemKey,
+    );
+    final componentSpecs = _structuredDiagnosisComponentSpecs(
+      systemKey,
+      profile,
+    );
+    final selectedComponentKey = _resolveStructuredDiagnosisComponentKey(
+      systemKey,
+      profile,
+      selectionScopeKey: selectionScopeKey,
+    );
+    final technicalValues =
+        profile?.technicalValues ?? const <String, dynamic>{};
+    final contextChips = <Widget>[];
+
+    void addContextChip(IconData icon, String? label) {
+      final normalized = _normalizeNullableText(label ?? '');
+      if (normalized == null) return;
+      contextChips.add(
+        _buildStructuredDiagnosisMetaChip(theme, icon: icon, label: normalized),
+      );
+    }
+
+    final wheelSize = _normalizeNullableText(bike?.wheelSize ?? '');
+    addContextChip(
+      Icons.circle_outlined,
+      wheelSize == null ? null : 'Aro $wheelSize',
+    );
+    final hubSpacing = systemKey == 'front_wheel'
+        ? bike?.frontHubSpacingMm
+        : bike?.rearHubSpacingMm;
+    if (hubSpacing != null) {
+      addContextChip(
+        Icons.settings_input_component_outlined,
+        'Maza ${_formatHubSpacingMm(hubSpacing)} mm',
+      );
+    }
+    final spokeKey =
+        systemKey == 'front_wheel' ? 'frontSpokeHoles' : 'rearSpokeHoles';
+    final spokeHoles =
+        _normalizeNullableText(technicalValues[spokeKey]?.toString() ?? '');
+    addContextChip(
+      Icons.blur_circular_outlined,
+      spokeHoles == null ? null : '$spokeHoles rayos',
+    );
+    final valveType =
+        _normalizeNullableText(technicalValues['valveType']?.toString() ?? '');
+    addContextChip(
+      Icons.opacity_outlined,
+      valveType == null ? null : 'Válvula $valveType',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (contextChips.isNotEmpty) ...[
+          Wrap(spacing: 8, runSpacing: 8, children: contextChips),
+          const SizedBox(height: 16),
+        ],
+        if (componentSpecs.isNotEmpty) ...[
+          Text(
+            'Componentes del sistema',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildDiagnosisComponentSelector(
+            theme,
+            specs: componentSpecs,
+            selectedComponentKey: selectedComponentKey,
+            statusForComponent: (componentKey) =>
+                _wheelComponentStatus(wheelSheet, componentKey),
+            onSelected: (componentKey) {
+              setState(() {
+                _selectedStructuredDiagnosisComponentKeys[selectionScopeKey] =
+                    componentKey;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (selectedComponentKey != null)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Container(
+              key: ValueKey('editor_${systemKey}_$selectedComponentKey'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.15),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _buildWheelComponentEditor(
+                currentTab,
+                systemKey: systemKey,
+                wheelSheet: wheelSheet,
+                componentKey: selectedComponentKey,
+                update: update,
+              ),
+            ),
+          ),
+        const SizedBox(height: 20),
+        TextFormField(
+          key: ValueKey(
+            'diag_${systemKey}_notes_${currentTab.tabId}_${wheelSheet.notes ?? 'empty'}',
+          ),
+          initialValue: wheelSheet.notes,
+          decoration: InputDecoration(
+            labelText: 'Notas rueda $title',
+            border: const OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              (current) => current.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+              refresh: false,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWheelComponentEditor(
+    _BikeTabData currentTab, {
+    required String systemKey,
+    required WheelDiagnosisSheet wheelSheet,
+    required String componentKey,
+    required _WheelDiagnosisSheetUpdater update,
+  }) {
+    switch (componentKey) {
+      case 'tire':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_${systemKey}_tire_${currentTab.tabId}_${wheelSheet.tireCondition ?? 'empty'}',
+              label: 'Estado cubierta',
+              icon: Icons.trip_origin,
+              value: wheelSheet.tireCondition,
+              options: _kWheelTireConditionOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    tireCondition: value,
+                    clearTireCondition: value == null,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_${systemKey}_tubeless_${currentTab.tabId}_${wheelSheet.tubelessStatus ?? 'empty'}',
+              label: 'Estado tubeless',
+              icon: Icons.opacity_outlined,
+              value: wheelSheet.tubelessStatus,
+              options: _kWheelTubelessStatusOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    tubelessStatus: value,
+                    clearTubelessStatus: value == null,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      case 'rim':
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_rim_${currentTab.tabId}_${wheelSheet.rimCondition ?? 'empty'}',
+          label: 'Estado aro',
+          icon: Icons.circle_outlined,
+          value: wheelSheet.rimCondition,
+          options: _kWheelRimConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                rimCondition: value,
+                clearRimCondition: value == null,
+              ),
+            );
+          },
+        );
+      case 'spokes':
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_spokes_${currentTab.tabId}_${wheelSheet.spokeCondition ?? 'empty'}',
+          label: 'Estado rayos',
+          icon: Icons.blur_circular_outlined,
+          value: wheelSheet.spokeCondition,
+          options: _kWheelSpokeConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                spokeCondition: value,
+                clearSpokeCondition: value == null,
+              ),
+            );
+          },
+        );
+      case 'hub':
+      default:
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_hub_${currentTab.tabId}_${wheelSheet.hubBearingCondition ?? 'empty'}',
+          label: 'Estado rodamientos maza',
+          icon: Icons.settings_input_component_outlined,
+          value: wheelSheet.hubBearingCondition,
+          options: _kWheelHubBearingConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                hubBearingCondition: value,
+                clearHubBearingCondition: value == null,
+              ),
+            );
+          },
+        );
+    }
+  }
+
+  String _formatHubSpacingMm(double value) {
+    return value == value.roundToDouble()
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+  }
+
   Widget _buildChainWearField(
     _BikeTabData currentTab,
     DrivetrainDiagnosisSheet drivetrainSheet,
@@ -8910,17 +9584,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
           ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          Padding(
-            padding: const EdgeInsets.all(32),
+          const Padding(
+            padding: EdgeInsets.all(32),
             child: Column(
               children: [
                 Icon(
                   Icons.construction_rounded,
                   size: 48,
-                  color: const Color(0xFFCBD5E1),
+                  color: Color(0xFFCBD5E1),
                 ),
-                const SizedBox(height: 16),
-                const Text(
+                SizedBox(height: 16),
+                Text(
                   'Componentes en desarrollo',
                   style: TextStyle(
                     fontSize: 16,
@@ -8929,8 +9603,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                SizedBox(height: 8),
+                Text(
                   'El selector de piezas detallado para este sistema estará disponible pronto.\nPor ahora, registra tus observaciones en las notas generales del servicio.',
                   style: TextStyle(
                     fontSize: 13,
@@ -9032,6 +9706,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         contextLines.add(
           'Headset y dirección siguen anclados aquí como sistema de steering, aunque esta visita todavía no tenga ficha estructurada editable.',
         );
+        break;
       case 'front_brake':
       case 'rear_brake':
       case 'drivetrain':
@@ -9108,7 +9783,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Hoy la verdad estructurada de la visita sigue limitada a transmisión, freno delantero y freno trasero. Cuando este sistema gane soporte, el mismo controlador se reutilizará aquí sin crear otra variante visual.',
+                  'Hoy la verdad estructurada de la visita cubre transmisión, frenos y ruedas delanteras/traseras. Cuando este sistema gane soporte, el mismo controlador se reutilizará aquí sin crear otra variante visual.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     height: 1.45,
@@ -10943,8 +11618,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                                 theme, entry.key + 1, entry.value, entry.key)),
 
                       // Existing service items (displayed after parts)
-                      if (_serviceItems.isNotEmpty)
-                        ..._serviceItems.asMap().entries.map((entry) =>
+                      if (_currentServiceItems.isNotEmpty)
+                        ..._currentServiceItems.asMap().entries.map((entry) =>
                             _buildServiceRow(
                                 theme,
                                 _currentPartItems.length + entry.key + 1,
@@ -11207,8 +11882,145 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  _JobPartItem _bridgeServiceItemForWizard(_JobServiceItem item) {
+    return _JobPartItem(
+      product: item.serviceProduct,
+      name: item.description,
+      isCatalogProduct: item.serviceProduct != null,
+      isServiceItem: true,
+      quantity: item.hours > 0 ? item.hours.ceil() : 1,
+      unitPrice: item.hourlyRate,
+      location: item.location,
+      notes: item.notes,
+      wizardAnswers: item.wizardAnswers,
+      wizardProfile: item.wizardProfile,
+    );
+  }
+
+  Future<void> _editServiceWizardForServiceItem(
+    int itemIndex, {
+    _BikeTabData? tab,
+  }) async {
+    final serviceItems = _serviceItemsForTab(tab ?? _currentBikeTab);
+    if (itemIndex < 0 || itemIndex >= serviceItems.length) {
+      return;
+    }
+
+    final item = serviceItems[itemIndex];
+    final serviceProduct = item.serviceProduct;
+    if (serviceProduct == null) return;
+
+    ServiceWizardProfile? profile = item.wizardProfile;
+    profile ??= await _serviceWizardService
+        .getProfileForProduct(serviceProduct.id)
+        .catchError((_) => null);
+    profile = ServiceWizardService.normalizeProfile(profile);
+
+    final defaultLocation = _defaultServiceLocationForProfile(
+      profile,
+      bikeProfile: _bikeProfileForCurrentTab(),
+      currentLocation: item.location,
+    );
+    final hydratedItem = item.copyWith(
+      wizardProfile: profile,
+      location: defaultLocation,
+    );
+
+    if (!mounted) return;
+
+    final wizardItem = _bridgeServiceItemForWizard(hydratedItem);
+    final wizardDialogConfig =
+        _buildServiceWizardDialogConfig(profile, wizardItem);
+
+    final result = await showServiceWizardDialog(
+      context,
+      productName: serviceProduct.name,
+      productIsService: true,
+      profile: profile,
+      initialAnswers: wizardDialogConfig.initialAnswers,
+      contextSummary: wizardDialogConfig.contextSummary,
+      helperText: wizardDialogConfig.helperText,
+      hiddenQuestionKeys: wizardDialogConfig.hiddenQuestionKeys,
+      questionOverrides: wizardDialogConfig.questionOverrides,
+      diagnosisLinkedQuestionKeys:
+          wizardDialogConfig.diagnosisLinkedQuestionKeys,
+    );
+
+    if (result == null) {
+      if (hydratedItem.location != item.location ||
+          hydratedItem.wizardProfile != item.wizardProfile) {
+        setState(() {
+          serviceItems[itemIndex] = hydratedItem;
+        });
+      }
+      return;
+    }
+
+    final normalizedAnswers = ServiceWizardService.normalizeAnswersForProfile(
+      profile,
+      result.answers,
+    );
+    final normalizedLocation = _normalizedLocationForServiceProfile(
+      profile,
+      _resolveWizardLocation(hydratedItem.location, normalizedAnswers),
+    );
+    final persistedSummary = _buildPersistedWizardSummary(
+      profile,
+      normalizedAnswers,
+      result.summary,
+      hiddenQuestionKeys: wizardDialogConfig.hiddenQuestionKeys,
+    );
+    final updatedItem = hydratedItem.copyWith(
+      notes: persistedSummary,
+      wizardAnswers: normalizedAnswers.isNotEmpty ? normalizedAnswers : null,
+      wizardProfile: profile,
+      location: normalizedLocation,
+    );
+    final updatedBridgeItem = _bridgeServiceItemForWizard(updatedItem);
+    final promotedBikeProfile = _buildPromotedBikeProfileFromServiceWizard(
+      serviceProfile: profile,
+      answers: normalizedAnswers,
+    );
+    final syncFeedback = _serviceWizardSyncFeedback(
+      profile,
+      updatedBridgeItem,
+      normalizedAnswers,
+    );
+    final promotionFeedback = promotedBikeProfile == null
+        ? null
+        : _bikeProfilePromotionFeedback(profile);
+
+    setState(() {
+      serviceItems[itemIndex] = updatedItem;
+      _applyWizardAnswersToDiagnosis(
+        item: updatedBridgeItem,
+        profile: profile,
+        answers: normalizedAnswers,
+      );
+      if (promotedBikeProfile != null) {
+        _pendingBikeProfileOverrides[promotedBikeProfile.bikeId] =
+            promotedBikeProfile;
+        if (_selectedBike?.id == promotedBikeProfile.bikeId) {
+          _selectedBikeProfile = promotedBikeProfile;
+        }
+      }
+    });
+
+    final feedbackParts = <String>[
+      if (syncFeedback != null) syncFeedback,
+      if (promotionFeedback != null) promotionFeedback,
+    ];
+
+    if (feedbackParts.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(feedbackParts.join(' '))),
+      );
+    }
+  }
+
   Widget _buildLaborSection() {
     final theme = Theme.of(context);
+    final serviceItems = _currentServiceItems;
 
     // If on mobile, show mobile layout (cards)
     // We can detect mobile by screen width context
@@ -11224,8 +12036,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          if (_serviceItems.isNotEmpty)
-            ..._serviceItems.asMap().entries.map((entry) =>
+          if (serviceItems.isNotEmpty)
+            ...serviceItems.asMap().entries.map((entry) =>
                 _buildMobileServiceRow(
                     theme, entry.key + 1, entry.value, entry.key)),
           const SizedBox(height: 8),
@@ -11423,8 +12235,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           Column(
                             children: [
                               // Existing labor items
-                              if (_serviceItems.isNotEmpty)
-                                ..._serviceItems.asMap().entries.map((entry) =>
+                              if (serviceItems.isNotEmpty)
+                                ...serviceItems.asMap().entries.map((entry) =>
                                     _buildServiceRow(theme, entry.key + 1,
                                         entry.value, entry.key)),
 
@@ -11432,7 +12244,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                               Container(
                                 decoration: BoxDecoration(
                                   border: Border(
-                                    top: _serviceItems.isNotEmpty
+                                    top: serviceItems.isNotEmpty
                                         ? BorderSide(
                                             color: theme.colorScheme.outline
                                                 .withValues(alpha: 0.2))
@@ -11500,30 +12312,33 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   Widget _buildServiceRow(
       ThemeData theme, int index, _JobServiceItem item, int itemIndex) {
+    final badgeItem = _bridgeServiceItemForWizard(item);
+    final serviceItems = _currentServiceItems;
+
     return LineRowWrapper(
       key: ValueKey('service_${item.hashCode}_$index'),
       index: index,
       canMoveUp: itemIndex > 0,
-      canMoveDown: itemIndex < _serviceItems.length - 1,
+      canMoveDown: itemIndex < serviceItems.length - 1,
       onMoveUp: () {
         if (itemIndex > 0) {
           setState(() {
-            final temp = _serviceItems[itemIndex];
-            _serviceItems[itemIndex] = _serviceItems[itemIndex - 1];
-            _serviceItems[itemIndex - 1] = temp;
+            final temp = serviceItems[itemIndex];
+            serviceItems[itemIndex] = serviceItems[itemIndex - 1];
+            serviceItems[itemIndex - 1] = temp;
           });
         }
       },
       onMoveDown: () {
-        if (itemIndex < _serviceItems.length - 1) {
+        if (itemIndex < serviceItems.length - 1) {
           setState(() {
-            final temp = _serviceItems[itemIndex];
-            _serviceItems[itemIndex] = _serviceItems[itemIndex + 1];
-            _serviceItems[itemIndex + 1] = temp;
+            final temp = serviceItems[itemIndex];
+            serviceItems[itemIndex] = serviceItems[itemIndex + 1];
+            serviceItems[itemIndex + 1] = temp;
           });
         }
       },
-      onRemove: () => setState(() => _serviceItems.removeAt(itemIndex)),
+      onRemove: () => setState(() => serviceItems.removeAt(itemIndex)),
       canEdit: true,
       indexColumnWidth: _colIndexWidth,
       actionsColumnWidth: _colActionsWidth,
@@ -11577,6 +12392,40 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (item.serviceProduct != null) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _ServiceLineBadge(item: badgeItem),
+                          TextButton.icon(
+                            onPressed: () =>
+                                _editServiceWizardForServiceItem(itemIndex),
+                            icon: Icon(
+                              item.hasWizardAnswers
+                                  ? Icons.edit_outlined
+                                  : Icons.tune,
+                              size: 16,
+                            ),
+                            label: Text(
+                              item.hasWizardAnswers
+                                  ? 'Editar servicio'
+                                  : 'Configurar',
+                            ),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Text(
                       item.displayName,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -11598,6 +12447,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             fontStyle: FontStyle.italic,
                           ),
                           maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    if (item.notes != null && item.notes!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          item.notes!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 11,
+                            height: 1.35,
+                          ),
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -11646,12 +12509,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             onChanged: (value) {
               final newPrice = double.tryParse(value) ?? 0;
               setState(() {
-                _serviceItems[itemIndex] = _JobServiceItem(
-                  serviceProduct: item.serviceProduct,
-                  description: item.description,
-                  hours: item.hours,
+                serviceItems[itemIndex] = item.copyWith(
                   hourlyRate: newPrice,
-                  date: item.date,
                 );
               });
             },
@@ -12488,6 +13347,10 @@ class _JobServiceItem {
   final double hours;
   final double hourlyRate;
   final DateTime date;
+  final String? notes;
+  final BikeMemoryLocation location;
+  final Map<String, dynamic>? wizardAnswers;
+  final ServiceWizardProfile? wizardProfile;
 
   _JobServiceItem({
     this.serviceProduct,
@@ -12495,9 +13358,15 @@ class _JobServiceItem {
     required this.hours,
     required this.hourlyRate,
     required this.date,
+    this.notes,
+    this.location = BikeMemoryLocation.none,
+    this.wizardAnswers,
+    this.wizardProfile,
   });
 
   String get displayName => serviceProduct?.name ?? description;
+  bool get hasWizardAnswers =>
+      wizardAnswers != null && wizardAnswers!.isNotEmpty;
 
   bool get hasCustomDescription =>
       serviceProduct != null &&
@@ -12505,6 +13374,31 @@ class _JobServiceItem {
       description != serviceProduct!.name;
 
   double get total => hours * hourlyRate;
+
+  _JobServiceItem copyWith({
+    Product? serviceProduct,
+    String? description,
+    double? hours,
+    double? hourlyRate,
+    DateTime? date,
+    String? notes,
+    BikeMemoryLocation? location,
+    Map<String, dynamic>? wizardAnswers,
+    ServiceWizardProfile? wizardProfile,
+    bool clearWizard = false,
+  }) {
+    return _JobServiceItem(
+      serviceProduct: serviceProduct ?? this.serviceProduct,
+      description: description ?? this.description,
+      hours: hours ?? this.hours,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      date: date ?? this.date,
+      notes: notes ?? this.notes,
+      location: location ?? this.location,
+      wizardAnswers: clearWizard ? null : (wizardAnswers ?? this.wizardAnswers),
+      wizardProfile: clearWizard ? null : (wizardProfile ?? this.wizardProfile),
+    );
+  }
 }
 
 // Modern part item dialog with ProductAutocompleteField

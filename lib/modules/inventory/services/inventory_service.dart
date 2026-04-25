@@ -246,52 +246,14 @@ class InventoryService extends ChangeNotifier {
       List<Map<String, dynamic>> data;
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
-        // 1. Fetch all products (leveraging existing pagination/caching)
-        data = await _db.select('products', fetchAll: true);
-
-        // 2. Client-side fuzzy search for better flexibility
-        // Use normalization and stemming to handle plurals and accents
-        final rawSearchTerms =
-            searchTerm.toLowerCase().trim().split(RegExp(r'\s+'));
-
-        final searchTerms = rawSearchTerms
-            .map((t) => _stemSearchTerm(_normalizeText(t)))
-            .toList();
-
-        List<Map<String, dynamic>> filteredData = [];
-
-        for (final item in data) {
-          final name = _normalizeText(item['name'] as String? ?? '');
-          final sku = _normalizeText(item['sku'] as String? ?? '');
-          final brand = _normalizeText(item['brand'] as String? ?? '');
-          final category =
-              _normalizeText(item['category_name'] as String? ?? '');
-          final model = _normalizeText(item['model'] as String? ?? '');
-          final tags = _normalizeText((item['tags'] as List?)?.join(' ') ?? '');
-
-          final searchableText = '$name $sku $brand $category $model $tags';
-
-          // Check if ALL keywords exist in the searchable text.
-          // Numeric tokens use word-boundary matching to avoid "29" matching "295".
-          bool matchesAll = true;
-          for (final term in searchTerms) {
-            if (RegExp(r'^\d+$').hasMatch(term)) {
-              if (!RegExp('(?:^|\\s|[^0-9])$term(?:\$|\\s|[^0-9])')
-                  .hasMatch(searchableText)) {
-                matchesAll = false;
-                break;
-              }
-            } else if (!searchableText.contains(term)) {
-              matchesAll = false;
-              break;
-            }
-          }
-
-          if (matchesAll) {
-            filteredData.add(item);
-          }
+        var products = await searchProductPreviews(searchTerm, limit: 200);
+        if (categoryId != null) {
+          products = products.where((p) => p.categoryId == categoryId).toList();
         }
-        data = filteredData;
+        if (lowStockOnly == true) {
+          products = products.where((p) => p.isLowStock).toList();
+        }
+        return products..sort((a, b) => a.name.compareTo(b.name));
       } else {
         // Select with JOIN to get category name - fetch ALL products with pagination
         data = await _db.select('products', fetchAll: true);
@@ -330,6 +292,59 @@ class InventoryService extends ChangeNotifier {
       }
       rethrow;
     }
+  }
+
+  Future<List<Product>> searchProductPreviews(
+    String searchTerm, {
+    int limit = 50,
+  }) async {
+    final trimmed = searchTerm.trim();
+    if (trimmed.isEmpty) {
+      final products = await getProductsForList();
+      return products.take(limit).toList(growable: false);
+    }
+
+    final searchTerms = _searchTermsFor(trimmed);
+    if (searchTerms.isEmpty) return const [];
+
+    final cachedSource = _isCacheValid(_productsCacheTime)
+        ? _cachedProducts
+        : _isCacheValid(_listProductsCacheTime)
+            ? _cachedListProducts
+            : null;
+    if (cachedSource != null && cachedSource.isNotEmpty) {
+      return _filterProductsByTerms(cachedSource, searchTerms, limit);
+    }
+
+    try {
+      final rows = await _db.searchRecordsMultiToken(
+        'products',
+        const [
+          'name',
+          'sku',
+          'brand',
+          'model',
+          'supplier_code',
+          'barcode',
+          'category_name',
+        ],
+        searchTerms,
+        limit: limit,
+        selectColumns: Product.listPreviewSelect,
+      );
+
+      final products = rows.map((json) => Product.fromJson(json)).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      if (products.isNotEmpty) return products;
+    } catch (e) {
+      if (!kReleaseMode) {
+        debugPrint('⚠️ [InventoryService] Product preview search failed: $e');
+      }
+    }
+
+    // Accent-insensitive fallback: still preview-width, but local filtered.
+    final products = await getProductsForList();
+    return _filterProductsByTerms(products, searchTerms, limit);
   }
 
   Future<List<Product>> getProductsForList({
@@ -1172,6 +1187,50 @@ class InventoryService extends ChangeNotifier {
     normalized = normalized.replaceAll(RegExp(r'[ç]'), 'c');
 
     return normalized;
+  }
+
+  List<String> _searchTermsFor(String searchTerm) {
+    return searchTerm
+        .toLowerCase()
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((term) => term.isNotEmpty)
+        .map((term) => _stemSearchTerm(_normalizeText(term)))
+        .where((term) => term.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  List<Product> _filterProductsByTerms(
+    Iterable<Product> products,
+    List<String> searchTerms,
+    int limit,
+  ) {
+    final filtered = products.where((product) {
+      final searchableText = _normalizeText([
+        product.name,
+        product.sku,
+        product.brand ?? '',
+        product.model ?? '',
+        product.barcode ?? '',
+        product.categoryName ?? '',
+        product.supplierCode ?? '',
+        product.tags.join(' '),
+      ].join(' '));
+
+      for (final term in searchTerms) {
+        if (RegExp(r'^\d+$').hasMatch(term)) {
+          final pattern =
+              RegExp('(?:^|\\s|[^0-9])${RegExp.escape(term)}(?:\$|\\s|[^0-9])');
+          if (!pattern.hasMatch(searchableText)) return false;
+        } else if (!searchableText.contains(term)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return filtered.take(limit).toList(growable: false);
   }
 
   /// Naive Spanish stemming for search queries

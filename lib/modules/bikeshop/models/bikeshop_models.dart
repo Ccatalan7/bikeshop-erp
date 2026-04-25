@@ -3076,18 +3076,24 @@ class MechanicJobDiagnosisSheet {
   final DrivetrainDiagnosisSheet drivetrain;
   final BrakeDiagnosisSheet frontBrake;
   final BrakeDiagnosisSheet rearBrake;
+  final WheelDiagnosisSheet frontWheel;
+  final WheelDiagnosisSheet rearWheel;
 
   const MechanicJobDiagnosisSheet({
     this.templateKey = 'basic_workshop_v1',
     this.drivetrain = const DrivetrainDiagnosisSheet(),
     this.frontBrake = const BrakeDiagnosisSheet(),
     this.rearBrake = const BrakeDiagnosisSheet(),
+    this.frontWheel = const WheelDiagnosisSheet(),
+    this.rearWheel = const WheelDiagnosisSheet(),
   });
 
   bool get hasMeaningfulData =>
       drivetrain.hasMeaningfulData ||
       frontBrake.hasMeaningfulData ||
-      rearBrake.hasMeaningfulData;
+      rearBrake.hasMeaningfulData ||
+      frontWheel.hasMeaningfulData ||
+      rearWheel.hasMeaningfulData;
 
   factory MechanicJobDiagnosisSheet.fromJson(Map<String, dynamic> json) {
     return MechanicJobDiagnosisSheet(
@@ -3107,6 +3113,16 @@ class MechanicJobDiagnosisSheet {
             ? Map<String, dynamic>.from(json['rear_brake'] as Map)
             : const {},
       ),
+      frontWheel: WheelDiagnosisSheet.fromJson(
+        json['front_wheel'] is Map
+            ? Map<String, dynamic>.from(json['front_wheel'] as Map)
+            : const {},
+      ),
+      rearWheel: WheelDiagnosisSheet.fromJson(
+        json['rear_wheel'] is Map
+            ? Map<String, dynamic>.from(json['rear_wheel'] as Map)
+            : const {},
+      ),
     );
   }
 
@@ -3116,6 +3132,8 @@ class MechanicJobDiagnosisSheet {
       'drivetrain': drivetrain.toJson(),
       'front_brake': frontBrake.toJson(),
       'rear_brake': rearBrake.toJson(),
+      'front_wheel': frontWheel.toJson(),
+      'rear_wheel': rearWheel.toJson(),
     };
   }
 
@@ -3124,12 +3142,16 @@ class MechanicJobDiagnosisSheet {
     DrivetrainDiagnosisSheet? drivetrain,
     BrakeDiagnosisSheet? frontBrake,
     BrakeDiagnosisSheet? rearBrake,
+    WheelDiagnosisSheet? frontWheel,
+    WheelDiagnosisSheet? rearWheel,
   }) {
     return MechanicJobDiagnosisSheet(
       templateKey: templateKey ?? this.templateKey,
       drivetrain: drivetrain ?? this.drivetrain,
       frontBrake: frontBrake ?? this.frontBrake,
       rearBrake: rearBrake ?? this.rearBrake,
+      frontWheel: frontWheel ?? this.frontWheel,
+      rearWheel: rearWheel ?? this.rearWheel,
     );
   }
 }
@@ -3359,6 +3381,93 @@ class BrakeDiagnosisSheet {
           : (rotorContaminationStatus ?? this.rotorContaminationStatus),
       symptomKeys:
           clearSymptomKeys ? const [] : (symptomKeys ?? this.symptomKeys),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
+}
+
+class WheelDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final String? tireCondition;
+  final String? rimCondition;
+  final String? spokeCondition;
+  final String? hubBearingCondition;
+  final String? tubelessStatus;
+  final String? notes;
+
+  const WheelDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.tireCondition,
+    this.rimCondition,
+    this.spokeCondition,
+    this.hubBearingCondition,
+    this.tubelessStatus,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      (tireCondition != null && tireCondition!.isNotEmpty) ||
+      (rimCondition != null && rimCondition!.isNotEmpty) ||
+      (spokeCondition != null && spokeCondition!.isNotEmpty) ||
+      (hubBearingCondition != null && hubBearingCondition!.isNotEmpty) ||
+      (tubelessStatus != null && tubelessStatus!.isNotEmpty) ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory WheelDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return WheelDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      tireCondition: json['tire_condition']?.toString(),
+      rimCondition: json['rim_condition']?.toString(),
+      spokeCondition: json['spoke_condition']?.toString(),
+      hubBearingCondition: json['hub_bearing_condition']?.toString(),
+      tubelessStatus: json['tubeless_status']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'tire_condition': tireCondition,
+      'rim_condition': rimCondition,
+      'spoke_condition': spokeCondition,
+      'hub_bearing_condition': hubBearingCondition,
+      'tubeless_status': tubelessStatus,
+      'notes': notes,
+    };
+  }
+
+  WheelDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    String? tireCondition,
+    bool clearTireCondition = false,
+    String? rimCondition,
+    bool clearRimCondition = false,
+    String? spokeCondition,
+    bool clearSpokeCondition = false,
+    String? hubBearingCondition,
+    bool clearHubBearingCondition = false,
+    String? tubelessStatus,
+    bool clearTubelessStatus = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return WheelDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      tireCondition:
+          clearTireCondition ? null : (tireCondition ?? this.tireCondition),
+      rimCondition:
+          clearRimCondition ? null : (rimCondition ?? this.rimCondition),
+      spokeCondition:
+          clearSpokeCondition ? null : (spokeCondition ?? this.spokeCondition),
+      hubBearingCondition: clearHubBearingCondition
+          ? null
+          : (hubBearingCondition ?? this.hubBearingCondition),
+      tubelessStatus:
+          clearTubelessStatus ? null : (tubelessStatus ?? this.tubelessStatus),
       notes: clearNotes ? null : (notes ?? this.notes),
     );
   }

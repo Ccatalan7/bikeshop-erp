@@ -88,9 +88,50 @@ Reduce Supabase egress and startup latency by replacing broad list reads with pr
   - lib/modules/sales/widgets/sales_invoice_editor.dart
   - lib/modules/bikeshop/services/bikeshop_service.dart
 
+### 11) Public storefront product/catalog egress hardening
+- Added tenant-scoped public product RPCs for paged product lists, fuzzy search, featured products, and category counts.
+- Public storefront product RPCs return storefront-safe product columns and zero out purchase cost.
+- Product catalog now loads one server-side page at a time instead of downloading the full public catalog and filtering locally.
+- Category counts now come from a compact count RPC instead of requiring a full product list.
+- Product detail, SKU lookup, related products, and featured products now use public storefront RPC paths.
+- Public storefront preview projection no longer includes product cost; `Product.fromJson` tolerates missing cost for public payloads.
+- Existing journal header totals for sales invoices were backfilled from balanced journal lines, and a trigger now keeps future journal header totals aligned with line totals.
+- Public product policies were tightened to require active + published + website-visible products.
+- Important production-safety note: old direct public table access was not fully removed yet, because the currently deployed frontend may still depend on it. After the updated frontend is deployed, the next DB hardening step should drop the compatibility public products table policies and rely on the storefront RPCs.
+- Files touched:
+  - lib/public_store/pages/product_catalog_page.dart
+  - lib/public_store/services/public_inventory_service.dart
+  - lib/public_store/pages/public_home_page_old.dart
+  - lib/modules/website/widgets/canvas_block.dart
+  - lib/modules/website/services/website_service.dart
+  - lib/shared/models/product.dart
+  - supabase/migrations/20260424114500_harden_public_products_and_accounting_refs.sql
+  - supabase/migrations/20260424115500_backfill_sales_invoice_journal_totals.sql
+  - supabase/migrations/20260424120500_add_public_store_product_rpcs.sql
+
+### 12) Label printer and AI product search egress follow-through
+- Added a bounded product preview search path to the module inventory service.
+- Replaced the old `getProducts(searchTerm: ...)` hot paths that fetched all product rows before filtering.
+- Label printer product search now uses the bounded preview search and debounces typing.
+- AI stock keyword lookup now uses bounded preview search for each keyword query.
+- Public website product blocks now consistently require published products in public render mode, while preserving editor preview behavior for selected draft items.
+- Product block parsing now preserves `product_type` and `is_published` from the product payload.
+- Files touched:
+  - lib/modules/inventory/services/inventory_service.dart
+  - lib/modules/label_printer/label_printer_page.dart
+  - lib/modules/ai_assistant/services/ai_service.dart
+  - lib/modules/website/widgets/website_block_renderer.dart
+  - lib/public_store/widgets/editable_website.dart
+
 ## Current Runtime/Analyzer Status
+- 2026-04-24 update:
+  - Focused analyze passed for the modified storefront/product/website files.
+  - Focused analyze also passed after the label printer + AI product search follow-through.
+  - Full `/Users/Claudio/flutter/bin/flutter analyze` runs now, but still reports the repo's existing 1009 info/warning diagnostics outside this slice.
+  - Live DB smoke checks passed: public product RPC returns paged rows with `cost = 0`, category counts match the public in-stock total, and journal header/line total mismatches are now 0.
 - Flutter wrapper note:
-  - In the current sandbox, `/Users/Claudio/flutter/bin/flutter analyze` cannot complete because the SDK wrapper tries to write `/Users/Claudio/flutter/bin/cache/engine.stamp` or `lockfile`.
+  - Earlier runs in the sandbox could not complete because the SDK wrapper tried to write `/Users/Claudio/flutter/bin/cache/engine.stamp` or `lockfile`.
+  - As of 2026-04-24, `/Users/Claudio/flutter/bin/flutter analyze` does run in this workspace, but the full repo still has many pre-existing diagnostics.
   - Direct Dart fallback used:
     - `HOME=$PWD/.codex-home DART_SUPPRESS_ANALYTICS=true /Users/Claudio/flutter/bin/cache/dart-sdk/bin/dart analyze ...`
 - Latest focused direct-Dart analyze results:

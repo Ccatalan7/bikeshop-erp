@@ -93,6 +93,7 @@ class _EditableWebsiteState extends State<EditableWebsite> {
           .eq('tenant_id', tenantId)
           .inFilter('id', productIds)
           .eq('show_on_website', true)
+          .eq('is_published', true)
           .eq('is_active', true);
 
       return (response as List).map((row) {

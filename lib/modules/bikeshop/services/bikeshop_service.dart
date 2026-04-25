@@ -869,6 +869,26 @@ class BikeshopService extends ChangeNotifier {
       location: BikeMemoryLocation.rear,
       section: diagnosisSheet.rearBrake,
     );
+    await _syncWheelDiagnosisSection(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: 'front_wheel',
+      title: 'Diagnóstico rueda delantera',
+      location: BikeMemoryLocation.front,
+      section: diagnosisSheet.frontWheel,
+    );
+    await _syncWheelDiagnosisSection(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: 'rear_wheel',
+      title: 'Diagnóstico rueda trasera',
+      location: BikeMemoryLocation.rear,
+      section: diagnosisSheet.rearWheel,
+    );
   }
 
   Future<void> _syncDrivetrainDiagnosisSection({
@@ -1298,7 +1318,201 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  Future<void> _syncWheelDiagnosisSection({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
+    required String systemKey,
+    required String title,
+    required BikeMemoryLocation location,
+    required WheelDiagnosisSheet section,
+  }) async {
+    if (!section.hasMeaningfulData) return;
+
+    final noteParts = <String>[];
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Cubierta',
+      _diagnosisConditionLabel(section.tireCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Aro',
+      _diagnosisConditionLabel(section.rimCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Rayos',
+      _diagnosisConditionLabel(section.spokeCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Maza',
+      _diagnosisConditionLabel(section.hubBearingCondition),
+    );
+    _appendDiagnosisSummaryPart(
+      noteParts,
+      'Tubeless',
+      _diagnosisConditionLabel(section.tubelessStatus),
+    );
+    if (section.notes != null && section.notes!.trim().isNotEmpty) {
+      noteParts.add(section.notes!.trim());
+    }
+    final summary = noteParts.join(' | ');
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        location: location,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: 'diagnosis_sheet_$systemKey',
+        title: title,
+        summary: summary.isEmpty ? null : summary,
+        statusValue: section.overallStatus.dbValue,
+        severity: _severityFromSystemStatus(section.overallStatus),
+        observedAt: observedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+          'section': systemKey,
+          ...section.toJson(),
+        },
+      ),
+    );
+
+    await upsertBikeSystemState(
+      BikeSystemState(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        location: location,
+        overallStatus: section.overallStatus,
+        statusNote: summary.isEmpty ? null : _truncateForStateNote(summary),
+        lastReviewedAt: observedAt,
+        payload: {
+          'source': 'diagnosis_sheet',
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
+
+    await _createWheelConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'tire',
+      observationKey: 'tire_condition',
+      title: 'Estado de cubierta',
+      statusValue: section.tireCondition,
+    );
+
+    await _createWheelConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'rim',
+      observationKey: 'rim_condition',
+      title: 'Estado del aro',
+      statusValue: section.rimCondition,
+    );
+
+    await _createWheelConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'spokes',
+      observationKey: 'spoke_condition',
+      title: 'Estado de rayos',
+      statusValue: section.spokeCondition,
+    );
+
+    await _createWheelConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'hub',
+      observationKey: 'hub_bearing_condition',
+      title: 'Estado de rodamientos de maza',
+      statusValue: section.hubBearingCondition,
+    );
+
+    await _createWheelConditionObservation(
+      job: job,
+      jobBike: jobBike,
+      diagnosisSheet: diagnosisSheet,
+      observedAt: observedAt,
+      systemKey: systemKey,
+      location: location,
+      componentSlotKey: 'tubeless_setup',
+      observationKey: 'tubeless_status',
+      title: 'Estado tubeless',
+      statusValue: section.tubelessStatus,
+    );
+  }
+
   Future<void> _createBrakeConditionObservation({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required MechanicJobDiagnosisSheet diagnosisSheet,
+    required DateTime observedAt,
+    required String systemKey,
+    required BikeMemoryLocation location,
+    required String componentSlotKey,
+    required String observationKey,
+    required String title,
+    required String? statusValue,
+  }) async {
+    if (statusValue == null || statusValue.trim().isEmpty) return;
+
+    await createBikeObservation(
+      BikeObservation(
+        tenantId: job.tenantId,
+        bikeId: jobBike.bikeId,
+        jobId: job.id,
+        jobBikeId: jobBike.id,
+        systemKey: systemKey,
+        componentSlotKey: componentSlotKey,
+        location: location,
+        observationKind: BikeObservationKind.conditionAssessment,
+        observationKey: observationKey,
+        title: title,
+        statusValue: statusValue,
+        summary: _diagnosisConditionLabel(statusValue),
+        severity: _severityFromDiagnosisCondition(statusValue),
+        observedAt: observedAt,
+        source: 'job_diagnosis_sync',
+        sourceField: 'diagnosis_sheet',
+        payload: {
+          'job_number': job.jobNumber,
+          'template_key': diagnosisSheet.templateKey,
+        },
+      ),
+    );
+  }
+
+  Future<void> _createWheelConditionObservation({
     required MechanicJob job,
     required MechanicJobBike jobBike,
     required MechanicJobDiagnosisSheet diagnosisSheet,
@@ -1404,6 +1618,9 @@ class BikeshopService extends ChangeNotifier {
       case 'worn_out':
       case 'failing':
       case 'broken':
+      case 'bent':
+      case 'damaged':
+      case 'cracked':
         return BikeMemorySeverity.critical;
       case 'dry':
       case 'dirty':
@@ -1412,6 +1629,13 @@ class BikeshopService extends ChangeNotifier {
       case 'misaligned':
       case 'slow':
       case 'sticky':
+      case 'loose':
+      case 'uneven':
+      case 'rough':
+      case 'play':
+      case 'service':
+      case 'leaking':
+      case 'dry_sealant':
         return BikeMemorySeverity.warning;
       default:
         return null;
@@ -1471,6 +1695,28 @@ class BikeshopService extends ChangeNotifier {
         return 'Pegado';
       case 'broken':
         return 'Roto';
+      case 'bent':
+        return 'Golpeado / desviado';
+      case 'damaged':
+        return 'Dañado';
+      case 'cracked':
+        return 'Fisurado';
+      case 'loose':
+        return 'Suelto';
+      case 'uneven':
+        return 'Disparejo';
+      case 'rough':
+        return 'Áspero';
+      case 'play':
+        return 'Con juego';
+      case 'service':
+        return 'Requiere servicio';
+      case 'leaking':
+        return 'Pierde aire';
+      case 'dry_sealant':
+        return 'Líquido seco';
+      case 'not_applicable':
+        return 'No aplica';
       default:
         return null;
     }
@@ -3574,6 +3820,7 @@ class BikeshopService extends ChangeNotifier {
           quantity: hours,
           unitPrice: hourlyRate,
           totalPrice: package.baseLaborCost,
+          itemType: 'service',
           notes: '${package.description} - ${hours}h labor',
         );
 

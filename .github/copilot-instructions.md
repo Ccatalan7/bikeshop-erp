@@ -261,7 +261,7 @@ Search first in the schema and existing workshop files before adding anything ne
 
 Preferred rule: improve the backbone deliberately, do not build a second backbone beside it.
 
-## Fresh-Agent Continuity Snapshot (2026-04-16)
+## Fresh-Agent Continuity Snapshot (2026-04-25)
 
 For a fresh chat, the current code-side state is:
 
@@ -270,7 +270,7 @@ For a fresh chat, the current code-side state is:
 - `front_wheel` and `rear_wheel` are now the primary interactive wheel units; legacy aggregate `wheels` survives only as a family/history compatibility alias and should not keep driving new UI or targeting decisions.
 - `bottom_bracket` is now a dedicated shared-controller system so pedalier bearings are not buried inside drivetrain copy.
 - `cockpit` now explicitly covers steering/headset semantics even though that system still lacks a dedicated structured editor.
-- only `drivetrain`, `front_brake`, and `rear_brake` currently have structured editable diagnosis inspectors in `mechanic_job_form_page.dart`; `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` intentionally render explicit unavailable-system placeholders instead of a second reduced controller.
+- `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, and `rear_wheel` currently have structured editable diagnosis inspectors in `mechanic_job_form_page.dart`; `cockpit`, `suspension`, and `bottom_bracket` intentionally render explicit unavailable-system placeholders instead of a second reduced controller.
 - `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses a bike-first split shell like the intake wizard: keep the bike persistently visible in the left preview pane, and do not regress to the old top-cover / tabs-below shell.
 - `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses the same shared controller both in the history workbench and in the technical specs tab's upstream kernel read model, with those maps anchored in the left preview pane; do not fork a second bike map for record visibility.
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now uses the same shared controller as the upstream technical-step navigator, with system-by-system profile panels and explicit placeholder handling for unmodeled intake systems such as `cockpit`.
@@ -280,6 +280,7 @@ For a fresh chat, the current code-side state is:
 - `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now consumes that target metadata when hydrating service rows so `target_position_mode = none` workflows like drivetrain, headset/cockpit, and bottom-bracket stay pinned to `location = none` instead of exposing fake front/rear row targeting in the job editor.
 - first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, but `derailleurs` prefill must still stay conservative until `drivetrainConfig` coverage improves.
 - drivetrain diagnosis-linked wizard answers `chain_wear` and `cable_condition` now round-trip with the structured diagnosis sheet: `chain_wear` prefills from and writes back to `DrivetrainDiagnosisSheet.chainWearPercent`, while `cable_condition` is stored explicitly as `DrivetrainDiagnosisSheet.cableCondition` inside the shifter slice instead of being left in guided-note text.
+- front/rear wheel diagnosis now stores visit-specific tire, rim, spoke, hub-bearing, and tubeless state under `MechanicJobDiagnosisSheet.frontWheel` / `rearWheel` and `mechanic_job_bikes.diagnosis_sheet_data.front_wheel` / `rear_wheel`; these are visit findings, not a replacement for upstream wheel-size, hub-spacing, spoke-hole, or valve truth.
 - live production audit on 2026-04-18 confirmed that some active mapped wizard vocabularies are still semantically weak, especially drivetrain `cable_condition` with `ok` / `frayed` / `replace` and the label `Ya reemplazados`; future work must normalize these through a shared diagnosis-field definition layer instead of proliferating them into more backbone flows.
 - the first shared diagnosis-field definition layer now exists in `lib/modules/bikeshop/config/diagnosis_field_definitions.dart`, and `mechanic_job_form_page.dart` only marks wizard questions as diagnosis-linked when their normalized key, question type, and option set match that registry.
 - drivetrain diagnosis-linked normalization now also lives in `lib/modules/bikeshop/config/drivetrain_canonical_data.dart` plus `lib/modules/bikeshop/services/service_wizard_service.dart`, so `cable_condition` uses anchored present-state labels in the app layer instead of inheriting weak service-history wording from live profile rows.
@@ -309,6 +310,7 @@ For a fresh chat, the current code-side state is:
 - live inspection on 2026-04-20 confirmed that Viñabike production already uses the coarse technical-family bridge through `category_tech_mappings` + `spec_templates`: mapped brake product populations include `Pastillas` (`brake_pad`), `Calipers` (`brake_caliper`), `Manillas` (`brake_lever`), `Herraduras` (`rim_brake`), `Rotores` / `Rotor BMX` (`rotor`), and `Frenos hidráulicos completos` (`hydraulic_disc_brake` via template key).
 - the current brake-first compatibility scorer now consumes that controlled bridge as the coarse fallback before detailed `product_spec_values`, so obvious family-level mismatches no longer depend entirely on ficha coverage; detailed specs still remain the stronger within-family refinement layer.
 - a first live rotor-spec enrichment pass on 2026-04-18 seeded canonical rotor fields on explicit 160/180/203 mm rotor rows in Viñabike production, improving brake-spec coverage but not replacing the need for the coarse technical-family fallback.
+- live validation on 2026-04-25 found no legacy key drift in recent structured diagnosis JSON and no recent persisted `mechanic_job_items.service_configuration_data` blobs to migrate before expanding beyond brakes/drivetrain. Keep validating each new diagnosis slice against live profiles/questions/mappings before promoting wizard answers.
 
 Before continuing this implementation in a fresh chat, also read:
 
@@ -322,10 +324,10 @@ Before continuing this implementation in a fresh chat, also read:
 
 Immediate next queue:
 
-1. Validate the brake prototype against live production service profiles/questions/mappings before expanding it further.
-2. Extend structured diagnosis to remaining shared-controller systems only with a real schema/editor plan; until then, keep explicit unavailable placeholders and do not fork another controller.
-3. Improve upstream `bike_profiles.technical_profile.values` coverage for drivetrain (`drivetrainConfig`, `freehubType`) now that the first drivetrain service mappings are live, with caution around the `derailleurs` multi-select template behavior.
-4. Broaden the now-live brake-first compatibility hints into other suggestion and catalog flows, and extend the same controlled technical-family fallback approach to more families only after the brake layer stays stable in production.
+1. Extend structured diagnosis to remaining shared-controller placeholders (`cockpit`, `suspension`, and `bottom_bracket`) only with a real schema/editor plan; until then, keep explicit unavailable placeholders and do not fork another controller.
+2. Improve upstream `bike_profiles.technical_profile.values` coverage for drivetrain (`drivetrainConfig`, `freehubType`) now that the first drivetrain service mappings are live, with caution around the `derailleurs` multi-select template behavior.
+3. Broaden the now-live compatibility hints into other suggestion and catalog flows, using the same controlled technical-family fallback approach only when live data supports it.
+4. Keep validating each new diagnosis slice against production service profiles/questions/mappings before letting wizard answers promote into diagnosis or bike-profile truth.
 
 ---
 
@@ -378,6 +380,63 @@ supabase functions deploy my-function-name --project-ref xzdvtzdqjeyqxnkqprtf
 supabase functions deploy whatsapp-webhook --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
 ```
 **⚠️ ALWAYS set `--project-ref xzdvtzdqjeyqxnkqprtf` or the command will fail or deploy to the wrong place.**
+
+## 🧪 Local Database Testing (pgTAP) via Supabase CLI (CRITICAL)
+
+Use local pgTAP tests to continuously verify schema, triggers, functions, RLS policies, and rollups without touching production.
+
+Prereqs:
+- Docker must be running (Supabase local stack is Docker-based).
+- Supabase CLI installed (tested with `supabase --version` = `2.90.0`).
+
+### Start / inspect the local Supabase stack
+
+```bash
+# Start local Supabase stack (Postgres + services)
+supabase start
+
+# Print local connection info (includes DB_URL)
+supabase status -o env
+```
+
+### Run pgTAP tests
+
+Tests live in `supabase/tests/*.sql`.
+
+```bash
+# Run ALL tests (local DB)
+supabase test db --local
+
+# Run a focused subset (faster while iterating)
+supabase test db --local supabase/tests/bike_workshop_backbone_smoke.sql
+supabase test db --local supabase/tests/mechanic_job_items_service_configuration_persistence.sql
+supabase test db --local supabase/tests/mechanic_job_items_service_bike_assignment.sql
+```
+
+Notes:
+- Keep every test file self-contained and repeatable: wrap in `begin; ... rollback;` so the DB stays clean.
+- Create required fixtures inside the test file (tenant/customer/bike/product), do not depend on `seed.sql`.
+- Prefer existence tests (`has_table`, `has_column`, `has_trigger`, `has_function`) for schema coverage.
+- Prefer behavior tests (`ok(...)`) for trigger/rollup coverage.
+- Do not use `--linked` by default. Treat linked tests as staging-only and assume they can be destructive.
+
+### What we added (bike workshop baseline coverage)
+
+- `supabase/tests/bike_workshop_backbone_smoke.sql`
+  - existence checks for the workshop backbone tables/columns/triggers and `create_invoice_from_mechanic_job(uuid)`
+- `supabase/tests/mechanic_job_items_service_configuration_persistence.sql`
+  - verifies `mechanic_job_items.service_configuration_data` persists through triggers and rolls into job labor totals
+- `supabase/tests/mechanic_job_items_service_bike_assignment.sql`
+  - verifies bike-assigned service items keep `job_bike_id` and roll up into `mechanic_job_bikes` + `mechanic_jobs`
+
+### Advanced: `core_schema.sql` idempotency smoke-check (fast, catches broken SQL)
+
+After editing `supabase/sql/core_schema.sql`, validate it applies cleanly against an already-running local DB:
+
+```bash
+DB_URL=$(supabase status -o env | sed -n 's/^DB_URL=//p' | tr -d '"')
+psql "$DB_URL" -v ON_ERROR_STOP=1 -c "begin" -f supabase/sql/core_schema.sql -c "rollback"
+```
 
 ## Important Tenant IDs
 
@@ -761,6 +820,53 @@ When modifying a list, catalog, search surface, or frequently opened form, expli
 4. whether cache reuse prevents redundant reloads during navigation
 5. whether the same screen could multiply bandwidth through bots, previews, or repeated open/close flows
 
+### 2026-04-24 implementation baseline
+
+The active roadmap for this work is `EGRESS_OPTIMIZATION_IMPLEMENTATION_PLAN_2026-04-24.md`.
+
+Current performance architecture:
+- Public storefront product access is moving to tenant-scoped RPCs for paged catalog results, search, featured products, related products, and category counts.
+- Public storefront product payloads must be storefront-safe. Anonymous/public flows must not receive real purchase cost; public product RPCs should return `cost = 0` or omit cost entirely.
+- Public product visibility requires `is_active = true`, `is_published = true`, and `show_on_website = true`.
+- Editor and preview flows may intentionally see draft/unpublished products, but those paths must stay separate from public render paths.
+- Product/customer search in hot flows should be bounded, debounced when typing-driven, and based on preview projections.
+- Full detail hydration is allowed only when opening a detail page, editor, dialog, invoice line detail, or workflow that truly needs the full record.
+- Accounting totals should be protected at the database layer when they are derived from journal lines; Flutter should display the result, not become the only place totals are repaired.
+- The debug database/query gauge is part of the optimization workflow. Use it to verify real navigation does not create broad read spikes.
+
+Expected impact:
+- Public catalog and website product blocks should stay fast even with a large product table.
+- POS, invoice, label-printer, AI inventory lookup, and customer/product pickers should avoid startup stalls caused by full-table hydration.
+- Supabase egress should decrease because list/card/search surfaces fetch only the fields they render.
+- Public data exposure risk should decrease because anonymous product access no longer depends on full product rows.
+- Accounting reports should be more reliable when journal entry headers are synchronized from journal lines.
+
+Future implementation rules:
+- Prefer `Product.listPreviewSelect`, `Product.storefrontPreviewSelect`, customer preview projections, compact RPCs, or page-specific preview constants for list/search UI.
+- Prefer server-side paging, filtering, sorting, and counting for any table that can grow.
+- Use targeted hydration by ID for selected records, existing invoice rows, barcode hits, OCR references, or edit forms.
+- Use compact count queries or count RPCs when the UI needs totals.
+- Keep admin-only broad scans explicit, filtered when possible, and out of public/startup/typing flows.
+- When deploying standalone SQL migrations for safety or speed, mirror the final schema/function/trigger/policy state back into `supabase/sql/core_schema.sql`.
+- After the frontend that uses public product RPCs is deployed, remove old compatibility policies that still permit direct public `products` table reads.
+
+Avoid after this implementation:
+- Do not use bare `.select()` on `products`, `customers`, invoices, messages, website tables, or other large/high-frequency tables.
+- Do not make empty search load a full catalog or full customer table.
+- Do not use full product rows for public product cards, related products, featured products, label search, AI keyword lookup, or autocomplete.
+- Do not expose `products.cost` to anonymous storefront users.
+- Do not merge editor-preview data needs with public-render data needs.
+- Do not add or modify accounting/inventory triggers without first inspecting the live database behavior and the corresponding `core_schema.sql` path.
+
+Verification before handoff:
+- Run focused Dart analysis on every touched Dart file.
+- Run `git diff --check`.
+- For database changes, run read-only live smoke checks against the deployed Supabase project before and after the change.
+- For database changes, run local pgTAP tests: `supabase test db --local`.
+- For accounting changes, verify journal entries balance and header totals match line totals.
+- For inventory changes, verify stock columns, movement ledger rows, and adjustment/audit rows stay coherent.
+- For public store changes, verify anonymous product payloads are paged, tenant-scoped, published/active/website-visible, and cost-safe.
+
 ---
 
 # 🚨 TROUBLESHOOTING: MULTI-TENANT ISSUES
@@ -1063,7 +1169,7 @@ alter table my_table add column if not exists new_column text;
 9. 💾 Save and inform user: "Deploy the updated `core_schema.sql` to Supabase"
 10. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
 
-**This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
+**This is the ONLY long-term database schema source of truth. The 3-file split and standalone migration files are for deployment only and must be reconciled back into `core_schema.sql`.**
 
 ---
 
@@ -1429,7 +1535,7 @@ update products
 5. ✅ Navigation integration (add to main menu)
 
 **REMEMBER:**
-- 🚫 No new SQL files
+- 🚫 No standalone SQL files as the long-term source of truth. Standalone migrations are allowed only for targeted deployment and must be mirrored back into `core_schema.sql`.
 - 🚫 No duplicate functions/triggers (search first!)
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first

@@ -4815,12 +4815,17 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         case 'manual':
           // Fetch specific products by ID
           if (_selectedProductIds.isNotEmpty) {
-            final response = await supabase
+            dynamic query = supabase
                 .from('products')
                 .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .inFilter('id', _selectedProductIds)
                 .eq('is_active', true);
+            if (!widget.previewMode) {
+              query =
+                  query.eq('is_published', true).eq('show_on_website', true);
+            }
+            final response = await query;
 
             products = _parseProducts(response);
 
@@ -4837,15 +4842,17 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         case 'category':
           // Fetch products from a specific category
           if (_categoryId != null && _categoryId!.isNotEmpty) {
-            final response = await supabase
+            dynamic query = supabase
                 .from('products')
                 .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .eq('category_id', _categoryId!)
                 .eq('is_active', true)
-                .eq('show_on_website', true)
-                .order('name')
-                .limit(_maxProducts);
+                .eq('show_on_website', true);
+            if (!widget.previewMode) {
+              query = query.eq('is_published', true);
+            }
+            final response = await query.order('name').limit(_maxProducts);
 
             products = _parseProducts(response);
           }
@@ -4853,12 +4860,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
         case 'newest':
           // Fetch newest products
-          final response = await supabase
+          dynamic newestQuery = supabase
               .from('products')
               .select(Product.storefrontPreviewSelect)
               .eq('tenant_id', tenantId)
               .eq('is_active', true)
-              .eq('show_on_website', true)
+              .eq('show_on_website', true);
+          if (!widget.previewMode) {
+            newestQuery = newestQuery.eq('is_published', true);
+          }
+          final response = await newestQuery
               .order('created_at', ascending: false)
               .limit(_maxProducts);
 
@@ -4871,19 +4882,26 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           if (widget.featuredProducts != null &&
               widget.featuredProducts!.isNotEmpty) {
             products = widget.featuredProducts!
-                .where((p) => p.isActive)
+                .where((p) {
+                  if (!p.isActive) return false;
+                  if (!widget.previewMode && !p.isPublished) return false;
+                  return true;
+                })
                 .take(_maxProducts)
                 .toList();
           } else {
             // Fallback: fetch products marked as show_on_website
-            final response = await supabase
+            dynamic fallbackQuery = supabase
                 .from('products')
                 .select(Product.storefrontPreviewSelect)
                 .eq('tenant_id', tenantId)
                 .eq('is_active', true)
-                .eq('show_on_website', true)
-                .order('name')
-                .limit(_maxProducts);
+                .eq('show_on_website', true);
+            if (!widget.previewMode) {
+              fallbackQuery = fallbackQuery.eq('is_published', true);
+            }
+            final response =
+                await fallbackQuery.order('name').limit(_maxProducts);
 
             products = _parseProducts(response);
           }
@@ -4941,7 +4959,13 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
               weight: (map['weight'] as num?)?.toDouble() ?? 0,
               trackStock: map['track_stock'] as bool? ?? true,
               isActive: map['is_active'] as bool? ?? true,
-              productType: ProductType.product,
+              isPublished: map['is_published'] as bool? ??
+                  map['show_on_website'] as bool? ??
+                  true,
+              productType: ProductType.values.firstWhere(
+                (type) => type.name == map['product_type']?.toString(),
+                orElse: () => ProductType.product,
+              ),
               createdAt:
                   DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                       DateTime.now(),

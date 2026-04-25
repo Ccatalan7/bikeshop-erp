@@ -2508,8 +2508,10 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
       try {
         final keywordQueries = _buildKeywordSearchQueries(lookupQuery);
         for (final keywordQuery in keywordQueries) {
-          final products =
-              await inventory.getProducts(searchTerm: keywordQuery);
+          final products = await inventory.searchProductPreviews(
+            keywordQuery,
+            limit: 30,
+          );
           keywordResults.addAll(products.take(30).map((p) => {
                 'id': p.id,
                 'name': p.name,

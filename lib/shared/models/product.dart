@@ -12,7 +12,7 @@ class Product {
 
   // Shared preview payload for storefront/product-card surfaces.
   static const String storefrontPreviewSelect =
-      'id,name,sku,barcode,price,cost,inventory_qty,stock_quantity,'
+      'id,name,sku,barcode,price,inventory_qty,stock_quantity,'
       'image_url,image_url_optimized,image_urls,description,'
       'website_description,category,category_id,category_name,brand_id,brand,'
       'model,manufacturer,manufacturer_sku,gtin,product_type,track_stock,'
@@ -165,7 +165,7 @@ class Product {
       sku: json['sku'] as String,
       barcode: json['barcode'] as String?,
       price: (json['price'] as num).toDouble(),
-      cost: (json['cost'] as num).toDouble(),
+      cost: (json['cost'] as num?)?.toDouble() ?? 0,
       // Be resilient: some code paths historically updated only one column.
       // Treat stock as the max of both.
       stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
