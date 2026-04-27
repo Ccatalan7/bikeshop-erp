@@ -438,16 +438,14 @@ class _ProductSalesData {
   final String sku;
   final String name;
   final bool isService;
-  double quantity;
-  double totalAmount;
+  double quantity = 0;
+  double totalAmount = 0;
 
   _ProductSalesData({
     this.id,
     required this.sku,
     required this.name,
     required this.isService,
-    this.quantity = 0.0,
-    this.totalAmount = 0.0,
   });
 
   double get averagePrice => quantity == 0 ? 0 : totalAmount / quantity;

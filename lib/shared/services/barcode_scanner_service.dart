@@ -26,8 +26,9 @@ class BarcodeScannerService extends ChangeNotifier {
     _isListening = true;
     notifyListeners();
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print('✅ Barcode scanner listening started (Keyboard mode)');
+    }
   }
 
   /// Stop listening for barcode input
