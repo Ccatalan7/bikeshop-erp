@@ -293,7 +293,11 @@ class ServiceWizardService {
             ? rawValue
             : (kBrakeDamageLevelOptions[canonicalValue] ?? rawValue);
       case 'brake_type':
-        return kBrakeTypeDisplayLabels[rawValue] ?? rawValue;
+      case 'brake_type_mech':
+        final canonicalValue = canonicalBrakeTypeValue(rawValue);
+        return canonicalValue == null
+            ? rawValue
+            : (kBrakeTypeDisplayLabels[canonicalValue] ?? rawValue);
       case 'symptom':
         return resolveBrakeSymptomLabel(rawValue) ?? rawValue;
       case 'chain_wear':
@@ -433,6 +437,9 @@ class ServiceWizardService {
         return _optionsFromMap(kBrakePistonCountOptions);
       case 'damage_level':
         return _optionsFromMap(kBrakeDamageLevelOptions);
+      case 'brake_type':
+      case 'brake_type_mech':
+        return _canonicalBrakeTypeQuestionOptions(options);
       case 'symptom':
         final normalizedValues = canonicalizeBrakeSymptomKeys(
           options.map((option) => option.value),
@@ -462,6 +469,30 @@ class ServiceWizardService {
           ),
         )
         .toList(growable: false);
+  }
+
+  static List<ServiceQuestionOption> _canonicalBrakeTypeQuestionOptions(
+    List<ServiceQuestionOption> options,
+  ) {
+    final normalized = <ServiceQuestionOption>[];
+    final seenValues = <String>{};
+
+    for (final option in options) {
+      final canonicalValue = canonicalBrakeTypeValue(option.value);
+      if (canonicalValue == null || seenValues.contains(canonicalValue)) {
+        continue;
+      }
+
+      seenValues.add(canonicalValue);
+      normalized.add(
+        ServiceQuestionOption(
+          value: canonicalValue,
+          label: kBrakeTypeDisplayLabels[canonicalValue] ?? option.label,
+        ),
+      );
+    }
+
+    return normalized.isEmpty ? options : normalized;
   }
 
   static String? _canonicalBrakeQuestionLabel(String key) {

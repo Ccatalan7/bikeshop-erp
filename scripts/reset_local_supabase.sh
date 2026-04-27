@@ -59,9 +59,12 @@ create extension if not exists pgtap with schema public;
 SQL
 }
 
-apply_baseline() {
+apply_canonical_schema() {
   local db_url="$1"
-  psql "$db_url" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/supabase/sql/local_public_baseline.sql"
+
+  # core_schema.sql is the canonical source of truth. Bootstrapping from it keeps
+  # local pgTAP runs aligned with the schema the app and migrations expect.
+  psql "$db_url" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/supabase/sql/core_schema.sql"
 }
 
 run_local_tests() {
@@ -78,7 +81,7 @@ if [[ -z "$DB_URL" ]]; then
 fi
 
 reset_public_schema "$DB_URL"
-apply_baseline "$DB_URL"
+apply_canonical_schema "$DB_URL"
 run_local_tests
 
 echo

@@ -34,6 +34,7 @@ const List<BikeSystemControllerSpec> kBikeSystemControllerSpecs = [
     label: 'Suspensión',
     icon: Icons.waves_outlined,
     diagnosisSubtitle: 'Horquilla, amortiguacion y soporte del sistema.',
+    supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(
     systemKey: 'front_brake',

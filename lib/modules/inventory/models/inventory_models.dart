@@ -275,7 +275,7 @@ class Product {
       'color': color,
       'size': size,
       'material': material,
-      'dimensions': dimensions?.toJson(),
+      'dimensions': dimensions?.toJson() ?? const <String, dynamic>{},
       'price': price,
       'cost': cost,
       'inventory_qty': tracksInventory ? inventoryQty : 0,

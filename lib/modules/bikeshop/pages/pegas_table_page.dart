@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +17,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/hover_zoom_image.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
@@ -43,6 +44,8 @@ class PegasTablePage extends StatefulWidget {
 
 class _PegasTablePageState extends State<PegasTablePage>
     with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  static const String _debugTestCustomerName = 'Test Taller';
+
   // Keep this page alive to preserve state when navigating away
   @override
   bool get wantKeepAlive => true;
@@ -61,6 +64,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   late DatabaseService _databaseService;
   late JobStatusService _jobStatusService;
   late SalesService _salesService;
+  final TenantService _tenantService = TenantService();
 
   List<MechanicJob> _jobs = [];
   List<MechanicJob> _filteredJobs = [];
@@ -75,6 +79,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   String? _draggingJobId; // To track which row is being dragged over
 
   bool _isLoading = true;
+  bool _isCreatingDebugJob = false;
   bool _needsRefresh = false;
   Timer? _reloadDebounceTimer;
   String _searchTerm = '';
@@ -202,6 +207,48 @@ class _PegasTablePageState extends State<PegasTablePage>
     _showOnlyUnpaid = _bikeshopService.pegasShowOnlyUnpaid;
     _searchTerm = _bikeshopService.pegasSearchTerm;
     _viewMode = _bikeshopService.pegasViewMode;
+
+    if (!kDebugMode && _statusFilter == 'test') {
+      _statusFilter = 'active';
+    }
+  }
+
+  List<ButtonSegment<String>> _buildStatusSegments({
+    required bool compact,
+  }) {
+    final textStyle = compact ? null : const TextStyle(fontSize: 13);
+
+    return [
+      ButtonSegment(
+        value: 'active',
+        label: Text('Activos', style: textStyle),
+      ),
+      if (kDebugMode)
+        ButtonSegment(
+          value: 'test',
+          label: Text('Tests', style: textStyle),
+        ),
+      ButtonSegment(
+        value: 'completed',
+        label: Text('Completados', style: textStyle),
+      ),
+      ButtonSegment(
+        value: 'delivered',
+        label: Text('Entregados', style: textStyle),
+      ),
+      ButtonSegment(
+        value: 'warranty_completed',
+        label: Text('Garantías', style: textStyle),
+      ),
+      ButtonSegment(
+        value: 'unpaid',
+        label: Text('Sin Pagar', style: textStyle),
+      ),
+      ButtonSegment(
+        value: 'all',
+        label: Text('Todos', style: textStyle),
+      ),
+    ];
   }
 
   /// Save table state to BikeshopService for persistence
@@ -264,8 +311,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     setState(() {
       _jobs = _bikeshopService.cachedJobs;
-      if (_customerService.hasListCustomersCache) {
-        _customers = _buildCustomerMap(_customerService.cachedListCustomers);
+      if (_customerService.hasCustomersCache) {
+        _customers = _buildCustomerMap(_customerService.cachedCustomers);
       }
       if (_bikeshopService.hasBikesCache) {
         _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
@@ -559,7 +606,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   bool get _canUseFreshInstantCache =>
       _bikeshopService.isJobsCacheFresh &&
-      _customerService.isListCustomersCacheFresh &&
+      _customerService.isCustomersCacheFresh &&
       _bikeshopService.isBikesCacheFresh &&
       _bikeshopService.isJobBikesCacheFresh &&
       _salesService.isInvoicesCacheFresh;
@@ -572,7 +619,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       setState(() {
         _jobs = _bikeshopService.cachedJobs;
         _filteredJobs = _jobs;
-        _customers = _buildCustomerMap(_customerService.cachedListCustomers);
+        _customers = _buildCustomerMap(_customerService.cachedCustomers);
         _bikes = _buildBikeMap(_bikeshopService.cachedBikes);
         _jobBikesMap = _bikeshopService.cachedAllJobBikes;
         _invoices = _buildInvoiceMap(_salesService.cachedInvoices);
@@ -586,7 +633,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final results = await Future.wait([
         _bikeshopService.getJobs(includeCompleted: true),
-        _customerService.getCustomersForList(),
+        _customerService.getCustomers(),
         _bikeshopService.getBikes(),
         _loadInvoices(),
         _bikeshopService.getAllJobBikes(), // Single query for all job bikes
@@ -1782,6 +1829,10 @@ class _PegasTablePageState extends State<PegasTablePage>
               tooltip: 'Actualizar',
             ),
             const SizedBox(width: 8),
+            if (kDebugMode) ...[
+              _buildDebugQuickJobButton(isMobile: isMobile),
+              const SizedBox(width: 8),
+            ],
             if (isMobile)
               FilledButton(
                 onPressed: () {
@@ -1875,6 +1926,453 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
+  Widget _buildDebugQuickJobButton({required bool isMobile}) {
+    final icon = _isCreatingDebugJob
+        ? const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : const Icon(Icons.science_outlined, size: 20);
+
+    if (isMobile) {
+      return IconButton(
+        onPressed: _isCreatingDebugJob ? null : _launchDebugQuickJobBuilder,
+        tooltip: 'Crear caso de prueba',
+        icon: icon,
+      );
+    }
+
+    return FilledButton.tonalIcon(
+      onPressed: _isCreatingDebugJob ? null : _launchDebugQuickJobBuilder,
+      icon: icon,
+      label: const Text('Prueba rápida'),
+    );
+  }
+
+  Future<void> _launchDebugQuickJobBuilder() async {
+    final request = await _showDebugQuickJobDialog();
+    if (request == null || _isCreatingDebugJob) return;
+
+    setState(() => _isCreatingDebugJob = true);
+
+    try {
+      final createdJob = await _createDebugQuickJob(request);
+      if (!mounted) return;
+
+      setState(() => _statusFilter = 'test');
+      _saveTableState();
+      _markNeedsRefresh();
+
+      if (createdJob.id != null && createdJob.id!.isNotEmpty) {
+        await context.push('/taller/pegas/${createdJob.id}');
+      }
+
+      if (!mounted) return;
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo crear el caso de prueba: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingDebugJob = false);
+      }
+    }
+  }
+
+  Future<_DebugTestJobRequest?> _showDebugQuickJobDialog() {
+    var selectedScenario = _debugBikeScenarios.first;
+    var selectedStage = _DebugJobLifecycleStage.diagnostic;
+
+    return showDialog<_DebugTestJobRequest>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final fixtureModeText = selectedScenario.reuseBike
+                ? 'Reutiliza la bicicleta fixture y vuelve a sembrar la ficha tecnica del escenario.'
+                : 'Crea una bicicleta nueva para garantizar un caso sin ficha previa.';
+
+            return AlertDialog(
+              title: const Text('Crear caso de prueba'),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Genera un trabajo debug con cliente, bici y estado inicial listos para probar sin pasar por el flujo normal.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<_DebugBikeScenario>(
+                      initialValue: selectedScenario,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Escenario',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _debugBikeScenarios
+                          .map(
+                            (scenario) => DropdownMenuItem<_DebugBikeScenario>(
+                              value: scenario,
+                              child: Text(scenario.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() => selectedScenario = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<_DebugJobLifecycleStage>(
+                      initialValue: selectedStage,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado inicial del trabajo',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _DebugJobLifecycleStage.values
+                          .map(
+                            (stage) =>
+                                DropdownMenuItem<_DebugJobLifecycleStage>(
+                              value: stage,
+                              child: Text(stage.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() => selectedStage = value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedScenario.description,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            fixtureModeText,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            selectedStage.supportText,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(
+                    dialogContext,
+                    _DebugTestJobRequest(
+                      scenario: selectedScenario,
+                      stage: selectedStage,
+                    ),
+                  ),
+                  icon: const Icon(Icons.bolt, size: 18),
+                  label: const Text('Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<MechanicJob> _createDebugQuickJob(_DebugTestJobRequest request) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo resolver el tenant actual');
+    }
+
+    final customer = await _ensureDebugTestCustomer(tenantId);
+    final customerId = customer.id;
+    if (customerId == null || customerId.isEmpty) {
+      throw Exception('No se pudo crear el cliente de prueba');
+    }
+
+    final bike = await _ensureDebugScenarioBike(
+      tenantId: tenantId,
+      customerId: customerId,
+      scenario: request.scenario,
+    );
+    final bikeId = bike.id;
+    if (bikeId == null || bikeId.isEmpty) {
+      throw Exception('No se pudo preparar la bicicleta de prueba');
+    }
+
+    if (request.scenario.technicalValues.isNotEmpty) {
+      await _ensureDebugBikeProfile(
+        tenantId: tenantId,
+        bike: bike,
+        scenario: request.scenario,
+      );
+    }
+
+    final now = DateTime.now();
+    final timing = _debugTimingForStage(request.stage, now);
+    final debugTag =
+        '[test scenario:${request.scenario.id}][stage:${request.stage.id}]';
+
+    final job = MechanicJob(
+      tenantId: tenantId,
+      customerId: customerId,
+      bikeId: bikeId,
+      jobType: JobType.service,
+      arrivalDate: timing.arrivalDate,
+      diagnosticDeadline: timing.diagnosticDeadline,
+      deliveryDeadline: timing.deliveryDeadline,
+      startedAt: timing.startedAt,
+      completedAt: timing.completedAt,
+      deliveredAt: timing.deliveredAt,
+      status: request.stage.status,
+      priority: JobPriority.normal,
+      clientRequest: request.scenario.clientRequest,
+      diagnosis:
+          request.stage.includesDiagnosis ? request.scenario.diagnosis : null,
+      workPerformed: request.stage.includesWorkPerformed
+          ? request.scenario.workPerformed
+          : null,
+      notes: '$debugTag ${request.scenario.description}',
+    );
+
+    final createdJob = await _bikeshopService.createJob(job);
+    final createdJobId = createdJob.id;
+    if (createdJobId == null || createdJobId.isEmpty) {
+      throw Exception('No se pudo persistir el trabajo de prueba');
+    }
+
+    await _bikeshopService.addBikeToJob(
+      MechanicJobBike(
+        tenantId: tenantId,
+        jobId: createdJobId,
+        bikeId: bikeId,
+        workRequested: request.scenario.clientRequest,
+        diagnosis:
+            request.stage.includesDiagnosis ? request.scenario.diagnosis : null,
+        workPerformed: request.stage.includesWorkPerformed
+            ? request.scenario.workPerformed
+            : null,
+        technicianNotes: '$debugTag ${request.scenario.description}',
+      ),
+    );
+
+    return createdJob;
+  }
+
+  Future<Customer> _ensureDebugTestCustomer(String tenantId) async {
+    final cachedCustomer = _findDebugCustomer(_customers.values);
+    if (cachedCustomer != null) return cachedCustomer;
+
+    final customers = await _customerService.getCustomers(forceRefresh: false);
+    final existingCustomer = _findDebugCustomer(customers);
+    if (existingCustomer != null) return existingCustomer;
+
+    return _customerService.createCustomer(
+      Customer(
+        tenantId: tenantId,
+        name: _debugTestCustomerName,
+        rut: '',
+        email: 'debug+taller@local.test',
+        phone: '+56900000000',
+        address: 'Fixture debug [test data]',
+        region: 'Valparaiso',
+      ),
+    );
+  }
+
+  Customer? _findDebugCustomer(Iterable<Customer> customers) {
+    for (final customer in customers) {
+      if (customer.name.trim().toLowerCase() ==
+          _debugTestCustomerName.toLowerCase()) {
+        return customer;
+      }
+    }
+    return null;
+  }
+
+  Future<Bike> _ensureDebugScenarioBike({
+    required String tenantId,
+    required String customerId,
+    required _DebugBikeScenario scenario,
+  }) async {
+    Bike? existingBike;
+    if (scenario.reuseBike) {
+      existingBike = _findBikeBySerial(_bikes.values, scenario.fixtureSerial);
+      existingBike ??= _findBikeBySerial(
+        await _bikeshopService.getBikes(forceRefresh: false),
+        scenario.fixtureSerial,
+      );
+    }
+
+    final serialNumber = scenario.reuseBike
+        ? scenario.fixtureSerial
+        : '${scenario.fixtureSerial}-${DateTime.now().millisecondsSinceEpoch}';
+    final desiredBike = Bike(
+      tenantId: tenantId,
+      customerId: customerId,
+      brand: scenario.brand,
+      model: scenario.model,
+      year: scenario.year,
+      serialNumber: serialNumber,
+      color: scenario.color,
+      frameSize: scenario.frameSize,
+      wheelSize: scenario.wheelSize,
+      bikeType: scenario.bikeType,
+      notes: '[test fixture:${scenario.id}] ${scenario.description}',
+    );
+
+    if (existingBike != null) {
+      return _bikeshopService.updateBike(
+        existingBike.copyWith(
+          customerId: customerId,
+          brand: desiredBike.brand,
+          model: desiredBike.model,
+          year: desiredBike.year,
+          serialNumber: desiredBike.serialNumber,
+          color: desiredBike.color,
+          frameSize: desiredBike.frameSize,
+          wheelSize: desiredBike.wheelSize,
+          bikeType: desiredBike.bikeType,
+          notes: desiredBike.notes,
+        ),
+      );
+    }
+
+    return _bikeshopService.createBike(desiredBike);
+  }
+
+  Bike? _findBikeBySerial(Iterable<Bike> bikes, String serialNumber) {
+    for (final bike in bikes) {
+      if (bike.serialNumber?.trim().toLowerCase() ==
+          serialNumber.trim().toLowerCase()) {
+        return bike;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _ensureDebugBikeProfile({
+    required String tenantId,
+    required Bike bike,
+    required _DebugBikeScenario scenario,
+  }) async {
+    final bikeId = bike.id;
+    if (bikeId == null || bikeId.isEmpty || scenario.technicalValues.isEmpty) {
+      return;
+    }
+
+    final existingProfile = await _bikeshopService.getBikeProfile(bikeId);
+    final mergedValues = {
+      ...?existingProfile?.technicalValues,
+      ...scenario.technicalValues,
+    };
+    final mergedSources = {
+      ...?existingProfile?.technicalSources,
+      for (final key in scenario.technicalValues.keys) key: 'debug_fixture',
+    };
+    final mergedConfirmed = {
+      ...?existingProfile?.technicalConfirmed,
+      for (final key in scenario.technicalValues.keys) key: true,
+    };
+
+    final profile = (existingProfile ??
+            BikeProfile(
+              tenantId: tenantId,
+              bikeId: bikeId,
+            ))
+        .copyWith(
+      technicalProfile: {
+        'values': mergedValues,
+        'sources': mergedSources,
+        'confirmed': mergedConfirmed,
+      },
+      summarySnapshot: {
+        'identityLine': bike.displayName,
+        'technicalHighlights': scenario.technicalHighlights,
+        'warnings': const ['Fixture de depuracion'],
+      },
+      lastConfirmedAt: DateTime.now(),
+    );
+
+    await _bikeshopService.upsertBikeProfile(profile);
+  }
+
+  _DebugJobTiming _debugTimingForStage(
+    _DebugJobLifecycleStage stage,
+    DateTime now,
+  ) {
+    switch (stage) {
+      case _DebugJobLifecycleStage.intake:
+        return _DebugJobTiming(
+          arrivalDate: now.subtract(const Duration(minutes: 20)),
+          diagnosticDeadline: now.add(const Duration(days: 1)),
+          deliveryDeadline: now.add(const Duration(days: 3)),
+        );
+      case _DebugJobLifecycleStage.diagnostic:
+        return _DebugJobTiming(
+          arrivalDate: now.subtract(const Duration(hours: 3)),
+          diagnosticDeadline: now.add(const Duration(hours: 12)),
+          deliveryDeadline: now.add(const Duration(days: 2)),
+          startedAt: now.subtract(const Duration(hours: 2)),
+        );
+      case _DebugJobLifecycleStage.inProgress:
+        return _DebugJobTiming(
+          arrivalDate: now.subtract(const Duration(days: 1)),
+          diagnosticDeadline: now.subtract(const Duration(hours: 16)),
+          deliveryDeadline: now.add(const Duration(days: 1)),
+          startedAt: now.subtract(const Duration(hours: 6)),
+        );
+      case _DebugJobLifecycleStage.completed:
+        return _DebugJobTiming(
+          arrivalDate: now.subtract(const Duration(days: 2)),
+          diagnosticDeadline: now.subtract(const Duration(days: 1, hours: 6)),
+          deliveryDeadline: now.add(const Duration(hours: 8)),
+          startedAt: now.subtract(const Duration(days: 1)),
+          completedAt: now.subtract(const Duration(hours: 1)),
+        );
+      case _DebugJobLifecycleStage.delivered:
+        return _DebugJobTiming(
+          arrivalDate: now.subtract(const Duration(days: 4)),
+          diagnosticDeadline: now.subtract(const Duration(days: 3)),
+          deliveryDeadline: now.subtract(const Duration(days: 1)),
+          startedAt: now.subtract(const Duration(days: 3)),
+          completedAt: now.subtract(const Duration(days: 1, hours: 8)),
+          deliveredAt: now.subtract(const Duration(hours: 3)),
+        );
+    }
+  }
+
   Widget _buildToolbar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -1927,21 +2425,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     child: Row(
                       children: [
                         SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                                value: 'active', label: Text('Activos')),
-                            ButtonSegment(value: 'test', label: Text('Tests')),
-                            ButtonSegment(
-                                value: 'completed', label: Text('Completados')),
-                            ButtonSegment(
-                                value: 'delivered', label: Text('Entregados')),
-                            ButtonSegment(
-                                value: 'warranty_completed',
-                                label: Text('Garantías')),
-                            ButtonSegment(
-                                value: 'unpaid', label: Text('Sin Pagar')),
-                            ButtonSegment(value: 'all', label: Text('Todos')),
-                          ],
+                          segments: _buildStatusSegments(compact: true),
                           selected: <String>{_statusFilter},
                           onSelectionChanged: (selected) {
                             if (selected.isNotEmpty) {
@@ -2003,41 +2487,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 Row(
                   children: [
                     SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(
-                          value: 'active',
-                          label:
-                              Text('Activos', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'test',
-                          label: Text('Tests', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'completed',
-                          label: Text('Completados',
-                              style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'delivered',
-                          label: Text('Entregados',
-                              style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'warranty_completed',
-                          label:
-                              Text('Garantías', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'unpaid',
-                          label:
-                              Text('Sin Pagar', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'all',
-                          label: Text('Todos', style: TextStyle(fontSize: 13)),
-                        ),
-                      ],
+                      segments: _buildStatusSegments(compact: false),
                       selected: <String>{_statusFilter},
                       onSelectionChanged: (selected) {
                         if (selected.isNotEmpty) {
@@ -8611,3 +9061,271 @@ class _NotCoveredConvertDialog extends StatelessWidget {
     );
   }
 }
+
+enum _DebugJobLifecycleStage {
+  intake,
+  diagnostic,
+  inProgress,
+  completed,
+  delivered,
+}
+
+extension _DebugJobLifecycleStageX on _DebugJobLifecycleStage {
+  String get id {
+    switch (this) {
+      case _DebugJobLifecycleStage.intake:
+        return 'intake';
+      case _DebugJobLifecycleStage.diagnostic:
+        return 'diagnostic';
+      case _DebugJobLifecycleStage.inProgress:
+        return 'in_progress';
+      case _DebugJobLifecycleStage.completed:
+        return 'completed';
+      case _DebugJobLifecycleStage.delivered:
+        return 'delivered';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case _DebugJobLifecycleStage.intake:
+        return 'Ingreso';
+      case _DebugJobLifecycleStage.diagnostic:
+        return 'Diagnóstico';
+      case _DebugJobLifecycleStage.inProgress:
+        return 'En curso';
+      case _DebugJobLifecycleStage.completed:
+        return 'Finalizado';
+      case _DebugJobLifecycleStage.delivered:
+        return 'Entregado';
+    }
+  }
+
+  String get supportText {
+    switch (this) {
+      case _DebugJobLifecycleStage.intake:
+        return 'Llega recién al taller, con solicitud del cliente pero sin diagnóstico aún.';
+      case _DebugJobLifecycleStage.diagnostic:
+        return 'Deja el trabajo listo para probar wizards, diagnósticos y confirmaciones técnicas.';
+      case _DebugJobLifecycleStage.inProgress:
+        return 'Simula un trabajo ya en ejecución con diagnóstico completo y plazos corridos.';
+      case _DebugJobLifecycleStage.completed:
+        return 'Prepara el caso como finalizado para probar cierre, cobro y memoria de trabajo.';
+      case _DebugJobLifecycleStage.delivered:
+        return 'Deja el trabajo como entregado para revisar históricos y estados archivados.';
+    }
+  }
+
+  JobStatus get status {
+    switch (this) {
+      case _DebugJobLifecycleStage.intake:
+        return JobStatus.pendiente;
+      case _DebugJobLifecycleStage.diagnostic:
+        return JobStatus.diagnostico;
+      case _DebugJobLifecycleStage.inProgress:
+        return JobStatus.enCurso;
+      case _DebugJobLifecycleStage.completed:
+        return JobStatus.finalizado;
+      case _DebugJobLifecycleStage.delivered:
+        return JobStatus.entregado;
+    }
+  }
+
+  bool get includesDiagnosis {
+    switch (this) {
+      case _DebugJobLifecycleStage.intake:
+        return false;
+      case _DebugJobLifecycleStage.diagnostic:
+      case _DebugJobLifecycleStage.inProgress:
+      case _DebugJobLifecycleStage.completed:
+      case _DebugJobLifecycleStage.delivered:
+        return true;
+    }
+  }
+
+  bool get includesWorkPerformed {
+    switch (this) {
+      case _DebugJobLifecycleStage.completed:
+      case _DebugJobLifecycleStage.delivered:
+        return true;
+      case _DebugJobLifecycleStage.intake:
+      case _DebugJobLifecycleStage.diagnostic:
+      case _DebugJobLifecycleStage.inProgress:
+        return false;
+    }
+  }
+}
+
+class _DebugBikeScenario {
+  final String id;
+  final String label;
+  final String description;
+  final String brand;
+  final String model;
+  final int year;
+  final BikeType bikeType;
+  final String wheelSize;
+  final String frameSize;
+  final String color;
+  final String fixtureSerial;
+  final bool reuseBike;
+  final String clientRequest;
+  final String diagnosis;
+  final String workPerformed;
+  final Map<String, dynamic> technicalValues;
+  final List<String> technicalHighlights;
+
+  const _DebugBikeScenario({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.brand,
+    required this.model,
+    required this.year,
+    required this.bikeType,
+    required this.wheelSize,
+    required this.frameSize,
+    required this.color,
+    required this.fixtureSerial,
+    required this.reuseBike,
+    required this.clientRequest,
+    required this.diagnosis,
+    required this.workPerformed,
+    this.technicalValues = const {},
+    this.technicalHighlights = const [],
+  });
+}
+
+class _DebugTestJobRequest {
+  final _DebugBikeScenario scenario;
+  final _DebugJobLifecycleStage stage;
+
+  const _DebugTestJobRequest({
+    required this.scenario,
+    required this.stage,
+  });
+}
+
+class _DebugJobTiming {
+  final DateTime arrivalDate;
+  final DateTime diagnosticDeadline;
+  final DateTime deliveryDeadline;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? deliveredAt;
+
+  const _DebugJobTiming({
+    required this.arrivalDate,
+    required this.diagnosticDeadline,
+    required this.deliveryDeadline,
+    this.startedAt,
+    this.completedAt,
+    this.deliveredAt,
+  });
+}
+
+const List<_DebugBikeScenario> _debugBikeScenarios = [
+  _DebugBikeScenario(
+    id: 'drivetrain_no_profile',
+    label: 'Drivetrain sin ficha',
+    description:
+        'Hardtail 1x12 sin bike_profile previa, útil para probar promoción de ficha desde wizards reales.',
+    brand: 'Test MTB',
+    model: 'Drivetrain Sin Ficha',
+    year: 2025,
+    bikeType: BikeType.mountainHardtail,
+    wheelSize: '29',
+    frameSize: 'M',
+    color: 'Rojo',
+    fixtureSerial: 'DBG-DRIVETRAIN-NO-PROFILE',
+    reuseBike: false,
+    clientRequest: 'Regular cambios y revisar desgaste de cadena.',
+    diagnosis:
+        'Transmisión desajustada y sin ficha técnica confirmada para drivetrain.',
+    workPerformed: 'Ajuste base de cambios y revisión general de transmisión.',
+    technicalHighlights: ['Sin ficha previa', '1x12', 'MTB 29'],
+  ),
+  _DebugBikeScenario(
+    id: 'rim_brake_city',
+    label: 'Urbana rim brake 3x7',
+    description:
+        'Bicicleta urbana con V-Brake y freewheel roscado para probar flujos de freno de llanta y transmisión básica.',
+    brand: 'Test City',
+    model: 'Rim Brake 3x7',
+    year: 2024,
+    bikeType: BikeType.paseo,
+    wheelSize: '700C',
+    frameSize: 'M',
+    color: 'Azul',
+    fixtureSerial: 'DBG-RIM-BRAKE-CITY',
+    reuseBike: true,
+    clientRequest: 'Revisar frenos, piolas y ajuste de cambios traseros.',
+    diagnosis:
+        'Frenos de llanta con mordaza descentrada y transmisión 3x7 con roce leve.',
+    workPerformed:
+        'Ajuste de frenos V-Brake, centrado y regulación de cambios.',
+    technicalValues: {
+      'brakeType': 'rim',
+      'rimBrakeFamily': 'v_brake',
+      'drivetrainConfig': '3x7',
+      'drivetrainSpeeds': 7,
+      'freehubType': 'threaded_freewheel',
+      'valveType': 'schrader',
+    },
+    technicalHighlights: ['V-Brake', '3x7', 'Freewheel roscado'],
+  ),
+  _DebugBikeScenario(
+    id: 'hydraulic_disc_mtb',
+    label: 'MTB disco hidráulico 1x12',
+    description:
+        'Hardtail moderna con freno hidráulico y transmisión 1x12 para compatibilidad y wizard de frenos/disco.',
+    brand: 'Test Trail',
+    model: 'Hydraulic Disc 1x12',
+    year: 2025,
+    bikeType: BikeType.mountainHardtail,
+    wheelSize: '29',
+    frameSize: 'L',
+    color: 'Negro',
+    fixtureSerial: 'DBG-HYDRAULIC-DISC-MTB',
+    reuseBike: true,
+    clientRequest: 'Purgar frenos y revisar transmisión 1x12.',
+    diagnosis:
+        'Freno delantero esponjoso y transmisión 1x12 con ajuste fino pendiente.',
+    workPerformed: 'Purgado, alineación de cáliper y ajuste de cambios.',
+    technicalValues: {
+      'brakeType': 'hydraulic_disc',
+      'drivetrainConfig': '1x12',
+      'drivetrainSpeeds': 12,
+      'freehubType': 'shimano_hg',
+      'bottomBracketFamily': 'threaded_bsa',
+    },
+    technicalHighlights: ['Disco hidráulico', '1x12', 'BSA'],
+  ),
+  _DebugBikeScenario(
+    id: 'bmx_single_speed',
+    label: 'BMX singlespeed',
+    description:
+        'BMX rígida para probar casos especiales de 1x1, rim brake y driver BMX.',
+    brand: 'Test BMX',
+    model: 'Street 1x1',
+    year: 2023,
+    bikeType: BikeType.bmx,
+    wheelSize: '20',
+    frameSize: '20.5',
+    color: 'Blanco',
+    fixtureSerial: 'DBG-BMX-SINGLE',
+    reuseBike: true,
+    clientRequest: 'Ajustar freno trasero y revisar juego en driver.',
+    diagnosis:
+        'BMX con freno trasero desalineado y transmisión 1x1 con holgura en driver.',
+    workPerformed: 'Ajuste de U-Brake y revisión general del driver BMX.',
+    technicalValues: {
+      'brakeType': 'rim',
+      'rimBrakeFamily': 'u_brake',
+      'drivetrainConfig': '1x1',
+      'drivetrainSpeeds': 1,
+      'freehubType': 'bmx_driver',
+    },
+    technicalHighlights: ['BMX', '1x1', 'Driver BMX'],
+  ),
+];

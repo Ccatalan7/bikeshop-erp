@@ -157,6 +157,70 @@ String? canonicalBrakeWheelValueFromAnswers(Map<String, dynamic> answers) {
   );
 }
 
+String? canonicalBrakeTypeValue(String? rawValue) {
+  final normalized = _normalizeBrakeText(rawValue)?.toLowerCase();
+  switch (normalized) {
+    case 'rim':
+    case 'llanta':
+    case 'rim brake':
+    case 'freno de llanta':
+      return 'rim';
+    case 'mechanical_disc':
+    case 'disco_mec':
+    case 'disco mecanico':
+    case 'disco mecánico':
+    case 'mecanico':
+    case 'mecánico':
+      return 'mechanical_disc';
+    case 'hydraulic_disc':
+    case 'hidraulico':
+    case 'hidráulico':
+      return 'hydraulic_disc';
+    case 'v_brake':
+    case 'v-brake':
+    case 'v brake':
+    case 'vbrake':
+      return 'v_brake';
+    case 'cantilever':
+      return 'cantilever';
+    case 'road_caliper_short_reach':
+    case 'short reach':
+    case 'caliper corto':
+      return 'road_caliper_short_reach';
+    case 'road_caliper_long_reach':
+    case 'long reach':
+    case 'caliper largo':
+      return 'road_caliper_long_reach';
+    case 'u_brake':
+    case 'u-brake':
+    case 'u brake':
+    case 'ubrake':
+      return 'u_brake';
+    case 'rod_brake':
+    case 'rod brake':
+    case 'freno de varilla':
+    case 'varilla':
+      return 'rod_brake';
+    case 'roller_brake':
+    case 'roller brake':
+      return 'roller_brake';
+    case 'drum_brake':
+    case 'drum brake':
+    case 'tambor':
+      return 'drum_brake';
+    case 'coaster_brake':
+    case 'coaster brake':
+    case 'contrapedal':
+      return 'coaster_brake';
+    case 'band_brake':
+    case 'band brake':
+    case 'banda':
+      return 'band_brake';
+    default:
+      return _normalizeBrakeText(rawValue);
+  }
+}
+
 String? canonicalBrakeFluidTypeValue(String? rawValue) {
   switch (rawValue) {
     case 'mineral':
@@ -261,6 +325,9 @@ Map<String, dynamic> canonicalizeBrakeWizardAnswers(
 
 dynamic canonicalizeBrakeWizardAnswerValue(String key, dynamic rawValue) {
   switch (key) {
+    case 'brake_type':
+    case 'brake_type_mech':
+      return canonicalBrakeTypeValue(rawValue?.toString());
     case 'which_wheel':
       return canonicalBrakeWheelValue(rawValue?.toString());
     case 'fluid_type':

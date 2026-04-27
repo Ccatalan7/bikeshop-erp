@@ -16,7 +16,7 @@ begin
     execute format('drop trigger if exists %I on mechanic_job_tasks cascade', r.trigger_name);
     raise notice 'Dropped task trigger: %', r.trigger_name;
   end loop;
-  
+
   -- Drop ALL triggers on mechanic_job_items that might cause conflicts
   for r in (
     select trigger_name 
@@ -46,6 +46,27 @@ declare
   v_job_id uuid;
   v_max_number integer;
 begin
+  -- In a fresh/local DB the table (and sequence/function) may not exist yet.
+  -- This data-fix block is safe to skip when bootstrapping from scratch.
+  if not exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'mechanic_jobs'
+  ) then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'generate_mechanic_job_number'
+  ) then
+    return;
+  end if;
+
   -- Backfill missing/blank job numbers
   for v_job_id in
     select id
@@ -68,9 +89,15 @@ begin
   end if;
 
   if v_max_number < 1 then
-    perform setval('public.mechanic_job_number_seq', 1, false);
+    begin
+      perform setval('public.mechanic_job_number_seq', 1, false);
+    exception when undefined_table or undefined_object then null;
+    end;
   else
-    perform setval('public.mechanic_job_number_seq', v_max_number, true);
+    begin
+      perform setval('public.mechanic_job_number_seq', v_max_number, true);
+    exception when undefined_table or undefined_object then null;
+    end;
   end if;
 end $$;
 
@@ -272,6 +299,63 @@ create table if not exists user_profiles (
 create index if not exists idx_user_profiles_user on user_profiles(user_id);
 create index if not exists idx_user_profiles_tenant on user_profiles(tenant_id);
 
+--------------------------------------------------------------------------------
+-- HELPER FUNCTION: Get current user's tenant_id from user_profiles
+-- (Defined early because many RLS policies depend on it.)
+--------------------------------------------------------------------------------
+create or replace function public.user_tenant_id()
+returns uuid
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid;
+begin
+  -- Bypass RLS by using security definer with explicit query
+  select tenant_id into v_tenant_id
+  from user_profiles
+  where user_id = auth.uid()
+  limit 1;
+
+  return v_tenant_id;
+end;
+$$;
+
+grant execute on function public.user_tenant_id() to authenticated;
+
+--------------------------------------------------------------------------------
+-- TRIGGER FUNCTION: Auto-update updated_at timestamp
+-- (Defined early because many tables create updated_at triggers.)
+--------------------------------------------------------------------------------
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  NEW.updated_at := now();
+  return NEW;
+end;
+$$;
+
+--------------------------------------------------------------------------------
+-- TRIGGER FUNCTION: Auto-populate created_by on INSERT (audit trail)
+-- (Defined early because multiple tables add this trigger.)
+--------------------------------------------------------------------------------
+create or replace function set_created_by()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  if new.created_by is null then
+    new.created_by := auth.uid();
+  end if;
+  return new;
+end;
+$$;
+
 -- User activity log: Track user actions within each tenant
 create table if not exists user_activity_log (
   id uuid primary key default gen_random_uuid(),
@@ -291,7 +375,10 @@ create table if not exists user_invitations (
   role text not null check (role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant')),
   permissions jsonb not null,
   invited_by uuid references auth.users(id) not null,
-  employee_id uuid references employees(id) on delete cascade,
+  -- NOTE: employees table is created much later in this file. We add the FK
+  -- constraint after employees exists so core_schema.sql can bootstrap from a
+  -- fresh/local database.
+  employee_id uuid,
   metadata jsonb,
   status text default 'pending' check (status in ('pending', 'accepted', 'expired')),
   expires_at timestamp with time zone not null,
@@ -1129,7 +1216,8 @@ end $$;
 create table if not exists wheel_hubs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  product_id uuid references products(id) on delete cascade,
+  -- FK to products is added later (products table is defined after wheel tables).
+  product_id uuid,
   
   -- Basic Info
   name text not null,
@@ -1192,7 +1280,8 @@ create policy "wheel_hubs_delete" on wheel_hubs for delete to authenticated
 create table if not exists wheel_rims (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  product_id uuid references products(id) on delete cascade,
+  -- FK to products is added later (products table is defined after wheel tables).
+  product_id uuid,
   
   -- Basic Info
   name text not null,
@@ -1252,7 +1341,8 @@ create policy "wheel_rims_delete" on wheel_rims for delete to authenticated
 create table if not exists wheel_spokes (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  product_id uuid references products(id) on delete cascade,
+  -- FK to products is added later (products table is defined after wheel tables).
+  product_id uuid,
   
   -- Basic Info
   name text not null,
@@ -1309,9 +1399,9 @@ create table if not exists wheel_builds (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   
-  -- References
-  bike_id uuid references bikes(id) on delete set null,
-  mechanic_job_id uuid references mechanic_jobs(id) on delete set null,
+  -- References (FKs added later; bikes/mechanic_jobs tables are defined later)
+  bike_id uuid,
+  mechanic_job_id uuid,
   
   -- Build Info
   build_name text not null,
@@ -1332,8 +1422,9 @@ create table if not exists wheel_builds (
   right_spoke_length_mm numeric(5,2),
   
   -- Actual Spoke Products Used (for inventory)
-  left_spoke_product_id uuid references products(id) on delete set null,
-  right_spoke_product_id uuid references products(id) on delete set null,
+  -- FK to products is added later (products table is defined after wheel tables).
+  left_spoke_product_id uuid,
+  right_spoke_product_id uuid,
   
   -- Additional Components
   nipple_type text, -- 'brass', 'aluminum', 'brass_lock'
@@ -1665,15 +1756,21 @@ begin
     alter table products add column specifications jsonb not null default '{}'::jsonb;
   end if;
 
-  -- Add supplier relationship
-  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_id') then
-    alter table products add column supplier_id uuid references public.suppliers(id) on delete set null;
-  end if;
+	  -- Add supplier relationship
+	  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_id') then
+	    -- FK added later after suppliers table exists (bootstrap-safe).
+	    alter table products add column supplier_id uuid;
+	  end if;
 
-  -- Add supplier reference codes
-  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_reference') then
-    alter table products add column supplier_reference text;
-  end if;
+	  -- Add supplier_name (resolved name, kept in sync by triggers)
+	  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_name') then
+	    alter table products add column supplier_name text;
+	  end if;
+
+	  -- Add supplier reference codes
+	  if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_reference') then
+	    alter table products add column supplier_reference text;
+	  end if;
 
   -- Add supplier code (Código Proveedor for this specific supplier)
   if not exists (select 1 from information_schema.columns where table_name = 'products' and column_name = 'supplier_code') then
@@ -3374,12 +3471,18 @@ end;
 $$ language plpgsql;
 
 -- Trigger on product_categories to sync product names
-drop trigger if exists trg_sync_products_on_category_change on product_categories;
-create trigger trg_sync_products_on_category_change
-  after update of name
-  on product_categories
-  for each row
-  execute function sync_products_on_category_change();
+do $$
+begin
+  if to_regclass('public.product_categories') is null then
+    return;
+  end if;
+
+  execute 'drop trigger if exists trg_sync_products_on_category_change on product_categories';
+  execute 'create trigger trg_sync_products_on_category_change after update of name on product_categories for each row execute function sync_products_on_category_change()';
+exception
+  when others then
+    raise notice '⚠️ Could not create trg_sync_products_on_category_change (%).', sqlerrm;
+end $$;
 
 -- Function to update supplier_name when supplier name changes
 create or replace function sync_products_on_supplier_change()
@@ -3397,12 +3500,18 @@ end;
 $$ language plpgsql;
 
 -- Trigger on suppliers to sync product supplier names
-drop trigger if exists trg_sync_products_on_supplier_change on suppliers;
-create trigger trg_sync_products_on_supplier_change
-  after update of name
-  on suppliers
-  for each row
-  execute function sync_products_on_supplier_change();
+do $$
+begin
+  if to_regclass('public.suppliers') is null then
+    return;
+  end if;
+
+  execute 'drop trigger if exists trg_sync_products_on_supplier_change on suppliers';
+  execute 'create trigger trg_sync_products_on_supplier_change after update of name on suppliers for each row execute function sync_products_on_supplier_change()';
+exception
+  when others then
+    raise notice '⚠️ Could not create trg_sync_products_on_supplier_change (%).', sqlerrm;
+end $$;
 
 -- ============================================================================
 -- PRODUCT CATEGORIES - Hierarchical (Odoo-style)
@@ -3435,6 +3544,14 @@ create index if not exists idx_product_categories_full_path on product_categorie
 create index if not exists idx_product_categories_level on product_categories(level);
 create index if not exists idx_product_categories_is_active on product_categories(is_active);
 create index if not exists idx_product_categories_name on product_categories using gin (to_tsvector('spanish', coalesce(name, '')));
+
+-- Trigger: keep products.category_name synced when product_categories.name changes
+drop trigger if exists trg_sync_products_on_category_change on product_categories;
+create trigger trg_sync_products_on_category_change
+  after update of name
+  on product_categories
+  for each row
+  execute function sync_products_on_category_change();
 
 -- Step 3: Migrate existing data from 'categories' to 'product_categories' (if old table exists)
 do $$
@@ -3639,6 +3756,39 @@ begin
   end if;
 end $$;
 
+-- Add FK: products.supplier_id -> suppliers.id (bootstrap-safe).
+do $$
+begin
+  if to_regclass('public.products') is null
+     or to_regclass('public.suppliers') is null then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = to_regclass('public.products')
+      and conname = 'products_supplier_id_fkey'
+  ) then
+    begin
+      alter table public.products
+        add constraint products_supplier_id_fkey
+          foreign key (supplier_id) references public.suppliers(id) on delete set null;
+    exception
+      when others then
+        raise notice '⚠️ Could not add FK products.supplier_id -> suppliers.id (%).', sqlerrm;
+    end;
+  end if;
+end $$;
+
+-- Trigger: keep products.supplier_name synced when suppliers.name changes
+drop trigger if exists trg_sync_products_on_supplier_change on suppliers;
+create trigger trg_sync_products_on_supplier_change
+  after update of name
+  on suppliers
+  for each row
+  execute function sync_products_on_supplier_change();
+
 -- ============================================================================
 -- SMART PURCHASE LIST - Intelligent purchase planning
 -- ============================================================================
@@ -3667,8 +3817,9 @@ create table if not exists smart_purchase_list (
   notes text,
   added_by uuid references auth.users(id) on delete set null,
   added_date timestamp with time zone not null default now(),
-  linked_purchase_invoice_id uuid references purchase_invoices(id) on delete set null,
-  linked_expense_id uuid references expenses(id) on delete set null,
+  -- FKs added later after purchase_invoices / expenses tables exist.
+  linked_purchase_invoice_id uuid,
+  linked_expense_id uuid,
   ordered_date timestamp with time zone,
   received_date timestamp with time zone,
   created_at timestamp with time zone not null default now(),
@@ -3691,7 +3842,8 @@ alter table smart_purchase_list add column if not exists stock_at_receipt intege
 -- Add category columns if they don't exist (migration for existing tables)
 alter table smart_purchase_list add column if not exists category_id uuid references product_categories(id) on delete set null;
 alter table smart_purchase_list add column if not exists category_name text;
-alter table smart_purchase_list add column if not exists linked_job_id uuid references mechanic_jobs(id) on delete set null;
+-- FK added later after mechanic_jobs table exists.
+alter table smart_purchase_list add column if not exists linked_job_id uuid;
 alter table smart_purchase_list add column if not exists linked_job_number text;
 
 -- Add index for category filtering
@@ -3748,6 +3900,18 @@ begin
   
   -- Use whichever column is set (prefer stock_quantity as source of truth)
   v_current_stock := coalesce(NEW.stock_quantity, NEW.inventory_qty, 0);
+
+  -- Services and non-stock-tracked items must NEVER be added to the smart
+  -- purchase list. If they were previously auto-added (legacy bug), clean them
+  -- up opportunistically whenever this trigger fires.
+  if coalesce(NEW.product_type, 'product') = 'service'
+     or coalesce(NEW.track_stock, true) = false then
+    delete from smart_purchase_list
+    where product_id = NEW.id
+      and tenant_id = NEW.tenant_id
+      and status in ('pending', 'ordered');
+    return NEW;
+  end if;
   
   -- AUTO-REMOVAL: If stock is now ABOVE minimum level, remove from pending list
   if v_current_stock > NEW.min_stock_level then
@@ -3967,12 +4131,18 @@ end;
 $$;
 
 -- Trigger on purchase_invoices to update purchase list when status changes
-drop trigger if exists trg_update_purchase_list_on_status_change on purchase_invoices;
-create trigger trg_update_purchase_list_on_status_change
-  after update of status
-  on purchase_invoices
-  for each row
-  execute function public.auto_update_purchase_list_on_invoice_status();
+do $$
+begin
+  if to_regclass('public.purchase_invoices') is null then
+    return;
+  end if;
+
+  execute 'drop trigger if exists trg_update_purchase_list_on_status_change on purchase_invoices';
+  execute 'create trigger trg_update_purchase_list_on_status_change after update of status on purchase_invoices for each row execute function public.auto_update_purchase_list_on_invoice_status()';
+exception
+  when others then
+    raise notice '⚠️ Could not create trg_update_purchase_list_on_status_change (%).', sqlerrm;
+end $$;
 
 -- Function to backfill stock_at_receipt for existing received items
 -- This calculates the stock at receipt by adding purchased quantity to stock_at_order
@@ -4927,23 +5097,31 @@ create policy "job_statuses_delete" on job_statuses
   using (tenant_id = public.user_tenant_id() and is_system = false); -- Can't delete system statuses
 
 -- Add status_id column to mechanic_jobs (migration)
-alter table mechanic_jobs add column if not exists status_id uuid;
-
--- Add foreign key constraint after table exists
-do $$ begin
-  if not exists (
-    select 1 from information_schema.table_constraints
-    where constraint_name = 'mechanic_jobs_status_id_fkey'
-  ) then
-    alter table mechanic_jobs add constraint mechanic_jobs_status_id_fkey
-      foreign key (tenant_id, status_id) references job_statuses(tenant_id, id) on delete set null;
-    raise notice '✅ Added mechanic_jobs.status_id foreign key';
+do $$
+begin
+  if to_regclass('public.mechanic_jobs') is null then
+    return;
   end if;
-exception
-  when others then raise notice '⚠️ mechanic_jobs.status_id FK: %', sqlerrm;
-end $$;
 
-create index if not exists idx_mechanic_jobs_status_id on mechanic_jobs(status_id);
+  alter table mechanic_jobs add column if not exists status_id uuid;
+
+  -- Add foreign key constraint after table exists
+  begin
+    if to_regclass('public.job_statuses') is not null
+       and not exists (
+         select 1 from information_schema.table_constraints
+         where constraint_name = 'mechanic_jobs_status_id_fkey'
+       ) then
+      alter table mechanic_jobs add constraint mechanic_jobs_status_id_fkey
+        foreign key (tenant_id, status_id) references job_statuses(tenant_id, id) on delete set null;
+      raise notice '✅ Added mechanic_jobs.status_id foreign key';
+    end if;
+  exception
+    when others then raise notice '⚠️ mechanic_jobs.status_id FK: %', sqlerrm;
+  end;
+
+  execute 'create index if not exists idx_mechanic_jobs_status_id on mechanic_jobs(status_id)';
+end $$;
 
 -- ============================================================================
 -- 🏗️ MULTI-TENANT ONBOARDING SYSTEM - FOUNDATION DATA SEEDING
@@ -5168,6 +5346,11 @@ declare
   v_job record;
   v_status_id uuid;
 begin
+  -- Fresh bootstrap safety: mechanic_jobs is created much later in this file.
+  if to_regclass('public.mechanic_jobs') is null then
+    return 'Skipped migrate_job_statuses(): mechanic_jobs table does not exist yet';
+  end if;
+
   -- First, seed job statuses for all existing tenants that don't have them
   for v_job in (select distinct tenant_id from mechanic_jobs) loop
     perform public.seed_job_statuses_for_tenant(v_job.tenant_id);
@@ -5194,7 +5377,14 @@ end;
 $$;
 
 -- Run migration automatically
-select public.migrate_job_statuses();
+do $$
+begin
+  if to_regclass('public.mechanic_jobs') is null then
+    raise notice 'Skipping migrate_job_statuses(): mechanic_jobs table missing (fresh bootstrap).';
+    return;
+  end if;
+  perform public.migrate_job_statuses();
+end $$;
 
 -- ============================================================================
 -- SEED CHART OF ACCOUNTS FOR A TENANT
@@ -6350,7 +6540,16 @@ $$;
 
 -- CRITICAL: Drop trigger FIRST, then function to clear cached type definition
 -- Using CASCADE to ensure all dependencies are dropped
-drop trigger if exists trg_purchase_payments_change on public.purchase_payments cascade;
+do $$
+begin
+  if to_regclass('public.purchase_payments') is not null then
+    execute 'drop trigger if exists trg_purchase_payments_change on public.purchase_payments cascade';
+  end if;
+exception
+  when others then
+    raise notice '⚠️  trg_purchase_payments_change drop skipped: %', sqlerrm;
+end;
+$$;
 drop function if exists public.handle_purchase_payment_change() cascade;
 
 create or replace function public.handle_purchase_payment_change()
@@ -7320,6 +7519,14 @@ create table if not exists purchase_invoices (
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, invoice_number) -- Each tenant can have same invoice numbers
 );
+
+-- Trigger: update smart_purchase_list when purchase_invoices.status changes
+drop trigger if exists trg_update_purchase_list_on_status_change on purchase_invoices;
+create trigger trg_update_purchase_list_on_status_change
+  after update of status
+  on purchase_invoices
+  for each row
+  execute function public.auto_update_purchase_list_on_invoice_status();
 
 alter table public.purchase_invoices
   add column if not exists invoice_number text not null,
@@ -8367,20 +8574,6 @@ begin
     create trigger trg_expense_lines_prepare
       before insert or update on public.expense_lines
       for each row execute procedure public.prepare_expense_line();
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_trigger
-     where tgname = 'trg_expense_lines_change'
-       and tgrelid = 'public.expense_lines'::regclass
-  ) then
-    create trigger trg_expense_lines_change
-      after insert or update or delete on public.expense_lines
-      for each row execute procedure public.handle_expense_line_change();
   end if;
 end $$;
 
@@ -9498,9 +9691,38 @@ end $$;
 -- 1. Stock Movements View (Modern: Reads from table, not calculation)
 drop view if exists stock_movements_view cascade;
 
+-- Helper: safe lookup (avoids hard dependency when bootstrapping from scratch)
+create or replace function public.get_mechanic_job_number(p_job_id uuid, p_tenant_id uuid)
+returns text
+language plpgsql
+stable
+set search_path = public
+as $$
+declare
+  v_job_number text;
+begin
+  if p_job_id is null then
+    return null;
+  end if;
+
+  if to_regclass('public.mechanic_jobs') is null then
+    return null;
+  end if;
+
+  execute 'select job_number from public.mechanic_jobs where id = $1 and tenant_id = $2'
+    into v_job_number
+    using p_job_id, p_tenant_id;
+
+  return v_job_number;
+exception
+  when others then
+    return null;
+end;
+$$;
+
 create view stock_movements_view as
 with movement_documents as (
-  select 
+  select
     sm.id,
     sm.product_id,
     p.name as product_name,
@@ -9572,7 +9794,10 @@ movements_with_resolution as (
     case
       when md.document_type = 'sales_invoice' then coalesce(nullif(si.invoice_number, ''), md.reference)
       when md.document_type = 'purchase_invoice' then coalesce(nullif(pi.invoice_number, ''), md.reference)
-      when md.document_type = 'mechanic_job' then coalesce(nullif(mj.job_number, ''), md.reference)
+      when md.document_type = 'mechanic_job' then coalesce(
+        nullif(public.get_mechanic_job_number(md.document_id, md.tenant_id), ''),
+        md.reference
+      )
       when sa.id is not null then coalesce(
         nullif(sa.reference, ''),
         nullif(trim(coalesce(md.reference, '')), ''),
@@ -9598,10 +9823,6 @@ movements_with_resolution as (
     on md.document_type = 'purchase_invoice'
    and md.document_id = pi.id
    and md.tenant_id = pi.tenant_id
-  left join mechanic_jobs mj
-    on md.document_type = 'mechanic_job'
-   and md.document_id = mj.id
-   and md.tenant_id = mj.tenant_id
   left join stock_adjustments sa
     on md.document_type is null
    and md.tenant_id = sa.tenant_id
@@ -10632,7 +10853,6 @@ end $$;
 create table if not exists order_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  tenant_id uuid references tenants(id) on delete cascade not null,
   order_id uuid not null references orders(id) on delete cascade,
   product_id uuid not null references products(id) on delete restrict,
   quantity integer not null,
@@ -11522,20 +11742,34 @@ exception
 end $$;
 
 -- Basic RLS scaffolding: enable on each table; policies to be tailored per role.
-alter table customers enable row level security;
-alter table customer_addresses enable row level security;
-alter table products enable row level security;
-alter table product_brands enable row level security;
-alter table sales_invoices enable row level security;
-alter table sales_payments enable row level security;
-alter table stock_movements enable row level security;
-alter table orders enable row level security;
-alter table order_items enable row level security;
-alter table journal_entries enable row level security;
-alter table journal_lines enable row level security;
-alter table suppliers enable row level security;
-alter table purchase_invoices enable row level security;
-alter table bikes enable row level security;
+do $$
+declare
+  v_table text;
+begin
+  foreach v_table in array ARRAY[
+    'customers',
+    'customer_addresses',
+    'products',
+    'product_brands',
+    'sales_invoices',
+    'sales_payments',
+    'stock_movements',
+    'orders',
+    'order_items',
+    'journal_entries',
+    'journal_lines',
+    'suppliers',
+    'purchase_invoices',
+    'bikes'
+  ] loop
+    if to_regclass('public.' || v_table) is not null then
+      execute format('alter table public.%I enable row level security', v_table);
+    else
+      raise notice '⚠️  Skipping RLS enable for %. Table does not exist yet.', v_table;
+    end if;
+  end loop;
+end;
+$$;
 
 -- Old non-tenant-filtered policies REMOVED to enforce multi-tenant isolation
 
@@ -12733,7 +12967,7 @@ create table if not exists bike_events (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   bike_id uuid references bikes(id) on delete cascade not null,
-  job_id uuid references mechanic_jobs(id) on delete set null,
+  job_id uuid,
   event_type text not null,
   event_category text not null check (event_category in ('state', 'visit', 'evidence', 'incident', 'component')),
   event_date timestamp with time zone not null default now(),
@@ -12757,7 +12991,7 @@ begin
     alter table bike_events add column bike_id uuid references bikes(id) on delete cascade not null;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'job_id') then
-    alter table bike_events add column job_id uuid references mechanic_jobs(id) on delete set null;
+    alter table bike_events add column job_id uuid;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'bike_events' and column_name = 'event_type') then
     alter table bike_events add column event_type text not null default 'profile_updated';
@@ -12831,8 +13065,8 @@ create table if not exists bike_system_states (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   bike_id uuid references bikes(id) on delete cascade not null,
-  job_id uuid references mechanic_jobs(id) on delete set null,
-  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
+  job_id uuid,
+  job_bike_id uuid,
   system_key text not null,
   location_key text not null default 'none'
     check (location_key in ('none', 'front', 'rear', 'left', 'right', 'center')),
@@ -12861,9 +13095,9 @@ create table if not exists bike_component_lifecycles (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   bike_id uuid references bikes(id) on delete cascade not null,
-  job_id uuid references mechanic_jobs(id) on delete set null,
-  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
-  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  job_id uuid,
+  job_bike_id uuid,
+  mechanic_job_item_id uuid,
   product_id uuid references products(id) on delete set null,
   service_product_id uuid references products(id) on delete set null,
   system_key text not null,
@@ -12904,9 +13138,9 @@ create table if not exists bike_observations (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   bike_id uuid references bikes(id) on delete cascade not null,
-  job_id uuid references mechanic_jobs(id) on delete set null,
-  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
-  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  job_id uuid,
+  job_bike_id uuid,
+  mechanic_job_item_id uuid,
   lifecycle_id uuid references bike_component_lifecycles(id) on delete set null,
   product_id uuid references products(id) on delete set null,
   service_product_id uuid references products(id) on delete set null,
@@ -12951,9 +13185,9 @@ create table if not exists bike_interventions (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   bike_id uuid references bikes(id) on delete cascade not null,
-  job_id uuid references mechanic_jobs(id) on delete set null,
-  job_bike_id uuid references mechanic_job_bikes(id) on delete set null,
-  mechanic_job_item_id uuid references mechanic_job_items(id) on delete set null,
+  job_id uuid,
+  job_bike_id uuid,
+  mechanic_job_item_id uuid,
   product_id uuid references products(id) on delete set null,
   service_product_id uuid references products(id) on delete set null,
   from_lifecycle_id uuid references bike_component_lifecycles(id) on delete set null,
@@ -13012,6 +13246,26 @@ end $$;
 
 -- Table: mechanic_jobs (pegas)
 -- Main table for tracking service jobs/work orders
+-- NOTE: This must exist BEFORE the table default uses it (fresh bootstrap safety).
+create sequence if not exists public.mechanic_job_number_seq
+  start with 1
+  increment by 1
+  no cycle;
+
+create or replace function public.generate_mechanic_job_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_next_number integer;
+begin
+  v_next_number := nextval('public.mechanic_job_number_seq');
+  return 'PG-' || lpad(v_next_number::text, 5, '0');
+end;
+$$;
+
 create table if not exists mechanic_jobs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -13077,6 +13331,24 @@ create table if not exists mechanic_jobs (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Status backbone: mechanic_jobs.status_id (FK to job_statuses)
+alter table mechanic_jobs add column if not exists status_id uuid;
+
+do $$ begin
+  if not exists (
+    select 1
+      from information_schema.table_constraints
+     where constraint_name = 'mechanic_jobs_status_id_fkey'
+  ) then
+    alter table mechanic_jobs add constraint mechanic_jobs_status_id_fkey
+      foreign key (tenant_id, status_id) references job_statuses(tenant_id, id) on delete set null;
+  end if;
+exception
+  when others then raise notice '⚠️ mechanic_jobs.status_id FK: %', sqlerrm;
+end $$;
+
+create index if not exists idx_mechanic_jobs_status_id on mechanic_jobs(status_id);
 
 -- Add tax_treatment column to mechanic_jobs
 alter table mechanic_jobs 
@@ -16216,6 +16488,33 @@ create table if not exists employees (
   unique (tenant_id, rut)
 );
 
+-- Backfill FK: user_invitations.employee_id -> employees.id.
+-- user_invitations is created early (before employees) so core_schema.sql can
+-- bootstrap from a fresh/local database.
+do $$
+begin
+  if to_regclass('public.user_invitations') is null
+     or to_regclass('public.employees') is null then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = to_regclass('public.user_invitations')
+      and conname = 'user_invitations_employee_id_fkey'
+  ) then
+    begin
+      alter table public.user_invitations
+        add constraint user_invitations_employee_id_fkey
+        foreign key (employee_id) references public.employees(id) on delete cascade;
+    exception
+      when others then
+        raise notice '⚠️ Could not add FK user_invitations.employee_id -> employees.id (%).', sqlerrm;
+    end;
+  end if;
+end $$;
+
 -- Migration: Add missing columns to employees table
 do $$
 begin
@@ -18038,7 +18337,22 @@ create policy "users_manage_own_push_subscriptions" on email_push_subscriptions
   for all using (auth.uid() = user_id);
 
 -- Enable realtime for push notifications to Flutter app
-alter publication supabase_realtime add table email_push_subscriptions;
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'email_push_subscriptions'
+  ) then
+    alter publication supabase_realtime add table email_push_subscriptions;
+  end if;
+end $$;
 
 -- Function to trigger notification (called by Edge Function webhooks)
 create or replace function public.notify_new_email(
@@ -18940,14 +19254,27 @@ begin
 end $$;
 
 -- Seed default homepage content
-insert into website_content (id, title, content) values
-  ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
-  ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
-  ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
-  ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
-  ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
-  ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
-on conflict (id) do nothing;
+-- NOTE: Multi-tenant stores seed this content per-tenant (TenantSignupService).
+do $$
+begin
+  if not exists (
+    select 1
+      from information_schema.columns
+     where table_name = 'website_content'
+       and column_name = 'tenant_id'
+  ) then
+    insert into website_content (id, title, content) values
+      ('homepage_hero', 'Título Principal', '<h1>Bienvenido a Vinabike</h1><p>Las mejores bicicletas de Chile</p>'),
+      ('homepage_promo', 'Promoción Destacada', '<p>¡Aprovecha nuestras ofertas especiales!</p>'),
+      ('about_us', 'Sobre Nosotros', '<p>Somos una empresa dedicada a ofrecer las mejores bicicletas y accesorios en Chile.</p>'),
+      ('terms_conditions', 'Términos y Condiciones', '<p>Términos y condiciones de uso del sitio web.</p>'),
+      ('privacy_policy', 'Política de Privacidad', '<p>Política de privacidad y manejo de datos.</p>'),
+      ('shipping_info', 'Información de Envío', '<p>Enviamos a todo Chile. Costo de envío: $5.000. Envío gratis en compras sobre $50.000.</p>')
+    on conflict (id) do nothing;
+  else
+    raise notice 'Skipping default website_content INSERT - multi-tenant structure detected. Content will be seeded per-tenant.';
+  end if;
+end $$;
 
 --------------------------------------------------------------------------------
 -- MULTI-TENANT MIGRATION: Add tenant_id to all tables
@@ -18963,9 +19290,13 @@ begin
   end if;
 
   -- Categories
-  if not exists (select 1 from information_schema.columns where table_name = 'categories' and column_name = 'tenant_id') then
-    alter table categories add column tenant_id uuid references tenants(id) on delete cascade;
-    raise notice '✓ Added tenant_id to categories';
+  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+    if not exists (select 1 from information_schema.columns where table_name = 'categories' and column_name = 'tenant_id') then
+      alter table categories add column tenant_id uuid references tenants(id) on delete cascade;
+      raise notice '✓ Added tenant_id to categories';
+    end if;
+  else
+    raise notice '⚠ Table categories does not exist, skipping';
   end if;
 
   -- Product Categories
@@ -19326,17 +19657,19 @@ begin
   end if;
   
   if exists (select 1 from information_schema.tables where table_name = 'user_activity_log') then
-    alter table user_activity_log enable row level security;
-  end if;
-  
-  alter table customers enable row level security;
-  alter table products enable row level security;
-  alter table categories enable row level security;
-  alter table product_categories enable row level security;
-  alter table product_brands enable row level security;
-  alter table stock_movements enable row level security;
-  alter table sales_invoices enable row level security;
-  
+	  alter table user_activity_log enable row level security;
+	end if;
+
+	alter table customers enable row level security;
+	alter table products enable row level security;
+	if exists (select 1 from information_schema.tables where table_name = 'categories') then
+	  alter table categories enable row level security;
+	end if;
+	alter table product_categories enable row level security;
+	alter table product_brands enable row level security;
+	alter table stock_movements enable row level security;
+	alter table sales_invoices enable row level security;
+
   if exists (select 1 from information_schema.tables where table_name = 'sales_invoice_items') then
     alter table sales_invoice_items enable row level security;
   end if;
@@ -20821,7 +21154,7 @@ create table if not exists inventory_adjustments (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   product_id uuid references products(id) on delete cascade,
-  warehouse_id uuid references warehouses(id) on delete cascade,
+  warehouse_id uuid,
   adjustment_type text check (adjustment_type in ('add', 'subtract', 'set')) not null,
   quantity integer not null,
   reason text,
@@ -21091,7 +21424,7 @@ end $$;
 create table if not exists work_order_items (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  work_order_id uuid references work_orders(id) on delete cascade,
+  work_order_id uuid,
   product_id uuid references products(id) on delete set null,
   item_type text check (item_type in ('part', 'service', 'labor')) not null,
   description text not null,
@@ -21287,8 +21620,14 @@ exception when others then null; end $$;
 -- Drop existing policies first (both anon and authenticated versions)
 drop policy if exists "public_products_select" on products;
 drop policy if exists "public_products_select_authenticated" on products;
-drop policy if exists "public_categories_select" on categories;
-drop policy if exists "public_categories_select_authenticated" on categories;
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_name = 'categories') then
+    drop policy if exists "public_categories_select" on categories;
+    drop policy if exists "public_categories_select_authenticated" on categories;
+  end if;
+exception when others then null;
+end $$;
 drop policy if exists "public_product_categories_select" on product_categories;
 drop policy if exists "public_product_categories_select_authenticated" on product_categories;
 drop policy if exists "public_website_banners_select" on website_banners;
@@ -25054,6 +25393,164 @@ create policy "product_spec_values_insert" on product_spec_values for insert to 
 create policy "product_spec_values_update" on product_spec_values for update to authenticated using (tenant_id = public.user_tenant_id());
 create policy "product_spec_values_delete" on product_spec_values for delete to authenticated using (tenant_id = public.user_tenant_id());
 
+create or replace function public.is_broad_drivetrain_ecosystem_claim(
+  p_value text
+)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+  v_normalized text;
+  v_has_brand_family boolean;
+  v_has_exact_semantics boolean;
+begin
+  if p_value is null or btrim(p_value) = '' then
+    return false;
+  end if;
+
+  v_normalized := lower(btrim(p_value));
+  v_normalized := replace(v_normalized, 'á', 'a');
+  v_normalized := replace(v_normalized, 'é', 'e');
+  v_normalized := replace(v_normalized, 'í', 'i');
+  v_normalized := replace(v_normalized, 'ó', 'o');
+  v_normalized := replace(v_normalized, 'ú', 'u');
+  v_normalized := regexp_replace(v_normalized, '[^a-z0-9]+', '', 'g');
+
+  if v_normalized like '%ecosistema%' then
+    return true;
+  end if;
+
+  if v_normalized like '%compatible%'
+     and v_normalized not like '%genericocompatible%' then
+    return true;
+  end if;
+
+  v_has_brand_family := v_normalized like '%shimano%'
+    or v_normalized like '%sram%'
+    or v_normalized like '%campagnolo%'
+    or v_normalized like '%microshift%';
+
+  if not v_has_brand_family then
+    return false;
+  end if;
+
+  v_has_exact_semantics := v_normalized like '%hg%'
+    or v_normalized like '%sis%'
+    or v_normalized like '%dynasys%'
+    or v_normalized like '%linkglide%'
+    or v_normalized like '%cues%'
+    or v_normalized like '%exactactuation%'
+    or v_normalized like '%xactuation%'
+    or v_normalized like '%eagle%'
+    or v_normalized like '%axs%'
+    or v_normalized like '%flattop%'
+    or v_normalized like '%ttype%'
+    or v_normalized like '%transmission%'
+    or v_normalized like '%advent%'
+    or v_normalized like '%acolyte%'
+    or v_normalized like '%friccion%'
+    or v_normalized like '%universal%'
+    or v_normalized like '%single%'
+    or v_normalized like '%bmx%'
+    or v_normalized like '%ruta%';
+
+  return not v_has_exact_semantics;
+end;
+$$;
+
+create or replace function public.validate_product_spec_value_exact_drivetrain_fields()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_spec_key text;
+  v_raw_value text;
+begin
+  select sd.key
+    into v_spec_key
+    from public.spec_definitions sd
+   where sd.id = new.spec_definition_id;
+
+  if v_spec_key not in ('drivetrain_platform', 'shift_actuation_family') then
+    return new;
+  end if;
+
+  v_raw_value := btrim(coalesce(
+    new.value_option,
+    new.value_text,
+    case
+      when new.value_json is not null and jsonb_typeof(new.value_json) = 'string'
+        then new.value_json #>> '{}'
+      else null
+    end,
+    new.display_value,
+    ''
+  ));
+
+  if v_raw_value = '' then
+    return new;
+  end if;
+
+  if v_spec_key = 'drivetrain_platform' then
+    if not (v_raw_value = any (array[
+      'Shimano HG / SIS',
+      'Shimano Hyperglide+',
+      'Shimano Linkglide / CUES',
+      'SRAM Eagle',
+      'SRAM FlatTop / AXS road',
+      'SRAM T-Type Transmission',
+      'Campagnolo',
+      'Microshift Advent / Acolyte',
+      'Friccion / universal',
+      'Single speed / BMX',
+      'Generico compatible',
+      'Desconocido / sin confirmar'
+    ]))
+       and public.is_broad_drivetrain_ecosystem_claim(v_raw_value) then
+      raise exception
+        'drivetrain_platform must store an exact platform label, not a broad ecosystem claim (%).',
+        v_raw_value
+        using errcode = '23514';
+    end if;
+  end if;
+
+  if v_spec_key = 'shift_actuation_family' then
+    if not (v_raw_value = any (array[
+      'Shimano SIS 6-9v',
+      'Shimano Dynasys 10v',
+      'Shimano Dynasys 11/12v',
+      'Shimano CUES / Linkglide',
+      'Shimano ruta',
+      'SRAM Exact Actuation',
+      'SRAM X-Actuation / Eagle',
+      'SRAM AXS road / FlatTop',
+      'SRAM T-Type Transmission',
+      'Campagnolo',
+      'Microshift Advent / Acolyte',
+      'Friccion / universal',
+      'Otro',
+      'Desconocido / sin confirmar'
+    ]))
+       and public.is_broad_drivetrain_ecosystem_claim(v_raw_value) then
+      raise exception
+        'shift_actuation_family must store an exact actuation/indexing label, not a broad ecosystem claim (%).',
+        v_raw_value
+        using errcode = '23514';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_validate_product_spec_value_exact_drivetrain_fields on public.product_spec_values;
+create trigger trg_validate_product_spec_value_exact_drivetrain_fields
+  before insert or update of spec_definition_id, value_text, value_option, value_json, display_value
+  on public.product_spec_values
+  for each row
+  execute function public.validate_product_spec_value_exact_drivetrain_fields();
+
 -- service_profiles: operational behavior for a billable service product
 create table if not exists service_profiles (
   id                        uuid        primary key default gen_random_uuid(),
@@ -25344,16 +25841,22 @@ values
    '[{"value":"1","label":"1 pinon"},{"value":"3","label":"3 pinones"},{"value":"5","label":"5 pinones"},{"value":"6","label":"6 pinones"},{"value":"7","label":"7 pinones"},{"value":"8","label":"8 pinones"},{"value":"9","label":"9 pinones"},{"value":"10","label":"10 pinones"},{"value":"11","label":"11 pinones"},{"value":"12","label":"12 pinones"},{"value":"13","label":"13 pinones"},{"value":"14","label":"14 pinones"}]'::jsonb),
   ('00000000-0003-0001-0000-000000000006', null, '00000000-0003-0000-0000-000000000001',
    'freehub_type', 'Driver / freehub', 'single_select', false, 3,
-   '[{"value":"shimano_hg","label":"Shimano HG"},{"value":"microspline","label":"Micro Spline"},{"value":"sram_xd","label":"SRAM XD"},{"value":"campagnolo","label":"Campagnolo"},{"value":"threaded_freewheel","label":"Rueda libre roscada"},{"value":"bmx_driver","label":"Driver BMX"},{"value":"fixed_threaded","label":"Rosca fija / contratuerca"},{"value":"coaster_hub","label":"Maza contrapedal"},{"value":"unknown","label":"Desconocido / sin confirmar"}]'::jsonb),
+    '[{"value":"shimano_hg","label":"Shimano HG"},{"value":"shimano_hg_road_11","label":"Shimano HG Road 11"},{"value":"microspline","label":"Micro Spline"},{"value":"sram_xd","label":"SRAM XD"},{"value":"sram_xdr","label":"SRAM XDR"},{"value":"campagnolo","label":"Campagnolo"},{"value":"campagnolo_n3w","label":"Campagnolo N3W"},{"value":"threaded_freewheel","label":"Rueda libre roscada"},{"value":"bmx_driver","label":"Driver BMX"},{"value":"fixed_threaded","label":"Rosca fija / contratuerca"},{"value":"coaster_hub","label":"Maza contrapedal"},{"value":"unknown","label":"Desconocido / sin confirmar"}]'::jsonb),
   ('00000000-0003-0001-0000-000000000001', null, '00000000-0003-0000-0000-000000000001',
    'derailleurs', '¿Qué desviadores?', 'multi_select', true, 10,
    '[{"value":"rear","label":"Trasero"},{"value":"front","label":"Delantero"}]'::jsonb),
   ('00000000-0003-0001-0000-000000000002', null, '00000000-0003-0000-0000-000000000001',
    'cable_condition', 'Estado de cables', 'single_select', false, 20,
-   '[{"value":"ok","label":"OK"},{"value":"frayed","label":"Deshilachados - reemplazar"},{"value":"replace","label":"Ya reemplazados"}]'::jsonb),
+    '[{"value":"ok","label":"Funcionamiento suave / sin resistencia anormal"},{"value":"high_friction","label":"Alta friccion / recorrido duro"},{"value":"frayed","label":"Deshilachado"},{"value":"corroded","label":"Corrosion visible"},{"value":"housing_damaged","label":"Funda danada / colapsada"},{"value":"replace","label":"Danio severo / recambio necesario"}]'::jsonb),
   ('00000000-0003-0001-0000-000000000003', null, '00000000-0003-0000-0000-000000000001',
    'include_housing', '¿Incluye funda de cables?', 'boolean', false, 30, '[]'::jsonb)
-on conflict (id) do nothing;
+on conflict (id) do update
+set label = excluded.label,
+    question_type = excluded.question_type,
+    is_required = excluded.is_required,
+    sort_order = excluded.sort_order,
+    options_json = excluded.options_json,
+    updated_at = now();
 
 -- ============================================================
 -- Drivetrain service targets
@@ -25980,7 +26483,9 @@ join (
     ('00000000-0090-0001-0000-000000000001'::uuid, 'caliper_service', 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
      '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
     ('00000000-0091-0001-0000-000000000001'::uuid, 'brake_cable_replace_adjust', 'which_wheel', '¿Qué rueda(s)?', 'single_select', true, 10,
-     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb)
+     '[{"value":"front","label":"Delantera"},{"value":"rear","label":"Trasera"},{"value":"both","label":"Ambas"}]'::jsonb),
+    ('00000000-0091-0001-0000-000000000002'::uuid, 'brake_cable_replace_adjust', 'brake_type_mech', 'Tipo de freno mecánico', 'single_select', false, 30,
+     '[{"value":"v_brake","label":"V-Brake"},{"value":"mechanical_disc","label":"Disco mecánico"},{"value":"cantilever","label":"Cantilever"}]'::jsonb)
 ) as seed(id, profile_key, key, label, question_type, is_required, sort_order, options_json)
   on sp.key = seed.profile_key
 where sp.tenant_id is null
@@ -25992,3 +26497,788 @@ on conflict (service_profile_id, key) do update set
   sort_order = excluded.sort_order,
   options_json = excluded.options_json,
   updated_at = now();
+
+
+-- ============================================================================
+-- CORE_SCHEMA MIRROR: 20260426104500_drivetrain_spec_templates_and_mappings
+-- Do not deploy core_schema.sql directly; deploy the standalone migration file.
+-- ============================================================================
+
+-- ============================================================================
+-- DRIVETRAIN SPEC TEMPLATES + CATEGORY MAPPINGS
+-- Migration: 20260426104500_drivetrain_spec_templates_and_mappings.sql
+--
+-- Adds the structured ficha-tecnica layer needed for drivetrain compatibility.
+-- This follows the existing mature pattern:
+--   category_tech_mappings -> spec_templates -> product_spec_values
+--   -> BikeProductCompatibilityService
+--
+-- Important: this does not infer product specs from names/SKUs. It creates the
+-- fields and maps the right commercial categories so real product ficha data can
+-- be entered, audited, and consumed by the compatibility engine.
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. System spec definitions
+-- ---------------------------------------------------------------------------
+
+insert into spec_definitions (
+  tenant_id,
+  key,
+  label,
+  description,
+  data_type,
+  unit,
+  allowed_values,
+  validation_rules,
+  is_filterable,
+  is_required_by_default,
+  is_compatibility_relevant,
+  is_customer_visible,
+  is_mechanic_visible,
+  group_name,
+  sort_order
+)
+values
+  (null, 'drivetrain_speeds', 'Velocidades transmisión',
+   'Velocidades traseras compatibles: cassette, piñón, cambio, shifter, volante o corona.',
+   'multi_select', null, '["1","5","6","7","8","9","10","11","12","13"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 10),
+
+  (null, 'chain_speeds', 'Velocidades cadena',
+   'Velocidades traseras compatibles para cadenas y conectores de cadena.',
+   'multi_select', null, '["1","5","6","7","8","9","10","11","12","13"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 11),
+
+  (null, 'chain_width_family', 'Familia ancho cadena',
+   'Familia de ancho de cadena; especialmente importante para single speed, BMX y transmisiones modernas.',
+   'single_select', null, '["1/8","3/32","11/128","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 12),
+
+  (null, 'chain_outer_width_mm', 'Ancho externo cadena',
+   'Ancho externo nominal de la cadena en milimetros. En cadenas modernas ayuda a distinguir 9/10/11/12v dentro de la misma familia interna.',
+   'number', 'mm', '["5.25","5.3","5.62","5.88","5.95","6.6","6.7","7.1","7.3","7.8"]'::jsonb, '{"min":5.2,"max":7.8}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 13),
+
+  (null, 'link_count', 'Cantidad de eslabones',
+   'Cantidad de eslabones incluidos en una cadena.',
+    'number', 'eslabones', '["72","76","80","82","84","86","88","90","92","94","96","98","100","102","104","106","108","110","112","114","116","118","120","122","124","126","128","130","132","134","136"]'::jsonb, '{"min":72,"max":136}'::jsonb,
+   false, false, false, true, true, 'Contenido', 20),
+
+  (null, 'quick_link_included', 'Incluye missing link',
+   'Indica si la cadena incluye conector rapido.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, false, true, true, 'Contenido', 21),
+
+  (null, 'chain_connector_type', 'Tipo conector cadena',
+   'Tipo de conector o cierre de cadena.',
+   'single_select', null, '["Missing link","Pin","Half link","Otro"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 22),
+
+  (null, 'freehub_type', 'Driver / Freehub',
+    'Familia de driver trasero: distingue cuerpos como Shimano HG, HG Road 11, Micro Spline, XD, XDR, Campagnolo y N3W; no colapses estas variantes en una sola etiqueta gruesa.',
+    'single_select', null, '["Shimano HG","Shimano HG Road 11","Micro Spline","SRAM XD","SRAM XDR","Campagnolo","Campagnolo N3W","Rueda libre roscada","Driver BMX","Rosca fija / contratuerca","Maza contrapedal","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 23),
+
+  (null, 'smallest_cog_teeth', 'Piñón menor',
+   'Cantidad de dientes del piñón más pequeño del cassette o rueda libre.',
+    'number', 'T', '["8","9","10","11","12","13","14","15","16"]'::jsonb, '{"min":8,"max":24}'::jsonb,
+   true, false, true, true, true, 'Rango', 30),
+
+  (null, 'largest_cog_teeth', 'Piñón mayor',
+   'Cantidad de dientes del piñón más grande del cassette o rueda libre.',
+    'number', 'T', '["14","15","16","18","20","21","22","24","25","26","27","28","30","32","34","36","38","40","42","44","46","48","50","51","52","54","56","58","60"]'::jsonb, '{"min":14,"max":60}'::jsonb,
+   true, false, true, true, true, 'Rango', 31),
+
+  (null, 'single_cog_teeth', 'Dientes piñón simple',
+   'Cantidad de dientes cuando el producto es piñón simple, fixie o single speed.',
+   'number', 'T', '[]'::jsonb, '{"min":9,"max":24}'::jsonb,
+   true, false, true, true, true, 'Rango', 32),
+
+  (null, 'front_chainring_count', 'Cantidad de platos',
+   'Cantidad de platos delanteros que el componente soporta o incluye.',
+   'multi_select', null, '["1","2","3"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 40),
+
+  (null, 'chainring_teeth', 'Dientes plato/corona',
+   'Dientes del plato o corona; puede ser un valor simple o una combinación como 42/34/24.',
+   'text', 'T', '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Transmisión delantera', 41),
+
+  (null, 'chainring_bcd_mm', 'BCD corona',
+   'Diámetro BCD de la corona/plato.',
+   'number', 'mm', '[]'::jsonb, '{"min":64,"max":144}'::jsonb,
+   true, false, true, true, true, 'Montaje', 42),
+
+  (null, 'chainring_bolt_count', 'Pernos corona',
+   'Cantidad de pernos de montaje de la corona/plato.',
+   'single_select', null, '["3","4","5","Direct mount","Otro"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Montaje', 43),
+
+  (null, 'chainring_mount_type', 'Montaje corona',
+   'Interfaz de montaje de corona/plato.',
+   'single_select', null, '["BCD 4 pernos","BCD 5 pernos","Direct mount Shimano","Direct mount SRAM","Direct mount Cinch","Rosca BMX","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Montaje', 44),
+
+  (null, 'chainring_offset_mm', 'Offset corona',
+   'Offset de corona/plato para línea de cadena.',
+   'number', 'mm', '[]'::jsonb, '{"min":-10,"max":10}'::jsonb,
+   false, false, true, true, true, 'Montaje', 45),
+
+  (null, 'narrow_wide', 'Narrow-wide',
+   'Indica si la corona usa perfil narrow-wide.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Transmisión delantera', 46),
+
+  (null, 'crank_arm_length_mm', 'Largo biela',
+   'Largo de biela/pedivela.',
+   'number', 'mm', '[]'::jsonb, '{"min":130,"max":190}'::jsonb,
+   true, false, true, true, true, 'Bielas', 50),
+
+  (null, 'crank_side', 'Lado biela',
+   'Lado de la biela o pedivela cuando se vende por separado.',
+   'single_select', null, '["Izquierda","Derecha","Par"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Bielas', 51),
+
+  (null, 'pedal_thread', 'Rosca pedal',
+   'Rosca de pedal compatible.',
+   'single_select', null, '["9/16","1/2","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Bielas', 52),
+
+  (null, 'chainline_mm', 'Línea de cadena',
+   'Línea de cadena nominal del volante/corona.',
+   'number', 'mm', '[]'::jsonb, '{"min":35,"max":60}'::jsonb,
+   false, false, true, true, true, 'Compatibilidad', 53),
+
+  (null, 'bottom_bracket_family', 'Familia pedalier / motor',
+   'Familia o estándar principal del eje de motor / bottom bracket.',
+   'single_select', null, '["BSA roscado","Pressfit","BB30 / PF30","Mid / BMX","Americano / one-piece","Cuadrado cartucho","Hollowtech / 24mm externo","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 60),
+
+  (null, 'bb_thread_standard', 'Rosca pedalier',
+   'Estándar de rosca o caja del pedalier.',
+   'single_select', null, '["BSA / Inglés 1.37x24","Italiano","Americano BMX","Mid BMX","Pressfit","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 61),
+
+  (null, 'bb_shell_width_mm', 'Ancho caja motor',
+   'Ancho de caja del cuadro para motor / bottom bracket.',
+   'number', 'mm', '[]'::jsonb, '{"min":50,"max":125}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 62),
+
+  (null, 'spindle_interface', 'Interfaz eje',
+   'Interfaz del eje con biela: cuadrado, Hollowtech, ISIS, BMX, etc.',
+   'single_select', null, '["Cuadrado JIS","Cuadrado ISO","Hollowtech / 24mm","SRAM DUB","ISIS","Octalink","BMX 19mm","BMX 22mm","BMX 24mm","One-piece / americano","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 63),
+
+  (null, 'spindle_length_mm', 'Largo eje',
+   'Largo del eje de motor / spindle.',
+   'number', 'mm', '[]'::jsonb, '{"min":80,"max":150}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 64),
+
+  (null, 'spindle_diameter_mm', 'Diámetro eje',
+   'Diámetro de eje/spindle, común en BMX y motores externos.',
+   'number', 'mm', '[]'::jsonb, '{"min":15,"max":32}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 65),
+
+  (null, 'bearing_size_code', 'Código rodamiento',
+   'Código comercial del rodamiento, por ejemplo 6805, 6902 o 163110.',
+   'text', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Rodamientos', 66),
+
+  (null, 'bearing_inner_diameter_mm', 'Diámetro interno rodamiento',
+   'Diámetro interno del rodamiento.',
+   'number', 'mm', '[]'::jsonb, '{"min":5,"max":40}'::jsonb,
+   true, false, true, true, true, 'Rodamientos', 67),
+
+  (null, 'bearing_outer_diameter_mm', 'Diámetro externo rodamiento',
+   'Diámetro externo del rodamiento.',
+   'number', 'mm', '[]'::jsonb, '{"min":10,"max":60}'::jsonb,
+   true, false, true, true, true, 'Rodamientos', 68),
+
+  (null, 'shifter_position', 'Posición shifter',
+   'Indica si el mando controla cambio delantero, trasero o viene como par.',
+   'single_select', null, '["Izquierdo / delantero","Derecho / trasero","Par","Universal"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 70),
+
+  (null, 'shift_actuation_family', 'Familia indexado / tiro',
+   'Familia de tiro/indexado para shifter y desviadores.',
+   'single_select', null, '["Shimano MTB 6-9v","Shimano MTB 10-12v","Shimano ruta","Shimano CUES / Linkglide","SRAM Exact Actuation","SRAM X-Actuation","Campagnolo","Fricción","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 71),
+
+  (null, 'rear_derailleur_mount_type', 'Montaje cambio trasero',
+   'Tipo de montaje del cambio trasero.',
+   'single_select', null, '["Pata/postiza estándar","Direct mount","Con uña / claw","Extensor de pata","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 72),
+
+  (null, 'rear_derailleur_max_teeth', 'Máximo piñón cambio trasero',
+   'Máximo piñón que soporta el cambio trasero.',
+   'number', 'T', '[]'::jsonb, '{"min":24,"max":60}'::jsonb,
+   true, false, true, true, true, 'Cambios', 73),
+
+  (null, 'derailleur_cage_length', 'Largo caja cambio',
+   'Largo de caja/pata del cambio trasero.',
+   'single_select', null, '["SS / corta","GS / media","SGS / larga","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 74),
+
+  (null, 'front_derailleur_mount_type', 'Montaje desviador delantero',
+   'Tipo de montaje del desviador delantero.',
+   'single_select', null, '["Abrazadera","Braze-on","E-type","Direct mount","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 75),
+
+  (null, 'front_derailleur_clamp_mm', 'Abrazadera desviador delantero',
+   'Diámetro de abrazadera del desviador delantero.',
+   'single_select', 'mm', '["28.6","31.8","34.9","Otro","No aplica"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 76),
+
+  (null, 'front_derailleur_pull_direction', 'Tiro desviador delantero',
+   'Dirección de tiro del cable del desviador delantero.',
+   'single_select', null, '["Top pull","Down pull","Dual pull","Side swing","Electrónico","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 77),
+
+  (null, 'pulley_teeth', 'Dientes roldana',
+   'Cantidad de dientes de la roldana/polea de cambio.',
+   'number', 'T', '[]'::jsonb, '{"min":8,"max":18}'::jsonb,
+   true, false, true, true, true, 'Roldanas', 80),
+
+  (null, 'hanger_model_code', 'Código postiza / pata',
+   'Código de modelo de la postiza o fusible de cambio.',
+   'text', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Postiza', 81),
+
+  (null, 'compatible_frame_hint', 'Compatibilidad cuadro',
+   'Marca/modelo de cuadro compatible cuando aplica.',
+   'text', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Postiza', 82),
+
+  (null, 'chain_guide_mount_type', 'Montaje guía cadena',
+   'Tipo de montaje de guía de cadena.',
+   'single_select', null, '["ISCG 05","BB mount","Seat tube","Direct mount","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Guía cadena', 83),
+
+  (null, 'spacer_thickness_mm', 'Espesor espaciador',
+   'Espesor del espaciador de cassette/freehub.',
+   'number', 'mm', '[]'::jsonb, '{"min":0.5,"max":10}'::jsonb,
+   true, false, true, true, true, 'Espaciadores', 84),
+
+  (null, 'kit_contents', 'Contenido kit',
+   'Resumen estructurado/manual del contenido del kit.',
+   'text', null, '[]'::jsonb, '{}'::jsonb,
+   false, false, false, true, true, 'Kit', 85)
+on conflict (key) where tenant_id is null do update
+set label = excluded.label,
+    description = excluded.description,
+    data_type = excluded.data_type,
+    unit = excluded.unit,
+    allowed_values = excluded.allowed_values,
+    validation_rules = excluded.validation_rules,
+    is_filterable = excluded.is_filterable,
+    is_required_by_default = excluded.is_required_by_default,
+    is_compatibility_relevant = excluded.is_compatibility_relevant,
+    is_customer_visible = excluded.is_customer_visible,
+    is_mechanic_visible = excluded.is_mechanic_visible,
+    group_name = excluded.group_name,
+    sort_order = excluded.sort_order,
+    updated_at = now();
+
+-- ---------------------------------------------------------------------------
+-- 2. System templates
+-- ---------------------------------------------------------------------------
+
+insert into spec_templates (
+  tenant_id,
+  key,
+  name,
+  technical_family,
+  description,
+  default_tags,
+  is_active
+)
+values
+  (null, 'chain', 'Cadena', 'chain',
+   'Cadena de transmisión; compatibilidad principal por velocidades y familia de ancho.',
+   '["drivetrain","chain"]'::jsonb, true),
+  (null, 'chain_link', 'Missing Link / Conector Cadena', 'chain_link',
+   'Conector de cadena; compatibilidad principal por velocidades y ancho de cadena.',
+   '["drivetrain","chain"]'::jsonb, true),
+  (null, 'cassette', 'Cassette', 'cassette',
+   'Cassette para núcleo/freehub; compatibilidad por velocidades, driver y rango.',
+   '["drivetrain","rear_cogs"]'::jsonb, true),
+  (null, 'freewheel', 'Piñón / Rueda Libre', 'freewheel',
+   'Piñón atornillado o rueda libre; compatibilidad por rosca/driver y velocidades.',
+   '["drivetrain","rear_cogs"]'::jsonb, true),
+  (null, 'fixed_cog', 'Piñón Fixie', 'fixed_cog',
+   'Piñón fijo o single speed roscado.',
+   '["drivetrain","rear_cogs","fixie"]'::jsonb, true),
+  (null, 'rear_derailleur', 'Cambio Trasero', 'rear_derailleur',
+   'Cambio trasero; compatibilidad por velocidades, tiro/indexado, montaje y rango maximo.',
+   '["drivetrain","derailleur"]'::jsonb, true),
+  (null, 'front_derailleur', 'Desviador Delantero', 'front_derailleur',
+   'Desviador delantero; compatibilidad por cantidad de platos, tiro y montaje.',
+   '["drivetrain","derailleur"]'::jsonb, true),
+  (null, 'shifter', 'Shifter / Mando Cambio', 'shifter',
+   'Mando de cambio; compatibilidad por posicion, velocidades e indexado.',
+   '["drivetrain","controls"]'::jsonb, true),
+  (null, 'derailleur_hanger', 'Postiza / Pata Cambio', 'derailleur_hanger',
+   'Postiza o fusible de cambio; compatibilidad por cuadro/modelo y montaje.',
+   '["drivetrain","hanger"]'::jsonb, true),
+  (null, 'derailleur_pulley', 'Roldana Cambio', 'derailleur_pulley',
+   'Roldana/polea de cambio trasero.',
+   '["drivetrain","derailleur"]'::jsonb, true),
+  (null, 'bottom_bracket', 'Motor / Bottom Bracket', 'bottom_bracket',
+   'Motor/pedalier completo; compatibilidad por familia, caja, rosca, eje e interfaz.',
+   '["drivetrain","bottom_bracket"]'::jsonb, true),
+  (null, 'bottom_bracket_axle', 'Eje de Motor', 'bottom_bracket_axle',
+   'Eje/spindle de motor; compatibilidad por interfaz, largo y familia.',
+   '["drivetrain","bottom_bracket"]'::jsonb, true),
+  (null, 'bottom_bracket_cup', 'Cubeta de Motor', 'bottom_bracket_cup',
+   'Cubeta/cazoleta de motor; compatibilidad por rosca, caja y familia.',
+   '["drivetrain","bottom_bracket"]'::jsonb, true),
+  (null, 'bottom_bracket_bearing', 'Rodamiento Motor', 'bottom_bracket_bearing',
+   'Rodamiento de motor/pedalier; compatibilidad por codigo y medidas.',
+   '["drivetrain","bottom_bracket","bearing"]'::jsonb, true),
+  (null, 'crankset', 'Volante / Pedivela', 'crankset',
+   'Volante/pedivela completo; compatibilidad por platos, eje, motor y velocidades.',
+   '["drivetrain","crankset"]'::jsonb, true),
+  (null, 'crank_arm', 'Biela / Pedivela Suelta', 'crank_arm',
+   'Biela suelta; compatibilidad por lado, largo, interfaz de eje y rosca de pedal.',
+   '["drivetrain","crankset"]'::jsonb, true),
+  (null, 'chainring', 'Corona / Catalina / Plato', 'chainring',
+   'Corona, catalina o plato; compatibilidad por dientes, BCD/montaje, velocidades y offset.',
+   '["drivetrain","chainring"]'::jsonb, true),
+  (null, 'chain_guide', 'Guía de Cadena', 'chain_guide',
+   'Guía de cadena; compatibilidad por montaje, plato y línea de cadena.',
+   '["drivetrain","chain_guide"]'::jsonb, true),
+  (null, 'cassette_spacer', 'Espaciador Cassette', 'cassette_spacer',
+   'Espaciador de cassette/freehub.',
+   '["drivetrain","rear_cogs"]'::jsonb, true),
+  (null, 'drivetrain_kit', 'Kit Transmisión', 'drivetrain_kit',
+   'Kit mixto de transmisión; ficha resume contenido y compatibilidades principales.',
+   '["drivetrain","kit"]'::jsonb, true)
+on conflict (key) where tenant_id is null do update
+set name = excluded.name,
+    technical_family = excluded.technical_family,
+    description = excluded.description,
+    default_tags = excluded.default_tags,
+    is_active = excluded.is_active,
+    updated_at = now();
+
+-- ---------------------------------------------------------------------------
+-- 3. Template fields
+-- ---------------------------------------------------------------------------
+
+with field_rows(template_key, spec_key, is_required, section_key, sort_order, helper_text) as (
+  values
+    ('chain', 'chain_speeds', true, 'compatibility', 10, 'Velocidades reales que soporta la cadena.'),
+    ('chain', 'chain_width_family', false, 'compatibility', 20, 'Importante en single speed, BMX y cadenas angostas.'),
+    ('chain', 'chain_outer_width_mm', false, 'compatibility', 25, 'Clave para afinar 9/10/11/12v dentro de 11/128 y precisar coberturas reales en 3/32.'),
+    ('chain', 'link_count', false, 'contents', 10, null),
+    ('chain', 'quick_link_included', false, 'contents', 20, null),
+
+    ('chain_link', 'chain_speeds', true, 'compatibility', 10, 'Debe coincidir con la cadena instalada.'),
+    ('chain_link', 'chain_width_family', false, 'compatibility', 20, null),
+    ('chain_link', 'chain_outer_width_mm', false, 'compatibility', 25, 'Usa el ancho externo nominal cuando el fabricante lo declara para no mezclar 9/10/11/12v.'),
+    ('chain_link', 'chain_connector_type', false, 'identification', 10, null),
+
+    ('cassette', 'drivetrain_speeds', true, 'compatibility', 10, 'Cantidad de velocidades traseras.'),
+    ('cassette', 'freehub_type', true, 'compatibility', 20, 'Driver/nucleo requerido por el cassette.'),
+    ('cassette', 'smallest_cog_teeth', false, 'range', 10, null),
+    ('cassette', 'largest_cog_teeth', false, 'range', 20, 'Debe cruzarse con capacidad del cambio trasero.'),
+
+    ('freewheel', 'drivetrain_speeds', true, 'compatibility', 10, '1v para piñón simple; 5-8v para ruedas libres comunes.'),
+    ('freewheel', 'freehub_type', true, 'compatibility', 20, 'Normalmente rueda libre roscada.'),
+    ('freewheel', 'smallest_cog_teeth', false, 'range', 10, null),
+    ('freewheel', 'largest_cog_teeth', false, 'range', 20, null),
+
+    ('fixed_cog', 'drivetrain_speeds', false, 'compatibility', 10, 'Normalmente 1v / single speed.'),
+    ('fixed_cog', 'freehub_type', true, 'compatibility', 20, 'Normalmente rosca fija / contratuerca.'),
+    ('fixed_cog', 'single_cog_teeth', true, 'range', 10, null),
+    ('fixed_cog', 'chain_width_family', false, 'compatibility', 30, null),
+
+    ('rear_derailleur', 'drivetrain_speeds', true, 'compatibility', 10, 'Velocidades traseras compatibles.'),
+    ('rear_derailleur', 'shift_actuation_family', false, 'compatibility', 20, 'Familia de tiro/indexado.'),
+    ('rear_derailleur', 'rear_derailleur_mount_type', false, 'mounting', 10, null),
+    ('rear_derailleur', 'rear_derailleur_max_teeth', false, 'range', 10, 'Piñón mayor máximo soportado.'),
+    ('rear_derailleur', 'derailleur_cage_length', false, 'range', 20, null),
+
+    ('front_derailleur', 'front_chainring_count', true, 'compatibility', 10, '2x o 3x principalmente.'),
+    ('front_derailleur', 'drivetrain_speeds', false, 'compatibility', 20, 'Velocidades traseras compatibles.'),
+    ('front_derailleur', 'shift_actuation_family', false, 'compatibility', 30, null),
+    ('front_derailleur', 'front_derailleur_mount_type', false, 'mounting', 10, null),
+    ('front_derailleur', 'front_derailleur_clamp_mm', false, 'mounting', 20, null),
+    ('front_derailleur', 'front_derailleur_pull_direction', false, 'mounting', 30, null),
+
+    ('shifter', 'shifter_position', true, 'compatibility', 10, 'Izquierdo/delantero, derecho/trasero o par.'),
+    ('shifter', 'drivetrain_speeds', false, 'compatibility', 20, 'Velocidades para shifter derecho/trasero.'),
+    ('shifter', 'front_chainring_count', false, 'compatibility', 30, 'Platos para shifter izquierdo/delantero.'),
+    ('shifter', 'shift_actuation_family', false, 'compatibility', 40, null),
+
+    ('derailleur_hanger', 'hanger_model_code', false, 'identification', 10, 'Codigo A-HG, AE, marca/modelo, etc.'),
+    ('derailleur_hanger', 'compatible_frame_hint', false, 'compatibility', 10, 'Marca/modelo de cuadro compatible.'),
+    ('derailleur_hanger', 'rear_derailleur_mount_type', false, 'mounting', 10, null),
+
+    ('derailleur_pulley', 'pulley_teeth', true, 'compatibility', 10, null),
+    ('derailleur_pulley', 'derailleur_cage_length', false, 'compatibility', 20, null),
+
+    ('bottom_bracket', 'bottom_bracket_family', true, 'compatibility', 10, 'Debe coincidir con el estándar confirmado de la bici.'),
+    ('bottom_bracket', 'bb_thread_standard', false, 'compatibility', 20, null),
+    ('bottom_bracket', 'bb_shell_width_mm', false, 'dimensions', 10, null),
+    ('bottom_bracket', 'spindle_interface', false, 'compatibility', 30, null),
+    ('bottom_bracket', 'spindle_length_mm', false, 'dimensions', 20, null),
+    ('bottom_bracket', 'spindle_diameter_mm', false, 'dimensions', 30, null),
+
+    ('bottom_bracket_axle', 'bottom_bracket_family', false, 'compatibility', 10, null),
+    ('bottom_bracket_axle', 'spindle_interface', true, 'compatibility', 20, null),
+    ('bottom_bracket_axle', 'spindle_length_mm', true, 'dimensions', 10, null),
+
+    ('bottom_bracket_cup', 'bottom_bracket_family', true, 'compatibility', 10, null),
+    ('bottom_bracket_cup', 'bb_thread_standard', false, 'compatibility', 20, null),
+    ('bottom_bracket_cup', 'bb_shell_width_mm', false, 'dimensions', 10, null),
+
+    ('bottom_bracket_bearing', 'bottom_bracket_family', false, 'compatibility', 10, null),
+    ('bottom_bracket_bearing', 'bearing_size_code', false, 'identification', 10, null),
+    ('bottom_bracket_bearing', 'bearing_inner_diameter_mm', false, 'dimensions', 10, null),
+    ('bottom_bracket_bearing', 'bearing_outer_diameter_mm', false, 'dimensions', 20, null),
+    ('bottom_bracket_bearing', 'spindle_diameter_mm', false, 'dimensions', 30, null),
+
+    ('crankset', 'front_chainring_count', false, 'compatibility', 10, null),
+    ('crankset', 'chainring_teeth', false, 'compatibility', 20, null),
+    ('crankset', 'drivetrain_speeds', false, 'compatibility', 30, 'Velocidades traseras compatibles cuando el fabricante lo declara.'),
+    ('crankset', 'bottom_bracket_family', false, 'compatibility', 40, null),
+    ('crankset', 'spindle_interface', false, 'compatibility', 50, null),
+    ('crankset', 'crank_arm_length_mm', false, 'dimensions', 10, null),
+    ('crankset', 'chainline_mm', false, 'dimensions', 20, null),
+
+    ('crank_arm', 'crank_side', true, 'identification', 10, null),
+    ('crank_arm', 'crank_arm_length_mm', true, 'dimensions', 10, null),
+    ('crank_arm', 'spindle_interface', true, 'compatibility', 10, null),
+    ('crank_arm', 'pedal_thread', false, 'compatibility', 20, null),
+
+    ('chainring', 'chainring_teeth', true, 'compatibility', 10, null),
+    ('chainring', 'drivetrain_speeds', false, 'compatibility', 20, 'Velocidades traseras compatibles si la corona lo declara.'),
+    ('chainring', 'chain_width_family', false, 'compatibility', 30, null),
+    ('chainring', 'chainring_bcd_mm', false, 'mounting', 10, null),
+    ('chainring', 'chainring_bolt_count', false, 'mounting', 20, null),
+    ('chainring', 'chainring_mount_type', false, 'mounting', 30, null),
+    ('chainring', 'chainring_offset_mm', false, 'mounting', 40, null),
+    ('chainring', 'narrow_wide', false, 'features', 10, null),
+
+    ('chain_guide', 'chain_guide_mount_type', false, 'mounting', 10, null),
+    ('chain_guide', 'chainring_teeth', false, 'compatibility', 10, null),
+    ('chain_guide', 'chainline_mm', false, 'compatibility', 20, null),
+
+    ('cassette_spacer', 'freehub_type', false, 'compatibility', 10, null),
+    ('cassette_spacer', 'spacer_thickness_mm', true, 'dimensions', 10, null),
+
+    ('drivetrain_kit', 'kit_contents', false, 'contents', 10, null),
+    ('drivetrain_kit', 'front_chainring_count', false, 'compatibility', 10, null),
+    ('drivetrain_kit', 'chainring_teeth', false, 'compatibility', 20, null),
+    ('drivetrain_kit', 'bottom_bracket_family', false, 'compatibility', 30, null),
+    ('drivetrain_kit', 'spindle_interface', false, 'compatibility', 40, null),
+    ('drivetrain_kit', 'crank_arm_length_mm', false, 'dimensions', 10, null)
+)
+insert into spec_template_fields (
+  tenant_id,
+  template_id,
+  spec_definition_id,
+  is_required,
+  section_key,
+  sort_order,
+  helper_text
+)
+select
+  null,
+  st.id,
+  sd.id,
+  fr.is_required,
+  fr.section_key,
+  fr.sort_order,
+  fr.helper_text
+from field_rows fr
+join spec_templates st
+  on st.tenant_id is null
+ and st.key = fr.template_key
+join spec_definitions sd
+  on sd.tenant_id is null
+ and sd.key = fr.spec_key
+on conflict (template_id, spec_definition_id) do update
+set is_required = excluded.is_required,
+    section_key = excluded.section_key,
+    sort_order = excluded.sort_order,
+    helper_text = excluded.helper_text,
+    updated_at = now();
+
+-- ---------------------------------------------------------------------------
+-- 4. Existing tenant category mappings
+-- ---------------------------------------------------------------------------
+
+with mapping_rows(full_path, technical_family, template_key, default_tags, status) as (
+  values
+    ('Componentes / Transmisión / Cadenas', 'chain', 'chain', '["drivetrain","chain"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Missinglink', 'chain_link', 'chain_link', '["drivetrain","chain"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Cadenas / Guias de cadena', 'chain_guide', 'chain_guide', '["drivetrain","chain_guide"]'::jsonb, 'active'),
+
+    ('Componentes / Transmisión / Piñones', 'freewheel', 'freewheel', '["drivetrain","rear_cogs"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Piñones / Cassette', 'cassette', 'cassette', '["drivetrain","rear_cogs"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Piñones / Freewheel', 'freewheel', 'freewheel', '["drivetrain","rear_cogs"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Piñones / Fixie', 'fixed_cog', 'fixed_cog', '["drivetrain","rear_cogs","fixie"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Piñones / Espaciadores de Cassette', 'cassette_spacer', 'cassette_spacer', '["drivetrain","rear_cogs"]'::jsonb, 'active'),
+
+    ('Componentes / Cambios / Desviadores / Desviador Trasero', 'rear_derailleur', 'rear_derailleur', '["drivetrain","derailleur"]'::jsonb, 'active'),
+    ('Componentes / Cambios / Desviadores / Desviadores delanteros', 'front_derailleur', 'front_derailleur', '["drivetrain","derailleur"]'::jsonb, 'active'),
+    ('Componentes / Cambios / Shifters', 'shifter', 'shifter', '["drivetrain","controls"]'::jsonb, 'active'),
+    ('Componentes / Cambios / Postiza', 'derailleur_hanger', 'derailleur_hanger', '["drivetrain","hanger"]'::jsonb, 'active'),
+    ('Componentes / Cambios / Roldanas', 'derailleur_pulley', 'derailleur_pulley', '["drivetrain","derailleur"]'::jsonb, 'active'),
+
+    ('Componentes / Transmisión / Motores / Motor', 'bottom_bracket', 'bottom_bracket', '["drivetrain","bottom_bracket"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Motores / Ejes de motor', 'bottom_bracket_axle', 'bottom_bracket_axle', '["drivetrain","bottom_bracket"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Motores / Cubetas', 'bottom_bracket_cup', 'bottom_bracket_cup', '["drivetrain","bottom_bracket"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Motores / Rodamientos Motor', 'bottom_bracket_bearing', 'bottom_bracket_bearing', '["drivetrain","bottom_bracket","bearing"]'::jsonb, 'active'),
+
+    ('Componentes / Transmisión / Volantes', 'crankset', 'crankset', '["drivetrain","crankset"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Volantes / Volante', 'crankset', 'crankset', '["drivetrain","crankset"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Volantes / Biela Americana', 'crankset', 'crankset', '["drivetrain","crankset","bmx"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Volantes / Biela Izquierda', 'crank_arm', 'crank_arm', '["drivetrain","crankset"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Volantes / Catalina', 'chainring', 'chainring', '["drivetrain","chainring"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Volantes / Coronas', 'chainring', 'chainring', '["drivetrain","chainring"]'::jsonb, 'active'),
+    ('Componentes / Transmisión / Kits', 'drivetrain_kit', 'drivetrain_kit', '["drivetrain","kit"]'::jsonb, 'active')
+)
+insert into category_tech_mappings (
+  tenant_id,
+  category_id,
+  technical_family,
+  template_id,
+  default_tags,
+  status
+)
+select
+  pc.tenant_id,
+  pc.id,
+  mr.technical_family,
+  st.id,
+  mr.default_tags,
+  mr.status
+from mapping_rows mr
+join product_categories pc
+  on pc.tenant_id is not null
+ and pc.full_path = mr.full_path
+join spec_templates st
+  on st.tenant_id is null
+ and st.key = mr.template_key
+on conflict (tenant_id, category_id) do update
+set technical_family = excluded.technical_family,
+    template_id = excluded.template_id,
+    default_tags = excluded.default_tags,
+    status = excluded.status,
+    updated_at = now();
+
+-- ============================================================================
+-- CORE_SCHEMA MIRROR: 20260426173000_drivetrain_precision_spec_layer
+-- ============================================================================
+-- DRIVETRAIN PRECISION SPEC LAYER
+-- Migration: 20260426173000_drivetrain_precision_spec_layer.sql
+--
+-- Extends the first drivetrain ficha layer with platform/profile fields that
+-- matter for real compatibility decisions. This stays additive and idempotent:
+-- no product specs are guessed from names/SKUs, and existing product rows keep
+-- working while mechanics fill richer ficha data over time.
+-- ============================================================================
+
+insert into spec_definitions (
+  tenant_id,
+  key,
+  label,
+  description,
+  data_type,
+  unit,
+  allowed_values,
+  validation_rules,
+  is_filterable,
+  is_required_by_default,
+  is_compatibility_relevant,
+  is_customer_visible,
+  is_mechanic_visible,
+  group_name,
+  sort_order
+)
+values
+  (null, 'freehub_type', 'Driver / Freehub',
+   'Familia de driver trasero: nucleo de cassette, XDR/XD, Micro Spline, rueda libre roscada, driver BMX, fijo o contrapedal.',
+   'single_select', null, '["Shimano HG","Shimano HG Road 11","Micro Spline","SRAM XD","SRAM XDR","Campagnolo","Campagnolo N3W","Rueda libre roscada","Driver BMX","Rosca fija / contratuerca","Maza contrapedal","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 23),
+
+  (null, 'drivetrain_mode', 'Modo transmision',
+   'Rama principal de compatibilidad: derailleur o single speed / BMX / IGH.',
+   'single_select', null, '["Derailleur","Single speed / BMX / IGH","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 12),
+
+  (null, 'drivetrain_primary_ecosystem', 'Familia tecnica / ecosistema principal',
+   'Ecosistema tecnico principal declarado por el fabricante. No confundir con la marca comercial del producto.',
+   'single_select', null, '["Ecosistema Shimano","Ecosistema SRAM","Ecosistema Campagnolo","Ecosistema Microshift","Universal / generico","Single speed / BMX","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 13),
+
+  (null, 'drivetrain_declared_compatible_ecosystems', 'Ecosistemas compatibles declarados',
+   'Claims explicitos de compatibilidad cruzada impresos en la caja, por ejemplo Compatible Shimano. No usar para duplicar el ecosistema principal.',
+   'multi_select', null, '["Ecosistema Shimano","Ecosistema SRAM","Ecosistema Campagnolo","Ecosistema Microshift","Universal / generico","Single speed / BMX","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Compatibilidad', 14),
+
+  (null, 'shift_actuation_family', 'Familia indexado / tiro',
+   'Familia de tiro/indexado para shifter y desviadores; no confundir con marca comercial simple.',
+   'single_select', null, '["Shimano SIS 6-9v","Shimano Dynasys 10v","Shimano Dynasys 11/12v","Shimano CUES / Linkglide","Shimano ruta","SRAM Exact Actuation","SRAM X-Actuation / Eagle","SRAM AXS road / FlatTop","SRAM T-Type Transmission","Campagnolo","Microshift Advent / Acolyte","Friccion / universal","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 71),
+
+  (null, 'drivetrain_platform', 'Plataforma transmision',
+   'Ecosistema de compatibilidad declarado por el fabricante cuando afecta cadena, cassette, cambio, shifter o plato.',
+   'single_select', null, '["Shimano HG / SIS","Shimano Hyperglide+","Shimano Linkglide / CUES","SRAM Eagle","SRAM FlatTop / AXS road","SRAM T-Type Transmission","Campagnolo","Microshift Advent / Acolyte","Friccion / universal","Single speed / BMX","Generico compatible","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+    true, false, true, true, true, 'Compatibilidad', 15),
+
+  (null, 'chain_profile_family', 'Perfil cadena',
+   'Perfil o familia de cadena compatible: universal, HG+, Linkglide, Eagle, FlatTop, BMX/single speed, etc.',
+   'multi_select', null, '["Universal 5-8v","Universal 9-11v","Shimano HG+","Shimano Linkglide / CUES","SRAM Eagle","SRAM FlatTop","SRAM T-Type","Campagnolo","KMC compatible","Single speed / BMX","Otro","Desconocido / sin confirmar"]'::jsonb, '{}'::jsonb,
+    true, false, true, true, true, 'Compatibilidad', 16),
+
+  (null, 'chain_directional', 'Cadena direccional',
+   'Indica si la cadena tiene sentido de instalacion declarado por fabricante.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, false, true, true, 'Caracteristicas', 24),
+
+  (null, 'chain_ebike_rated', 'Apta e-bike',
+   'Indica si la cadena o kit declara refuerzo para e-bike o alto torque.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, false, true, true, 'Caracteristicas', 25),
+
+  (null, 'chain_link_reusable', 'Missing link reutilizable',
+   'Indica si el conector de cadena declara reutilizacion.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, false, true, true, 'Contenido', 26),
+
+  (null, 'chain_link_pack_qty', 'Cantidad conectores',
+   'Cantidad de conectores incluidos en el pack.',
+   'number', 'unidades', '[]'::jsonb, '{"min":1,"max":100}'::jsonb,
+   false, false, false, true, true, 'Contenido', 27),
+
+  (null, 'cassette_cog_sequence', 'Secuencia pinones',
+   'Secuencia de dientes del cassette o rueda libre, por ejemplo 11-13-15-18-21-24-28-32.',
+   'text', 'T', '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Rango', 33),
+
+  (null, 'rear_derailleur_min_teeth', 'Minimo pinon cambio trasero',
+   'Piñon menor minimo recomendado por el cambio trasero.',
+   'number', 'T', '[]'::jsonb, '{"min":8,"max":24}'::jsonb,
+   true, false, true, true, true, 'Rango', 75),
+
+  (null, 'rear_derailleur_total_capacity_teeth', 'Capacidad total cambio trasero',
+   'Capacidad total del cambio trasero en dientes.',
+   'number', 'T', '[]'::jsonb, '{"min":10,"max":60}'::jsonb,
+   true, false, true, true, true, 'Rango', 76),
+
+  (null, 'derailleur_clutch', 'Cambio con clutch',
+   'Indica si el cambio trasero tiene embrague/clutch de estabilizacion de cadena.',
+   'boolean', null, '[]'::jsonb, '{}'::jsonb,
+   true, false, true, true, true, 'Cambios', 77),
+
+  (null, 'bb_shell_diameter_mm', 'Diametro caja motor',
+   'Diametro interno o nominal de la caja de motor cuando el estandar lo requiere.',
+   'number', 'mm', '[]'::jsonb, '{"min":30,"max":55}'::jsonb,
+   true, false, true, true, true, 'Pedalier', 69),
+
+  (null, 'bb_bearing_width_mm', 'Ancho rodamiento motor',
+   'Ancho del rodamiento de motor/pedalier.',
+   'number', 'mm', '[]'::jsonb, '{"min":5,"max":20}'::jsonb,
+   true, false, true, true, true, 'Rodamientos', 70)
+on conflict (key) where tenant_id is null do update
+set label = excluded.label,
+    description = excluded.description,
+    data_type = excluded.data_type,
+    unit = excluded.unit,
+    allowed_values = excluded.allowed_values,
+    validation_rules = excluded.validation_rules,
+    is_filterable = excluded.is_filterable,
+    is_required_by_default = excluded.is_required_by_default,
+    is_compatibility_relevant = excluded.is_compatibility_relevant,
+    is_customer_visible = excluded.is_customer_visible,
+    is_mechanic_visible = excluded.is_mechanic_visible,
+    group_name = excluded.group_name,
+    sort_order = excluded.sort_order,
+    updated_at = now();
+
+with field_rows(template_key, spec_key, is_required, section_key, sort_order, helper_text) as (
+  values
+    ('chain', 'drivetrain_mode', false, 'compatibility', 15, 'Rama principal: derailleur o single speed / BMX / IGH.'),
+    ('chain', 'drivetrain_primary_ecosystem', false, 'compatibility', 30, 'Ecosistema principal declarado por la caja. No usar la marca comercial como atajo.'),
+    ('chain', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 40, 'Solo para claims explícitos como Compatible Shimano.'),
+    ('chain', 'drivetrain_platform', false, 'compatibility', 50, 'Solo llenar si el fabricante declara una plataforma especifica.'),
+    ('chain', 'chain_profile_family', false, 'compatibility', 60, 'Perfil de compatibilidad declarado por fabricante.'),
+    ('chain', 'chain_directional', false, 'features', 10, null),
+    ('chain', 'chain_ebike_rated', false, 'features', 20, null),
+
+    ('chain_link', 'drivetrain_mode', false, 'compatibility', 15, 'Rama principal: derailleur o single speed / BMX / IGH.'),
+    ('chain_link', 'drivetrain_primary_ecosystem', false, 'compatibility', 30, 'Ecosistema principal declarado por la cadena/conector.'),
+    ('chain_link', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 40, 'Solo para claims explícitos impresos en el conector.'),
+    ('chain_link', 'chain_profile_family', false, 'compatibility', 50, 'Debe coincidir con cadena y plataforma cuando aplica.'),
+    ('chain_link', 'chain_link_reusable', false, 'features', 10, null),
+    ('chain_link', 'chain_link_pack_qty', false, 'contents', 20, null),
+
+    ('cassette', 'cassette_cog_sequence', false, 'range', 30, null),
+
+    ('freewheel', 'cassette_cog_sequence', false, 'range', 30, null),
+
+    ('rear_derailleur', 'drivetrain_primary_ecosystem', false, 'compatibility', 20, 'Ecosistema principal que el cambio trasero declara servir.'),
+    ('rear_derailleur', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 25, 'Solo para claims explícitos de compatibilidad cruzada.'),
+    ('rear_derailleur', 'drivetrain_platform', false, 'compatibility', 30, null),
+    ('rear_derailleur', 'rear_derailleur_min_teeth', false, 'range', 15, null),
+    ('rear_derailleur', 'rear_derailleur_total_capacity_teeth', false, 'range', 30, null),
+    ('rear_derailleur', 'derailleur_clutch', false, 'features', 10, null),
+
+    ('front_derailleur', 'drivetrain_primary_ecosystem', false, 'compatibility', 30, null),
+    ('front_derailleur', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 35, null),
+    ('front_derailleur', 'drivetrain_platform', false, 'compatibility', 40, null),
+
+    ('shifter', 'drivetrain_primary_ecosystem', false, 'compatibility', 40, null),
+    ('shifter', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 45, null),
+    ('shifter', 'drivetrain_platform', false, 'compatibility', 50, null),
+
+    ('bottom_bracket', 'bb_shell_diameter_mm', false, 'dimensions', 40, null),
+    ('bottom_bracket_bearing', 'bb_bearing_width_mm', false, 'dimensions', 40, null),
+
+    ('crankset', 'drivetrain_platform', false, 'compatibility', 60, null),
+    ('crankset', 'chain_profile_family', false, 'compatibility', 70, 'Perfil de cadena/plato declarado si aplica.'),
+
+    ('chainring', 'chain_profile_family', false, 'compatibility', 40, null),
+    ('chainring', 'drivetrain_platform', false, 'compatibility', 50, null),
+
+    ('drivetrain_kit', 'drivetrain_primary_ecosystem', false, 'compatibility', 40, 'Ecosistema principal del kit; plataforma, perfil e indexado refinan despues.'),
+    ('drivetrain_kit', 'drivetrain_declared_compatible_ecosystems', false, 'compatibility', 45, 'Solo para claims explícitos de compatibilidad cruzada.'),
+    ('drivetrain_kit', 'drivetrain_platform', false, 'compatibility', 50, null),
+    ('drivetrain_kit', 'chain_profile_family', false, 'compatibility', 60, null),
+    ('drivetrain_kit', 'chain_ebike_rated', false, 'features', 10, null)
+)
+insert into spec_template_fields (
+  tenant_id,
+  template_id,
+  spec_definition_id,
+  is_required,
+  section_key,
+  sort_order,
+  helper_text
+)
+select
+  null,
+  st.id,
+  sd.id,
+  fr.is_required,
+  fr.section_key,
+  fr.sort_order,
+  fr.helper_text
+from field_rows fr
+join spec_templates st
+  on st.tenant_id is null
+ and st.key = fr.template_key
+join spec_definitions sd
+  on sd.tenant_id is null
+ and sd.key = fr.spec_key
+on conflict (template_id, spec_definition_id) do update
+set is_required = excluded.is_required,
+    section_key = excluded.section_key,
+    sort_order = excluded.sort_order,
+    helper_text = excluded.helper_text,
+    updated_at = now();

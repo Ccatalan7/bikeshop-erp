@@ -302,7 +302,7 @@ class Product {
       'color': color,
       'size': size,
       'material': material,
-      'dimensions': dimensions?.toJson(),
+      'dimensions': dimensions?.toJson() ?? const <String, dynamic>{},
       'warranty_months': warrantyMonths,
       'lifecycle_status': lifecycleStatus,
       'serialized': serialized,

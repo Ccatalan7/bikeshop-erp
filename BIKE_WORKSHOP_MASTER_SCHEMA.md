@@ -1,8 +1,13 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-04-21
+Last updated: 2026-04-27
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
+
+Compatibility concepts companion: `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md`
+
+Use this file for backbone architecture and layer ownership.
+Use `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md` for the technical and conceptual compatibility doctrine that the code, schema, and scorer must stay aligned with.
 
 ## Why This File Exists
 
@@ -37,7 +42,33 @@ Any time an agent or developer changes any of the following, they must update th
 - bike record panel / visible history
 - any database schema that changes this backbone
 
+If the task changes compatibility semantics, product ficha meaning, canonical vocabularies, or compatibility scoring doctrine, it must also update `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md` in the same task.
+
 They must also update `/.github/copilot-instructions.md` with the same architectural direction and the reference to this file.
+
+## Ordered Progress Ledger Rule
+
+This file is not only the architecture doctrine.
+
+It is also the primary ordered ledger for bike workshop progress.
+
+Fresh agents must use this file first to determine:
+
+- what has already landed
+- what remains open
+- what is intentionally deferred
+- what the next ordered queue is
+
+Whenever substantive bike workshop work lands, the same task must update all of the following here:
+
+1. the affected architecture/doctrine section
+2. the current reality that is now true because of the change
+3. the ordered `Next Session Priority Queue`
+4. any newly blocked, deferred, or intentionally premature work
+
+If this file and `.github/copilot-instructions.md` drift apart, this file wins and the repo instructions must be reconciled in the same task.
+
+Do not continue bike workshop work from memory alone, and do not invent a new next step before reconciling the ordered queue in this file.
 
 ## Mandatory Whole-Backbone Inspection Rule
 
@@ -106,19 +137,20 @@ Start by proving that you understand the current system.
 Read these exact files first, in this order:
 
 1. `BIKE_WORKSHOP_MASTER_SCHEMA.md`
-2. `.github/copilot-instructions.md`
-3. `supabase/sql/core_schema.sql`
-4. `lib/modules/bikeshop/models/bikeshop_models.dart`
-5. `lib/modules/bikeshop/services/bikeshop_service.dart`
-6. `lib/modules/bikeshop/pages/bike_form_dialog.dart`
-7. `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`
-8. `lib/modules/bikeshop/widgets/bike_system_controller.dart`
-9. `lib/modules/bikeshop/widgets/bike_record_panel.dart`
-10. `lib/modules/bikeshop/widgets/service_wizard_dialog.dart`
-11. `lib/modules/bikeshop/services/service_wizard_service.dart`
-12. `lib/modules/bikeshop/config/brake_canonical_data.dart`
-13. `lib/shared/models/bike_catalog_models.dart`
-14. `lib/shared/services/bike_catalog_service.dart`
+2. `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md`
+3. `.github/copilot-instructions.md`
+4. `supabase/sql/core_schema.sql`
+5. `lib/modules/bikeshop/models/bikeshop_models.dart`
+6. `lib/modules/bikeshop/services/bikeshop_service.dart`
+7. `lib/modules/bikeshop/pages/bike_form_dialog.dart`
+8. `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`
+9. `lib/modules/bikeshop/widgets/bike_system_controller.dart`
+10. `lib/modules/bikeshop/widgets/bike_record_panel.dart`
+11. `lib/modules/bikeshop/widgets/service_wizard_dialog.dart`
+12. `lib/modules/bikeshop/services/service_wizard_service.dart`
+13. `lib/modules/bikeshop/config/brake_canonical_data.dart`
+14. `lib/shared/models/bike_catalog_models.dart`
+15. `lib/shared/services/bike_catalog_service.dart`
 
 If the change touches historical context or prior implementation intent, also read:
 
@@ -152,7 +184,7 @@ Fresh agents must preserve these exact rules unless they are deliberately redesi
 - `front_wheel` and `rear_wheel` are now the primary interactive wheel units. Legacy aggregate `wheels` remains only as a family/compatibility alias and backward-compatible history fallback; do not keep building new UI or targeting flows around a single undifferentiated wheel bucket.
 - `bottom_bracket` is now a dedicated shared-controller system because pedalier bearings and standards matter operationally on their own, even though `bottomBracketFamily` still lives in `bike_profiles.technical_profile.values` as upstream truth.
 - `cockpit` now explicitly means cockpit/steering. Headset belongs under this system until a richer schema/editor layer exists; do not leave headset semantics stranded in vague placeholder copy or freeform notes.
-- `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, and `rear_wheel` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, and `bottom_bracket` intentionally route to explicit unavailable-system placeholders instead of a second reduced controller.
+- only `drivetrain`, `front_brake`, and `rear_brake` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` intentionally route to explicit unavailable-system context cards instead of a second reduced controller.
 
 ### Mandatory Live Verification Protocol
 
@@ -186,6 +218,89 @@ Known example:
 - the live brake service family was `brake`, not `brakes`
 
 That single mismatch was enough to make code look correct while the live system still behaved wrong.
+
+### Mandatory External Technical Research Protocol
+
+When the task touches bike technical data, workshop compatibility semantics, product ficha meaning, diagnosis gating, service-profile technical vocabulary, or the compatibility engine, agents must also study external workshop-standard references before implementing.
+
+This is mandatory for work such as:
+
+- new or changed bike technical fields
+- new compatibility keys or value vocabularies
+- drivetrain / brake / wheel / hub / bottom-bracket matching logic
+- product ficha option sets, bounded numeric ranges, or canonical labels
+- decisions about whether two standards are equivalent, adjacent, or incompatible
+
+Required external sources:
+
+- Sheldon Brown
+- Park Tool
+
+Required method:
+
+- inspect the relevant pages with browser tools, not only memory or guesswork
+- prefer studying the actual article context, tables, diagrams, compatibility notes, and edge-case wording before deciding canonical app semantics
+- use those sources to sharpen the technical conclusion, then reconcile that conclusion with live production data, the existing schema, and the current backbone rules
+
+Important boundary:
+
+- external reference research does not replace live production inspection or schema search
+- live data still decides what the app currently stores and how migrations must be staged
+- external sources help determine the best technical model so the implementation does not freeze a weak or guessed assumption into the backbone
+
+Definition-of-done addition for this class of task:
+
+- a bike technical-data or compatibility-engine task is incomplete if it changes semantics without first checking both live production shape and the relevant Sheldon Brown / Park Tool references in the browser
+
+### Mandatory Fast Validation Harness For Compatibility And Backbone Changes
+
+Any change that touches the compatibility engine or the master-schema backbone must also be proved through one fast end-to-end debug workflow.
+
+Code reading, seed inspection, and ad hoc manual setup are not enough by themselves.
+
+Current code-side harness:
+
+- `lib/modules/bikeshop/pages/pegas_table_page.dart` now hides the old `Tests` filter/tab from non-debug sessions and exposes a debug-only `Prueba rápida` launcher in the jobs page header
+- that launcher creates explicit DB-backed workshop fixtures for testing; it is not a production-visible affordance and must stay hidden from release users
+- the resulting jobs are intentionally tagged as test/debug data and continue to route through the debug-only `test` filter path, while normal production filters keep excluding them
+
+This harness must be used for every change that affects at least one of these areas:
+
+- bike-profile promotion or upstream truth capture
+- diagnosis gating or service-wizard projection
+- product compatibility ranking, scorer logic, or bike-aware product search
+- canonical compatibility vocabularies or master-schema wiring across profile, diagnosis, service, item, and memory layers
+
+Current built-in bike scenarios:
+
+- `drivetrain_no_profile`: creates a fresh bike with no existing `bike_profile`; use this when the task must prove upstream profile creation/promotion behavior from service or diagnosis flows
+- `rim_brake_city`: reusable 3x7 rim-brake city bike for rim-brake gating, cable/brake wizard flows, and basic drivetrain checks
+- `hydraulic_disc_mtb`: reusable 1x12 hydraulic-disc hardtail for modern disc-brake, rotor, and drivetrain compatibility paths
+- `bmx_single_speed`: reusable BMX singlespeed case for `1x1`, `bmx_driver`, and rim-brake edge cases
+
+Current built-in lifecycle stages:
+
+- `intake`
+- `diagnostic`
+- `in_progress`
+- `completed`
+- `delivered`
+
+Minimum validation loop for compatibility/backbone work:
+
+1. choose the nearest built-in bike scenario and lifecycle stage
+2. create the quick test job from the debug-only launcher
+3. open the created job and execute the changed flow end to end
+4. verify the exact upstream/downstream effect that the task changed
+5. if the nearest built-in scenario is insufficient, extend the harness in the same task instead of inventing a one-off manual setup
+6. record in the task summary which scenario and stage were used
+
+Task-completion rule addition:
+
+- a compatibility-engine or backbone/master-schema task is incomplete if it ships without at least one focused harness run or equivalent automated coverage
+- ad hoc manual creation of random `Test` customers, bikes, or jobs is no longer the default validation path; extend the harness instead when the existing scenarios are insufficient
+
+This strengthens centralization because validation now runs through explicit, repeatable bike/job/profile fixtures instead of depending on production-visible test UI, random local data, or repeated manual setup.
 
 ### Search-First Rule
 
@@ -512,6 +627,73 @@ The existing generic product spec engine should therefore be used progressively,
 - first-wave UI consumers may be advisory ranking surfaces, such as shared product autocompletes in workshop flows, before the system grows into stronger validation gates
 - when product spec coverage is sparse, products with no detailed spec rows should remain neutral unless a controlled coarse technical-family mapping already proves an obvious incompatibility
 - compatibility hints in workshop suggestion UI should be driven first by `bike_profiles.technical_profile.values`, then by `product_spec_values` / `spec_definitions.key`, and may use `category_tech_mappings.technical_family` as a coarse fallback; they must not be driven by raw `products.category_name` or page-local keyword matching
+- ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already works with known counts, diameters, widths, tooth ranges, and driver families
+- when one product-spec field is downstream of stronger upstream selections such as chain width, drivetrain speeds, declared profile, brand family, or freehub family, the ficha UI must filter, lock, or suppress incompatible options instead of letting the user save contradictory combinations that later poison the compatibility layer
+
+### Commercial Brand Is Not Compatibility Family
+
+This must be explicit because the drivetrain slice already drifted here once.
+
+- `products.brand` is commercial catalog brand data, not technical compatibility truth by itself
+- compatibility engines are not allowed to treat raw product brand text as the stored backbone answer for ecosystem-family matching
+- if a component family depends on an ecosystem/manufacturer family such as Shimano, SRAM, Campagnolo, Microshift, universal/generic, or single-speed/BMX, that truth must exist as a first-class visible ficha field with controlled values before downstream refinements start relying on it
+- for drivetrain products, one overloaded broad field is no longer sufficient. The catalog side must distinguish between:
+  - a mandatory singular top anchor for the product's main drivetrain branch or ecosystem truth
+  - optional explicit cross-ecosystem compatibility claims printed on packaging
+  - narrower downstream platform/profile/actuation refinements
+- the corrected target model is:
+  - `drivetrain_mode` (or equivalent) as the top branch: at minimum `single_speed_bmx_igh` vs `derailleur`; this is mandatory for chain-family templates and may be implicit for other drivetrain templates when category already proves the branch
+  - when stronger chain-side signals such as standardized width family, confirmed chain speeds, declared platform, or anchored profile already prove that branch, the ficha UI should keep `drivetrain_mode` implicit/hidden instead of re-showing it as a second locked pseudo-field; persist it manually only when the branch is still unresolved and really needs explicit upstream confirmation
+  - `drivetrain_primary_ecosystem` (user-facing: `Familia tecnica / ecosistema principal`) as a mandatory single-select anchor for modern derailleur-compatible products when the manufacturer declares one; this is the real top hierarchy field for Shimano/SRAM/Campagnolo/Microshift-style truth
+  - `drivetrain_declared_compatible_ecosystems` as an optional multi-select field only for explicit packaging claims such as `Compatible Shimano` or genuinely multi-ecosystem chain marketing; do not overload the primary ecosystem field with these claims
+  - `drivetrain_platform` as a narrower single-select platform under the primary ecosystem, for examples like `Shimano Hyperglide+`, `Shimano Linkglide / CUES`, `SRAM Eagle`, `SRAM FlatTop / AXS road`, or `SRAM T-Type Transmission`
+  - compatibility scoring must not silently expand `drivetrain_primary_ecosystem` or `drivetrain_declared_compatible_ecosystems` into exact downstream platforms such as HG+, Linkglide, Eagle, or T-Type; those broad ecosystem claims can gate obvious mismatch or keep the result in caution territory, but exact platform truth still belongs to `drivetrain_platform` / `chain_profile_family`
+  - the same rule applies when legacy or dirty data strands a broad label inside the exact field itself: values like `Shimano`, `SRAM`, `Ecosistema Shimano`, or `Compatible SRAM` sitting in `drivetrain_platform` are not allowed to be re-canonicalized as exact HG/SIS, Eagle, or other downstream platform truth at runtime
+  - `chain_speeds` as a mandatory derailleur-chain truth for `chain` / `chain_link` templates; packaging and modern compatibility rules declare speed first far more often than they declare a broad ecosystem family
+  - `chain_width_family` as a coarse physical fallback, and only a top-level anchor for true single-speed / BMX / derailerless chains; it is not the top hierarchy field for modern derailleur chains
+  - `chain_outer_width_mm` as the next chain-specific refinement under that coarse width family whenever the manufacturer declares it; this must use bounded standard values, not free text, because `11/128` alone does not prove universal `9-11v` compatibility and `3/32` still spans materially different real chain bodies
+  - `chain_profile_family` as a downstream narrow chain-specific refinement, not the broad ecosystem anchor
+  - `shift_actuation_family` as a shifter / derailleur cable-pull or indexing refinement, not the broad cross-component ecosystem anchor
+- `drivetrain_platform`, `shift_actuation_family`, `chain_profile_family`, and `freehub_type` remain downstream refinements; they are not replacements for the top anchor fields above
+- dirty broad brand/ecosystem claims stranded in `shift_actuation_family` are not allowed to become ecosystem truth by implication. Values like `Shimano` or `SRAM` in that field are not sufficient by themselves to populate the primary ecosystem anchor; only real actuation/indexing semantics such as SIS, Dynasys, Linkglide/CUES, Exact Actuation, X-Actuation, AXS, or equivalent refinement-level signals may inform downstream inference
+- drivetrain compatibility scoring must stay conservative for the control components even after speed matches. Rear derailleurs are not fully compatible from speed alone: actuation family, largest-cog support, cage / total-capacity expectations, and mounting reality still matter. Front derailleurs are not fully compatible from `2x` / `3x` count alone: mount style, pull direction, big-ring size/cage curvature, and road-vs-MTB front indexing still matter. Shifters are not fully compatible from click-count alone when the unresolved seam is the front side or the exact indexed-pull family. Drivetrain kits must not graduate to full-compatible from front-side crankset/pedalier facts alone while the rear-side content of the kit is still unresolved. In those cases the scorer should stay in caution territory until the missing structured facts are explicit.
+- cassette / freewheel scoring must stay conservative too. A rear-cog product is not fully compatible from speed plus driver/freehub family alone: threaded-freewheel vs cassette body is a hard split, but even after that match the scorer must still leave caution territory for unresolved range, spacer/body-generation, and system-exception seams unless those structured facts are explicit.
+- cassette / freewheel ficha UI must reflect that same rule upstream: `freehub_type` cannot stay implicit, threaded freewheels must remain an explicit ficha confirmation instead of an auto-derived category shortcut, and cassette / freewheel templates should surface the real range seam through fields like `largest_cog_teeth` instead of pretending speed is the whole compatibility story.
+- cassette-spacer ficha UI must follow the same rear-body discipline: keep `freehub_type` explicit, restrict it to cassette-body families instead of freewheel/fixed mounts, and keep `spacer_thickness_mm` as explicit measured truth because spacer use depends on body length/generation exceptions rather than a generic “Shimano-compatible” label.
+- rear-hub and rear-cog vocabulary must keep the finer body-family split explicit when those distinctions matter: `Shimano HG`, `Shimano HG Road 11`, `Micro Spline`, `SRAM XD`, `SRAM XDR`, `Campagnolo`, and `Campagnolo N3W` are not interchangeable labels and must not be collapsed back into one coarse cassette-body bucket in ficha UI, helper text, or scorer wording.
+- generic hub ficha UI must also gate by wheel position upstream: front hubs should hide rear-only `freehub_type`, and `hub_spacing_mm` should use standardized front/rear OLD selectors instead of one mixed free-text lane that blends 100/110 with 130/135/142/148.
+- helper text or inference is not allowed to talk as if a compatibility-family answer already exists when the ficha cannot actually show, edit, and persist that answer as a first-class field
+- brand, product name, description text, and commercial category are not allowed to act as runtime hint sources inside the tech-spec form. If packaging text later needs to backfill ficha truth, that work belongs in an explicit reviewed DB fulfillment / migration pass, not in live Dart-side inference.
+- product-name or description text must not become a live Dart-side drivetrain ficha autofill source during normal editing. If packaging text is later mined to backfill specs, that work belongs in an explicit reviewed DB fulfillment / migration pass, not in runtime UI inference.
+- rear-cog templates (`cassette`, `freewheel`, `fixed_cog`) must not expose `drivetrain_primary_ecosystem`, `drivetrain_declared_compatible_ecosystems`, or `drivetrain_platform` as runtime ficha fields. Their real upstream seams are mount/body family, speeds, and range; broad ecosystem semantics in those templates are drift, not technical truth.
+- `chainring` and `crankset` templates must not expose broad ecosystem-anchor fields in the runtime ficha flow. Their real seams are teeth/count, mount, chainline, bottom-bracket interface, and exact downstream profile/platform truth when declared; a coarse Shimano/SRAM-style anchor there is drift, not useful compatibility truth.
+- `chain_guide` templates must not expose broad ecosystem-anchor fields or `drivetrain_platform` in runtime ficha flow. Their real seams are mount standard, supported chainring teeth, and chainline; drivetrain-brand semantics there are not a first-class compatibility seam.
+- `shifter` runtime ficha flow must gate front-vs-rear semantics by `shifter_position`: left/front shifters should suppress rear-side seams such as `drivetrain_speeds`, `rear_cog_count`, `shift_actuation_family`, and `drivetrain_platform`, while right/rear shifters should suppress front-chainring-count fields; only pair/universal cases may keep both sides visible.
+- `front_derailleur` runtime ficha flow must constrain `front_chainring_count` to real multi-ring systems only; `1x` is not a valid front-derailleur ficha state and must not remain available as if a front derailleur applied there.
+- `front_derailleur` runtime ficha flow must also suppress 1x-only ecosystem/platform claims such as `Single speed / BMX`, `SRAM Eagle`, or `SRAM T-Type Transmission`; those claims do not belong on a multi-ring front-derailleur ficha.
+- `front_derailleur` runtime ficha flow must gate clamp diameter by mount style: `front_derailleur_clamp_mm` is only valid for clamp-mount units and must stay hidden for `braze-on`, `direct mount`, or `E-type` entries instead of pretending every front derailleur has a clamp seam.
+- if the UI can display a helper such as "sugerido desde marca" or "familia detectada", that same concept must already be representable as a first-class persisted field somewhere in the backbone; otherwise the helper is outrunning the schema and the architecture is drifting
+
+Live verification on 2026-04-27:
+
+- production `spec_definitions` currently expose family-like keys such as `chain_profile_family`, `chain_width_family`, `shift_actuation_family`, and `bottom_bracket_family`
+- the chain slice also needs one bounded numeric refinement below `chain_width_family`: `chain_outer_width_mm`, because internal width alone is too coarse for modern derailleur-chain compatibility
+- production drivetrain ficha templates currently expose the explicit ecosystem split through `drivetrain_primary_ecosystem` plus `drivetrain_declared_compatible_ecosystems`, alongside `drivetrain_platform`, `shift_actuation_family`, `chain_profile_family`, `freehub_type`, and related range fields. Rear-cog templates must keep dropping the broad ecosystem/platform trio and stay on the real rear-body/range seams.
+- `drivetrain_compatibility_family` was removed from the active production schema on 2026-04-27 after verifying zero live template attachments and zero live product values. Runtime code may still tolerate it as historical migration input, but the active ficha layer must not render or persist it.
+- live Viñabike drivetrain catalog audit shows current ficha coverage is near-empty for these drivetrain compatibility fields, while product names usually declare speed first, width sometimes, and only occasionally platform or cross-brand compatibility claims
+- the first production deployment intentionally backfilled only from existing structured drivetrain signals and inserted `0` live product rows, so current catalog reality still does not justify dense optimistic inference from sparse drivetrain packaging claims
+
+The architectural gap is no longer "missing the ecosystem split". That split now exists in the active ficha layer. The real remaining gap is data density and disciplined use: the catalog still needs better explicit population of primary ecosystem, declared compatible ecosystems, and downstream platform/profile truth without regressing into commercial-text inference.
+
+### Backbone boundary for this concept
+
+The 2026-04-27 inspection result for this drivetrain product-semantics correction is:
+
+- `bike_catalog` may eventually store known global drivetrain platform or ecosystem hints for complete bike models, but this catalog-side product ficha split does not require a new encyclopedia truth store today
+- `bike_profiles.technical_profile.values` should continue to store durable bike-side drivetrain kernel truth such as `drivetrainConfig`, `drivetrainSpeeds`, and `freehubType`; product-side ecosystem/platform semantics must not automatically become new bike-profile fields unless the installed bike or confirmed installed component really declares that truth upstream
+- `mechanic_job_bikes.diagnosis_sheet_data` should not gain parallel product-ficha ecosystem fields just because the product catalog becomes more precise; diagnosis remains visit-specific state, not catalog compatibility metadata
+- `service_profiles`, `service_profile_questions`, and wizard mappings do not need a new direct field from this split right now; they should continue to consume upstream bike truth and compatibility outputs rather than duplicating product-ficha semantics inside wizard answers
+- `mechanic_job_items` and bike memory kernel tables do not need a new parallel field from this split at this stage; if a later component-backed bike model promotes installed-part ecosystem/platform truth upstream, that promotion must happen deliberately through the same backbone instead of by copying product-ficha semantics into visit rows
 
 ### Product-side rule
 
@@ -890,10 +1072,11 @@ Concrete rule:
 - if a live service profile only exposes weak, action-oriented, or history-oriented options, that question must stay execution-only until the canonical diagnosis field is defined and the profile is normalized
 - coarse wizard buckets may still exist for workflow convenience, but they must not silently degrade a more precise stored measurement when the semantic bucket has not changed
 
-Live verified drift on 2026-04-18:
+Live verified drift on 2026-04-18, now resolved:
 
-- active mapped drivetrain `cable_condition` still exposes `ok`, `frayed`, and `replace`, with the label `Ya reemplazados` for the last value
-- this is architecture debt to normalize through a shared semantic field layer, not vocabulary that should be copied into more diagnosis UI, wizard mappings, bike profile logic, or memory projections
+- active mapped drivetrain `cable_condition` had exposed `ok`, `frayed`, and `replace`, with the label `Ya reemplazados` for the last value
+- the shared diagnosis-field definition layer plus `drivetrain_canonical_data.dart` / `ServiceWizardService` now normalize that vocabulary in the app layer, and the source row has been aligned in both `supabase/sql/core_schema.sql` and production via `supabase/migrations/20260427235930_normalize_drivetrain_cable_condition_options.sql`
+- this vocabulary must stay diagnosis-semantic and must not drift back into execution/history wording in wizard profiles, bike profile logic, or memory projections
 
 This rule strengthens centralization around bike profile truth and structured diagnosis truth because it prevents wizard-local vocabulary from becoming de facto technical truth.
 
@@ -914,11 +1097,11 @@ Target rule:
 
 Current implementation direction:
 
-- the structured diagnosis editor can present drivetrain, front/rear brake, and front/rear wheel systems through an interactive bike diagram
+- the structured diagnosis editor can present drivetrain/front brake/rear brake through an interactive bike diagram
 - the visual diagram is a UI layer over the existing `basic_workshop_v1` diagnosis systems, not a new schema
 - the bike-system controller itself must be a shared code-side widget + registry across diagnosis, bike record/history, and any future bike-profile/service surfaces; labels, pins, iconography, placements, hover/selection behavior, and system ordering must not fork into separate local implementations per screen
 - context-specific panels may differ, but they must sit on top of the same shared controller instead of re-implementing the bike map locally
-- live inspection on 2026-04-25 confirmed that recent production `mechanic_job_bikes.diagnosis_sheet_data` still used the pre-wheel shape (`drivetrain`, `front_brake`, `rear_brake`, and `template_key`) with no legacy key drift; the app model now extends that same JSONB visit truth with `front_wheel` and `rear_wheel` instead of adding a second store
+- live inspection on 2026-04-15 confirmed that `mechanic_job_bikes.diagnosis_sheet_data` currently exposes only `drivetrain`, `front_brake`, `rear_brake`, and `template_key`, while `bike_system_states` / `mechanic_job_items` already use a broader downstream vocabulary including `wheels`, `front_wheel`, `rear_wheel`, and `brakes`
 - therefore the diagnosis UI may render the full shared controller, but only systems actually modeled by the active diagnosis template should expose structured visit editors; unmodeled systems must show an explicit placeholder state instead of a second controller or fake fields
 - drivetrain now has a first component-driven editor slice in the mechanic job form:
   - selectable component targets: `chain`, `cassette`, `chainring`, `rear_derailleur`, `front_derailleur`, `shifter`
@@ -934,13 +1117,8 @@ Current implementation direction:
   - brake symptoms are captured as a structured multi-select set at the system layer for each front or rear brake
   - rim-brake bikes suppress the rotor target entirely at the component-selector layer, not just with passive helper copy
   - active brake component selection is now scoped per bike tab and per brake system so front, rear, and drivetrain selectors do not bleed into each other
-- front and rear wheels now follow the same component-target pattern for the currently modeled wheel fields:
-  - selectable component targets: `tire`, `rim`, `spokes`, and `hub`
-  - tire state also carries the narrow visit-specific tubeless state
-  - wheel-size, hub-spacing, spoke-hole, and valve profile facts are shown as upstream context, not re-collected as visit diagnosis truth
 - drivetrain component states are now synced into bike memory as per-component observations, not only left inside the diagnosis JSON blob
 - brake component states and symptom sets are now also synced into bike memory as brake-specific observations
-- wheel component states are now synced into bike memory as front/rear wheel observations and system states
 - rim-brake bikes hide rotor-thickness input based on upstream `technical_profile.values.brakeType`
 - the original `mtb_diagnostic_bg.png` full-suspension asset is the canonical MTB visual for `bike_type = mountain`; other variants must use real assets from the repo, not generated vector placeholders
 
@@ -1325,7 +1503,6 @@ Important rule:
 - the shared `BikeSystemController` + registry now drives mechanic-job diagnosis, bike record/history, and the bike form technical step instead of separate map implementations
 - the bike form technical step now uses the shared controller as an upstream system navigator and keeps explicit placeholder states for systems such as `cockpit` where the v1 profile kernel still has no dedicated intake fields
 - the shared controller now treats wheel work as `front_wheel` and `rear_wheel` units instead of one undifferentiated `wheels` bucket, while preserving legacy `wheels` history only as a compatibility alias
-- front and rear wheels now have structured visit diagnosis editors for tire, rim, spoke, hub-bearing, and tubeless state; those fields persist under `mechanic_job_bikes.diagnosis_sheet_data.front_wheel` / `rear_wheel` and sync into bike-memory observations/system states without adding a parallel table
 - `bottom_bracket` is now a first-class shared-controller system so pedalier/bearing work is not buried inside drivetrain copy or generic notes
 - bottom-bracket service wizards can now consume upstream `bike_profiles.technical_profile.values.bottomBracketFamily`, hide that question when it is already confirmed, and promote a newly confirmed family back into the bike profile on job save instead of stranding it in service notes
 - the bike record technical specs tab now uses that same shared controller as a system-organized upstream read model for `bike_profiles.technical_profile.values`, instead of a flat generic highlight grid
@@ -1344,7 +1521,7 @@ Important rule:
 - diagnosis fields are still too sparse, too manual, and too note-heavy for a workshop-grade shared visit model
 - diagnosis and service flows do not yet run on a schema-driven semantic field system with typed controls and guided customization
 - bike profile is not yet the hard gating layer for diagnosis field visibility
-- `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, and `rear_wheel` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, and `bottom_bracket` are still intentional placeholders waiting for a real schema/editor pass
+- only `drivetrain`, `front_brake`, and `rear_brake` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` now surface unavailable-but-contextual diagnosis cards while waiting for a real schema/editor pass
 - type-driven gating is stronger at intake now, but downstream service/product compatibility still does not fully consume the richer base kernel
 - the brake-first compatibility scorer now consumes the already-existing `category_tech_mappings.technical_family` / `spec_templates.key` bridge as a coarse fallback for live brake families such as `rotor`, `rim_brake`, `hydraulic_disc_brake`, `brake_pad`, `brake_caliper`, and `brake_lever`; detailed `product_spec_values` still remain the stronger within-family refinement layer
 - live production inspection on 2026-04-20 confirmed that this bridge matters because real Viñabike product populations still rely on family-level mappings for categories such as `Pastillas`, `Calipers`, `Manillas`, `Herraduras`, `Rotores`, and `Frenos hidráulicos completos`
@@ -1369,9 +1546,10 @@ These are important because they explain why the system currently looks the way 
 - `DEPLOY_VINABIKE_WHEEL_SPEC_TEMPLATES.sql` is live in production and now attaches the Viñabike wheel/headset category bridge to real `template_id` values for `Maza`, `Mazas`, `Llantas`, `Rayos`, `Cámaras`, `Cámaras Anti-Pinchazo`, `Cubre Cámara`, `Válvula Tubeless`, `Líquido Tubeless`, `Juego de dirección`, and both `Rodamientos` category IDs.
 - the `rim` ficha is no longer the thin three-field placeholder; it now includes the first useful workshop-grade rim detail set in the product form: `rim_tubeless_ready`, `rim_internal_width_mm`, `rim_external_width_mm`, `rim_etrto`, `rim_erd_mm`, `rim_material`, `rim_eyelet_type`, `rim_wall_type`, `rim_symmetry`, and `rim_asymmetric_offset_mm`, grouped into `Dimensiones`, `Construcción`, and `Tubeless` sections.
 - `DEPLOY_VINABIKE_SAFE_WHEEL_PRODUCT_SPECS.sql` is live for a deliberately conservative first tenant seed: only explicit truths written in live product names were persisted, such as rodado, spoke-hole count, valve family/length, rear driver family, `TR` / `TL`, `622x30` ETRTO text, `Doble pared`, `Pared simple`, `Aluminio`, and clear headset labels like `Semi-integrado` / `1 1/8`.
+- chain-related drivetrain ficha is now inference-aware in the product form: `spec_template_fields.helper_text` now reaches `SpecEngineService` and `product_form_page.dart`, while shared helpers in `drivetrain_canonical_data.dart` can autocompletar missing `chain_speeds`, suggest `chain_profile_family`, and infer `drivetrain_platform` for `chain` / `chain_link` templates only from structured width/speed/platform/profile/indexing signals. Manual overrides still win, switching category/template clears stale auto-derived values, and commercial brand/category/name metadata is no longer allowed to participate in that runtime inference layer.
+- production drivetrain ficha now uses the explicit ecosystem split through `drivetrain_primary_ecosystem` and `drivetrain_declared_compatible_ecosystems`; the legacy `drivetrain_compatibility_family` field was removed from the active production schema after a zero-usage audit, and the current runtime hides/strips any historical remnants instead of treating them as ficha truth. The first safe production backfill still promoted zero rows because live catalog data lacks enough structured drivetrain signals.
+- live audit on 2026-04-27 corrected the next design target: modern drivetrain product packaging declares speed first, width only as a coarse physical hint, and platform/cross-brand claims only sometimes. The next schema/UI pass is no longer to invent the split, but to populate and consume that explicit split more reliably from real packaging evidence while keeping width demoted to a coarse fallback except for true single-speed/BMX chains.
 - `lib/modules/bikeshop/services/bike_product_compatibility_service.dart` still emits the first non-brake coarse family hints for that same bridge, but it now also upgrades to detailed spec-driven comparisons for `hub`, `rim`, `tube`, `rim_strip`, and `tubeless_valve` when `product_spec_values` exist. `headset`, `bearing`, and `tubeless_consumable` are now template-backed in the catalog but remain coarse in compatibility until the upstream bike/profile truth grows further.
-- live production validation on 2026-04-25 found no drift in the current structured diagnosis JSON keys for recent job bikes: the active visit truth was still limited to the expected `template_key`, `drivetrain`, `front_brake`, and `rear_brake` shape before the wheel slice landed. Recent production job items also had no persisted `service_configuration_data` blobs, so there was no historical wizard-answer JSON to migrate before continuing.
-- front/rear wheel structured diagnosis is now the next shared-controller slice: the mechanic job form exposes tire/rim/spoke/hub/tubeless fields, stores them in the existing `diagnosis_sheet_data.front_wheel` / `rear_wheel` JSON sections, includes them in diagnosis narrative generation, and syncs per-component wheel observations into bike memory.
 
 ### 1. Central memory UI visibility
 
@@ -1427,9 +1605,6 @@ Problem:
 Fix:
 
 - service rows now carry inline target metadata via `Aplica a`
-- service/labor rows created from the mechanic job form now persist structured wizard answers in `mechanic_job_items.service_configuration_data` instead of relying only on editable row notes
-- in multi-bike jobs, service/labor rows belong to the active bike tab and save through the same `mechanic_job_items.job_bike_id` assignment path as parts/products, so executed labor remains tied to `mechanic_job_bikes` for bike-level rollups and later bike-memory projection
-- this strengthens centralization around the existing backbone: no new service truth store was added; job-level general services still use `job_bike_id = null`, while bike-specific services use the relevant `mechanic_job_bikes.id`
 
 ### 6. Wizard-to-diagnosis linkage fixes
 
@@ -1551,13 +1726,12 @@ The same rule must hold for drivetrain, wheels, suspension, steering, tires, fra
 
 Current implementation status:
 
-- the first deliberate prototype system was brakes, and the first follow-on shared-controller slice is now front/rear wheels
+- the first deliberate prototype system is now brakes
 - front and rear brake diagnosis no longer behave as one thin paired pad/rotor row with passive rotor hiding
 - the brake workflow now includes component-target selection, typed brake-semantic controls, structured symptom chips, and downstream bike-memory sync
-- the mechanic job form also contains drivetrain and front/rear wheel slices; the wheel slice follows the same component-first pattern with tire, rim, spoke, hub, and tubeless state
+- the mechanic job form still contains a drivetrain slice, but the brake path is now the refinement target to mirror later into the other systems
 - this is still a v1 slice, not the finished schema-driven field-definition engine
-- live validation on 2026-04-25 showed the current brake diagnosis/profile data is clean enough to continue, and there is no recent production `service_configuration_data` backlog to migrate before expanding
-- the next remaining work is mirroring the same component-first field-definition logic into cockpit/steering, suspension, and bottom bracket without forking the shared controller
+- the next remaining work is validating this brake workflow against real brake services and then mirroring the same component-first field-definition logic into the rest of the workshop systems
 
 Field-definition model:
 
@@ -1608,15 +1782,27 @@ Brake example:
 
 This strengthens centralization because diagnosis, service guidance, product suggestions, and bike memory all operate on one component-centric visit model instead of parallel questionnaires.
 
-## Next Session Priority Queue (2026-04-25)
+## Recent Continuity Note (2026-04-27)
+
+- live brake validation against production `service_profiles`, `service_profile_questions`, `service_product_profile_mappings`, and recent `mechanic_job_bikes.diagnosis_sheet_data` confirmed that the current brake prototype is directionally correct but that some live wizard rows still drift back to legacy brake-type value spellings such as `disco_mec` and `v-brake`.
+- the shared brake canonical layer in `lib/modules/bikeshop/config/brake_canonical_data.dart` plus `lib/modules/bikeshop/services/service_wizard_service.dart` now normalizes those live spellings back into the backbone brake vocabulary before wizard rendering, answer persistence, and summary/diagnosis mapping.
+- the seed/migration source is now aligned too: `supabase/sql/core_schema.sql` seeds canonical `brake_type_mech` values for `brake_cable_replace_adjust`, and `supabase/migrations/20260427235900_normalize_brake_type_mech_options.sql` was deployed to production to rewrite the legacy live row in place.
+- live drivetrain validation then confirmed a different reality than expected: Viñabike currently has `0` `mechanic_job_items.service_configuration_data` rows with structured wizard payloads, so there is no safe historical drivetrain backfill to run yet and no candidate historical `derailleur_adjustment` kernel rows to harvest.
+- the real forward fix now lives in `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`: service-wizard promotion no longer aborts when the selected bike lacks an existing `bike_profile`, and `BikeshopService.upsertBikeProfile()` can now create that missing profile on demand from explicit wizard-confirmed upstream truths instead of blocking drivetrain, brake, or bottom-bracket promotion on profile absence.
+- `lib/modules/bikeshop/pages/pegas_table_page.dart` now hides the `Tests` tab outside debug sessions and exposes a debug-only `Prueba rápida` launcher that seeds explicit DB-backed workshop fixtures for backbone/compatibility validation: a fresh `drivetrain_no_profile` bike plus reusable `rim_brake_city`, `hydraulic_disc_mtb`, and `bmx_single_speed` scenarios across `intake`, `diagnostic`, `in_progress`, `completed`, and `delivered` stages.
+
+This strengthens centralization around bike profile truth because real service flows can now create the first durable `bike_profiles.technical_profile.values` record for bikes that previously had no profile at all, while historical data remains untouched until there is real structured evidence worth promoting. It also strengthens validation discipline because compatibility/backbone work now has a repeatable hidden debug harness instead of relying on production-visible test UI or repeated manual setup.
+
+## Next Session Priority Queue (2026-04-27)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
 
-1. Extend structured diagnosis deliberately to the remaining shared-controller placeholders (`cockpit`, `suspension`, and `bottom_bracket`) only when there is a real schema/editor plan. Keep the explicit unavailable-system state until each slice has structured fields and memory sync.
-2. Push upstream bike-profile truth deeper into more service families. Drivetrain remains a priority, but do not guess on `1x`/`2x` behavior beyond what the live `derailleurs` multi-select template can actually represent.
-3. Start wiring product compatibility and product suggestions to the same v1 kernel keys already stored on `bikes` and `bike_profiles.technical_profile.values`.
-4. Keep the bike record panel as a read-model consumer of bike memory kernel + shared controller behavior. Do not move hover/detail selection logic into parent widgets when extending the shared bike map.
-5. Continue validating each new diagnosis slice against live profile/question/mapping data before promoting wizard answers into diagnosis or bike-profile truth.
+Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
+
+1. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
+2. Finish shifter compatibility more deliberately: right/rear exact matches can stay strong, but front/pair semantics must remain conservative until the front pull/indexing seam is modeled and tested better.
+3. Finish bottom-bracket and crankset standards end to end: family, shell, spindle interface, mounting, chainline, and related crank-length/mount seams still need tighter doctrine and scoring before broad catalog population.
+4. Do not start broad compatibility population yet. Only after the shifter and bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
 
 ## The Most Important Direction From Here
 

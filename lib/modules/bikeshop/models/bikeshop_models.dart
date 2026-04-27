@@ -3073,31 +3073,45 @@ class MechanicJobBike {
 
 class MechanicJobDiagnosisSheet {
   final String templateKey;
+  final SuspensionDiagnosisSheet suspension;
   final DrivetrainDiagnosisSheet drivetrain;
   final BrakeDiagnosisSheet frontBrake;
   final BrakeDiagnosisSheet rearBrake;
   final WheelDiagnosisSheet frontWheel;
   final WheelDiagnosisSheet rearWheel;
+  final BottomBracketDiagnosisSheet bottomBracket;
+  final CockpitDiagnosisSheet cockpit;
 
   const MechanicJobDiagnosisSheet({
     this.templateKey = 'basic_workshop_v1',
+    this.suspension = const SuspensionDiagnosisSheet(),
     this.drivetrain = const DrivetrainDiagnosisSheet(),
     this.frontBrake = const BrakeDiagnosisSheet(),
     this.rearBrake = const BrakeDiagnosisSheet(),
     this.frontWheel = const WheelDiagnosisSheet(),
     this.rearWheel = const WheelDiagnosisSheet(),
+    this.bottomBracket = const BottomBracketDiagnosisSheet(),
+    this.cockpit = const CockpitDiagnosisSheet(),
   });
 
   bool get hasMeaningfulData =>
+      suspension.hasMeaningfulData ||
       drivetrain.hasMeaningfulData ||
       frontBrake.hasMeaningfulData ||
       rearBrake.hasMeaningfulData ||
       frontWheel.hasMeaningfulData ||
-      rearWheel.hasMeaningfulData;
+      rearWheel.hasMeaningfulData ||
+      bottomBracket.hasMeaningfulData ||
+      cockpit.hasMeaningfulData;
 
   factory MechanicJobDiagnosisSheet.fromJson(Map<String, dynamic> json) {
     return MechanicJobDiagnosisSheet(
       templateKey: json['template_key']?.toString() ?? 'basic_workshop_v1',
+      suspension: SuspensionDiagnosisSheet.fromJson(
+        json['suspension'] is Map
+            ? Map<String, dynamic>.from(json['suspension'] as Map)
+            : const {},
+      ),
       drivetrain: DrivetrainDiagnosisSheet.fromJson(
         json['drivetrain'] is Map
             ? Map<String, dynamic>.from(json['drivetrain'] as Map)
@@ -3123,35 +3137,54 @@ class MechanicJobDiagnosisSheet {
             ? Map<String, dynamic>.from(json['rear_wheel'] as Map)
             : const {},
       ),
+      bottomBracket: BottomBracketDiagnosisSheet.fromJson(
+        json['bottom_bracket'] is Map
+            ? Map<String, dynamic>.from(json['bottom_bracket'] as Map)
+            : const {},
+      ),
+      cockpit: CockpitDiagnosisSheet.fromJson(
+        json['cockpit'] is Map
+            ? Map<String, dynamic>.from(json['cockpit'] as Map)
+            : const {},
+      ),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'template_key': templateKey,
+      'suspension': suspension.toJson(),
       'drivetrain': drivetrain.toJson(),
       'front_brake': frontBrake.toJson(),
       'rear_brake': rearBrake.toJson(),
       'front_wheel': frontWheel.toJson(),
       'rear_wheel': rearWheel.toJson(),
+      'bottom_bracket': bottomBracket.toJson(),
+      'cockpit': cockpit.toJson(),
     };
   }
 
   MechanicJobDiagnosisSheet copyWith({
     String? templateKey,
+    SuspensionDiagnosisSheet? suspension,
     DrivetrainDiagnosisSheet? drivetrain,
     BrakeDiagnosisSheet? frontBrake,
     BrakeDiagnosisSheet? rearBrake,
     WheelDiagnosisSheet? frontWheel,
     WheelDiagnosisSheet? rearWheel,
+    BottomBracketDiagnosisSheet? bottomBracket,
+    CockpitDiagnosisSheet? cockpit,
   }) {
     return MechanicJobDiagnosisSheet(
       templateKey: templateKey ?? this.templateKey,
+      suspension: suspension ?? this.suspension,
       drivetrain: drivetrain ?? this.drivetrain,
       frontBrake: frontBrake ?? this.frontBrake,
       rearBrake: rearBrake ?? this.rearBrake,
       frontWheel: frontWheel ?? this.frontWheel,
       rearWheel: rearWheel ?? this.rearWheel,
+      bottomBracket: bottomBracket ?? this.bottomBracket,
+      cockpit: cockpit ?? this.cockpit,
     );
   }
 }
@@ -3468,6 +3501,207 @@ class WheelDiagnosisSheet {
           : (hubBearingCondition ?? this.hubBearingCondition),
       tubelessStatus:
           clearTubelessStatus ? null : (tubelessStatus ?? this.tubelessStatus),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
+}
+
+class BottomBracketDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final String? bearingCondition;
+  final String? noiseStatus;
+  final String? notes;
+
+  const BottomBracketDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.bearingCondition,
+    this.noiseStatus,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      (bearingCondition != null && bearingCondition!.isNotEmpty) ||
+      (noiseStatus != null && noiseStatus!.isNotEmpty) ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory BottomBracketDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return BottomBracketDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      bearingCondition: json['bearing_condition']?.toString(),
+      noiseStatus: json['noise_status']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'bearing_condition': bearingCondition,
+      'noise_status': noiseStatus,
+      'notes': notes,
+    };
+  }
+
+  BottomBracketDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    String? bearingCondition,
+    bool clearBearingCondition = false,
+    String? noiseStatus,
+    bool clearNoiseStatus = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return BottomBracketDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      bearingCondition: clearBearingCondition
+          ? null
+          : (bearingCondition ?? this.bearingCondition),
+      noiseStatus: clearNoiseStatus ? null : (noiseStatus ?? this.noiseStatus),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
+}
+
+class CockpitDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final String? headsetBearingCondition;
+  final String? headsetNoiseStatus;
+  final String? notes;
+
+  const CockpitDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.headsetBearingCondition,
+    this.headsetNoiseStatus,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      (headsetBearingCondition != null &&
+          headsetBearingCondition!.isNotEmpty) ||
+      (headsetNoiseStatus != null && headsetNoiseStatus!.isNotEmpty) ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory CockpitDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return CockpitDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      headsetBearingCondition: json['headset_bearing_condition']?.toString(),
+      headsetNoiseStatus: json['headset_noise_status']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'headset_bearing_condition': headsetBearingCondition,
+      'headset_noise_status': headsetNoiseStatus,
+      'notes': notes,
+    };
+  }
+
+  CockpitDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    String? headsetBearingCondition,
+    bool clearHeadsetBearingCondition = false,
+    String? headsetNoiseStatus,
+    bool clearHeadsetNoiseStatus = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return CockpitDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      headsetBearingCondition: clearHeadsetBearingCondition
+          ? null
+          : (headsetBearingCondition ?? this.headsetBearingCondition),
+      headsetNoiseStatus: clearHeadsetNoiseStatus
+          ? null
+          : (headsetNoiseStatus ?? this.headsetNoiseStatus),
+      notes: clearNotes ? null : (notes ?? this.notes),
+    );
+  }
+}
+
+class SuspensionDiagnosisSheet {
+  final BikeSystemOverallStatus overallStatus;
+  final String? forkCondition;
+  final String? forkNoiseStatus;
+  final String? rearShockCondition;
+  final String? rearShockNoiseStatus;
+  final String? notes;
+
+  const SuspensionDiagnosisSheet({
+    this.overallStatus = BikeSystemOverallStatus.unknown,
+    this.forkCondition,
+    this.forkNoiseStatus,
+    this.rearShockCondition,
+    this.rearShockNoiseStatus,
+    this.notes,
+  });
+
+  bool get hasMeaningfulData =>
+      overallStatus != BikeSystemOverallStatus.unknown ||
+      (forkCondition != null && forkCondition!.isNotEmpty) ||
+      (forkNoiseStatus != null && forkNoiseStatus!.isNotEmpty) ||
+      (rearShockCondition != null && rearShockCondition!.isNotEmpty) ||
+      (rearShockNoiseStatus != null && rearShockNoiseStatus!.isNotEmpty) ||
+      (notes != null && notes!.trim().isNotEmpty);
+
+  factory SuspensionDiagnosisSheet.fromJson(Map<String, dynamic> json) {
+    return SuspensionDiagnosisSheet(
+      overallStatus: BikeSystemOverallStatus.fromDbValue(
+        json['overall_status']?.toString(),
+      ),
+      forkCondition: json['fork_condition']?.toString(),
+      forkNoiseStatus: json['fork_noise_status']?.toString(),
+      rearShockCondition: json['rear_shock_condition']?.toString(),
+      rearShockNoiseStatus: json['rear_shock_noise_status']?.toString(),
+      notes: json['notes']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'overall_status': overallStatus.dbValue,
+      'fork_condition': forkCondition,
+      'fork_noise_status': forkNoiseStatus,
+      'rear_shock_condition': rearShockCondition,
+      'rear_shock_noise_status': rearShockNoiseStatus,
+      'notes': notes,
+    };
+  }
+
+  SuspensionDiagnosisSheet copyWith({
+    BikeSystemOverallStatus? overallStatus,
+    String? forkCondition,
+    bool clearForkCondition = false,
+    String? forkNoiseStatus,
+    bool clearForkNoiseStatus = false,
+    String? rearShockCondition,
+    bool clearRearShockCondition = false,
+    String? rearShockNoiseStatus,
+    bool clearRearShockNoiseStatus = false,
+    String? notes,
+    bool clearNotes = false,
+  }) {
+    return SuspensionDiagnosisSheet(
+      overallStatus: overallStatus ?? this.overallStatus,
+      forkCondition:
+          clearForkCondition ? null : (forkCondition ?? this.forkCondition),
+      forkNoiseStatus: clearForkNoiseStatus
+          ? null
+          : (forkNoiseStatus ?? this.forkNoiseStatus),
+      rearShockCondition: clearRearShockCondition
+          ? null
+          : (rearShockCondition ?? this.rearShockCondition),
+      rearShockNoiseStatus: clearRearShockNoiseStatus
+          ? null
+          : (rearShockNoiseStatus ?? this.rearShockNoiseStatus),
       notes: clearNotes ? null : (notes ?? this.notes),
     );
   }

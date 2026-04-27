@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/image_service.dart';
@@ -126,6 +127,12 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _filterGoogleMerchant = false; // is_google_merchant = true
   bool _showInactive =
       false; // when true, show ALL products (including inactive)
+  bool _filterMissingServiceStructuredProfile = false;
+  DateTime? _serviceStructuredProfileMappingsFetchedAt;
+  Set<String> _serviceStructuredProfileMappedProductIds = {};
+  bool _isLoadingServiceStructuredProfileMappings = false;
+  static const Duration _serviceStructuredProfileMappingsMaxAge =
+      Duration(minutes: 5);
 
   // 🔽 Sorting State
   ProductSortOption _sortOption = ProductSortOption.nameAsc;
@@ -178,7 +185,35 @@ class _ProductListPageState extends State<ProductListPage> {
       _filterWebPublished ||
       _filterGoogleMerchant ||
       _showInactive ||
+      _filterMissingServiceStructuredProfile ||
       _searchTerm.isNotEmpty;
+
+  String get _missingServiceStructuredProfileChipLabel {
+    // Keep the label stable while we don't have data yet.
+    if (_serviceStructuredProfileMappingsFetchedAt == null) {
+      return 'Sin perfil estructurado';
+    }
+
+    final services = _products
+        .where((p) => !p.isSetComponent && p.productType == ProductType.service)
+        .toList(growable: false);
+    if (services.isEmpty) {
+      return 'Sin perfil estructurado';
+    }
+
+    var mappedCount = 0;
+    for (final service in services) {
+      final id = service.id;
+      if (id == null || id.isEmpty) continue;
+      if (_serviceStructuredProfileMappedProductIds.contains(id)) {
+        mappedCount += 1;
+      }
+    }
+
+    var missingCount = services.length - mappedCount;
+    if (missingCount < 0) missingCount = 0;
+    return 'Sin perfil estructurado ($missingCount)';
+  }
 
   StreamSubscription? _scanSubscription;
   StreamSubscription<String>? _externalSearchSub;
@@ -243,6 +278,11 @@ class _ProductListPageState extends State<ProductListPage> {
       _loadSuppliers();
       _loadBrands();
       _applyFilters(resetPagination: false);
+      if (_selectedProductType == ProductType.service) {
+        unawaited(
+          _loadServiceStructuredProfileMappings(forceRefresh: false),
+        );
+      }
       _isLoading = false;
       // Schedule scroll restore after the frame renders
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -315,6 +355,7 @@ class _ProductListPageState extends State<ProductListPage> {
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
       _filterGoogleMerchant = false;
+      _filterMissingServiceStructuredProfile = false;
       _showInactive = false;
       _currentPage = 1;
       _sortOption = ProductSortOption.nameAsc;
@@ -670,6 +711,87 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
+  bool _isServiceStructuredProfileMappingsCacheValid() {
+    final fetchedAt = _serviceStructuredProfileMappingsFetchedAt;
+    if (fetchedAt == null) return false;
+    return DateTime.now().difference(fetchedAt) <
+        _serviceStructuredProfileMappingsMaxAge;
+  }
+
+  Future<void> _loadServiceStructuredProfileMappings({
+    bool forceRefresh = false,
+  }) async {
+    if (_isLoadingServiceStructuredProfileMappings) return;
+    if (!forceRefresh && _isServiceStructuredProfileMappingsCacheValid()) {
+      return;
+    }
+
+    _isLoadingServiceStructuredProfileMappings = true;
+    try {
+      final rows = await Supabase.instance.client
+          .from('service_product_profile_mappings')
+          .select('product_id')
+          .eq('status', 'active');
+
+      final mapped = <String>{};
+      for (final raw in (rows as List)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final productId = row['product_id']?.toString();
+        if (productId == null || productId.isEmpty) continue;
+        mapped.add(productId);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _serviceStructuredProfileMappingsFetchedAt = DateTime.now();
+        _serviceStructuredProfileMappedProductIds = mapped;
+        if (_filterMissingServiceStructuredProfile) {
+          _applyFilters(resetPagination: false);
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _serviceStructuredProfileMappingsFetchedAt = DateTime.now();
+        _serviceStructuredProfileMappedProductIds = {};
+        if (_filterMissingServiceStructuredProfile) {
+          _filterMissingServiceStructuredProfile = false;
+          _applyFilters(resetPagination: false);
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'No se pudo cargar el Perfil estructurado de servicio (revisa la conexion).'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } finally {
+      _isLoadingServiceStructuredProfileMappings = false;
+    }
+  }
+
+  Future<void> _setMissingServiceStructuredProfileFilter(bool value) async {
+    if (!mounted) return;
+
+    setState(() {
+      _filterMissingServiceStructuredProfile = value;
+      if (value && _selectedProductType != ProductType.service) {
+        _selectedProductType = ProductType.service;
+      }
+    });
+
+    if (value) {
+      await _loadServiceStructuredProfileMappings(forceRefresh: false);
+    }
+
+    if (!mounted) return;
+    setState(() => _applyFilters(resetPagination: true));
+  }
+
   Future<void> _loadProducts(
       {bool forceRefresh = false, bool preserveState = false}) async {
     if (!mounted) return;
@@ -706,6 +828,13 @@ class _ProductListPageState extends State<ProductListPage> {
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
+
+      if (_selectedProductType == ProductType.service ||
+          _filterMissingServiceStructuredProfile) {
+        unawaited(
+          _loadServiceStructuredProfileMappings(forceRefresh: forceRefresh),
+        );
+      }
 
       // Restore scroll position after data loads
       if (preserveState) {
@@ -820,6 +949,16 @@ class _ProductListPageState extends State<ProductListPage> {
       filtered = filtered
           .where((product) => product.productType == _selectedProductType)
           .toList();
+    }
+
+    // 3.6 Service structured profile filter
+    if (_filterMissingServiceStructuredProfile) {
+      filtered = filtered.where((product) {
+        if (product.productType != ProductType.service) return false;
+        final productId = product.id;
+        if (productId == null || productId.isEmpty) return true;
+        return !_serviceStructuredProfileMappedProductIds.contains(productId);
+      }).toList();
     }
 
     // 4. Stock Filters
@@ -1558,6 +1697,19 @@ class _ProductListPageState extends State<ProductListPage> {
                     onTap: (chipCtx, link) =>
                         _showProductTypeMenu(chipCtx, link, theme),
                   ),
+                  if (_selectedProductType == ProductType.service) ...[
+                    const SizedBox(width: 8),
+                    _ModernFilterChip(
+                      theme: theme,
+                      label: _missingServiceStructuredProfileChipLabel,
+                      isActive: _filterMissingServiceStructuredProfile,
+                      onTap: (chipCtx, link) => _showServiceProfileLinkMenu(
+                        chipCtx,
+                        link,
+                        theme,
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   _ModernFilterChip(
                     theme: theme,
@@ -1991,6 +2143,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     onChanged: (_) {
                       setState(() {
                         _selectedProductType = null;
+                        _filterMissingServiceStructuredProfile = false;
                         _applyFilters();
                       });
                       Navigator.pop(ctx);
@@ -1998,6 +2151,7 @@ class _ProductListPageState extends State<ProductListPage> {
                 onTap: () {
                   setState(() {
                     _selectedProductType = null;
+                    _filterMissingServiceStructuredProfile = false;
                     _applyFilters();
                   });
                   Navigator.pop(ctx);
@@ -2011,15 +2165,35 @@ class _ProductListPageState extends State<ProductListPage> {
                         onChanged: (_) {
                           setState(() {
                             _selectedProductType = type;
+                            if (type != ProductType.service) {
+                              _filterMissingServiceStructuredProfile = false;
+                            }
                             _applyFilters();
                           });
+                          if (type == ProductType.service) {
+                            unawaited(
+                              _loadServiceStructuredProfileMappings(
+                                forceRefresh: false,
+                              ),
+                            );
+                          }
                           Navigator.pop(ctx);
                         }),
                     onTap: () {
                       setState(() {
                         _selectedProductType = type;
+                        if (type != ProductType.service) {
+                          _filterMissingServiceStructuredProfile = false;
+                        }
                         _applyFilters();
                       });
+                      if (type == ProductType.service) {
+                        unawaited(
+                          _loadServiceStructuredProfileMappings(
+                            forceRefresh: false,
+                          ),
+                        );
+                      }
                       Navigator.pop(ctx);
                     },
                   )),
@@ -2045,6 +2219,106 @@ class _ProductListPageState extends State<ProductListPage> {
                   alignment: Alignment.topLeft,
                   child: SizedBox(
                     width: 300,
+                    child: Material(
+                      elevation: 8,
+                      borderRadius: BorderRadius.circular(8),
+                      clipBehavior: Clip.antiAlias,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          border:
+                              Border.all(color: Theme.of(context).dividerColor),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: buildMenuContent(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: buildMenuContent,
+      );
+    }
+  }
+
+  void _showServiceProfileLinkMenu(
+      BuildContext context, LayerLink link, ThemeData theme) {
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+
+    unawaited(_loadServiceStructuredProfileMappings(forceRefresh: false));
+
+    Widget buildMenuContent(BuildContext ctx) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Perfil estructurado',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('Todos'),
+                leading: Radio<bool>(
+                  value: false,
+                  groupValue: _filterMissingServiceStructuredProfile,
+                  onChanged: (_) {
+                    unawaited(_setMissingServiceStructuredProfileFilter(false));
+                    Navigator.pop(ctx);
+                  },
+                ),
+                onTap: () {
+                  unawaited(_setMissingServiceStructuredProfileFilter(false));
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                title: const Text('Solo sin perfil estructurado'),
+                leading: Radio<bool>(
+                  value: true,
+                  groupValue: _filterMissingServiceStructuredProfile,
+                  onChanged: (_) {
+                    unawaited(_setMissingServiceStructuredProfileFilter(true));
+                    Navigator.pop(ctx);
+                  },
+                ),
+                onTap: () {
+                  unawaited(_setMissingServiceStructuredProfileFilter(true));
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        );
+
+    if (isDesktop) {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Dismiss',
+        barrierColor: Colors.transparent,
+        pageBuilder: (context, anim1, anim2) {
+          return Stack(
+            children: [
+              CompositedTransformFollower(
+                link: link,
+                targetAnchor: Alignment.bottomLeft,
+                followerAnchor: Alignment.topLeft,
+                offset: const Offset(0, 4),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 320,
                     child: Material(
                       elevation: 8,
                       borderRadius: BorderRadius.circular(8),
@@ -3054,8 +3328,16 @@ class _ProductListPageState extends State<ProductListPage> {
       onChanged: (val) {
         setState(() {
           _selectedProductType = val;
+          if (val != ProductType.service) {
+            _filterMissingServiceStructuredProfile = false;
+          }
           _applyFilters();
         });
+        if (val == ProductType.service) {
+          unawaited(
+            _loadServiceStructuredProfileMappings(forceRefresh: false),
+          );
+        }
       },
     );
   }
@@ -3158,6 +3440,7 @@ class _ProductListPageState extends State<ProductListPage> {
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
       _filterGoogleMerchant = false;
+      _filterMissingServiceStructuredProfile = false;
       _showInactive = false;
       _searchTerm = '';
       _searchController.clear();
@@ -5034,6 +5317,24 @@ class _ProductListPageState extends State<ProductListPage> {
                                 style: theme.textTheme.titleSmall),
                             const SizedBox(height: 8),
                             _buildProductTypeFilterDropdown(theme),
+
+                            if (_selectedProductType == ProductType.service) ...[
+                              const SizedBox(height: 12),
+                              SwitchListTile(
+                                title:
+                                    const Text('Solo sin perfil estructurado'),
+                                value: _filterMissingServiceStructuredProfile,
+                                onChanged: (val) {
+                                  setModalState(() =>
+                                      _filterMissingServiceStructuredProfile =
+                                          val);
+                                  unawaited(
+                                    _setMissingServiceStructuredProfileFilter(
+                                        val),
+                                  );
+                                },
+                              ),
+                            ],
 
                             const SizedBox(height: 24),
 

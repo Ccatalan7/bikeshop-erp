@@ -1,3 +1,12 @@
+-- DEPRECATED LOCAL SNAPSHOT
+--
+-- Do not use this file to bootstrap a fresh local database.
+-- The canonical, replayable local bootstrap now lives in:
+--   supabase/sql/core_schema.sql
+-- and is applied via:
+--   scripts/reset_local_supabase.sh
+--
+-- This dump is kept only as a historical reference artifact.
 --
 -- PostgreSQL database dump
 --

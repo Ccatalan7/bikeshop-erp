@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
+import '../utils/product_spec_persistence_utils.dart';
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -13,6 +15,7 @@ class SpecDefinition {
   final List<String> options;
   final String? unit;
   final String? helpText;
+  final Map<String, dynamic> validationRules;
   final int sortOrder;
 
   const SpecDefinition({
@@ -23,6 +26,7 @@ class SpecDefinition {
     required this.options,
     this.unit,
     this.helpText,
+    this.validationRules = const <String, dynamic>{},
     required this.sortOrder,
   });
 
@@ -32,6 +36,10 @@ class SpecDefinition {
     if (raw is List) {
       opts = raw.map((e) => e.toString()).toList();
     }
+    final rawValidation = j['validation_rules'];
+    final validationRules = rawValidation is Map
+        ? Map<String, dynamic>.from(rawValidation)
+        : const <String, dynamic>{};
     return SpecDefinition(
       id: j['id'] as String,
       key: j['key'] as String,
@@ -40,6 +48,7 @@ class SpecDefinition {
       options: opts,
       unit: j['unit'] as String?,
       helpText: j['description'] as String?,
+      validationRules: validationRules,
       sortOrder: (j['sort_order'] as num?)?.toInt() ?? 0,
     );
   }
@@ -51,6 +60,7 @@ class SpecTemplateField {
   final int sortOrder;
   final bool isRequired;
   final dynamic defaultValue;
+  final String? helperText;
   final List<Map<String, dynamic>> visibilityRules;
 
   // Resolved after join
@@ -62,6 +72,7 @@ class SpecTemplateField {
     required this.sortOrder,
     required this.isRequired,
     this.defaultValue,
+    this.helperText,
     required this.visibilityRules,
     this.definition,
   });
@@ -78,6 +89,7 @@ class SpecTemplateField {
       sortOrder: (j['sort_order'] as num?)?.toInt() ?? 0,
       isRequired: j['is_required'] as bool? ?? false,
       defaultValue: j['default_value_json'],
+      helperText: j['helper_text'] as String?,
       visibilityRules: rules,
     );
   }
@@ -226,9 +238,10 @@ class SpecEngineService {
             sort_order,
             is_required,
             default_value_json,
+            helper_text,
             visibility_rules,
             spec_definitions!inner(
-              id, key, label, data_type, allowed_values, unit, description, sort_order
+              id, key, label, data_type, allowed_values, validation_rules, unit, description, sort_order
             )
           ''').eq('template_id', templateId).order('sort_order');
 
@@ -310,12 +323,21 @@ class SpecEngineService {
     required Map<String, dynamic> values,
   }) async {
     try {
+      final templateDefinitionIds = template.fields
+          .map((field) => field.definition?.id)
+          .whereType<String>()
+          .toSet()
+          .toList(growable: false);
+
       // Build map: spec_definition_id → value
       final toUpsert = <Map<String, dynamic>>[];
       for (final field in template.fields) {
         final def = field.definition;
         if (def == null) continue;
-        final value = values[def.key];
+        final value = sanitizeProductSpecValueForPersistence(
+          specKey: def.key,
+          value: values[def.key],
+        );
         // Skip null/empty unless we're explicitly clearing
         final isEmpty = value == null ||
             (value is String && value.trim().isEmpty) ||
@@ -357,7 +379,28 @@ class SpecEngineService {
         toUpsert.add(row);
       }
 
-      if (toUpsert.isEmpty) return;
+      final retainedDefinitionIds = toUpsert
+          .map((row) => row['spec_definition_id']?.toString())
+          .whereType<String>()
+          .toSet();
+      final definitionIdsToDelete = templateDefinitionIds
+          .where((id) => !retainedDefinitionIds.contains(id))
+          .toList(growable: false);
+
+      if (definitionIdsToDelete.isNotEmpty) {
+        await _client
+            .from('product_spec_values')
+            .delete()
+            .eq('product_id', productId)
+            .eq('tenant_id', tenantId)
+            .inFilter('spec_definition_id', definitionIdsToDelete);
+      }
+
+      if (toUpsert.isEmpty) {
+        debugPrint(
+            '✅ [SpecEngine] Cleared spec values for product $productId in template ${template.key}');
+        return;
+      }
 
       await _client.from('product_spec_values').upsert(
             toUpsert,

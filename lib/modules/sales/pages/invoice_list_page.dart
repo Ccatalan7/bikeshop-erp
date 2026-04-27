@@ -88,7 +88,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SalesService>().loadInvoicesForList();
+      context.read<SalesService>().loadInvoices();
     });
   }
 
@@ -188,7 +188,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
-    final invoices = _getFilteredAndSortedInvoices(salesService.listInvoices);
+    final invoices = _getFilteredAndSortedInvoices(salesService.invoices);
 
     // Use MediaQuery for robust detection, ignoring parent constraints issues
     // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
@@ -227,7 +227,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                await context.read<SalesService>().loadInvoicesForList(
+                await context.read<SalesService>().loadInvoices(
                       forceRefresh: true,
                     );
               },
@@ -304,7 +304,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
               if (value == 'refresh') {
-                context.read<SalesService>().loadInvoicesForList(
+                context.read<SalesService>().loadInvoices(
                       forceRefresh: true,
                     );
               }
@@ -954,7 +954,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () => context.read<SalesService>().loadInvoicesForList(
+            onPressed: () => context.read<SalesService>().loadInvoices(
                   forceRefresh: true,
                 ),
           ),
@@ -965,7 +965,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   Widget _buildInvoiceTable(List<Invoice> invoices, SalesService salesService,
       {required bool isFullWidth}) {
-    if (salesService.isLoadingListInvoices) {
+    if (salesService.isLoadingInvoices) {
       return const Center(child: BrandedLoading());
     }
 
@@ -1944,7 +1944,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                   _selectedInvoice = null;
                   _isHydratingSelectedInvoice = false;
                 });
-                await salesService.loadInvoicesForList(
+                await salesService.loadInvoices(
                   forceRefresh: true,
                 );
 
