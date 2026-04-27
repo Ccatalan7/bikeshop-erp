@@ -447,6 +447,18 @@ class _DiagnosisComponentSelectorStripState
 const List<_StructuredDiagnosisComponentSpec>
     _kStructuredDiagnosisComponentSpecs = [
   _StructuredDiagnosisComponentSpec(
+    systemKey: 'suspension',
+    componentKey: 'fork',
+    label: 'Horquilla',
+    icon: Icons.waves_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'suspension',
+    componentKey: 'rear_shock',
+    label: 'Amortiguador',
+    icon: Icons.linear_scale,
+  ),
+  _StructuredDiagnosisComponentSpec(
     systemKey: 'front_brake',
     componentKey: 'brake_pad',
     label: 'Pastillas / zapatas',
@@ -506,6 +518,54 @@ const List<_StructuredDiagnosisComponentSpec>
     label: 'Shifter',
     icon: Icons.touch_app_outlined,
   ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'tire',
+    label: 'Cubierta',
+    icon: Icons.trip_origin,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'rim',
+    label: 'Aro',
+    icon: Icons.circle_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'spokes',
+    label: 'Rayos',
+    icon: Icons.blur_circular_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'front_wheel',
+    componentKey: 'hub',
+    label: 'Maza',
+    icon: Icons.settings_input_component_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'tire',
+    label: 'Cubierta',
+    icon: Icons.trip_origin,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'rim',
+    label: 'Aro',
+    icon: Icons.circle_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'spokes',
+    label: 'Rayos',
+    icon: Icons.blur_circular_outlined,
+  ),
+  _StructuredDiagnosisComponentSpec(
+    systemKey: 'rear_wheel',
+    componentKey: 'hub',
+    label: 'Maza',
+    icon: Icons.settings_input_component_outlined,
+  ),
 ];
 
 const Map<String, String> _kChainLubricationOptions = {
@@ -536,11 +596,96 @@ const Map<String, String> _kShifterConditionOptions = {
   'replace': 'Reemplazar',
 };
 
+const Map<String, String> _kWheelTireConditionOptions = {
+  'ok': 'Buen estado',
+  'worn': 'Desgastada',
+  'damaged': 'Danada / cortada',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelRimConditionOptions = {
+  'ok': 'Recto / sin dano',
+  'attention': 'Descentrado leve',
+  'bent': 'Golpeado / desviado',
+  'cracked': 'Fisurado',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelSpokeConditionOptions = {
+  'ok': 'Tension pareja',
+  'loose': 'Rayos sueltos',
+  'uneven': 'Tension dispareja',
+  'broken': 'Rayos cortados',
+};
+
+const Map<String, String> _kWheelHubBearingConditionOptions = {
+  'ok': 'Gira suave',
+  'rough': 'Aspero',
+  'play': 'Con juego',
+  'service': 'Requiere servicio',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kWheelTubelessStatusOptions = {
+  'ok': 'Sellado correcto',
+  'leaking': 'Pierde aire',
+  'dry_sealant': 'Liquido seco',
+  'not_applicable': 'No aplica',
+};
+
+const Map<String, String> _kBearingConditionOptions = {
+  'ok': 'Gira suave',
+  'rough': 'Aspero',
+  'play': 'Con juego',
+  'service': 'Requiere servicio',
+  'replace': 'Reemplazar',
+};
+
+const Map<String, String> _kMechanicalNoiseStatusOptions = {
+  'ok': 'Sin ruido anormal',
+  'creaking': 'Crujido / chirrido',
+  'clicking': 'Click / golpeteo',
+  'knocking': 'Golpe / clunk',
+  'service': 'Requiere revision',
+};
+
+const Map<String, String> _kSuspensionConditionOptions = {
+  'ok': 'Funcionamiento correcto',
+  'rough': 'Recorrido aspero',
+  'sticky': 'Recorrido duro / pegado',
+  'leaking': 'Perdida de aire / aceite',
+  'play': 'Con juego',
+  'service': 'Requiere servicio',
+  'replace': 'Reemplazar',
+};
+
 final List<ServiceQuestionOption> _kBrakeSymptomOptions =
     serviceQuestionOptionsFromMap(kBrakeSymptomLabels);
 
 typedef _BrakeDiagnosisSheetUpdater = void Function(
   BrakeDiagnosisSheet Function(BrakeDiagnosisSheet current) transform, {
+  bool refresh,
+});
+
+typedef _WheelDiagnosisSheetUpdater = void Function(
+  WheelDiagnosisSheet Function(WheelDiagnosisSheet current) transform, {
+  bool refresh,
+});
+
+typedef _BottomBracketDiagnosisSheetUpdater = void Function(
+  BottomBracketDiagnosisSheet Function(BottomBracketDiagnosisSheet current)
+      transform, {
+  bool refresh,
+});
+
+typedef _CockpitDiagnosisSheetUpdater = void Function(
+  CockpitDiagnosisSheet Function(CockpitDiagnosisSheet current) transform, {
+  bool refresh,
+});
+
+typedef _SuspensionDiagnosisSheetUpdater = void Function(
+  SuspensionDiagnosisSheet Function(SuspensionDiagnosisSheet current)
+      transform, {
   bool refresh,
 });
 
@@ -6530,6 +6675,85 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           hasCriticalRisk || _brakeHasCriticalRisk(sheet.rearBrake);
     }
 
+    final frontWheelNarrative =
+        _buildWheelNarrativeFromSheet('rueda delantera', sheet.frontWheel);
+    if (frontWheelNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Rueda delantera',
+          body: frontWheelNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildWheelRecommendationHints('rueda delantera', sheet.frontWheel),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _wheelHasCriticalRisk(sheet.frontWheel);
+    }
+
+    final rearWheelNarrative =
+        _buildWheelNarrativeFromSheet('rueda trasera', sheet.rearWheel);
+    if (rearWheelNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Rueda trasera',
+          body: rearWheelNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildWheelRecommendationHints('rueda trasera', sheet.rearWheel),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _wheelHasCriticalRisk(sheet.rearWheel);
+    }
+
+    final bottomBracketNarrative =
+        _buildBottomBracketNarrativeFromSheet(sheet.bottomBracket);
+    if (bottomBracketNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Pedalier / BB',
+          body: bottomBracketNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildBottomBracketRecommendationHints(sheet.bottomBracket),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _bottomBracketHasCriticalRisk(sheet.bottomBracket);
+    }
+
+    final cockpitNarrative = _buildCockpitNarrativeFromSheet(sheet.cockpit);
+    if (cockpitNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Cockpit / direccion',
+          body: cockpitNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildCockpitRecommendationHints(sheet.cockpit),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _cockpitHasCriticalRisk(sheet.cockpit);
+    }
+
+    final suspensionNarrative =
+        _buildSuspensionNarrativeFromSheet(sheet.suspension);
+    if (suspensionNarrative != null) {
+      sections.add(
+        _DiagnosisNarrativeSection(
+          title: 'Suspension',
+          body: suspensionNarrative,
+        ),
+      );
+      recommendations.addAll(
+        _buildSuspensionRecommendationHints(sheet.suspension),
+      );
+      hasCriticalRisk =
+          hasCriticalRisk || _suspensionHasCriticalRisk(sheet.suspension);
+    }
+
     return _DiagnosisNarrativeSource(
       sections: sections,
       recommendationHints: recommendations.toList(growable: false),
@@ -6847,6 +7071,231 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return sentences.isEmpty ? null : sentences.join(' ');
   }
 
+  String? _buildWheelNarrativeFromSheet(
+    String wheelLabel,
+    WheelDiagnosisSheet sheet,
+  ) {
+    if (!sheet.hasMeaningfulData) {
+      return null;
+    }
+
+    final sentences = <String>[];
+
+    switch (sheet.overallStatus) {
+      case BikeSystemOverallStatus.ok:
+        sentences.add('La $wheelLabel se encuentra en buen estado general.');
+        break;
+      case BikeSystemOverallStatus.attention:
+        sentences.add('La $wheelLabel presenta detalles que conviene revisar.');
+        break;
+      case BikeSystemOverallStatus.critical:
+        sentences.add(
+          'La $wheelLabel muestra hallazgos importantes que requieren atención pronta.',
+        );
+        break;
+      case BikeSystemOverallStatus.unknown:
+        break;
+    }
+
+    final tire = _describeWheelComponentSentence(
+      'La cubierta',
+      sheet.tireCondition,
+    );
+    if (tire != null) {
+      sentences.add(tire);
+    }
+
+    final rim = _describeWheelComponentSentence('El aro', sheet.rimCondition);
+    if (rim != null) {
+      sentences.add(rim);
+    }
+
+    final spokes =
+        _describeWheelComponentSentence('Los rayos', sheet.spokeCondition);
+    if (spokes != null) {
+      sentences.add(spokes);
+    }
+
+    final hub = _describeWheelComponentSentence(
+      'La maza',
+      sheet.hubBearingCondition,
+    );
+    if (hub != null) {
+      sentences.add(hub);
+    }
+
+    final tubeless = _describeTubelessStatusSentence(sheet.tubelessStatus);
+    if (tubeless != null) {
+      sentences.add(tubeless);
+    }
+
+    final notes = _normalizeNullableText(sheet.notes ?? '');
+    if (notes != null) {
+      sentences.add('Además, en la inspección se consignó: $notes');
+    }
+
+    return sentences.isEmpty ? null : sentences.join(' ');
+  }
+
+  String? _buildBottomBracketNarrativeFromSheet(
+    BottomBracketDiagnosisSheet sheet,
+  ) {
+    if (!sheet.hasMeaningfulData) {
+      return null;
+    }
+
+    final sentences = <String>[];
+
+    switch (sheet.overallStatus) {
+      case BikeSystemOverallStatus.ok:
+        sentences.add(
+            'El pedalier se encuentra estable y sin hallazgos relevantes.');
+        break;
+      case BikeSystemOverallStatus.attention:
+        sentences.add('El pedalier presenta señales que conviene revisar.');
+        break;
+      case BikeSystemOverallStatus.critical:
+        sentences.add(
+            'El pedalier muestra hallazgos que requieren atención pronta.');
+        break;
+      case BikeSystemOverallStatus.unknown:
+        break;
+    }
+
+    final bearing = _describeMechanicalBearingSentence(
+      'El pedalier',
+      sheet.bearingCondition,
+    );
+    if (bearing != null) {
+      sentences.add(bearing);
+    }
+
+    final noise = _describeMechanicalNoiseSentence(
+      'El pedalier',
+      sheet.noiseStatus,
+    );
+    if (noise != null) {
+      sentences.add(noise);
+    }
+
+    final notes = _normalizeNullableText(sheet.notes ?? '');
+    if (notes != null) {
+      sentences.add('Además, en la inspección se consignó: $notes');
+    }
+
+    return sentences.isEmpty ? null : sentences.join(' ');
+  }
+
+  String? _buildCockpitNarrativeFromSheet(CockpitDiagnosisSheet sheet) {
+    if (!sheet.hasMeaningfulData) {
+      return null;
+    }
+
+    final sentences = <String>[];
+
+    switch (sheet.overallStatus) {
+      case BikeSystemOverallStatus.ok:
+        sentences
+            .add('La dirección se encuentra estable y sin juego apreciable.');
+        break;
+      case BikeSystemOverallStatus.attention:
+        sentences.add('La dirección presenta señales que conviene revisar.');
+        break;
+      case BikeSystemOverallStatus.critical:
+        sentences.add(
+            'La dirección muestra hallazgos que requieren atención pronta.');
+        break;
+      case BikeSystemOverallStatus.unknown:
+        break;
+    }
+
+    final bearing = _describeMechanicalBearingSentence(
+      'El headset',
+      sheet.headsetBearingCondition,
+    );
+    if (bearing != null) {
+      sentences.add(bearing);
+    }
+
+    final noise = _describeMechanicalNoiseSentence(
+      'La dirección',
+      sheet.headsetNoiseStatus,
+    );
+    if (noise != null) {
+      sentences.add(noise);
+    }
+
+    final notes = _normalizeNullableText(sheet.notes ?? '');
+    if (notes != null) {
+      sentences.add('Además, en la inspección se consignó: $notes');
+    }
+
+    return sentences.isEmpty ? null : sentences.join(' ');
+  }
+
+  String? _buildSuspensionNarrativeFromSheet(SuspensionDiagnosisSheet sheet) {
+    if (!sheet.hasMeaningfulData) {
+      return null;
+    }
+
+    final sentences = <String>[];
+
+    switch (sheet.overallStatus) {
+      case BikeSystemOverallStatus.ok:
+        sentences.add('La suspensión se encuentra en buen estado general.');
+        break;
+      case BikeSystemOverallStatus.attention:
+        sentences.add('La suspensión presenta detalles que conviene revisar.');
+        break;
+      case BikeSystemOverallStatus.critical:
+        sentences.add(
+          'La suspensión muestra hallazgos importantes que requieren atención pronta.',
+        );
+        break;
+      case BikeSystemOverallStatus.unknown:
+        break;
+    }
+
+    final fork = _describeSuspensionComponentSentence(
+      'La horquilla',
+      sheet.forkCondition,
+    );
+    if (fork != null) {
+      sentences.add(fork);
+    }
+
+    final forkNoise = _describeMechanicalNoiseSentence(
+      'La horquilla',
+      sheet.forkNoiseStatus,
+    );
+    if (forkNoise != null) {
+      sentences.add(forkNoise);
+    }
+
+    final rearShock = _describeSuspensionComponentSentence(
+      'El amortiguador',
+      sheet.rearShockCondition,
+    );
+    if (rearShock != null) {
+      sentences.add(rearShock);
+    }
+
+    final rearShockNoise = _describeMechanicalNoiseSentence(
+      'El amortiguador',
+      sheet.rearShockNoiseStatus,
+    );
+    if (rearShockNoise != null) {
+      sentences.add(rearShockNoise);
+    }
+
+    final notes = _normalizeNullableText(sheet.notes ?? '');
+    if (notes != null) {
+      sentences.add('Además, en la inspección se consignó: $notes');
+    }
+
+    return sentences.isEmpty ? null : sentences.join(' ');
+  }
+
   List<String> _buildDrivetrainRecommendationHints(
     DrivetrainDiagnosisSheet sheet,
   ) {
@@ -6961,6 +7410,136 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return recommendations.toList(growable: false);
   }
 
+  List<String> _buildWheelRecommendationHints(
+    String wheelLabel,
+    WheelDiagnosisSheet sheet,
+  ) {
+    final recommendations = <String>{};
+
+    if (sheet.tireCondition == 'worn') {
+      recommendations.add('evaluar cambio de cubierta en la $wheelLabel');
+    }
+    if (sheet.tireCondition == 'damaged' || sheet.tireCondition == 'replace') {
+      recommendations.add('reemplazar la cubierta de la $wheelLabel');
+    }
+
+    if (sheet.rimCondition == 'attention' || sheet.rimCondition == 'bent') {
+      recommendations.add('centrar y revisar el aro de la $wheelLabel');
+    }
+    if (sheet.rimCondition == 'cracked' || sheet.rimCondition == 'replace') {
+      recommendations.add('reemplazar el aro de la $wheelLabel');
+    }
+
+    if (sheet.spokeCondition == 'loose' || sheet.spokeCondition == 'uneven') {
+      recommendations.add('tensionar y centrar rayos de la $wheelLabel');
+    }
+    if (sheet.spokeCondition == 'broken') {
+      recommendations.add('reemplazar rayos cortados de la $wheelLabel');
+    }
+
+    if (sheet.hubBearingCondition == 'rough' ||
+        sheet.hubBearingCondition == 'play' ||
+        sheet.hubBearingCondition == 'service') {
+      recommendations.add('realizar servicio de maza en la $wheelLabel');
+    }
+    if (sheet.hubBearingCondition == 'replace') {
+      recommendations.add('reemplazar rodamientos o maza de la $wheelLabel');
+    }
+
+    if (sheet.tubelessStatus == 'leaking' ||
+        sheet.tubelessStatus == 'dry_sealant') {
+      recommendations.add('revisar sellado tubeless de la $wheelLabel');
+    }
+
+    return recommendations.toList(growable: false);
+  }
+
+  List<String> _buildBottomBracketRecommendationHints(
+    BottomBracketDiagnosisSheet sheet,
+  ) {
+    final recommendations = <String>{};
+
+    if (sheet.bearingCondition == 'rough' ||
+        sheet.bearingCondition == 'play' ||
+        sheet.bearingCondition == 'service') {
+      recommendations.add('realizar servicio de pedalier');
+    }
+    if (sheet.bearingCondition == 'replace') {
+      recommendations.add('reemplazar rodamientos o conjunto de pedalier');
+    }
+    if (sheet.noiseStatus == 'creaking' ||
+        sheet.noiseStatus == 'clicking' ||
+        sheet.noiseStatus == 'knocking' ||
+        sheet.noiseStatus == 'service') {
+      recommendations.add('revisar torque, holguras y ajuste del pedalier');
+    }
+
+    return recommendations.toList(growable: false);
+  }
+
+  List<String> _buildCockpitRecommendationHints(CockpitDiagnosisSheet sheet) {
+    final recommendations = <String>{};
+
+    if (sheet.headsetBearingCondition == 'rough' ||
+        sheet.headsetBearingCondition == 'play' ||
+        sheet.headsetBearingCondition == 'service') {
+      recommendations.add('realizar servicio de dirección / headset');
+    }
+    if (sheet.headsetBearingCondition == 'replace') {
+      recommendations.add('reemplazar rodamientos o juego de dirección');
+    }
+    if (sheet.headsetNoiseStatus == 'creaking' ||
+        sheet.headsetNoiseStatus == 'clicking' ||
+        sheet.headsetNoiseStatus == 'knocking' ||
+        sheet.headsetNoiseStatus == 'service') {
+      recommendations.add('revisar juego, torque y ajuste de la dirección');
+    }
+
+    return recommendations.toList(growable: false);
+  }
+
+  List<String> _buildSuspensionRecommendationHints(
+    SuspensionDiagnosisSheet sheet,
+  ) {
+    final recommendations = <String>{};
+
+    if (sheet.forkCondition == 'rough' ||
+        sheet.forkCondition == 'sticky' ||
+        sheet.forkCondition == 'leaking' ||
+        sheet.forkCondition == 'play' ||
+        sheet.forkCondition == 'service') {
+      recommendations.add('realizar servicio de horquilla');
+    }
+    if (sheet.forkCondition == 'replace') {
+      recommendations.add('evaluar reemplazo de horquilla');
+    }
+    if (sheet.forkNoiseStatus == 'creaking' ||
+        sheet.forkNoiseStatus == 'clicking' ||
+        sheet.forkNoiseStatus == 'knocking' ||
+        sheet.forkNoiseStatus == 'service') {
+      recommendations.add('revisar juego y funcionamiento de la horquilla');
+    }
+
+    if (sheet.rearShockCondition == 'rough' ||
+        sheet.rearShockCondition == 'sticky' ||
+        sheet.rearShockCondition == 'leaking' ||
+        sheet.rearShockCondition == 'play' ||
+        sheet.rearShockCondition == 'service') {
+      recommendations.add('realizar servicio de amortiguador');
+    }
+    if (sheet.rearShockCondition == 'replace') {
+      recommendations.add('evaluar reemplazo de amortiguador');
+    }
+    if (sheet.rearShockNoiseStatus == 'creaking' ||
+        sheet.rearShockNoiseStatus == 'clicking' ||
+        sheet.rearShockNoiseStatus == 'knocking' ||
+        sheet.rearShockNoiseStatus == 'service') {
+      recommendations.add('revisar juego y funcionamiento del amortiguador');
+    }
+
+    return recommendations.toList(growable: false);
+  }
+
   bool _drivetrainHasCriticalRisk(DrivetrainDiagnosisSheet sheet) {
     return sheet.overallStatus == BikeSystemOverallStatus.critical ||
         (sheet.chainWearPercent != null && sheet.chainWearPercent! >= 75) ||
@@ -6979,6 +7558,32 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         sheet.rotorTruenessStatus == 'replace' ||
         sheet.padContaminationStatus == 'replace' ||
         sheet.rotorContaminationStatus == 'replace';
+  }
+
+  bool _wheelHasCriticalRisk(WheelDiagnosisSheet sheet) {
+    return sheet.overallStatus == BikeSystemOverallStatus.critical ||
+        sheet.tireCondition == 'replace' ||
+        sheet.tireCondition == 'damaged' ||
+        sheet.rimCondition == 'cracked' ||
+        sheet.rimCondition == 'replace' ||
+        sheet.spokeCondition == 'broken' ||
+        sheet.hubBearingCondition == 'replace';
+  }
+
+  bool _bottomBracketHasCriticalRisk(BottomBracketDiagnosisSheet sheet) {
+    return sheet.overallStatus == BikeSystemOverallStatus.critical ||
+        sheet.bearingCondition == 'replace';
+  }
+
+  bool _cockpitHasCriticalRisk(CockpitDiagnosisSheet sheet) {
+    return sheet.overallStatus == BikeSystemOverallStatus.critical ||
+        sheet.headsetBearingCondition == 'replace';
+  }
+
+  bool _suspensionHasCriticalRisk(SuspensionDiagnosisSheet sheet) {
+    return sheet.overallStatus == BikeSystemOverallStatus.critical ||
+        sheet.forkCondition == 'replace' ||
+        sheet.rearShockCondition == 'replace';
   }
 
   String? _describeChainLubricationSentence(String? status) {
@@ -7136,6 +7741,110 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  String? _describeWheelComponentSentence(String subject, String? status) {
+    switch (status) {
+      case 'ok':
+        return null;
+      case 'attention':
+        return '$subject requiere revision.';
+      case 'worn':
+        return '$subject presenta desgaste.';
+      case 'damaged':
+        return '$subject presenta daño visible.';
+      case 'bent':
+        return '$subject se encuentra golpeado o desviado.';
+      case 'cracked':
+        return '$subject presenta fisura.';
+      case 'loose':
+        return '$subject presentan soltura.';
+      case 'uneven':
+        return '$subject presentan tension dispareja.';
+      case 'broken':
+        return '$subject presentan cortes o roturas.';
+      case 'rough':
+        return '$subject gira aspera.';
+      case 'play':
+        return '$subject presenta juego.';
+      case 'service':
+        return '$subject requiere servicio.';
+      case 'replace':
+        return '$subject requiere reemplazo.';
+      default:
+        return null;
+    }
+  }
+
+  String? _describeTubelessStatusSentence(String? status) {
+    switch (status) {
+      case 'ok':
+      case 'not_applicable':
+        return null;
+      case 'leaking':
+        return 'El sistema tubeless pierde aire o no está sellando correctamente.';
+      case 'dry_sealant':
+        return 'El liquido tubeless se encuentra seco o insuficiente.';
+      default:
+        return null;
+    }
+  }
+
+  String? _describeMechanicalBearingSentence(String subject, String? status) {
+    switch (status) {
+      case 'ok':
+        return '$subject gira suave y sin asperezas.';
+      case 'rough':
+        return '$subject presenta roce o aspereza al girar.';
+      case 'play':
+        return '$subject presenta juego perceptible.';
+      case 'service':
+        return '$subject requiere servicio.';
+      case 'replace':
+        return '$subject requiere reemplazo.';
+      default:
+        return null;
+    }
+  }
+
+  String? _describeMechanicalNoiseSentence(String subject, String? status) {
+    switch (status) {
+      case 'ok':
+        return null;
+      case 'creaking':
+        return '$subject presenta crujidos bajo carga.';
+      case 'clicking':
+        return '$subject presenta chasquidos o clics repetidos.';
+      case 'knocking':
+        return '$subject presenta golpeteos o juego marcado.';
+      case 'service':
+        return '$subject requiere revision por ruidos o funcionamiento irregular.';
+      default:
+        return null;
+    }
+  }
+
+  String? _describeSuspensionComponentSentence(String subject, String? status) {
+    switch (status) {
+      case 'ok':
+        return '$subject funciona correctamente.';
+      case 'attention':
+        return '$subject requiere revision.';
+      case 'rough':
+        return '$subject presenta funcionamiento aspero.';
+      case 'sticky':
+        return '$subject presenta recorrido pegado o poco fluido.';
+      case 'leaking':
+        return '$subject presenta fuga visible.';
+      case 'play':
+        return '$subject presenta juego.';
+      case 'service':
+        return '$subject requiere servicio.';
+      case 'replace':
+        return '$subject requiere reemplazo.';
+      default:
+        return null;
+    }
+  }
+
   String _joinNaturalList(Iterable<String> values) {
     final items = values
         .map((value) => value.trim())
@@ -7178,13 +7887,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     TextEditingController diagnosisCtrl,
   ) {
     final diagnosisSheet = _currentDiagnosisSheet;
-    final statuses = [
-      diagnosisSheet.drivetrain.overallStatus,
-      diagnosisSheet.frontBrake.overallStatus,
-      diagnosisSheet.rearBrake.overallStatus,
-    ];
-    final trackedSystems = statuses
-        .where((status) => status != BikeSystemOverallStatus.unknown)
+    final statuses = _kStructuredDiagnosisEditableSystems
+        .map(
+          (spec) => _structuredDiagnosisStatus(diagnosisSheet, spec.systemKey),
+        )
+        .toList(growable: false);
+    final trackedSystems = _kStructuredDiagnosisEditableSystems
+        .where(
+          (spec) => _structuredDiagnosisHasMeaningfulData(
+            diagnosisSheet,
+            spec.systemKey,
+          ),
+        )
         .length;
     final criticalSystems = statuses
         .where((status) => status == BikeSystemOverallStatus.critical)
@@ -7812,10 +8526,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   ) {
     switch (systemKey) {
       case 'cockpit':
+        return sheet.cockpit.overallStatus;
       case 'suspension':
+        return sheet.suspension.overallStatus;
       case 'front_wheel':
+        return sheet.frontWheel.overallStatus;
       case 'bottom_bracket':
+        return sheet.bottomBracket.overallStatus;
       case 'rear_wheel':
+        return sheet.rearWheel.overallStatus;
       case 'wheels':
         return BikeSystemOverallStatus.unknown;
       case 'front_brake':
@@ -7834,10 +8553,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   ) {
     switch (systemKey) {
       case 'cockpit':
+        return sheet.cockpit.hasMeaningfulData;
       case 'suspension':
+        return sheet.suspension.hasMeaningfulData;
       case 'front_wheel':
+        return sheet.frontWheel.hasMeaningfulData;
       case 'bottom_bracket':
+        return sheet.bottomBracket.hasMeaningfulData;
       case 'rear_wheel':
+        return sheet.rearWheel.hasMeaningfulData;
       case 'wheels':
         return false;
       case 'front_brake':
@@ -7866,6 +8590,31 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (!_isDiscBrakeType(brakeType)) {
         specs = specs.where((spec) => spec.componentKey != 'rotor').toList();
       }
+      return specs;
+    }
+
+    if (systemKey == 'suspension') {
+      final layout = profile?.technicalValues['suspensionLayout']
+          ?.toString()
+          .trim()
+          .toLowerCase();
+      final hasFork = layout == null ||
+          layout.isEmpty ||
+          layout == 'front_suspension' ||
+          layout == 'full_suspension';
+      final hasRearShock = layout == 'full_suspension';
+
+      specs = specs.where((spec) {
+        switch (spec.componentKey) {
+          case 'fork':
+            return hasFork;
+          case 'rear_shock':
+            return hasRearShock;
+          default:
+            return true;
+        }
+      }).toList();
+
       return specs;
     }
 
@@ -7930,6 +8679,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       case 'bent':
       case 'damaged':
       case 'contaminated':
+      case 'broken':
+      case 'cracked':
         return BikeSystemOverallStatus.critical;
       case 'attention':
       case 'worn':
@@ -7939,6 +8690,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       case 'high_friction':
       case 'corroded':
       case 'housing_damaged':
+      case 'loose':
+      case 'uneven':
+      case 'rough':
+      case 'play':
+      case 'service':
+      case 'leaking':
+      case 'dry_sealant':
+      case 'creaking':
+      case 'clicking':
+      case 'knocking':
         return BikeSystemOverallStatus.attention;
       case 'ok':
         return BikeSystemOverallStatus.ok;
@@ -7972,6 +8733,47 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return _maxSystemStatus([
           _statusFromConditionValue(sheet.shifterCondition),
           _drivetrainCableConditionStatus(sheet.cableCondition),
+        ]);
+      default:
+        return BikeSystemOverallStatus.unknown;
+    }
+  }
+
+  BikeSystemOverallStatus _wheelComponentStatus(
+    WheelDiagnosisSheet sheet,
+    String componentKey,
+  ) {
+    switch (componentKey) {
+      case 'tire':
+        return _maxSystemStatus([
+          _statusFromConditionValue(sheet.tireCondition),
+          _statusFromConditionValue(sheet.tubelessStatus),
+        ]);
+      case 'rim':
+        return _statusFromConditionValue(sheet.rimCondition);
+      case 'spokes':
+        return _statusFromConditionValue(sheet.spokeCondition);
+      case 'hub':
+        return _statusFromConditionValue(sheet.hubBearingCondition);
+      default:
+        return BikeSystemOverallStatus.unknown;
+    }
+  }
+
+  BikeSystemOverallStatus _suspensionComponentStatus(
+    SuspensionDiagnosisSheet sheet,
+    String componentKey,
+  ) {
+    switch (componentKey) {
+      case 'fork':
+        return _maxSystemStatus([
+          _statusFromConditionValue(sheet.forkCondition),
+          _statusFromConditionValue(sheet.forkNoiseStatus),
+        ]);
+      case 'rear_shock':
+        return _maxSystemStatus([
+          _statusFromConditionValue(sheet.rearShockCondition),
+          _statusFromConditionValue(sheet.rearShockNoiseStatus),
         ]);
       default:
         return BikeSystemOverallStatus.unknown;
@@ -8229,18 +9031,155 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final rimBrakeFamily =
         profile?.technicalValues['rimBrakeFamily']?.toString();
     switch (activeSpec.systemKey) {
-      case 'suspension':
       case 'wheels':
-      case 'cockpit':
-      case 'front_wheel':
-      case 'bottom_bracket':
-      case 'rear_wheel':
         return _buildUnavailableStructuredDiagnosisSystemCard(
           theme,
           activeSpec: activeSpec,
           profile: profile,
           bike: currentTab.bike,
           templateKey: diagnosisSheet.templateKey,
+        );
+      case 'suspension':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.suspension.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.suspension.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              suspension: current.suspension.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildSuspensionDiagnosisFields(
+            currentTab,
+            suspensionSheet: diagnosisSheet.suspension,
+            profile: profile,
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(suspension: transform(current.suspension)),
+              refresh: refresh,
+            ),
+          ),
+        );
+      case 'cockpit':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.cockpit.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.cockpit.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              cockpit: current.cockpit.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildCockpitDiagnosisFields(
+            currentTab,
+            cockpitSheet: diagnosisSheet.cockpit,
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(cockpit: transform(current.cockpit)),
+              refresh: refresh,
+            ),
+          ),
+        );
+      case 'front_wheel':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.frontWheel.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.frontWheel.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              frontWheel: current.frontWheel.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildWheelDiagnosisFields(
+            currentTab,
+            systemKey: 'front_wheel',
+            wheelSheet: diagnosisSheet.frontWheel,
+            profile: profile,
+            bike: currentTab.bike,
+            title: 'delantera',
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(frontWheel: transform(current.frontWheel)),
+              refresh: refresh,
+            ),
+          ),
+        );
+      case 'bottom_bracket':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.bottomBracket.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.bottomBracket.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              bottomBracket:
+                  current.bottomBracket.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildBottomBracketDiagnosisFields(
+            currentTab,
+            bottomBracketSheet: diagnosisSheet.bottomBracket,
+            profile: profile,
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) => current.copyWith(
+                bottomBracket: transform(current.bottomBracket),
+              ),
+              refresh: refresh,
+            ),
+          ),
+        );
+      case 'rear_wheel':
+        return _buildDiagnosisSystemCard(
+          theme,
+          title: activeSpec.label,
+          subtitle: activeSpec.diagnosisSubtitle,
+          status: diagnosisSheet.rearWheel.overallStatus,
+          statusTint: _diagnosisStatusColor(
+            theme,
+            diagnosisSheet.rearWheel.overallStatus,
+          ),
+          onStatusChanged: (status) => _updateCurrentDiagnosisSheet(
+            (current) => current.copyWith(
+              rearWheel: current.rearWheel.copyWith(overallStatus: status),
+            ),
+          ),
+          child: _buildWheelDiagnosisFields(
+            currentTab,
+            systemKey: 'rear_wheel',
+            wheelSheet: diagnosisSheet.rearWheel,
+            profile: profile,
+            bike: currentTab.bike,
+            title: 'trasera',
+            update: (transform, {refresh = true}) =>
+                _updateCurrentDiagnosisSheet(
+              (current) =>
+                  current.copyWith(rearWheel: transform(current.rearWheel)),
+              refresh: refresh,
+            ),
+          ),
         );
       case 'front_brake':
         return _buildDiagnosisSystemCard(
@@ -8604,6 +9543,658 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ],
         );
     }
+  }
+
+  Widget _buildWheelDiagnosisFields(
+    _BikeTabData currentTab, {
+    required String systemKey,
+    required WheelDiagnosisSheet wheelSheet,
+    required BikeProfile? profile,
+    required Bike? bike,
+    required String title,
+    required _WheelDiagnosisSheetUpdater update,
+  }) {
+    final theme = Theme.of(context);
+    final selectionScopeKey = _diagnosisComponentSelectionScopeKey(
+      currentTab.tabId,
+      systemKey,
+    );
+    final componentSpecs = _structuredDiagnosisComponentSpecs(
+      systemKey,
+      profile,
+    );
+    final selectedComponentKey = _resolveStructuredDiagnosisComponentKey(
+      systemKey,
+      profile,
+      selectionScopeKey: selectionScopeKey,
+    );
+    final technicalValues =
+        profile?.technicalValues ?? const <String, dynamic>{};
+    final contextChips = <Widget>[];
+
+    void addContextChip(IconData icon, String? label) {
+      final normalized = _normalizeNullableText(label ?? '');
+      if (normalized == null) return;
+      contextChips.add(
+        _buildStructuredDiagnosisMetaChip(theme, icon: icon, label: normalized),
+      );
+    }
+
+    final wheelSize = _normalizeNullableText(bike?.wheelSize ?? '');
+    addContextChip(
+      Icons.circle_outlined,
+      wheelSize == null ? null : 'Aro $wheelSize',
+    );
+    final hubSpacing = systemKey == 'front_wheel'
+        ? bike?.frontHubSpacingMm
+        : bike?.rearHubSpacingMm;
+    if (hubSpacing != null) {
+      addContextChip(
+        Icons.settings_input_component_outlined,
+        'Maza ${_formatHubSpacingMm(hubSpacing)} mm',
+      );
+    }
+    final spokeKey =
+        systemKey == 'front_wheel' ? 'frontSpokeHoles' : 'rearSpokeHoles';
+    final spokeHoles =
+        _normalizeNullableText(technicalValues[spokeKey]?.toString() ?? '');
+    addContextChip(
+      Icons.blur_circular_outlined,
+      spokeHoles == null ? null : '$spokeHoles rayos',
+    );
+    final valveType =
+        _normalizeNullableText(technicalValues['valveType']?.toString() ?? '');
+    addContextChip(
+      Icons.opacity_outlined,
+      valveType == null ? null : 'Valvula $valveType',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (contextChips.isNotEmpty) ...[
+          Wrap(spacing: 8, runSpacing: 8, children: contextChips),
+          const SizedBox(height: 16),
+        ],
+        if (componentSpecs.isNotEmpty) ...[
+          Text(
+            'Componentes del sistema',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildDiagnosisComponentSelector(
+            theme,
+            specs: componentSpecs,
+            selectedComponentKey: selectedComponentKey,
+            statusForComponent: (componentKey) =>
+                _wheelComponentStatus(wheelSheet, componentKey),
+            onSelected: (componentKey) {
+              setState(() {
+                _selectedStructuredDiagnosisComponentKeys[selectionScopeKey] =
+                    componentKey;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (selectedComponentKey != null)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Container(
+              key: ValueKey('editor_${systemKey}_$selectedComponentKey'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.15),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _buildWheelComponentEditor(
+                currentTab,
+                systemKey: systemKey,
+                wheelSheet: wheelSheet,
+                componentKey: selectedComponentKey,
+                update: update,
+              ),
+            ),
+          ),
+        const SizedBox(height: 20),
+        TextFormField(
+          key: ValueKey(
+            'diag_${systemKey}_notes_${currentTab.tabId}_${wheelSheet.notes ?? 'empty'}',
+          ),
+          initialValue: wheelSheet.notes,
+          decoration: InputDecoration(
+            labelText: 'Notas rueda $title',
+            border: const OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              (current) => current.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+              refresh: false,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWheelComponentEditor(
+    _BikeTabData currentTab, {
+    required String systemKey,
+    required WheelDiagnosisSheet wheelSheet,
+    required String componentKey,
+    required _WheelDiagnosisSheetUpdater update,
+  }) {
+    switch (componentKey) {
+      case 'tire':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_${systemKey}_tire_${currentTab.tabId}_${wheelSheet.tireCondition ?? 'empty'}',
+              label: 'Estado cubierta',
+              icon: Icons.trip_origin,
+              value: wheelSheet.tireCondition,
+              options: _kWheelTireConditionOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    tireCondition: value,
+                    clearTireCondition: value == null,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_${systemKey}_tubeless_${currentTab.tabId}_${wheelSheet.tubelessStatus ?? 'empty'}',
+              label: 'Estado tubeless',
+              icon: Icons.opacity_outlined,
+              value: wheelSheet.tubelessStatus,
+              options: _kWheelTubelessStatusOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    tubelessStatus: value,
+                    clearTubelessStatus: value == null,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      case 'rim':
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_rim_${currentTab.tabId}_${wheelSheet.rimCondition ?? 'empty'}',
+          label: 'Estado aro',
+          icon: Icons.circle_outlined,
+          value: wheelSheet.rimCondition,
+          options: _kWheelRimConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                rimCondition: value,
+                clearRimCondition: value == null,
+              ),
+            );
+          },
+        );
+      case 'spokes':
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_spokes_${currentTab.tabId}_${wheelSheet.spokeCondition ?? 'empty'}',
+          label: 'Estado rayos',
+          icon: Icons.blur_circular_outlined,
+          value: wheelSheet.spokeCondition,
+          options: _kWheelSpokeConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                spokeCondition: value,
+                clearSpokeCondition: value == null,
+              ),
+            );
+          },
+        );
+      case 'hub':
+      default:
+        return _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_${systemKey}_hub_${currentTab.tabId}_${wheelSheet.hubBearingCondition ?? 'empty'}',
+          label: 'Estado rodamientos maza',
+          icon: Icons.settings_input_component_outlined,
+          value: wheelSheet.hubBearingCondition,
+          options: _kWheelHubBearingConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                hubBearingCondition: value,
+                clearHubBearingCondition: value == null,
+              ),
+            );
+          },
+        );
+    }
+  }
+
+  Widget _buildBottomBracketDiagnosisFields(
+    _BikeTabData currentTab, {
+    required BottomBracketDiagnosisSheet bottomBracketSheet,
+    required BikeProfile? profile,
+    required _BottomBracketDiagnosisSheetUpdater update,
+  }) {
+    final theme = Theme.of(context);
+    final familyLabel = bottomBracketFamilyLabel(
+      profile?.technicalValues['bottomBracketFamily']?.toString(),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (familyLabel != null && familyLabel.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildStructuredDiagnosisMetaChip(
+                theme,
+                icon: Icons.hub_outlined,
+                label: 'Familia BB: $familyLabel',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+        _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_bb_bearing_${currentTab.tabId}_${bottomBracketSheet.bearingCondition ?? 'empty'}',
+          label: 'Estado rodamientos pedalier',
+          icon: Icons.hub_outlined,
+          value: bottomBracketSheet.bearingCondition,
+          options: _kBearingConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                bearingCondition: value,
+                clearBearingCondition: value == null,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_bb_noise_${currentTab.tabId}_${bottomBracketSheet.noiseStatus ?? 'empty'}',
+          label: 'Ruidos / juego pedalier',
+          icon: Icons.graphic_eq,
+          value: bottomBracketSheet.noiseStatus,
+          options: _kMechanicalNoiseStatusOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                noiseStatus: value,
+                clearNoiseStatus: value == null,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: ValueKey(
+            'diag_bb_notes_${currentTab.tabId}_${bottomBracketSheet.notes ?? 'empty'}',
+          ),
+          initialValue: bottomBracketSheet.notes,
+          decoration: const InputDecoration(
+            labelText: 'Notas pedalier / BB',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              (current) => current.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+              refresh: false,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCockpitDiagnosisFields(
+    _BikeTabData currentTab, {
+    required CockpitDiagnosisSheet cockpitSheet,
+    required _CockpitDiagnosisSheetUpdater update,
+  }) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildStructuredDiagnosisMetaChip(
+              theme,
+              icon: Icons.tune,
+              label: 'Headset y direccion anclados en cockpit',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_cockpit_bearing_${currentTab.tabId}_${cockpitSheet.headsetBearingCondition ?? 'empty'}',
+          label: 'Estado rodamientos headset',
+          icon: Icons.settings_input_component_outlined,
+          value: cockpitSheet.headsetBearingCondition,
+          options: _kBearingConditionOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                headsetBearingCondition: value,
+                clearHeadsetBearingCondition: value == null,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildDiagnosisSelectField(
+          keySuffix:
+              'diag_cockpit_noise_${currentTab.tabId}_${cockpitSheet.headsetNoiseStatus ?? 'empty'}',
+          label: 'Ruidos / juego direccion',
+          icon: Icons.graphic_eq,
+          value: cockpitSheet.headsetNoiseStatus,
+          options: _kMechanicalNoiseStatusOptions,
+          onChanged: (value) {
+            update(
+              (current) => current.copyWith(
+                headsetNoiseStatus: value,
+                clearHeadsetNoiseStatus: value == null,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: ValueKey(
+            'diag_cockpit_notes_${currentTab.tabId}_${cockpitSheet.notes ?? 'empty'}',
+          ),
+          initialValue: cockpitSheet.notes,
+          decoration: const InputDecoration(
+            labelText: 'Notas cockpit / direccion',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              (current) => current.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+              refresh: false,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuspensionDiagnosisFields(
+    _BikeTabData currentTab, {
+    required SuspensionDiagnosisSheet suspensionSheet,
+    required BikeProfile? profile,
+    required _SuspensionDiagnosisSheetUpdater update,
+  }) {
+    final theme = Theme.of(context);
+    final selectionScopeKey =
+        _diagnosisComponentSelectionScopeKey(currentTab.tabId, 'suspension');
+    final componentSpecs =
+        _structuredDiagnosisComponentSpecs('suspension', profile);
+    final selectedComponentKey = _resolveStructuredDiagnosisComponentKey(
+      'suspension',
+      profile,
+      selectionScopeKey: selectionScopeKey,
+    );
+    final suspensionLayout = _normalizeNullableText(
+      profile?.technicalValues['suspensionLayout']?.toString() ?? '',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (suspensionLayout != null) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildStructuredDiagnosisMetaChip(
+                theme,
+                icon: Icons.waves_outlined,
+                label: 'Layout: $suspensionLayout',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (componentSpecs.isNotEmpty) ...[
+          Text(
+            'Componentes del sistema',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildDiagnosisComponentSelector(
+            theme,
+            specs: componentSpecs,
+            selectedComponentKey: selectedComponentKey,
+            statusForComponent: (componentKey) =>
+                _suspensionComponentStatus(suspensionSheet, componentKey),
+            onSelected: (componentKey) {
+              setState(() {
+                _selectedStructuredDiagnosisComponentKeys[selectionScopeKey] =
+                    componentKey;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Text(
+              'La bici no expone un componente de suspension visitable desde el perfil tecnico actual. Puedes dejar notas si observaste algo relevante, pero no se fuerza una ficha imposible para una configuracion rigida.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (selectedComponentKey != null)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Container(
+              key: ValueKey('editor_suspension_$selectedComponentKey'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.15),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: _buildSuspensionComponentEditor(
+                currentTab,
+                suspensionSheet: suspensionSheet,
+                componentKey: selectedComponentKey,
+                update: update,
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: ValueKey(
+            'diag_suspension_notes_${currentTab.tabId}_${suspensionSheet.notes ?? 'empty'}',
+          ),
+          initialValue: suspensionSheet.notes,
+          decoration: const InputDecoration(
+            labelText: 'Notas suspension',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          maxLines: 3,
+          onChanged: (value) {
+            final normalized = _normalizeNullableText(value);
+            update(
+              (current) => current.copyWith(
+                notes: normalized,
+                clearNotes: normalized == null,
+              ),
+              refresh: false,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuspensionComponentEditor(
+    _BikeTabData currentTab, {
+    required SuspensionDiagnosisSheet suspensionSheet,
+    required String componentKey,
+    required _SuspensionDiagnosisSheetUpdater update,
+  }) {
+    switch (componentKey) {
+      case 'rear_shock':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_rear_shock_condition_${currentTab.tabId}_${suspensionSheet.rearShockCondition ?? 'empty'}',
+              label: 'Estado amortiguador',
+              icon: Icons.linear_scale,
+              value: suspensionSheet.rearShockCondition,
+              options: _kSuspensionConditionOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    rearShockCondition: value,
+                    clearRearShockCondition: value == null,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_rear_shock_noise_${currentTab.tabId}_${suspensionSheet.rearShockNoiseStatus ?? 'empty'}',
+              label: 'Ruidos amortiguador',
+              icon: Icons.graphic_eq,
+              value: suspensionSheet.rearShockNoiseStatus,
+              options: _kMechanicalNoiseStatusOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    rearShockNoiseStatus: value,
+                    clearRearShockNoiseStatus: value == null,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      case 'fork':
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_fork_condition_${currentTab.tabId}_${suspensionSheet.forkCondition ?? 'empty'}',
+              label: 'Estado horquilla',
+              icon: Icons.waves_outlined,
+              value: suspensionSheet.forkCondition,
+              options: _kSuspensionConditionOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    forkCondition: value,
+                    clearForkCondition: value == null,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildDiagnosisSelectField(
+              keySuffix:
+                  'diag_fork_noise_${currentTab.tabId}_${suspensionSheet.forkNoiseStatus ?? 'empty'}',
+              label: 'Ruidos horquilla',
+              icon: Icons.graphic_eq,
+              value: suspensionSheet.forkNoiseStatus,
+              options: _kMechanicalNoiseStatusOptions,
+              onChanged: (value) {
+                update(
+                  (current) => current.copyWith(
+                    forkNoiseStatus: value,
+                    clearForkNoiseStatus: value == null,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+    }
+  }
+
+  String _formatHubSpacingMm(double value) {
+    return value == value.roundToDouble()
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
   }
 
   Widget _buildChainWearField(

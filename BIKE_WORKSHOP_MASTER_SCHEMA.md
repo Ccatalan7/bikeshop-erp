@@ -184,7 +184,7 @@ Fresh agents must preserve these exact rules unless they are deliberately redesi
 - `front_wheel` and `rear_wheel` are now the primary interactive wheel units. Legacy aggregate `wheels` remains only as a family/compatibility alias and backward-compatible history fallback; do not keep building new UI or targeting flows around a single undifferentiated wheel bucket.
 - `bottom_bracket` is now a dedicated shared-controller system because pedalier bearings and standards matter operationally on their own, even though `bottomBracketFamily` still lives in `bike_profiles.technical_profile.values` as upstream truth.
 - `cockpit` now explicitly means cockpit/steering. Headset belongs under this system until a richer schema/editor layer exists; do not leave headset semantics stranded in vague placeholder copy or freeform notes.
-- only `drivetrain`, `front_brake`, and `rear_brake` are currently modeled as structured editable diagnosis systems in the mechanic job form. `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` intentionally route to explicit unavailable-system context cards instead of a second reduced controller.
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now exposes structured editable diagnosis inspectors for every shared-controller system except the legacy aggregate alias `wheels`: `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, `rear_wheel`, `bottom_bracket`, `cockpit`, and `suspension` all round-trip through `MechanicJobDiagnosisSheet`, and the diagnosis summary/narrative layer now consumes those same structured sheets instead of dropping them back to placeholder cards.
 
 ### Mandatory Live Verification Protocol
 
@@ -1521,7 +1521,7 @@ Important rule:
 - diagnosis fields are still too sparse, too manual, and too note-heavy for a workshop-grade shared visit model
 - diagnosis and service flows do not yet run on a schema-driven semantic field system with typed controls and guided customization
 - bike profile is not yet the hard gating layer for diagnosis field visibility
-- only `drivetrain`, `front_brake`, and `rear_brake` have structured editable diagnosis inspectors today; `cockpit`, `suspension`, `front_wheel`, `bottom_bracket`, and `rear_wheel` now surface unavailable-but-contextual diagnosis cards while waiting for a real schema/editor pass
+- structured editable diagnosis inspectors now exist for `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, `rear_wheel`, `bottom_bracket`, `cockpit`, and `suspension`, but those editors are still hand-wired and remain less schema-driven, less profile-gated, and less semantically rich than the long-term backbone target
 - type-driven gating is stronger at intake now, but downstream service/product compatibility still does not fully consume the richer base kernel
 - the brake-first compatibility scorer now consumes the already-existing `category_tech_mappings.technical_family` / `spec_templates.key` bridge as a coarse fallback for live brake families such as `rotor`, `rim_brake`, `hydraulic_disc_brake`, `brake_pad`, `brake_caliper`, and `brake_lever`; detailed `product_spec_values` still remain the stronger within-family refinement layer
 - live production inspection on 2026-04-20 confirmed that this bridge matters because real Viñabike product populations still rely on family-level mappings for categories such as `Pastillas`, `Calipers`, `Manillas`, `Herraduras`, `Rotores`, and `Frenos hidráulicos completos`
