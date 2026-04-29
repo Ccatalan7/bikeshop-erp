@@ -27,9 +27,22 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main_store.dart",
+      "deviceId": "chrome",
       "args": [
-        "-d",
-        "chrome",
+        "--web-port=8080",
+        "--dart-define=STORE_PERF_LOGS=true",
+        "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
+        "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
+        "--dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike"
+      ]
+    },
+    {
+      "name": "🧪 Debug Vinabike Store (Chrome • Reset State)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_store.dart",
+      "deviceId": "chrome",
+      "args": [
         "--web-port=8080",
         "--dart-define=STORE_PERF_LOGS=true",
         "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",

@@ -26,6 +26,11 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage>
     with AutomaticKeepAliveClientMixin {
+  static const Color _logoBlue = Color(0xFF093357);
+  static const Color _warmLine = Color(0xFFE8E2D8);
+  static const Color _warmSurface = Color(0xFFF7F4EE);
+  static const Color _softSurface = Color(0xFFFCFBF8);
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -499,6 +504,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         }
 
         // Navigate to order confirmation
+        if (!mounted) return;
         context.go('/tienda/pedido/$orderId');
       }
     } catch (e) {
@@ -525,12 +531,6 @@ class _CheckoutPageState extends State<CheckoutPage>
     debugPrint(
         '🛒 [CheckoutPage.build] cart.isEmpty: ${cart.isEmpty}, items: ${cart.items.length}');
 
-    if (cart.isEmpty) {
-      debugPrint(
-          '🛒 [CheckoutPage.build] Cart is empty, showing empty cart view');
-      return _buildEmptyCart(context);
-    }
-
     // Get edit mode for key to prevent element reactivation conflicts
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final modeKey = editProvider.isEditMode
@@ -538,681 +538,895 @@ class _CheckoutPageState extends State<CheckoutPage>
         : (editProvider.isPreviewMode ? 'preview' : 'normal');
 
     debugPrint('🛒 [CheckoutPage.build] Cart has items, showing checkout form');
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 1200),
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: MediaQueryLayoutBuilder(
-        key: ValueKey('checkout_layout_$modeKey'),
-        builder: (context, constraints) {
-          final isMobile = constraints.maxWidth < 900;
+    return MediaQueryLayoutBuilder(
+      key: ValueKey('checkout_layout_$modeKey'),
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 980;
+        final horizontalMargin = constraints.maxWidth < 760 ? 16.0 : 24.0;
+        final verticalMargin = isMobile ? 28.0 : 44.0;
 
-          if (isMobile) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Checkout Form (Full Width)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Finalizar Compra',
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: 32),
-                    _buildCheckoutForm(),
-                  ],
-                ),
-
-                const SizedBox(height: 32),
-
-                // Order Summary (Full Width)
-                _buildOrderSummary(context, cart),
-              ],
-            );
-          }
-
-          // Desktop Layout (Row)
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Checkout Form (Left - 60%)
-              Expanded(
-                flex: 60,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Finalizar Compra',
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: 32),
-                    _buildCheckoutForm(),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 32),
-
-              // Order Summary (Right - 40%)
-              Expanded(
-                flex: 40,
-                child: _buildOrderSummary(context, cart),
-              ),
-            ],
+        if (cart.isEmpty) {
+          return _buildEmptyCart(
+            context,
+            horizontalMargin: horizontalMargin,
+            verticalMargin: verticalMargin,
           );
-        },
-      ),
-    );
-  }
+        }
 
-  Widget _buildEmptyCart(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.shopping_cart_outlined,
-            size: 64,
-            color: PublicStoreTheme.textMuted,
+        return Container(
+          constraints: const BoxConstraints(maxWidth: 1320),
+          margin: EdgeInsets.symmetric(
+            horizontal: horizontalMargin,
+            vertical: verticalMargin,
           ),
-          const SizedBox(height: 16),
-          Text(
-            'El carrito está vacío',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => context.go('/productos'),
-            child: const Text('IR A COMPRAR'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckoutForm() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Customer Information
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '1. Información de Contacto',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Name
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre completo *',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'El nombre es requerido';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Email
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo electrónico *',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'El correo es requerido';
-                      }
-                      if (!value.contains('@')) {
-                        return 'Ingresa un correo válido';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Phone
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Teléfono *',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      hintText: '+56 9 1234 5678',
-                    ),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'El teléfono es requerido';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Shipping Address
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '2. Dirección de Envío',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 24),
-                  if ((_accountService?.isAuthenticated ?? false) &&
-                      _savedAddresses.isNotEmpty) ...[
-                    DropdownButtonFormField<CustomerAddress>(
-                      initialValue: _selectedAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Usar dirección guardada',
-                        prefixIcon: Icon(Icons.bookmark_outline),
-                      ),
-                      items: _savedAddresses
-                          .map(
-                            (address) => DropdownMenuItem<CustomerAddress>(
-                              value: address,
-                              child: Text(
-                                '${address.label} • ${address.comuna}',
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          _applyAddressFromCustomer(value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (_addressAutocompleteService != null &&
-                      _addressAutocompleteService!.isEnabled) ...[
-                    typeahead.TypeAheadField<AddressSuggestion>(
-                      controller: _addressController,
-                      suggestionsCallback: (pattern) async {
-                        return await _addressAutocompleteService
-                                ?.fetchSuggestions(pattern) ??
-                            [];
-                      },
-                      builder: (context, controller, focusNode) {
-                        return TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: 'Dirección completa *',
-                            prefixIcon: Icon(Icons.location_on_outlined),
-                            hintText: 'Busca tu dirección y selecciónala',
-                          ),
-                          maxLines: 2,
-                          onChanged: (value) {
-                            if (value.trim().isEmpty) {
-                              setState(() {
-                                _selectedAddress = null;
-                                _resolvedAddress = null;
-                              });
-                            }
-                          },
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'La dirección es requerida';
-                            }
-                            return null;
-                          },
-                        );
-                      },
-                      itemBuilder: (context, suggestion) => ListTile(
-                        leading: const Icon(Icons.place_outlined),
-                        title: Text(suggestion.description),
-                      ),
-                      loadingBuilder: (context) => const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                      emptyBuilder: (context) => const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('No encontramos coincidencias'),
-                      ),
-                      onSelected: (suggestion) async {
-                        final resolved = await _addressAutocompleteService
-                            ?.resolvePlace(suggestion.placeId);
-                        if (resolved != null) {
-                          _applyResolvedAddress(resolved);
-                          _addressAutocompleteService?.resetSessionToken();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Utilizamos Google Maps para validar la dirección de entrega.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: PublicStoreTheme.textSecondary,
-                          ),
-                    ),
-                    if ((_accountService?.isAuthenticated ?? false) &&
-                        _selectedAddress == null) ...[
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _addressLabelController,
-                        decoration: const InputDecoration(
-                          labelText: 'Etiqueta (ej: Casa, Trabajo)',
-                          prefixIcon: Icon(Icons.label_outline),
-                        ),
-                      ),
-                      CheckboxListTile(
-                        value: _saveAddressToAccount,
-                        onChanged: (value) {
-                          setState(() {
-                            _saveAddressToAccount = value ?? false;
-                          });
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title:
-                            const Text('Guardar esta dirección en mi cuenta'),
-                      ),
-                    ] else if ((_accountService?.isAuthenticated ?? false) &&
-                        _selectedAddress != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: () =>
-                              context.go('/tienda/cuenta/direcciones'),
-                          icon: const Icon(Icons.open_in_new),
-                          label:
-                              const Text('Gestionar mis direcciones guardadas'),
-                        ),
-                      ),
-                    ],
-                  ] else ...[
-                    TextFormField(
-                      controller: _addressController,
-                      decoration: const InputDecoration(
-                        labelText: 'Dirección completa *',
-                        prefixIcon: Icon(Icons.location_on_outlined),
-                        hintText: 'Calle, número, comuna, región',
-                      ),
-                      maxLines: 3,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'La dirección es requerida';
-                        }
-                        return null;
-                      },
-                    ),
-                    if (_addressAutocompleteService != null &&
-                        !_addressAutocompleteService!.isEnabled)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          'Configura la clave de Google Places en Supabase para habilitar la búsqueda inteligente.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: PublicStoreTheme.textSecondary),
-                        ),
-                      ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Payment Method
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '3. Método de Pago',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 24),
-                  RadioListTile<String>(
-                    value: 'mercadopago',
-                    groupValue: _paymentMethod,
-                    onChanged: (value) =>
-                        setState(() => _paymentMethod = value!),
-                    title: Row(
-                      children: [
-                        const Text('MercadoPago'),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'RECOMENDADO',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    subtitle: const Text(
-                        'Pago seguro con tarjeta de crédito/débito o efectivo'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  RadioListTile<String>(
-                    value: 'transfer',
-                    groupValue: _paymentMethod,
-                    onChanged: (value) =>
-                        setState(() => _paymentMethod = value!),
-                    title: const Text('Transferencia Bancaria'),
-                    subtitle: const Text(
-                        'Recibirás los datos para realizar la transferencia'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  RadioListTile<String>(
-                    value: 'cash_on_delivery',
-                    groupValue: _paymentMethod,
-                    onChanged: (value) =>
-                        setState(() => _paymentMethod = value!),
-                    title: const Text('Pago contra entrega'),
-                    subtitle: const Text('Paga cuando recibas tu pedido'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Additional Notes
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Notas adicionales (opcional)',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _notesController,
-                    decoration: const InputDecoration(
-                      hintText: 'Alguna instrucción especial para tu pedido...',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 4,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderSummary(BuildContext context, CartProvider cart) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Resumen del Pedido',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-
-            // Product List
-            ...cart.items.map((item) {
-              // Prefer optimized image for cart thumbnails
-              final displayImageUrl =
-                  item.product.imageUrlOptimized ?? item.product.imageUrl;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Row(
+          child: isMobile
+              ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Thumbnail
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: PublicStoreTheme.surface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: displayImageUrl != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                displayImageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.image_not_supported,
-                                      size: 24);
-                                },
-                              ),
-                            )
-                          : const Icon(Icons.pedal_bike, size: 24),
-                    ),
-                    const SizedBox(width: 12),
+                    _buildPageHeader(),
+                    const SizedBox(height: 28),
+                    _buildCheckoutForm(isMobile: true),
+                    const SizedBox(height: 32),
+                    _buildOrderSummary(cart, isMobile: true),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Expanded(
+                      flex: 7,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item.product.name,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Cantidad: ${item.quantity}',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: PublicStoreTheme.textSecondary,
-                                    ),
-                          ),
+                          _buildPageHeader(),
+                          const SizedBox(height: 34),
+                          _buildCheckoutForm(isMobile: false),
                         ],
                       ),
                     ),
-                    Text(
-                      ChileanUtils.formatCurrency(item.subtotal),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                    const SizedBox(width: 28),
+                    Expanded(
+                      flex: 4,
+                      child: _buildOrderSummary(cart, isMobile: false),
                     ),
                   ],
                 ),
-              );
-            }),
+        );
+      },
+    );
+  }
 
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
+  Widget _buildPageHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeading('Finalizar compra'),
+        const SizedBox(height: 12),
+        const Text(
+          'Completa tus datos de contacto, entrega y pago para confirmar tu pedido con el mismo lenguaje claro del resto de la tienda.',
+          style: TextStyle(
+            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontSize: 15,
+            color: PublicStoreTheme.textSecondary,
+            height: 1.55,
+          ),
+        ),
+      ],
+    );
+  }
 
-            // Subtotal
-            _buildSummaryRow(
-              context,
-              'Subtotal',
-              ChileanUtils.formatCurrency(cart.subtotal),
-            ),
-            const SizedBox(height: 12),
-
-            // IVA
-            _buildSummaryRow(
-              context,
-              'IVA (19%)',
-              ChileanUtils.formatCurrency(cart.ivaAmount),
-              isSecondary: true,
-            ),
-
-            const SizedBox(height: 12),
-
-            // Shipping
-            _buildSummaryRow(
-              context,
-              'Envío',
-              'Por calcular',
-              isSecondary: true,
-            ),
-
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
-
-            // Total
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Total',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+  Widget _buildEmptyCart(
+    BuildContext context, {
+    required double horizontalMargin,
+    required double verticalMargin,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 1320),
+      margin: EdgeInsets.symmetric(
+        horizontal: horizontalMargin,
+        vertical: verticalMargin,
+      ),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 560),
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 148,
+                height: 148,
+                decoration: BoxDecoration(
+                  color: _softSurface,
+                  border: Border.all(color: _warmLine),
                 ),
-                Text(
-                  ChileanUtils.formatCurrency(cart.total),
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: PublicStoreTheme.primaryBlue,
-                        fontWeight: FontWeight.bold,
-                      ),
+                child: const Icon(
+                  Icons.shopping_cart_outlined,
+                  size: 62,
+                  color: PublicStoreTheme.textMuted,
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 32),
-
-            // Place Order Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _placeOrder,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
+              ),
+              const SizedBox(height: 32),
+              _buildSectionHeading('No hay productos para finalizar'),
+              const SizedBox(height: 16),
+              const Text(
+                'Vuelve al catálogo, revisa productos y agrega artículos antes de continuar al checkout.',
+                style: TextStyle(
+                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontSize: 15,
+                  color: PublicStoreTheme.textSecondary,
+                  height: 1.6,
                 ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('REALIZAR PEDIDO'),
+                textAlign: TextAlign.center,
               ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Back to Cart
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed:
-                    _isProcessing ? null : () => context.go('/tienda/carrito'),
-                child: const Text('VOLVER AL CARRITO'),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Security Notice
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: PublicStoreTheme.info.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: PublicStoreTheme.info.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.lock_outline,
-                    color: PublicStoreTheme.info,
-                    size: 20,
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                onPressed: () => context.go('/productos'),
+                icon: const Icon(Icons.shopping_bag_outlined),
+                label: const Text('EXPLORAR PRODUCTOS'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _logoBlue,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Tus datos están protegidos y serán utilizados únicamente para procesar tu pedido.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: PublicStoreTheme.info,
-                          ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSummaryRow(
-    BuildContext context,
+  Widget _buildCheckoutForm({required bool isMobile}) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFormSection(
+            title: '1. Información de contacto',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: _fieldDecoration(
+                    label: 'Nombre completo *',
+                    icon: Icons.person_outline,
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'El nombre es requerido';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: _fieldDecoration(
+                    label: 'Correo electrónico *',
+                    icon: Icons.email_outlined,
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'El correo es requerido';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Ingresa un correo válido';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: _fieldDecoration(
+                    label: 'Teléfono *',
+                    icon: Icons.phone_outlined,
+                    hintText: '+56 9 1234 5678',
+                  ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'El teléfono es requerido';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildFormSection(
+            title: '2. Dirección de envío',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if ((_accountService?.isAuthenticated ?? false) &&
+                    _savedAddresses.isNotEmpty) ...[
+                  DropdownButtonFormField<CustomerAddress>(
+                    initialValue: _selectedAddress,
+                    decoration: _fieldDecoration(
+                      label: 'Usar dirección guardada',
+                      icon: Icons.bookmark_outline,
+                    ),
+                    items: _savedAddresses
+                        .map(
+                          (address) => DropdownMenuItem<CustomerAddress>(
+                            value: address,
+                            child: Text('${address.label} • ${address.comuna}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        _applyAddressFromCustomer(value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_addressAutocompleteService != null &&
+                    _addressAutocompleteService!.isEnabled) ...[
+                  typeahead.TypeAheadField<AddressSuggestion>(
+                    controller: _addressController,
+                    suggestionsCallback: (pattern) async {
+                      return await _addressAutocompleteService
+                              ?.fetchSuggestions(pattern) ??
+                          [];
+                    },
+                    builder: (context, controller, focusNode) {
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: _fieldDecoration(
+                          label: 'Dirección completa *',
+                          icon: Icons.location_on_outlined,
+                          hintText: 'Busca tu dirección y selecciónala',
+                        ),
+                        maxLines: 2,
+                        onChanged: (value) {
+                          if (value.trim().isEmpty) {
+                            setState(() {
+                              _selectedAddress = null;
+                              _resolvedAddress = null;
+                            });
+                          }
+                        },
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'La dirección es requerida';
+                          }
+                          return null;
+                        },
+                      );
+                    },
+                    itemBuilder: (context, suggestion) => ListTile(
+                      leading: const Icon(Icons.place_outlined),
+                      title: Text(suggestion.description),
+                    ),
+                    loadingBuilder: (context) => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                    emptyBuilder: (context) => const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('No encontramos coincidencias'),
+                    ),
+                    onSelected: (suggestion) async {
+                      final resolved = await _addressAutocompleteService
+                          ?.resolvePlace(suggestion.placeId);
+                      if (resolved != null) {
+                        _applyResolvedAddress(resolved);
+                        _addressAutocompleteService?.resetSessionToken();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Utilizamos Google Maps para validar la dirección de entrega.',
+                    style: TextStyle(
+                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontSize: 12,
+                      color: PublicStoreTheme.textSecondary,
+                    ),
+                  ),
+                  if ((_accountService?.isAuthenticated ?? false) &&
+                      _selectedAddress == null) ...[
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _addressLabelController,
+                      decoration: _fieldDecoration(
+                        label: 'Etiqueta (ej: Casa, Trabajo)',
+                        icon: Icons.label_outline,
+                      ),
+                    ),
+                    CheckboxListTile(
+                      value: _saveAddressToAccount,
+                      onChanged: (value) {
+                        setState(() {
+                          _saveAddressToAccount = value ?? false;
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('Guardar esta dirección en mi cuenta'),
+                    ),
+                  ] else if ((_accountService?.isAuthenticated ?? false) &&
+                      _selectedAddress != null) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            context.go('/tienda/cuenta/direcciones'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _logoBlue,
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label:
+                            const Text('Gestionar mis direcciones guardadas'),
+                      ),
+                    ),
+                  ],
+                ] else ...[
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: _fieldDecoration(
+                      label: 'Dirección completa *',
+                      icon: Icons.location_on_outlined,
+                      hintText: 'Calle, número, comuna, región',
+                    ),
+                    maxLines: 3,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'La dirección es requerida';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (_addressAutocompleteService != null &&
+                      !_addressAutocompleteService!.isEnabled)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Configura la clave de Google Places en Supabase para habilitar la búsqueda inteligente.',
+                        style: TextStyle(
+                          fontFamily: PublicStoreTheme.defaultBodyFont,
+                          fontSize: 12,
+                          color: PublicStoreTheme.textSecondary,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildFormSection(
+            title: '3. Método de pago',
+            child: RadioGroup<String>(
+              groupValue: _paymentMethod,
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _paymentMethod = value);
+              },
+              child: Column(
+                children: [
+                  _buildPaymentOption(
+                    value: 'mercadopago',
+                    title: 'MercadoPago',
+                    subtitle:
+                        'Pago seguro con tarjeta de crédito, débito o efectivo.',
+                    badgeLabel: 'RECOMENDADO',
+                  ),
+                  _buildPaymentOption(
+                    value: 'transfer',
+                    title: 'Transferencia bancaria',
+                    subtitle:
+                        'Recibirás los datos para completar la transferencia.',
+                  ),
+                  _buildPaymentOption(
+                    value: 'cash_on_delivery',
+                    title: 'Pago contra entrega',
+                    subtitle: 'Paga cuando recibas tu pedido.',
+                    isLast: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildFormSection(
+            title: 'Notas adicionales (opcional)',
+            child: TextFormField(
+              controller: _notesController,
+              decoration: _fieldDecoration(
+                label: 'Instrucciones especiales para tu pedido',
+                icon: Icons.note_alt_outlined,
+              ),
+              maxLines: 4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderSummary(CartProvider cart, {required bool isMobile}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isMobile ? 20 : 24),
+      decoration: BoxDecoration(
+        color: _warmSurface.withValues(alpha: 0.56),
+        border: const Border(
+          top: BorderSide(color: _warmLine),
+          bottom: BorderSide(color: _warmLine),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'RESUMEN DEL PEDIDO',
+            style: TextStyle(
+              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontSize: isMobile ? 28 : 32,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 18),
+          for (var index = 0; index < cart.items.length; index++)
+            _buildSummaryProductRow(
+              cart.items[index],
+              isLast: index == cart.items.length - 1,
+            ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            height: 1,
+            color: _warmLine,
+          ),
+          const SizedBox(height: 18),
+          _buildSummaryMetric(
+            'Subtotal',
+            ChileanUtils.formatCurrency(cart.subtotal),
+          ),
+          const SizedBox(height: 12),
+          _buildSummaryMetric(
+            'IVA (19%)',
+            ChileanUtils.formatCurrency(cart.ivaAmount),
+            secondary: true,
+          ),
+          const SizedBox(height: 12),
+          _buildSummaryMetric(
+            'Envío',
+            'Por calcular',
+            secondary: true,
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            height: 1,
+            color: _warmLine,
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text(
+                'TOTAL',
+                style: TextStyle(
+                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: PublicStoreTheme.textSecondary,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Text(
+                ChileanUtils.formatCurrency(cart.total),
+                style: const TextStyle(
+                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontSize: 44,
+                  fontWeight: FontWeight.w700,
+                  color: _logoBlue,
+                  height: 0.95,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _isProcessing ? null : _placeOrder,
+              style: FilledButton.styleFrom(
+                backgroundColor: _logoBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: _isProcessing
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('REALIZAR PEDIDO'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _isProcessing ? null : () => context.go('/carrito'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _logoBlue,
+                side: const BorderSide(color: _logoBlue),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: const Text('VOLVER AL CARRITO'),
+            ),
+          ),
+          const SizedBox(height: 26),
+          Container(
+            width: double.infinity,
+            height: 1,
+            color: _warmLine,
+          ),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                margin: const EdgeInsets.only(top: 6),
+                decoration: const BoxDecoration(
+                  color: _logoBlue,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Tus datos están protegidos y serán utilizados únicamente para procesar tu pedido.',
+                  style: TextStyle(
+                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormSection({
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _softSurface.withValues(alpha: 0.62),
+        border: const Border(
+          top: BorderSide(color: _warmLine),
+          bottom: BorderSide(color: _warmLine),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration({
+    required String label,
+    required IconData icon,
+    String? hintText,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      prefixIcon: Icon(icon, color: PublicStoreTheme.textSecondary, size: 20),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: _warmLine),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: _warmLine),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: _logoBlue, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: PublicStoreTheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: PublicStoreTheme.error, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption({
+    required String value,
+    required String title,
+    required String subtitle,
+    String? badgeLabel,
+    bool isLast = false,
+  }) {
+    final isSelected = _paymentMethod == value;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isLast ? Colors.transparent : _warmLine,
+          ),
+        ),
+      ),
+      child: InkWell(
+        onTap: () => setState(() => _paymentMethod = value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Radio<String>(
+                value: value,
+                activeColor: _logoBlue,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontFamily: PublicStoreTheme.defaultBodyFont,
+                              fontSize: 15,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        if (badgeLabel != null) ...[
+                          const SizedBox(width: 8),
+                          _buildMiniPill(badgeLabel),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontSize: 13,
+                        color: PublicStoreTheme.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryProductRow(CartItem item, {bool isLast = false}) {
+    final displayImageUrl =
+        item.product.imageUrlOptimized ?? item.product.imageUrl;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isLast ? Colors.transparent : _warmLine,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            color: _softSurface,
+            padding: const EdgeInsets.all(8),
+            child: displayImageUrl != null
+                ? Image.network(
+                    displayImageUrl,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.center,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 22,
+                        color: PublicStoreTheme.textMuted,
+                      );
+                    },
+                  )
+                : const Icon(
+                    Icons.pedal_bike_outlined,
+                    size: 22,
+                    color: PublicStoreTheme.textMuted,
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.product.name,
+                  style: const TextStyle(
+                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    height: 1.45,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Cantidad: ${item.quantity}',
+                  style: const TextStyle(
+                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontSize: 12,
+                    color: PublicStoreTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            ChileanUtils.formatCurrency(item.subtotal),
+            style: const TextStyle(
+              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryMetric(
     String label,
     String value, {
-    bool isSecondary = false,
+    bool secondary = false,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isSecondary
-                    ? PublicStoreTheme.textSecondary
-                    : PublicStoreTheme.textPrimary,
-              ),
+          style: TextStyle(
+            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontSize: 15,
+            color: secondary
+                ? PublicStoreTheme.textSecondary
+                : PublicStoreTheme.textPrimary,
+          ),
         ),
         Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: isSecondary
-                    ? PublicStoreTheme.textSecondary
-                    : PublicStoreTheme.textPrimary,
-              ),
+          style: TextStyle(
+            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniPill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _logoBlue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: _logoBlue,
+          letterSpacing: 0.7,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeading(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: Colors.black,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: 72,
+          height: 2,
+          color: Colors.black,
         ),
       ],
     );
