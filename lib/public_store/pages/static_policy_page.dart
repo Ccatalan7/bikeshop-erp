@@ -130,7 +130,6 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         pageSlug: widget.slug,
       );
     }
-
   }
 
   Future<void> _loadPage() async {
@@ -301,45 +300,48 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     // In editor context (preview or edit), render the provider blocks for THIS page.
     // This ensures switching to preview after saving shows the updated content.
     final blocksToRender = (editProvider.isInEditorContext && matchesPage)
-      ? editProvider.blocks
-      : _blocks;
+        ? editProvider.blocks
+        : _blocks;
 
     String eff(String key, String fallback) {
       if (editProvider.isInEditorContext) {
-      return editProvider.getEffectiveThemeSetting(key, fallback);
+        return editProvider.getEffectiveThemeSetting(key, fallback);
       }
       return fallback;
     }
 
     // Get theme from WebsiteService (already cached), with live-preview overrides
-    final primaryColor =
-      _parseColor(eff('theme_primary_color', websiteService.getSetting('theme_primary_color', ''))) ??
+    final primaryColor = _parseColor(eff('theme_primary_color',
+            websiteService.getSetting('theme_primary_color', ''))) ??
         const Color(0xFF2E7D32);
-    final accentColor =
-      _parseColor(eff('theme_accent_color', websiteService.getSetting('theme_accent_color', ''))) ??
+    final accentColor = _parseColor(eff('theme_accent_color',
+            websiteService.getSetting('theme_accent_color', ''))) ??
         const Color(0xFFFF6F00);
     final headingFont = eff(
       'theme_heading_font',
-      websiteService.getSetting('theme_heading_font', 'Roboto'),
+      websiteService.getSetting('theme_heading_font', 'Oswald'),
     );
     final bodyFont = eff(
       'theme_body_font',
-      websiteService.getSetting('theme_body_font', 'Roboto'),
+      websiteService.getSetting('theme_body_font', 'Barlow'),
     );
     final headingSize = double.tryParse(
-        eff('theme_heading_size', websiteService.getSetting('theme_heading_size', '48')),
-      ) ??
-      48.0;
+          eff('theme_heading_size',
+              websiteService.getSetting('theme_heading_size', '48')),
+        ) ??
+        48.0;
     final bodySize = double.tryParse(
-        eff('theme_body_size', websiteService.getSetting('theme_body_size', '16')),
-      ) ??
-      16.0;
+          eff('theme_body_size',
+              websiteService.getSetting('theme_body_size', '16')),
+        ) ??
+        16.0;
     final sectionSpacing = double.tryParse(
-        eff('theme_section_spacing', websiteService.getSetting('theme_section_spacing', '64')),
-      ) ??
-      64.0;
-    final textColor =
-      _parseColor(eff('theme_text_color', websiteService.getSetting('theme_text_color', ''))) ??
+          eff('theme_section_spacing',
+              websiteService.getSetting('theme_section_spacing', '64')),
+        ) ??
+        64.0;
+    final textColor = _parseColor(eff('theme_text_color',
+            websiteService.getSetting('theme_text_color', ''))) ??
         Colors.black87;
 
     if (_loading && _blocks.isEmpty) {
@@ -373,8 +375,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 14, color: textColor.withValues(alpha: 0.7)),
+                style: TextStyle(
+                    fontSize: 14, color: textColor.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -388,7 +390,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
           padding: const EdgeInsets.all(32),
           child: Text(
             'Esta página está en construcción',
-            style: TextStyle(fontSize: 18, color: textColor.withValues(alpha: 0.7)),
+            style: TextStyle(
+                fontSize: 18, color: textColor.withValues(alpha: 0.7)),
           ),
         ),
       );
@@ -450,7 +453,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             bodyFont: bodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -465,7 +469,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             bodyFont: bodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
   }

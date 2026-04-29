@@ -52,12 +52,106 @@
       ],
       "headers": [
         {
+          "source": "/",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/productos",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "text/html; charset=utf-8"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/productos/**",
           "headers": [
             {
               "key": "Content-Type",
               "value": "text/html; charset=utf-8"
             },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/contacto",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/cuenta/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/pagina/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/nosotros",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/terminos",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/privacidad",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/devoluciones",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/envios",
+          "headers": [
             {
               "key": "Cache-Control",
               "value": "public, max-age=0, must-revalidate"
@@ -75,6 +169,15 @@
         },
         {
           "source": "/flutter_bootstrap.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter.js",
           "headers": [
             {
               "key": "Cache-Control",
@@ -119,16 +222,43 @@
           ]
         },
         {
-          "source": "**/*.{png,jpg,jpeg,webp,svg,ico,woff,woff2,ttf,otf,wasm,mjs}",
+          "source": "/assets/AssetManifest.bin.json",
           "headers": [
             {
               "key": "Cache-Control",
-              "value": "public, max-age=2592000"
+              "value": "public, max-age=0, must-revalidate"
             }
           ]
         },
         {
-          "source": "assets/**",
+          "source": "/assets/AssetManifest.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/assets/FontManifest.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "**/*.{ttf,otf,woff,woff2}",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "**/*.{png,jpg,jpeg,webp,svg,ico,wasm,mjs}",
           "headers": [
             {
               "key": "Cache-Control",

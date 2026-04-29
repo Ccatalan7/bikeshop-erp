@@ -6031,8 +6031,8 @@ class _ThemeTabState extends State<_ThemeTab> {
   final _accentColorController = TextEditingController();
 
   // Typography
-  String _headingFont = 'Inter';
-  String _bodyFont = 'Inter';
+  String _headingFont = 'Oswald';
+  String _bodyFont = 'Barlow';
   String _headingSize = 'normal';
   String _bodySize = 'normal';
 
@@ -6046,6 +6046,9 @@ class _ThemeTabState extends State<_ThemeTab> {
   bool _loaded = false;
 
   final _fonts = [
+    'Oswald',
+    'Barlow',
+    'Barlow Condensed',
     'Inter',
     'Roboto',
     'Open Sans',
@@ -6140,8 +6143,8 @@ class _ThemeTabState extends State<_ThemeTab> {
               service.getSetting('theme_primary_color', '#00A09D');
           _accentColorController.text =
               service.getSetting('theme_accent_color', '#FF6D00');
-          _headingFont = service.getSetting('theme_heading_font', 'Inter');
-          _bodyFont = service.getSetting('theme_body_font', 'Inter');
+          _headingFont = service.getSetting('theme_heading_font', 'Oswald');
+          _bodyFont = service.getSetting('theme_body_font', 'Barlow');
           _headingSize = _sizeKeyFromStoredValue(
             isHeading: true,
             raw: service.getSetting('theme_heading_size', '48'),

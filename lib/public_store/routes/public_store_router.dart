@@ -238,6 +238,7 @@ Page<dynamic> _buildPage(
   final pageChild = KeyedSubtree(
     key: pageKey,
     child: PublicStoreLayout(
+      routePath: state.uri.path,
       enablePageViewScrolling: true,
       child: child,
     ),
@@ -330,6 +331,7 @@ Page<dynamic> _buildPageNoScroll(
   final pageChild = KeyedSubtree(
     key: pageKey,
     child: PublicStoreLayout(
+      routePath: state.uri.path,
       enablePageViewScrolling: false,
       child: child,
     ),

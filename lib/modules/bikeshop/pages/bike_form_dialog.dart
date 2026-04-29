@@ -265,6 +265,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   String? _freehubType;
   String? _valveType;
   String? _bottomBracketFamily;
+  String? _bbShellWidthValue;
+  String? _bbShellDiameterValue;
+  String? _spindleInterface;
   int? _frontRotorSizeMm;
   int? _rearRotorSizeMm;
   int? _frontChainringCount;
@@ -354,8 +357,24 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             : null;
         _freehubType = technicalValues['freehubType']?.toString();
         _valveType = technicalValues['valveType']?.toString();
-        _bottomBracketFamily =
+        _bottomBracketFamily = canonicalBottomBracketFamilyValue(
+              technicalValues['bottomBracketFamily']?.toString(),
+            ) ??
             technicalValues['bottomBracketFamily']?.toString();
+        _bbShellWidthValue = _formatMeasurementSelection(
+          technicalValues['bbShellWidthMm'] ??
+              technicalValues['bb_shell_width_mm'],
+        );
+        _bbShellDiameterValue = _formatMeasurementSelection(
+          technicalValues['bbShellDiameterMm'] ??
+              technicalValues['bb_shell_diameter_mm'],
+        );
+        _spindleInterface = canonicalBottomBracketSpindleInterfaceValue(
+              technicalValues['spindleInterface']?.toString() ??
+                  technicalValues['spindle_interface']?.toString(),
+            ) ??
+            technicalValues['spindleInterface']?.toString() ??
+            technicalValues['spindle_interface']?.toString();
         _frontRotorSizeMm = !_isDiscBrakeType(_brakeType)
             ? null
             : _parseNullableIntValue(technicalValues['frontRotorSizeMm']);
@@ -727,6 +746,25 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     return int.tryParse(value.toString().trim());
   }
 
+  double? _parseNullableDoubleValue(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().trim());
+  }
+
+  String? _formatMeasurementSelection(dynamic value) {
+    final parsedValue = _parseNullableDoubleValue(value);
+    if (parsedValue == null) {
+      return null;
+    }
+
+    if (parsedValue == parsedValue.roundToDouble()) {
+      return parsedValue.toInt().toString();
+    }
+
+    return parsedValue.toStringAsFixed(1);
+  }
+
   _DrivetrainBreakdown? _parseDrivetrainBreakdown({
     String? configRaw,
     int? totalSpeeds,
@@ -931,6 +969,83 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   bool get _hasExplicitBottomBracketSelection =>
       _bottomBracketFamily != null && _bottomBracketFamily!.trim().isNotEmpty;
+
+  bool get _showBottomBracketShellWidthField =>
+      isKnownBottomBracketFamily(_bottomBracketFamily);
+
+  bool get _showBottomBracketShellDiameterField =>
+      bottomBracketFamilyUsesShellDiameter(_bottomBracketFamily);
+
+  bool get _showBottomBracketSpindleInterfaceField =>
+      isKnownBottomBracketFamily(_bottomBracketFamily);
+
+  Map<String, String> _resolvedLabeledOptions(
+    Map<String, String> defaults,
+    String? currentValue,
+  ) {
+    final resolved = Map<String, String>.from(defaults);
+    if (currentValue != null &&
+        currentValue.trim().isNotEmpty &&
+        !resolved.containsKey(currentValue)) {
+      resolved[currentValue] = currentValue;
+    }
+    return resolved;
+  }
+
+  void _clearBottomBracketTechnicalField(String key, VoidCallback clearValue) {
+    clearValue();
+    _technicalSources.remove(key);
+    _technicalConfirmed.remove(key);
+  }
+
+  void _sanitizeBottomBracketTechnicalState() {
+    final allowedShellWidthOptions =
+        bottomBracketShellWidthOptionsForFamily(_bottomBracketFamily);
+    final allowedShellDiameterOptions =
+        bottomBracketShellDiameterOptionsForFamily(_bottomBracketFamily);
+    final allowedSpindleOptions =
+        bottomBracketSpindleInterfaceOptionsForFamily(_bottomBracketFamily);
+
+    if (!_showBottomBracketShellWidthField ||
+        (_bbShellWidthValue != null &&
+            !allowedShellWidthOptions.containsKey(_bbShellWidthValue))) {
+      _clearBottomBracketTechnicalField(
+        'bbShellWidthMm',
+        () => _bbShellWidthValue = null,
+      );
+    }
+
+    if (!_showBottomBracketShellDiameterField ||
+        (_bbShellDiameterValue != null &&
+            !allowedShellDiameterOptions.containsKey(_bbShellDiameterValue))) {
+      _clearBottomBracketTechnicalField(
+        'bbShellDiameterMm',
+        () => _bbShellDiameterValue = null,
+      );
+    }
+
+    if (!_showBottomBracketSpindleInterfaceField ||
+        (_spindleInterface != null &&
+            !allowedSpindleOptions.containsKey(_spindleInterface))) {
+      _clearBottomBracketTechnicalField(
+        'spindleInterface',
+        () => _spindleInterface = null,
+      );
+    }
+  }
+
+  String _bottomBracketKernelFooterText() {
+    final familyLabel = bottomBracketFamilyLabel(_bottomBracketFamily);
+    if (familyLabel == null) {
+      return 'Confirma primero la familia del shell pedalier. Luego captura el ancho de caja y la interfaz real del eje para que compatibilidad no se quede en una etiqueta vacia.';
+    }
+
+    if (_showBottomBracketShellDiameterField) {
+      return 'En $familyLabel el bore/caja manda. Confirma ancho, diametro del shell y la interfaz del eje en vez de tratarlo como si fuera una caja roscada generica.';
+    }
+
+    return 'En $familyLabel confirma el ancho de caja y la interfaz real del eje. Eso evita que el pedalier quede reducido a una familia demasiado amplia.';
+  }
 
   bool get _hasAnyDrivetrainTruth {
     return _currentDrivetrainBreakdown != null ||
@@ -1448,6 +1563,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _freehubType != null ||
         _valveType != null ||
         _bottomBracketFamily != null ||
+        (_bbShellWidthValue?.trim().isNotEmpty ?? false) ||
+        (_bbShellDiameterValue?.trim().isNotEmpty ?? false) ||
+        (_spindleInterface?.trim().isNotEmpty ?? false) ||
         _frontSpokeHolesController.text.trim().isNotEmpty ||
         _rearSpokeHolesController.text.trim().isNotEmpty ||
         _frontRotorSizeMm != null ||
@@ -1491,6 +1609,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (_valveType != null) 'valveType': _valveType,
       if (_bottomBracketFamily != null)
         'bottomBracketFamily': _bottomBracketFamily,
+      if (_showBottomBracketShellWidthField &&
+          _parseNullableDoubleValue(_bbShellWidthValue) != null)
+        'bbShellWidthMm': _parseNullableDoubleValue(_bbShellWidthValue),
+      if (_showBottomBracketShellDiameterField &&
+          _parseNullableDoubleValue(_bbShellDiameterValue) != null)
+        'bbShellDiameterMm': _parseNullableDoubleValue(_bbShellDiameterValue),
+      if (_showBottomBracketSpindleInterfaceField && _spindleInterface != null)
+        'spindleInterface': _spindleInterface,
       if (_frontSpokeHolesController.text.trim().isNotEmpty)
         'frontSpokeHoles': int.tryParse(_frontSpokeHolesController.text.trim()),
       if (_rearSpokeHolesController.text.trim().isNotEmpty)
@@ -2455,12 +2581,23 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         ].where((value) => value).length;
         return _statusFromCompleteness(knownCount: knownCount, totalCount: 3);
       case 'bottom_bracket':
+        final knownCount = [
+          _bottomBracketFamily != null && _bottomBracketFamily!.isNotEmpty,
+          !_showBottomBracketShellWidthField ||
+              (_bbShellWidthValue != null && _bbShellWidthValue!.isNotEmpty),
+          !_showBottomBracketShellDiameterField ||
+              (_bbShellDiameterValue != null &&
+                  _bbShellDiameterValue!.isNotEmpty),
+          !_showBottomBracketSpindleInterfaceField ||
+              (_spindleInterface != null && _spindleInterface!.isNotEmpty),
+        ].where((value) => value).length;
+        final totalCount = 1 +
+            (_showBottomBracketShellWidthField ? 1 : 0) +
+            (_showBottomBracketShellDiameterField ? 1 : 0) +
+            (_showBottomBracketSpindleInterfaceField ? 1 : 0);
         return _statusFromCompleteness(
-          knownCount:
-              (_bottomBracketFamily != null && _bottomBracketFamily!.isNotEmpty)
-                  ? 1
-                  : 0,
-          totalCount: 1,
+          knownCount: knownCount,
+          totalCount: totalCount,
         );
       case 'rear_wheel':
         final knownCount = [
@@ -2798,7 +2935,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Widget _buildBikeTypePreviewDropdown() {
     return DropdownButtonFormField<BikeType>(
-      value: _selectedType,
+      initialValue: _selectedType,
       decoration: const InputDecoration(
         labelText: 'Tipo de bicicleta',
         border: OutlineInputBorder(),
@@ -3054,7 +3191,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ? '${_effectiveDrivetrainSpeeds}v'
           : 'Pendiente',
       supportingText: _currentDrivetrainBreakdown != null
-          ? 'Resultado de ${_frontChainringCount} × ${_rearCogCount}.'
+          ? 'Resultado de $_frontChainringCount × $_rearCogCount.'
           : (_legacyDrivetrainSpeeds != null
               ? 'Valor heredado. Confirma ambos selectores para recalcularlo.'
               : 'Se calcula automáticamente desde el desglose delantero y trasero.'),
@@ -3092,8 +3229,58 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       icon: Icons.settings_input_component_outlined,
       onChanged: (value) {
         setState(() {
-          _bottomBracketFamily = value;
+          _bottomBracketFamily = canonicalBottomBracketFamilyValue(value);
           _markTechnicalFieldManual('bottomBracketFamily');
+          _sanitizeBottomBracketTechnicalState();
+        });
+      },
+    );
+
+    final bottomBracketShellWidthField = _buildCodeDropdown(
+      value: _bbShellWidthValue,
+      label: 'Ancho caja pedalier',
+      options: _resolvedLabeledOptions(
+        bottomBracketShellWidthOptionsForFamily(_bottomBracketFamily),
+        _bbShellWidthValue,
+      ),
+      icon: Icons.straighten_outlined,
+      onChanged: (value) {
+        setState(() {
+          _bbShellWidthValue = value;
+          _markTechnicalFieldManual('bbShellWidthMm');
+        });
+      },
+    );
+
+    final bottomBracketShellDiameterField = _buildCodeDropdown(
+      value: _bbShellDiameterValue,
+      label: 'Diametro shell / bore',
+      options: _resolvedLabeledOptions(
+        bottomBracketShellDiameterOptionsForFamily(_bottomBracketFamily),
+        _bbShellDiameterValue,
+      ),
+      icon: Icons.donut_large_outlined,
+      onChanged: (value) {
+        setState(() {
+          _bbShellDiameterValue = value;
+          _markTechnicalFieldManual('bbShellDiameterMm');
+        });
+      },
+    );
+
+    final spindleInterfaceField = _buildCodeDropdown(
+      value: _spindleInterface,
+      label: 'Interfaz del eje',
+      options: _resolvedLabeledOptions(
+        bottomBracketSpindleInterfaceOptionsForFamily(_bottomBracketFamily),
+        _spindleInterface,
+      ),
+      icon: Icons.settings_ethernet_outlined,
+      onChanged: (value) {
+        setState(() {
+          _spindleInterface =
+              canonicalBottomBracketSpindleInterfaceValue(value);
+          _markTechnicalFieldManual('spindleInterface');
         });
       },
     );
@@ -3249,10 +3436,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           description:
               'Los rodamientos y el estándar del eje pedalier son una unidad propia del backbone. No deben perderse como un detalle secundario de transmisión.',
           icon: Icons.hub_outlined,
-          fields: [bottomBracketField],
+          fields: [
+            bottomBracketField,
+            if (_showBottomBracketShellWidthField) bottomBracketShellWidthField,
+            if (_showBottomBracketShellDiameterField)
+              bottomBracketShellDiameterField,
+            if (_showBottomBracketSpindleInterfaceField) spindleInterfaceField,
+          ],
           minItemWidth: 220,
-          footerText:
-              'Este sistema concentra la familia de pedalier para compatibilidad, diagnóstico y futuros servicios de rodamientos.',
+          footerText: _bottomBracketKernelFooterText(),
         ),
       'rear_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda trasera',

@@ -2,11 +2,11 @@ import 'package:intl/intl.dart';
 
 class ChileanUtils {
   // Chilean Peso formatting
-  static final NumberFormat _clpFormat = NumberFormat.currency(
-    locale: 'es_CL',
-    symbol: '\$',
-    decimalDigits: 0,
-  );
+  static NumberFormat get _clpFormat => NumberFormat.currency(
+        locale: 'es_CL',
+        customPattern: '\$ #,##0',
+        decimalDigits: 0,
+      );
 
   // Date formatting for Chile (DD/MM/YYYY)
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');

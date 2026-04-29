@@ -115,6 +115,52 @@ void main() {
       expect(assessment.detail, contains('tiro/indexado delantero'));
     });
 
+    test('keeps pair shifter matches in caution even when both sides line up',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: const <String, dynamic>{
+          'drivetrainConfig': '2x10',
+          'drivetrainSpeeds': 10,
+          'shiftActuationFamily': 'Shimano MTB 10-12v',
+        },
+        productSpecs: const <String, dynamic>{
+          'shifter_position': 'pair',
+          'drivetrain_speeds': ['10'],
+          'front_chainring_count': ['2'],
+          'shift_actuation_family': 'Shimano MTB 10-12v',
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('10v'));
+      expect(assessment.detail, contains('2x'));
+      expect(assessment.detail, contains('tiro/indexado delantero'));
+    });
+
+    test('treats universal shifter matches like pair and keeps them in caution',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'shifter',
+        bikeTechnicalValues: const <String, dynamic>{
+          'drivetrainConfig': '2x10',
+          'drivetrainSpeeds': 10,
+          'shiftActuationFamily': 'Shimano MTB 10-12v',
+        },
+        productSpecs: const <String, dynamic>{
+          'shifter_position': 'Universal',
+          'drivetrain_speeds': ['10'],
+          'front_chainring_count': ['2'],
+          'shift_actuation_family': 'Shimano MTB 10-12v',
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('10v'));
+      expect(assessment.detail, contains('2x'));
+      expect(assessment.detail, contains('tiro/indexado delantero'));
+    });
+
     test(
         'keeps rear derailleur matches in caution while range semantics stay unresolved',
         () async {
@@ -181,6 +227,58 @@ void main() {
       expect(assessment.detail, contains('1x'));
       expect(assessment.detail, contains('Mid / BMX'));
       expect(assessment.detail, contains('parte trasera'));
+    });
+
+    test(
+        'keeps bottom bracket matches in caution while shell-standard seams stay unresolved',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: const <String, dynamic>{
+          'bottomBracketFamily': 'BSA roscado',
+          'bbShellWidthMm': 68,
+          'bbShellDiameterMm': 33.7,
+          'spindleInterface': '24 mm integrado',
+        },
+        productSpecs: const <String, dynamic>{
+          'bottom_bracket_family': 'BSA roscado',
+          'bb_shell_width_mm': 68,
+          'bb_shell_diameter_mm': 33.7,
+          'spindle_interface': '24 mm integrado',
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('BSA roscado'));
+      expect(assessment.detail, contains('68 mm'));
+      expect(assessment.detail, contains('24 mm'));
+      expect(assessment.detail, contains('estándar real del shell'));
+    });
+
+    test(
+        'keeps crankset matches in caution while chainline and mounting seams stay unresolved',
+        () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'crankset',
+        bikeTechnicalValues: const <String, dynamic>{
+          'drivetrainConfig': '1x1',
+          'bottomBracketFamily': 'Mid / BMX',
+          'bbShellWidthMm': 68,
+          'spindleInterface': 'BMX 19 mm',
+        },
+        productSpecs: const <String, dynamic>{
+          'bottom_bracket_family': 'Mid / BMX',
+          'bb_shell_width_mm': 68,
+          'spindle_interface': 'BMX 19 mm',
+          'front_chainring_count': ['1'],
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.caution);
+      expect(assessment.detail, contains('Mid / BMX'));
+      expect(assessment.detail, contains('1x'));
+      expect(assessment.detail, contains('línea de cadena'));
+      expect(assessment.detail, contains('estándar real del crankset'));
     });
 
     test('still rejects exact shifter actuation mismatch at service level',

@@ -433,10 +433,38 @@ DrivetrainProductSpecFieldBehavior resolveDrivetrainProductSpecFieldBehavior({
   final isChainGuideFamily = normalizedFamily == 'chain_guide';
   final isShifterFamily = normalizedFamily == 'shifter';
   final isFrontDerailleurFamily = normalizedFamily == 'front_derailleur';
+  final isBottomBracketFamily = normalizedFamily == 'bottom_bracket';
   final isHubFamily = normalizedFamily == 'hub' ||
       normalizedFamily == 'hub_generic' ||
       normalizedFamily == 'front_hub' ||
       normalizedFamily == 'rear_hub';
+  final normalizedBottomBracketFamily =
+      _normalizeDrivetrainText(currentValues['bottom_bracket_family'])
+          ?.toLowerCase();
+  final isPressfitBottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('pressfit') == true ||
+          normalizedBottomBracketFamily?.contains('bb30') == true ||
+          normalizedBottomBracketFamily?.contains('pf30') == true;
+  final isMidBmxBottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('mid') == true &&
+          normalizedBottomBracketFamily?.contains('bmx') == true;
+  final isOnePieceBottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('americano') == true ||
+          normalizedBottomBracketFamily?.contains('one-piece') == true ||
+          normalizedBottomBracketFamily?.contains('one piece') == true;
+  final isSquareCartridgeBottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('cuadrado') == true ||
+          normalizedBottomBracketFamily?.contains('square') == true ||
+          normalizedBottomBracketFamily?.contains('cartucho') == true;
+  final isExternal24BottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('hollowtech') == true ||
+          normalizedBottomBracketFamily?.contains('24mm externo') == true ||
+          normalizedBottomBracketFamily?.contains('24 mm externo') == true;
+  final isThreadedCupBottomBracketFamily =
+      normalizedBottomBracketFamily?.contains('bsa') == true ||
+          normalizedBottomBracketFamily?.contains('roscado') == true ||
+          isSquareCartridgeBottomBracketFamily ||
+          isExternal24BottomBracketFamily;
   final hubWheelPosition = canonicalDrivetrainWheelPositionValue(
     currentValues['wheel_position']?.toString(),
   );
@@ -617,6 +645,89 @@ DrivetrainProductSpecFieldBehavior resolveDrivetrainProductSpecFieldBehavior({
         }),
         helperText:
             'Confirma la familia real del cuerpo trasero. Shimano HG, HG Road 11, XD/XDR y Campagnolo/N3W no deben colapsarse en una sola opcion gruesa.',
+      );
+    }
+  }
+
+  if (isBottomBracketFamily) {
+    if (fieldKey == 'bb_thread_standard') {
+      if (isPressfitBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          hidden: true,
+          helperText:
+              'Las familias Pressfit y BB30/PF30 se distinguen por el diámetro del bore/caja, no por una rosca de copas.',
+        );
+      }
+
+      if (isMidBmxBottomBracketFamily || isOnePieceBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          hidden: true,
+          helperText:
+              'Mid/BMX y one-piece/americano no deben mezclar un estándar de rosca de copas como si fueran cajas roscadas BSA o italianas.',
+        );
+      }
+    }
+
+    if (fieldKey == 'spindle_interface') {
+      if (isExternal24BottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          enabled: false,
+          allowedOptions: ['Hollowtech / 24mm'],
+          helperText:
+              'La familia Hollowtech / 24mm externo ya fija la interfaz del eje. No la abras de nuevo a BMX, ISIS u otras familias incompatibles.',
+        );
+      }
+
+      if (isSquareCartridgeBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          allowedOptions: ['Cuadrado JIS', 'Cuadrado ISO'],
+          helperText:
+              'Un cartucho cuadrado debe declararse como JIS o ISO; no mezcles esta familia con Hollowtech, ISIS o BMX.',
+        );
+      }
+
+      if (isMidBmxBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          allowedOptions: ['BMX 19mm', 'BMX 22mm', 'BMX 24mm'],
+          helperText:
+              'Mid / BMX debe quedarse dentro de interfaces BMX reales. No abras esta familia a estándares de ruta/MTB ajenos.',
+        );
+      }
+
+      if (isOnePieceBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          enabled: false,
+          allowedOptions: ['One-piece / americano'],
+          helperText:
+              'La familia americano / one-piece ya fija la interfaz del eje.',
+        );
+      }
+    }
+
+    if (fieldKey == 'bb_shell_diameter_mm') {
+      if (isPressfitBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          helperText:
+              'En familias Pressfit y BB30/PF30 confirma el diámetro real del bore/caja. Ese diámetro sí es parte del estándar, no un dato decorativo.',
+        );
+      }
+
+      if (isThreadedCupBottomBracketFamily) {
+        return const DrivetrainProductSpecFieldBehavior(
+          hidden: true,
+          helperText:
+              'En familias roscadas o de copas externas manda el estándar de rosca y el ancho de caja; no dejes un diámetro de bore como si fuera la seam principal.',
+        );
+      }
+    }
+
+    if ((fieldKey == 'spindle_length_mm' ||
+            fieldKey == 'spindle_diameter_mm') &&
+        isExternal24BottomBracketFamily) {
+      return const DrivetrainProductSpecFieldBehavior(
+        hidden: true,
+        helperText:
+            'En sistemas Hollowtech / 24mm externos la compatibilidad gira primero sobre familia de shell/copa, no sobre un largo o diámetro suelto del spindle.',
       );
     }
   }

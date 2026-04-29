@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // import '../theme/public_store_theme.dart'; // Unused
 import '../services/public_inventory_service.dart';
+import '../services/public_store_scroll_state.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../theme/public_store_theme.dart';
 import '../../shared/models/product.dart';
 import '../../shared/utils/chilean_utils.dart';
 // import '../providers/cart_provider.dart'; // Unused
@@ -14,6 +16,7 @@ import '../widgets/full_page_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
+import '../widgets/public_store_layout.dart';
 
 class ProductCatalogPage extends StatefulWidget {
   const ProductCatalogPage({super.key});
@@ -818,7 +821,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       color: Colors.white,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1560),
           child: MediaQueryLayoutBuilder(
             key: ValueKey('catalog_layout_$modeKey'),
             builder: (context, constraints) {
@@ -851,6 +854,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                               const Text(
                                 'PRODUCTOS',
                                 style: TextStyle(
+                                  fontFamily:
+                                      PublicStoreTheme.defaultHeadingFont,
                                   fontSize: 20,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
@@ -863,6 +868,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           Text(
                             '$_totalProductCount productos',
                             style: TextStyle(
+                              fontFamily: PublicStoreTheme.defaultBodyFont,
                               fontSize: 13,
                               color: Colors.grey.shade600,
                             ),
@@ -893,8 +899,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                                 Text(
                                   'Filtro',
                                   style: TextStyle(
+                                    fontFamily:
+                                        PublicStoreTheme.defaultHeadingFont,
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
+                                    letterSpacing: 0.2,
                                   ),
                                 ),
                               ],
@@ -909,8 +918,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                                 Text(
                                   'Ordenar por',
                                   style: TextStyle(
+                                    fontFamily:
+                                        PublicStoreTheme.defaultHeadingFont,
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
+                                    letterSpacing: 0.2,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -970,16 +982,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               // Desktop: sidebar layout
               return Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Sidebar Filters
                     SizedBox(
-                      width: 260,
+                      width: 224,
                       child: _buildFilters(),
                     ),
-                    const SizedBox(width: 40),
+                    const SizedBox(width: 32),
                     // Main Content
                     Expanded(
                       child: Column(
@@ -1010,19 +1022,25 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         const Text(
           'Filtros',
           style: TextStyle(
-            fontSize: 18,
+            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Colors.black87,
+            letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         // Search
         TextField(
           controller: _filtersSearchController,
           decoration: InputDecoration(
             hintText: 'Buscar productos',
-            hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            hintStyle: TextStyle(
+              fontFamily: PublicStoreTheme.defaultBodyFont,
+              color: Colors.grey.shade500,
+              fontSize: 14,
+            ),
             prefixIcon:
                 Icon(Icons.search, color: Colors.grey.shade400, size: 20),
             filled: true,
@@ -1045,24 +1063,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
-          style: const TextStyle(fontSize: 14),
+          style: const TextStyle(
+            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontSize: 14,
+          ),
           onChanged: (value) {
             _searchQuery = value;
             _handleFiltersChanged(debounce: true);
           },
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         Container(height: 1, color: Colors.grey.shade200),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         // Categories
         const Text(
           'Categorías',
           style: TextStyle(
+            fontFamily: PublicStoreTheme.defaultHeadingFont,
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: Colors.black87,
+            letterSpacing: 0.2,
           ),
         ),
         const SizedBox(height: 16),
@@ -1209,6 +1232,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                   child: Text(
                     '${node.name} ($productCount)',
                     style: TextStyle(
+                      fontFamily: PublicStoreTheme.defaultBodyFont,
                       fontSize: 13,
                       color: isSelected ? Colors.black : Colors.grey.shade700,
                       fontWeight:
@@ -1264,6 +1288,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               child: Text(
                 '$name ($count)',
                 style: TextStyle(
+                  fontFamily: PublicStoreTheme.defaultBodyFont,
                   fontSize: 13,
                   color: isSelected ? Colors.black : Colors.grey.shade700,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1299,6 +1324,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             Text(
               titleText,
               style: const TextStyle(
+                fontFamily: PublicStoreTheme.defaultHeadingFont,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -1313,6 +1339,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               ? 'Mostrando $startIndex - $endIndex de $totalProducts $noun'
               : '0 $noun encontrados',
           style: TextStyle(
+            fontFamily: PublicStoreTheme.defaultBodyFont,
             fontSize: 13,
             color: Colors.grey.shade600,
           ),
@@ -1465,28 +1492,34 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         final width = constraints.maxWidth;
         int crossAxisCount;
         double childAspectRatio;
-        double spacing;
+        double crossAxisSpacing;
+        double mainAxisSpacing;
 
         if (width < 400) {
-          // Mobile small: 2 columns, taller cards
           crossAxisCount = 2;
           childAspectRatio = 0.58;
-          spacing = 12;
+          crossAxisSpacing = 16;
+          mainAxisSpacing = 22;
         } else if (width < 600) {
-          // Mobile/tablet: 2 columns
           crossAxisCount = 2;
-          childAspectRatio = 0.65;
-          spacing = 16;
-        } else if (width < 900) {
-          // Tablet: 3 columns
+          childAspectRatio = 0.63;
+          crossAxisSpacing = 18;
+          mainAxisSpacing = 24;
+        } else if (width < 980) {
           crossAxisCount = 3;
-          childAspectRatio = 0.68;
-          spacing = 20;
-        } else {
-          // Desktop: 3-4 columns
-          crossAxisCount = 3;
+          childAspectRatio = 0.69;
+          crossAxisSpacing = 22;
+          mainAxisSpacing = 30;
+        } else if (width < 1320) {
+          crossAxisCount = 4;
           childAspectRatio = 0.72;
-          spacing = 20;
+          crossAxisSpacing = 24;
+          mainAxisSpacing = 32;
+        } else {
+          crossAxisCount = 5;
+          childAspectRatio = 0.75;
+          crossAxisSpacing = 28;
+          mainAxisSpacing = 36;
         }
 
         return Column(
@@ -1498,8 +1531,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxisCount,
                 childAspectRatio: childAspectRatio,
-                crossAxisSpacing: spacing,
-                mainAxisSpacing: spacing,
+                crossAxisSpacing: crossAxisSpacing,
+                mainAxisSpacing: mainAxisSpacing,
               ),
               itemCount: paginatedProducts.length,
               itemBuilder: (context, index) {
@@ -1521,6 +1554,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   void _goToPage(int page) {
     final nextPage = page < 1 ? 1 : page;
     setState(() => _currentPage = nextPage);
+
+    final currentUri = GoRouterState.of(context).uri;
+    final scrollState = context.read<PublicStoreScrollState>();
+    scrollState.requestScrollToTop(currentUri.toString());
+    scrollState.requestScrollToTopForPath(currentUri.path);
 
     final editProvider = context.read<WebsiteEditModeProvider>();
     if (!editProvider.isInEditorContext) {
@@ -1665,19 +1703,19 @@ class _CatalogProductCard extends StatefulWidget {
 class _CatalogProductCardState extends State<_CatalogProductCard> {
   bool _isHovered = false;
 
-  bool _isInStock(Product product) {
-    if (product.productType == ProductType.service) return true;
-    if (!product.trackStock) return true;
-    return product.stockQuantity > 0;
-  }
-
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
+    final brand = product.brand?.trim();
+    final hasBrand = brand != null && brand.isNotEmpty;
     // Prefer optimized image for faster loading, fallback to original
     final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
-    final inStock = _isInStock(product);
+    final isInStock =
+        product.tracksInventory ? product.stockQuantity > 0 : true;
+    final stockLabel = isInStock ? 'EN STOCK' : 'AGOTADO';
+    const hoverDuration = Duration(milliseconds: 220);
+    const logoBlue = Color(0xFF0B3A5F);
 
     final mediaQuery = MediaQuery.maybeOf(context);
     final reduceMotion = (mediaQuery?.disableAnimations ?? false) ||
@@ -1690,169 +1728,184 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => context.push('/productos/${product.id}'),
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 140),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => PublicStoreLayout.navigateToHref(
+            context, '/productos/${product.id}'),
+        child: AnimatedContainer(
+          duration: hoverDuration,
           curve: Curves.easeOutCubic,
-          scale: hoverActive ? 1.015 : 1.0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: hoverActive
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
+          decoration: BoxDecoration(
+            color: hoverActive ? Colors.white : Colors.transparent,
+            boxShadow: hoverActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 34,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 18),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Product Image Area
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: Colors.white,
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        10,
+                        12,
+                        hasBrand ? 28 : 10,
                       ),
-                    ]
-                  : const [],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Product Image
-                Expanded(
-                  flex: 4,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        color: Colors.white,
-                        padding: const EdgeInsets.all(16),
-                        child: hasImage
-                            ? Image.network(
-                                displayImageUrl,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Center(
-                                    child: Icon(
-                                      Icons.pedal_bike_outlined,
-                                      size: 48,
-                                      color: Colors.grey.shade400,
+                      child: hasImage
+                          ? Image.network(
+                              displayImageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Icon(
+                                    Icons.pedal_bike_outlined,
+                                    size: 48,
+                                    color: Colors.grey.shade300,
+                                  ),
+                                );
+                              },
+                            )
+                          : Center(
+                              child: Icon(
+                                Icons.pedal_bike_outlined,
+                                size: 48,
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: AnimatedContainer(
+                          duration: hoverDuration,
+                          curve: Curves.easeOutCubic,
+                          height: hoverActive ? 42 : 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          color: logoBlue.withValues(alpha: 0.78),
+                          child: AnimatedOpacity(
+                            duration: hoverDuration,
+                            curve: Curves.easeOutCubic,
+                            opacity: hoverActive ? 1 : 0,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    hasBrand ? brand.toUpperCase() : '',
+                                    style: const TextStyle(
+                                      fontFamily:
+                                          PublicStoreTheme.defaultBodyFont,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: 0.65,
                                     ),
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: Icon(
-                                  Icons.pedal_bike_outlined,
-                                  size: 48,
-                                  color: Colors.grey.shade400,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  stockLabel,
+                                  style: const TextStyle(
+                                    fontFamily:
+                                        PublicStoreTheme.defaultBodyFont,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.75,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      // Out of stock badge (only for stock-tracked products)
-                      if (!inStock)
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            color: Colors.black87,
-                            child: const Text(
-                              'AGOTADO',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                    ),
+                    if (hasBrand && !hoverActive)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 6,
+                        child: Text(
+                          brand.toUpperCase(),
+                          style: TextStyle(
+                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade500,
+                            letterSpacing: 0.45,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      // Hover overlay
-                      if (hoverActive)
-                        Positioned(
-                          bottom: 12,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              color: Colors.black,
-                              child: const Text(
-                                'VER PRODUCTO',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
+                      ),
+                  ],
+                ),
+              ),
+              // Product Info Area — fixed height keeps separators aligned; content stays top-stacked.
+              SizedBox(
+                height: 90,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: hoverActive
+                            ? Colors.transparent
+                            : const Color(0xFFE8E2D8),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name.toUpperCase(),
+                        style: const TextStyle(
+                          fontFamily: PublicStoreTheme.defaultHeadingFont,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                          height: 1.3,
+                          letterSpacing: 0.2,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        ChileanUtils.formatCurrency(product.price),
+                        style: const TextStyle(
+                          fontFamily: PublicStoreTheme.defaultBodyFont,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
-                // Product Info
-                Expanded(
-                  flex: 4,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Brand
-                        if (product.brand != null && product.brand!.isNotEmpty)
-                          Text(
-                            product.brand!.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade500,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        const SizedBox(height: 4),
-                        // Product name
-                        Expanded(
-                          child: Text(
-                            product.name,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87,
-                              height: 1.3,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Price
-                        Text(
-                          ChileanUtils.formatCurrency(product.price),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                        if (product.productType != ProductType.service &&
-                            product.trackStock)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              'Stock: ${product.stockQuantity}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

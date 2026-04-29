@@ -504,6 +504,88 @@ void main() {
     }
   });
 
+  test('hides bb thread standard for pressfit families', () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'bb_thread_standard',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'Pressfit',
+      },
+    );
+
+    expect(behavior.hidden, isTrue);
+    expect(behavior.helperText, contains('bore'));
+  });
+
+  test(
+      'locks spindle interface to square variants for square cartridge families',
+      () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'spindle_interface',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'Cuadrado cartucho',
+      },
+    );
+
+    expect(behavior.hidden, isFalse);
+    expect(behavior.allowedOptions, const ['Cuadrado JIS', 'Cuadrado ISO']);
+    expect(behavior.helperText, contains('JIS o ISO'));
+  });
+
+  test('locks spindle interface for hollowtech external families', () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'spindle_interface',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'Hollowtech / 24mm externo',
+      },
+    );
+
+    expect(behavior.hidden, isFalse);
+    expect(behavior.enabled, isFalse);
+    expect(behavior.allowedOptions, const ['Hollowtech / 24mm']);
+  });
+
+  test('keeps shell diameter visible for pressfit families', () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'bb_shell_diameter_mm',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'BB30 / PF30',
+      },
+    );
+
+    expect(behavior.hidden, isFalse);
+    expect(behavior.helperText, contains('diámetro real del bore/caja'));
+  });
+
+  test('hides shell diameter for threaded bottom bracket families', () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'bb_shell_diameter_mm',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'BSA roscado',
+      },
+    );
+
+    expect(behavior.hidden, isTrue);
+    expect(behavior.helperText, contains('estándar de rosca'));
+  });
+
+  test('hides loose spindle length for hollowtech external families', () {
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
+      technicalFamily: 'bottom_bracket',
+      fieldKey: 'spindle_length_mm',
+      currentValues: const <String, dynamic>{
+        'bottom_bracket_family': 'Hollowtech / 24mm externo',
+      },
+    );
+
+    expect(behavior.hidden, isTrue);
+    expect(behavior.helperText, contains('Hollowtech / 24mm'));
+  });
+
   test('hides broad ecosystem and platform semantics for chain guide templates',
       () {
     for (final fieldKey in const [

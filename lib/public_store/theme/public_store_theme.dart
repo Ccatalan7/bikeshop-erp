@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 /// Professional light theme for the public-facing store
 /// Inspired by vinabike.cl - clean, trustworthy, modern
 class PublicStoreTheme {
+  static const String defaultHeadingFont = 'Oswald';
+  static const String defaultBodyFont = 'Barlow';
+
   // Brand Colors (Professional Blues & Grays)
   static const Color primaryBlue = Color(0xFF2563EB); // Professional blue
   static const Color secondaryGray = Color(0xFF64748B); // Elegant gray
@@ -42,6 +45,8 @@ class PublicStoreTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      visualDensity: const VisualDensity(horizontal: -1, vertical: -1),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
 
       // Color Scheme
       colorScheme: const ColorScheme.light(
@@ -65,6 +70,7 @@ class PublicStoreTheme {
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
+          fontFamily: defaultHeadingFont,
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w600,
@@ -88,13 +94,14 @@ class PublicStoreTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
           elevation: 2,
           textStyle: const TextStyle(
-            fontSize: 16,
+            fontFamily: defaultBodyFont,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -104,13 +111,14 @@ class PublicStoreTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
           side: const BorderSide(color: primaryBlue, width: 2),
           textStyle: const TextStyle(
-            fontSize: 16,
+            fontFamily: defaultBodyFont,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -120,9 +128,10 @@ class PublicStoreTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primaryBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           textStyle: const TextStyle(
-            fontSize: 16,
+            fontFamily: defaultBodyFont,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -149,8 +158,11 @@ class PublicStoreTheme {
           borderSide: const BorderSide(color: error),
         ),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: const TextStyle(color: textMuted),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        hintStyle: const TextStyle(
+          fontFamily: defaultBodyFont,
+          color: textMuted,
+        ),
       ),
 
       // Chip
@@ -183,18 +195,21 @@ class PublicStoreTheme {
       textTheme: const TextTheme(
         // Display (Hero Text)
         displayLarge: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 48,
           fontWeight: FontWeight.bold,
           color: Colors.white,
           letterSpacing: -1,
         ),
         displayMedium: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 40,
           fontWeight: FontWeight.bold,
           color: textPrimary,
           letterSpacing: -0.5,
         ),
         displaySmall: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 32,
           fontWeight: FontWeight.bold,
           color: textPrimary,
@@ -202,16 +217,19 @@ class PublicStoreTheme {
 
         // Headlines
         headlineLarge: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 28,
           fontWeight: FontWeight.bold,
           color: textPrimary,
         ),
         headlineMedium: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 24,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
         headlineSmall: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: textPrimary,
@@ -219,16 +237,19 @@ class PublicStoreTheme {
 
         // Titles
         titleLarge: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
         titleMedium: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
         titleSmall: TextStyle(
+          fontFamily: defaultHeadingFont,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: textPrimary,
@@ -236,18 +257,21 @@ class PublicStoreTheme {
 
         // Body
         bodyLarge: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 16,
           fontWeight: FontWeight.normal,
           color: textPrimary,
           height: 1.5,
         ),
         bodyMedium: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 14,
           fontWeight: FontWeight.normal,
           color: textSecondary,
           height: 1.5,
         ),
         bodySmall: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 12,
           fontWeight: FontWeight.normal,
           color: textMuted,
@@ -256,16 +280,19 @@ class PublicStoreTheme {
 
         // Labels
         labelLarge: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
         labelMedium: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: textSecondary,
         ),
         labelSmall: TextStyle(
+          fontFamily: defaultBodyFont,
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: textMuted,

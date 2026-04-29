@@ -211,6 +211,7 @@ Phase-one behavior should:
 - `chainring` and `crankset` templates must not surface broad ecosystem-anchor fields in the runtime ficha flow; use teeth, mount, chainline, bottom-bracket interface, and exact downstream profile/platform truth instead of a coarse Shimano/SRAM-style anchor.
 - `chain_guide` templates must not surface broad ecosystem-anchor fields or `drivetrain_platform` in the runtime ficha flow; their real seams are mount standard, supported chainring teeth, and chainline.
 - `shifter` runtime ficha flow must gate front-vs-rear semantics by `shifter_position`: left/front shifters suppress rear-side seams such as `drivetrain_speeds`, `rear_cog_count`, `shift_actuation_family`, and `drivetrain_platform`, while right/rear shifters suppress front-chainring-count fields; only pair/universal cases may keep both sides visible.
+- shifter scoring must treat `universal` the same as `pair`: keep both structured sides visible when present, but leave pair/universal in `caution` until the front pull/indexing seam is modeled explicitly. Only exact right/rear matches may reach `compatible`.
 - `front_derailleur` runtime ficha flow must constrain `front_chainring_count` to real multi-ring systems only; `1x` is not a valid front-derailleur ficha state and must not remain available as if a front derailleur applied there.
 - `front_derailleur` runtime ficha flow must also suppress 1x-only ecosystem/platform claims such as `Single speed / BMX`, `SRAM Eagle`, or `SRAM T-Type Transmission`; those claims do not belong on a multi-ring front-derailleur ficha.
 - `front_derailleur` runtime ficha flow must gate clamp diameter by mount style: `front_derailleur_clamp_mm` is only valid for clamp-mount units and must stay hidden for `braze-on`, `direct mount`, or `E-type` entries.
@@ -322,16 +323,18 @@ Search first in the schema and existing workshop files before adding anything ne
 
 Preferred rule: improve the backbone deliberately, do not build a second backbone beside it.
 
-## Fresh-Agent Continuity Snapshot (2026-04-27)
+## Fresh-Agent Continuity Snapshot (2026-04-28)
 
 For a fresh chat, the current code-side state is:
 
+- that same bike intake dialog now also owns the richer pedalier kernel upstream: `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface` are captured through one shared canonical helper in `lib/modules/bikeshop/config/bottom_bracket_canonical_data.dart`, and the dialog only exposes shell-diameter input for the families that actually use bore diameter.
+- `lib/modules/bikeshop/models/bikeshop_models.dart` and `lib/modules/bikeshop/widgets/bike_record_panel.dart` now surface that richer bottom-bracket truth back out through the bike profile summary and the technical record panel instead of collapsing pedalier visibility back to family-only copy.
 - `lib/modules/bikeshop/widgets/bike_system_controller.dart` is now a backbone widget, not a local screen helper. It is the shared bike-system controller for mechanic-job diagnosis, bike record/history, and the bike record technical read model.
 - the current shared controller registry is `cockpit`, `suspension`, `front_brake`, `front_wheel`, `drivetrain`, `bottom_bracket`, `rear_wheel`, and `rear_brake`.
 - `front_wheel` and `rear_wheel` are now the primary interactive wheel units; legacy aggregate `wheels` survives only as a family/history compatibility alias and should not keep driving new UI or targeting decisions.
 - `bottom_bracket` is now a dedicated shared-controller system so pedalier bearings are not buried inside drivetrain copy.
 - `cockpit` now explicitly covers steering/headset semantics even though that system still lacks a dedicated structured editor.
-- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now exposes structured editable diagnosis inspectors for every shared-controller system except the legacy aggregate alias `wheels`: `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, `rear_wheel`, `bottom_bracket`, `cockpit`, and `suspension` all round-trip through `MechanicJobDiagnosisSheet`, and the diagnosis summary/narrative layer now consumes those same structured sheets instead of dropping them back to placeholder cards.
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now exposes structured editable diagnosis inspectors for every shared-controller system except the legacy aggregate alias `wheels`: `drivetrain`, `front_brake`, `rear_brake`, `front_wheel`, `rear_wheel`, `bottom_bracket`, `cockpit`, and `suspension` all round-trip through `MechanicJobDiagnosisSheet`, the diagnosis summary/narrative layer now consumes those same structured sheets instead of dropping them back to placeholder cards, and save/edit flows now normalize each system's `overallStatus` from the structured component fields so restored editors do not persist as `unknown` by default after real findings are entered.
 - `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses a bike-first split shell like the intake wizard: keep the bike persistently visible in the left preview pane, and do not regress to the old top-cover / tabs-below shell.
 - `lib/modules/bikeshop/widgets/bike_record_panel.dart` now uses the same shared controller both in the history workbench and in the technical specs tab's upstream kernel read model, with those maps anchored in the left preview pane; do not fork a second bike map for record visibility.
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now uses the same shared controller as the upstream technical-step navigator, with system-by-system profile panels and explicit placeholder handling for unmodeled intake systems such as `cockpit`.
@@ -342,7 +345,7 @@ For a fresh chat, the current code-side state is:
 - global drivetrain service profiles `chain_lube` and `derailleur_adjustment` now have explicit `service_profile_targets` rows with `target_family = drivetrain` and `target_position_mode = none`; do not reintroduce fake front/rear targeting for drivetrain-level services.
 - `lib/modules/bikeshop/services/service_wizard_service.dart` now loads `service_profile_targets` with a tenant-specific-or-global fallback, because live workshop profiles such as drivetrain, wheels, cockpit, and bottom-bracket currently store those target rows globally (`tenant_id = null`) in production.
 - `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now consumes that target metadata when hydrating service rows so `target_position_mode = none` workflows like drivetrain, headset/cockpit, and bottom-bracket stay pinned to `location = none` instead of exposing fake front/rear row targeting in the job editor.
-- first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, but `derailleurs` prefill must still stay conservative until `drivetrainConfig` coverage improves.
+- first-wave Viñabike drivetrain mappings now exist for `Regulación de Cambios`, `Reemplazo de fundas y piolas + regulación de cambios`, `Mantención de Cambio`, `Limpieza/Cepillado de Cadena`, and `Limpieza sistema transmisión`; upstream drivetrain wizard reuse is now live for those services, drivetrain kernel questions now prefill/hide only from confirmed bike-profile truth, and `derailleurs` no longer auto-collapses from weak upstream profile values while `service_wizard_dialog.dart` still handles the narrow rear-only `front_chainring_count = 1` case inside the wizard.
 - drivetrain diagnosis-linked wizard answers `chain_wear` and `cable_condition` now round-trip with the structured diagnosis sheet: `chain_wear` prefills from and writes back to `DrivetrainDiagnosisSheet.chainWearPercent`, while `cable_condition` is stored explicitly as `DrivetrainDiagnosisSheet.cableCondition` inside the shifter slice instead of being left in guided-note text.
 - the first shared diagnosis-field definition layer now exists in `lib/modules/bikeshop/config/diagnosis_field_definitions.dart`, and `mechanic_job_form_page.dart` only marks wizard questions as diagnosis-linked when their normalized key, question type, and option set match that registry.
 - drivetrain diagnosis-linked normalization now also lives in `lib/modules/bikeshop/config/drivetrain_canonical_data.dart` plus `lib/modules/bikeshop/services/service_wizard_service.dart`, so `cable_condition` uses anchored present-state labels in the app layer instead of inheriting weak service-history wording from live profile rows.
@@ -350,19 +353,19 @@ For a fresh chat, the current code-side state is:
 - the global `derailleur_adjustment` profile now also exposes `front_chainring_count`, `rear_cog_count`, and `freehub_type` as the upstream drivetrain-kernel review seam; when those answers are captured for a bike with missing drivetrain truth, `mechanic_job_form_page.dart` promotes canonical `drivetrainConfig`, `drivetrainSpeeds`, and `freehubType` back into `bike_profiles.technical_profile.values` on job save.
 - live production inspection on 2026-04-27 confirmed that Viñabike still has `0` historical `mechanic_job_items.service_configuration_data` rows, so there is no safe historical drivetrain backfill to run yet; do not invent one until real structured service rows exist.
 - `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now also creates a base `bike_profile` on demand during service-wizard promotion when the selected bike has none yet, so explicit drivetrain/brake/bottom-bracket confirmations from real service flows are no longer blocked on pre-existing profile rows.
-- `lib/modules/bikeshop/pages/pegas_table_page.dart` now hides the `Tests` filter/tab from non-debug sessions and exposes a debug-only `Prueba rápida` launcher that creates explicit DB-backed workshop fixtures for compatibility/backbone validation. Built-in scenarios currently cover a fresh `drivetrain_no_profile` bike plus reusable `rim_brake_city`, `hydraulic_disc_mtb`, and `bmx_single_speed` bikes across `intake`, `diagnostic`, `in_progress`, `completed`, and `delivered` stages; use that harness instead of ad hoc manual setup when validating compatibility/backbone changes.
+- `lib/modules/bikeshop/pages/pegas_table_page.dart` now hides the `Tests` filter/tab from non-debug sessions and exposes a debug-only `Prueba rápida` launcher that creates explicit DB-backed workshop fixtures for compatibility/backbone validation. Built-in scenarios currently cover a fresh `drivetrain_no_profile` bike plus reusable `rim_brake_city`, `hydraulic_disc_mtb`, `pressfit_trail_dub`, and `bmx_single_speed` bikes across `intake`, `diagnostic`, `in_progress`, `completed`, and `delivered` stages; use that harness instead of ad hoc manual setup when validating compatibility/backbone changes.
 - `derailleurs` remains a service-execution field rather than the primary upstream drivetrain truth source; keep its suppression conservative and do not infer exact drivetrain layout from it when the explicit kernel questions are absent, except for the narrow wizard-local case where `front_chainring_count = 1` already proves a rear-only derailleur layout and the redundant `derailleurs` prompt should collapse automatically.
 - `mechanic_job_items.service_configuration_data` now persists structured service wizard answers for executed service rows; `notes` remains the editable human-readable summary, while diagnosis-linked truths still round-trip through `mechanic_job_bikes.diagnosis_sheet_data`.
 - `lib/modules/bikeshop/widgets/service_wizard_dialog.dart` now treats regular `single_select` questions as compact dropdown fields and `multi_select` questions as picker fields; do not reintroduce chip walls for ordinary wizard answer sets. Keep pill-style controls only for small binary toggles such as yes/no when the UI remains compact and obvious.
 - the same dialog now blocks confirm when required wizard questions are still empty and shows inline field-level errors instead of silently saving rows with red-asterisk fields unanswered.
 - `lib/modules/bikeshop/pages/mechanic_job_form_page.dart` now stages missing rim-brake-family confirmations from brake service wizards into the selected bike profile immediately in local state and promotes them into `bike_profiles.technical_profile.values` through `BikeshopService.upsertBikeProfile()` when the job is saved, so later brake services stop re-asking the same refinement.
-- the same mechanic-job wizard flow now also treats `bottomBracketFamily` as upstream truth for bottom-bracket services: when the bike profile already confirms it, the wizard consumes and hides that question; when the mechanic confirms it during `Ajuste de motor` / `Mantención de Motor`, the answer is promoted back into `bike_profiles.technical_profile.values` on save instead of staying trapped in service notes.
+- the same mechanic-job wizard flow now also treats the richer bottom-bracket kernel as upstream truth for bottom-bracket services: when the bike profile already confirms `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, or `spindleInterface`, the wizard consumes and hides those seams; when the mechanic confirms them during `Ajuste de motor` / `Mantención de Motor`, the answers are promoted back into `bike_profiles.technical_profile.values` on save instead of staying trapped in service notes.
 - `lib/modules/bikeshop/pages/bike_form_dialog.dart` now treats `freehubType` as an explicit review field with an `unknown` option, applies the safe BMX `bmx_driver` default upstream, defaults new bikes to `mountain_hardtail`, and still allows `Guardar rápido` to create the bike from the minimum upstream identity set (bike type, brand, model) before the technical kernel has been reviewed.
 - `lib/modules/inventory/pages/product_form_page.dart` now gives `ProductType.service` a profile-first workflow form: regular product categories are suppressed, service codes can be generated as `SRV-<family>-<operation>-NNN`, and saving the form updates `service_product_profile_mappings` so the service catalog irrigates the workshop backbone directly instead of behaving like an almost-normal stock product.
 - `supabase/sql/core_schema.sql` now seeds the missing global `service_profile_targets` row for `wheel_truing`, and `DEPLOY_VINABIKE_WHEEL_TRUING_MAPPING.sql` maps only the clearly matching service `Centrado de rueda (C/U)` to that profile; keep `Centrado Express` and `Enrayado + Centrado` intentionally unmapped until their distinct wheel profiles exist.
 - `supabase/sql/core_schema.sql` now also seeds the next wheel/steering service workflow profiles `wheel_build_and_true`, `hub_service`, `tube_replacement`, `tubeless_conversion`, and `headset_service`, with `wheels` / `cockpit` target families aligned to the shared controller backbone.
 - `DEPLOY_VINABIKE_WHEEL_HUB_HEADSET_MAPPINGS.sql` maps the clearly matching Viñabike services `Enrayado + Centrado`, `Servicio de Mazas (C/U)`, `Mantención Maza`, `Cambio de cámara (no incluye cámara)`, `Tubeless Viñabike`, `Tubeless Bettabikes`, and `Mantención De Dirección`; keep `Ajuste de dirección` and `Instalación Juego de Dirección` intentionally deferred until the dedicated `headset_adjustment` / `headset_install` profiles exist.
-- `supabase/sql/core_schema.sql` now also seeds the bottom-bracket workflow profiles `bottom_bracket_adjustment` and `bottom_bracket_service`, both targeted to `bottom_bracket` with canonical `bottom_bracket_family` question values aligned to the bike intake vocabulary.
+- `supabase/sql/core_schema.sql` now also seeds the bottom-bracket workflow profiles `bottom_bracket_adjustment` and `bottom_bracket_service`, both targeted to `bottom_bracket` with canonical `bottom_bracket_family`, `bb_shell_width_mm`, `bb_shell_diameter_mm`, and `spindle_interface` question values aligned to the bike intake vocabulary.
 - `DEPLOY_VINABIKE_BOTTOM_BRACKET_WORKFLOW.sql` maps the live Viñabike services `Ajuste de motor`, `Limpieza y engrase de caja de motor`, and `Mantención De Motor`, and bridges the stocked `Motor`, `Ejes de motor`, and `Rodamientos Motor` categories into `category_tech_mappings.technical_family = bottom_bracket` so the existing compatibility scorer can finally rank pedalier stock against upstream bike truth.
 - live audit on 2026-04-20 also confirmed that the coarse product-side technical-family bridge was still effectively brake-only in production; stocked wheel/headset categories had no active `category_tech_mappings` coverage yet despite meaningful populations in `Maza`, `Mazas`, `Llantas`, `Rayos`, `Cámaras`, `Juego de dirección`, and `Rodamientos`.
 - `DEPLOY_VINABIKE_WHEEL_CATEGORY_TECH_FAMILIES.sql` is now live for those unambiguous wheel/headset categories (`hub`, `rim`, `spoke`, `tube`, `rim_strip`, `tubeless_valve`, `tubeless_consumable`, `headset`, `bearing`) while mixed buckets like `Tubeless` / `Tripas Tubeless` remain intentionally deferred for a later template split.
@@ -377,6 +380,9 @@ For a fresh chat, the current code-side state is:
 - live verification on 2026-04-27 confirmed two things at once: the safe structured-only backfill inserted `0` product rows in production, and the live catalog still declares speed first, width sometimes, and platform/compatibility claims only occasionally in product names. The next schema/UI step is therefore to populate and consume the explicit ecosystem split more reliably from real packaging evidence, instead of reviving or densifying the legacy interim field.
 - that 2026-04-27 verification is **not** a green light for broad compatibility population yet. Population remains intentionally blocked while shifter and bottom-bracket/crankset seams stay incomplete.
 - current shifter compatibility is still intentionally conservative: exact right/rear matches can rank `compatible`, but left/front and pair/universal cases must remain in `caution` until the front pull/indexing seam is modeled and tested better.
+- the detailed shifter scorer now also routes `shifter_position = universal` through the same conservative two-sided path as `pair`, so live/seeded schema options no longer skip the speed/front-count checks while broad population remains blocked.
+- the detailed bottom-bracket and crankset scorer now also stays conservative on nominal matches: matching family/shell/spindle or front-count facts no longer upgrades those families to `compatible`, because chainline, mounting, crank-length, and exact shell/adapter semantics are still incomplete.
+- bottom-bracket ficha behavior now also gates from `bottom_bracket_family`: pressfit/BB30 families hide `bb_thread_standard` but keep `bb_shell_diameter_mm` visible as the bore seam, threaded/external-cup families suppress that raw shell-diameter field, square-cartridge families narrow `spindle_interface` to JIS/ISO, and `Hollowtech / 24mm externo` locks the interface and hides loose spindle-length/diameter fields so the product form stops allowing obviously contradictory cartridge-style combinations.
 - current bottom-bracket and crankset compatibility is also intentionally incomplete: family/shell/interface seams exist, but chainline, mounting, crank-length, and related crankset-standard seams are not finished enough for broad catalog population.
 - `lib/modules/bikeshop/services/bike_product_compatibility_service.dart` now provides the brake-first product compatibility scorer, `lib/shared/widgets/product_autocomplete_field.dart` can surface optional compatibility ranking/badges when a caller provides bike context, and `lib/shared/widgets/smart_product_field.dart` now forwards that context so the mechanic-job line editor no longer bypasses the same compatibility-aware search path.
 - `lib/modules/bikeshop/widgets/tasks_tab_view.dart` now also resolves the current job's primary bike/profile and forwards that same compatibility context into its legacy add/edit catalog dialogs, so the older detail/calendar task surfaces do not keep bypassing the current bike-aware ranking path.
@@ -401,9 +407,8 @@ Immediate next queue:
 Validation rule for every queue item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and extend it if the nearest built-in scenario is insufficient.
 
 1. Improve upstream `bike_profiles.technical_profile.values` coverage for drivetrain (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, with caution around the `derailleurs` multi-select template behavior. Historical backfill stays blocked until live structured `service_configuration_data` rows exist.
-2. Finish shifter compatibility more deliberately before population: keep right/rear exact matches strong, but do not relax front/pair caution until front pull/indexing semantics are modeled and tested better.
-3. Finish bottom-bracket and crankset standards end to end before population: family, shell, spindle, mounting, chainline, and related crank seams still need tighter doctrine and scorer behavior.
-4. Do not start broad compatibility population yet. Only after those shifter and bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
+2. Finish the next bottom-bracket / crankset seam before population: the bike form/read model/debug harness and bottom-bracket service flows now cover `bottomBracketFamily`, shell width, shell diameter, and spindle interface, but the broader chainline, mounting, crank-length, and exact shell/adapter seams still need tighter doctrine and scorer behavior.
+3. Do not start broad compatibility population yet. Only after those bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
 
 ---
 
@@ -2124,10 +2129,12 @@ Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 **Core Principles:**
 - **Minimalism:** Professional, clean, data-dense (no circus colors/excessive icons)
 - **Typography:** 14px body, 13px labels, 18-24px headers
-- **Colors:** Whites/grays + single accent (blue), semantic colors sparingly
+- **Colors:** Neutrals first, one restrained accent only when justified, semantic colors sparingly
 - **Tables:** Subtle borders, compact spacing (48px rows), right-align numbers
 - **Buttons:** 1 primary (filled), 2-3 secondary (outlined/text), strategic icons only
 - **Forms:** Two-column layout (desktop), grouped fields, 12-16px spacing
+
+**Desired tone:** serious ERP clarity first, with a restrained premium/performance edge. The app may feel modern, technical, and polished, but it must not feel playful, childish, or visually noisy.
 
 **⚠️ CRITICAL: Avoid "AI-ish" UI Redesigns**
 
@@ -2138,12 +2145,17 @@ For ERP/admin screens, default to a restrained business application aesthetic.
 - ✅ Use color only to communicate state or priority, not to "make it pop"
 - ✅ Keep lists, tables, filters, and detail panes compact, sober, and information-first
 - ✅ Make actions obvious through placement, iconography, and contrast, not through visual noise
+- ✅ When a screen needs personality, express it through typography, composition, contrast, imagery, and material feel rather than flooding the UI with accent colors
+- ✅ Dashboard and summary surfaces should default to restrained tables, compact metrics, and calm status treatments before reaching for colored KPI cards
+- ✅ If taking inspiration from premium outdoor/performance brands, translate that into precision, restraint, and technical confidence, not literal sports-marketing styling
 
 - ❌ Do not add colorful chips, gradient cards, glow effects, oversized pills, dashboard-style badges, or random accent blocks unless the screen already uses them consistently
 - ❌ Do not turn ERP modules into marketing pages, Dribbble shots, or flashy analytics dashboards
 - ❌ Do not solve weak hierarchy by adding more color, more icons, or more containers
 - ❌ Do not redesign stable screens into "modern" card soup when a table/list layout is the correct tool
 - ❌ Do not introduce visual styles that feel autogenerated, trendy, or detached from the existing desktop ERP language
+- ❌ Do not default to bright blue/green accents across unrelated modules just because they feel "safe" or "modern"
+- ❌ Do not build rainbow KPI walls, multicolor dashboard cards, or candy-like button systems that make the ERP feel unserious
 
 **Practical rule:** if a UI change would look normal in an accounting system, ERP, POS backoffice, or inventory control app, it is probably on the right track. If it looks like a startup landing page or an AI-generated concept shot, it is wrong.
 
@@ -3022,6 +3034,63 @@ Include the following modules:
 # 🌐 Website Builder - COMPLETE ARCHITECTURE
 
 **CRITICAL: The Website Builder is a visual, block-based CMS. ALL content must be editable through the UI - NEVER hardcode content in code or SQL!**
+
+## 🏆 Public Store Quality Bar (April 2026)
+
+The public storefront is not a demo surface.
+
+It is a revenue, trust, and brand surface, and it must be held to the standard of a professional commerce website.
+
+Agents working on the website must optimize for broad product quality principles, not one-off local styling preferences.
+
+**This section is intentionally about general doctrine, not component-specific mandates.**
+
+Use concrete examples such as sticky headers, compact checkout chrome, or trust badges only to justify a larger UX rule, never as the rule itself.
+
+### 1. UX Standard: reduce friction, preserve orientation, make actions obvious
+
+- Primary journeys must feel simple and reliable: discover products, understand the offer, add to cart, check out, and find support.
+- Navigation must stay predictable across the whole storefront. If the same concept exists in multiple places, it must behave the same way.
+- The UI should minimize cognitive load: clear hierarchy, clear labels, clear next step, and no unnecessary distractions in task-focused flows.
+- Browsing flows and transactional flows may differ in chrome density, but that difference must be intentional and user-task-driven, not accidental drift.
+- Checkout, login, account, cart, and order confirmation must feel trustworthy and calm, not like marketing pages or admin leftovers.
+- Do not ship flows that require the user to infer system state from subtle visual quirks. State, errors, required fields, loading, and success outcomes must be explicit.
+
+### 2. UI Standard: premium, restrained, and consistent
+
+- Default to a polished ecommerce aesthetic: strong hierarchy, measured spacing, disciplined typography, and consistent alignment.
+- Use emphasis intentionally. Visual weight should come from layout, contrast, and typography before it comes from color or decoration.
+- Avoid noisy or cheap-looking UI: random gradients, crowded badges, inconsistent iconography, oversized pills, decorative clutter, or visibly hacked-together route-specific layouts.
+- Shared surfaces must look shared. Header, footer, navigation, cards, filters, forms, product media, and trust messaging must use one cohesive visual language.
+- Responsiveness must preserve intent, not just avoid overflow. Mobile, tablet, and desktop should feel like the same site with the same information architecture.
+
+### 3. Trust and Security Standard: never erode buyer confidence
+
+- The storefront must never leak admin/editor affordances, internal tools, debug remnants, or implementation artifacts into public-facing flows.
+- Authentication state must be explicit and intentional. Do not let stale local state, cached sessions, or debug-only leftovers masquerade as real storefront truth.
+- Payment and checkout flows must communicate legitimacy: secure handling, clear totals, clear fulfillment expectations, and no ambiguous or contradictory messaging.
+- Use conservative defaults around security-sensitive UX. If a state could confuse users about who is signed in, what they are paying, or whether a flow is official, treat that as a quality bug.
+- Public-store validation and data access must remain tenant-safe and production-safe. Do not relax tenant boundaries, auth semantics, or sensitive-data protections for convenience.
+
+### 4. Engineering Standard for Website Work
+
+- Prefer systemic fixes over page-local hacks. If a website inconsistency is caused by shared shell, navigation, cache, auth bootstrapping, or renderer drift, fix it at the shared layer.
+- Keep debug and preview environments deterministic. Local validation should resemble production behavior closely enough to be trustworthy.
+- When a local debug surface intentionally differs from production, make that difference explicit and controlled through configuration rather than hidden browser/session residue.
+- Performance is part of UX quality. Protect bundle size, first render, navigation responsiveness, and image/media loading behavior.
+- Treat website regressions as product-quality issues, not cosmetic issues, when they affect orientation, trust, checkout confidence, or perceived legitimacy.
+
+### 5. Decision Rule for Future Website Changes
+
+When choosing between alternatives, prefer the option that best satisfies all of these together:
+
+1. clearer user intent
+2. lower friction in key sales flows
+3. stronger trust and perceived legitimacy
+4. more consistent behavior across pages and breakpoints
+5. less architectural drift in shared website systems
+
+If a change improves one page while making the overall storefront less coherent, less trustworthy, or harder to reason about, it is not the right change.
 
 ---
 

@@ -34,6 +34,15 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
   late final TextEditingController _contactAddressController;
   late final TextEditingController _whatsappController;
 
+  // Transfer payment info
+  late final TextEditingController _paymentTransferBankNameController;
+  late final TextEditingController _paymentTransferAccountTypeController;
+  late final TextEditingController _paymentTransferAccountNumberController;
+  late final TextEditingController _paymentTransferAccountHolderController;
+  late final TextEditingController _paymentTransferRutController;
+  late final TextEditingController _paymentTransferEmailController;
+  late final TextEditingController _paymentTransferInstructionsController;
+
   // Social media
   late final TextEditingController _facebookController;
   late final TextEditingController _instagramController;
@@ -68,6 +77,13 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     _contactPhoneController = TextEditingController();
     _contactAddressController = TextEditingController();
     _whatsappController = TextEditingController();
+    _paymentTransferBankNameController = TextEditingController();
+    _paymentTransferAccountTypeController = TextEditingController();
+    _paymentTransferAccountNumberController = TextEditingController();
+    _paymentTransferAccountHolderController = TextEditingController();
+    _paymentTransferRutController = TextEditingController();
+    _paymentTransferEmailController = TextEditingController();
+    _paymentTransferInstructionsController = TextEditingController();
     _facebookController = TextEditingController();
     _instagramController = TextEditingController();
     _twitterController = TextEditingController();
@@ -91,6 +107,13 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     _contactPhoneController.dispose();
     _contactAddressController.dispose();
     _whatsappController.dispose();
+    _paymentTransferBankNameController.dispose();
+    _paymentTransferAccountTypeController.dispose();
+    _paymentTransferAccountNumberController.dispose();
+    _paymentTransferAccountHolderController.dispose();
+    _paymentTransferRutController.dispose();
+    _paymentTransferEmailController.dispose();
+    _paymentTransferInstructionsController.dispose();
     _facebookController.dispose();
     _instagramController.dispose();
     _twitterController.dispose();
@@ -111,12 +134,13 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
       // Load current tenant data
       final tenantService = context.read<TenantService>();
       final tenantData = await tenantService.getCurrentTenant();
-      
+
       debugPrint('🔍 Tenant data loaded: $tenantData');
-      
+
       if (tenantData != null && mounted) {
         _currentTenant = Tenant.fromJson(tenantData);
-        debugPrint('✅ Tenant object created: ${_currentTenant?.shopName} (${_currentTenant?.subdomain})');
+        debugPrint(
+            '✅ Tenant object created: ${_currentTenant?.shopName} (${_currentTenant?.subdomain})');
       } else {
         debugPrint('❌ Tenant data is NULL!');
       }
@@ -124,38 +148,50 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
       if (mounted) {
         final tenantName = _currentTenant?.shopName ?? 'Mi Tienda';
         final tenantSubdomain = _currentTenant?.subdomain ?? 'mitienda';
-        final tenantEmail = _currentTenant?.ownerEmail ?? 'contacto@mitienda.cl';
-        
-        debugPrint('📝 Using values: name=$tenantName, subdomain=$tenantSubdomain, email=$tenantEmail');
-        
+        final tenantEmail =
+            _currentTenant?.ownerEmail ?? 'contacto@mitienda.cl';
+
+        debugPrint(
+            '📝 Using values: name=$tenantName, subdomain=$tenantSubdomain, email=$tenantEmail');
+
         setState(() {
           // Store info - Use tenant data as defaults
           _storeNameController.text =
               service.getSetting('store_name', tenantName);
-          _storeUrlController.text =
-              service.getSetting('store_url', 'https://$tenantSubdomain.bikeshop-erp.app');
+          _storeUrlController.text = service.getSetting(
+              'store_url', 'https://$tenantSubdomain.bikeshop-erp.app');
           _storeDescriptionController.text = service.getSetting(
-              'store_description',
-              'Tienda de bicicletas y accesorios');
+              'store_description', 'Tienda de bicicletas y accesorios');
 
           // Contact - Use tenant data as defaults
           _contactEmailController.text =
               service.getSetting('contact_email', tenantEmail);
           _contactPhoneController.text =
               service.getSetting('contact_phone', '');
-          _contactAddressController.text = service.getSetting(
-              'contact_address', '');
-          _whatsappController.text =
-              service.getSetting('whatsapp', '');
+          _contactAddressController.text =
+              service.getSetting('contact_address', '');
+          _whatsappController.text = service.getSetting('whatsapp', '');
+          _paymentTransferBankNameController.text =
+              service.getSetting('payment_transfer_bank_name', '');
+          _paymentTransferAccountTypeController.text =
+              service.getSetting('payment_transfer_account_type', '');
+          _paymentTransferAccountNumberController.text =
+              service.getSetting('payment_transfer_account_number', '');
+          _paymentTransferAccountHolderController.text =
+              service.getSetting('payment_transfer_account_holder', '');
+          _paymentTransferRutController.text =
+              service.getSetting('payment_transfer_rut', '');
+          _paymentTransferEmailController.text = service.getSetting(
+              'payment_transfer_contact_email',
+              service.getSetting('contact_email', tenantEmail));
+          _paymentTransferInstructionsController.text =
+              service.getSetting('payment_transfer_instructions', '');
 
           // Social media
-          _facebookController.text =
-              service.getSetting('facebook', '');
-          _instagramController.text =
-              service.getSetting('instagram', '');
+          _facebookController.text = service.getSetting('facebook', '');
+          _instagramController.text = service.getSetting('instagram', '');
           _twitterController.text = service.getSetting('twitter', '');
-          _youtubeController.text =
-              service.getSetting('youtube', '');
+          _youtubeController.text = service.getSetting('youtube', '');
 
           // SEO - Use tenant data as defaults
           _metaTitleController.text = service.getSetting(
@@ -163,8 +199,8 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
           _metaDescriptionController.text = service.getSetting(
               'meta_description',
               'Tienda de bicicletas y accesorios. Envío a todo el país.');
-          _metaKeywordsController.text = service.getSetting('meta_keywords',
-              'bicicletas, mtb, ruta, accesorios, ciclismo');
+          _metaKeywordsController.text = service.getSetting(
+              'meta_keywords', 'bicicletas, mtb, ruta, accesorios, ciclismo');
 
           // Feature toggles
           _enableOrders = service.getSetting('enable_orders', 'true') == 'true';
@@ -188,328 +224,418 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/website'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                const Text('Configuración del Sitio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const Spacer(),
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              if (!widget.embedded) ...[
                 IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadSettings,
-                  tooltip: 'Recargar',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
                 ),
+                const SizedBox(width: 8),
               ],
-            ),
-          ),
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : Form(
-                    key: _formKey,
-                    child: ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        // Store Information Section
-                        _buildSection(
-                          icon: Icons.store,
-                          title: 'Información de la Tienda',
-                          color: Colors.blue,
-                          children: [
-                            TextFormField(
-                              controller: _storeNameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nombre de la Tienda',
-                                hintText: 'Ej: Vinabike',
-                                prefixIcon: Icon(Icons.storefront),
-                              ),
-                              validator: (value) =>
-                                  value?.isEmpty ?? true ? 'Campo requerido' : null,
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                        controller: _storeUrlController,
-                        decoration: const InputDecoration(
-                          labelText: 'URL de la Tienda',
-                          hintText: 'https://tienda.ejemplo.cl',
-                          prefixIcon: Icon(Icons.link),
-                        ),
-                        validator: (value) {
-                          if (value?.isEmpty ?? true) return 'Campo requerido';
-                          if (!value!.startsWith('http')) {
-                            return 'Debe comenzar con http:// o https://';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _storeDescriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Descripción',
-                          hintText: 'Breve descripción de tu tienda',
-                          prefixIcon: Icon(Icons.description),
-                        ),
-                        maxLines: 3,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Contact Information Section
-                  _buildSection(
-                    icon: Icons.contact_mail,
-                    title: 'Información de Contacto',
-                    color: Colors.green,
-                    children: [
-                      TextFormField(
-                        controller: _contactEmailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email de Contacto',
-                          hintText: 'contacto@ejemplo.cl',
-                          prefixIcon: Icon(Icons.email),
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value?.isEmpty ?? true) return 'Campo requerido';
-                          if (!value!.contains('@')) return 'Email inválido';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _contactPhoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Teléfono',
-                          hintText: '+56 2 2345 6789',
-                          prefixIcon: Icon(Icons.phone),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _whatsappController,
-                        decoration: const InputDecoration(
-                          labelText: 'WhatsApp',
-                          hintText: '+56912345678',
-                          prefixIcon: Icon(Icons.chat),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _contactAddressController,
-                        decoration: const InputDecoration(
-                          labelText: 'Dirección',
-                          hintText: 'Calle, Ciudad',
-                          prefixIcon: Icon(Icons.location_on),
-                        ),
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Social Media Section
-                  _buildSection(
-                    icon: Icons.share,
-                    title: 'Redes Sociales',
-                    color: Colors.purple,
-                    children: [
-                      TextFormField(
-                        controller: _facebookController,
-                        decoration: InputDecoration(
-                          labelText: 'Facebook',
-                          hintText: 'usuario o URL',
-                          prefixIcon:
-                              Icon(Icons.facebook, color: Colors.blue[700]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _instagramController,
-                        decoration: InputDecoration(
-                          labelText: 'Instagram',
-                          hintText: '@usuario',
-                          prefixIcon:
-                              Icon(Icons.camera_alt, color: Colors.pink[400]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _twitterController,
-                        decoration: InputDecoration(
-                          labelText: 'Twitter / X',
-                          hintText: '@usuario',
-                          prefixIcon: Icon(Icons.alternate_email,
-                              color: Colors.blue[400]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _youtubeController,
-                        decoration: InputDecoration(
-                          labelText: 'YouTube',
-                          hintText: '@canal',
-                          prefixIcon:
-                              Icon(Icons.video_library, color: Colors.red[600]),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // SEO Section
-                  _buildSection(
-                    icon: Icons.search,
-                    title: 'SEO - Optimización en Buscadores',
-                    color: Colors.orange,
-                    children: [
-                      TextFormField(
-                        controller: _metaTitleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Título SEO',
-                          hintText: 'Título que aparece en Google',
-                          prefixIcon: Icon(Icons.title),
-                          helperText: 'Máximo 60 caracteres',
-                        ),
-                        maxLength: 60,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _metaDescriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Meta Descripción',
-                          hintText:
-                              'Descripción que aparece en resultados de búsqueda',
-                          prefixIcon: Icon(Icons.description),
-                          helperText: 'Máximo 160 caracteres',
-                        ),
-                        maxLines: 3,
-                        maxLength: 160,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _metaKeywordsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Palabras Clave',
-                          hintText: 'palabra1, palabra2, palabra3',
-                          prefixIcon: Icon(Icons.label),
-                          helperText: 'Separadas por comas',
-                        ),
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Feature Toggles Section
-                  _buildSection(
-                    icon: Icons.tune,
-                    title: 'Funcionalidades',
-                    color: Colors.teal,
-                    children: [
-                      SwitchListTile(
-                        title: const Text('Habilitar Pedidos Online'),
-                        subtitle:
-                            const Text('Los clientes pueden hacer compras'),
-                        value: _enableOrders,
-                        onChanged: (value) =>
-                            setState(() => _enableOrders = value),
-                        secondary: Icon(
-                          Icons.shopping_cart,
-                          color: _enableOrders ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      const Divider(),
-                      SwitchListTile(
-                        title: const Text('Mostrar Precios'),
-                        subtitle:
-                            const Text('Precios visibles para visitantes'),
-                        value: _showPrices,
-                        onChanged: (value) =>
-                            setState(() => _showPrices = value),
-                        secondary: Icon(
-                          Icons.attach_money,
-                          color: _showPrices ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      const Divider(),
-                      SwitchListTile(
-                        title: const Text('Mostrar Stock'),
-                        subtitle: const Text('Cantidad disponible visible'),
-                        value: _showStock,
-                        onChanged: (value) =>
-                            setState(() => _showStock = value),
-                        secondary: Icon(
-                          Icons.inventory,
-                          color: _showStock ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      const Divider(),
-                      SwitchListTile(
-                        title: const Text('Requiere Login para Comprar'),
-                        subtitle: const Text('Los clientes deben crear cuenta'),
-                        value: _requireLogin,
-                        onChanged: (value) =>
-                            setState(() => _requireLogin = value),
-                        secondary: Icon(
-                          Icons.login,
-                          color: _requireLogin ? Colors.orange : Colors.grey,
-                        ),
-                      ),
-                      const Divider(),
-                      SwitchListTile(
-                        title: const Text('Habilitar Reseñas'),
-                        subtitle:
-                            const Text('Los clientes pueden dejar comentarios'),
-                        value: _enableReviews,
-                        onChanged: (value) =>
-                            setState(() => _enableReviews = value),
-                        secondary: Icon(
-                          Icons.star,
-                          color: _enableReviews ? Colors.amber : Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Save Button
-                  ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _saveSettings,
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(
-                        _isSaving ? 'Guardando...' : 'Guardar Configuración'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size.fromHeight(50),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-                ],
+              const Text('Configuración del Sitio',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadSettings,
+                tooltip: 'Recargar',
               ),
-            ),
+            ],
           ),
+        ),
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      // Store Information Section
+                      _buildSection(
+                        icon: Icons.store,
+                        title: 'Información de la Tienda',
+                        color: Colors.blue,
+                        children: [
+                          TextFormField(
+                            controller: _storeNameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Nombre de la Tienda',
+                              hintText: 'Ej: Vinabike',
+                              prefixIcon: Icon(Icons.storefront),
+                            ),
+                            validator: (value) => value?.isEmpty ?? true
+                                ? 'Campo requerido'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _storeUrlController,
+                            decoration: const InputDecoration(
+                              labelText: 'URL de la Tienda',
+                              hintText: 'https://tienda.ejemplo.cl',
+                              prefixIcon: Icon(Icons.link),
+                            ),
+                            validator: (value) {
+                              if (value?.isEmpty ?? true)
+                                return 'Campo requerido';
+                              if (!value!.startsWith('http')) {
+                                return 'Debe comenzar con http:// o https://';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _storeDescriptionController,
+                            decoration: const InputDecoration(
+                              labelText: 'Descripción',
+                              hintText: 'Breve descripción de tu tienda',
+                              prefixIcon: Icon(Icons.description),
+                            ),
+                            maxLines: 3,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Contact Information Section
+                      _buildSection(
+                        icon: Icons.contact_mail,
+                        title: 'Información de Contacto',
+                        color: Colors.green,
+                        children: [
+                          TextFormField(
+                            controller: _contactEmailController,
+                            decoration: const InputDecoration(
+                              labelText: 'Email de Contacto',
+                              hintText: 'contacto@ejemplo.cl',
+                              prefixIcon: Icon(Icons.email),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value?.isEmpty ?? true)
+                                return 'Campo requerido';
+                              if (!value!.contains('@'))
+                                return 'Email inválido';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _contactPhoneController,
+                            decoration: const InputDecoration(
+                              labelText: 'Teléfono',
+                              hintText: '+56 2 2345 6789',
+                              prefixIcon: Icon(Icons.phone),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _whatsappController,
+                            decoration: const InputDecoration(
+                              labelText: 'WhatsApp',
+                              hintText: '+56912345678',
+                              prefixIcon: Icon(Icons.chat),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _contactAddressController,
+                            decoration: const InputDecoration(
+                              labelText: 'Dirección',
+                              hintText: 'Calle, Ciudad',
+                              prefixIcon: Icon(Icons.location_on),
+                            ),
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      _buildSection(
+                        icon: Icons.account_balance,
+                        title: 'Datos para Transferencia',
+                        color: Colors.amber,
+                        children: [
+                          TextFormField(
+                            controller: _paymentTransferBankNameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Banco',
+                              hintText: 'Ej: Banco de Chile',
+                              prefixIcon: Icon(Icons.account_balance),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferAccountTypeController,
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo de Cuenta',
+                              hintText: 'Ej: Cuenta Vista',
+                              prefixIcon: Icon(Icons.badge_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferAccountNumberController,
+                            decoration: const InputDecoration(
+                              labelText: 'Número de Cuenta',
+                              hintText: 'Ej: 81522258',
+                              prefixIcon: Icon(Icons.numbers),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferAccountHolderController,
+                            decoration: const InputDecoration(
+                              labelText: 'Titular',
+                              hintText: 'Ej: Newen SpA',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferRutController,
+                            decoration: const InputDecoration(
+                              labelText: 'RUT',
+                              hintText: 'Ej: 77541999-7',
+                              prefixIcon: Icon(Icons.credit_card_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferEmailController,
+                            decoration: const InputDecoration(
+                              labelText: 'Email para Comprobante',
+                              hintText: 'Ej: contacto@vinabike.cl',
+                              prefixIcon: Icon(Icons.mark_email_read_outlined),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return null;
+                              if (!value.contains('@')) return 'Email inválido';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _paymentTransferInstructionsController,
+                            decoration: const InputDecoration(
+                              labelText: 'Instrucciones Adicionales',
+                              hintText:
+                                  'Ej: Envía el comprobante junto con tu número de pedido',
+                              prefixIcon: Icon(Icons.info_outline),
+                            ),
+                            maxLines: 3,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Social Media Section
+                      _buildSection(
+                        icon: Icons.share,
+                        title: 'Redes Sociales',
+                        color: Colors.purple,
+                        children: [
+                          TextFormField(
+                            controller: _facebookController,
+                            decoration: InputDecoration(
+                              labelText: 'Facebook',
+                              hintText: 'usuario o URL',
+                              prefixIcon:
+                                  Icon(Icons.facebook, color: Colors.blue[700]),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _instagramController,
+                            decoration: InputDecoration(
+                              labelText: 'Instagram',
+                              hintText: '@usuario',
+                              prefixIcon: Icon(Icons.camera_alt,
+                                  color: Colors.pink[400]),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _twitterController,
+                            decoration: InputDecoration(
+                              labelText: 'Twitter / X',
+                              hintText: '@usuario',
+                              prefixIcon: Icon(Icons.alternate_email,
+                                  color: Colors.blue[400]),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _youtubeController,
+                            decoration: InputDecoration(
+                              labelText: 'YouTube',
+                              hintText: '@canal',
+                              prefixIcon: Icon(Icons.video_library,
+                                  color: Colors.red[600]),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // SEO Section
+                      _buildSection(
+                        icon: Icons.search,
+                        title: 'SEO - Optimización en Buscadores',
+                        color: Colors.orange,
+                        children: [
+                          TextFormField(
+                            controller: _metaTitleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Título SEO',
+                              hintText: 'Título que aparece en Google',
+                              prefixIcon: Icon(Icons.title),
+                              helperText: 'Máximo 60 caracteres',
+                            ),
+                            maxLength: 60,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _metaDescriptionController,
+                            decoration: const InputDecoration(
+                              labelText: 'Meta Descripción',
+                              hintText:
+                                  'Descripción que aparece en resultados de búsqueda',
+                              prefixIcon: Icon(Icons.description),
+                              helperText: 'Máximo 160 caracteres',
+                            ),
+                            maxLines: 3,
+                            maxLength: 160,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _metaKeywordsController,
+                            decoration: const InputDecoration(
+                              labelText: 'Palabras Clave',
+                              hintText: 'palabra1, palabra2, palabra3',
+                              prefixIcon: Icon(Icons.label),
+                              helperText: 'Separadas por comas',
+                            ),
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Feature Toggles Section
+                      _buildSection(
+                        icon: Icons.tune,
+                        title: 'Funcionalidades',
+                        color: Colors.teal,
+                        children: [
+                          SwitchListTile(
+                            title: const Text('Habilitar Pedidos Online'),
+                            subtitle:
+                                const Text('Los clientes pueden hacer compras'),
+                            value: _enableOrders,
+                            onChanged: (value) =>
+                                setState(() => _enableOrders = value),
+                            secondary: Icon(
+                              Icons.shopping_cart,
+                              color: _enableOrders ? Colors.green : Colors.grey,
+                            ),
+                          ),
+                          const Divider(),
+                          SwitchListTile(
+                            title: const Text('Mostrar Precios'),
+                            subtitle:
+                                const Text('Precios visibles para visitantes'),
+                            value: _showPrices,
+                            onChanged: (value) =>
+                                setState(() => _showPrices = value),
+                            secondary: Icon(
+                              Icons.attach_money,
+                              color: _showPrices ? Colors.green : Colors.grey,
+                            ),
+                          ),
+                          const Divider(),
+                          SwitchListTile(
+                            title: const Text('Mostrar Stock'),
+                            subtitle: const Text('Cantidad disponible visible'),
+                            value: _showStock,
+                            onChanged: (value) =>
+                                setState(() => _showStock = value),
+                            secondary: Icon(
+                              Icons.inventory,
+                              color: _showStock ? Colors.green : Colors.grey,
+                            ),
+                          ),
+                          const Divider(),
+                          SwitchListTile(
+                            title: const Text('Requiere Login para Comprar'),
+                            subtitle:
+                                const Text('Los clientes deben crear cuenta'),
+                            value: _requireLogin,
+                            onChanged: (value) =>
+                                setState(() => _requireLogin = value),
+                            secondary: Icon(
+                              Icons.login,
+                              color:
+                                  _requireLogin ? Colors.orange : Colors.grey,
+                            ),
+                          ),
+                          const Divider(),
+                          SwitchListTile(
+                            title: const Text('Habilitar Reseñas'),
+                            subtitle: const Text(
+                                'Los clientes pueden dejar comentarios'),
+                            value: _enableReviews,
+                            onChanged: (value) =>
+                                setState(() => _enableReviews = value),
+                            secondary: Icon(
+                              Icons.star,
+                              color:
+                                  _enableReviews ? Colors.amber : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Save Button
+                      ElevatedButton.icon(
+                        onPressed: _isSaving ? null : _saveSettings,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save),
+                        label: Text(_isSaving
+                            ? 'Guardando...'
+                            : 'Guardar Configuración'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+        ),
       ],
     );
 
@@ -581,6 +707,17 @@ class _WebsiteSettingsPageState extends State<WebsiteSettingsPage> {
         'contact_phone': _contactPhoneController.text,
         'contact_address': _contactAddressController.text,
         'whatsapp': _whatsappController.text,
+        'payment_transfer_bank_name': _paymentTransferBankNameController.text,
+        'payment_transfer_account_type':
+            _paymentTransferAccountTypeController.text,
+        'payment_transfer_account_number':
+            _paymentTransferAccountNumberController.text,
+        'payment_transfer_account_holder':
+            _paymentTransferAccountHolderController.text,
+        'payment_transfer_rut': _paymentTransferRutController.text,
+        'payment_transfer_contact_email': _paymentTransferEmailController.text,
+        'payment_transfer_instructions':
+            _paymentTransferInstructionsController.text,
 
         // Social
         'facebook': _facebookController.text,

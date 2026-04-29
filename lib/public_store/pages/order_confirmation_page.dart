@@ -9,6 +9,7 @@ import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
 import '../../modules/website/services/mercadopago_service.dart';
+import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/widgets/branded_loading.dart';
@@ -54,6 +55,10 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     debugPrint(
         '🎉 [OrderConfirmationPage] initState() - orderId: ${widget.orderId}, status: ${widget.paymentStatus}');
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWebsiteSettings();
+    });
+
     // Check if order is already cached (survives widget rebuilds)
     if (_OrderConfirmationCache.loadedOrders.containsKey(widget.orderId)) {
       debugPrint('🎉 [OrderConfirmationPage] Using cached order data');
@@ -78,6 +83,15 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       }
     } else {
       _handleMercadoPagoCallback();
+    }
+  }
+
+  Future<void> _loadWebsiteSettings() async {
+    try {
+      await context.read<WebsiteService>().loadSettings();
+    } catch (e) {
+      debugPrint(
+          '🎉 [OrderConfirmationPage] Error loading website settings: $e');
     }
   }
 
@@ -364,6 +378,36 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   Widget _buildConfirmation() {
     final order = _order!;
+    final websiteService = context.watch<WebsiteService>();
+    final transferBankName =
+        websiteService.getSetting('payment_transfer_bank_name', '').trim();
+    final transferAccountType =
+        websiteService.getSetting('payment_transfer_account_type', '').trim();
+    final transferAccountNumber =
+        websiteService.getSetting('payment_transfer_account_number', '').trim();
+    final transferAccountHolder =
+        websiteService.getSetting('payment_transfer_account_holder', '').trim();
+    final transferRut =
+        websiteService.getSetting('payment_transfer_rut', '').trim();
+    final transferContactEmail = websiteService
+        .getSetting(
+          'payment_transfer_contact_email',
+          websiteService.getSetting('contact_email', ''),
+        )
+        .trim();
+    final transferInstructions =
+        websiteService.getSetting('payment_transfer_instructions', '').trim();
+    final hasTransferDestination = [
+      transferBankName,
+      transferAccountNumber,
+      transferAccountHolder,
+      transferRut,
+    ].any((value) => value.isNotEmpty);
+    final transferProofInstructions = transferInstructions.isNotEmpty
+        ? transferInstructions
+        : transferContactEmail.isNotEmpty
+            ? 'Una vez realizada la transferencia, envía el comprobante a $transferContactEmail con tu número de pedido.'
+            : '';
 
     return SingleChildScrollView(
       child: Center(
@@ -521,7 +565,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
+                          color: PublicStoreTheme.primaryBlue
+                              .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -580,20 +625,41 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                           style: TextStyle(fontSize: 14),
                         ),
                         const SizedBox(height: 12),
-                        _buildPaymentInfo('Banco', 'Banco de Chile'),
-                        _buildPaymentInfo('Cuenta Corriente', '1234567890'),
-                        _buildPaymentInfo('RUT', '12.345.678-9'),
-                        _buildPaymentInfo('Nombre', 'Vinabike SpA'),
+                        if (transferBankName.isNotEmpty)
+                          _buildPaymentInfo('Banco', transferBankName),
+                        if (transferAccountNumber.isNotEmpty)
+                          _buildPaymentInfo(
+                            transferAccountType.isNotEmpty
+                                ? transferAccountType
+                                : 'Cuenta',
+                            transferAccountNumber,
+                          ),
+                        if (transferRut.isNotEmpty)
+                          _buildPaymentInfo('RUT', transferRut),
+                        if (transferAccountHolder.isNotEmpty)
+                          _buildPaymentInfo('Nombre', transferAccountHolder),
                         _buildPaymentInfo(
                             'Monto', ChileanUtils.formatCurrency(order.total)),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Una vez realizada la transferencia, envía el comprobante a ventas@vinabike.cl con tu número de pedido.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: PublicStoreTheme.textSecondary,
+                        if (!hasTransferDestination) ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Nuestro equipo te compartirá los datos de transferencia para completar el pago.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: PublicStoreTheme.textSecondary,
+                            ),
                           ),
-                        ),
+                        ],
+                        if (transferProofInstructions.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            transferProofInstructions,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: PublicStoreTheme.textSecondary,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

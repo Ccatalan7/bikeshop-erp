@@ -50,8 +50,8 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   Color _primaryColor = const Color(0xFF2E7D32);
   Color _accentColor = const Color(0xFFFF6F00);
   Color _textColor = Colors.black87;
-  String _headingFont = 'Roboto';
-  String _bodyFont = 'Roboto';
+  String _headingFont = 'Oswald';
+  String _bodyFont = 'Barlow';
   double _headingSize = 48.0;
   double _bodySize = 16.0;
   double _sectionSpacing = 64.0;
@@ -584,7 +584,8 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               bodyFont: _bodyFont,
               headingSize: _headingSize,
               bodySize: _bodySize,
-              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+              onNavigate: (route) =>
+                  PublicStoreLayout.navigateToHref(context, route),
               isVisible: isVisible,
               tenantId: tenantId,
             )
@@ -598,7 +599,8 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               bodyFont: _bodyFont,
               headingSize: _headingSize,
               bodySize: _bodySize,
-              onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+              onNavigate: (route) =>
+                  PublicStoreLayout.navigateToHref(context, route),
               tenantId: tenantId,
             );
 

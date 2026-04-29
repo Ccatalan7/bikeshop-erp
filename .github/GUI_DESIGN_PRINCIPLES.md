@@ -1,6 +1,6 @@
 # 🎨 GUI DESIGN PRINCIPLES - VINABIKE ERP
 
-**Philosophy:** Professional, minimalist, data-dense interfaces that prioritize functionality over decoration.
+**Philosophy:** Professional, minimalist, data-dense interfaces that prioritize functionality over decoration, with a restrained premium/performance edge expressed through discipline rather than color noise.
 
 ---
 
@@ -10,9 +10,11 @@
 - ❌ **AVOID:** Excessive colors, gradients, shadows, or decorative elements
 - ❌ **AVOID:** Rainbow color palettes and "AI/startup circus" aesthetics
 - ❌ **AVOID:** Unnecessary icons cluttering every action
-- ✅ **USE:** Clean whites, subtle grays, single accent color (brand blue)
+- ❌ **AVOID:** Painting whole screens in bright blue/green by default just to force a "modern" look
+- ✅ **USE:** Clean whites, off-whites, charcoal/slate neutrals, and one restrained accent chosen deliberately for the context
 - ✅ **USE:** Strategic icon placement (only where they add clarity)
 - ✅ **USE:** Generous whitespace and clear visual hierarchy
+- ✅ **USE:** Typography, contrast, spacing rhythm, and material restraint to create a premium technical feel
 
 **Example:**
 ```dart
@@ -66,7 +68,7 @@ Text(
 
 ### 4. **Color Strategy**
 
-#### Primary Palette (Minimalist)
+#### Primary Palette (Neutral-First)
 ```dart
 // Neutral base
 Colors.white         // Backgrounds
@@ -75,21 +77,20 @@ Colors.grey[200]     // Borders
 Colors.grey[600]     // Secondary text
 Colors.grey[900]     // Primary text
 
-// Brand accent
-Colors.blue[700]     // Primary actions, links
-Colors.blue[50]      // Hover states, selections
+// Deliberate accent
+// Choose one restrained accent for the experience if truly needed.
+// Do not assume bright blue or green as the default visual answer.
 
 // Semantic colors (use sparingly)
 Colors.green[700]    // Success, confirmations
 Colors.red[700]      // Errors, destructive actions
 Colors.orange[700]   // Warnings
-Colors.purple[700]   // Status: confirmed
+Colors.amber[800]    // Secondary caution states
 ```
 
 #### Status Badge Colors
 - Draft: `Colors.grey` (neutral)
-- Sent: `Colors.blue` (informational)
-- Confirmed: `Colors.purple` (processing)
+- Informational / in progress: neutral or restrained accent with label/icon support
 - Paid/Complete: `Colors.green` (success)
 - Overdue/Error: `Colors.red` (urgent)
 - Cancelled: `Colors.orange` (warning)
@@ -97,7 +98,15 @@ Colors.purple[700]   // Status: confirmed
 **Usage Rules:**
 - ❌ Don't use more than 2-3 colors per screen
 - ❌ Don't use color as the only indicator (add icons/text)
+- ❌ Don't build dashboards from rows of saturated KPI cards unless the color carries real operational meaning
+- ❌ Don't use bright green and bright blue as the app's generic personality layer
 - ✅ Use color to reinforce meaning, not create it
+- ✅ Prefer neutral surfaces with small semantic markers over full-surface color fills
+
+#### KPI & Summary Surfaces
+- ✅ Prefer concise summaries, tabular metrics, and restrained section headers over colorful scorecard grids
+- ✅ If a KPI card is truly needed, keep the card surface neutral and let status color live in a border, icon, label, or small highlight
+- ❌ Avoid "dashboard candy": multicolor stat cards, oversized badges, glowing trend chips, and decorative gradients with little informational value
 
 ---
 
@@ -233,8 +242,10 @@ TextButton(
 - ✅ **2-3 secondary actions** max (outlined/text buttons)
 - ✅ Use icons ONLY when they add clarity
 - ✅ Keep button text concise (1-2 words)
+- ✅ Let hierarchy come from placement, weight, and contrast before it comes from saturated fills
 - ❌ Don't use more than 1 filled button in the same context
 - ❌ Don't add icons to every button (visual noise)
+- ❌ Don't build "fun" button systems with mixed bright colors, oversized pills, or decorative gradients on ERP screens
 
 #### Icon-Only Buttons
 ```dart

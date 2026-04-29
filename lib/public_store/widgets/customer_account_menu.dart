@@ -22,16 +22,44 @@ class CustomerAccountMenu extends StatelessWidget {
     final effectiveTextColor = textColor ?? Colors.black87;
 
     if (!accountService.isAuthenticated) {
-      return FilledButton.icon(
+      final isLightHeader = effectiveTextColor.computeLuminance() > 0.7;
+      final foregroundColor =
+          isLightHeader ? Colors.white : PublicStoreTheme.textPrimary;
+      final backgroundColor = isLightHeader
+          ? Colors.black.withValues(alpha: 0.18)
+          : Colors.white.withValues(alpha: 0.92);
+      final borderColor = isLightHeader
+          ? Colors.white.withValues(alpha: 0.36)
+          : PublicStoreTheme.border.withValues(alpha: 0.9);
+      final overlayColor = isLightHeader
+          ? Colors.white.withValues(alpha: 0.08)
+          : PublicStoreTheme.textPrimary.withValues(alpha: 0.05);
+
+      return OutlinedButton.icon(
         onPressed: () {
           PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/login');
         },
-        icon: const Icon(Icons.person_outline, size: 18),
+        icon: const Icon(Icons.person_outline, size: 17),
         label: const Text('INICIAR SESIÓN'),
-        style: FilledButton.styleFrom(
-          backgroundColor: PublicStoreTheme.primaryBlue,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: foregroundColor,
+          backgroundColor: backgroundColor,
+          side: BorderSide(color: borderColor, width: 1.2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
           minimumSize: isMobile ? const Size(double.infinity, 48) : null,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          textStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.15,
+          ),
+        ).copyWith(
+          overlayColor: WidgetStatePropertyAll(overlayColor),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         ),
       );
     }
@@ -45,7 +73,8 @@ class CustomerAccountMenu extends StatelessWidget {
         children: [
           ListTile(
             leading: CircleAvatar(
-              backgroundColor: PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
+              backgroundColor:
+                  PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
               child: Text(
                 userInitial,
                 style: const TextStyle(fontWeight: FontWeight.bold),
@@ -193,16 +222,14 @@ class CustomerAccountMenu extends StatelessWidget {
             PublicStoreLayout.navigateToHref(context, '/tienda/cuenta');
             break;
           case 'orders':
-            PublicStoreLayout.navigateToHref(
-                context, '/tienda/cuenta/pedidos');
+            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/pedidos');
             break;
           case 'addresses':
             PublicStoreLayout.navigateToHref(
                 context, '/tienda/cuenta/direcciones');
             break;
           case 'profile':
-            PublicStoreLayout.navigateToHref(
-                context, '/tienda/cuenta/perfil');
+            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/perfil');
             break;
           case 'chat':
             PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/chats');

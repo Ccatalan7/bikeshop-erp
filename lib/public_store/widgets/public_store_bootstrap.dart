@@ -86,7 +86,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
         return;
       }
 
-      // Step 2: Pre-populate settings from sync cache for faster header render.
+      // Step 2: Pre-populate from fresh sync cache for faster first paint.
       final didPreloadFromCache =
           websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
 
@@ -106,10 +106,31 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
           unawaited(websiteService.warmUpEdgeCacheHost());
           await Future<void>.delayed(
             didPreloadFromCache
-                ? const Duration(milliseconds: 800)
+                ? const Duration(milliseconds: 450)
                 : const Duration(milliseconds: 150),
           );
+
+          if (didPreloadFromCache) {
+            await websiteService.loadPublicStoreDataUnified(
+              tenantId,
+              forceRefresh: true,
+            );
+            return;
+          }
+
           await websiteService.loadPublicStoreDataUnified(tenantId);
+
+          unawaited(() async {
+            try {
+              await Future<void>.delayed(const Duration(milliseconds: 250));
+              await websiteService.loadPublicStoreDataUnified(
+                tenantId,
+                forceRefresh: true,
+              );
+            } catch (e) {
+              debugPrint('⚠️ [Bootstrap] Origin revalidation failed: $e');
+            }
+          }());
         } catch (e) {
           debugPrint('⚠️ [Bootstrap] Network load failed: $e');
         }
@@ -140,7 +161,8 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.store_mall_directory, size: 64, color: Colors.grey),
+              const Icon(Icons.store_mall_directory,
+                  size: 64, color: Colors.grey),
               const SizedBox(height: 16),
               Text(
                 _error ?? tenantProvider.error ?? 'Tienda no encontrada',

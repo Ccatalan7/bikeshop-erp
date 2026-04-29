@@ -407,7 +407,13 @@ class WebsiteService extends ChangeNotifier {
       _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
       // Fire-and-forget refresh: navigation changes are rare, but we still want
       // the header/footer to be correct even when settings+blocks are fresh.
-      unawaited(loadNavigationForTenant(tenantId, notify: true));
+      unawaited(
+        loadNavigationForTenant(
+          tenantId,
+          notify: true,
+          forceRefresh: true,
+        ),
+      );
 
       _hasLoadedForTenant = true;
       if (_perfLogsEnabled) {
@@ -472,7 +478,8 @@ class WebsiteService extends ChangeNotifier {
       }
 
       // 2. Try edge cache (if pre-fetch missed)
-      if (response == null) {
+      // Explicit force refreshes should bypass cached worker responses.
+      if (response == null && !forceRefresh) {
         try {
           final swEdge = Stopwatch()..start();
           final cacheResponse = await _tryEdgeCache(tenantId);
@@ -548,7 +555,13 @@ class WebsiteService extends ChangeNotifier {
           // Even if settings/blocks haven't changed, we still need navigation.
           // Load from cache instantly and refresh in background.
           _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
-          unawaited(loadNavigationForTenant(tenantId, notify: false));
+          unawaited(
+            loadNavigationForTenant(
+              tenantId,
+              notify: false,
+              forceRefresh: true,
+            ),
+          );
 
           await _persistPublicStoreLastRefresh(tenantId);
           _hasLoadedForTenant = true;
@@ -581,7 +594,11 @@ class WebsiteService extends ChangeNotifier {
 
         // Navigation is NOT included in get_public_store_data yet, so load it
         // separately (public read is allowed by RLS policy when is_visible=true).
-        await loadNavigationForTenant(tenantId, notify: false);
+        await loadNavigationForTenant(
+          tenantId,
+          notify: false,
+          forceRefresh: true,
+        );
 
         debugPrint('✅ [WebsiteService] Load complete ($source): '
             '${_settings.length} settings, ${_blocks.length} blocks');
@@ -609,7 +626,11 @@ class WebsiteService extends ChangeNotifier {
       await Future.wait([
         loadSettingsForTenant(tenantId),
         loadBlocksForTenant(tenantId),
-        loadNavigationForTenant(tenantId, notify: false),
+        loadNavigationForTenant(
+          tenantId,
+          notify: false,
+          forceRefresh: true,
+        ),
       ]);
     }
   }
@@ -654,6 +675,10 @@ class WebsiteService extends ChangeNotifier {
   /// Loads BOTH settings + blocks from the synchronous cache and notifies once.
   /// This reduces boot-time rebuild churn (helps avoid skipped frames).
   bool preloadPublicStoreFromSynchronousCache(String tenantId) {
+    if (!_hasFreshPublicStoreCache(tenantId)) {
+      return false;
+    }
+
     final settingsLoaded = _loadSettingsFromSynchronousCacheInternal(
       tenantId,
       notify: false,

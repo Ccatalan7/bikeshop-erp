@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../services/customer_account_service.dart';
@@ -135,330 +136,565 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 900;
 
-    // No Scaffold - wrapped by PublicStoreLayout
-    return Column(
-      children: [
-        // Header bar
-        Container(
-          color: Theme.of(context).primaryColor,
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top,
-            left: 4,
-            right: 16,
-            bottom: 8,
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.go('/'),
-              ),
-              Expanded(
-                child: Text(
-                  _isLogin ? 'Iniciar Sesión' : 'Crear Cuenta',
-                  style: const TextStyle(
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, isWide ? 44 : 28, 24, 56),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: Container(
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x12000000),
+                        blurRadius: 28,
+                        offset: Offset(0, 14),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(width: 48), // Balance for back button
-            ],
-          ),
-        ),
-        // Content
-        Container(
-          constraints: const BoxConstraints(maxWidth: 450),
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_showVerificationNotice &&
-                        _verificationEmail != null) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: PublicStoreTheme.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
+                  child: isWide
+                      ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Confirma tu correo',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.',
-                              style: const TextStyle(
-                                color: PublicStoreTheme.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _isLoading
-                                  ? null
-                                  : () async {
-                                      try {
-                                        setState(() => _isLoading = true);
-                                        await context
-                                            .read<CustomerAccountService>()
-                                            .resendVerificationEmail();
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                  'Hemos reenviado el correo de verificación.'),
-                                            ),
-                                          );
-                                        }
-                                      } catch (error) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'No pudimos reenviar el correo: $error',
-                                              ),
-                                              backgroundColor: Colors.red,
-                                            ),
-                                          );
-                                        }
-                                      } finally {
-                                        if (mounted) {
-                                          setState(() => _isLoading = false);
-                                        }
-                                      }
-                                    },
-                              icon:
-                                  const Icon(Icons.mark_email_unread_outlined),
-                              label: const Text('Reenviar correo'),
-                            ),
+                            Expanded(child: _buildIntroPanel(context)),
+                            Expanded(child: _buildFormPanel(context)),
+                          ],
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildIntroPanel(context, compact: true),
+                            _buildFormPanel(context),
                           ],
                         ),
-                      ),
-                    ],
-                    // Logo/Title
-                    Text(
-                      _isLogin ? '¡Bienvenido!' : '¡Únete a Vinabike!',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _isLogin
-                          ? 'Ingresa a tu cuenta para continuar'
-                          : 'Crea tu cuenta y disfruta de beneficios exclusivos',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: PublicStoreTheme.textSecondary,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Name field (only for signup)
-                    if (!_isLogin) ...[
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre completo',
-                          prefixIcon: Icon(Icons.person_outline),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'El nombre es requerido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Email field
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Correo electrónico',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'El correo es requerido';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Ingresa un correo válido';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Phone field (only for signup)
-                    if (!_isLogin) ...[
-                      TextFormField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Teléfono (opcional)',
-                          prefixIcon: Icon(Icons.phone_outlined),
-                          hintText: '+56 9 1234 5678',
-                        ),
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Password field
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () {
-                            setState(
-                                () => _obscurePassword = !_obscurePassword);
-                          },
-                        ),
-                      ),
-                      obscureText: _obscurePassword,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'La contraseña es requerida';
-                        }
-                        if (!_isLogin && value.length < 6) {
-                          return 'Mínimo 6 caracteres';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Submit button
-                    FilledButton(
-                      onPressed: _isLoading ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              _isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA',
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Divider
-                    const Row(
-                      children: [
-                        Expanded(child: Divider()),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'O',
-                            style: TextStyle(
-                                color: PublicStoreTheme.textSecondary),
-                          ),
-                        ),
-                        Expanded(child: Divider()),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Google sign in button
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _signInWithGoogle,
-                      icon: Image.network(
-                        'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg.png',
-                        height: 20,
-                      ),
-                      label: Text(_isLogin
-                          ? 'Continuar con Google'
-                          : 'Registrarse con Google'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Toggle login/signup
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _isLogin
-                              ? '¿No tienes cuenta?'
-                              : '¿Ya tienes cuenta?',
-                          style:
-                              const TextStyle(color: PublicStoreTheme.textSecondary),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _isLogin = !_isLogin;
-                              _formKey.currentState?.reset();
-                            });
-                          },
-                          child:
-                              Text(_isLogin ? 'Regístrate' : 'Inicia sesión'),
-                        ),
-                      ],
-                    ),
-
-                    // Forgot password (only in login mode)
-                    if (_isLogin)
-                      TextButton(
-                        onPressed: () {
-                          // TODO: Implement forgot password dialog
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Recuperar Contraseña'),
-                              content: const Text(
-                                'Funcionalidad próximamente disponible',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('OK'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: const Text('¿Olvidaste tu contraseña?'),
-                      ),
-                  ],
                 ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildIntroPanel(BuildContext context, {bool compact = false}) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding:
+          EdgeInsets.fromLTRB(28, compact ? 28 : 36, 28, compact ? 24 : 36),
+      decoration: BoxDecoration(
+        color: compact ? Colors.white : PublicStoreTheme.surface,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(24),
+          bottomLeft: compact ? Radius.zero : const Radius.circular(24),
+          topRight: compact ? const Radius.circular(24) : Radius.zero,
+        ),
+        border: compact
+            ? Border(
+                bottom: BorderSide(
+                  color: PublicStoreTheme.border.withValues(alpha: 0.75),
+                ),
+              )
+            : Border(
+                right: BorderSide(
+                  color: PublicStoreTheme.border.withValues(alpha: 0.75),
+                ),
+              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'CUENTA VINABIKE',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: PublicStoreTheme.textSecondary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _isLogin
+                ? 'Ingresa para revisar pedidos, bicicletas y soporte desde un solo lugar.'
+                : 'Crea tu cuenta para guardar tus datos, seguir tus pedidos y acceder a tu historial.',
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontSize: compact ? 28 : 32,
+              height: 1.15,
+              color: PublicStoreTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _isLogin
+                ? 'Una experiencia más ordenada, rápida y clara que el checkout improvisado de invitado.'
+                : 'Todo queda asociado a tu cuenta para futuras compras, seguimiento y atención postventa.',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: PublicStoreTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 28),
+          _buildBenefitRow(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Pedidos y seguimiento',
+            subtitle:
+                'Consulta compras, estados y confirmaciones en un solo panel.',
+          ),
+          const SizedBox(height: 16),
+          _buildBenefitRow(
+            icon: Icons.pedal_bike_outlined,
+            title: 'Historial de bicicletas',
+            subtitle:
+                'Accede a tus bicicletas registradas y próximos servicios.',
+          ),
+          const SizedBox(height: 16),
+          _buildBenefitRow(
+            icon: Icons.support_agent_outlined,
+            title: 'Atención más rápida',
+            subtitle:
+                'Mantén tus datos listos para soporte, mensajes y futuras compras.',
+          ),
+          if (!compact) ...[
+            const SizedBox(height: 28),
+            TextButton.icon(
+              onPressed: () => context.go('/'),
+              icon: const Icon(Icons.arrow_back, size: 18),
+              label: const Text('Volver al inicio'),
+              style: TextButton.styleFrom(
+                foregroundColor: PublicStoreTheme.textPrimary,
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBenefitRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: PublicStoreTheme.border.withValues(alpha: 0.85),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: PublicStoreTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: PublicStoreTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: PublicStoreTheme.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFormPanel(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 30, 28, 30),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _isLogin ? 'Iniciar sesión' : 'Crear cuenta',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: PublicStoreTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isLogin
+                  ? 'Usa tu correo y contraseña para continuar.'
+                  : 'Completa tus datos para guardar tus compras e historial.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: PublicStoreTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_showVerificationNotice && _verificationEmail != null) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: PublicStoreTheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: PublicStoreTheme.border.withValues(alpha: 0.85),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Confirma tu correo',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: PublicStoreTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y activa tu cuenta desde el enlace recibido.',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.45,
+                        color: PublicStoreTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final accountService =
+                                  context.read<CustomerAccountService>();
+                              try {
+                                setState(() => _isLoading = true);
+                                await accountService.resendVerificationEmail();
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Hemos reenviado el correo de verificación.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (error) {
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'No pudimos reenviar el correo: $error',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isLoading = false);
+                                }
+                              }
+                            },
+                      icon: const Icon(Icons.mark_email_unread_outlined),
+                      label: const Text('Reenviar correo'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: PublicStoreTheme.textPrimary,
+                        side: BorderSide(
+                          color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (!_isLogin) ...[
+              _buildFieldLabel('Nombre completo'),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  hintText: 'Tu nombre y apellido',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El nombre es requerido';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+            _buildFieldLabel('Correo electrónico'),
+            TextFormField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                hintText: 'nombre@correo.com',
+                prefixIcon: Icon(Icons.email_outlined),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'El correo es requerido';
+                }
+                if (!value.contains('@')) {
+                  return 'Ingresa un correo válido';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            if (!_isLogin) ...[
+              _buildFieldLabel('Teléfono'),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(
+                  hintText: '+56 9 1234 5678',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+            ],
+            _buildFieldLabel('Contraseña'),
+            TextFormField(
+              controller: _passwordController,
+              decoration: InputDecoration(
+                hintText: _isLogin ? 'Tu contraseña' : 'Mínimo 6 caracteres',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+              ),
+              obscureText: _obscurePassword,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'La contraseña es requerida';
+                }
+                if (!_isLogin && value.length < 6) {
+                  return 'Mínimo 6 caracteres';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: _isLoading ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: PublicStoreTheme.textPrimary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.15,
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(_isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA'),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    'o continúa con',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: PublicStoreTheme.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: _isLoading ? null : _signInWithGoogle,
+              icon: const FaIcon(
+                FontAwesomeIcons.google,
+                size: 16,
+                color: PublicStoreTheme.textPrimary,
+              ),
+              label: Text(
+                _isLogin ? 'Continuar con Google' : 'Registrarse con Google',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: PublicStoreTheme.textPrimary,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                Text(
+                  _isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?',
+                  style: const TextStyle(
+                    color: PublicStoreTheme.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLogin = !_isLogin;
+                      _formKey.currentState?.reset();
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: PublicStoreTheme.textPrimary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: Text(_isLogin ? 'Regístrate' : 'Inicia sesión'),
+                ),
+              ],
+            ),
+            if (_isLogin)
+              Align(
+                alignment: Alignment.center,
+                child: TextButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Recuperar Contraseña'),
+                        content: const Text(
+                          'Funcionalidad próximamente disponible',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: PublicStoreTheme.textSecondary,
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('¿Olvidaste tu contraseña?'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: PublicStoreTheme.textPrimary,
+        ),
+      ),
     );
   }
 }

@@ -805,6 +805,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Bike? _selectedBike; // Legacy - now use _bikeTabs
   BikeProfile? _selectedBikeProfile;
   final Map<String, BikeProfile> _pendingBikeProfileOverrides = {};
+  final Map<String, Map<String, dynamic>> _pendingServiceWizardAnswers = {};
   JobPriority _selectedPriority = JobPriority.normal;
   JobStatus _selectedStatus = JobStatus.pendiente;
   JobStatusCustom?
@@ -901,8 +902,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (mounted) {
         setState(() {
-          if (customerService.hasCustomersCache && _customers.isEmpty) {
-            _customers = List<Customer>.from(customerService.cachedCustomers);
+          if (customerService.hasListCustomersCache && _customers.isEmpty) {
+            _customers =
+                List<Customer>.from(customerService.cachedListCustomers);
           }
           if (inventoryService.hasLoaded && _products.isEmpty) {
             _products = List<Product>.from(inventoryService.products.take(50));
@@ -914,7 +916,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       final results = await Future.wait([
-        customerService.getCustomers(limit: 50),
+        customerService.getCustomersForList(),
         inventoryService.searchProducts('', limit: 50),
         jobStatusService.loadStatuses(),
         bikeshopService.getJobSubjects(),
@@ -969,15 +971,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       if (widget.customerId != null && widget.jobId == null) {
-        try {
-          final customer = _customers.firstWhere(
-            (c) => c.id == widget.customerId,
-          );
+        final customer =
+            _customers.where((c) => c.id == widget.customerId).firstOrNull;
+        if (customer != null) {
           await _selectCustomer(customer);
-        } catch (_) {
-          if (_customers.isNotEmpty) {
-            await _selectCustomer(_customers.first);
-          }
         }
       }
 
@@ -1534,12 +1531,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final customerService =
         Provider.of<CustomerService>(context, listen: false);
 
+    if (_customers.isEmpty) {
+      try {
+        final customers = await customerService.getCustomersForList();
+        if (!mounted) return;
+        setState(() {
+          _customers = List<Customer>.from(customers);
+        });
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudieron cargar los clientes: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
     final selected = await showDialog<Customer>(
       context: context,
       builder: (context) {
         return _CustomerSelector(
           initialCustomers: List<Customer>.from(_customers),
-          customerService: customerService,
           onCreateCustomer: _createQuickCustomer,
         );
       },
@@ -2072,6 +2087,23 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return tab != null ? tab.partItems : _partItems;
   }
 
+  Map<String, dynamic>? _effectiveWizardAnswersForItem(_JobPartItem item) {
+    final answers = item.wizardAnswers ?? _pendingServiceWizardAnswers[item.id];
+    if (answers == null || answers.isEmpty) {
+      return null;
+    }
+    return Map<String, dynamic>.from(answers);
+  }
+
+  void _syncPendingWizardAnswerCache(_JobPartItem item) {
+    final answers = item.wizardAnswers;
+    if (answers == null || answers.isEmpty) {
+      _pendingServiceWizardAnswers.remove(item.id);
+      return;
+    }
+    _pendingServiceWizardAnswers[item.id] = Map<String, dynamic>.from(answers);
+  }
+
   Future<void> _addCatalogPart(Product product) async {
     if (!mounted) return;
     final wizardProfile = await _loadServiceWizardProfileForProduct(
@@ -2592,7 +2624,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               itemType: _itemTypeForPartItem(item),
               location: item.location,
               notes: item.notes,
-              serviceConfigurationData: item.wizardAnswers,
+              serviceConfigurationData: _effectiveWizardAnswersForItem(item),
             );
             final created = await bikeshopService.createJobItem(
               jobItem,
@@ -2626,6 +2658,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
 
         // Create MechanicJobBike record for this bike
+        final normalizedDiagnosisSheet =
+            _normalizeDiagnosisSheetStatuses(tab.diagnosisSheet);
         final jobBike = MechanicJobBike(
           id: null, // Always create new (we deleted old ones)
           tenantId: tenantId,
@@ -2645,9 +2679,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               ? null
               : tab.technicianNotesController.text.trim(),
           diagnosisSheetKey:
-              tab.diagnosisSheetKey ?? tab.diagnosisSheet.templateKey,
-          diagnosisSheet: tab.diagnosisSheet,
-          diagnosisSheetUpdatedAt: tab.diagnosisSheet.hasMeaningfulData
+              tab.diagnosisSheetKey ?? normalizedDiagnosisSheet.templateKey,
+          diagnosisSheet: normalizedDiagnosisSheet,
+          diagnosisSheetUpdatedAt: normalizedDiagnosisSheet.hasMeaningfulData
               ? (tab.diagnosisSheetUpdatedAt ?? DateTime.now())
               : null,
           isWarrantyWork: tab.isWarrantyWork,
@@ -2684,7 +2718,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             itemType: _itemTypeForPartItem(item),
             location: item.location,
             notes: item.notes, // ✅ Save the description!
-            serviceConfigurationData: item.wizardAnswers,
+            serviceConfigurationData: _effectiveWizardAnswersForItem(item),
           );
           final created = await bikeshopService.createJobItem(
             jobItem,
@@ -2731,7 +2765,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             itemType: _itemTypeForPartItem(item),
             location: item.location,
             notes: item.notes,
-            serviceConfigurationData: item.wizardAnswers,
+            serviceConfigurationData: _effectiveWizardAnswersForItem(item),
           );
           final created = await bikeshopService.createJobItem(
             jobItem,
@@ -4440,6 +4474,135 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return candidate;
   }
 
+  String? _resolvedBottomBracketFamilyForWizardAnswers(
+    BikeProfile bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    return canonicalBottomBracketFamilyValue(
+      answers['bottom_bracket_family']?.toString() ??
+          bikeProfile.technicalValues['bottomBracketFamily']?.toString(),
+    );
+  }
+
+  double? _bottomBracketMeasurementValue(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    if (rawValue is num) {
+      return rawValue.toDouble();
+    }
+
+    return _parseNullableDouble(rawValue.toString());
+  }
+
+  double? _selectedBottomBracketShellWidthFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (!_isBottomBracketServiceFamily(serviceProfile?.serviceFamily) ||
+        bikeProfile == null) {
+      return null;
+    }
+
+    final resolvedFamily =
+        _resolvedBottomBracketFamilyForWizardAnswers(bikeProfile, answers);
+    if (!isKnownBottomBracketFamily(resolvedFamily)) {
+      return null;
+    }
+
+    final candidate =
+        _bottomBracketMeasurementValue(answers['bb_shell_width_mm']);
+    if (candidate == null) {
+      return null;
+    }
+
+    final currentValue = _bottomBracketMeasurementValue(
+      bikeProfile.technicalValues['bbShellWidthMm'] ??
+          bikeProfile.technicalValues['bb_shell_width_mm'],
+    );
+    final confirmed = bikeProfile.technicalConfirmed['bbShellWidthMm'] == true;
+    if (currentValue != null &&
+        (currentValue - candidate).abs() < 0.001 &&
+        confirmed) {
+      return null;
+    }
+
+    return candidate;
+  }
+
+  double? _selectedBottomBracketShellDiameterFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (!_isBottomBracketServiceFamily(serviceProfile?.serviceFamily) ||
+        bikeProfile == null) {
+      return null;
+    }
+
+    final resolvedFamily =
+        _resolvedBottomBracketFamilyForWizardAnswers(bikeProfile, answers);
+    if (!bottomBracketFamilyUsesShellDiameter(resolvedFamily)) {
+      return null;
+    }
+
+    final candidate =
+        _bottomBracketMeasurementValue(answers['bb_shell_diameter_mm']);
+    if (candidate == null) {
+      return null;
+    }
+
+    final currentValue = _bottomBracketMeasurementValue(
+      bikeProfile.technicalValues['bbShellDiameterMm'] ??
+          bikeProfile.technicalValues['bb_shell_diameter_mm'],
+    );
+    final confirmed =
+        bikeProfile.technicalConfirmed['bbShellDiameterMm'] == true;
+    if (currentValue != null &&
+        (currentValue - candidate).abs() < 0.001 &&
+        confirmed) {
+      return null;
+    }
+
+    return candidate;
+  }
+
+  String? _selectedBottomBracketSpindleInterfaceFromWizardAnswers(
+    ServiceWizardProfile? serviceProfile,
+    BikeProfile? bikeProfile,
+    Map<String, dynamic> answers,
+  ) {
+    if (!_isBottomBracketServiceFamily(serviceProfile?.serviceFamily) ||
+        bikeProfile == null) {
+      return null;
+    }
+
+    final resolvedFamily =
+        _resolvedBottomBracketFamilyForWizardAnswers(bikeProfile, answers);
+    if (!isKnownBottomBracketFamily(resolvedFamily)) {
+      return null;
+    }
+
+    final candidate = canonicalBottomBracketSpindleInterfaceValue(
+      answers['spindle_interface']?.toString(),
+    );
+    if (candidate == null || candidate == 'unknown') {
+      return null;
+    }
+
+    final currentValue = canonicalBottomBracketSpindleInterfaceValue(
+      bikeProfile.technicalValues['spindleInterface']?.toString(),
+    );
+    final confirmed = bikeProfile.technicalConfirmed['spindleInterface'] == true;
+    if (currentValue == candidate && confirmed) {
+      return null;
+    }
+
+    return candidate;
+  }
+
   String? _selectedDrivetrainConfigFromWizardAnswers(
     ServiceWizardProfile? serviceProfile,
     BikeProfile? bikeProfile,
@@ -4545,6 +4708,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       effectiveProfile,
       answers,
     );
+    final bottomBracketShellWidth =
+        _selectedBottomBracketShellWidthFromWizardAnswers(
+      serviceProfile,
+      effectiveProfile,
+      answers,
+    );
+    final bottomBracketShellDiameter =
+        _selectedBottomBracketShellDiameterFromWizardAnswers(
+      serviceProfile,
+      effectiveProfile,
+      answers,
+    );
+    final bottomBracketSpindleInterface =
+        _selectedBottomBracketSpindleInterfaceFromWizardAnswers(
+      serviceProfile,
+      effectiveProfile,
+      answers,
+    );
     final drivetrainConfig = _selectedDrivetrainConfigFromWizardAnswers(
       serviceProfile,
       effectiveProfile,
@@ -4562,6 +4743,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
     if (rimBrakeFamily == null &&
         bottomBracketFamily == null &&
+        bottomBracketShellWidth == null &&
+        bottomBracketShellDiameter == null &&
+        bottomBracketSpindleInterface == null &&
         drivetrainConfig == null &&
         drivetrainFreehubType == null) {
       return null;
@@ -4601,6 +4785,54 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         technicalValues['bottomBracketFamily'] = bottomBracketFamily;
         technicalSources['bottomBracketFamily'] = 'mechanic';
         technicalConfirmed['bottomBracketFamily'] = true;
+        didChange = true;
+      }
+
+      if (!bottomBracketFamilyUsesShellDiameter(bottomBracketFamily) &&
+          technicalValues.containsKey('bbShellDiameterMm')) {
+        technicalValues.remove('bbShellDiameterMm');
+        technicalSources.remove('bbShellDiameterMm');
+        technicalConfirmed.remove('bbShellDiameterMm');
+        didChange = true;
+      }
+    }
+
+    if (bottomBracketShellWidth != null) {
+      final currentValue = _bottomBracketMeasurementValue(
+        technicalValues['bbShellWidthMm'] ?? technicalValues['bb_shell_width_mm'],
+      );
+      if (currentValue == null ||
+          (currentValue - bottomBracketShellWidth).abs() >= 0.001 ||
+          technicalConfirmed['bbShellWidthMm'] != true) {
+        technicalValues['bbShellWidthMm'] = bottomBracketShellWidth;
+        technicalSources['bbShellWidthMm'] = 'mechanic';
+        technicalConfirmed['bbShellWidthMm'] = true;
+        didChange = true;
+      }
+    }
+
+    if (bottomBracketShellDiameter != null) {
+      final currentValue = _bottomBracketMeasurementValue(
+        technicalValues['bbShellDiameterMm'] ??
+            technicalValues['bb_shell_diameter_mm'],
+      );
+      if (currentValue == null ||
+          (currentValue - bottomBracketShellDiameter).abs() >= 0.001 ||
+          technicalConfirmed['bbShellDiameterMm'] != true) {
+        technicalValues['bbShellDiameterMm'] = bottomBracketShellDiameter;
+        technicalSources['bbShellDiameterMm'] = 'mechanic';
+        technicalConfirmed['bbShellDiameterMm'] = true;
+        didChange = true;
+      }
+    }
+
+    if (bottomBracketSpindleInterface != null) {
+      if (technicalValues['spindleInterface']?.toString() !=
+              bottomBracketSpindleInterface ||
+          technicalConfirmed['spindleInterface'] != true) {
+        technicalValues['spindleInterface'] = bottomBracketSpindleInterface;
+        technicalSources['spindleInterface'] = 'mechanic';
+        technicalConfirmed['spindleInterface'] = true;
         didChange = true;
       }
     }
@@ -4872,6 +5104,58 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     return _firstMatchingWizardOption(question, [rawBottomBracketFamily]);
+  }
+
+  String? _normalizedWizardMeasurementValue(dynamic rawValue) {
+    final parsedValue = _bottomBracketMeasurementValue(rawValue);
+    if (parsedValue == null) {
+      return null;
+    }
+
+    if (parsedValue == parsedValue.roundToDouble()) {
+      return parsedValue.toInt().toString();
+    }
+
+    return parsedValue.toStringAsFixed(1);
+  }
+
+  String? _mappedBottomBracketMeasurementWizardAnswer(
+    dynamic rawMeasurement,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null || rawMeasurement == null) {
+      return null;
+    }
+
+    final normalizedValue = _normalizedWizardMeasurementValue(rawMeasurement);
+    if (normalizedValue == null) {
+      return null;
+    }
+
+    final rawString = rawMeasurement.toString().trim();
+    return _firstMatchingWizardOption(
+      question,
+      [normalizedValue, if (rawString.isNotEmpty) rawString],
+    );
+  }
+
+  String? _mappedBottomBracketSpindleInterfaceWizardAnswer(
+    String? rawSpindleInterface,
+    ServiceProfileQuestion? question,
+  ) {
+    if (question == null ||
+        rawSpindleInterface == null ||
+        rawSpindleInterface.isEmpty) {
+      return null;
+    }
+
+    final canonicalValue =
+        canonicalBottomBracketSpindleInterfaceValue(rawSpindleInterface);
+    if (canonicalValue == null) {
+      return null;
+    }
+
+    return _firstMatchingWizardOption(question, [canonicalValue]);
   }
 
   bool _needsRimBrakeFamilyConfirmation(
@@ -5813,50 +6097,48 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final drivetrainConfirmed =
           technicalConfirmed['drivetrainConfig'] == true &&
               technicalConfirmed['drivetrainSpeeds'] == true;
+      final confirmedDrivetrainConfig =
+          drivetrainConfirmed ? drivetrainConfig : null;
       final frontChainringAnswer =
           _mappedDrivetrainFrontChainringCountWizardAnswer(
-        drivetrainConfig,
+        confirmedDrivetrainConfig,
         questionsByKey['front_chainring_count'],
       );
       if (frontChainringAnswer != null) {
         initialAnswers['front_chainring_count'] = frontChainringAnswer;
-        if (drivetrainConfirmed) {
-          hiddenQuestionKeys.add('front_chainring_count');
-        }
+        hiddenQuestionKeys.add('front_chainring_count');
       }
 
       final rearCogAnswer = _mappedDrivetrainRearCogCountWizardAnswer(
-        drivetrainConfig,
+        confirmedDrivetrainConfig,
         questionsByKey['rear_cog_count'],
       );
       if (rearCogAnswer != null) {
         initialAnswers['rear_cog_count'] = rearCogAnswer;
-        if (drivetrainConfirmed) {
-          hiddenQuestionKeys.add('rear_cog_count');
-        }
+        hiddenQuestionKeys.add('rear_cog_count');
       }
 
       final freehubAnswer = _mappedDrivetrainFreehubTypeWizardAnswer(
-        technicalValues['freehubType']?.toString(),
+        technicalConfirmed['freehubType'] == true
+            ? technicalValues['freehubType']?.toString()
+            : null,
         questionsByKey['freehub_type'],
       );
       if (freehubAnswer != null) {
         initialAnswers['freehub_type'] = freehubAnswer;
-        if (technicalConfirmed['freehubType'] == true &&
-            isKnownDrivetrainFreehubType(
-              technicalValues['freehubType']?.toString(),
-            )) {
+        if (isKnownDrivetrainFreehubType(
+          technicalValues['freehubType']?.toString(),
+        )) {
           hiddenQuestionKeys.add('freehub_type');
         }
       }
 
       final derailleurs = _mappedDerailleursWizardAnswer(
-        drivetrainConfig,
+        confirmedDrivetrainConfig,
         questionsByKey['derailleurs'],
       );
       if (derailleurs != null) {
         initialAnswers['derailleurs'] = derailleurs;
-        hiddenQuestionKeys.add('derailleurs');
       }
 
       final drivetrainSheet = currentTab?.diagnosisSheet.drivetrain;
@@ -5893,9 +6175,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         questionsByKey['bottom_bracket_family'],
       );
       final hasKnownFamily = isKnownBottomBracketFamily(rawBottomBracketFamily);
+      final familyConfirmed =
+        hasKnownFamily && technicalConfirmed['bottomBracketFamily'] == true;
+      final shellWidthValue =
+        technicalValues['bbShellWidthMm'] ?? technicalValues['bb_shell_width_mm'];
+      final shellDiameterValue = technicalValues['bbShellDiameterMm'] ??
+        technicalValues['bb_shell_diameter_mm'];
+      final spindleInterfaceValue =
+        technicalValues['spindleInterface']?.toString();
       final bikeLabel = currentTab?.displayName ?? 'Bicicleta';
       final bikeTypeLabel = currentTab?.bike?.bikeType?.displayName;
       final familyLabel = bottomBracketFamilyLabel(rawBottomBracketFamily);
+      final shellWidthLabel = bottomBracketMeasurementLabel(shellWidthValue);
+      final shellDiameterLabel =
+        bottomBracketMeasurementLabel(shellDiameterValue);
+      final spindleInterfaceLabel =
+        bottomBracketSpindleInterfaceLabel(spindleInterfaceValue);
 
       contextSummary = ServiceWizardContextSummary(
         title: bikeLabel,
@@ -5912,19 +6207,71 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 ? 'Pedalier confirmado: $familyLabel'
                 : 'Pedalier / BB sin confirmar',
           ),
+          if (shellWidthLabel != null &&
+              technicalConfirmed['bbShellWidthMm'] == true)
+            ServiceWizardContextChip(
+              icon: Icons.straighten_outlined,
+              label: 'Ancho caja: $shellWidthLabel',
+            ),
+          if (shellDiameterLabel != null &&
+              technicalConfirmed['bbShellDiameterMm'] == true)
+            ServiceWizardContextChip(
+              icon: Icons.donut_large_outlined,
+              label: 'Diámetro shell: $shellDiameterLabel',
+            ),
+          if (spindleInterfaceLabel != null &&
+              technicalConfirmed['spindleInterface'] == true)
+            ServiceWizardContextChip(
+              icon: Icons.settings_ethernet_outlined,
+              label: 'Interfaz eje: $spindleInterfaceLabel',
+            ),
         ],
       );
 
       if (mappedBottomBracketFamily != null) {
         initialAnswers['bottom_bracket_family'] = mappedBottomBracketFamily;
-        if (hasKnownFamily) {
+        if (familyConfirmed) {
           hiddenQuestionKeys.add('bottom_bracket_family');
         }
       }
 
+      final mappedShellWidth = _mappedBottomBracketMeasurementWizardAnswer(
+        shellWidthValue,
+        questionsByKey['bb_shell_width_mm'],
+      );
+      if (mappedShellWidth != null) {
+        initialAnswers['bb_shell_width_mm'] = mappedShellWidth;
+        if (technicalConfirmed['bbShellWidthMm'] == true) {
+          hiddenQuestionKeys.add('bb_shell_width_mm');
+        }
+      }
+
+      final mappedShellDiameter = _mappedBottomBracketMeasurementWizardAnswer(
+        shellDiameterValue,
+        questionsByKey['bb_shell_diameter_mm'],
+      );
+      if (mappedShellDiameter != null) {
+        initialAnswers['bb_shell_diameter_mm'] = mappedShellDiameter;
+        if (technicalConfirmed['bbShellDiameterMm'] == true) {
+          hiddenQuestionKeys.add('bb_shell_diameter_mm');
+        }
+      }
+
+      final mappedSpindleInterface =
+          _mappedBottomBracketSpindleInterfaceWizardAnswer(
+        spindleInterfaceValue,
+        questionsByKey['spindle_interface'],
+      );
+      if (mappedSpindleInterface != null) {
+        initialAnswers['spindle_interface'] = mappedSpindleInterface;
+        if (technicalConfirmed['spindleInterface'] == true) {
+          hiddenQuestionKeys.add('spindle_interface');
+        }
+      }
+
       helperText = hasKnownFamily && familyLabel != null
-          ? 'La ficha técnica upstream ya confirma pedalier / BB $familyLabel. El wizard usa esa verdad y no vuelve a pedirla.'
-          : 'Si confirmas la familia de pedalier aquí, esa respuesta se promoverá a la ficha técnica upstream al guardar la pega.';
+          ? 'La ficha técnica upstream ya confirma pedalier / BB $familyLabel. El wizard reutiliza esa verdad y solo deja visibles las medidas o la interfaz del eje que sigan sin confirmar.'
+          : 'Si confirmas aquí la familia, el ancho de caja, el diámetro shell y/o la interfaz del eje, esas respuestas se promoverán a la ficha técnica upstream al guardar la pega.';
     }
 
     return _ServiceWizardDialogConfig(
@@ -5971,7 +6318,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     if (_isBottomBracketServiceFamily(profile?.serviceFamily)) {
-      return 'La familia de pedalier / BB quedará confirmada en la ficha técnica al guardar la pega.';
+      return 'La familia, las medidas de caja y la interfaz del eje del pedalier / BB quedarán confirmadas en la ficha técnica al guardar la pega cuando se resuelvan en el wizard.';
     }
 
     return null;
@@ -8793,6 +9140,112 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return BikeSystemOverallStatus.ok;
     }
     return BikeSystemOverallStatus.unknown;
+  }
+
+  BikeSystemOverallStatus _derivedDrivetrainDiagnosisStatus(
+    DrivetrainDiagnosisSheet sheet,
+  ) {
+    return _maxSystemStatus([
+      _drivetrainComponentStatus(sheet, 'chain'),
+      _drivetrainComponentStatus(sheet, 'cassette'),
+      _drivetrainComponentStatus(sheet, 'chainring'),
+      _drivetrainComponentStatus(sheet, 'rear_derailleur'),
+      _drivetrainComponentStatus(sheet, 'front_derailleur'),
+      _drivetrainComponentStatus(sheet, 'shifter'),
+    ]);
+  }
+
+  BikeSystemOverallStatus _derivedWheelDiagnosisStatus(
+    WheelDiagnosisSheet sheet,
+  ) {
+    return _maxSystemStatus([
+      _wheelComponentStatus(sheet, 'tire'),
+      _wheelComponentStatus(sheet, 'rim'),
+      _wheelComponentStatus(sheet, 'spokes'),
+      _wheelComponentStatus(sheet, 'hub'),
+    ]);
+  }
+
+  BikeSystemOverallStatus _derivedBottomBracketDiagnosisStatus(
+    BottomBracketDiagnosisSheet sheet,
+  ) {
+    return _maxSystemStatus([
+      _statusFromConditionValue(sheet.bearingCondition),
+      _statusFromConditionValue(sheet.noiseStatus),
+    ]);
+  }
+
+  BikeSystemOverallStatus _derivedCockpitDiagnosisStatus(
+    CockpitDiagnosisSheet sheet,
+  ) {
+    return _maxSystemStatus([
+      _statusFromConditionValue(sheet.headsetBearingCondition),
+      _statusFromConditionValue(sheet.headsetNoiseStatus),
+    ]);
+  }
+
+  BikeSystemOverallStatus _derivedSuspensionDiagnosisStatus(
+    SuspensionDiagnosisSheet sheet,
+  ) {
+    return _maxSystemStatus([
+      _suspensionComponentStatus(sheet, 'fork'),
+      _suspensionComponentStatus(sheet, 'rear_shock'),
+    ]);
+  }
+
+  MechanicJobDiagnosisSheet _normalizeDiagnosisSheetStatuses(
+    MechanicJobDiagnosisSheet sheet,
+  ) {
+    return sheet.copyWith(
+      suspension: sheet.suspension.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.suspension.overallStatus,
+          _derivedSuspensionDiagnosisStatus(sheet.suspension),
+        ),
+      ),
+      drivetrain: sheet.drivetrain.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.drivetrain.overallStatus,
+          _derivedDrivetrainDiagnosisStatus(sheet.drivetrain),
+        ),
+      ),
+      frontBrake: sheet.frontBrake.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.frontBrake.overallStatus,
+          _derivedBrakeDiagnosisStatus(sheet.frontBrake),
+        ),
+      ),
+      rearBrake: sheet.rearBrake.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.rearBrake.overallStatus,
+          _derivedBrakeDiagnosisStatus(sheet.rearBrake),
+        ),
+      ),
+      frontWheel: sheet.frontWheel.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.frontWheel.overallStatus,
+          _derivedWheelDiagnosisStatus(sheet.frontWheel),
+        ),
+      ),
+      rearWheel: sheet.rearWheel.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.rearWheel.overallStatus,
+          _derivedWheelDiagnosisStatus(sheet.rearWheel),
+        ),
+      ),
+      bottomBracket: sheet.bottomBracket.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.bottomBracket.overallStatus,
+          _derivedBottomBracketDiagnosisStatus(sheet.bottomBracket),
+        ),
+      ),
+      cockpit: sheet.cockpit.copyWith(
+        overallStatus: _mergeDerivedDiagnosisStatus(
+          sheet.cockpit.overallStatus,
+          _derivedCockpitDiagnosisStatus(sheet.cockpit),
+        ),
+      ),
+    );
   }
 
   double _chainWearGaugeValue(double? rawValue) {
@@ -12593,9 +13046,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       onChanged: (newItem) {
         setState(() {
           _currentPartItems[itemIndex] = newItem;
+          _syncPendingWizardAnswerCache(newItem);
         });
       },
-      onRemove: () => setState(() => _currentPartItems.removeAt(itemIndex)),
+      onRemove: () => setState(() {
+        _pendingServiceWizardAnswers.remove(_currentPartItems[itemIndex].id);
+        _currentPartItems.removeAt(itemIndex);
+      }),
       onMoveUp: () {
         if (itemIndex > 0) {
           setState(() {
@@ -12687,6 +13144,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       setState(() {
         _currentPartItems[itemIndex] = updatedItem;
+        _syncPendingWizardAnswerCache(updatedItem);
         _applyWizardAnswersToDiagnosis(
           item: updatedItem,
           profile: profile,
@@ -14665,12 +15123,10 @@ class _ServiceEntryDialogState extends State<_ServiceEntryDialog> {
 // Customer Selector Widget
 class _CustomerSelector extends StatefulWidget {
   final List<Customer> initialCustomers;
-  final CustomerService customerService;
   final Future<Customer?> Function(String name) onCreateCustomer;
 
   const _CustomerSelector({
     required this.initialCustomers,
-    required this.customerService,
     required this.onCreateCustomer,
   });
 
@@ -14679,7 +15135,9 @@ class _CustomerSelector extends StatefulWidget {
 }
 
 class _CustomerSelectorState extends State<_CustomerSelector> {
-  late List<Customer> _customers = widget.initialCustomers;
+  late final List<Customer> _allCustomers =
+      List<Customer>.from(widget.initialCustomers);
+  late List<Customer> _customers = List<Customer>.from(widget.initialCustomers);
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   bool _isSearching = false;
@@ -14707,26 +15165,45 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
   void _onSearchChanged(String term) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
-      setState(() => _isSearching = true);
-      try {
-        final results = term.trim().isEmpty
-            ? widget.initialCustomers
-            : await widget.customerService
-                .getCustomers(searchTerm: term, limit: 20);
-        if (mounted) {
-          setState(() => _customers = results);
-        }
-      } catch (_) {
-        if (mounted) {
-          setState(() => _customers = widget.initialCustomers);
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSearching = false);
-        }
-      }
+    if (_isSearching) {
+      setState(() => _isSearching = false);
+    }
+    setState(() {
+      _customers = _filterCustomers(term);
     });
+  }
+
+  List<Customer> _filterCustomers(String term) {
+    final query = _normalizeSearchTerm(term);
+    if (query.isEmpty) {
+      return List<Customer>.from(_allCustomers);
+    }
+
+    return _allCustomers.where((customer) {
+      final searchableParts = [
+        customer.name,
+        customer.rut,
+        customer.email ?? '',
+        customer.phone ?? '',
+      ];
+
+      return searchableParts.any(
+        (value) => _normalizeSearchTerm(value).contains(query),
+      );
+    }).toList(growable: false);
+  }
+
+  String _normalizeSearchTerm(String value) {
+    return value
+        .toLowerCase()
+        .trim()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('ü', 'u');
   }
 
   void _populateFormFromCustomer(Customer customer) {
@@ -14835,17 +15312,18 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
 
       setState(() {
         final existingIndex =
-            _customers.indexWhere((item) => item.id == saved.id);
+            _allCustomers.indexWhere((item) => item.id == saved.id);
         if (existingIndex >= 0) {
-          _customers[existingIndex] = saved;
+          _allCustomers[existingIndex] = saved;
         } else {
-          _customers.add(saved);
+          _allCustomers.add(saved);
         }
-        _customers.sort(
+        _allCustomers.sort(
           (left, right) => left.name.toLowerCase().compareTo(
                 right.name.toLowerCase(),
               ),
         );
+        _customers = _filterCustomers(_searchController.text);
       });
 
       if (mounted) {

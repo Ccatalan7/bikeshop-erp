@@ -180,6 +180,7 @@ Do not overload one broad field and pretend it resolves the whole stack.
 - left or front shifters hide rear-side seams such as `drivetrain_speeds`, `rear_cog_count`, `shift_actuation_family`, and `drivetrain_platform`.
 - right or rear shifters hide front-chainring-count semantics.
 - pair or universal shifters may keep both sides visible.
+- pair and universal shifters still stay in `caution` scoring territory until the front pull/indexing seam is modeled explicitly; only an exact right or rear shifter match may rise to `compatible`.
 - `front_derailleur` ficha behavior must constrain `front_chainring_count` to real multi-ring values only.
 - `front_derailleur` ficha behavior must suppress 1x-only ecosystem and platform claims such as `Single speed / BMX`, `SRAM Eagle`, and `SRAM T-Type Transmission`.
 - `front_derailleur_clamp_mm` is only meaningful for clamp-mount front derailleurs.
@@ -227,7 +228,10 @@ This conservative rule currently applies especially to:
 - `bottomBracketFamily` is upstream bike truth, not a service-note detail.
 - crankset and chainring ficha semantics should depend on teeth, chainring count, mount, chainline, spindle interface, and bottom-bracket interface.
 - crankset and chainring templates must not depend on broad ecosystem-anchor fields as if they were the main truth source.
-- when service flows confirm missing bottom-bracket truth, that answer should promote back into `bike_profiles.technical_profile.values`.
+- bottom-bracket and crankset scoring should stay in `caution` even when family, shell, or spindle-interface facts line up, until chainline, mounting, crank-length, and the exact shell/adapter standard seams are modeled more completely.
+- bottom-bracket ficha behavior should also gate by `bottom_bracket_family`: pressfit-style families should not keep asking for threaded-cup standards and should keep `bb_shell_diameter_mm` visible as the real bore seam, while threaded/external-cup families should suppress that raw shell-diameter field; square-cartridge families should narrow spindle-interface choices to square variants, and `Hollowtech / 24mm externo` should not keep exposing loose spindle-length/diameter fields as if it were a cartridge spindle system.
+- bottom-bracket service wizards should follow that same family-first gating upstream: `bottom_bracket_family` resolves first, then the wizard may expose `bb_shell_width_mm`, `bb_shell_diameter_mm`, and `spindle_interface` only when those seams are still unresolved and relevant for the chosen family.
+- when service flows confirm missing bottom-bracket truth, those answers should promote back into `bike_profiles.technical_profile.values` instead of staying trapped in wizard-only notes or execution summaries.
 
 ## Product Ficha Boundaries
 

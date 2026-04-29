@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/bottom_bracket_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../services/service_wizard_service.dart';
 import 'bikeshop_multi_select_picker_field.dart';
@@ -140,7 +141,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
       }
     }
 
-    _syncDerivedDrivetrainAnswers();
+    _syncDerivedAnswers();
   }
 
   @override
@@ -165,6 +166,18 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     if (_shouldAutoHideRearOnlyDerailleur) {
       hiddenQuestionKeys.add('derailleurs');
     }
+    if (_isBottomBracketWizard) {
+      final family = _selectedBottomBracketFamily;
+      if (!isKnownBottomBracketFamily(family)) {
+        hiddenQuestionKeys.addAll(const {
+          'bb_shell_width_mm',
+          'bb_shell_diameter_mm',
+          'spindle_interface',
+        });
+      } else if (!bottomBracketFamilyUsesShellDiameter(family)) {
+        hiddenQuestionKeys.add('bb_shell_diameter_mm');
+      }
+    }
     return hiddenQuestionKeys;
   }
 
@@ -177,7 +190,7 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
   }
 
   List<ServiceQuestionOption> _questionOptions(ServiceProfileQuestion q) {
-    return _overrideFor(q)?.options ?? q.options;
+    return _overrideFor(q)?.options ?? _bottomBracketQuestionOptions(q) ?? q.options;
   }
 
   ServiceProfileQuestion? _questionByKey(String key) {
@@ -193,6 +206,51 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
 
   bool _isDiagnosisLinked(ServiceProfileQuestion q) {
     return widget.diagnosisLinkedQuestionKeys.contains(q.key);
+  }
+
+  bool get _isBottomBracketWizard {
+    return widget.profile?.serviceFamily == 'bottom_bracket';
+  }
+
+  String? get _selectedBottomBracketFamily {
+    return canonicalBottomBracketFamilyValue(
+      _answers['bottom_bracket_family']?.toString(),
+    );
+  }
+
+  List<ServiceQuestionOption>? _bottomBracketQuestionOptions(
+    ServiceProfileQuestion q,
+  ) {
+    if (!_isBottomBracketWizard) {
+      return null;
+    }
+
+    final family = _selectedBottomBracketFamily;
+    if (!isKnownBottomBracketFamily(family)) {
+      return null;
+    }
+
+    final options = switch (q.key) {
+      'bb_shell_width_mm' => bottomBracketShellWidthOptionsForFamily(family),
+      'bb_shell_diameter_mm' =>
+        bottomBracketShellDiameterOptionsForFamily(family),
+      'spindle_interface' =>
+        bottomBracketSpindleInterfaceOptionsForFamily(family),
+      _ => const <String, String>{},
+    };
+
+    if (options.isEmpty) {
+      return null;
+    }
+
+    return options.entries
+        .map(
+          (entry) => ServiceQuestionOption(
+            value: entry.key,
+            label: entry.value,
+          ),
+        )
+        .toList(growable: false);
   }
 
   String _resolveQuestionValueLabel(ServiceProfileQuestion q, String rawValue) {
@@ -293,10 +351,62 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
     _hasAutoDerivedRearDerailleur = false;
   }
 
+  void _syncDerivedBottomBracketAnswers() {
+    if (!_isBottomBracketWizard) {
+      return;
+    }
+
+    final family = _selectedBottomBracketFamily;
+    if (!isKnownBottomBracketFamily(family)) {
+      _answers.remove('bb_shell_width_mm');
+      _answers.remove('bb_shell_diameter_mm');
+      _answers.remove('spindle_interface');
+      return;
+    }
+
+    void removeIfInvalid(String key) {
+      final currentValue = _answers[key]?.toString();
+      if (currentValue == null || currentValue.isEmpty) {
+        return;
+      }
+      final allowedValues = _questionOptions(
+        _questionByKey(key) ??
+            ServiceProfileQuestion(
+              id: '',
+              key: key,
+              label: '',
+              questionType: 'single_select',
+              isRequired: false,
+              isAdvanced: false,
+              options: const <ServiceQuestionOption>[],
+              sortOrder: 0,
+            ),
+      ).map((option) => option.value).toSet();
+      if (allowedValues.isNotEmpty && !allowedValues.contains(currentValue)) {
+        _answers.remove(key);
+      }
+    }
+
+    removeIfInvalid('bb_shell_width_mm');
+    removeIfInvalid('spindle_interface');
+
+    if (!bottomBracketFamilyUsesShellDiameter(family)) {
+      _answers.remove('bb_shell_diameter_mm');
+      return;
+    }
+
+    removeIfInvalid('bb_shell_diameter_mm');
+  }
+
+  void _syncDerivedAnswers() {
+    _syncDerivedDrivetrainAnswers();
+    _syncDerivedBottomBracketAnswers();
+  }
+
   void _updateAnswer(String key, dynamic value) {
     setState(() {
       _answers[key] = value;
-      _syncDerivedDrivetrainAnswers();
+      _syncDerivedAnswers();
       if (_requiredQuestionErrors.contains(key)) {
         final normalized = value is String ? value.trim() : value;
         final hasValue = normalized is bool

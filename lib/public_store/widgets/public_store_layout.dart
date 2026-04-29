@@ -17,6 +17,7 @@ import 'package:web/web.dart'
     as web;
 
 import '../providers/cart_provider.dart';
+import '../pages/public_home_page.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
@@ -71,6 +72,7 @@ class PublicStoreLayout extends StatefulWidget {
   final Widget child;
   final bool showEditorButton;
   final bool enablePageViewScrolling;
+  final String? routePath;
 
   /// When true, the editor panel is rendered externally (by PersistentEditorShell)
   /// so this layout should not render it.
@@ -82,6 +84,7 @@ class PublicStoreLayout extends StatefulWidget {
     this.showEditorButton = true,
     this.enablePageViewScrolling = true,
     this.useExternalEditorPanel = true,
+    this.routePath,
   });
 
   /// Centralized navigation entry-point for public store UI elements.
@@ -215,6 +218,63 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     _inlineFooterNavLabelController.dispose();
     _inlineFooterNavLabelFocusNode.dispose();
     super.dispose();
+  }
+
+  String _currentPublicStorePath(BuildContext context) {
+    final explicitRoutePath = widget.routePath;
+    if (explicitRoutePath != null && explicitRoutePath.isNotEmpty) {
+      return explicitRoutePath;
+    }
+
+    final routeName = ModalRoute.of(context)?.settings.name;
+    if (routeName != null && routeName.isNotEmpty) {
+      final parsed = Uri.tryParse(routeName);
+      if (parsed != null && parsed.path.isNotEmpty) {
+        return parsed.path;
+      }
+      if (routeName.startsWith('/')) {
+        return routeName;
+      }
+    }
+
+    try {
+      final path = GoRouterState.of(context).uri.path;
+      if (path.isNotEmpty) {
+        return path;
+      }
+    } catch (_) {
+      // Fall through to a safe default.
+    }
+
+    return '/';
+  }
+
+  bool _isHomePagePath(String path) {
+    switch (path) {
+      case '/':
+      case '/tienda':
+      case '/tienda/':
+      case '/home':
+      case '/inicio':
+      case '/tienda/home':
+      case '/tienda/inicio':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _usesInlineHeaderLayout(String path) {
+    return path == '/carrito' ||
+        path == '/checkout' ||
+        path == '/cuenta' ||
+        path.startsWith('/cuenta/') ||
+        path == '/tienda/carrito' ||
+        path == '/tienda/checkout' ||
+        path == '/tienda/cuenta' ||
+        path.startsWith('/tienda/cuenta/') ||
+        path.startsWith('/pedido/') ||
+        path.startsWith('/tienda/pedido/');
   }
 
   void _beginInlineFooterNavEdit(
@@ -837,11 +897,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Build the main page content based on header style
     Widget pageContent;
 
-    // Check if we're on the homepage (route is exactly '/tienda' or '/')
-    final currentRoute = GoRouterState.of(context).uri.path;
-    final isHomePage = currentRoute == '/tienda' ||
-        currentRoute == '/' ||
-        currentRoute == '/tienda/';
+    // Use the page route name first because the raw GoRouter state inside this
+    // shared shell can resolve to the outer location and misclassify inner
+    // pages like /checkout or /pedido/:id as the homepage.
+    final currentRoute = _currentPublicStorePath(context);
+    final isHomePage = _isHomePagePath(currentRoute);
+    final allowsOverlayHeader = isHomePage && widget.child is PublicHomePage;
+    final usesInlineHeaderLayout =
+        widget.enablePageViewScrolling && _usesInlineHeaderLayout(currentRoute);
 
     // Mode-aware key ensures complete widget recreation on mode change to
     // avoid element reactivation crashes during layout.
@@ -849,7 +912,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         isEditMode ? 'edit' : (isPreviewMode ? 'preview' : 'normal');
 
     if (headerStyle == 'transparent' &&
-        isHomePage &&
+        allowsOverlayHeader &&
         widget.enablePageViewScrolling) {
       // TRANSPARENT: Header floats over hero ONLY ON HOMEPAGE
       pageContent = ScrollConfiguration(
@@ -899,39 +962,62 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         !isHomePage &&
         widget.enablePageViewScrolling) {
       // TRANSPARENT style but NOT homepage: Use solid header instead
-      pageContent = Column(
-        children: [
-          // Header - static at top with solid background
-          buildHeaderWidget(
-            isOverlay: false,
-            overrideBgColor: headerBgColor,
-            overrideColorMode: headerColorMode,
-            overrideShadow: headerShadow,
-          ),
-          // Main content area - scrollable
-          Expanded(
-            child: ScrollConfiguration(
+      pageContent = usesInlineHeaderLayout
+          ? ScrollConfiguration(
               behavior: isEditMode
                   ? const _NoDragScrollBehavior()
                   : const MaterialScrollBehavior(),
               child: _PublicStoreScrollView(
-                key: ValueKey('scroll_transparent_notHome_$scrollViewMode'),
+                key: ValueKey('scroll_transparent_inline_$scrollViewMode'),
                 child: Column(
                   children: [
+                    buildHeaderWidget(
+                      isOverlay: false,
+                      overrideBgColor: headerBgColor,
+                      overrideColorMode: headerColorMode,
+                      overrideShowBanner: false,
+                      overrideShadow: headerShadow,
+                    ),
                     animateBody(widget.child),
                     footerWidget,
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
-      );
+            )
+          : Column(
+              children: [
+                // Header - static at top with solid background
+                buildHeaderWidget(
+                  isOverlay: false,
+                  overrideBgColor: headerBgColor,
+                  overrideColorMode: headerColorMode,
+                  overrideShadow: headerShadow,
+                ),
+                // Main content area - scrollable
+                Expanded(
+                  child: ScrollConfiguration(
+                    behavior: isEditMode
+                        ? const _NoDragScrollBehavior()
+                        : const MaterialScrollBehavior(),
+                    child: _PublicStoreScrollView(
+                      key: ValueKey(
+                          'scroll_transparent_notHome_$scrollViewMode'),
+                      child: Column(
+                        children: [
+                          animateBody(widget.child),
+                          footerWidget,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
     } else if (headerStyle == 'sticky' &&
-        isHomePage &&
         (widget.enablePageViewScrolling || isPreviewMode || isEditMode)) {
-      // STICKY: Header stays fixed at top while scrolling (Homepage only)
-      // On inner pages, we fall back to solid/static to prevent overlap issues
+      // STICKY: Homepage may overlay the hero; inner routes reserve header
+      // height so the fixed header stays visible without covering content.
+      final stickyAllowsOverlay = allowsOverlayHeader;
       pageContent = _buildStickyHeaderLayout(
         context: context,
         storeName: storeName,
@@ -943,48 +1029,66 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         primaryColor: primaryColor,
         accentColor: accentColor,
         headerColorMode: headerColorMode,
-        showTopBanner: showTopBanner,
+        showTopBanner: stickyAllowsOverlay ? showTopBanner : false,
         headerShadow: headerShadow,
         headerBgColor: headerBgColor,
         navItems: navItems,
         isEditMode: isEditMode,
         child: animateBody(widget.child),
         footer: footerWidget,
+        allowOverlayAtTop: stickyAllowsOverlay,
         scrollViewMode: scrollViewMode,
       );
     } else {
       // SOLID: Normal layout, header at top, content scrolls below
-      pageContent = Column(
-        children: [
-          // Header - static at top
-          buildHeaderWidget(),
-          // Main content area - scrollable or fixed
-          Expanded(
-            child: widget.enablePageViewScrolling
-                ? ScrollConfiguration(
-                    behavior: isEditMode
-                        ? const _NoDragScrollBehavior()
-                        : const MaterialScrollBehavior(),
-                    child: _PublicStoreScrollView(
-                      key: ValueKey('scroll_solid_$scrollViewMode'),
-                      child: Column(
-                        children: [
-                          animateBody(widget.child),
-                          footerWidget,
-                        ],
-                      ),
-                    ),
-                  )
-                : Column(
-                    children: [
-                      Expanded(child: animateBody(widget.child, expand: true)),
-                      // In fixed mode, footer is not shown or is part of child.
-                      // Let's hide footer for fixed layout to gain max space.
-                    ],
-                  ),
-          ),
-        ],
-      );
+      pageContent = usesInlineHeaderLayout
+          ? ScrollConfiguration(
+              behavior: isEditMode
+                  ? const _NoDragScrollBehavior()
+                  : const MaterialScrollBehavior(),
+              child: _PublicStoreScrollView(
+                key: ValueKey('scroll_solid_inline_$scrollViewMode'),
+                child: Column(
+                  children: [
+                    buildHeaderWidget(overrideShowBanner: false),
+                    animateBody(widget.child),
+                    footerWidget,
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                // Header - static at top
+                buildHeaderWidget(),
+                // Main content area - scrollable or fixed
+                Expanded(
+                  child: widget.enablePageViewScrolling
+                      ? ScrollConfiguration(
+                          behavior: isEditMode
+                              ? const _NoDragScrollBehavior()
+                              : const MaterialScrollBehavior(),
+                          child: _PublicStoreScrollView(
+                            key: ValueKey('scroll_solid_$scrollViewMode'),
+                            child: Column(
+                              children: [
+                                animateBody(widget.child),
+                                footerWidget,
+                              ],
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            Expanded(
+                                child: animateBody(widget.child, expand: true)),
+                            // In fixed mode, footer is not shown or is part of child.
+                            // Let's hide footer for fixed layout to gain max space.
+                          ],
+                        ),
+                ),
+              ],
+            );
     }
 
     // ========================================================================
@@ -1234,9 +1338,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 backgroundColor: accentColor,
               ),
             ),
-          // Show "Edit Site" button ONLY on ERP domain (not on public store domain)
-          // This is for admin previewing the store from ERP, not for customers.
-          if (isLoggedIn && widget.showEditorButton && !_isPublicStoreDomain())
+          // Show the legacy "Edit Site" FAB only when the store is mounted
+          // inside the ERP shell. Standalone store debug on localhost should
+          // behave like the public storefront and never expose this old entry.
+          if (isLoggedIn && widget.showEditorButton && _isErpMountedStore())
             Positioned(
               bottom: 24,
               right: hasWhatsApp ? 104 : 24,
@@ -3551,6 +3656,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isEditMode,
     required Widget child,
     required Widget footer,
+    bool allowOverlayAtTop = true,
     String scrollViewMode = 'normal',
   }) {
     // Sticky uses the scaffold that keeps header fixed at top
@@ -3572,6 +3678,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       headerBgColor: headerBgColor,
       navItems: navItems,
       isEditMode: isEditMode,
+      allowOverlayAtTop: allowOverlayAtTop,
       buildHeader: _buildHeader,
       footer: footer,
       child: child,
@@ -5308,6 +5415,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontFamily: PublicStoreTheme.defaultHeadingFont,
+                letterSpacing: 0.25,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 color: isActive
                     ? primaryColor
@@ -5875,9 +5984,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               Text(
                 label,
                 style: TextStyle(
+                  fontFamily: PublicStoreTheme.defaultHeadingFont,
                   color: color ?? Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
+                  letterSpacing: 0.2,
                 ),
               ),
               const Spacer(),
@@ -6669,6 +6780,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
   final Color headerBgColor;
   final List<WebsiteNavigation> navItems;
   final bool isEditMode;
+  final bool allowOverlayAtTop;
   final Widget Function({
     required BuildContext context,
     required String storeName,
@@ -6707,6 +6819,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
     required this.headerBgColor,
     required this.navItems,
     required this.isEditMode,
+    required this.allowOverlayAtTop,
     required this.buildHeader,
     required this.child,
     required this.footer,
@@ -6717,8 +6830,12 @@ class _StickyHeaderScaffold extends StatefulWidget {
 }
 
 class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
+  static const double _fallbackReservedHeaderHeight = 92;
+
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _headerKey = GlobalKey();
   double _scrollOffset = 0;
+  double _reservedHeaderHeight = _fallbackReservedHeaderHeight;
   String? _routeKey;
   bool _restoredForRoute = false;
   PublicStoreScrollState? _scrollState;
@@ -6841,19 +6958,56 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
     });
   }
 
+  void _scheduleHeaderMeasurement() {
+    if (widget.allowOverlayAtTop) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final headerContext = _headerKey.currentContext;
+      if (headerContext == null) return;
+
+      final renderBox = headerContext.findRenderObject() as RenderBox?;
+      if (renderBox == null || !renderBox.hasSize) return;
+
+      final measuredHeight = renderBox.size.height;
+      if ((measuredHeight - _reservedHeaderHeight).abs() < 0.5) return;
+
+      setState(() {
+        _reservedHeaderHeight = measuredHeight;
+      });
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _StickyHeaderScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.allowOverlayAtTop != widget.allowOverlayAtTop ||
+        oldWidget.showTopBanner != widget.showTopBanner) {
+      _scheduleHeaderMeasurement();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    _scheduleHeaderMeasurement();
+
     // Calculate header opacity based on scroll (0 = transparent, 1 = solid)
     // Transition happens over the first 100 pixels of scroll
-    final double headerOpacity = (_scrollOffset / 100).clamp(0.0, 1.0);
-    final bool isScrolled = _scrollOffset > 50;
+    final bool allowOverlayAtTop = widget.allowOverlayAtTop;
+    final double headerOpacity =
+        allowOverlayAtTop ? (_scrollOffset / 100).clamp(0.0, 1.0) : 1.0;
+    final bool isScrolled = allowOverlayAtTop && _scrollOffset > 50;
 
     // When scrolled, switch to light mode (dark text on white bg)
     final String effectiveColorMode =
-        isScrolled ? 'light' : widget.headerColorMode;
-    final Color effectiveBgColor = isScrolled
-        ? widget.headerBgColor
-        : widget.headerBgColor.withValues(alpha: headerOpacity);
+        allowOverlayAtTop && isScrolled ? 'light' : widget.headerColorMode;
+    final Color effectiveBgColor = allowOverlayAtTop
+        ? (isScrolled
+            ? widget.headerBgColor
+            : widget.headerBgColor.withValues(alpha: headerOpacity))
+        : widget.headerBgColor;
 
     return Stack(
       // On Flutter Web (HTML renderer especially), clipping can create DOM
@@ -6874,8 +7028,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
             clipBehavior: kIsWeb ? Clip.none : Clip.hardEdge,
             child: Column(
               children: [
-                // Add padding at top for the header space (only if not in edit mode)
-                if (!widget.isEditMode) const SizedBox(height: 0),
+                if (!allowOverlayAtTop) SizedBox(height: _reservedHeaderHeight),
                 widget.child,
                 widget.footer,
               ],
@@ -6887,24 +7040,31 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
           top: 0,
           left: 0,
           right: 0,
-          child: widget.buildHeader(
-            context: context,
-            storeName: widget.storeName,
-            storeDescription: widget.storeDescription,
-            logoUrl: widget.logoUrl,
-            topBannerText: widget.topBannerText,
-            contactPhone: widget.contactPhone,
-            contactEmail: widget.contactEmail,
-            primaryColor: widget.primaryColor,
-            accentColor: widget.accentColor,
-            isEditMode: widget.isEditMode,
-            headerStyle: 'transparent',
-            headerColorMode: effectiveColorMode,
-            showTopBanner: widget.showTopBanner && !isScrolled,
-            headerShadow: widget.headerShadow && isScrolled,
-            headerBgColor: effectiveBgColor,
-            navItems: widget.navItems,
-            isOverlay: !isScrolled, // Only overlay when not scrolled
+          child: KeyedSubtree(
+            key: _headerKey,
+            child: widget.buildHeader(
+              context: context,
+              storeName: widget.storeName,
+              storeDescription: widget.storeDescription,
+              logoUrl: widget.logoUrl,
+              topBannerText: widget.topBannerText,
+              contactPhone: widget.contactPhone,
+              contactEmail: widget.contactEmail,
+              primaryColor: widget.primaryColor,
+              accentColor: widget.accentColor,
+              isEditMode: widget.isEditMode,
+              headerStyle: 'transparent',
+              headerColorMode: effectiveColorMode,
+              showTopBanner: allowOverlayAtTop
+                  ? widget.showTopBanner && !isScrolled
+                  : widget.showTopBanner,
+              headerShadow: allowOverlayAtTop
+                  ? widget.headerShadow && isScrolled
+                  : widget.headerShadow,
+              headerBgColor: effectiveBgColor,
+              navItems: widget.navItems,
+              isOverlay: allowOverlayAtTop && !isScrolled,
+            ),
           ),
         ),
       ],

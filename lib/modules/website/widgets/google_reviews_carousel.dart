@@ -357,10 +357,10 @@ class _ReviewCard extends StatelessWidget {
                 width: 24,
                 height: 24,
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   'G',
                   style: TextStyle(
-                    fontFamily: 'Roboto',
+                    fontFamily: bodyFont,
                     fontWeight: FontWeight.w900,
                     fontSize: 20,
                     color: Color(0xFF4285F4), // Google Blue

@@ -1233,6 +1233,14 @@ class BikeProductCompatibilityService {
     required Map<String, dynamic> specValues,
   }) {
     final position = _canonicalShifterPosition(specValues['shifter_position']);
+    final checksRearSide = position == null ||
+        position == 'right' ||
+        position == 'pair' ||
+        position == 'universal';
+    final checksFrontSide = position == null ||
+        position == 'left' ||
+        position == 'pair' ||
+        position == 'universal';
     final expectedRearSpeed = _chainSpeedFromContext(compatibilityContext);
     final expectedFrontCount =
         _frontChainringCountFromContext(compatibilityContext);
@@ -1258,7 +1266,7 @@ class BikeProductCompatibilityService {
       );
     }
 
-    if (position == null || position == 'right' || position == 'pair') {
+    if (checksRearSide) {
       if (expectedRearSpeed != null && productSpeeds.isNotEmpty) {
         if (!productSpeeds.contains(expectedRearSpeed)) {
           return ProductCompatibilityAssessment.incompatible(
@@ -1272,7 +1280,7 @@ class BikeProductCompatibilityService {
       }
     }
 
-    if ((position == null || position == 'left' || position == 'pair') &&
+    if (checksFrontSide &&
         expectedFrontCount != null &&
         productFrontCounts.isNotEmpty) {
       if (!productFrontCounts.contains(expectedFrontCount)) {
@@ -1315,7 +1323,10 @@ class BikeProductCompatibilityService {
         if (position == 'right' &&
             (bikeActuation == null || productActuation == null))
           'familia de indexado exacta',
-        if (position == 'left' || position == 'pair' || position == null)
+        if (position == 'left' ||
+            position == 'pair' ||
+            position == 'universal' ||
+            position == null)
           'tiro/indexado delantero',
       ];
 
@@ -1389,26 +1400,16 @@ class BikeProductCompatibilityService {
       );
     }
 
-    final matchedParts = <String>[
-      if (expectedFamily != null && productFamily == expectedFamily)
-        _bottomBracketFamilyLabel(expectedFamily),
-      if (expectedShellWidth != null &&
-          productShellWidth != null &&
-          _sameNumericValue(expectedShellWidth, productShellWidth))
-        '${_formatMeasurement(productShellWidth)} mm',
-      if (expectedShellDiameter != null &&
-          productShellDiameter != null &&
-          _sameNumericValue(expectedShellDiameter, productShellDiameter))
-        'diam ${_formatMeasurement(productShellDiameter)} mm',
-      if (expectedSpindleInterface != null &&
-          productSpindleInterface == expectedSpindleInterface)
-        _spindleInterfaceLabel(productSpindleInterface!),
-    ];
+    final matchedParts = _matchedBottomBracketParts(
+      compatibilityContext: compatibilityContext,
+      specValues: specValues,
+    );
 
     if (matchedParts.isNotEmpty) {
-      return ProductCompatibilityAssessment.compatible(
-        detail: '$familyLabel compatible (${matchedParts.join(' · ')})',
-        sortPriority: matchedParts.length >= 2 ? 12 : 16,
+      return ProductCompatibilityAssessment.caution(
+        detail:
+            '$familyLabel coincide ${matchedParts.join(' · ')}; falta confirmar estándar real del shell, montaje y combinación completa del sistema',
+        sortPriority: matchedParts.length >= 2 ? 18 : 22,
       );
     }
 
@@ -1446,19 +1447,20 @@ class BikeProductCompatibilityService {
     }
 
     final matchedParts = <String>[
-      if (bbAssessment?.level == ProductCompatibilityLevel.compatible &&
-          bbAssessment?.detail != null)
-        bbAssessment!.detail!,
+      ..._matchedBottomBracketParts(
+        compatibilityContext: compatibilityContext,
+        specValues: specValues,
+      ),
       if (expectedFrontCount != null &&
           productFrontCounts.contains(expectedFrontCount))
         '${expectedFrontCount}x',
     ];
 
     if (matchedParts.isNotEmpty) {
-      return ProductCompatibilityAssessment.compatible(
+      return ProductCompatibilityAssessment.caution(
         detail:
-            '$familyLabel compatible (${matchedParts.join(' · ')}); revisar largo, linea de cadena y montaje',
-        sortPriority: 18,
+            '$familyLabel coincide ${matchedParts.join(' · ')}; falta confirmar línea de cadena, largo, montaje y estándar real del crankset',
+        sortPriority: 20,
       );
     }
 
@@ -1467,6 +1469,42 @@ class BikeProductCompatibilityService {
           '$familyLabel; falta ficha de platos/pedalier o datos upstream de la bici',
       sortPriority: 32,
     );
+  }
+
+  List<String> _matchedBottomBracketParts({
+    required _BikeCompatibilityContext compatibilityContext,
+    required Map<String, dynamic> specValues,
+  }) {
+    final expectedFamily =
+        _canonicalBottomBracketFamily(compatibilityContext.bottomBracketFamily);
+    final productFamily =
+        _canonicalBottomBracketFamily(specValues['bottom_bracket_family']);
+    final expectedShellWidth = compatibilityContext.bbShellWidthMm;
+    final productShellWidth =
+        _parseDoubleValue(specValues['bb_shell_width_mm']);
+    final expectedShellDiameter = compatibilityContext.bbShellDiameterMm;
+    final productShellDiameter =
+        _parseDoubleValue(specValues['bb_shell_diameter_mm']);
+    final expectedSpindleInterface =
+        _canonicalSpindleInterface(compatibilityContext.spindleInterface);
+    final productSpindleInterface =
+        _canonicalSpindleInterface(specValues['spindle_interface']);
+
+    return <String>[
+      if (expectedFamily != null && productFamily == expectedFamily)
+        _bottomBracketFamilyLabel(expectedFamily),
+      if (expectedShellWidth != null &&
+          productShellWidth != null &&
+          _sameNumericValue(expectedShellWidth, productShellWidth))
+        '${_formatMeasurement(productShellWidth)} mm',
+      if (expectedShellDiameter != null &&
+          productShellDiameter != null &&
+          _sameNumericValue(expectedShellDiameter, productShellDiameter))
+        'diam ${_formatMeasurement(productShellDiameter)} mm',
+      if (expectedSpindleInterface != null &&
+          productSpindleInterface == expectedSpindleInterface)
+        _spindleInterfaceLabel(productSpindleInterface!),
+    ];
   }
 
   ProductCompatibilityAssessment? _assessDetailedDrivetrainKitCompatibility({
@@ -3514,12 +3552,20 @@ class BikeProductCompatibilityService {
     if (normalized.contains('dub')) return 'sram_dub';
     if (normalized.contains('isis')) return 'isis';
     if (normalized.contains('octalink')) return 'octalink';
-    if (normalized.contains('19mm')) return 'bmx_19';
-    if (normalized.contains('22mm')) return 'bmx_22';
-    if (normalized.contains('bmx') && normalized.contains('24mm')) {
+    if (normalized.contains('19mm') || normalized.contains('19 mm')) {
+      return 'bmx_19';
+    }
+    if (normalized.contains('22mm') || normalized.contains('22 mm')) {
+      return 'bmx_22';
+    }
+    if (normalized.contains('bmx') &&
+        (normalized.contains('24mm') || normalized.contains('24 mm'))) {
       return 'bmx_24';
     }
-    if (normalized.contains('hollowtech') || normalized.contains('24mm')) {
+    if (normalized.contains('hollowtech') ||
+        normalized.contains('24mm') ||
+        normalized.contains('24 mm') ||
+        normalized.contains('integrado')) {
       return 'hollowtech_24';
     }
     if (normalized.contains('one-piece') || normalized.contains('americano')) {
@@ -3792,7 +3838,7 @@ class BikeProductCompatibilityService {
       case 'square_taper':
         return 'Cuadrado';
       case 'hollowtech_24':
-        return 'Hollowtech/24mm';
+        return 'Hollowtech / 24 mm';
       case 'sram_dub':
         return 'SRAM DUB';
       case 'isis':
@@ -3800,11 +3846,11 @@ class BikeProductCompatibilityService {
       case 'octalink':
         return 'Octalink';
       case 'bmx_19':
-        return 'BMX 19mm';
+        return 'BMX 19 mm';
       case 'bmx_22':
-        return 'BMX 22mm';
+        return 'BMX 22 mm';
       case 'bmx_24':
-        return 'BMX 24mm';
+        return 'BMX 24 mm';
       case 'one_piece':
         return 'One-piece/americano';
       default:

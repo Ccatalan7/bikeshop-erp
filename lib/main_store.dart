@@ -41,6 +41,60 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 String? _initialBrowserUrl;
 
+bool get _shouldResetLocalStoreDebugState {
+  const reset = bool.fromEnvironment('PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE');
+  if (!reset) return false;
+
+  if (!kIsWeb) {
+    return true;
+  }
+
+  final host = Uri.base.host.toLowerCase().split(':').first;
+  return host == 'localhost' || host == '127.0.0.1';
+}
+
+Future<void> _resetLocalStoreDebugStateIfNeeded(
+  SharedPreferences prefs,
+) async {
+  if (!_shouldResetLocalStoreDebugState) return;
+
+  const tenantId = String.fromEnvironment('PUBLIC_STORE_TENANT_ID');
+  const cachePrefixes = [
+    'website_settings_',
+    'website_blocks_',
+    'website_navigation_',
+    'website_public_store_last_refresh_',
+  ];
+
+  final keysToRemove = <String>{};
+  if (tenantId.isNotEmpty) {
+    for (final prefix in cachePrefixes) {
+      keysToRemove.add('$prefix$tenantId');
+    }
+  } else {
+    for (final key in prefs.getKeys()) {
+      if (cachePrefixes.any(key.startsWith)) {
+        keysToRemove.add(key);
+      }
+    }
+  }
+
+  for (final key in keysToRemove) {
+    await prefs.remove(key);
+  }
+
+  final auth = Supabase.instance.client.auth;
+  final hadSession = auth.currentSession != null;
+  if (hadSession) {
+    await auth.signOut();
+  }
+
+  debugPrint(
+    '🧪 [StoreMain] Reset public store debug state: '
+    'removed ${keysToRemove.length} cache keys, signedOut=$hadSession',
+  );
+}
+
 Future<void> main() async {
   if (kIsWeb) {
     _initialBrowserUrl = getInitialBrowserUrl();
@@ -72,6 +126,8 @@ Future<void> main() async {
         autoRefreshToken: true,
       ),
     );
+
+    await _resetLocalStoreDebugStateIfNeeded(prefs);
 
     FlutterError.onError = (FlutterErrorDetails details) {
       // Suppress Flutter Web-specific "disposed EngineFlutterView" errors

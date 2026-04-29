@@ -2,6 +2,7 @@
 
 import 'dart:ui' show Color;
 
+import '../config/bottom_bracket_canonical_data.dart';
 import '../../../shared/models/tax_treatment.dart';
 
 /// Sentinel object used in copyWith to distinguish between "not provided" and "explicitly null"
@@ -488,16 +489,6 @@ const Map<String, String> _bikeProfileValveTypeLabels = {
   'unknown': 'Desconocido',
 };
 
-const Map<String, String> _bikeProfileBottomBracketFamilyLabels = {
-  'bsa_threaded': 'BSA roscado',
-  'pressfit': 'Pressfit',
-  'bb30_pf30': 'BB30 / PF30',
-  'mid': 'Mid / BMX',
-  'one_piece': 'One-piece',
-  'other': 'Otro',
-  'unknown': 'Desconocido',
-};
-
 const Map<String, String> _bikeProfileMaintenanceLabels = {
   'regular': 'Regular',
   'occasional': 'Ocasional',
@@ -564,6 +555,41 @@ String? _formatSpokeHighlight(dynamic frontValue, dynamic rearValue) {
   }
 
   return 'Rayos traseros: $rear';
+}
+
+String? _buildBottomBracketHighlight(Map<String, dynamic> technicalValues) {
+  final familyRaw = technicalValues['bottomBracketFamily']?.toString();
+  final familyLabel = bottomBracketFamilyLabel(familyRaw);
+  if (familyLabel == null) {
+    return null;
+  }
+
+  final shellWidthLabel = bottomBracketMeasurementLabel(
+    technicalValues['bbShellWidthMm'] ?? technicalValues['bb_shell_width_mm'],
+  );
+  final shellDiameterLabel = bottomBracketFamilyUsesShellDiameter(familyRaw)
+      ? bottomBracketMeasurementLabel(
+          technicalValues['bbShellDiameterMm'] ??
+              technicalValues['bb_shell_diameter_mm'],
+        )
+      : null;
+  final spindleLabel = bottomBracketSpindleInterfaceLabel(
+    technicalValues['spindleInterface']?.toString() ??
+        technicalValues['spindle_interface']?.toString(),
+  );
+
+  final details = <String>[familyLabel];
+  if (shellWidthLabel != null) {
+    details.add('ancho $shellWidthLabel');
+  }
+  if (shellDiameterLabel != null) {
+    details.add('diam. $shellDiameterLabel');
+  }
+  if (spindleLabel != null) {
+    details.add(spindleLabel);
+  }
+
+  return 'Pedalier: ${details.join(' · ')}';
 }
 
 class BikeProfileSummaryBuilder {
@@ -637,10 +663,8 @@ class BikeProfileSummaryBuilder {
       _bikeProfileValveTypeLabels,
       technicalValues['valveType'],
     );
-    final bottomBracketFamily = _bikeProfileLabelFor(
-      _bikeProfileBottomBracketFamilyLabels,
-      technicalValues['bottomBracketFamily'],
-    );
+    final bottomBracketHighlight =
+        _buildBottomBracketHighlight(technicalValues);
     final spokeHighlight = _formatSpokeHighlight(
       technicalValues['frontSpokeHoles'],
       technicalValues['rearSpokeHoles'],
@@ -689,8 +713,8 @@ class BikeProfileSummaryBuilder {
     if (valveType != null) {
       highlights.add('Valvula: $valveType');
     }
-    if (bottomBracketFamily != null) {
-      highlights.add('Pedalier: $bottomBracketFamily');
+    if (bottomBracketHighlight != null) {
+      highlights.add(bottomBracketHighlight);
     }
 
     return highlights;

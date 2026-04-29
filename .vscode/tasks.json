@@ -4,19 +4,19 @@
 		{
 			"label": "📱 Run Store (Android • Profile • Skia)",
 			"type": "shell",
-			"command": "flutter run --profile -d R28M2189XQF -t lib/main_store.dart --no-enable-impeller --verbose-system-logs --dart-define=STORE_PERF_LOGS=true --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike",
+			"command": "flutter run --profile -d R28M2189XQF -t lib/main_store.dart --no-enable-impeller --verbose-system-logs --dart-define=STORE_PERF_LOGS=true --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike --dart-define=PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE=true",
 			"problemMatcher": []
 		},
 		{
 			"label": "📱 Run Store (Android • Profile • Impeller)",
 			"type": "shell",
-			"command": "flutter run --profile -d R28M2189XQF -t lib/main_store.dart --enable-impeller --verbose-system-logs --dart-define=STORE_PERF_LOGS=true --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike",
+			"command": "flutter run --profile -d R28M2189XQF -t lib/main_store.dart --enable-impeller --verbose-system-logs --dart-define=STORE_PERF_LOGS=true --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike --dart-define=PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE=true",
 			"problemMatcher": []
 		},
 		{
 			"label": "📱 Run Store (Android • Debug • Skia)",
 			"type": "shell",
-			"command": "flutter run -d R28M2189XQF -t lib/main_store.dart --no-enable-impeller --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike",
+			"command": "flutter run -d R28M2189XQF -t lib/main_store.dart --no-enable-impeller --dart-define=PUBLIC_STORE_IGNORE_AUTH=true --dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890 --dart-define=PUBLIC_STORE_SUBDOMAIN=vinabike --dart-define=PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE=true",
 			"problemMatcher": []
 		},
 		{
@@ -32,7 +32,7 @@
 		{
 			"label": "🚀 Deploy to Firebase (Both Sites) [WASM]",
 			"type": "shell",
-			"command": "./scripts/sync_seo_index.sh && flutter build web --wasm --release --dart-define=STORE_PERF_LOGS=true -t lib/main_store.dart -o build/web_store && dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl && echo '📦 Store bundle:' && ls -lh build/web_store/main.dart.wasm && flutter build web --wasm --release --dart-define=STORE_PERF_LOGS=true -t lib/main.dart -o build/web_erp && echo '📦 ERP bundle:' && ls -lh build/web_erp/main.dart.wasm && firebase deploy --only hosting",
+			"command": "./scripts/sync_seo_index.sh && flutter build web --wasm --release --pwa-strategy=none --dart-define=STORE_PERF_LOGS=true -t lib/main_store.dart -o build/web_store && dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl && echo '📦 Store bundle:' && ls -lh build/web_store/main.dart.wasm && flutter build web --wasm --release --dart-define=STORE_PERF_LOGS=true -t lib/main.dart -o build/web_erp && echo '📦 ERP bundle:' && ls -lh build/web_erp/main.dart.wasm && firebase deploy --only hosting",
 			"problemMatcher": [],
 			"group": "build"
 		}

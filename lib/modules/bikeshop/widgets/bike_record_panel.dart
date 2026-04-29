@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 
+import '../config/bottom_bracket_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import 'bike_diagram_illustration.dart';
@@ -1148,24 +1149,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     }
 
     String? bottomBracketLabel(String? raw) {
-      switch (raw) {
-        case 'bsa_threaded':
-          return 'BSA roscado';
-        case 'pressfit':
-          return 'Pressfit';
-        case 'bb30_pf30':
-          return 'BB30 / PF30';
-        case 'mid':
-          return 'Mid / BMX';
-        case 'one_piece':
-          return 'One-piece';
-        case 'other':
-          return 'Otro';
-        case 'unknown':
-          return 'Desconocido';
-        default:
-          return raw;
-      }
+      return bottomBracketFamilyLabel(raw);
     }
 
     String formatSpacing(double? value) {
@@ -1179,6 +1163,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     String formatRotor(dynamic value) {
       if (value == null) return '';
       return '${value.toString()} mm';
+    }
+
+    String? formatBottomBracketMeasurement(dynamic value) {
+      return bottomBracketMeasurementLabel(value);
     }
 
     String? brakeType = technicalValues['brakeType']?.toString();
@@ -1290,24 +1278,55 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   : null,
         );
       case 'bottom_bracket':
+        final bottomBracketFamily =
+            technicalValues['bottomBracketFamily']?.toString();
+        final usesShellDiameter =
+            bottomBracketFamilyUsesShellDiameter(bottomBracketFamily);
         final facts = [
+          profileFact('bottomBracketFamily', 'Familia pedalier / BB',
+              bottomBracketLabel(bottomBracketFamily)),
           profileFact(
-              'bottomBracketFamily',
-              'Pedalier / BB',
-              bottomBracketLabel(
-                  technicalValues['bottomBracketFamily']?.toString())),
+            'bbShellWidthMm',
+            'Ancho caja',
+            formatBottomBracketMeasurement(
+              technicalValues['bbShellWidthMm'] ??
+                  technicalValues['bb_shell_width_mm'],
+            ),
+          ),
+          if (usesShellDiameter)
+            profileFact(
+              'bbShellDiameterMm',
+              'Diametro shell / bore',
+              formatBottomBracketMeasurement(
+                technicalValues['bbShellDiameterMm'] ??
+                    technicalValues['bb_shell_diameter_mm'],
+              ),
+            ),
+          profileFact(
+            'spindleInterface',
+            'Interfaz del eje',
+            bottomBracketSpindleInterfaceLabel(
+              technicalValues['spindleInterface']?.toString() ??
+                  technicalValues['spindle_interface']?.toString(),
+            ),
+          ),
         ].whereType<_BikeRecordTechnicalFact>().toList();
         final knownCount = facts.length;
+        final expectedCount = 1 + 1 + (usesShellDiameter ? 1 : 0) + 1;
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
               'El pedalier vive como sistema propio porque su estándar y sus rodamientos son relevantes para servicio, compatibilidad y memoria técnica.',
           facts: facts,
-          expectedCount: 1,
+          expectedCount: expectedCount,
           knownCount: knownCount,
           missingText: knownCount == 0
               ? 'Todavía no hay un kernel upstream confirmado para el pedalier.'
-              : null,
+              : knownCount < expectedCount
+                  ? (usesShellDiameter
+                      ? 'Falta completar ancho, bore o interfaz del eje para que el pedalier no quede reducido a una familia demasiado amplia.'
+                      : 'Falta completar ancho o interfaz del eje para que el pedalier no quede reducido a una familia demasiado amplia.')
+                  : null,
         );
       case 'rear_wheel':
         final facts = [
