@@ -264,7 +264,10 @@ class MercadoPagoService extends ChangeNotifier {
     try {
       final response = await _supabase.functions.invoke(
         'mercadopago-get-payment',
-        body: {'payment_id': paymentId},
+        body: {
+          'payment_id': paymentId,
+          'tenant_id': _tenantId,
+        },
       );
 
       if (response.status == 200) {

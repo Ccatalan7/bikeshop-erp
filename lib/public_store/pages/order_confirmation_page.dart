@@ -167,12 +167,32 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               tenantId: tenantProvider.tenantId!);
         }
 
+        if (paymentId == null || paymentId.isEmpty) {
+          _paymentMessage =
+              'MercadoPago no devolvió un identificador de pago. Revisaremos el pedido y te contactaremos si el pago se acredita.';
+          await _loadOrder();
+          return;
+        }
+
+        final payment = await mercadopagoService.getPaymentStatus(paymentId);
+        final paymentStatus = payment?['status']?.toString();
+        final externalReference = payment?['external_reference']?.toString();
+
+        if (payment == null ||
+            paymentStatus != 'approved' ||
+            externalReference != widget.orderId) {
+          _paymentMessage =
+              'MercadoPago todavía no confirmó el pago. Te notificaremos cuando se procese.';
+          await _loadOrder();
+          return;
+        }
+
         // Process the payment callback
         // NOTE: This updates the order status. The webhook will create the invoice.
         // If webhook already processed, this will just update the order.
         await mercadopagoService.processPaymentCallback(
           orderId: widget.orderId,
-          paymentId: paymentId ?? 'unknown',
+          paymentId: paymentId,
           status: 'approved',
         );
 
