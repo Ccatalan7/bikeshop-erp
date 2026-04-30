@@ -123,3 +123,19 @@ void setLocationHash(String hash) {
     // Ignore errors
   }
 }
+
+String? getSessionStorageValue(String key) {
+  try {
+    return web.window.sessionStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+void setSessionStorageValue(String key, String value) {
+  try {
+    web.window.sessionStorage.setItem(key, value);
+  } catch (_) {
+    // Ignore errors
+  }
+}

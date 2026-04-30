@@ -1,6 +1,4 @@
-
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -50,11 +48,9 @@ class ResolvedAddress {
 }
 
 class AddressAutocompleteService extends ChangeNotifier {
-  AddressAutocompleteService({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+  AddressAutocompleteService();
 
   final SupabaseClient _supabase = Supabase.instance.client;
-  final http.Client _httpClient;
   final Uuid _uuid = const Uuid();
 
   String? _tenantId;
@@ -65,22 +61,34 @@ class AddressAutocompleteService extends ChangeNotifier {
   bool get isEnabled => _isEnabled;
   String get sessionToken => _sessionToken ??= _uuid.v4();
 
-  Future<void> initialize() async {
-    if (_isInitialized) return;
+  Future<void> initialize({String? tenantId}) async {
+    if (_isInitialized && (tenantId == null || tenantId == _tenantId)) return;
 
     try {
-      // Check if API key exists for any tenant (we'll get tenant from context later)
-      final response = await _supabase
-          .from('website_settings')
-          .select('value, tenant_id')
-          .eq('key', 'google_places_api_key')
-          .maybeSingle();
+      final scopedTenantId = tenantId?.trim();
+      if (scopedTenantId == null || scopedTenantId.isEmpty) {
+        _tenantId = null;
+        _isEnabled = false;
+        return;
+      }
 
-      final apiKey = (response?['value'] as String?)?.trim();
-      _tenantId = response?['tenant_id'] as String?;
-      _isEnabled = apiKey != null && apiKey.isNotEmpty && _tenantId != null;
+      final response = await _supabase.functions.invoke(
+        'google-places-proxy',
+        body: {
+          'action': 'status',
+          'tenantId': scopedTenantId,
+        },
+      );
+
+      final data = response.data is Map<String, dynamic>
+          ? response.data as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      _tenantId = scopedTenantId;
+      _isEnabled = response.status == 200 && data['enabled'] == true;
     } catch (error) {
       debugPrint('AddressAutocompleteService.init error: $error');
+      _tenantId = tenantId;
       _isEnabled = false;
     } finally {
       _isInitialized = true;
@@ -90,7 +98,7 @@ class AddressAutocompleteService extends ChangeNotifier {
 
   Future<List<AddressSuggestion>> fetchSuggestions(String query) async {
     if (!_isInitialized) {
-      await initialize();
+      await initialize(tenantId: _tenantId);
     }
 
     if (!_isEnabled || query.trim().length < 3 || _tenantId == null) {
@@ -118,7 +126,8 @@ class AddressAutocompleteService extends ChangeNotifier {
       final status = data['status'] as String?;
 
       if (status != 'OK') {
-        debugPrint('Google Places status: $status - ${data['error_message'] ?? ''}');
+        debugPrint(
+            'Google Places status: $status - ${data['error_message'] ?? ''}');
         return [];
       }
 
@@ -137,7 +146,7 @@ class AddressAutocompleteService extends ChangeNotifier {
 
   Future<ResolvedAddress?> resolvePlace(String placeId) async {
     if (!_isInitialized) {
-      await initialize();
+      await initialize(tenantId: _tenantId);
     }
 
     if (!_isEnabled || _tenantId == null) return null;
@@ -199,7 +208,8 @@ class AddressAutocompleteService extends ChangeNotifier {
       final location = geometry?['location'] as Map<String, dynamic>?;
 
       return ResolvedAddress(
-        formattedAddress: (result['formatted_address'] as String?)?.trim() ?? '',
+        formattedAddress:
+            (result['formatted_address'] as String?)?.trim() ?? '',
         street: street,
         streetNumber: number,
         apartment: apartment,

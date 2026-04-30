@@ -13,9 +13,21 @@ class CustomerAddressesPage extends StatelessWidget {
 
     return CustomerPortalLayout(
       title: 'Mis Direcciones',
+      headerAction: FilledButton.icon(
+        onPressed: () => _showAddressDialog(context, null),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('Nueva dirección'),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF102A43),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildIntro(),
+          const SizedBox(height: 18),
           if (accountService.addresses.isEmpty)
             _buildEmptyState(context)
           else
@@ -34,45 +46,100 @@ class CustomerAddressesPage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Add Button Row
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FilledButton.icon(
-                onPressed: () => _showAddressDialog(context, null),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Nueva Dirección'),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final useGrid = constraints.maxWidth >= 760;
+            if (!useGrid) {
+              return Column(
+                children: addresses.map((address) {
+                  return _AddressCard(
+                    address: address,
+                    onEdit: () => _showAddressDialog(context, address),
+                    onDelete: () => _confirmDelete(context, address),
+                    onSetDefault: () async {
+                      await accountService.setDefaultAddress(address.id);
+                    },
+                  );
+                }).toList(),
+              );
+            }
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: addresses.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: 2.25,
               ),
-            ],
-          ),
-        ),
-        // List
-        ...addresses.map((address) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _AddressCard(
-              address: address,
-              onEdit: () => _showAddressDialog(context, address),
-              onDelete: () => _confirmDelete(context, address),
-              onSetDefault: () async {
-                await accountService.setDefaultAddress(address.id);
+              itemBuilder: (context, index) {
+                final address = addresses[index];
+                return _AddressCard(
+                  address: address,
+                  onEdit: () => _showAddressDialog(context, address),
+                  onDelete: () => _confirmDelete(context, address),
+                  onSetDefault: () async {
+                    await accountService.setDefaultAddress(address.id);
+                  },
+                );
               },
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ],
     );
   }
 
+  Widget _buildIntro() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline, color: Color(0xFF102A43), size: 22),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Checkout más rápido y claro',
+                  style: TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Guarda casa, trabajo u otra dirección frecuente para no volver a escribirla en cada compra.',
+                  style: TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState(BuildContext context) {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
       child: Column(
         children: [
           Container(
@@ -93,10 +160,16 @@ class CustomerAddressesPage extends StatelessWidget {
                 color: Colors.grey[800]),
           ),
           const SizedBox(height: 24),
-          OutlinedButton.icon(
+          FilledButton.icon(
             onPressed: () => _showAddressDialog(context, null),
             icon: const Icon(Icons.add),
             label: const Text('Agregar la primera dirección'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF102A43),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
@@ -153,18 +226,11 @@ class _AddressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
       ),
       child: Column(
         children: [
@@ -178,11 +244,11 @@ class _AddressCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        color: const Color(0xFFF0F4F8),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.location_on_outlined,
-                          color: Colors.blue, size: 20),
+                          color: Color(0xFF102A43), size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -206,15 +272,15 @@ class _AddressCard extends StatelessWidget {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.shade100,
-                                    borderRadius: BorderRadius.circular(4),
+                                    color: const Color(0xFFE6F4EA),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text(
-                                    'PRINCIPAL',
+                                  child: const Text(
+                                    'Principal',
                                     style: TextStyle(
-                                      color: Colors.green.shade800,
+                                      color: Color(0xFF1E7E34),
                                       fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),

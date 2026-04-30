@@ -6,6 +6,7 @@ import '../theme/public_store_theme.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../modules/website/models/website_models.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/public_store_layout.dart';
 
 class CustomerOrdersPage extends StatefulWidget {
   const CustomerOrdersPage({super.key});
@@ -35,51 +36,24 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage>
 
     return CustomerPortalLayout(
       title: 'Mis Pedidos',
+      headerAction: FilledButton.icon(
+        onPressed: () =>
+            PublicStoreLayout.navigateToHref(context, '/productos'),
+        icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+        label: const Text('Comprar'),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF102A43),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Filter Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Historial',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _statusFilter,
-                    hint: const Text('Todos'),
-                    icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-                    style: TextStyle(color: Colors.grey[800], fontSize: 13),
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('Todos')),
-                      DropdownMenuItem(
-                          value: 'pending', child: Text('Pendientes')),
-                      DropdownMenuItem(
-                          value: 'approved', child: Text('Pagados')),
-                      DropdownMenuItem(
-                          value: 'cancelled', child: Text('Cancelados')),
-                    ],
-                    onChanged: (value) => setState(() => _statusFilter = value),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
+          _buildSummary(accountService.orders.length, filteredOrders.length),
+          const SizedBox(height: 18),
+          _buildFilters(),
+          const SizedBox(height: 18),
           if (accountService.orders.isEmpty)
             _buildEmptyState(context)
           else if (filteredOrders.isEmpty)
@@ -94,6 +68,78 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage>
     );
   }
 
+  Widget _buildSummary(int totalOrders, int visibleOrders) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.receipt_long_outlined,
+              color: Color(0xFF102A43), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$visibleOrders de $totalOrders pedidos',
+                  style: const TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Revisa pagos, productos y el detalle de cada compra.',
+                  style: TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    const filters = [
+      (label: 'Todos', value: null),
+      (label: 'Pendientes', value: 'pending'),
+      (label: 'Pagados', value: 'approved'),
+      (label: 'Cancelados', value: 'cancelled'),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: filters.map((filter) {
+        final selected = _statusFilter == filter.value;
+        return ChoiceChip(
+          label: Text(filter.label),
+          selected: selected,
+          showCheckmark: false,
+          onSelected: (_) => setState(() => _statusFilter = filter.value),
+          selectedColor: const Color(0xFF102A43),
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: Color(0xFFE0E4EA)),
+          labelStyle: TextStyle(
+            color: selected ? Colors.white : const Color(0xFF344054),
+            fontWeight: FontWeight.w700,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildOrdersList(List<OnlineOrder> orders) {
     return Column(
       children: orders.map((order) => _OrderCard(order: order)).toList(),
@@ -101,8 +147,13 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage>
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
       child: Column(
         children: [
           Container(
@@ -127,6 +178,19 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage>
             'Tus compras aparecerán aquí',
             style: TextStyle(color: Colors.grey[600]),
           ),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: () =>
+                PublicStoreLayout.navigateToHref(context, '/productos'),
+            icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+            label: const Text('Ver productos'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF102A43),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
         ],
       ),
     );
@@ -147,19 +211,12 @@ class _OrderCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
       ),
       child: InkWell(
         onTap: () => _showOrderDetails(context, order),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -171,7 +228,8 @@ class _OrderCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: (statusInfo['color'] as Color).withValues(alpha: 0.1),
+                      color:
+                          (statusInfo['color'] as Color).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(statusInfo['icon'] as IconData,
@@ -229,7 +287,8 @@ class _OrderCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: (statusInfo['color'] as Color).withValues(alpha: 0.1),
+                      color:
+                          (statusInfo['color'] as Color).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

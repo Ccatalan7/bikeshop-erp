@@ -95,7 +95,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       if (!mounted) return;
 
       // Navigate to account page or back
-      context.go('/tienda/cuenta');
+      context.go('/cuenta');
     } catch (e) {
       if (!mounted) return;
 
@@ -120,7 +120,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       await accountService.signInWithGoogle();
 
       if (!mounted) return;
-      context.go('/tienda/cuenta');
+      context.go('/cuenta');
     } catch (e) {
       if (!mounted) return;
 
@@ -651,23 +651,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
               Align(
                 alignment: Alignment.center,
                 child: TextButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Recuperar Contraseña'),
-                        content: const Text(
-                          'Funcionalidad próximamente disponible',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  onPressed: _showPasswordResetDialog,
                   style: TextButton.styleFrom(
                     foregroundColor: PublicStoreTheme.textSecondary,
                     textStyle: const TextStyle(
@@ -696,5 +680,84 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         ),
       ),
     );
+  }
+
+  Future<void> _showPasswordResetDialog() async {
+    final emailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ingresa tu correo y enviaremos un enlace seguro para restablecer el acceso.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Correo electrónico',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El correo es requerido';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Ingresa un correo válido';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await context
+                    .read<CustomerAccountService>()
+                    .resetPassword(emailController.text.trim());
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Revisa tu correo para continuar con la recuperación.',
+                    ),
+                  ),
+                );
+              } catch (error) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('No pudimos enviar el correo: $error'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Enviar enlace'),
+          ),
+        ],
+      ),
+    );
+
+    emailController.dispose();
   }
 }

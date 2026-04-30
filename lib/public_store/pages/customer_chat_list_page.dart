@@ -178,7 +178,7 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
         children: _conversations.map((conv) {
           return _ConversationCard(
             conversation: conv,
-            onTap: () => context.go('/tienda/cuenta/chats/${conv['id']}'),
+            onTap: () => context.go('/cuenta/chats/${conv['id']}'),
           );
         }).toList(),
       ),
@@ -292,7 +292,7 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
                       );
 
                       debugPrint('✅ Chat created: $conversationId');
-                      if (mounted) {
+                      if (mounted && parentContext.mounted) {
                         _loadConversations();
                         ScaffoldMessenger.of(parentContext).showSnackBar(
                           const SnackBar(
@@ -302,13 +302,12 @@ class _CustomerChatListPageState extends State<CustomerChatListPage> {
                           ),
                         );
                         // Navigate to the new chat using parent context
-                        parentContext
-                            .go('/tienda/cuenta/chats/$conversationId');
+                        parentContext.go('/cuenta/chats/$conversationId');
                       }
                     } catch (e, stack) {
                       debugPrint('❌ Error creating chat: $e');
                       debugPrint('$stack');
-                      if (mounted) {
+                      if (mounted && parentContext.mounted) {
                         ScaffoldMessenger.of(parentContext).showSnackBar(
                           SnackBar(
                             content: Text('Error: $e'),

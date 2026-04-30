@@ -70,7 +70,7 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
       title: title,
       showBackButton: true,
       overrideLayout: true,
-      backPath: '/tienda/cuenta/chats',
+      backPath: '/cuenta/chats',
       child: MediaQueryLayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 900;
@@ -111,7 +111,7 @@ class _CustomerChatDetailPageState extends State<CustomerChatDetailPage> {
                 child: CustomerInboxList(
                   activeConversationId: widget.conversationId,
                   onConversationSelected: (id) =>
-                      context.go('/tienda/cuenta/chats/$id'),
+                      context.go('/cuenta/chats/$id'),
                 ),
               ),
             ],

@@ -25,6 +25,13 @@ serve(async (req: Request): Promise<Response> => {
       tenantId: string;
     };
 
+    if (!tenantId) {
+      return new Response(
+        JSON.stringify({ error: "tenantId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Get API key from website_settings
     // @ts-ignore - Deno.env is available in Deno runtime
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -40,6 +47,14 @@ serve(async (req: Request): Promise<Response> => {
       .single();
 
     const apiKey = settings?.value;
+
+    if (action === "status") {
+      return new Response(
+        JSON.stringify({ enabled: Boolean(apiKey) }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: "Google Places API key not configured" }),

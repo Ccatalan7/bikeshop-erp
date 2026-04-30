@@ -94,7 +94,7 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => context.go('/login'),
+              onPressed: () => context.go('/cuenta/login'),
               child: const Text('IR AL LOGIN'),
             ),
           ],
@@ -175,7 +175,7 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
           bike: bike,
           onTap: () => _showBikeDetails(bike),
           onViewServices: () =>
-              context.go('/tienda/cuenta/servicios?bike_id=${bike['id']}'),
+              context.go('/cuenta/servicios?bike_id=${bike['id']}'),
         );
       }).toList(),
     );
@@ -280,7 +280,8 @@ class _BikeCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: _getBikeTypeColor(bikeType).withValues(alpha: 0.1),
+                            color: _getBikeTypeColor(bikeType)
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -572,8 +573,7 @@ class _BikeDetailSheet extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        context.go(
-                            '/tienda/cuenta/servicios?bike_id=${bike['id']}');
+                        context.go('/cuenta/servicios?bike_id=${bike['id']}');
                       },
                       icon: const Icon(Icons.history),
                       label: const Text('VER HISTORIAL COMPLETO'),

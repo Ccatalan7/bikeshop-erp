@@ -1322,7 +1322,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       backgroundColor: backgroundColor,
       body: Stack(
         children: [
-          pageContent,
+          Positioned.fill(child: pageContent),
           // Internal Chat System (replaces WhatsApp for richer interaction)
           const CustomerChatWidget(),
           if (hasWhatsApp &&

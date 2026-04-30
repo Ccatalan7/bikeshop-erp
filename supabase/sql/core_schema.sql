@@ -20785,7 +20785,76 @@ declare
   v_subdomain text;
   v_subdomain_base text;
   v_counter integer := 1;
+  v_customer_id uuid;
 begin
+  -- Public storefront customers are not ERP tenant owners. They belong to the
+  -- detected storefront tenant and get a customer profile only.
+  if coalesce(new.raw_user_meta_data->>'account_type', '') = 'public_store_customer' then
+    begin
+      v_tenant_id := nullif(new.raw_user_meta_data->>'customer_tenant_id', '')::uuid;
+    exception
+      when others then
+        raise exception 'Invalid customer_tenant_id for public customer signup';
+    end;
+
+    if v_tenant_id is null or not exists (
+      select 1 from tenants where id = v_tenant_id and is_active = true
+    ) then
+      raise exception 'Invalid or inactive storefront tenant for public customer signup';
+    end if;
+
+    select id into v_customer_id
+    from customers
+    where tenant_id = v_tenant_id
+      and lower(email) = lower(new.email)
+    limit 1;
+
+    if v_customer_id is null then
+      insert into customers (
+        tenant_id,
+        auth_user_id,
+        name,
+        email,
+        phone,
+        is_active
+      ) values (
+        v_tenant_id,
+        new.id,
+        coalesce(nullif(new.raw_user_meta_data->>'name', ''), split_part(new.email, '@', 1)),
+        new.email,
+        nullif(new.raw_user_meta_data->>'phone', ''),
+        true
+      )
+      returning id into v_customer_id;
+    else
+      update customers
+      set auth_user_id = new.id,
+          name = coalesce(nullif(new.raw_user_meta_data->>'name', ''), name),
+          phone = coalesce(nullif(new.raw_user_meta_data->>'phone', ''), phone),
+          is_active = true,
+          updated_at = now()
+      where id = v_customer_id;
+    end if;
+
+    update online_orders
+    set customer_id = v_customer_id,
+        updated_at = now()
+    where tenant_id = v_tenant_id
+      and customer_id is null
+      and lower(customer_email) = lower(new.email);
+
+    update auth.users
+    set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
+      'customer_id', v_customer_id,
+      'customer_tenant_id', v_tenant_id,
+      'role', 'customer'
+    )
+    where id = new.id;
+
+    raise notice '✅ Created public storefront customer % for tenant %', new.email, v_tenant_id;
+    return new;
+  end if;
+
   -- Check if user was invited (has pending invitation)
   -- Use LOWER() for case-insensitive email matching
   select * into v_invitation

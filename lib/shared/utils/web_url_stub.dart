@@ -50,3 +50,11 @@ void navigateToUrl(String url) {
 void setLocationHash(String hash) {
   // No-op on non-web platforms
 }
+
+String? getSessionStorageValue(String key) {
+  return null;
+}
+
+void setSessionStorageValue(String key, String value) {
+  // No-op on non-web platforms
+}

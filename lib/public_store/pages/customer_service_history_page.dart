@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
+
 import '../services/customer_account_service.dart';
-import '../theme/public_store_theme.dart';
+import '../widgets/customer_portal_layout.dart';
+import '../widgets/public_store_layout.dart';
 import '../../shared/utils/chilean_utils.dart';
 
-/// Customer service history page - view mechanic jobs (pegas) for their bikes
 class CustomerServiceHistoryPage extends StatefulWidget {
-  final String? bikeId; // Optional filter by bike
+  final String? bikeId;
 
   const CustomerServiceHistoryPage({super.key, this.bikeId});
 
@@ -21,7 +21,6 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
   String? _selectedBikeId;
   String _selectedStatus = 'all';
 
-  // Keep this page alive in memory to prevent reloading on navigation
   @override
   bool get wantKeepAlive => true;
 
@@ -32,50 +31,176 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final service = context.read<CustomerAccountService>();
       service.loadServiceHistory();
-      service.loadBikes(); // For filter dropdown
+      service.loadBikes();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    super.build(context);
     final accountService = context.watch<CustomerAccountService>();
 
     if (!accountService.isAuthenticated) {
-      return _buildUnauthenticatedState(context);
+      return CustomerPortalLayout(
+        title: 'Servicios de taller',
+        child: _UnauthenticatedState(
+          onLogin: () => PublicStoreLayout.navigateToHref(
+            context,
+            '/cuenta/login',
+          ),
+        ),
+      );
     }
 
-    // Filter services
     var services = accountService.serviceHistory;
-    debugPrint('🔍 [ServiceHistoryPage] Total services: ${services.length}');
-    debugPrint(
-        '🔍 [ServiceHistoryPage] Selected bike: $_selectedBikeId, status: $_selectedStatus');
-
     if (_selectedBikeId != null && _selectedBikeId!.isNotEmpty) {
-      services =
-          services.where((s) => s['bike_id'] == _selectedBikeId).toList();
-      debugPrint(
-          '🔍 [ServiceHistoryPage] After bike filter: ${services.length}');
+      services = services
+          .where((service) => service['bike_id'] == _selectedBikeId)
+          .toList();
     }
     if (_selectedStatus != 'all') {
-      services = services.where((s) => s['status'] == _selectedStatus).toList();
-      debugPrint(
-          '🔍 [ServiceHistoryPage] After status filter: ${services.length}');
+      services = services
+          .where((service) => service['status'] == _selectedStatus)
+          .toList();
     }
 
-    debugPrint(
-        '🔍 [ServiceHistoryPage] Final services to display: ${services.length}');
-
-    // Build content without Scaffold (PublicStoreLayout provides the chrome)
-    return _buildPageContent(context, accountService, services);
+    return CustomerPortalLayout(
+      title: 'Servicios de taller',
+      headerAction: FilledButton.icon(
+        onPressed: () => PublicStoreLayout.navigateToHref(context, '/contacto'),
+        icon: const Icon(Icons.calendar_today_outlined, size: 18),
+        label: const Text('Agendar'),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF102A43),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ServiceSummary(total: accountService.serviceHistory.length),
+          const SizedBox(height: 18),
+          _ServiceFilters(
+            selectedBikeId: _selectedBikeId,
+            selectedStatus: _selectedStatus,
+            bikes: accountService.bikes,
+            onBikeChanged: (value) => setState(() => _selectedBikeId = value),
+            onStatusChanged: (value) {
+              setState(() => _selectedStatus = value ?? 'all');
+            },
+          ),
+          const SizedBox(height: 18),
+          if (accountService.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(48),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (services.isEmpty)
+            _EmptyServicesState(
+              hasBikeFilter: _selectedBikeId != null,
+              onContact: () => PublicStoreLayout.navigateToHref(
+                context,
+                '/contacto',
+              ),
+            )
+          else
+            _ServicesList(
+              services: services,
+              onTap: _showServiceDetails,
+            ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildUnauthenticatedState(BuildContext context) {
+  void _showServiceDetails(Map<String, dynamic> service) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Servicio #${service['job_number'] ?? 'N/A'}',
+                        style: const TextStyle(
+                          color: Color(0xFF18212F),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _StatusBadge(status: (service['status'] ?? '').toString()),
+                const SizedBox(height: 18),
+                _DetailLine(
+                  label: 'Bicicleta',
+                  value: _bikeTitle(service),
+                ),
+                if ((service['description'] ?? '').toString().isNotEmpty)
+                  _DetailLine(
+                    label: 'Trabajo',
+                    value: service['description'].toString(),
+                  ),
+                if ((service['diagnosis'] ?? '').toString().isNotEmpty)
+                  _DetailLine(
+                    label: 'Diagnóstico',
+                    value: service['diagnosis'].toString(),
+                  ),
+                if (service['arrival_date'] != null)
+                  _DetailLine(
+                    label: 'Ingreso',
+                    value: _formatDate(service['arrival_date']),
+                  ),
+                if (service['deadline'] != null)
+                  _DetailLine(
+                    label: 'Fecha estimada',
+                    value: _formatDate(service['deadline']),
+                  ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF102A43),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Entendido'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnauthenticatedState extends StatelessWidget {
+  final VoidCallback onLogin;
+
+  const _UnauthenticatedState({required this.onLogin});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 400),
+      constraints: const BoxConstraints(minHeight: 360),
       child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.build_outlined, size: 64),
@@ -83,286 +208,266 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
             const Text('Debes iniciar sesión para ver tu historial'),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: () => context.go('/cuenta/login'),
-              child: const Text('INICIAR SESIÓN'),
-            ),
+                onPressed: onLogin, child: const Text('Iniciar sesión')),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildPageContent(
-      BuildContext context,
-      CustomerAccountService accountService,
-      List<Map<String, dynamic>> services) {
+class _ServiceSummary extends StatelessWidget {
+  final int total;
+
+  const _ServiceSummary({required this.total});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 500),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Page header with back button
-          _buildPageHeader(context),
-
-          // Filters
-          _buildFilters(accountService),
-
-          // Content - no Expanded needed since we're in SingleChildScrollView
-          if (accountService.isLoading)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (services.isEmpty)
-            _buildEmptyState()
-          else
-            _buildServicesContent(services),
+          const Icon(Icons.build_outlined, color: Color(0xFF102A43), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  total == 1
+                      ? '1 servicio registrado'
+                      : '$total servicios registrados',
+                  style: const TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Consulta el estado de tus trabajos de taller y el historial asociado a tus bicicletas.',
+                  style: TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildPageHeader(BuildContext context) {
+class _ServiceFilters extends StatelessWidget {
+  final String? selectedBikeId;
+  final String selectedStatus;
+  final List<Map<String, dynamic>> bikes;
+  final ValueChanged<String?> onBikeChanged;
+  final ValueChanged<String?> onStatusChanged;
+
+  const _ServiceFilters({
+    required this.selectedBikeId,
+    required this.selectedStatus,
+    required this.bikes,
+    required this.onBikeChanged,
+    required this.onStatusChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
-        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.go('/cuenta'),
-            tooltip: 'Volver a mi cuenta',
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Historial de Servicios',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          final bikeField = DropdownButtonFormField<String>(
+            initialValue: selectedBikeId,
+            decoration: const InputDecoration(
+              labelText: 'Bicicleta',
+              border: OutlineInputBorder(),
+              isDense: true,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilters(CustomerAccountService accountService) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Bike filter
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _selectedBikeId,
-              decoration: const InputDecoration(
-                labelText: 'Bicicleta',
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(),
-                isDense: true,
+            items: [
+              const DropdownMenuItem(
+                value: null,
+                child: Text('Todas las bicicletas'),
               ),
-              items: [
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text('Todas las bicicletas'),
-                ),
-                ...accountService.bikes.map((bike) {
-                  final brand = bike['brand'] ?? bike['brand_name'] ?? '';
-                  final model = bike['model'] ?? bike['model_name'] ?? '';
-                  return DropdownMenuItem(
+              ...bikes.map((bike) => DropdownMenuItem(
                     value: bike['id'] as String,
-                    child: Text('$brand $model'),
-                  );
-                }),
+                    child: Text(_bikeTitle(bike)),
+                  )),
+            ],
+            onChanged: onBikeChanged,
+          );
+          final statusField = DropdownButtonFormField<String>(
+            initialValue: selectedStatus,
+            decoration: const InputDecoration(
+              labelText: 'Estado',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text('Todos')),
+              DropdownMenuItem(value: 'PENDIENTE', child: Text('Pendiente')),
+              DropdownMenuItem(value: 'EN_CURSO', child: Text('En curso')),
+              DropdownMenuItem(
+                value: 'ESPERANDO_REPUESTOS',
+                child: Text('Esperando repuestos'),
+              ),
+              DropdownMenuItem(value: 'FINALIZADO', child: Text('Finalizado')),
+              DropdownMenuItem(value: 'ENTREGADO', child: Text('Entregado')),
+            ],
+            onChanged: onStatusChanged,
+          );
+
+          if (compact) {
+            return Column(
+              children: [
+                bikeField,
+                const SizedBox(height: 12),
+                statusField,
               ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedBikeId = value;
-                });
-              },
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: bikeField),
+              const SizedBox(width: 12),
+              Expanded(child: statusField),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyServicesState extends StatelessWidget {
+  final bool hasBikeFilter;
+  final VoidCallback onContact;
+
+  const _EmptyServicesState(
+      {required this.hasBikeFilter, required this.onContact});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.build_outlined, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 18),
+          Text(
+            hasBikeFilter
+                ? 'Esta bicicleta no tiene servicios'
+                : 'No tienes servicios registrados',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF18212F),
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(width: 12),
-
-          // Status filter
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _selectedStatus,
-              decoration: const InputDecoration(
-                labelText: 'Estado',
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: const [
-                DropdownMenuItem(value: 'all', child: Text('Todos')),
-                DropdownMenuItem(value: 'PENDIENTE', child: Text('Pendiente')),
-                DropdownMenuItem(value: 'EN_CURSO', child: Text('En curso')),
-                DropdownMenuItem(
-                    value: 'ESPERANDO_REPUESTOS',
-                    child: Text('Esperando repuestos')),
-                DropdownMenuItem(
-                    value: 'FINALIZADO', child: Text('Finalizado')),
-                DropdownMenuItem(value: 'ENTREGADO', child: Text('Entregado')),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedStatus = value ?? 'all';
-                });
-              },
-            ),
+          const SizedBox(height: 8),
+          const Text(
+            'Cuando lleves tu bicicleta a servicio técnico, los trabajos aparecerán aquí.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF667085), height: 1.35),
+          ),
+          const SizedBox(height: 22),
+          OutlinedButton.icon(
+            onPressed: onContact,
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: const Text('Agendar servicio'),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.build_outlined,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 24),
-            Text(
-              _selectedBikeId != null
-                  ? 'Esta bicicleta no tiene servicios'
-                  : 'No tienes servicios registrados',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Cuando lleves tu bicicleta a servicio técnico, los trabajos aparecerán aquí.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[500],
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            OutlinedButton.icon(
-              onPressed: () => context.go('/contacto'),
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: const Text('AGENDAR SERVICIO'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+class _ServicesList extends StatelessWidget {
+  final List<Map<String, dynamic>> services;
+  final ValueChanged<Map<String, dynamic>> onTap;
 
-  Widget _buildServicesList(List<Map<String, dynamic>> services) {
-    // Debug: log all service statuses
-    for (final s in services) {
-      debugPrint(
-          '🔍 [ServicesList] Service ${s['job_number']}: status="${s['status']}", status_id=${s['status_id']}');
-    }
+  const _ServicesList({required this.services, required this.onTap});
 
-    // Group by status: active first, then completed
+  @override
+  Widget build(BuildContext context) {
     final activeServices = services
-        .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .where((service) =>
+            !['ENTREGADO', 'CANCELADO'].contains(service['status']))
         .toList();
     final completedServices = services
-        .where((s) => ['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .where(
+            (service) => ['ENTREGADO', 'CANCELADO'].contains(service['status']))
         .toList();
 
-    debugPrint(
-        '🔍 [ServicesList] activeServices: ${activeServices.length}, completedServices: ${completedServices.length}');
-
-    // Build content directly (no ListView since we're in SingleChildScrollView)
-    final children = <Widget>[];
-    if (activeServices.isNotEmpty) {
-      debugPrint('🔍 [ServicesList] Adding active services section');
-      children
-          .add(_buildSectionHeader('Servicios Activos', Icons.pending_actions));
-      for (final service in activeServices) {
-        debugPrint(
-            '🔍 [ServicesList] Adding card for: ${service['job_number']}');
-        children.add(_ServiceCard(
-          service: service,
-          onTap: () => _showServiceDetails(service),
-        ));
-      }
-      children.add(const SizedBox(height: 24));
-    }
-    if (completedServices.isNotEmpty) {
-      debugPrint('🔍 [ServicesList] Adding completed services section');
-      children.add(_buildSectionHeader('Historial', Icons.history));
-      for (final service in completedServices) {
-        children.add(_ServiceCard(
-          service: service,
-          onTap: () => _showServiceDetails(service),
-        ));
-      }
-    }
-
-    debugPrint(
-        '🔍 [ServicesList] Total children in ListView: ${children.length}');
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
-    );
-  }
-
-  /// Build services content without RefreshIndicator (not needed in SingleChildScrollView)
-  Widget _buildServicesContent(List<Map<String, dynamic>> services) {
-    return _buildServicesList(services);
-  }
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: PublicStoreTheme.primaryBlue),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: PublicStoreTheme.primaryBlue,
-                ),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (activeServices.isNotEmpty) ...[
+          const _SectionHeader(icon: Icons.pending_actions, title: 'Activos'),
+          const SizedBox(height: 10),
+          ...activeServices.map((service) => _ServiceCard(
+                service: service,
+                onTap: () => onTap(service),
+              )),
+          const SizedBox(height: 18),
         ],
-      ),
+        if (completedServices.isNotEmpty) ...[
+          const _SectionHeader(icon: Icons.history, title: 'Historial'),
+          const SizedBox(height: 10),
+          ...completedServices.map((service) => _ServiceCard(
+                service: service,
+                onTap: () => onTap(service),
+              )),
+        ],
+      ],
     );
   }
+}
 
-  void _showServiceDetails(Map<String, dynamic> service) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _ServiceDetailSheet(service: service),
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _SectionHeader({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF102A43), size: 18),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF18212F),
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -371,238 +476,153 @@ class _ServiceCard extends StatelessWidget {
   final Map<String, dynamic> service;
   final VoidCallback onTap;
 
-  const _ServiceCard({
-    required this.service,
-    required this.onTap,
-  });
-
-  /// Calculate display total based on tax treatment (same logic as ERP)
-  double _getDisplayTotal() {
-    final taxTreatment = service['tax_treatment'] ?? 'no_tax';
-    final partsCost = (service['parts_cost'] ?? 0).toDouble();
-    final laborCost = (service['labor_cost'] ?? 0).toDouble();
-    final totalCost = (service['total_cost'] ?? 0).toDouble();
-
-    debugPrint(
-        '💰 [ServiceCard] ${service['job_number']}: tax_treatment=$taxTreatment, parts=$partsCost, labor=$laborCost, total=$totalCost');
-
-    // If no_tax, show parts + labor (net amount)
-    // Otherwise show total_cost (which may include tax)
-    if (taxTreatment == 'no_tax') {
-      return partsCost + laborCost;
-    }
-    return totalCost;
-  }
+  const _ServiceCard({required this.service, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-        '🎴 [ServiceCard] Building card for job: ${service['job_number']}');
-    final jobNumber = service['job_number'] ?? 'Sin número';
-    final status = service['status'] ?? 'PENDIENTE';
-    final bikeBrand = service['bike_brand'] ?? service['bikes']?['brand'] ?? '';
-    final bikeModel = service['bike_model'] ?? service['bikes']?['model'] ?? '';
-    final clientRequest = service['client_request'];
-    final diagnosis = service['diagnosis'];
-    final arrivalDate = service['arrival_date'];
-    final deadline = service['deadline'];
-    final displayTotal = _getDisplayTotal();
-    final isInvoiced = service['is_invoiced'] ?? false;
+    final status = (service['status'] ?? '').toString();
+    final displayTotal = _numeric(service['total_amount']) ??
+        _numeric(service['total_cost']) ??
+        _numeric(service['estimated_total']) ??
+        0;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header row
-              Row(
-                children: [
-                  // Job number
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      jobNumber,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Status badge
-                  _StatusBadge(status: status),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Bike info
-              if (bikeBrand.isNotEmpty || bikeModel.isNotEmpty)
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE0E4EA)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.pedal_bike, size: 16, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$bikeBrand $bikeModel'.trim(),
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ],
-                ),
-
-              // Client request
-              if (clientRequest != null && clientRequest.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  clientRequest,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-
-              // Diagnosis preview (if available)
-              if (diagnosis != null && diagnosis.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.medical_information,
-                          size: 16, color: Colors.blue[700]),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          diagnosis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.blue[900],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-
-              // Footer: dates and cost
-              Row(
-                children: [
-                  // Dates
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (arrivalDate != null)
-                          _buildDateRow(
-                            'Ingreso:',
-                            ChileanUtils.formatDate(
-                                DateTime.parse(arrivalDate)),
-                          ),
-                        if (deadline != null)
-                          _buildDateRow(
-                            'Fecha límite:',
-                            ChileanUtils.formatDate(DateTime.parse(deadline)),
-                            isOverdue: DateTime.parse(deadline)
-                                    .isBefore(DateTime.now()) &&
-                                !['ENTREGADO', 'CANCELADO'].contains(status),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // Cost
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (displayTotal > 0)
-                        Text(
-                          ChileanUtils.formatCurrency(displayTotal),
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: PublicStoreTheme.primaryBlue,
-                                  ),
-                        ),
-                      if (isInvoiced)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green[100],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'FACTURADO',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[800],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _bikeTitle(service),
+                            style: const TextStyle(
+                              color: Color(0xFF18212F),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                        ),
-                    ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Servicio #${service['job_number'] ?? 'N/A'}',
+                            style: const TextStyle(
+                              color: Color(0xFF667085),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _StatusBadge(status: status),
+                  ],
+                ),
+                if ((service['description'] ?? '').toString().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    service['description'].toString(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF344054),
+                      height: 1.35,
+                    ),
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 6,
+                        children: [
+                          if (service['arrival_date'] != null)
+                            _DatePill(
+                              label: 'Ingreso',
+                              value: _formatDate(service['arrival_date']),
+                            ),
+                          if (service['deadline'] != null)
+                            _DatePill(
+                              label: 'Estimado',
+                              value: _formatDate(service['deadline']),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (displayTotal > 0)
+                      Text(
+                        ChileanUtils.formatCurrency(displayTotal),
+                        style: const TextStyle(
+                          color: Color(0xFF102A43),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildDateRow(String label, String value, {bool isOverdue = false}) {
+class _DatePill extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DatePill({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '$label: $value',
+      style: const TextStyle(color: Color(0xFF667085), fontSize: 12),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
+              color: Color(0xFF667085),
               fontSize: 12,
-              color: Colors.grey[600],
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isOverdue ? Colors.red : Colors.grey[800],
-            ),
-          ),
-          if (isOverdue) ...[
-            const SizedBox(width: 4),
-            const Icon(Icons.warning_amber, size: 14, color: Colors.red),
-          ],
+          const SizedBox(height: 3),
+          Text(value, style: const TextStyle(color: Color(0xFF18212F))),
         ],
       ),
     );
@@ -616,98 +636,29 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = _getStatusConfig(status);
-
+    final config = _statusConfig(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: config.backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(config.icon, size: 14, color: config.textColor),
+          Icon(config.icon, size: 13, color: config.textColor),
           const SizedBox(width: 4),
           Text(
             config.label,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
               color: config.textColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
       ),
     );
-  }
-
-  _StatusConfig _getStatusConfig(String status) {
-    switch (status) {
-      case 'PENDIENTE':
-        return _StatusConfig(
-          label: 'Pendiente',
-          icon: Icons.schedule,
-          backgroundColor: Colors.grey[200]!,
-          textColor: Colors.grey[700]!,
-        );
-      case 'DIAGNOSTICO':
-        return _StatusConfig(
-          label: 'En diagnóstico',
-          icon: Icons.search,
-          backgroundColor: Colors.purple[100]!,
-          textColor: Colors.purple[800]!,
-        );
-      case 'ESPERANDO_APROBACION':
-        return _StatusConfig(
-          label: 'Esperando aprobación',
-          icon: Icons.pending_actions,
-          backgroundColor: Colors.amber[100]!,
-          textColor: Colors.amber[900]!,
-        );
-      case 'ESPERANDO_REPUESTOS':
-        return _StatusConfig(
-          label: 'Esperando repuestos',
-          icon: Icons.inventory_2,
-          backgroundColor: Colors.orange[100]!,
-          textColor: Colors.orange[900]!,
-        );
-      case 'EN_CURSO':
-        return _StatusConfig(
-          label: 'En trabajo',
-          icon: Icons.build,
-          backgroundColor: Colors.blue[100]!,
-          textColor: Colors.blue[800]!,
-        );
-      case 'FINALIZADO':
-        return _StatusConfig(
-          label: 'Listo para retiro',
-          icon: Icons.check_circle,
-          backgroundColor: Colors.green[100]!,
-          textColor: Colors.green[800]!,
-        );
-      case 'ENTREGADO':
-        return _StatusConfig(
-          label: 'Entregado',
-          icon: Icons.done_all,
-          backgroundColor: Colors.teal[100]!,
-          textColor: Colors.teal[800]!,
-        );
-      case 'CANCELADO':
-        return _StatusConfig(
-          label: 'Cancelado',
-          icon: Icons.cancel,
-          backgroundColor: Colors.red[100]!,
-          textColor: Colors.red[800]!,
-        );
-      default:
-        return _StatusConfig(
-          label: status,
-          icon: Icons.help_outline,
-          backgroundColor: Colors.grey[200]!,
-          textColor: Colors.grey[700]!,
-        );
-    }
   }
 }
 
@@ -717,7 +668,7 @@ class _StatusConfig {
   final Color backgroundColor;
   final Color textColor;
 
-  _StatusConfig({
+  const _StatusConfig({
     required this.label,
     required this.icon,
     required this.backgroundColor,
@@ -725,456 +676,88 @@ class _StatusConfig {
   });
 }
 
-class _ServiceDetailSheet extends StatelessWidget {
-  final Map<String, dynamic> service;
-
-  const _ServiceDetailSheet({required this.service});
-
-  /// Calculate display total based on tax treatment (same logic as ERP)
-  double _getDisplayTotal() {
-    final taxTreatment = service['tax_treatment'] ?? 'no_tax';
-    final partsCost = (service['parts_cost'] ?? 0).toDouble();
-    final laborCost = (service['labor_cost'] ?? 0).toDouble();
-    final totalCost = (service['total_cost'] ?? 0).toDouble();
-
-    if (taxTreatment == 'no_tax') {
-      return partsCost + laborCost;
-    }
-    return totalCost;
+_StatusConfig _statusConfig(String status) {
+  switch (status) {
+    case 'PENDIENTE':
+      return _StatusConfig(
+        label: 'Pendiente',
+        icon: Icons.schedule,
+        backgroundColor: Colors.grey.shade200,
+        textColor: Colors.grey.shade700,
+      );
+    case 'DIAGNOSTICO':
+      return _StatusConfig(
+        label: 'Diagnóstico',
+        icon: Icons.search,
+        backgroundColor: Colors.purple.shade50,
+        textColor: Colors.purple.shade700,
+      );
+    case 'ESPERANDO_APROBACION':
+      return _StatusConfig(
+        label: 'Aprobación',
+        icon: Icons.pending_actions,
+        backgroundColor: Colors.amber.shade50,
+        textColor: Colors.amber.shade900,
+      );
+    case 'ESPERANDO_REPUESTOS':
+      return _StatusConfig(
+        label: 'Repuestos',
+        icon: Icons.inventory_2_outlined,
+        backgroundColor: Colors.orange.shade50,
+        textColor: Colors.orange.shade800,
+      );
+    case 'EN_CURSO':
+      return _StatusConfig(
+        label: 'En curso',
+        icon: Icons.build,
+        backgroundColor: Colors.blue.shade50,
+        textColor: Colors.blue.shade700,
+      );
+    case 'FINALIZADO':
+      return _StatusConfig(
+        label: 'Finalizado',
+        icon: Icons.check_circle_outline,
+        backgroundColor: Colors.green.shade50,
+        textColor: Colors.green.shade700,
+      );
+    case 'ENTREGADO':
+      return _StatusConfig(
+        label: 'Entregado',
+        icon: Icons.done_all,
+        backgroundColor: Colors.green.shade50,
+        textColor: Colors.green.shade800,
+      );
+    case 'CANCELADO':
+      return _StatusConfig(
+        label: 'Cancelado',
+        icon: Icons.cancel_outlined,
+        backgroundColor: Colors.red.shade50,
+        textColor: Colors.red.shade700,
+      );
+    default:
+      return _StatusConfig(
+        label: status.isEmpty ? 'Sin estado' : status,
+        icon: Icons.info_outline,
+        backgroundColor: Colors.grey.shade100,
+        textColor: Colors.grey.shade700,
+      );
   }
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final jobNumber = service['job_number'] ?? 'Sin número';
-    final status = service['status'] ?? 'PENDIENTE';
-    final bikeBrand = service['bike_brand'] ?? service['bikes']?['brand'] ?? '';
-    final bikeModel = service['bike_model'] ?? service['bikes']?['model'] ?? '';
-    final clientRequest = service['client_request'];
-    final diagnosis = service['diagnosis'];
-    final workPerformed = service['work_performed'];
-    final arrivalDate = service['arrival_date'];
-    final deadline = service['deadline'];
-    final completedAt = service['completed_at'];
-    final deliveredAt = service['delivered_at'];
-    final partsCost = (service['parts_cost'] ?? 0).toDouble();
-    final laborCost = (service['labor_cost'] ?? 0).toDouble();
-    final discountAmount = (service['discount_amount'] ?? 0).toDouble();
-    final displayTotal = _getDisplayTotal();
-    final isWarrantyJob = service['is_warranty_job'] ?? false;
-    final warrantyNotes = service['warranty_notes'];
-    final technicianName = service['assigned_technician_name'];
+String _bikeTitle(Map<String, dynamic> data) {
+  final brand = data['bike_brand'] ?? data['brand'] ?? data['brand_name'] ?? '';
+  final model = data['bike_model'] ?? data['model'] ?? data['model_name'] ?? '';
+  final title = '$brand $model'.trim();
+  return title.isEmpty ? 'Bicicleta' : title;
+}
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) => SingleChildScrollView(
-        controller: scrollController,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
+String _formatDate(dynamic value) {
+  if (value == null) return '';
+  final date = value is DateTime ? value : DateTime.tryParse(value.toString());
+  return date == null ? value.toString() : ChileanUtils.formatDate(date);
+}
 
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: PublicStoreTheme.primaryBlue,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      jobNumber,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  _StatusBadge(status: status),
-                ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bike info
-                  if (bikeBrand.isNotEmpty || bikeModel.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        const Icon(Icons.pedal_bike, size: 24),
-                        const SizedBox(width: 12),
-                        Text(
-                          '$bikeBrand $bikeModel'.trim(),
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-
-                  // Warranty badge
-                  if (isWarrantyJob) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.purple[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.purple[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.verified, color: Colors.purple[700]),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Trabajo en Garantía',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.purple[900],
-                                  ),
-                                ),
-                                if (warrantyNotes != null &&
-                                    warrantyNotes.isNotEmpty)
-                                  Text(
-                                    warrantyNotes,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.purple[800],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Client request
-                  if (clientRequest != null && clientRequest.isNotEmpty) ...[
-                    _buildSection(
-                      'Lo que reportaste',
-                      Icons.chat_bubble_outline,
-                      clientRequest,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Diagnosis
-                  if (diagnosis != null && diagnosis.isNotEmpty) ...[
-                    _buildSection(
-                      'Diagnóstico',
-                      Icons.medical_information,
-                      diagnosis,
-                      backgroundColor: Colors.blue[50],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Work performed
-                  if (workPerformed != null && workPerformed.isNotEmpty) ...[
-                    _buildSection(
-                      'Trabajo realizado',
-                      Icons.build_circle,
-                      workPerformed,
-                      backgroundColor: Colors.green[50],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Timeline
-                  _buildTimelineSection(
-                    arrivalDate: arrivalDate,
-                    deadline: deadline,
-                    completedAt: completedAt,
-                    deliveredAt: deliveredAt,
-                    status: status,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Cost breakdown
-                  if (displayTotal > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Detalle de Costos',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (partsCost > 0)
-                            _buildCostRow('Repuestos', partsCost),
-                          if (laborCost > 0)
-                            _buildCostRow('Mano de obra', laborCost),
-                          if (discountAmount > 0)
-                            _buildCostRow('Descuento', -discountAmount,
-                                isDiscount: true),
-                          const Divider(height: 16),
-                          _buildCostRow('Total', displayTotal, isTotal: true),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Technician
-                  if (technicianName != null && technicianName.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        Icon(Icons.engineering,
-                            size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Técnico: $technicianName',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection(
-    String title,
-    IconData icon,
-    String content, {
-    Color? backgroundColor,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: backgroundColor ?? Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: Colors.grey[700]),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            content,
-            style: const TextStyle(fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineSection({
-    String? arrivalDate,
-    String? deadline,
-    String? completedAt,
-    String? deliveredAt,
-    required String status,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Seguimiento',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[700],
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (arrivalDate != null)
-            _buildTimelineItem(
-              'Ingreso',
-              ChileanUtils.formatDate(DateTime.parse(arrivalDate)),
-              Icons.login,
-              isCompleted: true,
-            ),
-          if (deadline != null)
-            _buildTimelineItem(
-              'Fecha límite',
-              ChileanUtils.formatDate(DateTime.parse(deadline)),
-              Icons.event,
-              isCompleted: completedAt != null,
-              isOverdue: DateTime.parse(deadline).isBefore(DateTime.now()) &&
-                  completedAt == null &&
-                  !['ENTREGADO', 'CANCELADO'].contains(status),
-            ),
-          if (completedAt != null)
-            _buildTimelineItem(
-              'Completado',
-              ChileanUtils.formatDate(DateTime.parse(completedAt)),
-              Icons.check_circle,
-              isCompleted: true,
-            ),
-          if (deliveredAt != null)
-            _buildTimelineItem(
-              'Entregado',
-              ChileanUtils.formatDate(DateTime.parse(deliveredAt)),
-              Icons.done_all,
-              isCompleted: true,
-              isLast: true,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineItem(
-    String label,
-    String date,
-    IconData icon, {
-    bool isCompleted = false,
-    bool isOverdue = false,
-    bool isLast = false,
-  }) {
-    final color = isOverdue
-        ? Colors.red
-        : isCompleted
-            ? Colors.green
-            : Colors.grey;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 14, color: color),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.grey[300],
-              ),
-          ],
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: isOverdue ? Colors.red : null,
-                  ),
-                ),
-                Text(
-                  date,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isOverdue ? Colors.red : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCostRow(String label, double amount,
-      {bool isDiscount = false, bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 16 : 14,
-            ),
-          ),
-          Text(
-            isDiscount
-                ? '-${ChileanUtils.formatCurrency(amount.abs())}'
-                : ChileanUtils.formatCurrency(amount),
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 16 : 14,
-              color: isDiscount
-                  ? Colors.green
-                  : (isTotal ? PublicStoreTheme.primaryBlue : null),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+double? _numeric(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
 }

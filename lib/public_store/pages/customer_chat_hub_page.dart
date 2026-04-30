@@ -87,9 +87,9 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
 
     if (updateUrl) {
       if (conversationId != null) {
-        context.go('/tienda/cuenta/chats/$conversationId');
+        context.go('/cuenta/chats/$conversationId');
       } else {
-        context.go('/tienda/cuenta/chats');
+        context.go('/cuenta/chats');
       }
     }
   }

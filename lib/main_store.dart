@@ -41,6 +41,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 String? _initialBrowserUrl;
 
+const _storeDebugResetSessionKey = 'vinabike_store_debug_reset_done';
+
 bool get _shouldResetLocalStoreDebugState {
   const reset = bool.fromEnvironment('PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE');
   if (!reset) return false;
@@ -57,6 +59,14 @@ Future<void> _resetLocalStoreDebugStateIfNeeded(
   SharedPreferences prefs,
 ) async {
   if (!_shouldResetLocalStoreDebugState) return;
+
+  if (kIsWeb && getSessionStorageValue(_storeDebugResetSessionKey) == 'true') {
+    debugPrint(
+      '🧪 [StoreMain] Debug reset already ran for this browser tab; '
+      'skipping so hot restart keeps the current session.',
+    );
+    return;
+  }
 
   const tenantId = String.fromEnvironment('PUBLIC_STORE_TENANT_ID');
   const cachePrefixes = [
@@ -87,6 +97,10 @@ Future<void> _resetLocalStoreDebugStateIfNeeded(
   final hadSession = auth.currentSession != null;
   if (hadSession) {
     await auth.signOut();
+  }
+
+  if (kIsWeb) {
+    setSessionStorageValue(_storeDebugResetSessionKey, 'true');
   }
 
   debugPrint(

@@ -37,6 +37,8 @@ class _CheckoutPageState extends State<CheckoutPage>
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _notesController = TextEditingController();
+  final _accountPasswordController = TextEditingController();
+  final _accountPasswordConfirmController = TextEditingController();
 
   String _paymentMethod =
       'mercadopago'; // mercadopago, transfer, cash_on_delivery
@@ -49,6 +51,8 @@ class _CheckoutPageState extends State<CheckoutPage>
   final TextEditingController _addressLabelController =
       TextEditingController(text: 'Dirección de entrega');
   bool _saveAddressToAccount = true;
+  bool _createAccountAfterCheckout = false;
+  bool _obscureAccountPassword = true;
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -69,7 +73,8 @@ class _CheckoutPageState extends State<CheckoutPage>
       final autocompleteService = context.read<AddressAutocompleteService>();
       _addressAutocompleteService = autocompleteService;
       autocompleteService.addListener(_onAutocompleteChanged);
-      autocompleteService.initialize();
+      final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+      autocompleteService.initialize(tenantId: tenantId);
 
       _handleCheckoutQueryParameters();
     });
@@ -85,6 +90,8 @@ class _CheckoutPageState extends State<CheckoutPage>
     _addressController.dispose();
     _notesController.dispose();
     _addressLabelController.dispose();
+    _accountPasswordController.dispose();
+    _accountPasswordConfirmController.dispose();
     super.dispose();
   }
 
@@ -273,6 +280,43 @@ class _CheckoutPageState extends State<CheckoutPage>
     }
   }
 
+  ResolvedAddress _shippingAddressForOrder() {
+    final manualAddress = _addressController.text.trim();
+    return _resolvedAddress ??
+        ResolvedAddress(
+          formattedAddress: manualAddress,
+          street: manualAddress,
+          comuna: '',
+          city: '',
+          region: '',
+        );
+  }
+
+  Future<String?> _createAccountFromCheckout(
+      CustomerAccountService service) async {
+    if (!_createAccountAfterCheckout || service.isAuthenticated) return null;
+
+    service.setTenantId(context.read<PublicStoreTenantProvider>().tenantId);
+
+    try {
+      final result = await service.signUp(
+        email: _emailController.text.trim(),
+        password: _accountPasswordController.text,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+      );
+
+      if (result == CustomerAuthResult.emailVerificationRequired) {
+        return 'Te enviamos un correo para activar tu cuenta. Tus pedidos quedarán asociados a este email.';
+      }
+
+      return 'Cuenta creada. Desde Mi Cuenta podrás revisar pedidos, direcciones y servicios.';
+    } catch (error) {
+      debugPrint('Checkout account creation failed: $error');
+      return 'El pedido fue creado, pero no pudimos crear la cuenta automáticamente. Puedes iniciar sesión o recuperar acceso con este mismo correo.';
+    }
+  }
+
   Future<void> _placeOrder() async {
     debugPrint('🔵 [Checkout] _placeOrder() CALLED!');
 
@@ -311,9 +355,9 @@ class _CheckoutPageState extends State<CheckoutPage>
       debugPrint('🔵 [Checkout] Got CustomerAccountService');
 
       final profile = accountService.customerProfile;
-      final resolvedAddress = _resolvedAddress;
+      final resolvedAddress = _shippingAddressForOrder();
       debugPrint(
-          '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, resolvedAddress: ${resolvedAddress != null ? "exists" : "null"}');
+          '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, shipping address prepared');
 
       // ⚠️ CRITICAL: Get tenant_id from detected tenant (subdomain)
       debugPrint('🔵 [Checkout] Getting tenant provider...');
@@ -353,8 +397,24 @@ class _CheckoutPageState extends State<CheckoutPage>
         'customer_email': _emailController.text.trim(),
         'customer_name': _nameController.text.trim(),
         'customer_phone': _phoneController.text.trim(),
-        'customer_address': resolvedAddress?.formatForDisplay() ??
-            _addressController.text.trim(),
+        'customer_address': resolvedAddress.formatForDisplay().isNotEmpty
+            ? resolvedAddress.formatForDisplay()
+            : _addressController.text.trim(),
+        'delivery_type': 'shipping',
+        'shipping_address_line1': resolvedAddress.street.isNotEmpty
+            ? [
+                resolvedAddress.street,
+                resolvedAddress.streetNumber,
+              ].whereType<String>().where((value) => value.isNotEmpty).join(' ')
+            : _addressController.text.trim(),
+        'shipping_address_line2': resolvedAddress.apartment,
+        'shipping_city': resolvedAddress.city.isNotEmpty
+            ? resolvedAddress.city
+            : resolvedAddress.comuna,
+        'shipping_state':
+            resolvedAddress.region.isNotEmpty ? resolvedAddress.region : null,
+        'shipping_postal_code': resolvedAddress.postalCode,
+        'shipping_country': 'Chile',
         'subtotal': subtotalAmount,
         'tax_amount': taxAmount,
         'shipping_cost': 0, // Will be calculated later
@@ -396,9 +456,17 @@ class _CheckoutPageState extends State<CheckoutPage>
 
       if (!mounted) return;
 
+      final accountMessage = await _createAccountFromCheckout(accountService);
+      if (accountMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(accountMessage),
+              duration: const Duration(seconds: 6)),
+        );
+      }
+
       if ((_accountService?.isAuthenticated ?? false) &&
           _saveAddressToAccount &&
-          resolvedAddress != null &&
           profile != null &&
           profile['id'] != null) {
         await _saveAddressForCustomer(
@@ -740,6 +808,91 @@ class _CheckoutPageState extends State<CheckoutPage>
                     return null;
                   },
                 ),
+                if (!(_accountService?.isAuthenticated ?? false)) ...[
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: _warmLine),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                          value: _createAccountAfterCheckout,
+                          onChanged: (value) {
+                            setState(() {
+                              _createAccountAfterCheckout = value ?? false;
+                            });
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text(
+                            'Crear una cuenta con estos datos',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Te enviaremos una confirmación por correo para activar el acceso a pedidos, direcciones y servicios.',
+                          ),
+                        ),
+                        if (_createAccountAfterCheckout) ...[
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _accountPasswordController,
+                            obscureText: _obscureAccountPassword,
+                            decoration: _fieldDecoration(
+                              label: 'Contraseña para tu cuenta *',
+                              icon: Icons.lock_outline,
+                            ).copyWith(
+                              suffixIcon: IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _obscureAccountPassword =
+                                        !_obscureAccountPassword;
+                                  });
+                                },
+                                icon: Icon(
+                                  _obscureAccountPassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (!_createAccountAfterCheckout) return null;
+                              if (value == null || value.length < 6) {
+                                return 'Usa al menos 6 caracteres';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _accountPasswordConfirmController,
+                            obscureText: _obscureAccountPassword,
+                            decoration: _fieldDecoration(
+                              label: 'Confirmar contraseña *',
+                              icon: Icons.lock_reset_outlined,
+                            ),
+                            validator: (value) {
+                              if (!_createAccountAfterCheckout) return null;
+                              if (value != _accountPasswordController.text) {
+                                return 'Las contraseñas no coinciden';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -902,7 +1055,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     const Padding(
                       padding: EdgeInsets.only(top: 8.0),
                       child: Text(
-                        'Configura la clave de Google Places en Supabase para habilitar la búsqueda inteligente.',
+                        'Puedes escribir la dirección manualmente. Revisaremos los datos antes del despacho si hace falta.',
                         style: TextStyle(
                           fontFamily: PublicStoreTheme.defaultBodyFont,
                           fontSize: 12,

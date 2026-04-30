@@ -27,7 +27,11 @@ class CustomerAccountService extends ChangeNotifier {
 
   /// Set the tenant ID (must be called before any operations)
   void setTenantId(String? tenantId) {
+    if (_tenantId == tenantId) return;
     _tenantId = tenantId;
+    if (_currentUser != null) {
+      _loadCustomerData();
+    }
   }
 
   String? get tenantId => _tenantId;
@@ -94,7 +98,12 @@ class CustomerAccountService extends ChangeNotifier {
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'name': name, 'phone': phone},
+        data: {
+          'account_type': 'public_store_customer',
+          'customer_tenant_id': _tenantId,
+          'name': name,
+          'phone': phone,
+        },
       );
 
       final session = response.session;
@@ -232,9 +241,25 @@ class CustomerAccountService extends ChangeNotifier {
   /// Reset password (send email)
   Future<void> resetPassword(String email) async {
     try {
-      await _supabase.auth.resetPasswordForEmail(email);
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kIsWeb ? '${Uri.base.origin}/cuenta/login' : null,
+      );
     } catch (e) {
       _error = 'Error al enviar email de recuperación: $e';
+      debugPrint(_error);
+      rethrow;
+    }
+  }
+
+  /// Update password for the currently signed-in customer.
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } catch (e) {
+      _error = 'Error al actualizar contraseña: $e';
       debugPrint(_error);
       rethrow;
     }
@@ -254,21 +279,22 @@ class CustomerAccountService extends ChangeNotifier {
         final tenant = await detectionService.detectTenant();
         if (tenant != null) {
           _tenantId = tenant.id;
-          debugPrint('🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
+          debugPrint(
+              '🔍 Auto-detected tenant: ${tenant.shopName} (${tenant.id})');
         }
       }
-      
+
       // Get customer profile - filter by tenant if available
       var query = _supabase
           .from('customers')
           .select()
           .eq('auth_user_id', _currentUser!.id);
-      
+
       // Filter by tenant_id for multi-tenant isolation
       if (_tenantId != null) {
         query = query.eq('tenant_id', _tenantId!);
       }
-      
+
       final profileResponse = await query.maybeSingle();
 
       if (profileResponse != null) {
@@ -287,7 +313,7 @@ class CustomerAccountService extends ChangeNotifier {
           debugPrint('⚠️ Cannot create customer: tenant_id not set');
           return;
         }
-        
+
         final userData = _currentUser!.userMetadata;
         await _supabase.from('customers').insert({
           'tenant_id': _tenantId, // CRITICAL: Include tenant_id
@@ -295,7 +321,7 @@ class CustomerAccountService extends ChangeNotifier {
           'name': userData?['full_name'] ?? userData?['name'] ?? 'Usuario',
           'email': _currentUser!.email,
         });
-        
+
         debugPrint('✅ Created customer for tenant $_tenantId');
 
         await _loadCustomerData(); // Reload
@@ -369,7 +395,8 @@ class CustomerAccountService extends ChangeNotifier {
     try {
       final data = address.toJson();
       data['customer_id'] = _customerProfile!['id'];
-      data['tenant_id'] = _customerProfile!['tenant_id']; // CRITICAL: Required for RLS
+      data['tenant_id'] =
+          _customerProfile!['tenant_id']; // CRITICAL: Required for RLS
       data.remove('id'); // Let database generate ID
 
       await _supabase.from('customer_addresses').insert(data);
@@ -452,9 +479,10 @@ class CustomerAccountService extends ChangeNotifier {
         // Extract items from the nested response
         final itemsJson = json['online_order_items'] as List? ?? [];
         final items = itemsJson
-            .map((item) => OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+            .map((item) =>
+                OnlineOrderItem.fromJson(item as Map<String, dynamic>))
             .toList();
-        
+
         // Create order with items
         return OnlineOrder.fromJson(json).copyWith(items: items);
       }).toList();
@@ -468,14 +496,10 @@ class CustomerAccountService extends ChangeNotifier {
   Future<OnlineOrder?> getOrderById(String orderId) async {
     try {
       // Load order with items
-      final response = await _supabase
-          .from('online_orders')
-          .select('''
+      final response = await _supabase.from('online_orders').select('''
             *,
             online_order_items (*)
-          ''')
-          .eq('id', orderId)
-          .single();
+          ''').eq('id', orderId).single();
 
       // Extract items
       final itemsJson = response['online_order_items'] as List? ?? [];
@@ -519,14 +543,14 @@ class CustomerAccountService extends ChangeNotifier {
       // Enrich with service count and last service date
       for (var i = 0; i < _bikes.length; i++) {
         final bikeId = _bikes[i]['id'];
-        
+
         // Get service count
         final countResponse = await _supabase
             .from('mechanic_jobs')
             .select('id')
             .eq('bike_id', bikeId)
             .isFilter('deleted_at', null);
-        
+
         _bikes[i]['service_count'] = (countResponse as List).length;
 
         // Get last service date
@@ -540,8 +564,8 @@ class CustomerAccountService extends ChangeNotifier {
 
         if ((lastServiceResponse as List).isNotEmpty) {
           final lastService = lastServiceResponse.first;
-          _bikes[i]['last_service_date'] = lastService['delivered_at'] ?? 
-              lastService['completed_at'];
+          _bikes[i]['last_service_date'] =
+              lastService['delivered_at'] ?? lastService['completed_at'];
         }
 
         // Extract brand/model names from joins
@@ -565,18 +589,14 @@ class CustomerAccountService extends ChangeNotifier {
   /// Get a single bike by ID
   Future<Map<String, dynamic>?> getBikeById(String bikeId) async {
     try {
-      final response = await _supabase
-          .from('bikes')
-          .select('''
+      final response = await _supabase.from('bikes').select('''
             *,
             bike_brands(name),
             bike_models(name)
-          ''')
-          .eq('id', bikeId)
-          .single();
+          ''').eq('id', bikeId).single();
 
       final bike = Map<String, dynamic>.from(response);
-      
+
       // Extract brand/model names
       if (bike['bike_brands'] != null) {
         bike['brand_name'] = bike['bike_brands']['name'];
@@ -604,7 +624,8 @@ class CustomerAccountService extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      debugPrint('📋 Loading service history for customer: ${_customerProfile!['id']}');
+      debugPrint(
+          '📋 Loading service history for customer: ${_customerProfile!['id']}');
 
       // Query mechanic_jobs without join first (RLS might block joins)
       final response = await _supabase
@@ -628,7 +649,7 @@ class CustomerAccountService extends ChangeNotifier {
                 .select('brand, model, color, bike_type')
                 .eq('id', bikeId)
                 .maybeSingle();
-            
+
             if (bikeResponse != null) {
               _serviceHistory[i]['bike_brand'] = bikeResponse['brand'] ?? '';
               _serviceHistory[i]['bike_model'] = bikeResponse['model'] ?? '';
@@ -652,7 +673,8 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   /// Get service history for a specific bike
-  Future<List<Map<String, dynamic>>> getServiceHistoryForBike(String bikeId) async {
+  Future<List<Map<String, dynamic>>> getServiceHistoryForBike(
+      String bikeId) async {
     try {
       final response = await _supabase
           .from('mechanic_jobs')
@@ -671,9 +693,7 @@ class CustomerAccountService extends ChangeNotifier {
   /// Get a single service job by ID
   Future<Map<String, dynamic>?> getServiceById(String jobId) async {
     try {
-      final response = await _supabase
-          .from('mechanic_jobs')
-          .select('''
+      final response = await _supabase.from('mechanic_jobs').select('''
             *,
             bikes(brand, model, color, bike_type, serial_number),
             mechanic_job_parts(
@@ -684,9 +704,7 @@ class CustomerAccountService extends ChangeNotifier {
               unit_price,
               subtotal
             )
-          ''')
-          .eq('id', jobId)
-          .single();
+          ''').eq('id', jobId).single();
 
       return Map<String, dynamic>.from(response);
     } catch (e) {
@@ -697,29 +715,29 @@ class CustomerAccountService extends ChangeNotifier {
 
   /// Get active services count (not delivered or cancelled)
   int get activeServicesCount {
-    return _serviceHistory.where((s) => 
-      !['ENTREGADO', 'CANCELADO'].contains(s['status'])).length;
+    return _serviceHistory
+        .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .length;
   }
 
   /// Get services awaiting customer approval
   List<Map<String, dynamic>> get servicesAwaitingApproval {
-    return _serviceHistory.where((s) => 
-      s['status'] == 'ESPERANDO_APROBACION' && 
-      s['approved_by_customer'] != true).toList();
+    return _serviceHistory
+        .where((s) =>
+            s['status'] == 'ESPERANDO_APROBACION' &&
+            s['approved_by_customer'] != true)
+        .toList();
   }
 
   /// Approve a service estimate
   Future<void> approveServiceEstimate(String jobId) async {
     try {
-      await _supabase
-          .from('mechanic_jobs')
-          .update({
-            'approved_by_customer': true,
-            'approved_at': DateTime.now().toIso8601String(),
-            'status': 'EN_CURSO', // Move to in progress after approval
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', jobId);
+      await _supabase.from('mechanic_jobs').update({
+        'approved_by_customer': true,
+        'approved_at': DateTime.now().toIso8601String(),
+        'status': 'EN_CURSO', // Move to in progress after approval
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', jobId);
 
       await loadServiceHistory();
     } catch (e) {
@@ -732,16 +750,13 @@ class CustomerAccountService extends ChangeNotifier {
   /// Reject a service estimate (will be handled as cancellation)
   Future<void> rejectServiceEstimate(String jobId, String? reason) async {
     try {
-      await _supabase
-          .from('mechanic_jobs')
-          .update({
-            'approved_by_customer': false,
-            'approved_at': DateTime.now().toIso8601String(),
-            'status': 'CANCELADO',
-            'notes': reason ?? 'Presupuesto rechazado por el cliente',
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', jobId);
+      await _supabase.from('mechanic_jobs').update({
+        'approved_by_customer': false,
+        'approved_at': DateTime.now().toIso8601String(),
+        'status': 'CANCELADO',
+        'notes': reason ?? 'Presupuesto rechazado por el cliente',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', jobId);
 
       await loadServiceHistory();
     } catch (e) {

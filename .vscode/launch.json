@@ -6,7 +6,7 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "args": [
+      "toolArgs": [
         "--dart-define=ENV=development",
         "--dart-define=DEBUG_EMAIL=vinabikechile@gmail.com",
         "--dart-define=DEBUG_PASSWORD=000000"
@@ -17,19 +17,16 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "args": [
-        "-d",
-        "chrome"
-      ]
+      "deviceId": "chrome"
     },
     {
       "name": "🐞 Debug Vinabike Store (Chrome)",
       "request": "launch",
       "type": "dart",
+      "flutterMode": "debug",
       "program": "lib/main_store.dart",
       "deviceId": "chrome",
-      "args": [
-        "--web-port=8080",
+      "toolArgs": [
         "--dart-define=STORE_PERF_LOGS=true",
         "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
         "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
@@ -40,10 +37,10 @@
       "name": "🧪 Debug Vinabike Store (Chrome • Reset State)",
       "request": "launch",
       "type": "dart",
+      "flutterMode": "debug",
       "program": "lib/main_store.dart",
       "deviceId": "chrome",
-      "args": [
-        "--web-port=8080",
+      "toolArgs": [
         "--dart-define=STORE_PERF_LOGS=true",
         "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
         "--dart-define=PUBLIC_STORE_TENANT_ID=5443b130-cc28-45af-a420-cd500b288890",
@@ -56,7 +53,7 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main_store.dart",
-      "args": [
+      "toolArgs": [
         "--no-enable-impeller",
         "--dart-define=STORE_PERF_LOGS=true",
         "--dart-define=PUBLIC_STORE_IGNORE_AUTH=true",
@@ -72,7 +69,7 @@
       "type": "dart",
       "flutterMode": "profile",
       "program": "lib/main_store.dart",
-      "args": [
+      "toolArgs": [
         "--no-enable-impeller",
         "--verbose-system-logs",
         "--dart-define=STORE_PERF_LOGS=true",
@@ -89,7 +86,7 @@
       "type": "dart",
       "flutterMode": "profile",
       "program": "lib/main_store.dart",
-      "args": [
+      "toolArgs": [
         "--enable-impeller",
         "--verbose-system-logs",
         "--dart-define=STORE_PERF_LOGS=true",
@@ -105,30 +102,21 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "args": [
-        "-d",
-        "windows"
-      ]
+      "deviceId": "windows"
     },
     {
       "name": "🍎 Flutter: Run (macOS)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "args": [
-        "-d",
-        "macos"
-      ]
+      "deviceId": "macos"
     },
     {
       "name": "📱 Flutter: Run (Android)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "args": [
-        "-d",
-        "android"
-      ]
+      "deviceId": "android"
     },
     {
       "name": "⚡ Flutter: Profile Mode",

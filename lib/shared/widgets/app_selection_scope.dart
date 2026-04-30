@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 /// Enables selection/copy across the app from a single top-level wrapper.
 class AppSelectionScope extends StatelessWidget {
@@ -11,12 +12,10 @@ class AppSelectionScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Overlay(
-      initialEntries: [
-        OverlayEntry(
-          builder: (context) => SelectionArea(child: child),
-        ),
-      ],
-    );
+    if (kIsWeb) {
+      return child;
+    }
+
+    return SelectionArea(child: child);
   }
 }

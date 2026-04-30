@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
-import '../services/customer_account_service.dart';
+
 import '../providers/public_store_tenant_provider.dart';
-import '../widgets/premium_dashboard_widgets.dart';
-import '../widgets/customer_chat_panel.dart';
-import '../../shared/widgets/safe_layout_builder.dart';
+import '../services/customer_account_service.dart';
+import '../widgets/customer_portal_layout.dart';
+import '../widgets/public_store_layout.dart';
+import '../../shared/utils/chilean_utils.dart';
 
 class CustomerDashboardPage extends StatefulWidget {
   const CustomerDashboardPage({super.key});
@@ -16,7 +16,6 @@ class CustomerDashboardPage extends StatefulWidget {
 
 class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     with AutomaticKeepAliveClientMixin {
-  // Keep this page alive in memory to prevent reloading on navigation
   @override
   bool get wantKeepAlive => true;
 
@@ -29,588 +28,539 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
       accountService.setTenantId(tenantProvider.tenantId);
 
       if (accountService.isAuthenticated) {
+        accountService.loadOrders();
+        accountService.loadAddresses();
         accountService.loadBikes();
         accountService.loadServiceHistory();
-        accountService.loadOrders();
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    super.build(context);
     final accountService = context.watch<CustomerAccountService>();
     final profile = accountService.customerProfile;
-    final name = profile?['name']?.split(' ')[0] ?? 'Usuario';
-
+    final fullName = (profile?['name'] ?? 'Cliente').toString();
+    final firstName = fullName.trim().isEmpty
+        ? 'Cliente'
+        : fullName.trim().split(RegExp(r'\s+')).first;
     final activeServices = accountService.serviceHistory
-        .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .where((service) =>
+            !['ENTREGADO', 'CANCELADO'].contains(service['status']))
         .toList();
-    final activeService =
-        activeServices.isNotEmpty ? activeServices.first : null;
-    final bikes = accountService.bikes;
-    final orders = accountService.orders;
-    final services = accountService.serviceHistory;
 
-    return Container(
-      color: Colors.white,
-      child: MediaQueryLayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 900;
-          if (isDesktop) {
-            return _buildDesktopLayout(
-                context, name, activeService, bikes, orders, services);
-          } else {
-            return _buildMobileLayout(
-                context, name, activeService, bikes, orders, services);
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildDesktopLayout(
-    BuildContext context,
-    String name,
-    Map<String, dynamic>? activeService,
-    List<dynamic> bikes,
-    List<dynamic> orders,
-    List<dynamic> services,
-  ) {
-    return IntrinsicHeight(
-      child: Row(
+    return CustomerPortalLayout(
+      title: 'Mi cuenta',
+      showBackButton: false,
+      showHeader: false,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // LEFT COLUMN (Main Content + Header Part)
-          Expanded(
-            flex: 2,
-            child: Column(
-              children: [
-                // HEADER ROW (Grey Background)
-                Container(
-                  height: 80, // Strict height for alignment
-                  color: Colors.grey.shade200,
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 0), // ALL 8px
-                  width: double.infinity,
-                  alignment: Alignment.centerLeft, // Center text vertically
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Bienvenido, $name',
-                        style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // BODY CONTENT (White Background) - Wrap in Expanded for scrolling
-                Expanded(
-                  child: Container(
-                    color: Colors.white,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(8), // ALL 8px
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Dashboard Widgets
-                          LiveJobTracker(activeService: activeService),
-                          const SizedBox(height: 8), // ALL 8px
-                          GarageGrid(bikes: bikes),
-                          const SizedBox(height: 8), // ALL 8px
-                          RecentActivity(orders: orders, services: services),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _WelcomePanel(firstName: firstName),
+          const SizedBox(height: 18),
+          const _DashboardHeading(),
+          const SizedBox(height: 16),
+          _AccountMetrics(
+            ordersCount: accountService.orders.length,
+            addressesCount: accountService.addresses.length,
+            bikesCount: accountService.bikes.length,
+            activeServicesCount: activeServices.length,
           ),
-
-          // RIGHT COLUMN (Unified Sidebar Container)
-          // Wraps from bottom to top, containing the "Header" (Profile)
-          Container(
-            width: 400, // Fixed width for sidebar
-            height: double.infinity, // Stretch to match IntrinsicHeight
-            constraints:
-                BoxConstraints(minHeight: MediaQuery.of(context).size.height),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200, // The "Container" background
-              border: Border(left: BorderSide(color: Colors.grey.shade300)),
+          const SizedBox(height: 18),
+          _PortalSection(
+            title: 'Actividad reciente',
+            actionLabel: 'Ver pedidos',
+            onAction: () => PublicStoreLayout.navigateToHref(
+              context,
+              '/cuenta/pedidos',
             ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                  8, 0, 8, 8), // No top padding for header alignment
-              child: Column(
-                children: [
-                  // PROFILE CARD (User information + Dropdown)
-                  Container(
-                    height: 80,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        PopupMenuButton<String>(
-                          tooltip: 'Opciones de Cuenta',
-                          offset: const Offset(0, 50),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Container(
-                            padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
-                            decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(30),
-                                border:
-                                    Border.all(color: Colors.grey.shade300)),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: Colors.black,
-                                  child: Text(name[0].toUpperCase(),
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text('Mi Cuenta',
-                                    style: TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14)),
-                                const SizedBox(width: 4),
-                                Icon(Icons.keyboard_arrow_down,
-                                    size: 18, color: Colors.grey[600]),
-                              ],
-                            ),
-                          ),
-                          onSelected: (value) async {
-                            switch (value) {
-                              case 'profile':
-                                context.go('/tienda/cuenta/perfil');
-                                break;
-                              case 'orders':
-                                context.go('/tienda/cuenta/pedidos');
-                                break;
-                              case 'addresses':
-                                context.go('/tienda/cuenta/direcciones');
-                                break;
-                              case 'chat':
-                                context.go('/tienda/cuenta/chats');
-                                break;
-                              case 'logout':
-                                final accountService =
-                                    context.read<CustomerAccountService>();
-                                await accountService.signOut();
-                                if (context.mounted) context.go('/');
-                                break;
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'profile',
-                              child: Row(children: [
-                                Icon(Icons.person_outline),
-                                SizedBox(width: 12),
-                                Text('Mi Perfil')
-                              ]),
-                            ),
-                            const PopupMenuItem(
-                              value: 'orders',
-                              child: Row(children: [
-                                Icon(Icons.shopping_bag_outlined),
-                                SizedBox(width: 12),
-                                Text('Mis Pedidos')
-                              ]),
-                            ),
-                            const PopupMenuItem(
-                              value: 'addresses',
-                              child: Row(children: [
-                                Icon(Icons.location_on_outlined),
-                                SizedBox(width: 12),
-                                Text('Mis Direcciones')
-                              ]),
-                            ),
-                            const PopupMenuItem(
-                              value: 'chat',
-                              child: Row(children: [
-                                Icon(Icons.chat_bubble_outline),
-                                SizedBox(width: 12),
-                                Text('Ayuda y Soporte')
-                              ]),
-                            ),
-                            const PopupMenuDivider(),
-                            const PopupMenuItem(
-                              value: 'logout',
-                              child: Row(children: [
-                                Icon(Icons.logout, color: Colors.red),
-                                SizedBox(width: 12),
-                                Text('Cerrar Sesión',
-                                    style: TextStyle(color: Colors.red))
-                              ]),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 0),
-
-                  // Chat Card
-
-                  // NO GAP HERE - Chat starts at Y=80 (aligned with header bottom)
-
-                  // SIDEBAR CARDS
-
-                  // Chat Card
-                  Container(
-                    height: 400,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4))
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: const CustomerChatPanel(compactMode: true),
-                  ),
-
-                  const SizedBox(height: 8), // ALL 8px
-
-                  // Quick Reorder Card
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4))
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(20),
-                    child: _buildQuickReorder(),
-                  ),
-
-                  const SizedBox(height: 8), // ALL 8px
-
-                  // Recommendations Card
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4))
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(20),
-                    child: _buildRecommendations(),
-                  ),
-
-                  const SizedBox(height: 8), // ALL 8px
-                  Text('Semelle footer',
-                      style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                ],
-              ),
+            child: _RecentOrdersPreview(orders: accountService.orders),
+          ),
+          const SizedBox(height: 18),
+          _PortalSection(
+            title: 'Taller y bicicletas',
+            actionLabel: 'Ver taller',
+            onAction: () => PublicStoreLayout.navigateToHref(
+              context,
+              '/cuenta/servicios',
+            ),
+            child: _WorkshopPreview(
+              activeServices: activeServices,
+              bikes: accountService.bikes,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildMobileLayout(
-    BuildContext context,
-    String name,
-    Map<String, dynamic>? activeService,
-    List<dynamic> bikes,
-    List<dynamic> orders,
-    List<dynamic> services,
-  ) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Hola, $name',
-                    style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87)),
-                PopupMenuButton<String>(
-                  offset: const Offset(0, 50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.black,
-                    child: Text(name[0].toUpperCase(),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 14)),
-                  ),
-                  onSelected: (value) async {
-                    switch (value) {
-                      case 'profile':
-                        context.go('/tienda/cuenta/perfil');
-                        break;
-                      case 'orders':
-                        context.go('/tienda/cuenta/pedidos');
-                        break;
-                      case 'addresses':
-                        context.go('/tienda/cuenta/direcciones');
-                        break;
-                      case 'chat':
-                        context.go('/tienda/cuenta/chats');
-                        break;
-                      case 'logout':
-                        final accountService =
-                            context.read<CustomerAccountService>();
-                        await accountService.signOut();
-                        if (context.mounted) context.go('/');
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'profile',
-                      child: Row(children: [
-                        Icon(Icons.person_outline),
-                        SizedBox(width: 12),
-                        Text('Mi Perfil')
-                      ]),
-                    ),
-                    const PopupMenuItem(
-                      value: 'orders',
-                      child: Row(children: [
-                        Icon(Icons.shopping_bag_outlined),
-                        SizedBox(width: 12),
-                        Text('Mis Pedidos')
-                      ]),
-                    ),
-                    const PopupMenuItem(
-                      value: 'addresses',
-                      child: Row(children: [
-                        Icon(Icons.location_on_outlined),
-                        SizedBox(width: 12),
-                        Text('Mis Direcciones')
-                      ]),
-                    ),
-                    const PopupMenuItem(
-                      value: 'chat',
-                      child: Row(children: [
-                        Icon(Icons.chat_bubble_outline),
-                        SizedBox(width: 12),
-                        Text('Ayuda y Soporte')
-                      ]),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'logout',
-                      child: Row(children: [
-                        Icon(Icons.logout, color: Colors.red),
-                        SizedBox(width: 12),
-                        Text('Cerrar Sesión',
-                            style: TextStyle(color: Colors.red))
-                      ]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            LiveJobTracker(activeService: activeService),
-            const SizedBox(height: 16),
-            GarageGrid(bikes: bikes),
-            const SizedBox(height: 16),
-            RecentActivity(orders: orders, services: services),
-            const SizedBox(height: 16),
+class _DashboardHeading extends StatelessWidget {
+  const _DashboardHeading();
 
-            // Mobile Sidebar (Stacked Cards)
-            Container(
-                height: 340,
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200)),
-                clipBehavior: Clip.antiAlias,
-                child: const CustomerChatPanel(compactMode: true)),
-            const SizedBox(height: 12),
-            Container(
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200)),
-                padding: const EdgeInsets.all(16),
-                child: _buildQuickReorder()),
-            const SizedBox(height: 12),
-            Container(
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200)),
-                padding: const EdgeInsets.all(16),
-                child: _buildRecommendations()),
-
-            const SizedBox(height: 32),
-          ],
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mi cuenta',
+          style: TextStyle(
+            color: Color(0xFF18212F),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
         ),
+        SizedBox(height: 4),
+        Text(
+          'Compra, revisa tus datos y vuelve a lo importante sin fricción.',
+          style: TextStyle(
+            color: Color(0xFF667085),
+            fontSize: 13,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WelcomePanel extends StatelessWidget {
+  final String firstName;
+
+  const _WelcomePanel({required this.firstName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF102A43),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final copy = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hola, $firstName',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Tus compras, datos personales, direcciones y bicicletas en un solo lugar.',
+                style: TextStyle(
+                  color: Color(0xFFD9E2EC),
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          );
+          return copy;
+        },
       ),
     );
   }
+}
 
-  Widget _buildQuickReorder() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+class _AccountMetrics extends StatelessWidget {
+  final int ordersCount;
+  final int addressesCount;
+  final int bikesCount;
+  final int activeServicesCount;
+
+  const _AccountMetrics({
+    required this.ordersCount,
+    required this.addressesCount,
+    required this.bikesCount,
+    required this.activeServicesCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 620 ? 2 : 4;
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: columns,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: columns == 2 ? 1.55 : 1.25,
           children: [
-            const Text('Reordenar Rápido',
-                style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16)),
-            TextButton(
-              onPressed: () => context.go('/tienda'),
-              style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero, minimumSize: Size.zero),
-              child: Text('Ver todo',
-                  style: TextStyle(color: Colors.blue[600], fontSize: 13)),
+            _MetricTile(
+              icon: Icons.receipt_long_outlined,
+              value: ordersCount.toString(),
+              label: 'Pedidos',
+            ),
+            _MetricTile(
+              icon: Icons.location_on_outlined,
+              value: addressesCount.toString(),
+              label: 'Direcciones',
+            ),
+            _MetricTile(
+              icon: Icons.pedal_bike_outlined,
+              value: bikesCount.toString(),
+              label: 'Bicicletas',
+            ),
+            _MetricTile(
+              icon: Icons.build_outlined,
+              value: activeServicesCount.toString(),
+              label: 'Servicios activos',
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        _buildReorderItem(name: 'Lubricante Cadena', price: '\$18.000'),
-        const SizedBox(height: 12),
-        _buildReorderItem(name: 'Cámaras (Pack)', price: '\$12.500'),
-      ],
+        );
+      },
     );
   }
+}
 
-  Widget _buildReorderItem({required String name, required String price}) {
-    return Row(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(Icons.shopping_bag_outlined,
-              color: Colors.grey[500], size: 24),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
+class _MetricTile extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _MetricTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(icon, color: const Color(0xFF102A43), size: 22),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: const TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14)),
-              const SizedBox(height: 2),
-              Text(price,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-            ],
-          ),
-        ),
-        Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
-      ],
-    );
-  }
-
-  Widget _buildRecommendations() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Recomendado para Ti',
-            style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
-                fontSize: 16)),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 90,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              _buildProductThumbnail('Lubricante', isNew: false),
-              _buildProductThumbnail('Cámaras', isNew: true),
-              _buildProductThumbnail('Pastillas', isNew: true),
-              _buildProductThumbnail('Sellante', isNew: false),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProductThumbnail(String name, {bool isNew = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.shopping_bag_outlined,
-                    color: Colors.grey[400], size: 24),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF18212F),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              if (isNew)
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(4)),
-                    child: const Text('NEW',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold)),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF667085),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PortalSection extends StatelessWidget {
+  final String title;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final Widget child;
+
+  const _PortalSection({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E4EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
                   ),
                 ),
+              ),
+              TextButton(
+                onPressed: onAction,
+                child: Text(actionLabel),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: 56,
-            child: Text(name,
-                style: TextStyle(color: Colors.grey[600], fontSize: 10),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentOrdersPreview extends StatelessWidget {
+  final List<dynamic> orders;
+
+  const _RecentOrdersPreview({required this.orders});
+
+  @override
+  Widget build(BuildContext context) {
+    if (orders.isEmpty) {
+      return _EmptyInlineState(
+        icon: Icons.receipt_long_outlined,
+        title: 'Aún no hay compras',
+        message: 'Cuando compres en Viñabike, tus pedidos aparecerán aquí.',
+        actionLabel: 'Ver productos',
+        onAction: () => PublicStoreLayout.navigateToHref(context, '/productos'),
+      );
+    }
+
+    return Column(
+      children: orders.take(3).map((order) {
+        final orderNumber = _read(order, 'orderNumber') ??
+            _read(order, 'order_number') ??
+            'N/A';
+        final total = _read(order, 'total');
+        final status = (_read(order, 'paymentStatus') ??
+                _read(order, 'payment_status') ??
+                'pending')
+            .toString();
+        return _CompactRow(
+          icon: Icons.receipt_long_outlined,
+          title: 'Pedido #$orderNumber',
+          subtitle: _statusLabel(status),
+          trailing: total is num
+              ? ChileanUtils.formatCurrency(total.toDouble())
+              : null,
+        );
+      }).toList(),
+    );
+  }
+
+  static dynamic _read(dynamic object, String key) {
+    if (object is Map<String, dynamic>) return object[key];
+    try {
+      final value = switch (key) {
+        'orderNumber' => object.orderNumber,
+        'paymentStatus' => object.paymentStatus,
+        'total' => object.total,
+        _ => null,
+      };
+      return value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String _statusLabel(String status) {
+    switch (status) {
+      case 'approved':
+      case 'paid':
+        return 'Pago confirmado';
+      case 'pending':
+        return 'Pago pendiente';
+      case 'cancelled':
+      case 'rejected':
+        return 'Cancelado';
+      case 'shipped':
+        return 'Enviado';
+      case 'delivered':
+        return 'Entregado';
+      default:
+        return status;
+    }
+  }
+}
+
+class _WorkshopPreview extends StatelessWidget {
+  final List<dynamic> activeServices;
+  final List<dynamic> bikes;
+
+  const _WorkshopPreview({required this.activeServices, required this.bikes});
+
+  @override
+  Widget build(BuildContext context) {
+    if (activeServices.isEmpty && bikes.isEmpty) {
+      return _EmptyInlineState(
+        icon: Icons.pedal_bike_outlined,
+        title: 'Sin actividad de taller',
+        message:
+            'Tus bicicletas y servicios aparecerán cuando visites el taller.',
+        actionLabel: 'Contactar tienda',
+        onAction: () => PublicStoreLayout.navigateToHref(context, '/contacto'),
+      );
+    }
+
+    return Column(
+      children: [
+        if (activeServices.isNotEmpty)
+          ...activeServices.take(2).map((service) => _CompactRow(
+                icon: Icons.build_outlined,
+                title:
+                    '${service['bike_brand'] ?? ''} ${service['bike_model'] ?? 'Servicio'}'
+                        .trim(),
+                subtitle: 'Estado: ${service['status'] ?? 'en revisión'}',
+              )),
+        if (bikes.isNotEmpty)
+          ...bikes.take(2).map((bike) => _CompactRow(
+                icon: Icons.pedal_bike_outlined,
+                title:
+                    '${bike['brand'] ?? bike['brand_name'] ?? ''} ${bike['model'] ?? bike['model_name'] ?? 'Bicicleta'}'
+                        .trim(),
+                subtitle: 'Ficha de bicicleta guardada',
+              )),
+      ],
+    );
+  }
+}
+
+class _CompactRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? trailing;
+
+  const _CompactRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF102A43), size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.isEmpty ? 'Registro' : title,
+                  style: const TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (trailing != null) ...[
+            const SizedBox(width: 12),
+            Text(
+              trailing!,
+              style: const TextStyle(
+                color: Color(0xFF102A43),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyInlineState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _EmptyInlineState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF102A43), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF18212F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(onPressed: onAction, child: Text(actionLabel)),
         ],
       ),
     );
