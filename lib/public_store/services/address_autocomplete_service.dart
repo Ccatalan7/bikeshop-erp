@@ -35,15 +35,25 @@ class ResolvedAddress {
   });
 
   String formatForDisplay() {
+    final streetLine = [street, streetNumber]
+        .whereType<String>()
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ')
+        .trim();
+    final normalizedComuna = comuna.trim().toLowerCase();
+    final normalizedCity = city.trim().toLowerCase();
+    final normalizedRegion = region.trim().toLowerCase();
     final parts = <String>[
-      street,
-      if (streetNumber != null && streetNumber!.isNotEmpty) streetNumber!,
-      if (apartment != null && apartment!.isNotEmpty) apartment!,
-      comuna,
-      city,
-      region,
+      if (streetLine.isNotEmpty) streetLine,
+      if (apartment != null && apartment!.trim().isNotEmpty) apartment!.trim(),
+      if (comuna.trim().isNotEmpty) comuna.trim(),
+      if (city.trim().isNotEmpty && normalizedCity != normalizedComuna)
+        city.trim(),
+      if (region.trim().isNotEmpty && normalizedRegion != normalizedCity)
+        region.trim(),
+      'Chile',
     ];
-    return parts.where((part) => part.isNotEmpty).join(', ');
+    return parts.join(', ');
   }
 }
 
@@ -193,15 +203,18 @@ class AddressAutocompleteService extends ChangeNotifier {
       final street = getComponent('route') ?? '';
       final number = getComponent('street_number');
       final apartment = getComponent('subpremise') ?? getComponent('premise');
+      final locality = getComponent('locality');
+      final province = getComponent('administrative_area_level_2');
+      final region = getComponent('administrative_area_level_1') ?? '';
       final comuna = getComponent('administrative_area_level_3') ??
-          getComponent('locality') ??
+          locality ??
           getComponent('sublocality_level_1') ??
           getComponent('sublocality') ??
           '';
-      final city = getComponent('administrative_area_level_2') ??
-          getComponent('locality') ??
-          comuna;
-      final region = getComponent('administrative_area_level_1') ?? '';
+      final city = locality ??
+          (comuna.isNotEmpty ? comuna : null) ??
+          (province != region ? province : null) ??
+          region;
       final postalCode = getComponent('postal_code');
 
       final geometry = result['geometry'] as Map<String, dynamic>?;

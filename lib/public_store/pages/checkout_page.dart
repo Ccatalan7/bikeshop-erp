@@ -36,6 +36,13 @@ class _CheckoutPageState extends State<CheckoutPage>
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _streetController = TextEditingController();
+  final _streetNumberController = TextEditingController();
+  final _apartmentController = TextEditingController();
+  final _comunaController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _regionController = TextEditingController();
+  final _postalCodeController = TextEditingController();
   final _notesController = TextEditingController();
   final _accountPasswordController = TextEditingController();
   final _accountPasswordConfirmController = TextEditingController();
@@ -88,6 +95,13 @@ class _CheckoutPageState extends State<CheckoutPage>
     _emailController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _streetController.dispose();
+    _streetNumberController.dispose();
+    _apartmentController.dispose();
+    _comunaController.dispose();
+    _cityController.dispose();
+    _regionController.dispose();
+    _postalCodeController.dispose();
     _notesController.dispose();
     _addressLabelController.dispose();
     _accountPasswordController.dispose();
@@ -159,12 +173,11 @@ class _CheckoutPageState extends State<CheckoutPage>
     setState(() {
       _selectedAddress = address;
       _resolvedAddress = resolved;
-      final formatted = resolved.formattedAddress;
-      _addressController.text =
-          formatted.isNotEmpty ? formatted : resolved.formatForDisplay();
+      _addressController.text = resolved.formatForDisplay();
       _addressLabelController.text = address.label;
       _saveAddressToAccount = false;
     });
+    _fillAddressFields(resolved);
 
     if (_nameController.text.isEmpty) {
       _nameController.text = address.recipientName;
@@ -175,13 +188,16 @@ class _CheckoutPageState extends State<CheckoutPage>
     }
   }
 
-  void _applyResolvedAddress(ResolvedAddress resolved) {
+  void _applyResolvedAddress(
+    ResolvedAddress resolved, {
+    required String selectedLabel,
+  }) {
     setState(() {
       _selectedAddress = null;
       _resolvedAddress = resolved;
-      final formatted = resolved.formattedAddress;
-      _addressController.text =
-          formatted.isNotEmpty ? formatted : resolved.formatForDisplay();
+      _addressController.text = selectedLabel.trim().isNotEmpty
+          ? selectedLabel.trim()
+          : resolved.formatForDisplay();
       if (_addressLabelController.text.trim().isEmpty ||
           _addressLabelController.text == 'Dirección de entrega') {
         final locationLabel = resolved.comuna.isNotEmpty
@@ -193,6 +209,40 @@ class _CheckoutPageState extends State<CheckoutPage>
       }
       _saveAddressToAccount = _accountService?.isAuthenticated ?? false;
     });
+    _fillAddressFields(resolved);
+  }
+
+  void _fillAddressFields(ResolvedAddress resolved) {
+    final city = _normalizeAddressCity(
+      city: resolved.city,
+      comuna: resolved.comuna,
+      region: resolved.region,
+    );
+
+    _streetController.text = resolved.street;
+    _streetNumberController.text = resolved.streetNumber ?? '';
+    _apartmentController.text = resolved.apartment ?? '';
+    _comunaController.text = resolved.comuna;
+    _cityController.text = city;
+    _regionController.text = resolved.region;
+    _postalCodeController.text = resolved.postalCode ?? '';
+  }
+
+  String _normalizeAddressCity({
+    required String city,
+    required String comuna,
+    required String region,
+  }) {
+    final cleanCity = city.trim();
+    final cleanComuna = comuna.trim();
+    final cleanRegion = region.trim();
+
+    if (cleanComuna.isEmpty) return cleanCity;
+    if (cleanCity.isEmpty) return cleanComuna;
+    if (cleanCity.toLowerCase() == cleanRegion.toLowerCase()) {
+      return cleanComuna;
+    }
+    return cleanCity;
   }
 
   void _handleCheckoutQueryParameters() {
@@ -249,13 +299,11 @@ class _CheckoutPageState extends State<CheckoutPage>
       label: label,
       recipientName: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
-      streetAddress: resolved.street.isNotEmpty
-          ? resolved.street
-          : _addressController.text.trim(),
+      streetAddress: resolved.street,
       streetNumber: resolved.streetNumber,
       apartment: resolved.apartment,
-      comuna: resolved.comuna.isNotEmpty ? resolved.comuna : resolved.city,
-      city: resolved.city.isNotEmpty ? resolved.city : resolved.comuna,
+      comuna: resolved.comuna,
+      city: resolved.city,
       region: resolved.region,
       postalCode: resolved.postalCode,
       additionalInfo: null,
@@ -281,15 +329,64 @@ class _CheckoutPageState extends State<CheckoutPage>
   }
 
   ResolvedAddress _shippingAddressForOrder() {
-    final manualAddress = _addressController.text.trim();
-    return _resolvedAddress ??
-        ResolvedAddress(
-          formattedAddress: manualAddress,
-          street: manualAddress,
-          comuna: '',
-          city: '',
-          region: '',
-        );
+    final searchText = _addressController.text.trim();
+    final street = _streetController.text.trim();
+    final streetNumber = _streetNumberController.text.trim();
+    final apartment = _apartmentController.text.trim();
+    final comuna = _comunaController.text.trim();
+    final city = _cityController.text.trim();
+    final region = _regionController.text.trim();
+    final postalCode = _postalCodeController.text.trim();
+
+    return ResolvedAddress(
+      formattedAddress: searchText.isNotEmpty
+          ? searchText
+          : _formatAddressForDisplay(
+              street: street,
+              streetNumber: streetNumber,
+              apartment: apartment,
+              comuna: comuna,
+              city: city,
+              region: region,
+            ),
+      street: street.isNotEmpty ? street : searchText,
+      streetNumber: streetNumber.isNotEmpty ? streetNumber : null,
+      apartment: apartment.isNotEmpty ? apartment : null,
+      comuna: comuna.isNotEmpty ? comuna : city,
+      city: city.isNotEmpty ? city : comuna,
+      region: region,
+      postalCode: postalCode.isNotEmpty ? postalCode : null,
+      latitude: _resolvedAddress?.latitude,
+      longitude: _resolvedAddress?.longitude,
+    );
+  }
+
+  String _formatAddressForDisplay({
+    required String street,
+    required String streetNumber,
+    required String apartment,
+    required String comuna,
+    required String city,
+    required String region,
+  }) {
+    final streetLine = [street, streetNumber]
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ')
+        .trim();
+    final normalizedComuna = comuna.trim().toLowerCase();
+    final normalizedCity = city.trim().toLowerCase();
+    final normalizedRegion = region.trim().toLowerCase();
+    final parts = <String>[
+      if (streetLine.isNotEmpty) streetLine,
+      if (apartment.trim().isNotEmpty) apartment.trim(),
+      if (comuna.trim().isNotEmpty) comuna.trim(),
+      if (city.trim().isNotEmpty && normalizedCity != normalizedComuna)
+        city.trim(),
+      if (region.trim().isNotEmpty && normalizedRegion != normalizedCity)
+        region.trim(),
+      'Chile',
+    ];
+    return parts.join(', ');
   }
 
   Future<String?> _createAccountFromCheckout(
@@ -899,173 +996,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           const SizedBox(height: 24),
           _buildFormSection(
             title: '2. Dirección de envío',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if ((_accountService?.isAuthenticated ?? false) &&
-                    _savedAddresses.isNotEmpty) ...[
-                  DropdownButtonFormField<CustomerAddress>(
-                    initialValue: _selectedAddress,
-                    decoration: _fieldDecoration(
-                      label: 'Usar dirección guardada',
-                      icon: Icons.bookmark_outline,
-                    ),
-                    items: _savedAddresses
-                        .map(
-                          (address) => DropdownMenuItem<CustomerAddress>(
-                            value: address,
-                            child: Text('${address.label} • ${address.comuna}'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        _applyAddressFromCustomer(value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (_addressAutocompleteService != null &&
-                    _addressAutocompleteService!.isEnabled) ...[
-                  typeahead.TypeAheadField<AddressSuggestion>(
-                    controller: _addressController,
-                    suggestionsCallback: (pattern) async {
-                      return await _addressAutocompleteService
-                              ?.fetchSuggestions(pattern) ??
-                          [];
-                    },
-                    builder: (context, controller, focusNode) {
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: _fieldDecoration(
-                          label: 'Dirección completa *',
-                          icon: Icons.location_on_outlined,
-                          hintText: 'Busca tu dirección y selecciónala',
-                        ),
-                        maxLines: 2,
-                        onChanged: (value) {
-                          if (value.trim().isEmpty) {
-                            setState(() {
-                              _selectedAddress = null;
-                              _resolvedAddress = null;
-                            });
-                          }
-                        },
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'La dirección es requerida';
-                          }
-                          return null;
-                        },
-                      );
-                    },
-                    itemBuilder: (context, suggestion) => ListTile(
-                      leading: const Icon(Icons.place_outlined),
-                      title: Text(suggestion.description),
-                    ),
-                    loadingBuilder: (context) => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    emptyBuilder: (context) => const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text('No encontramos coincidencias'),
-                    ),
-                    onSelected: (suggestion) async {
-                      final resolved = await _addressAutocompleteService
-                          ?.resolvePlace(suggestion.placeId);
-                      if (resolved != null) {
-                        _applyResolvedAddress(resolved);
-                        _addressAutocompleteService?.resetSessionToken();
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Utilizamos Google Maps para validar la dirección de entrega.',
-                    style: TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
-                      fontSize: 12,
-                      color: PublicStoreTheme.textSecondary,
-                    ),
-                  ),
-                  if ((_accountService?.isAuthenticated ?? false) &&
-                      _selectedAddress == null) ...[
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _addressLabelController,
-                      decoration: _fieldDecoration(
-                        label: 'Etiqueta (ej: Casa, Trabajo)',
-                        icon: Icons.label_outline,
-                      ),
-                    ),
-                    CheckboxListTile(
-                      value: _saveAddressToAccount,
-                      onChanged: (value) {
-                        setState(() {
-                          _saveAddressToAccount = value ?? false;
-                        });
-                      },
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('Guardar esta dirección en mi cuenta'),
-                    ),
-                  ] else if ((_accountService?.isAuthenticated ?? false) &&
-                      _selectedAddress != null) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            context.go('/tienda/cuenta/direcciones'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _logoBlue,
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        icon: const Icon(Icons.open_in_new, size: 16),
-                        label:
-                            const Text('Gestionar mis direcciones guardadas'),
-                      ),
-                    ),
-                  ],
-                ] else ...[
-                  TextFormField(
-                    controller: _addressController,
-                    decoration: _fieldDecoration(
-                      label: 'Dirección completa *',
-                      icon: Icons.location_on_outlined,
-                      hintText: 'Calle, número, comuna, región',
-                    ),
-                    maxLines: 3,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'La dirección es requerida';
-                      }
-                      return null;
-                    },
-                  ),
-                  if (_addressAutocompleteService != null &&
-                      !_addressAutocompleteService!.isEnabled)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        'Puedes escribir la dirección manualmente. Revisaremos los datos antes del despacho si hace falta.',
-                        style: TextStyle(
-                          fontFamily: PublicStoreTheme.defaultBodyFont,
-                          fontSize: 12,
-                          color: PublicStoreTheme.textSecondary,
-                        ),
-                      ),
-                    ),
-                ],
-              ],
-            ),
+            child: _buildShippingAddressSection(),
           ),
           const SizedBox(height: 24),
           _buildFormSection(
@@ -1115,6 +1046,280 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildShippingAddressSection() {
+    final autocompleteEnabled = _addressAutocompleteService?.isEnabled ?? false;
+    final isAuthenticated = _accountService?.isAuthenticated ?? false;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isAuthenticated && _savedAddresses.isNotEmpty) ...[
+          DropdownButtonFormField<CustomerAddress>(
+            initialValue: _selectedAddress,
+            decoration: _fieldDecoration(
+              label: 'Usar dirección guardada',
+              icon: Icons.bookmark_outline,
+            ),
+            items: _savedAddresses
+                .map(
+                  (address) => DropdownMenuItem<CustomerAddress>(
+                    value: address,
+                    child: Text('${address.label} • ${address.comuna}'),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                _applyAddressFromCustomer(value);
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (autocompleteEnabled) ...[
+          typeahead.TypeAheadField<AddressSuggestion>(
+            controller: _addressController,
+            suggestionsCallback: (pattern) async {
+              return await _addressAutocompleteService
+                      ?.fetchSuggestions(pattern) ??
+                  [];
+            },
+            builder: (context, controller, focusNode) {
+              return TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: _fieldDecoration(
+                  label: 'Buscar dirección',
+                  icon: Icons.search,
+                  hintText: 'Ej: Álvarez 32, Viña del Mar',
+                ),
+                maxLines: 1,
+                onChanged: (value) {
+                  if (value.trim().isEmpty) {
+                    setState(() {
+                      _selectedAddress = null;
+                      _resolvedAddress = null;
+                    });
+                  }
+                },
+              );
+            },
+            itemBuilder: (context, suggestion) => ListTile(
+              leading: const Icon(Icons.place_outlined),
+              title: Text(suggestion.description),
+            ),
+            loadingBuilder: (context) => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            emptyBuilder: (context) => const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('No encontramos coincidencias'),
+            ),
+            onSelected: (suggestion) async {
+              FocusScope.of(context).unfocus();
+              final resolved = await _addressAutocompleteService
+                  ?.resolvePlace(suggestion.placeId);
+              if (resolved != null) {
+                _applyResolvedAddress(
+                  resolved,
+                  selectedLabel: suggestion.description,
+                );
+                _addressAutocompleteService?.resetSessionToken();
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Selecciona una sugerencia y revisa los datos antes de confirmar.',
+            style: TextStyle(
+              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontSize: 12,
+              color: PublicStoreTheme.textSecondary,
+            ),
+          ),
+        ] else if (_addressAutocompleteService != null) ...[
+          const Text(
+            'Puedes escribir tu dirección manualmente. Separarla nos ayuda a guardarla mejor en tu cuenta.',
+            style: TextStyle(
+              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontSize: 12,
+              color: PublicStoreTheme.textSecondary,
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
+        _buildAddressDetailsFields(),
+        if (isAuthenticated && _selectedAddress == null) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _addressLabelController,
+            decoration: _fieldDecoration(
+              label: 'Etiqueta (ej: Casa, Trabajo)',
+              icon: Icons.label_outline,
+            ),
+          ),
+          CheckboxListTile(
+            value: _saveAddressToAccount,
+            onChanged: (value) {
+              setState(() {
+                _saveAddressToAccount = value ?? false;
+              });
+            },
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Guardar esta dirección en mi cuenta'),
+          ),
+        ] else if (isAuthenticated && _selectedAddress != null) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => context.go('/tienda/cuenta/direcciones'),
+              style: TextButton.styleFrom(
+                foregroundColor: _logoBlue,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Gestionar mis direcciones guardadas'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAddressDetailsFields() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth >= 640;
+        return Column(
+          children: [
+            _buildAddressFieldRow(
+              useTwoColumns: useTwoColumns,
+              left: TextFormField(
+                controller: _streetController,
+                decoration: _fieldDecoration(
+                  label: 'Calle *',
+                  icon: Icons.signpost_outlined,
+                  hintText: 'Ej: Álvarez',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'La calle es requerida';
+                  }
+                  return null;
+                },
+              ),
+              right: TextFormField(
+                controller: _streetNumberController,
+                decoration: _fieldDecoration(
+                  label: 'Número',
+                  icon: Icons.pin_outlined,
+                  hintText: 'Ej: 32',
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildAddressFieldRow(
+              useTwoColumns: useTwoColumns,
+              left: TextFormField(
+                controller: _apartmentController,
+                decoration: _fieldDecoration(
+                  label: 'Depto / oficina / local',
+                  icon: Icons.apartment_outlined,
+                  hintText: 'Opcional',
+                ),
+              ),
+              right: TextFormField(
+                controller: _comunaController,
+                decoration: _fieldDecoration(
+                  label: 'Comuna *',
+                  icon: Icons.location_city_outlined,
+                  hintText: 'Ej: Viña del Mar',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'La comuna es requerida';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildAddressFieldRow(
+              useTwoColumns: useTwoColumns,
+              left: TextFormField(
+                controller: _cityController,
+                decoration: _fieldDecoration(
+                  label: 'Ciudad',
+                  icon: Icons.domain_outlined,
+                  hintText: 'Ej: Viña del Mar',
+                ),
+              ),
+              right: TextFormField(
+                controller: _regionController,
+                decoration: _fieldDecoration(
+                  label: 'Región *',
+                  icon: Icons.map_outlined,
+                  hintText: 'Ej: Valparaíso',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'La región es requerida';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: useTwoColumns ? constraints.maxWidth / 2 - 8 : null,
+                child: TextFormField(
+                  controller: _postalCodeController,
+                  decoration: _fieldDecoration(
+                    label: 'Código postal',
+                    icon: Icons.markunread_mailbox_outlined,
+                    hintText: 'Opcional',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAddressFieldRow({
+    required bool useTwoColumns,
+    required Widget left,
+    required Widget right,
+  }) {
+    if (!useTwoColumns) {
+      return Column(
+        children: [
+          left,
+          const SizedBox(height: 14),
+          right,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: 14),
+        Expanded(child: right),
+      ],
     );
   }
 

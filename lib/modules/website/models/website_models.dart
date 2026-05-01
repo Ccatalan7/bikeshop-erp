@@ -375,6 +375,16 @@ class OnlineOrder {
   final String? customerPhone;
   final String? customerAddress;
 
+  final String deliveryType;
+  final String? shippingAddressLine1;
+  final String? shippingAddressLine2;
+  final String? shippingCity;
+  final String? shippingState;
+  final String? shippingPostalCode;
+  final String? shippingCountry;
+  final String? shippingCarrier;
+  final String? trackingUrl;
+
   final double subtotal;
   final double taxAmount;
   final double shippingCost;
@@ -391,11 +401,15 @@ class OnlineOrder {
   final String? trackingNumber;
   final DateTime? shippedAt;
   final DateTime? deliveredAt;
+  final DateTime? readyForPickupAt;
+  final DateTime? cancelledAt;
+  final String? cancelledReason;
 
   final String? salesInvoiceId;
 
   final String? customerNotes;
   final String? internalNotes;
+  final String? notes;
 
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -411,6 +425,15 @@ class OnlineOrder {
     required this.customerName,
     this.customerPhone,
     this.customerAddress,
+    this.deliveryType = 'shipping',
+    this.shippingAddressLine1,
+    this.shippingAddressLine2,
+    this.shippingCity,
+    this.shippingState,
+    this.shippingPostalCode,
+    this.shippingCountry,
+    this.shippingCarrier,
+    this.trackingUrl,
     required this.subtotal,
     required this.taxAmount,
     required this.shippingCost,
@@ -424,9 +447,13 @@ class OnlineOrder {
     this.trackingNumber,
     this.shippedAt,
     this.deliveredAt,
+    this.readyForPickupAt,
+    this.cancelledAt,
+    this.cancelledReason,
     this.salesInvoiceId,
     this.customerNotes,
     this.internalNotes,
+    this.notes,
     required this.createdAt,
     required this.updatedAt,
     this.items = const [],
@@ -442,6 +469,15 @@ class OnlineOrder {
       customerName: json['customer_name']?.toString() ?? 'Cliente',
       customerPhone: json['customer_phone'] as String?,
       customerAddress: json['customer_address'] as String?,
+      deliveryType: json['delivery_type']?.toString() ?? 'shipping',
+      shippingAddressLine1: json['shipping_address_line1'] as String?,
+      shippingAddressLine2: json['shipping_address_line2'] as String?,
+      shippingCity: json['shipping_city'] as String?,
+      shippingState: json['shipping_state'] as String?,
+      shippingPostalCode: json['shipping_postal_code'] as String?,
+      shippingCountry: json['shipping_country'] as String?,
+      shippingCarrier: json['shipping_carrier'] as String?,
+      trackingUrl: json['tracking_url'] as String?,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       taxAmount: (json['tax_amount'] as num?)?.toDouble() ?? 0.0,
       shippingCost: (json['shipping_cost'] as num?)?.toDouble() ?? 0.0,
@@ -461,14 +497,24 @@ class OnlineOrder {
       deliveredAt: json['delivered_at'] != null
           ? DateTime.parse(json['delivered_at'] as String)
           : null,
+      readyForPickupAt: json['ready_for_pickup_at'] != null
+          ? DateTime.parse(json['ready_for_pickup_at'] as String)
+          : null,
+      cancelledAt: json['cancelled_at'] != null
+          ? DateTime.parse(json['cancelled_at'] as String)
+          : null,
+      cancelledReason: json['cancelled_reason'] as String?,
       salesInvoiceId: json['sales_invoice_id'] as String?,
       customerNotes: json['customer_notes'] as String?,
       internalNotes: json['internal_notes'] as String?,
+      notes: json['notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       items: (json['online_order_items'] as List<dynamic>?)
-          ?.map((item) => OnlineOrderItem.fromJson(item as Map<String, dynamic>))
-          .toList() ?? [],
+              ?.map((item) =>
+                  OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -482,6 +528,15 @@ class OnlineOrder {
       'customer_name': customerName,
       'customer_phone': customerPhone,
       'customer_address': customerAddress,
+      'delivery_type': deliveryType,
+      'shipping_address_line1': shippingAddressLine1,
+      'shipping_address_line2': shippingAddressLine2,
+      'shipping_city': shippingCity,
+      'shipping_state': shippingState,
+      'shipping_postal_code': shippingPostalCode,
+      'shipping_country': shippingCountry,
+      'shipping_carrier': shippingCarrier,
+      'tracking_url': trackingUrl,
       'subtotal': subtotal,
       'tax_amount': taxAmount,
       'shipping_cost': shippingCost,
@@ -495,9 +550,13 @@ class OnlineOrder {
       'tracking_number': trackingNumber,
       'shipped_at': shippedAt?.toIso8601String(),
       'delivered_at': deliveredAt?.toIso8601String(),
+      'ready_for_pickup_at': readyForPickupAt?.toIso8601String(),
+      'cancelled_at': cancelledAt?.toIso8601String(),
+      'cancelled_reason': cancelledReason,
       'sales_invoice_id': salesInvoiceId,
       'customer_notes': customerNotes,
       'internal_notes': internalNotes,
+      'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -512,6 +571,15 @@ class OnlineOrder {
     String? customerName,
     String? customerPhone,
     String? customerAddress,
+    String? deliveryType,
+    String? shippingAddressLine1,
+    String? shippingAddressLine2,
+    String? shippingCity,
+    String? shippingState,
+    String? shippingPostalCode,
+    String? shippingCountry,
+    String? shippingCarrier,
+    String? trackingUrl,
     double? subtotal,
     double? taxAmount,
     double? shippingCost,
@@ -525,9 +593,13 @@ class OnlineOrder {
     String? trackingNumber,
     DateTime? shippedAt,
     DateTime? deliveredAt,
+    DateTime? readyForPickupAt,
+    DateTime? cancelledAt,
+    String? cancelledReason,
     String? salesInvoiceId,
     String? customerNotes,
     String? internalNotes,
+    String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
     List<OnlineOrderItem>? items,
@@ -541,6 +613,15 @@ class OnlineOrder {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
+      deliveryType: deliveryType ?? this.deliveryType,
+      shippingAddressLine1: shippingAddressLine1 ?? this.shippingAddressLine1,
+      shippingAddressLine2: shippingAddressLine2 ?? this.shippingAddressLine2,
+      shippingCity: shippingCity ?? this.shippingCity,
+      shippingState: shippingState ?? this.shippingState,
+      shippingPostalCode: shippingPostalCode ?? this.shippingPostalCode,
+      shippingCountry: shippingCountry ?? this.shippingCountry,
+      shippingCarrier: shippingCarrier ?? this.shippingCarrier,
+      trackingUrl: trackingUrl ?? this.trackingUrl,
       subtotal: subtotal ?? this.subtotal,
       taxAmount: taxAmount ?? this.taxAmount,
       shippingCost: shippingCost ?? this.shippingCost,
@@ -554,9 +635,13 @@ class OnlineOrder {
       trackingNumber: trackingNumber ?? this.trackingNumber,
       shippedAt: shippedAt ?? this.shippedAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
+      readyForPickupAt: readyForPickupAt ?? this.readyForPickupAt,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancelledReason: cancelledReason ?? this.cancelledReason,
       salesInvoiceId: salesInvoiceId ?? this.salesInvoiceId,
       customerNotes: customerNotes ?? this.customerNotes,
       internalNotes: internalNotes ?? this.internalNotes,
+      notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       items: items ?? this.items,
@@ -571,6 +656,8 @@ class OnlineOrder {
         return 'Confirmado';
       case 'processing':
         return 'En Proceso';
+      case 'ready_for_pickup':
+        return 'Listo para retiro';
       case 'shipped':
         return 'Enviado';
       case 'delivered':
@@ -595,6 +682,39 @@ class OnlineOrder {
       default:
         return paymentStatus;
     }
+  }
+
+  String get deliveryDisplayName {
+    switch (deliveryType) {
+      case 'pickup':
+        return 'Retiro en tienda';
+      case 'shipping':
+        return 'Despacho';
+      default:
+        return deliveryType;
+    }
+  }
+
+  String get shippingAddressDisplay {
+    final parts = [
+      shippingAddressLine1,
+      shippingAddressLine2,
+      shippingCity,
+      shippingState,
+      shippingCountry,
+    ]
+        .map((part) => part?.trim())
+        .where((part) => part != null && part.isNotEmpty)
+        .cast<String>()
+        .toList();
+
+    if (parts.isEmpty) {
+      return customerAddress?.trim().isNotEmpty == true
+          ? customerAddress!.trim()
+          : 'Sin dirección registrada';
+    }
+
+    return parts.toSet().join(', ');
   }
 }
 
@@ -631,7 +751,7 @@ class OnlineOrderItem {
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
     );

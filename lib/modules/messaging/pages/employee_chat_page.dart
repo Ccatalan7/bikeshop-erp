@@ -100,6 +100,18 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     });
   }
 
+  void _syncTabToActiveConversation(Conversation? conversation) {
+    if (conversation == null) return;
+    final targetIndex = conversation.type == 'support' ? 1 : 0;
+    if (_tabController.index == targetIndex) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _tabController.index != targetIndex) {
+        _tabController.animateTo(targetIndex);
+      }
+    });
+  }
+
   void _closeSidePanel() {
     setState(() {
       _activeReference = null;
@@ -147,6 +159,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       } catch (_) {}
     }
 
+    _syncTabToActiveConversation(activeConversation);
+
     if (isMobile) {
       return _buildMobileLayout(
           provider, activeId, allConversations, pendingCount);
@@ -161,7 +175,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Mensajes',
+          'Mensajería interna',
           style: TextStyle(color: Colors.black87),
         ),
         backgroundColor: Colors.white,
@@ -188,14 +202,14 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           unselectedLabelColor: Colors.grey[600],
           indicatorColor: Theme.of(context).primaryColor,
           tabs: [
-            const Tab(icon: Icon(Icons.people), text: 'Internos'),
+            const Tab(icon: Icon(Icons.people), text: 'Equipo'),
             Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.support_agent),
                   const SizedBox(width: 8),
-                  const Text('Clientes'),
+                  const Text('WhatsApp'),
                   if (pendingCount > 0) ...[
                     const SizedBox(width: 8),
                     _buildBadge(pendingCount),
@@ -242,7 +256,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                   child: Row(
                     children: [
                       const Text(
-                        'Mensajes',
+                        'Mensajería interna',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -280,12 +294,12 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     unselectedLabelColor: Colors.grey[600],
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
-                      const Tab(text: 'Internos'),
+                      const Tab(text: 'Equipo'),
                       Tab(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Clientes'),
+                            const Text('WhatsApp'),
                             if (pendingCount > 0) ...[
                               const SizedBox(width: 8),
                               _buildBadge(pendingCount),
@@ -397,8 +411,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     if (customerConvs.isEmpty) {
       return _buildEmptyState(
         icon: Icons.support_agent_outlined,
-        title: 'Sin solicitudes de clientes',
-        subtitle: 'Las solicitudes de soporte aparecerán aquí',
+        title: 'Sin conversaciones de WhatsApp',
+        subtitle: 'Los contactos con clientes aparecerán aquí',
       );
     }
 
@@ -560,9 +574,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   String _getSubtitle(Conversation conv) {
     if (conv.status == 'pending') return '⏳ Esperando respuesta...';
     if (conv.status == 'resolved') return '✅ Resuelto';
+    if (conv.contextType == 'order') return '🛒 Pedido web';
     if (conv.contextType == 'job') return '🔧 Servicio técnico';
     if (conv.contextType == 'invoice') return '📄 Factura';
-    return conv.type == 'support' ? 'Soporte' : 'Chat interno';
+    return conv.type == 'support' ? 'WhatsApp cliente' : 'Chat interno';
   }
 
   Widget _buildBadge(int count) {

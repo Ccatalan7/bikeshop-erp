@@ -64,6 +64,7 @@ class _ChatWindowState extends State<ChatWindow> {
       _senderInfoFutureCache.clear();
       _whatsAppContactFuture = _resolveConversationWhatsAppContact();
       _loadMessages();
+      _applyPendingDraft();
     }
   }
 
@@ -72,6 +73,7 @@ class _ChatWindowState extends State<ChatWindow> {
     super.initState();
     _whatsAppContactFuture = _resolveConversationWhatsAppContact();
     _loadMessages();
+    _applyPendingDraft();
     _messageController.addListener(_onTextChanged);
   }
 
@@ -275,6 +277,24 @@ class _ChatWindowState extends State<ChatWindow> {
     });
   }
 
+  void _applyPendingDraft() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _messageController.text.trim().isNotEmpty) return;
+
+      final draft = context
+          .read<ChatProvider>()
+          .getConversationDraft(widget.conversation.id)
+          ?.body;
+      if (draft == null || draft.trim().isEmpty) return;
+
+      _messageController.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+      _restoreComposerFocus();
+    });
+  }
+
   Future<void> _sendInitialTemplate() async {
     if (_isSendingMessage) return;
     debugPrint('🟠 [ChatWindow] _sendInitialTemplate tapped');
@@ -314,16 +334,26 @@ class _ChatWindowState extends State<ChatWindow> {
       if (!mounted) return;
 
       if (success) {
+        final hasPendingDraft = context
+                .read<ChatProvider>()
+                .getConversationDraft(widget.conversation.id) !=
+            null;
         debugPrint('✅ [ChatWindow] Initial template sent successfully');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-                'Plantilla inicial enviada. Cuando el cliente responda se habilitará el chat normal.'),
+              hasPendingDraft
+                  ? 'Plantilla inicial enviada. El resumen del pedido sigue preparado; envíalo cuando el cliente responda.'
+                  : 'Plantilla inicial enviada. Cuando el cliente responda se habilitará el chat normal.',
+            ),
             backgroundColor: Colors.green,
           ),
         );
         // Reload messages so the sent template bubble appears
         _loadMessages();
+        setState(() {
+          _whatsAppContactFuture = _resolveConversationWhatsAppContact();
+        });
       } else {
         debugPrint('❌ [ChatWindow] Initial template failed');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -414,6 +444,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
         if (whatsappService.lastDeliveryMethod ==
             WhatsAppDeliveryMethod.cloudApi) {
+          chatProvider.clearConversationDraft(widget.conversation.id);
           chatProvider.updateMessageById(
             optimisticMessageId,
             content: whatsappService.lastResolvedMessageText ?? pendingText,
@@ -731,6 +762,8 @@ class _ChatWindowState extends State<ChatWindow> {
     final chatProvider = context.watch<ChatProvider>();
     final messages = chatProvider.activeMessages;
     final isLoading = chatProvider.isLoading;
+    final pendingDraft =
+        chatProvider.getConversationDraft(widget.conversation.id);
 
     return Column(
       children: [
@@ -783,6 +816,8 @@ class _ChatWindowState extends State<ChatWindow> {
             ],
           ),
         ),
+
+        if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
 
         // Pending Chat Request Banner (for employees reviewing customer requests)
         if (widget.conversation.type == 'support' &&
@@ -873,6 +908,84 @@ class _ChatWindowState extends State<ChatWindow> {
           child: _buildComposer(context),
         ),
       ],
+    );
+  }
+
+  Widget _buildPreparedHandoffBanner(ConversationDraft draft) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        border: Border(
+          bottom: BorderSide(color: Colors.blueGrey[100]!),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.assignment_outlined, color: Color(0xFF093357)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  draft.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF093357),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  draft.subtitle,
+                  style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blueGrey[100]!),
+                  ),
+                  child: Text(
+                    draft.body,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton.icon(
+            onPressed: () {
+              if (_messageController.text.trim().isEmpty) {
+                _messageController.value = TextEditingValue(
+                  text: draft.body,
+                  selection: TextSelection.collapsed(offset: draft.body.length),
+                );
+              }
+              _restoreComposerFocus();
+            },
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Editar'),
+          ),
+          IconButton(
+            tooltip: 'Descartar borrador',
+            onPressed: () {
+              context
+                  .read<ChatProvider>()
+                  .clearConversationDraft(widget.conversation.id);
+            },
+            icon: const Icon(Icons.close, size: 18),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1315,6 +1428,35 @@ class _ChatWindowState extends State<ChatWindow> {
     return DateTime.tryParse(rawValue?.toString() ?? '');
   }
 
+  DateTime? _parseLastFirstContactTemplateAt(Map<String, dynamic>? contact) {
+    final rawValue = contact?['last_first_contact_template_at'];
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    return DateTime.tryParse(rawValue?.toString() ?? '');
+  }
+
+  DateTime? _parseLastOutboundAt(Map<String, dynamic>? contact) {
+    final rawValue = contact?['last_outbound_at'];
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    return DateTime.tryParse(rawValue?.toString() ?? '');
+  }
+
+  bool _hasInitialTemplateWaitingForReply(Map<String, dynamic>? contact) {
+    final lastTemplateOrOutboundAt =
+        _parseLastFirstContactTemplateAt(contact) ??
+            _parseLastOutboundAt(contact);
+    if (lastTemplateOrOutboundAt == null) return false;
+
+    final lastInboundAt = _parseLastInboundAt(contact);
+    return lastInboundAt == null ||
+        lastTemplateOrOutboundAt.toUtc().isAfter(lastInboundAt.toUtc());
+  }
+
   bool _requiresFirstContactTemplate(Map<String, dynamic>? contact) {
     final phone = contact?['phone']?.toString();
     if (phone == null || phone.isEmpty) {
@@ -1387,8 +1529,12 @@ class _ChatWindowState extends State<ChatWindow> {
       builder: (context, snapshot) {
         final contact = snapshot.data;
         final requiresTemplate = _requiresFirstContactTemplate(contact);
+        final waitingForReply = _hasInitialTemplateWaitingForReply(contact);
 
         if (requiresTemplate) {
+          final draft = context
+              .watch<ChatProvider>()
+              .getConversationDraft(widget.conversation.id);
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1415,7 +1561,9 @@ class _ChatWindowState extends State<ChatWindow> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Primer contacto por WhatsApp',
+                            waitingForReply
+                                ? 'Plantilla inicial enviada'
+                                : 'Primer contacto por WhatsApp',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.orange[900],
@@ -1423,7 +1571,13 @@ class _ChatWindowState extends State<ChatWindow> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Aquí no se enviará texto libre. Al tocar el botón se mandará la plantilla aprobada de Meta para abrir la conversación.',
+                            waitingForReply
+                                ? (draft == null
+                                    ? 'Ya se envió la plantilla aprobada de Meta. Espera la respuesta del cliente para habilitar texto libre.'
+                                    : 'Ya se envió la plantilla aprobada de Meta. El resumen del pedido sigue preparado y se podrá enviar cuando el cliente responda.')
+                                : (draft == null
+                                    ? 'Aquí no se enviará texto libre. Al tocar el botón se mandará la plantilla aprobada de Meta para abrir la conversación.'
+                                    : 'Aquí no se enviará el resumen del pedido todavía. Primero se manda la plantilla aprobada de Meta; cuando el cliente responda, el borrador queda listo para enviar.'),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.orange[800],
@@ -1435,28 +1589,30 @@ class _ChatWindowState extends State<ChatWindow> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _isSendingMessage ? null : _sendInitialTemplate,
-                  icon: _isSendingMessage
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.send),
-                  label: Text(
-                    _isSendingMessage
-                        ? 'Enviando plantilla inicial...'
-                        : 'Enviar plantilla inicial',
+              if (!waitingForReply) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isSendingMessage ? null : _sendInitialTemplate,
+                    icon: _isSendingMessage
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                    label: Text(
+                      _isSendingMessage
+                          ? 'Enviando plantilla inicial...'
+                          : 'Enviar plantilla inicial',
+                    ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 6),
               Text(
                 'Cuando el cliente responda, aquí se habilitará el chat normal.',
@@ -1643,8 +1799,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:
-                        isMe ? Colors.white.withValues(alpha: 0.3) : Colors.grey[100],
+                    color: isMe
+                        ? Colors.white.withValues(alpha: 0.3)
+                        : Colors.grey[100],
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(

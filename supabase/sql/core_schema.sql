@@ -9742,11 +9742,7 @@ with movement_documents as (
     sm.tenant_id,
     case
       when coalesce(sm.reference, '') ~ '^sales_invoice:[0-9a-fA-F-]{36}$'
-        then split_part(sm.reference, ':', 2)::uuid
-      when coalesce(sm.reference, '') ~ '^purchase_invoice:[0-9a-fA-F-]{36}$'
-        then split_part(sm.reference, ':', 2)::uuid
-      when coalesce(sm.reference, '') ~ '^mechanic_job:[0-9a-fA-F-]{36}$'
-        then split_part(sm.reference, ':', 2)::uuid
+      true,
       else null::uuid
     end as document_id,
     case
@@ -24866,6 +24862,11 @@ begin
   end if;
 
   if v_context_type is not null and v_context_id is not null then
+    update public.conversation_contexts
+    set is_primary = false
+    where conversation_id = v_conversation_id
+      and tenant_id = p_tenant_id;
+
     insert into public.conversation_contexts (
       conversation_id,
       context_type,
@@ -24876,17 +24877,26 @@ begin
       v_conversation_id,
       v_context_type,
       v_context_id,
-      not exists (
-        select 1
-        from public.conversation_contexts
-        where conversation_id = v_conversation_id
-      ),
+      true,
       p_tenant_id
-    ) on conflict (conversation_id, context_type, context_id) do nothing;
+    ) on conflict (conversation_id, context_type, context_id) do update
+      set is_primary = true;
   end if;
 
   update public.conversations
-  set title = coalesce(title, nullif(trim(p_contact_name), ''), nullif(trim(p_phone_number), ''), title),
+  set title = case
+        when nullif(trim(p_contact_name), '') is not null
+          and (
+            title is null
+            or trim(title) = ''
+            or public.normalize_whatsapp_phone(title) = p_wa_id
+            or public.normalize_whatsapp_phone(title) = public.normalize_whatsapp_phone(p_phone_number)
+          )
+          then trim(p_contact_name)
+        else coalesce(title, nullif(trim(p_contact_name), ''), nullif(trim(p_phone_number), ''), title)
+      end,
+      context_type = coalesce(v_context_type, context_type),
+      context_id = coalesce(v_context_id, context_id),
       updated_at = now()
   where id = v_conversation_id;
 

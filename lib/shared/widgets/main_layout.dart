@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 import '../services/auth_service.dart';
 import '../services/navigation_service.dart';
+import '../services/tenant_service.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
+import '../utils/chilean_utils.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import 'expandable_menu_item.dart';
@@ -520,7 +523,8 @@ class _SidebarOptionsPanel extends StatelessWidget {
                     children: [
                       Icon(Icons.zoom_in,
                           size: 18,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.7)),
                       const SizedBox(width: 12),
                       Text('Zoom', style: theme.textTheme.bodyMedium),
                       const Spacer(),
@@ -559,7 +563,8 @@ class _SidebarOptionsPanel extends StatelessWidget {
                 ),
                 Divider(
                     height: 1,
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.3)),
                 // Reorder modules
                 _OptionTile(
                   icon: navigationService.isReorderMode
@@ -613,7 +618,8 @@ class _OptionTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon,
-                size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
             const SizedBox(width: 12),
             Text(label, style: theme.textTheme.bodyMedium),
           ],
@@ -644,12 +650,16 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   OverlayEntry? _currentNotificationOverlay;
   Timer? _notificationTimer;
+  StreamSubscription? _pushNotificationSubscription;
+  RealtimeChannel? _onlineOrdersChannel;
+  String? _lastNotifiedOnlineOrderId;
 
   @override
   void initState() {
     super.initState();
     // Listen for incoming messages to show in-app notification
-    NotificationService().messageStream.listen((message) {
+    _pushNotificationSubscription =
+        NotificationService().messageStream.listen((message) {
       if (!mounted) return;
 
       // FORCE ChatProvider refresh to ensure badge updates immediately
@@ -662,9 +672,69 @@ class _MainLayoutState extends State<MainLayout> {
 
       _showTopNotification(title, body);
     });
+
+    _setupOnlineOrderNotifications();
   }
 
-  void _showTopNotification(String title, String body) {
+  @override
+  void dispose() {
+    _notificationTimer?.cancel();
+    _currentNotificationOverlay?.remove();
+    _pushNotificationSubscription?.cancel();
+    _onlineOrdersChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  Future<void> _setupOnlineOrderNotifications() async {
+    final tenantId = await TenantService().getTenantId();
+    if (!mounted || tenantId == null || tenantId.isEmpty) return;
+
+    await _onlineOrdersChannel?.unsubscribe();
+    _onlineOrdersChannel = Supabase.instance.client
+        .channel('erp_online_order_notifications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'online_orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final record = payload.newRecord;
+            final orderId = record['id']?.toString();
+            if (orderId == null || orderId == _lastNotifiedOnlineOrderId) {
+              return;
+            }
+            _lastNotifiedOnlineOrderId = orderId;
+
+            final orderNumber =
+                record['order_number']?.toString() ?? 'Pedido web';
+            final customerName =
+                record['customer_name']?.toString() ?? 'Cliente';
+            final total = (record['total'] as num?)?.toDouble();
+            final amount =
+                total == null ? '' : ' · ${ChileanUtils.formatCurrency(total)}';
+
+            _showTopNotification(
+              'Nueva venta online',
+              '$orderNumber · $customerName$amount',
+              icon: Icons.shopping_cart_checkout_outlined,
+              route: '/website/orders',
+            );
+          },
+        )
+        .subscribe();
+  }
+
+  void _showTopNotification(
+    String title,
+    String body, {
+    IconData icon = Icons.chat_bubble_outline,
+    String route = '/chat',
+  }) {
     _notificationTimer?.cancel();
     _currentNotificationOverlay?.remove();
 
@@ -705,7 +775,7 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
                 child: InkWell(
                   onTap: () {
-                    context.go('/chat');
+                    context.go(route);
                     _currentNotificationOverlay?.remove();
                     _currentNotificationOverlay = null;
                   },
@@ -716,7 +786,7 @@ class _MainLayoutState extends State<MainLayout> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.chat_bubble_outline,
+                        Icon(icon,
                             size: 18,
                             color:
                                 Theme.of(context).colorScheme.onInverseSurface),
@@ -938,12 +1008,12 @@ class _MainLayoutState extends State<MainLayout> {
 Future<void> _handleLogout(BuildContext context) async {
   final authService = context.read<AuthService>();
   final router = GoRouter.of(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
 
   try {
     await authService.signOut();
     router.go('/login');
   } catch (error) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
       SnackBar(content: Text('No se pudo cerrar sesión: $error')),
     );
@@ -1360,7 +1430,8 @@ class _AppSidebarState extends State<AppSidebar> {
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surface,
                             border: Border.all(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.3),
                               width: 1,
                             ),
                             borderRadius: BorderRadius.circular(8),
@@ -1513,8 +1584,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             Icon(
                               Icons.logout_outlined,
                               size: 20,
-                              color:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1546,8 +1617,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             icon: Icon(
                               Icons.more_horiz,
                               size: 18,
-                              color:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
                             ),
                             iconSize: 18,
                             padding: EdgeInsets.zero,
@@ -1577,8 +1648,8 @@ class _AppSidebarState extends State<AppSidebar> {
                             },
                             style: IconButton.styleFrom(
                               backgroundColor: theme.colorScheme.surface,
-                              foregroundColor:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              foregroundColor: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         ],

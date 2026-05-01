@@ -35,11 +35,13 @@ class Conversation {
           .toList();
     }
 
-    // Extract context from relation
+    // Prefer the conversation's active context columns. The history table can
+    // contain older links for the same WhatsApp thread.
     String? cType = json['context_type'];
     String? cId = json['context_id'];
 
-    if (json['conversation_contexts'] != null) {
+    if ((cType == null || cId == null) &&
+        json['conversation_contexts'] != null) {
       final contexts = (json['conversation_contexts'] as List);
       if (contexts.isNotEmpty) {
         // Try to find primary, otherwise first

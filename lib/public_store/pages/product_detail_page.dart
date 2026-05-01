@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -38,6 +40,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   int _quantity = 1;
   int _selectedImageIndex = 0;
   int _loadToken = 0;
+  OverlayEntry? _productFeedbackOverlay;
+  Timer? _productFeedbackTimer;
+  Timer? _productFeedbackRemovalTimer;
+  ValueNotifier<bool>? _productFeedbackVisible;
 
   // DISABLED: AutomaticKeepAliveClientMixin causes element activation conflicts
   // during edit/preview mode switches. The performance cost of reloading is acceptable.
@@ -65,6 +71,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   @override
   void dispose() {
+    _hideProductFeedbackBanner(animated: false);
     removeStructuredDataScript(_structuredDataScriptId);
     super.dispose();
   }
@@ -337,11 +344,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
     if (isStockTracked && _product!.stockQuantity < _quantity) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Stock insuficiente'),
-          backgroundColor: PublicStoreTheme.error,
-        ),
+      _showProductFeedbackBanner(
+        message: 'Stock insuficiente',
+        backgroundColor: PublicStoreTheme.error,
       );
       return;
     }
@@ -349,19 +354,179 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final cart = context.read<CartProvider>();
     cart.addProduct(_product!, quantity: _quantity);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_product!.name} agregado al carrito'),
-        backgroundColor: PublicStoreTheme.success,
-        action: SnackBarAction(
-          label: 'Ver Carrito',
-          textColor: Colors.white,
-          onPressed: () => context.go('/carrito'),
+    _showProductFeedbackBanner(
+      message: '${_product!.name} agregado al carrito',
+      backgroundColor: _logoBlue,
+      actionLabel: 'Ver carrito',
+      onActionPressed: () => context.go('/carrito'),
+    );
+
+    setState(() => _quantity = 1);
+  }
+
+  void _showProductFeedbackBanner({
+    required String message,
+    required Color backgroundColor,
+    String? actionLabel,
+    VoidCallback? onActionPressed,
+  }) {
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    const bannerMaxWidth = 560.0;
+    final horizontalMargin = screenWidth > bannerMaxWidth + 32
+        ? (screenWidth - bannerMaxWidth) / 2
+        : 16.0;
+    final overlayState = Overlay.maybeOf(context, rootOverlay: true);
+
+    if (overlayState == null) return;
+
+    _hideProductFeedbackBanner(animated: false);
+
+    final visible = ValueNotifier<bool>(false);
+
+    final overlay = OverlayEntry(
+      builder: (overlayContext) => Positioned(
+        left: horizontalMargin,
+        right: horizontalMargin,
+        bottom: 20 + mediaQuery.padding.bottom,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: visible,
+              builder: (context, isVisible, child) {
+                return AnimatedSlide(
+                  offset: isVisible ? Offset.zero : const Offset(0, 0.18),
+                  duration: const Duration(milliseconds: 280),
+                  curve: isVisible ? Curves.easeOutCubic : Curves.easeInCubic,
+                  child: AnimatedOpacity(
+                    opacity: isVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    curve: isVisible ? Curves.easeOutCubic : Curves.easeInCubic,
+                    child: child,
+                  ),
+                );
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: bannerMaxWidth),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: backgroundColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            message,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: PublicStoreTheme.defaultBodyFont,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        if (actionLabel != null && onActionPressed != null) ...[
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () {
+                              _hideProductFeedbackBanner(animated: false);
+                              onActionPressed();
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              textStyle: const TextStyle(
+                                fontFamily: PublicStoreTheme.defaultBodyFont,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            child: Text(actionLabel),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
 
-    setState(() => _quantity = 1);
+    overlayState.insert(overlay);
+    _productFeedbackOverlay = overlay;
+    _productFeedbackVisible = visible;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_productFeedbackVisible == visible) {
+        visible.value = true;
+      }
+    });
+    _productFeedbackTimer = Timer(
+      const Duration(milliseconds: 2600),
+      () => _hideProductFeedbackBanner(),
+    );
+  }
+
+  void _hideProductFeedbackBanner({bool animated = true}) {
+    _productFeedbackTimer?.cancel();
+    _productFeedbackTimer = null;
+    _productFeedbackRemovalTimer?.cancel();
+    _productFeedbackRemovalTimer = null;
+
+    final overlay = _productFeedbackOverlay;
+    final visible = _productFeedbackVisible;
+
+    if (overlay == null) {
+      visible?.dispose();
+      _productFeedbackVisible = null;
+      return;
+    }
+
+    if (!animated || visible == null) {
+      overlay.remove();
+      if (identical(_productFeedbackOverlay, overlay)) {
+        _productFeedbackOverlay = null;
+        _productFeedbackVisible = null;
+      }
+      visible?.dispose();
+      return;
+    }
+
+    visible.value = false;
+    _productFeedbackRemovalTimer = Timer(
+      const Duration(milliseconds: 280),
+      () {
+        overlay.remove();
+        if (identical(_productFeedbackOverlay, overlay)) {
+          _productFeedbackOverlay = null;
+          _productFeedbackVisible = null;
+        }
+        visible.dispose();
+      },
+    );
   }
 
   @override

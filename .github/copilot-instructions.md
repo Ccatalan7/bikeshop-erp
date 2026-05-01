@@ -2053,6 +2053,21 @@ Each module is independent but shares a unified data layer. Modules include:
 
 ---
 
+# 💬 Internal Messaging / WhatsApp-Backed Support Inbox
+
+The customer communication platform inside the ERP should be called **Internal Messaging** or the **WhatsApp-backed support inbox**. In Spanish UI/context, use **Mensajería interna** when naming the module concept.
+
+Architecture rule:
+- `WhatsAppService` is a transport layer for WhatsApp Cloud API/manual fallback. It is not the screen-level workflow entrypoint for ERP modules.
+- ERP actions such as online order coordination, job updates, invoice follow-up, or customer support handoff must create or resolve an internal support conversation and route staff into `/chat?conversation=<conversation_id>`.
+- Use `MessagingService`, `ChatProvider`, `EmployeeChatPage`, and `ChatWindow` as the workflow surface. `ChatWindow` is where staff composes/sends the WhatsApp message through the internal UI.
+- Preserve business context with `conversation_contexts` / `ensure_whatsapp_conversation_binding` using the existing checked `context_type` vocabulary (`order`, `job`, `invoice`, `bike`, `product`, `customer`) and `context_id`; website online orders use `context_type = 'order'`.
+- Do not add direct `WhatsAppService.sendMessage(...)` calls to operational pages just because an action says WhatsApp. If the user should review, edit, or initiate a client conversation, open the internal inbox and optionally prefill a draft there.
+
+Direct transport sends are only appropriate inside the messaging workflow itself or for explicitly approved automated notifications where no staff review is expected.
+
+---
+
 # 🧮 Database Schema (PostgreSQL)
 
 Use normalized tables with foreign keys and constraints. Example:

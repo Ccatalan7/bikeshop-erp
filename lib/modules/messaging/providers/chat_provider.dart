@@ -7,6 +7,18 @@ import '../models/message.dart';
 import '../services/messaging_service.dart';
 import '../../../shared/services/notification_service.dart';
 
+class ConversationDraft {
+  final String body;
+  final String title;
+  final String subtitle;
+
+  const ConversationDraft({
+    required this.body,
+    required this.title,
+    required this.subtitle,
+  });
+}
+
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
   final UserManagementService? _userService;
@@ -15,6 +27,7 @@ class ChatProvider extends ChangeNotifier {
   List<Conversation> _conversations = [];
   List<Message> _activeMessages = [];
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
+  final Map<String, ConversationDraft> _conversationDrafts = {};
   bool _isLoading = false;
   String? _activeConversationId;
 
@@ -79,15 +92,18 @@ class ChatProvider extends ChangeNotifier {
 
   /// Get display title for a conversation
   String getChatTitle(Conversation c) {
-    if (c.title != null && c.title!.isNotEmpty) return c.title ?? '';
-
     // For support chats, use customer name
     if (c.type == 'support') {
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
         return c.creatorName ?? 'Cliente';
       }
+      if (c.title != null && c.title!.trim().isNotEmpty) {
+        return c.title!.trim();
+      }
       return 'Cliente';
     }
+
+    if (c.title != null && c.title!.isNotEmpty) return c.title ?? '';
 
     // Internal chat - find other participant
     final myId = _service.currentUserId;
@@ -107,6 +123,38 @@ class ChatProvider extends ChangeNotifier {
     }
 
     return 'Usuario Desconocido';
+  }
+
+  void setConversationDraft(
+    String conversationId,
+    String draft, {
+    String title = 'Mensaje preparado',
+    String subtitle = 'Nada se ha enviado todavía.',
+  }) {
+    final trimmed = draft.trim();
+    if (trimmed.isEmpty) return;
+    _conversationDrafts[conversationId] = ConversationDraft(
+      body: trimmed,
+      title: title,
+      subtitle: subtitle,
+    );
+    notifyListeners();
+  }
+
+  ConversationDraft? getConversationDraft(String conversationId) {
+    return _conversationDrafts[conversationId];
+  }
+
+  String? takeConversationDraft(String conversationId) {
+    final draft = _conversationDrafts.remove(conversationId);
+    if (draft != null) notifyListeners();
+    return draft?.body;
+  }
+
+  void clearConversationDraft(String conversationId) {
+    if (_conversationDrafts.remove(conversationId) != null) {
+      notifyListeners();
+    }
   }
 
   /// Load conversations list

@@ -5,6 +5,8 @@ import '../../bikeshop/services/bikeshop_service.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../../sales/models/sales_models.dart';
+import '../../website/models/website_models.dart';
+import '../../website/services/website_service.dart';
 
 class ChatContextPanel extends StatefulWidget {
   final String contextType;
@@ -94,6 +96,14 @@ class _ChatContextPanelState extends State<ChatContextPanel>
         } else {
           _error = 'Factura no encontrada';
         }
+      } else if (widget.contextType == 'order') {
+        final order =
+            await context.read<WebsiteService>().getOrderById(widget.contextId);
+        if (order != null) {
+          _data = order;
+        } else {
+          _error = 'Pedido web no encontrado';
+        }
       } else {
         _error = 'Tipo de contexto desconocido';
       }
@@ -131,6 +141,18 @@ class _ChatContextPanelState extends State<ChatContextPanel>
           ),
           padding: const EdgeInsets.all(16),
           child: _buildInvoiceContent(_data as Invoice));
+    } else if (widget.contextType == 'order') {
+      return Container(
+        width: 320,
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: Colors.grey[300]!)),
+          color: Colors.grey[50],
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildOrderContent(_data as OnlineOrder),
+        ),
+      );
     }
 
     return const SizedBox.shrink();
@@ -321,6 +343,101 @@ class _ChatContextPanelState extends State<ChatContextPanel>
     );
   }
 
+  Widget _buildOrderContent(OnlineOrder order) {
+    final theme = Theme.of(context);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final deliveryLabel =
+        order.deliveryType == 'pickup' ? 'Retiro en tienda' : 'Despacho';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.shopping_cart_outlined,
+                size: 20, color: Color(0xFF093357)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'PEDIDO WEB',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        Text('#${order.orderNumber}', style: theme.textTheme.bodySmall),
+        const SizedBox(height: 16),
+        _buildInfoRow('Estado', order.status.toUpperCase(),
+            color: _getOrderStatusColor(order.status)),
+        _buildInfoRow('Pago', order.paymentStatus.toUpperCase(),
+            color: _getPaymentStatusColor(order.paymentStatus)),
+        _buildInfoRow('Entrega', deliveryLabel),
+        const Divider(height: 24),
+        Text('Cliente',
+            style:
+                theme.textTheme.labelSmall?.copyWith(color: Colors.grey[600])),
+        const SizedBox(height: 6),
+        Text(order.customerName,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w700)),
+        if (order.customerEmail.isNotEmpty)
+          Text(order.customerEmail, style: theme.textTheme.bodySmall),
+        if (order.customerPhone?.isNotEmpty == true)
+          Text(order.customerPhone!, style: theme.textTheme.bodySmall),
+        const Divider(height: 24),
+        if (order.items.isNotEmpty) ...[
+          Text('Productos (${order.items.length})',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: Colors.grey[600])),
+          const SizedBox(height: 8),
+          ...order.items.take(8).map((item) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: Text('${item.quantity}x',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.productName,
+                            style: theme.textTheme.bodySmall,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        if (item.productSku?.isNotEmpty == true)
+                          Text('SKU ${item.productSku}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                              )),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(currencyFormat.format(item.subtotal),
+                      style: theme.textTheme.bodySmall),
+                ],
+              ),
+            );
+          }),
+        ],
+        const Divider(height: 24),
+        _buildInfoRow('Total', currencyFormat.format(order.total),
+            isBold: true),
+        if (order.salesInvoiceId?.isNotEmpty == true)
+          _buildInfoRow('Factura', 'Generada'),
+      ],
+    );
+  }
+
   Widget _buildInfoRow(String label, String value,
       {Color? color, bool isBold = false}) {
     return Padding(
@@ -354,5 +471,23 @@ class _ChatContextPanelState extends State<ChatContextPanel>
       default:
         return Colors.grey;
     }
+  }
+
+  Color _getOrderStatusColor(String status) {
+    return switch (status) {
+      'confirmed' => Colors.blue,
+      'shipped' || 'ready_for_pickup' => Colors.indigo,
+      'delivered' => Colors.green,
+      'cancelled' => Colors.red,
+      _ => Colors.orange,
+    };
+  }
+
+  Color _getPaymentStatusColor(String status) {
+    return switch (status) {
+      'paid' => Colors.green,
+      'failed' || 'refunded' => Colors.red,
+      _ => Colors.orange,
+    };
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/message.dart';
 // For VoidCallback
@@ -9,6 +10,60 @@ class MessagingService {
 
   /// Get current user ID
   String? get currentUserId => _client.auth.currentUser?.id;
+
+  String _normalizeWhatsAppPhone(String phone) {
+    var cleaned = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (cleaned.startsWith('56') && cleaned.length > 9) {
+      cleaned = cleaned.substring(2);
+    }
+
+    if (!cleaned.startsWith('9')) {
+      cleaned = '9$cleaned';
+    }
+
+    return '56$cleaned';
+  }
+
+  String? _normalizeConversationContextType(String? contextType) {
+    final normalized = contextType?.trim().toLowerCase().replaceAll('-', '_');
+    if (normalized == null || normalized.isEmpty) return null;
+
+    return switch (normalized) {
+      'online_order' || 'website_order' || 'web_order' => 'order',
+      'job' ||
+      'invoice' ||
+      'bike' ||
+      'product' ||
+      'order' ||
+      'customer' =>
+        normalized,
+      _ => throw Exception('Tipo de contexto no permitido: $contextType'),
+    };
+  }
+
+  bool _isDuplicateParticipantError(Object error) {
+    return error is PostgrestException && error.code == '23505';
+  }
+
+  Future<void> _addCurrentUserAsParticipant({
+    required String conversationId,
+    required String userId,
+    String? tenantId,
+    String role = 'member',
+  }) async {
+    try {
+      final data = {
+        'conversation_id': conversationId,
+        'user_id': userId,
+        'role': role,
+        if (tenantId != null) 'tenant_id': tenantId,
+      };
+      await _client.from('conversation_participants').insert(data);
+    } catch (error) {
+      if (!_isDuplicateParticipantError(error)) rethrow;
+    }
+  }
 
   /// Fetch conversations for the current user with unread counts
   /// [type] filter: 'internal' or 'support'
@@ -78,12 +133,41 @@ class MessagingService {
       unreadMap[row['conversation_id']] = row['unread_count'] ?? 0;
     }
 
-    // Collect all created_by IDs to fetch customer names in batch
+    // Collect support conversation IDs and creator IDs to fetch customer names
+    // and WhatsApp contact names in batch.
+    final Set<String> supportConversationIds = {};
     final Set<String> creatorIds = {};
     for (var json in data) {
       final createdBy = json['created_by'];
       if (createdBy != null && json['type'] == 'support') {
         creatorIds.add(createdBy);
+      }
+      if (json['type'] == 'support' && json['id'] != null) {
+        supportConversationIds.add(json['id'].toString());
+      }
+    }
+
+    final Map<String, String> whatsappContactNames = {};
+    if (supportConversationIds.isNotEmpty) {
+      try {
+        final bindings = await _client
+            .from('whatsapp_conversation_bindings')
+            .select('conversation_id, contact_name, external_phone_number')
+            .inFilter('conversation_id', supportConversationIds.toList());
+
+        for (final binding in bindings) {
+          final conversationId = binding['conversation_id']?.toString();
+          final contactName = binding['contact_name']?.toString().trim();
+          final phone = binding['external_phone_number']?.toString().trim();
+          if (conversationId == null) continue;
+          if (contactName != null && contactName.isNotEmpty) {
+            whatsappContactNames[conversationId] = contactName;
+          } else if (phone != null && phone.isNotEmpty) {
+            whatsappContactNames[conversationId] = phone;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching WhatsApp contact names: $e');
       }
     }
 
@@ -108,8 +192,12 @@ class MessagingService {
     return data.map((json) {
       // Inject unread count and creator name into json before parsing
       json['unread_count'] = unreadMap[json['id']] ?? 0;
+      final conversationId = json['id']?.toString();
       final createdBy = json['created_by'];
-      if (createdBy != null && customerNames.containsKey(createdBy)) {
+      if (conversationId != null &&
+          whatsappContactNames.containsKey(conversationId)) {
+        json['creator_name'] = whatsappContactNames[conversationId];
+      } else if (createdBy != null && customerNames.containsKey(createdBy)) {
         json['creator_name'] = customerNames[createdBy];
       }
       return Conversation.fromJson(json);
@@ -242,6 +330,82 @@ class MessagingService {
       'metadata': metadata ?? {},
     });
     // Trigger updates conversation timestamp automatically via DB trigger
+  }
+
+  /// Create or resolve a WhatsApp-backed support conversation without sending.
+  ///
+  /// This is the handoff point for ERP actions that need to contact a customer
+  /// through our internal inbox. Transport still happens later from ChatWindow.
+  Future<String> openWhatsAppSupportConversation({
+    required String phoneNumber,
+    required String contactName,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo resolver el tenant del usuario');
+    }
+
+    final channel = await _client
+        .from('whatsapp_channels')
+        .select('id, phone_number_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    if (channel == null) {
+      throw Exception('No hay un canal de WhatsApp activo para este tenant');
+    }
+
+    final normalizedPhone = _normalizeWhatsAppPhone(phoneNumber);
+    final normalizedContextType =
+        _normalizeConversationContextType(contextType);
+    final result = await _client.rpc(
+      'ensure_whatsapp_conversation_binding',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_channel_id': channel['id'],
+        'p_wa_id': normalizedPhone,
+        'p_phone_number': normalizedPhone,
+        'p_contact_name': contactName,
+        'p_customer_id': customerId,
+        'p_context_type': normalizedContextType,
+        'p_context_id': contextId,
+      },
+    );
+
+    final data = Map<String, dynamic>.from(result as Map);
+    final conversationId = data['conversation_id']?.toString();
+    if (conversationId == null || conversationId.isEmpty) {
+      throw Exception('No se pudo abrir la conversación de WhatsApp');
+    }
+
+    await _client.from('conversations').update({
+      'status': 'active',
+      'accepted_by': userId,
+      'accepted_at': DateTime.now().toIso8601String(),
+      if (normalizedContextType != null && contextId != null) ...{
+        'context_type': normalizedContextType,
+        'context_id': contextId,
+      },
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', conversationId);
+
+    await _addCurrentUserAsParticipant(
+      conversationId: conversationId,
+      userId: userId,
+      tenantId: tenantId,
+      role: 'admin',
+    );
+
+    return conversationId;
   }
 
   /// Listen for ANY changes to the conversations table (for list re-fetch)
@@ -632,16 +796,10 @@ class MessagingService {
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', conversationId);
 
-    // Add employee as participant if not already
-    try {
-      await _client.from('conversation_participants').upsert({
-        'conversation_id': conversationId,
-        'user_id': userId,
-        'role': 'member',
-      }, onConflict: 'conversation_id,user_id');
-    } catch (e) {
-      debugPrint('Participant already exists or error: $e');
-    }
+    await _addCurrentUserAsParticipant(
+      conversationId: conversationId,
+      userId: userId,
+    );
 
     debugPrint('✅ Accepted chat request: $conversationId');
   }
@@ -742,10 +900,33 @@ class MessagingService {
         };
       }
 
+      Future<String?> loadLastFirstContactTemplateAt() async {
+        final messages = await _client
+            .from('messages')
+            .select('created_at, metadata')
+            .eq('conversation_id', conversationId)
+            .eq('external_provider', 'whatsapp')
+            .eq('message_direction', 'outbound')
+            .order('created_at', ascending: false)
+            .limit(20);
+
+        for (final message in messages) {
+          final metadata = message['metadata'];
+          if (metadata is Map &&
+              metadata['template_purpose'] == 'first_contact') {
+            return message['created_at']?.toString();
+          }
+        }
+
+        return null;
+      }
+
+      final lastFirstContactTemplateAt = await loadLastFirstContactTemplateAt();
+
       final binding = await _client
           .from('whatsapp_conversation_bindings')
           .select(
-            'customer_id, contact_name, external_phone_number, last_inbound_at',
+            'customer_id, contact_name, external_phone_number, last_inbound_at, last_outbound_at',
           )
           .eq('conversation_id', conversationId)
           .limit(1)
@@ -755,6 +936,7 @@ class MessagingService {
       String? contactName = binding?['contact_name']?.toString();
       String? phoneNumber = binding?['external_phone_number']?.toString();
       final lastInboundAt = binding?['last_inbound_at']?.toString();
+      final lastOutboundAt = binding?['last_outbound_at']?.toString();
 
       if (customerId != null && customerId.isNotEmpty) {
         final customerContact = await loadCustomerById(customerId);
@@ -777,7 +959,9 @@ class MessagingService {
         String? contextId = conversation['context_id']?.toString();
 
         final contexts = conversation['conversation_contexts'];
-        if (contexts is List && contexts.isNotEmpty) {
+        if ((contextType == null || contextId == null) &&
+            contexts is List &&
+            contexts.isNotEmpty) {
           final primaryContext = contexts.firstWhere(
             (context) => context['is_primary'] == true,
             orElse: () => contexts.first,
@@ -833,6 +1017,8 @@ class MessagingService {
           'name': contactName,
           'phone': phoneNumber,
           'last_inbound_at': lastInboundAt,
+          'last_outbound_at': lastOutboundAt,
+          'last_first_contact_template_at': lastFirstContactTemplateAt,
         };
       }
 
@@ -865,6 +1051,8 @@ class MessagingService {
             'name': customer['name']?.toString() ?? contactName,
             'phone': phone,
             'last_inbound_at': lastInboundAt,
+            'last_outbound_at': lastOutboundAt,
+            'last_first_contact_template_at': lastFirstContactTemplateAt,
           };
         }
       }

@@ -78,13 +78,22 @@ class CustomerAddress {
   }
 
   String get fullAddress {
+    final streetLine = [streetAddress, streetNumber]
+        .whereType<String>()
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ')
+        .trim();
+    final normalizedComuna = comuna.trim().toLowerCase();
+    final normalizedCity = city.trim().toLowerCase();
+    final normalizedRegion = region.trim().toLowerCase();
     final parts = <String>[
-      streetAddress,
-      if (streetNumber != null) streetNumber!,
-      if (apartment != null) apartment!,
-      comuna,
-      city,
-      region,
+      if (streetLine.isNotEmpty) streetLine,
+      if (apartment != null && apartment!.trim().isNotEmpty) apartment!.trim(),
+      if (comuna.trim().isNotEmpty) comuna.trim(),
+      if (city.trim().isNotEmpty && normalizedCity != normalizedComuna)
+        city.trim(),
+      if (region.trim().isNotEmpty && normalizedRegion != normalizedCity)
+        region.trim(),
     ];
     return parts.join(', ');
   }

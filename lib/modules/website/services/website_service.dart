@@ -2040,14 +2040,30 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
-  Future<void> updateOrderStatus(String orderId, String status) async {
+  Future<String?> updateOrderStatus(
+    String orderId,
+    String status, {
+    String? trackingNumber,
+    String? trackingUrl,
+    String? carrier,
+    String? notes,
+  }) async {
     try {
-      await _supabase.from('online_orders').update({
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
+      final response =
+          await _supabase.rpc('update_online_order_status', params: {
+        'p_order_id': orderId,
+        'p_new_status': status,
+        'p_tracking_number': trackingNumber,
+        'p_tracking_url': trackingUrl,
+        'p_carrier': carrier,
+        'p_notes': notes,
+      });
 
       await loadOrders();
+      if (response is Map && response['invoice_id'] != null) {
+        return response['invoice_id'].toString();
+      }
+      return null;
     } catch (e) {
       _error = 'Error al actualizar estado del pedido: $e';
       debugPrint(_error);
