@@ -679,6 +679,21 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     return SafeLayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth > 720 ? 2 : 1;
+        final deliveryRows = order.deliveryType == 'pickup'
+            ? [
+                _InfoRow('Tipo', order.deliveryDisplayName),
+                _InfoRow('Punto de retiro', order.shippingAddressDisplay),
+                const _InfoRow(
+                  'Instrucción',
+                  'Avisar al cliente cuando el pedido esté listo para retiro.',
+                ),
+              ]
+            : [
+                _InfoRow('Tipo', order.deliveryDisplayName),
+                _InfoRow('Dirección', order.shippingAddressDisplay),
+                _InfoRow('Comuna', order.shippingCity ?? 'Sin comuna'),
+                _InfoRow('Región', order.shippingState ?? 'Sin región'),
+              ];
         final cards = [
           _buildInfoPanel(
             title: 'Cliente',
@@ -693,12 +708,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           _buildInfoPanel(
             title: 'Entrega',
             icon: Icons.local_shipping_outlined,
-            rows: [
-              _InfoRow('Tipo', order.deliveryDisplayName),
-              _InfoRow('Dirección', order.shippingAddressDisplay),
-              _InfoRow('Comuna', order.shippingCity ?? 'Sin comuna'),
-              _InfoRow('Región', order.shippingState ?? 'Sin región'),
-            ],
+            rows: deliveryRows,
           ),
           _buildInfoPanel(
             title: 'Pago',
@@ -1028,9 +1038,13 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         ? '\n- y ${order.items.length - 6} producto${order.items.length - 6 == 1 ? '' : 's'} más'
         : '';
 
-    final deliveryText = order.deliveryType == 'pickup'
-        ? 'El pedido está marcado para retiro en tienda.'
-        : 'El pedido está marcado para despacho a: ${order.shippingAddressDisplay}.';
+    final isPickup = order.deliveryType == 'pickup';
+    final deliveryText = isPickup
+        ? '''El pedido quedó marcado para retiro en tienda.
+  Punto de retiro: ${order.shippingAddressDisplay}.
+  Te avisaremos cuando esté listo. Para retirar, trae el número de pedido y el nombre de quien compra.'''
+        : '''El pedido está marcado para despacho a: ${order.shippingAddressDisplay}.
+  Para coordinar el despacho, confirma dirección, comuna y una franja horaria.''';
 
     return '''Hola $firstName, te escribimos de Viñabike por tu pedido ${order.orderNumber}.
 
@@ -1040,11 +1054,7 @@ ${itemLines.isEmpty ? '- Productos registrados en tu pedido web' : itemLines}$re
 Total: ${ChileanUtils.formatCurrency(order.total)}
 $deliveryText
 
-Para coordinar la entrega, respóndenos con una opción:
-1. Retiro en tienda
-2. Despacho a domicilio
-
-Si prefieres despacho, confirma dirección, comuna y una franja horaria. Gracias.''';
+${isPickup ? 'Si retirará otra persona, respóndenos con su nombre antes de venir. Gracias.' : 'Gracias.'}''';
   }
 
   void _showSnackBar(

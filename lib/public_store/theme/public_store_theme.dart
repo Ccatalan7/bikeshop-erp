@@ -7,6 +7,7 @@ class PublicStoreTheme {
   static const String defaultBodyFont = 'Barlow';
 
   // Brand Colors (Professional Blues & Grays)
+  static const Color logoBlue = Color(0xFF093357);
   static const Color primaryBlue = Color(0xFF2563EB); // Professional blue
   static const Color secondaryGray = Color(0xFF64748B); // Elegant gray
   static const Color accentGreen = Color(0xFF25D366); // WhatsApp green

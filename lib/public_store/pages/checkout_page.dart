@@ -47,8 +47,8 @@ class _CheckoutPageState extends State<CheckoutPage>
   final _accountPasswordController = TextEditingController();
   final _accountPasswordConfirmController = TextEditingController();
 
-  String _paymentMethod =
-      'mercadopago'; // mercadopago, transfer, cash_on_delivery
+  String _deliveryType = 'shipping'; // shipping, pickup
+  String _paymentMethod = 'mercadopago'; // mercadopago, transfer
   bool _isProcessing = false;
   CustomerAccountService? _accountService;
   AddressAutocompleteService? _addressAutocompleteService;
@@ -361,6 +361,20 @@ class _CheckoutPageState extends State<CheckoutPage>
     );
   }
 
+  String _pickupPointLabel(WebsiteService websiteService) {
+    final storeName = websiteService.getSetting('store_name', 'la tienda');
+    final address = websiteService.getSetting('contact_address', '').trim();
+    if (address.isNotEmpty) return address;
+    return 'Retiro en $storeName';
+  }
+
+  String _pickupCustomerAddress(WebsiteService websiteService) {
+    final pickupPoint = _pickupPointLabel(websiteService);
+    return pickupPoint.toLowerCase().startsWith('retiro')
+        ? pickupPoint
+        : 'Retiro en tienda: $pickupPoint';
+  }
+
   String _formatAddressForDisplay({
     required String street,
     required String streetNumber,
@@ -452,9 +466,10 @@ class _CheckoutPageState extends State<CheckoutPage>
       debugPrint('🔵 [Checkout] Got CustomerAccountService');
 
       final profile = accountService.customerProfile;
-      final resolvedAddress = _shippingAddressForOrder();
+      final isPickup = _deliveryType == 'pickup';
+      final resolvedAddress = isPickup ? null : _shippingAddressForOrder();
       debugPrint(
-          '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, shipping address prepared');
+          '🔵 [Checkout] Profile: ${profile != null ? "exists" : "null"}, delivery type: $_deliveryType');
 
       // ⚠️ CRITICAL: Get tenant_id from detected tenant (subdomain)
       debugPrint('🔵 [Checkout] Getting tenant provider...');
@@ -477,7 +492,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       debugPrint(
           '🔵 [Checkout] Calculating tax... paymentMethod: $_paymentMethod');
       // MercadoPago/Card: IVA is charged (tax_included)
-      // Wire Transfer/Cash: No IVA (no_tax) per Chilean informal sale rules
+      // Wire transfer: No IVA (no_tax) per current store checkout rules
       // ============================================================================
       final bool chargesIva =
           _paymentMethod == 'mercadopago' || _paymentMethod == 'card';
@@ -489,29 +504,41 @@ class _CheckoutPageState extends State<CheckoutPage>
 
       debugPrint('🔵 [Checkout] Creating orderData map...');
       // Create order data (database will generate id and orderNumber)
-      final orderData = {
+      final Map<String, dynamic> orderData = {
         'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
         'customer_email': _emailController.text.trim(),
         'customer_name': _nameController.text.trim(),
         'customer_phone': _phoneController.text.trim(),
-        'customer_address': resolvedAddress.formatForDisplay().isNotEmpty
-            ? resolvedAddress.formatForDisplay()
-            : _addressController.text.trim(),
-        'delivery_type': 'shipping',
-        'shipping_address_line1': resolvedAddress.street.isNotEmpty
-            ? [
-                resolvedAddress.street,
-                resolvedAddress.streetNumber,
-              ].whereType<String>().where((value) => value.isNotEmpty).join(' ')
-            : _addressController.text.trim(),
-        'shipping_address_line2': resolvedAddress.apartment,
-        'shipping_city': resolvedAddress.city.isNotEmpty
-            ? resolvedAddress.city
-            : resolvedAddress.comuna,
-        'shipping_state':
-            resolvedAddress.region.isNotEmpty ? resolvedAddress.region : null,
-        'shipping_postal_code': resolvedAddress.postalCode,
-        'shipping_country': 'Chile',
+        'customer_address': isPickup
+            ? _pickupCustomerAddress(websiteService)
+            : resolvedAddress!.formatForDisplay().isNotEmpty
+                ? resolvedAddress.formatForDisplay()
+                : _addressController.text.trim(),
+        'delivery_type': _deliveryType,
+        'shipping_address_line1': isPickup
+            ? null
+            : resolvedAddress!.street.isNotEmpty
+                ? [
+                    resolvedAddress.street,
+                    resolvedAddress.streetNumber,
+                  ]
+                    .whereType<String>()
+                    .where((value) => value.isNotEmpty)
+                    .join(' ')
+                : _addressController.text.trim(),
+        'shipping_address_line2': isPickup ? null : resolvedAddress!.apartment,
+        'shipping_city': isPickup
+            ? null
+            : resolvedAddress!.city.isNotEmpty
+                ? resolvedAddress.city
+                : resolvedAddress.comuna,
+        'shipping_state': isPickup
+            ? null
+            : resolvedAddress!.region.isNotEmpty
+                ? resolvedAddress.region
+                : null,
+        'shipping_postal_code': isPickup ? null : resolvedAddress!.postalCode,
+        'shipping_country': isPickup ? null : 'Chile',
         'subtotal': subtotalAmount,
         'tax_amount': taxAmount,
         'shipping_cost': 0, // Will be calculated later
@@ -562,13 +589,14 @@ class _CheckoutPageState extends State<CheckoutPage>
         );
       }
 
-      if ((_accountService?.isAuthenticated ?? false) &&
+      if (!isPickup &&
+          (_accountService?.isAuthenticated ?? false) &&
           _saveAddressToAccount &&
           profile != null &&
           profile['id'] != null) {
         await _saveAddressForCustomer(
           accountService,
-          resolvedAddress,
+          resolvedAddress!,
           profile['id'] as String,
         );
       }
@@ -662,7 +690,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           );
         }
       } else {
-        // Traditional payment methods (transfer, cash on delivery)
+        // Offline payment methods such as bank transfer
         // Clear cart
         while (cart.items.isNotEmpty) {
           cart.removeProduct(cart.items.first.product.id);
@@ -995,8 +1023,8 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
           const SizedBox(height: 24),
           _buildFormSection(
-            title: '2. Dirección de envío',
-            child: _buildShippingAddressSection(),
+            title: '2. Entrega',
+            child: _buildDeliverySection(),
           ),
           const SizedBox(height: 24),
           _buildFormSection(
@@ -1021,11 +1049,6 @@ class _CheckoutPageState extends State<CheckoutPage>
                     title: 'Transferencia bancaria',
                     subtitle:
                         'Recibirás los datos para completar la transferencia.',
-                  ),
-                  _buildPaymentOption(
-                    value: 'cash_on_delivery',
-                    title: 'Pago contra entrega',
-                    subtitle: 'Paga cuando recibas tu pedido.',
                     isLast: true,
                   ),
                 ],
@@ -1049,148 +1072,342 @@ class _CheckoutPageState extends State<CheckoutPage>
     );
   }
 
-  Widget _buildShippingAddressSection() {
+  Widget _buildDeliverySection() {
     final autocompleteEnabled = _addressAutocompleteService?.isEnabled ?? false;
     final isAuthenticated = _accountService?.isAuthenticated ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isAuthenticated && _savedAddresses.isNotEmpty) ...[
-          DropdownButtonFormField<CustomerAddress>(
-            initialValue: _selectedAddress,
-            decoration: _fieldDecoration(
-              label: 'Usar dirección guardada',
-              icon: Icons.bookmark_outline,
-            ),
-            items: _savedAddresses
-                .map(
-                  (address) => DropdownMenuItem<CustomerAddress>(
-                    value: address,
-                    child: Text('${address.label} • ${address.comuna}'),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                _applyAddressFromCustomer(value);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (autocompleteEnabled) ...[
-          typeahead.TypeAheadField<AddressSuggestion>(
-            controller: _addressController,
-            suggestionsCallback: (pattern) async {
-              return await _addressAutocompleteService
-                      ?.fetchSuggestions(pattern) ??
-                  [];
-            },
-            builder: (context, controller, focusNode) {
-              return TextFormField(
-                controller: controller,
-                focusNode: focusNode,
-                decoration: _fieldDecoration(
-                  label: 'Buscar dirección',
-                  icon: Icons.search,
-                  hintText: 'Ej: Álvarez 32, Viña del Mar',
-                ),
-                maxLines: 1,
-                onChanged: (value) {
-                  if (value.trim().isEmpty) {
-                    setState(() {
-                      _selectedAddress = null;
-                      _resolvedAddress = null;
-                    });
-                  }
-                },
-              );
-            },
-            itemBuilder: (context, suggestion) => ListTile(
-              leading: const Icon(Icons.place_outlined),
-              title: Text(suggestion.description),
-            ),
-            loadingBuilder: (context) => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-            emptyBuilder: (context) => const Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('No encontramos coincidencias'),
-            ),
-            onSelected: (suggestion) async {
-              FocusScope.of(context).unfocus();
-              final resolved = await _addressAutocompleteService
-                  ?.resolvePlace(suggestion.placeId);
-              if (resolved != null) {
-                _applyResolvedAddress(
-                  resolved,
-                  selectedLabel: suggestion.description,
-                );
-                _addressAutocompleteService?.resetSessionToken();
-              }
-            },
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Selecciona una sugerencia y revisa los datos antes de confirmar.',
-            style: TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
-              fontSize: 12,
-              color: PublicStoreTheme.textSecondary,
-            ),
-          ),
-        ] else if (_addressAutocompleteService != null) ...[
-          const Text(
-            'Puedes escribir tu dirección manualmente. Separarla nos ayuda a guardarla mejor en tu cuenta.',
-            style: TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
-              fontSize: 12,
-              color: PublicStoreTheme.textSecondary,
-            ),
-          ),
-        ],
-        const SizedBox(height: 18),
-        _buildAddressDetailsFields(),
-        if (isAuthenticated && _selectedAddress == null) ...[
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _addressLabelController,
-            decoration: _fieldDecoration(
-              label: 'Etiqueta (ej: Casa, Trabajo)',
-              icon: Icons.label_outline,
-            ),
-          ),
-          CheckboxListTile(
-            value: _saveAddressToAccount,
-            onChanged: (value) {
-              setState(() {
-                _saveAddressToAccount = value ?? false;
-              });
-            },
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Guardar esta dirección en mi cuenta'),
-          ),
-        ] else if (isAuthenticated && _selectedAddress != null) ...[
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => context.go('/tienda/cuenta/direcciones'),
-              style: TextButton.styleFrom(
-                foregroundColor: _logoBlue,
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        RadioGroup<String>(
+          groupValue: _deliveryType,
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => _deliveryType = value);
+          },
+          child: Column(
+            children: [
+              _buildDeliveryOption(
+                value: 'shipping',
+                title: 'Despacho a domicilio',
+                subtitle:
+                    'Enviaremos tu pedido a la dirección que indiques. La tienda confirmará costo y coordinación si aplica.',
+                icon: Icons.local_shipping_outlined,
               ),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Gestionar mis direcciones guardadas'),
-            ),
+              _buildDeliveryOption(
+                value: 'pickup',
+                title: 'Retiro en tienda',
+                subtitle:
+                    'Compra online y retira cuando recibas la confirmación de que tu pedido está listo.',
+                icon: Icons.storefront_outlined,
+                isLast: true,
+              ),
+            ],
           ),
+        ),
+        const SizedBox(height: 18),
+        if (_deliveryType == 'pickup') ...[
+          _buildPickupInstructions(),
+        ] else ...[
+          if (isAuthenticated && _savedAddresses.isNotEmpty) ...[
+            DropdownButtonFormField<CustomerAddress>(
+              initialValue: _selectedAddress,
+              decoration: _fieldDecoration(
+                label: 'Usar dirección guardada',
+                icon: Icons.bookmark_outline,
+              ),
+              items: _savedAddresses
+                  .map(
+                    (address) => DropdownMenuItem<CustomerAddress>(
+                      value: address,
+                      child: Text('${address.label} • ${address.comuna}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  _applyAddressFromCustomer(value);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (autocompleteEnabled) ...[
+            typeahead.TypeAheadField<AddressSuggestion>(
+              controller: _addressController,
+              suggestionsCallback: (pattern) async {
+                return await _addressAutocompleteService
+                        ?.fetchSuggestions(pattern) ??
+                    [];
+              },
+              builder: (context, controller, focusNode) {
+                return TextFormField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: _fieldDecoration(
+                    label: 'Buscar dirección',
+                    icon: Icons.search,
+                    hintText: 'Ej: Álvarez 32, Viña del Mar',
+                  ),
+                  maxLines: 1,
+                  onChanged: (value) {
+                    if (value.trim().isEmpty) {
+                      setState(() {
+                        _selectedAddress = null;
+                        _resolvedAddress = null;
+                      });
+                    }
+                  },
+                );
+              },
+              itemBuilder: (context, suggestion) => ListTile(
+                leading: const Icon(Icons.place_outlined),
+                title: Text(suggestion.description),
+              ),
+              loadingBuilder: (context) => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+              emptyBuilder: (context) => const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('No encontramos coincidencias'),
+              ),
+              onSelected: (suggestion) async {
+                FocusScope.of(context).unfocus();
+                final resolved = await _addressAutocompleteService
+                    ?.resolvePlace(suggestion.placeId);
+                if (resolved != null) {
+                  _applyResolvedAddress(
+                    resolved,
+                    selectedLabel: suggestion.description,
+                  );
+                  _addressAutocompleteService?.resetSessionToken();
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Selecciona una sugerencia y revisa los datos antes de confirmar.',
+              style: TextStyle(
+                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontSize: 12,
+                color: PublicStoreTheme.textSecondary,
+              ),
+            ),
+          ] else if (_addressAutocompleteService != null) ...[
+            const Text(
+              'Puedes escribir tu dirección manualmente. Separarla nos ayuda a guardarla mejor en tu cuenta.',
+              style: TextStyle(
+                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontSize: 12,
+                color: PublicStoreTheme.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          _buildAddressDetailsFields(),
+          if (isAuthenticated && _selectedAddress == null) ...[
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _addressLabelController,
+              decoration: _fieldDecoration(
+                label: 'Etiqueta (ej: Casa, Trabajo)',
+                icon: Icons.label_outline,
+              ),
+            ),
+            CheckboxListTile(
+              value: _saveAddressToAccount,
+              onChanged: (value) {
+                setState(() {
+                  _saveAddressToAccount = value ?? false;
+                });
+              },
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Guardar esta dirección en mi cuenta'),
+            ),
+          ] else if (isAuthenticated && _selectedAddress != null) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => context.go('/tienda/cuenta/direcciones'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _logoBlue,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('Gestionar mis direcciones guardadas'),
+              ),
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  Widget _buildDeliveryOption({
+    required String value,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    bool isLast = false,
+  }) {
+    final isSelected = _deliveryType == value;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: isLast ? Colors.transparent : _warmLine),
+        ),
+      ),
+      child: InkWell(
+        onTap: () => setState(() => _deliveryType = value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Radio<String>(
+                value: value,
+                activeColor: _logoBlue,
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                icon,
+                size: 22,
+                color: isSelected ? _logoBlue : PublicStoreTheme.textSecondary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontSize: 15,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontSize: 13,
+                        color: PublicStoreTheme.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPickupInstructions() {
+    final websiteService = context.watch<WebsiteService>();
+    final storeName = websiteService.getSetting('store_name', 'la tienda');
+    final address = websiteService.getSetting('contact_address', '').trim();
+    final phone = websiteService.getSetting('contact_phone', '').trim();
+
+    final rows = [
+      if (address.isNotEmpty) ('Punto de retiro', address),
+      ('Cuándo retirar', 'Espera la confirmación de que el pedido está listo.'),
+      ('Qué llevar', 'Número de pedido y nombre de quien compra.'),
+      ('Retira otra persona', 'Indícalo en notas para coordinar sin fricción.'),
+      if (phone.isNotEmpty) ('Contacto tienda', phone),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _warmLine),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.storefront_outlined, color: _logoBlue, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Retiro en $storeName',
+                      style: const TextStyle(
+                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'La tienda preparará tu pedido y te avisará antes de que pases a buscarlo.',
+                      style: TextStyle(
+                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontSize: 13,
+                        color: PublicStoreTheme.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final row in rows) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 128,
+                  child: Text(
+                    row.$1,
+                    style: const TextStyle(
+                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: PublicStoreTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.$2,
+                    style: const TextStyle(
+                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (row != rows.last) const SizedBox(height: 10),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1210,6 +1427,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   hintText: 'Ej: Álvarez',
                 ),
                 validator: (value) {
+                  if (_deliveryType == 'pickup') return null;
                   if (value == null || value.trim().isEmpty) {
                     return 'La calle es requerida';
                   }
@@ -1244,6 +1462,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   hintText: 'Ej: Viña del Mar',
                 ),
                 validator: (value) {
+                  if (_deliveryType == 'pickup') return null;
                   if (value == null || value.trim().isEmpty) {
                     return 'La comuna es requerida';
                   }
@@ -1270,6 +1489,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   hintText: 'Ej: Valparaíso',
                 ),
                 validator: (value) {
+                  if (_deliveryType == 'pickup') return null;
                   if (value == null || value.trim().isEmpty) {
                     return 'La región es requerida';
                   }
@@ -1371,8 +1591,8 @@ class _CheckoutPageState extends State<CheckoutPage>
           ),
           const SizedBox(height: 12),
           _buildSummaryMetric(
-            'Envío',
-            'Por calcular',
+            _deliveryType == 'pickup' ? 'Retiro' : 'Envío',
+            _deliveryType == 'pickup' ? 'Sin costo' : 'Por calcular',
             secondary: true,
           ),
           const SizedBox(height: 18),

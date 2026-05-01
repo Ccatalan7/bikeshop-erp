@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
 import 'package:provider/provider.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/address_autocomplete_service.dart';
 import '../services/customer_account_service.dart';
+import '../theme/public_store_theme.dart';
 import '../../shared/models/customer_address.dart';
 import '../widgets/customer_portal_layout.dart';
 
@@ -388,12 +392,19 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
   late final TextEditingController _regionController;
   late final TextEditingController _infoController;
 
+  AddressAutocompleteService? _addressAutocompleteService;
+  String? _postalCode;
+  bool _isResolvingAddress = false;
+  bool _useProfileContact = false;
   bool _isDefault = false;
 
   @override
   void initState() {
     super.initState();
     final addr = widget.address;
+    final profile = context.read<CustomerAccountService>().customerProfile;
+    final profileName = _readProfileText(profile, 'name');
+    final profilePhone = _readProfileText(profile, 'phone');
     _labelController = TextEditingController(text: addr?.label);
     _nameController = TextEditingController(text: addr?.recipientName);
     _phoneController = TextEditingController(text: addr?.phone);
@@ -404,11 +415,29 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
     _cityController = TextEditingController(text: addr?.city);
     _regionController = TextEditingController(text: addr?.region);
     _infoController = TextEditingController(text: addr?.additionalInfo);
+    _postalCode = addr?.postalCode;
+    _useProfileContact = addr == null
+        ? false
+        : addr.recipientName.trim() == profileName &&
+            addr.phone.trim() == profilePhone &&
+            profileName.isNotEmpty &&
+            profilePhone.isNotEmpty;
     _isDefault = addr?.isDefault ?? false;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final autocompleteService = context.read<AddressAutocompleteService>();
+      autocompleteService.addListener(_onAutocompleteChanged);
+      setState(() => _addressAutocompleteService = autocompleteService);
+
+      final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+      autocompleteService.initialize(tenantId: tenantId);
+    });
   }
 
   @override
   void dispose() {
+    _addressAutocompleteService?.removeListener(_onAutocompleteChanged);
     _labelController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
@@ -422,113 +451,337 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
     super.dispose();
   }
 
+  void _onAutocompleteChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final dialogMaxHeight = MediaQuery.sizeOf(context).height * 0.72;
+    final profile = context.watch<CustomerAccountService>().customerProfile;
+    final profileName = _readProfileText(profile, 'name');
+    final profilePhone = _readProfileText(profile, 'phone');
+
     return AlertDialog(
       title:
           Text(widget.address == null ? 'Nueva Dirección' : 'Editar Dirección'),
-      content: SingleChildScrollView(
+      content: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: dialogMaxHeight),
         child: SizedBox(
           width: 500,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _labelController,
-                  decoration: const InputDecoration(
-                      labelText: 'Etiqueta (ej: Casa, Trabajo)'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                      labelText: 'Nombre del destinatario'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _phoneController,
-                  decoration: const InputDecoration(labelText: 'Teléfono'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: TextFormField(
-                        controller: _streetController,
-                        decoration: const InputDecoration(labelText: 'Calle'),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Requerido' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _numberController,
-                        decoration: const InputDecoration(labelText: 'Número'),
-                      ),
-                    ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _labelController,
+                    decoration: const InputDecoration(
+                        labelText: 'Etiqueta (ej: Casa, Trabajo)'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildProfileContactOption(profileName, profilePhone),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _nameController,
+                    enabled: !_useProfileContact,
+                    decoration: const InputDecoration(
+                        labelText: 'Nombre del destinatario'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    enabled: !_useProfileContact,
+                    decoration: const InputDecoration(labelText: 'Teléfono'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  if (_addressAutocompleteService?.isEnabled ?? false) ...[
+                    const SizedBox(height: 12),
+                    _buildAddressSearchField(),
                   ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _apartmentController,
-                  decoration: const InputDecoration(
-                      labelText: 'Depto/Oficina (opcional)'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _comunaController,
-                  decoration: const InputDecoration(labelText: 'Comuna'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _cityController,
-                  decoration: const InputDecoration(labelText: 'Ciudad'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _regionController,
-                  decoration: const InputDecoration(labelText: 'Región'),
-                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _infoController,
-                  decoration: const InputDecoration(
-                      labelText: 'Referencias (opcional)'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-                CheckboxListTile(
-                  title: const Text('Dirección principal'),
-                  value: _isDefault,
-                  onChanged: (v) => setState(() => _isDefault = v ?? false),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: _streetController,
+                          decoration: const InputDecoration(labelText: 'Calle'),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Requerido' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _numberController,
+                          decoration:
+                              const InputDecoration(labelText: 'Número'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _apartmentController,
+                    decoration: const InputDecoration(
+                        labelText: 'Depto/Oficina (opcional)'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _comunaController,
+                    decoration: const InputDecoration(labelText: 'Comuna'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _cityController,
+                    decoration: const InputDecoration(labelText: 'Ciudad'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _regionController,
+                    decoration: const InputDecoration(labelText: 'Región'),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _infoController,
+                    decoration: const InputDecoration(
+                        labelText: 'Referencias (opcional)'),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    title: const Text('Dirección principal'),
+                    value: _isDefault,
+                    onChanged: (v) => setState(() => _isDefault = v ?? false),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
       actions: [
-        TextButton(
+        TextButton.icon(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          icon: const Icon(Icons.close, size: 18),
+          label: const Text('Cancelar'),
+          style: TextButton.styleFrom(
+            foregroundColor: PublicStoreTheme.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: _save,
-          child: const Text('Guardar'),
+          icon: const Icon(Icons.check, size: 18),
+          label: const Text('Guardar'),
+          style: FilledButton.styleFrom(
+            backgroundColor: PublicStoreTheme.logoBlue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
       ],
     );
+  }
+
+  Widget _buildProfileContactOption(String profileName, String profilePhone) {
+    final hasProfileContact = profileName.isNotEmpty && profilePhone.isNotEmpty;
+    final contactLabel = [
+      if (profileName.isNotEmpty) profileName,
+      if (profilePhone.isNotEmpty) profilePhone,
+    ].join(' · ');
+
+    return InkWell(
+      onTap: hasProfileContact
+          ? () => _setUseProfileContact(
+                !_useProfileContact,
+                profileName: profileName,
+                profilePhone: profilePhone,
+              )
+          : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE0E4EA)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Checkbox(
+              value: _useProfileContact,
+              onChanged: hasProfileContact
+                  ? (value) => _setUseProfileContact(
+                        value ?? false,
+                        profileName: profileName,
+                        profilePhone: profilePhone,
+                      )
+                  : null,
+              activeColor: PublicStoreTheme.logoBlue,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Usar mis datos de cuenta',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF18212F),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    hasProfileContact
+                        ? contactLabel
+                        : 'Agrega nombre y teléfono en tu perfil para reutilizarlos.',
+                    style: const TextStyle(
+                      color: Color(0xFF667085),
+                      fontSize: 12,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setUseProfileContact(
+    bool value, {
+    required String profileName,
+    required String profilePhone,
+  }) {
+    setState(() {
+      _useProfileContact = value;
+      if (value) {
+        if (profileName.isNotEmpty) _nameController.text = profileName;
+        if (profilePhone.isNotEmpty) _phoneController.text = profilePhone;
+      }
+    });
+  }
+
+  static String _readProfileText(Map<String, dynamic>? profile, String key) {
+    return (profile?[key] ?? '').toString().trim();
+  }
+
+  Widget _buildAddressSearchField() {
+    return typeahead.TypeAheadField<AddressSuggestion>(
+      suggestionsCallback: (pattern) async {
+        return await _addressAutocompleteService?.fetchSuggestions(pattern) ??
+            [];
+      },
+      builder: (context, controller, focusNode) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            labelText: 'Buscar dirección en Google Maps',
+            hintText: 'Ej: Álvarez 32, Viña del Mar',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _isResolvingAddress
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+          maxLines: 1,
+        );
+      },
+      itemBuilder: (context, suggestion) => ListTile(
+        leading: const Icon(Icons.place_outlined),
+        title: Text(suggestion.description),
+      ),
+      loadingBuilder: (context) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      emptyBuilder: (context) => const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('No encontramos coincidencias'),
+      ),
+      onSelected: _selectAddressSuggestion,
+    );
+  }
+
+  Future<void> _selectAddressSuggestion(AddressSuggestion suggestion) async {
+    FocusScope.of(context).unfocus();
+    setState(() => _isResolvingAddress = true);
+
+    try {
+      final resolved =
+          await _addressAutocompleteService?.resolvePlace(suggestion.placeId);
+      if (!mounted) return;
+
+      if (resolved == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pudimos cargar esa dirección')),
+        );
+        return;
+      }
+
+      _applyResolvedAddress(resolved);
+      _addressAutocompleteService?.resetSessionToken();
+    } finally {
+      if (mounted) {
+        setState(() => _isResolvingAddress = false);
+      }
+    }
+  }
+
+  void _applyResolvedAddress(ResolvedAddress address) {
+    final street = address.street.trim().isNotEmpty
+        ? address.street.trim()
+        : address.formattedAddress.split(',').first.trim();
+    final comuna = address.comuna.trim().isNotEmpty
+        ? address.comuna.trim()
+        : address.city.trim();
+    final city = address.city.trim().isNotEmpty ? address.city.trim() : comuna;
+
+    setState(() {
+      _streetController.text = street;
+      _numberController.text = address.streetNumber?.trim() ?? '';
+      if (address.apartment != null && address.apartment!.trim().isNotEmpty) {
+        _apartmentController.text = address.apartment!.trim();
+      }
+      _comunaController.text = comuna;
+      _cityController.text = city;
+      _regionController.text = address.region.trim();
+      _postalCode = address.postalCode?.trim();
+    });
   }
 
   Future<void> _save() async {
@@ -554,6 +807,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
       comuna: _comunaController.text.trim(),
       city: _cityController.text.trim(),
       region: _regionController.text.trim(),
+      postalCode: _postalCode,
       additionalInfo: _infoController.text.trim().isNotEmpty
           ? _infoController.text.trim()
           : null,

@@ -798,9 +798,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       MapEntry('Email', order.customerEmail),
       if (order.customerPhone != null && order.customerPhone!.trim().isNotEmpty)
         MapEntry('Teléfono', order.customerPhone!),
+      MapEntry('Entrega', order.deliveryDisplayName),
       if (order.customerAddress != null &&
           order.customerAddress!.trim().isNotEmpty)
-        MapEntry('Dirección', order.customerAddress!),
+        MapEntry(
+          order.deliveryType == 'pickup' ? 'Punto de retiro' : 'Dirección',
+          order.customerAddress!,
+        ),
     ];
 
     return _buildContentSection(
@@ -1437,7 +1441,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       case 'transfer':
         return 'TRANSFERENCIA';
       case 'cash_on_delivery':
-        return 'PAGO CONTRA ENTREGA';
+        return 'PAGO AL RETIRAR';
       default:
         return paymentMethod.toUpperCase();
     }
