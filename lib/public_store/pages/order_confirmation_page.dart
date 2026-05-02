@@ -1435,13 +1435,16 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   }
 
   String _formatPaymentMethod(String paymentMethod) {
-    switch (paymentMethod) {
+    final normalized = paymentMethod.trim().toLowerCase();
+    if (normalized == ['cash', 'on', 'delivery'].join('_')) {
+      return 'POR DEFINIR';
+    }
+
+    switch (normalized) {
       case 'mercadopago':
         return 'MERCADOPAGO';
       case 'transfer':
         return 'TRANSFERENCIA';
-      case 'cash_on_delivery':
-        return 'PAGO AL RETIRAR';
       default:
         return paymentMethod.toUpperCase();
     }

@@ -25,6 +25,10 @@ class EmployeeChatPage extends StatefulWidget {
 
 class _EmployeeChatPageState extends State<EmployeeChatPage>
     with SingleTickerProviderStateMixin {
+  static const Color _accentBlue = Color(0xFF093357);
+  static const Color _borderColor = Color(0xFFE5E7EB);
+  static const Color _softSurface = Color(0xFFF8FAFC);
+
   late TabController _tabController;
   ReferenceSegment? _activeReference;
   bool _isSidePanelExpanded = false;
@@ -129,7 +133,9 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   Map<String, List<Conversation>> _groupByStatus(List<Conversation> convs) {
     return {
       'pending': convs.where((c) => c.status == 'pending').toList(),
-      'active': convs.where((c) => c.status == 'active').toList(),
+      'active': convs
+          .where((c) => c.status != 'pending' && c.status != 'resolved')
+          .toList(),
       'resolved': convs.where((c) => c.status == 'resolved').toList(),
     };
   }
@@ -148,7 +154,16 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final allConversations = provider.conversations;
     final isMobile = MediaQuery.of(context).size.width < 900;
 
+    final supportConversations =
+        allConversations.where((c) => c.type == 'support').toList();
+    final internalConversations =
+        allConversations.where((c) => c.type == 'internal').toList();
     final pendingCount = _getPendingCount(allConversations);
+    final activeSupportCount = supportConversations
+        .where((conversation) =>
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .length;
 
     // Find active conversation object
     Conversation? activeConversation;
@@ -163,15 +178,30 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     if (isMobile) {
       return _buildMobileLayout(
-          provider, activeId, allConversations, pendingCount);
+        provider,
+        activeId,
+        allConversations,
+        pendingCount,
+      );
     }
 
     return _buildDesktopLayout(
-        provider, activeId, activeConversation, allConversations, pendingCount);
+      provider,
+      activeId,
+      activeConversation,
+      allConversations,
+      pendingCount,
+      activeSupportCount,
+      internalConversations.length,
+    );
   }
 
-  Widget _buildMobileLayout(ChatProvider provider, String? activeId,
-      List<Conversation> allConversations, int pendingCount) {
+  Widget _buildMobileLayout(
+    ChatProvider provider,
+    String? activeId,
+    List<Conversation> allConversations,
+    int pendingCount,
+  ) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -209,7 +239,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 children: [
                   const Icon(Icons.support_agent),
                   const SizedBox(width: 8),
-                  const Text('WhatsApp'),
+                  const Text('Clientes'),
                   if (pendingCount > 0) ...[
                     const SizedBox(width: 8),
                     _buildBadge(pendingCount),
@@ -233,17 +263,20 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   }
 
   Widget _buildDesktopLayout(
-      ChatProvider provider,
-      String? activeId,
-      Conversation? activeConversation,
-      List<Conversation> allConversations,
-      int pendingCount) {
+    ChatProvider provider,
+    String? activeId,
+    Conversation? activeConversation,
+    List<Conversation> allConversations,
+    int pendingCount,
+    int activeSupportCount,
+    int internalCount,
+  ) {
     return Scaffold(
       body: Row(
         children: [
           // Left Sidebar: Thread List
           Container(
-            width: 320,
+            width: 360,
             decoration: BoxDecoration(
               border: Border(right: BorderSide(color: Colors.grey[200]!)),
               color: Colors.white,
@@ -251,35 +284,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             child: Column(
               children: [
                 // Header
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Mensajería interna',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.add_comment_outlined),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => const NewChatDialog(),
-                          );
-                        },
-                        tooltip: 'Nuevo Chat',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: _loadConversations,
-                        tooltip: 'Recargar',
-                      ),
-                    ],
-                  ),
+                _buildMessagingHeader(
+                  pendingCount: pendingCount,
+                  activeSupportCount: activeSupportCount,
+                  internalCount: internalCount,
                 ),
                 // Tab Bar
                 Container(
@@ -294,12 +302,12 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     unselectedLabelColor: Colors.grey[600],
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
-                      const Tab(text: 'Equipo'),
+                      Tab(text: 'Equipo ($internalCount)'),
                       Tab(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('WhatsApp'),
+                            Text('Clientes ($activeSupportCount)'),
                             if (pendingCount > 0) ...[
                               const SizedBox(width: 8),
                               _buildBadge(pendingCount),
@@ -377,12 +385,145 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
+  Widget _buildMessagingHeader({
+    required int pendingCount,
+    required int activeSupportCount,
+    required int internalCount,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Mensajería interna',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_comment_outlined),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => const NewChatDialog(),
+                  );
+                },
+                tooltip: 'Nuevo chat',
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadConversations,
+                tooltip: 'Recargar',
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Equipo y clientes WhatsApp, separados por flujo de trabajo.',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildHeaderMetric(
+                  'Equipo',
+                  internalCount,
+                  Icons.people_outline,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildHeaderMetric(
+                  'Activos',
+                  activeSupportCount,
+                  Icons.support_agent_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildHeaderMetric(
+                  'Solicitudes',
+                  pendingCount,
+                  Icons.pending_actions_outlined,
+                  alert: pendingCount > 0,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderMetric(
+    String label,
+    int value,
+    IconData icon, {
+    bool alert = false,
+  }) {
+    final color = alert ? const Color(0xFFB45309) : const Color(0xFF475569);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      decoration: BoxDecoration(
+        color: alert ? color.withValues(alpha: 0.06) : _softSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: alert ? color.withValues(alpha: 0.35) : _borderColor,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build simple list for internal chats
   Widget _buildInternalList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
     // For internal tab, show filtered internal conversations
     final internalConvs =
-        conversations.where((c) => c.type == 'internal').toList();
+        conversations.where((c) => c.type == 'internal').toList()
+          ..sort(_compareConversations);
 
     if (internalConvs.isEmpty) {
       return _buildEmptyState(
@@ -392,12 +533,18 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       );
     }
 
-    return ListView.builder(
-      itemCount: internalConvs.length,
-      itemBuilder: (context, index) {
-        final conv = internalConvs[index];
-        return _buildConversationTile(provider, conv, activeId);
-      },
+    return ListView(
+      children: [
+        _buildListIntro(
+          title: 'Chats de equipo',
+          subtitle:
+              'Conversaciones internas entre colaboradores. No salen por WhatsApp.',
+          icon: Icons.people_outline,
+        ),
+        ...internalConvs.map(
+          (conv) => _buildConversationTile(provider, conv, activeId),
+        ),
+      ],
     );
   }
 
@@ -405,7 +552,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   Widget _buildCustomerList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
     final customerConvs =
-        conversations.where((c) => c.type == 'support').toList();
+        conversations.where((c) => c.type == 'support').toList()
+          ..sort(_compareConversations);
     final grouped = _groupByStatus(customerConvs);
 
     if (customerConvs.isEmpty) {
@@ -418,13 +566,15 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     return ListView(
       children: [
+        _buildSupportOverview(customerConvs),
         // Pending Section
         if (grouped['pending']!.isNotEmpty)
           _buildSection(
             icon: Icons.pending_actions,
-            title: 'SOLICITUDES',
+            title: 'Solicitudes pendientes',
+            subtitle: 'Requieren aceptación antes de responder como equipo.',
             count: grouped['pending']!.length,
-            color: Colors.orange,
+            color: const Color(0xFFB45309),
             conversations: grouped['pending']!,
             provider: provider,
             activeId: activeId,
@@ -434,9 +584,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         if (grouped['active']!.isNotEmpty)
           _buildSection(
             icon: Icons.chat_bubble,
-            title: 'ACTIVOS',
+            title: 'Conversaciones activas',
+            subtitle: 'Clientes WhatsApp ya atendidos por el equipo.',
             count: grouped['active']!.length,
-            color: Colors.green,
+            color: const Color(0xFF047857),
             conversations: grouped['active']!,
             provider: provider,
             activeId: activeId,
@@ -446,7 +597,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         if (grouped['resolved']!.isNotEmpty)
           _buildSection(
             icon: Icons.check_circle,
-            title: 'RESUELTOS',
+            title: 'Resueltas',
+            subtitle: 'Historial cerrado, disponible para consulta.',
             count: grouped['resolved']!.length,
             color: Colors.grey,
             conversations: grouped['resolved']!,
@@ -457,10 +609,163 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
+  Widget _buildListIntro({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _softSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: _accentBlue),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportOverview(List<Conversation> conversations) {
+    final orderContexts = conversations
+        .where((conversation) => conversation.contextType == 'order')
+        .length;
+    final unread = conversations.fold<int>(
+      0,
+      (sum, conversation) => sum + conversation.unreadCount,
+    );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _softSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Bandeja de clientes WhatsApp',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Usa esta bandeja para revisar, personalizar y enviar respuestas al cliente.',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMiniMetric(
+                  'Pedidos',
+                  orderContexts,
+                  Icons.receipt_long_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMiniMetric(
+                  'Sin leer',
+                  unread,
+                  Icons.mark_chat_unread_outlined,
+                  alert: unread > 0,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniMetric(
+    String label,
+    int value,
+    IconData icon, {
+    bool alert = false,
+  }) {
+    final color = alert ? const Color(0xFFB45309) : const Color(0xFF475569);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build a section header with conversations
   Widget _buildSection({
     required IconData icon,
     required String title,
+    required String subtitle,
     required int count,
     required Color color,
     required List<Conversation> conversations,
@@ -470,21 +775,46 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section Header
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: color.withValues(alpha: 0.1),
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(color: _borderColor),
+              bottom: BorderSide(color: _borderColor),
+              left: BorderSide(color: color, width: 3),
+            ),
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  letterSpacing: 1.2,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
@@ -511,6 +841,15 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             .map((conv) => _buildConversationTile(provider, conv, activeId)),
       ],
     );
+  }
+
+  int _compareConversations(Conversation a, Conversation b) {
+    final unreadCompare = b.unreadCount.compareTo(a.unreadCount);
+    if (unreadCompare != 0) return unreadCompare;
+
+    final aDate = a.lastMessageAt ?? a.updatedAt;
+    final bDate = b.lastMessageAt ?? b.updatedAt;
+    return bDate.compareTo(aDate);
   }
 
   Widget _buildConversationTile(
@@ -572,12 +911,39 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   }
 
   String _getSubtitle(Conversation conv) {
-    if (conv.status == 'pending') return '⏳ Esperando respuesta...';
-    if (conv.status == 'resolved') return '✅ Resuelto';
-    if (conv.contextType == 'order') return '🛒 Pedido web';
-    if (conv.contextType == 'job') return '🔧 Servicio técnico';
-    if (conv.contextType == 'invoice') return '📄 Factura';
-    return conv.type == 'support' ? 'WhatsApp cliente' : 'Chat interno';
+    final contextLabel = _getContextLabel(conv.contextType);
+
+    if (conv.type == 'support') {
+      final statusLabel = switch (conv.status) {
+        'pending' => 'Solicitud pendiente',
+        'resolved' => 'Resuelto',
+        _ => 'Cliente WhatsApp',
+      };
+      return contextLabel == null
+          ? statusLabel
+          : '$contextLabel · $statusLabel';
+    }
+
+    return contextLabel == null ? 'Chat de equipo' : '$contextLabel · Equipo';
+  }
+
+  String? _getContextLabel(String? contextType) {
+    switch (contextType) {
+      case 'order':
+        return 'Pedido web';
+      case 'job':
+        return 'Servicio técnico';
+      case 'invoice':
+        return 'Factura';
+      case 'bike':
+        return 'Bicicleta';
+      case 'customer':
+        return 'Cliente';
+      case 'product':
+        return 'Producto';
+      default:
+        return null;
+    }
   }
 
   Widget _buildBadge(int count) {

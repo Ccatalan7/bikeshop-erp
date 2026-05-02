@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../messaging/providers/chat_provider.dart';
 import '../../messaging/services/messaging_service.dart';
+import '../../../shared/services/notification_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -16,9 +17,11 @@ class OnlineOrdersPage extends StatefulWidget {
   const OnlineOrdersPage({
     super.key,
     this.embedded = false,
+    this.initialOrderId,
   });
 
   final bool embedded;
+  final String? initialOrderId;
 
   @override
   State<OnlineOrdersPage> createState() => _OnlineOrdersPageState();
@@ -29,20 +32,52 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   static const Color _borderColor = Color(0xFFE5E7EB);
   static const Color _softSurface = Color(0xFFF8FAFC);
   static const double _desktopBreakpoint = 980;
+  static const int _historicalInvoiceWarningDays = 7;
 
   final TextEditingController _searchController = TextEditingController();
 
+  String _selectedLane = 'attention';
   String _selectedStatus = 'all';
   String _selectedPaymentStatus = 'all';
   String _searchQuery = '';
   String? _selectedOrderId;
   String? _busyOrderId;
+  String? _lastMarkedAlertOrderId;
 
   @override
   void initState() {
     super.initState();
+    _selectedOrderId = widget.initialOrderId;
+    if (widget.initialOrderId != null) {
+      _selectedLane = 'all';
+    }
+    _markNotificationReadForOrder(widget.initialOrderId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WebsiteService>().initializeOrders();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant OnlineOrdersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialOrderId != widget.initialOrderId &&
+        widget.initialOrderId != null) {
+      setState(() => _selectedOrderId = widget.initialOrderId);
+      _markNotificationReadForOrder(widget.initialOrderId);
+    }
+  }
+
+  void _markNotificationReadForOrder(String? orderId) {
+    final trimmedOrderId = orderId?.trim();
+    if (trimmedOrderId == null ||
+        trimmedOrderId.isEmpty ||
+        trimmedOrderId == _lastMarkedAlertOrderId) {
+      return;
+    }
+    _lastMarkedAlertOrderId = trimmedOrderId;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService().markOnlineOrderAlertReadForOrder(trimmedOrderId);
     });
   }
 
@@ -64,6 +99,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       children: [
         _buildHeader(context, websiteService, allOrders),
         _buildSummaryStrip(allOrders),
+        _buildLaneStrip(allOrders),
         _buildToolbar(filteredOrders.length),
         Expanded(
           child: websiteService.isLoading && allOrders.isEmpty
@@ -119,7 +155,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   List<OnlineOrder> _filterOrders(List<OnlineOrder> orders) {
     final query = _searchQuery.trim().toLowerCase();
 
-    return orders.where((order) {
+    final filtered = orders.where((order) {
+      if (!_matchesLane(order, _selectedLane)) {
+        return false;
+      }
       if (_selectedStatus != 'all' && order.status != _selectedStatus) {
         return false;
       }
@@ -133,7 +172,14 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           order.customerName.toLowerCase().contains(query) ||
           order.customerEmail.toLowerCase().contains(query) ||
           (order.customerPhone ?? '').toLowerCase().contains(query);
-    }).toList();
+    }).toList()
+      ..sort((a, b) {
+        final priorityCompare = _orderPriority(a).compareTo(_orderPriority(b));
+        if (priorityCompare != 0) return priorityCompare;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+    return filtered;
   }
 
   OnlineOrder? _resolveSelectedOrder(List<OnlineOrder> orders) {
@@ -208,15 +254,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   }
 
   Widget _buildSummaryStrip(List<OnlineOrder> orders) {
-    final total = orders.length;
-    final pending = orders.where((order) => order.status == 'pending').length;
+    final newOrders = orders.where((order) => order.status == 'pending').length;
     final paid = orders.where((order) => order.paymentStatus == 'paid').length;
-    final missingInvoice = orders
-        .where((order) =>
-            order.paymentStatus == 'paid' && order.salesInvoiceId == null)
-        .length;
-    final shipping =
-        orders.where((order) => order.deliveryType == 'shipping').length;
+    final awaitingCoordination = orders.where(_needsCoordination).length;
+    final readyForPickup =
+        orders.where((order) => order.status == 'ready_for_pickup').length;
+    final blocked = orders.where(_isFulfillmentBlocked).length;
 
     return Container(
       color: _softSurface,
@@ -226,14 +269,14 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         runSpacing: 10,
         children: [
           _buildMetricPill(
-              'Total', total.toString(), Icons.receipt_long_outlined),
-          _buildMetricPill(
-              'Pendientes', pending.toString(), Icons.pending_actions_outlined),
+              'Nuevos', newOrders.toString(), Icons.fiber_new_outlined),
           _buildMetricPill('Pagados', paid.toString(), Icons.payments_outlined),
+          _buildMetricPill('Por coordinar', awaitingCoordination.toString(),
+              Icons.forum_outlined),
+          _buildMetricPill('Listo retiro', readyForPickup.toString(),
+              Icons.storefront_outlined),
           _buildMetricPill(
-              'Sin factura', missingInvoice.toString(), Icons.rule_outlined),
-          _buildMetricPill(
-              'Despacho', shipping.toString(), Icons.local_shipping_outlined),
+              'Bloqueados', blocked.toString(), Icons.report_problem_outlined),
         ],
       ),
     );
@@ -262,6 +305,129 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             style: TextStyle(color: Colors.grey[600], fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLaneStrip(List<OnlineOrder> orders) {
+    final lanes = [
+      const _OrderLane(
+        key: 'attention',
+        label: 'Atención',
+        icon: Icons.priority_high_outlined,
+      ),
+      const _OrderLane(
+        key: 'blocked',
+        label: 'Bloqueados',
+        icon: Icons.report_problem_outlined,
+      ),
+      const _OrderLane(
+        key: 'prepare',
+        label: 'Preparar',
+        icon: Icons.inventory_2_outlined,
+      ),
+      const _OrderLane(
+        key: 'coordination',
+        label: 'Coordinar',
+        icon: Icons.forum_outlined,
+      ),
+      const _OrderLane(
+        key: 'pickup',
+        label: 'Retiro',
+        icon: Icons.storefront_outlined,
+      ),
+      const _OrderLane(
+        key: 'shipping',
+        label: 'Despacho',
+        icon: Icons.local_shipping_outlined,
+      ),
+      const _OrderLane(
+        key: 'closed',
+        label: 'Cerrados',
+        icon: Icons.task_alt_outlined,
+      ),
+      const _OrderLane(
+        key: 'all',
+        label: 'Todos',
+        icon: Icons.view_list_outlined,
+      ),
+    ];
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final lane in lanes) ...[
+              _buildLaneChip(
+                lane,
+                count: orders
+                    .where((order) => _matchesLane(order, lane.key))
+                    .length,
+                selected: _selectedLane == lane.key,
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLaneChip(
+    _OrderLane lane, {
+    required int count,
+    required bool selected,
+  }) {
+    final color = selected ? _accentBlue : const Color(0xFF475569);
+
+    return Material(
+      color: selected ? _accentBlue.withValues(alpha: 0.06) : Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedLane = lane.key;
+            _selectedOrderId = null;
+          });
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? _accentBlue : _borderColor,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(lane.icon, size: 16, color: color),
+              const SizedBox(width: 7),
+              Text(
+                lane.label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -450,6 +616,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     required VoidCallback onTap,
   }) {
     final statusTone = _getStatusTone(order.status);
+    final queueSignals = _buildQueueSignals(order);
 
     return Material(
       color: selected ? _accentBlue.withValues(alpha: 0.04) : Colors.white,
@@ -525,6 +692,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              _buildAttentionRow(order),
+              if (queueSignals.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: queueSignals),
+              ],
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -547,6 +720,188 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           ),
         ),
       ),
+    );
+  }
+
+  List<Widget> _buildQueueSignals(OnlineOrder order) {
+    final signals = <Widget>[];
+
+    if (order.paymentStatus == 'paid' && order.salesInvoiceId == null) {
+      signals.add(_buildQueueSignalChip(
+        _requiresHistoricalInvoiceWarning(order)
+            ? 'pago antiguo sin factura'
+            : 'pagado sin factura',
+        Icons.receipt_long_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (order.paymentStatus == 'failed') {
+      signals.add(_buildQueueSignalChip(
+        'pago fallido',
+        Icons.payment_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (order.paymentStatus == 'pending' && order.status == 'pending') {
+      signals.add(_buildQueueSignalChip(
+        'pago pendiente',
+        Icons.hourglass_empty_outlined,
+        const Color(0xFFB45309),
+      ));
+    }
+    if (!_isTerminalOrder(order) && !_hasCustomerPhone(order)) {
+      signals.add(_buildQueueSignalChip(
+        'sin teléfono cliente',
+        Icons.phone_disabled_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (!_isTerminalOrder(order) && order.deliveryType == 'shipping') {
+      if (!_hasShippingAddress(order)) {
+        signals.add(_buildQueueSignalChip(
+          'sin dirección despacho',
+          Icons.location_off_outlined,
+          const Color(0xFFB91C1C),
+        ));
+      } else if (order.status == 'shipped' &&
+          order.trackingNumber?.trim().isNotEmpty != true) {
+        signals.add(_buildQueueSignalChip(
+          'sin seguimiento',
+          Icons.route_outlined,
+          const Color(0xFFB45309),
+        ));
+      }
+    }
+    signals.addAll(_buildInventoryQueueSignals(order));
+    if (_needsCoordination(order)) {
+      signals.add(_buildQueueSignalChip(
+        order.deliveryType == 'pickup' ? 'coordinar retiro' : 'coordinar envío',
+        Icons.forum_outlined,
+        const Color(0xFF475569),
+      ));
+    }
+    if (order.status == 'cancelled' && order.refundAmount > 0) {
+      signals.add(_buildQueueSignalChip(
+        'reembolso ${ChileanUtils.formatCurrency(order.refundAmount)}',
+        Icons.replay_circle_filled_outlined,
+        const Color(0xFF7C3AED),
+      ));
+    }
+
+    return signals;
+  }
+
+  List<Widget> _buildInventoryQueueSignals(OnlineOrder order) {
+    if (_isTerminalOrder(order)) return const [];
+
+    final readiness = _inventoryReadinessForOrder(order);
+    if (order.items.isEmpty) {
+      return [
+        _buildQueueSignalChip(
+          'sin productos',
+          Icons.inventory_2_outlined,
+          const Color(0xFFB91C1C),
+        ),
+      ];
+    }
+
+    final codes = readiness.items.map((item) => item.code).toSet();
+    final chips = <Widget>[];
+    if (codes.contains('missing_link') || codes.contains('missing_product')) {
+      chips.add(_buildQueueSignalChip(
+        'item sin producto',
+        Icons.link_off_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (codes.contains('inactive_product')) {
+      chips.add(_buildQueueSignalChip(
+        'producto inactivo',
+        Icons.block_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (codes.contains('stock_short')) {
+      chips.add(_buildQueueSignalChip(
+        'stock corto',
+        Icons.production_quantity_limits_outlined,
+        const Color(0xFFB91C1C),
+      ));
+    }
+    if (codes.contains('stock_unknown') || codes.contains('context_pending')) {
+      chips.add(_buildQueueSignalChip(
+        'revisar stock',
+        Icons.help_outline,
+        const Color(0xFFB45309),
+      ));
+    }
+    if (codes.contains('stock_tight')) {
+      chips.add(_buildQueueSignalChip(
+        'stock justo',
+        Icons.info_outline,
+        const Color(0xFFB45309),
+      ));
+    }
+    if (codes.contains('unpublished')) {
+      chips.add(_buildQueueSignalChip(
+        'producto no publicado',
+        Icons.visibility_off_outlined,
+        const Color(0xFFB45309),
+      ));
+    }
+    return chips;
+  }
+
+  Widget _buildQueueSignalChip(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttentionRow(OnlineOrder order) {
+    final tone = _isFulfillmentBlocked(order)
+        ? const Color(0xFFB91C1C)
+        : _needsCoordination(order)
+            ? const Color(0xFFB45309)
+            : Colors.grey[700]!;
+
+    return Row(
+      children: [
+        Icon(_attentionIcon(order), size: 14, color: tone),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            _attentionLabel(order),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: tone,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -607,65 +962,27 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (order.status == 'pending')
-                      FilledButton.icon(
-                        onPressed: busy
-                            ? null
-                            : () =>
-                                _confirmOrder(context, websiteService, order),
-                        icon: const Icon(Icons.check, size: 18),
-                        label: const Text('Confirmar pedido'),
-                      ),
-                    if (order.customerPhone != null &&
-                        order.customerPhone!.trim().isNotEmpty)
-                      OutlinedButton.icon(
-                        onPressed: busy
-                            ? null
-                            : () => _openOrderMessagingConversation(
-                                  context,
-                                  order,
-                                ),
-                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                        label: const Text('Coordinar entrega'),
-                      ),
-                    if (order.salesInvoiceId == null &&
-                        order.paymentStatus == 'paid')
-                      OutlinedButton.icon(
-                        onPressed: busy
-                            ? null
-                            : () =>
-                                _processOrder(context, websiteService, order),
-                        icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                        label: const Text('Crear factura'),
-                      ),
-                    if (order.salesInvoiceId != null)
-                      OutlinedButton.icon(
-                        onPressed: () => context
-                            .go('/sales/invoices/${order.salesInvoiceId}'),
-                        icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                        label: const Text('Ver factura'),
-                      ),
-                    TextButton.icon(
-                      onPressed: busy || order.status == 'cancelled'
-                          ? null
-                          : () => _cancelOrder(context, websiteService, order),
-                      icon: const Icon(Icons.cancel_outlined, size: 18),
-                      label: const Text('Cancelar'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red[700],
-                      ),
-                    ),
-                  ],
+                _buildWorkflowActions(
+                  context,
+                  websiteService,
+                  order,
+                  busy: busy,
                 ),
+                const SizedBox(height: 12),
+                _buildWorkflowBrief(order),
+                const SizedBox(height: 12),
+                _buildOperationalChecklist(order),
+                const SizedBox(height: 12),
+                _buildInventoryReadinessPanel(order),
+                const SizedBox(height: 12),
+                _buildTimelinePanel(order),
                 const SizedBox(height: 18),
                 _buildInfoGrid(order),
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          _buildNotesPanel(context, websiteService, order, busy: busy),
           const SizedBox(height: 12),
           _buildItemsPanel(order),
           const SizedBox(height: 12),
@@ -673,6 +990,1181 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildWorkflowActions(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    final primaryAction = _buildPrimaryActionButton(
+      context,
+      websiteService,
+      order,
+      busy: busy,
+    );
+    final secondaryActions = _buildSecondaryActionButtons(
+      context,
+      websiteService,
+      order,
+      busy: busy,
+    );
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: SafeLayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 680;
+          final primaryColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Acción recomendada', style: _hintStyle),
+              const SizedBox(height: 8),
+              primaryAction ?? _buildPassiveActionState(order),
+            ],
+          );
+          final secondaryColumn = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Acciones secundarias', style: _hintStyle),
+              const SizedBox(height: 8),
+              if (secondaryActions.isEmpty)
+                Text('Sin acciones adicionales', style: _hintStyle)
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: secondaryActions,
+                ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                primaryColumn,
+                const Divider(height: 24),
+                secondaryColumn,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 260, child: primaryColumn),
+              Container(
+                width: 1,
+                height: 72,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                color: _borderColor,
+              ),
+              Expanded(child: secondaryColumn),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget? _buildPrimaryActionButton(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    switch (order.status) {
+      case 'pending':
+        if (_canConfirmPayment(order)) {
+          return SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => _confirmOrderPayment(context, websiteService, order),
+              icon: const Icon(Icons.payments_outlined, size: 18),
+              label: const Text('Confirmar pago'),
+            ),
+          );
+        }
+        return SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: busy
+                ? null
+                : () => _confirmOrder(context, websiteService, order),
+            icon: const Icon(Icons.check, size: 18),
+            label: const Text('Confirmar pedido'),
+          ),
+        );
+      case 'confirmed':
+        if (order.salesInvoiceId == null && order.paymentStatus == 'paid') {
+          return SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => _processOrder(context, websiteService, order),
+              icon: const Icon(Icons.receipt_long_outlined, size: 18),
+              label: const Text('Crear factura'),
+            ),
+          );
+        }
+        if (order.salesInvoiceId != null) {
+          return SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => _startPreparing(context, websiteService, order),
+              icon: const Icon(Icons.inventory_2_outlined, size: 18),
+              label: const Text('Preparar pedido'),
+            ),
+          );
+        }
+        return null;
+      case 'processing':
+        if (order.deliveryType == 'pickup') {
+          return SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => _markReadyForPickup(
+                        context,
+                        websiteService,
+                        order,
+                      ),
+              icon: const Icon(Icons.storefront_outlined, size: 18),
+              label: const Text('Listo para retiro'),
+            ),
+          );
+        }
+        return SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: busy
+                ? null
+                : () => _markShipped(context, websiteService, order),
+            icon: const Icon(Icons.local_shipping_outlined, size: 18),
+            label: const Text('Marcar enviado'),
+          ),
+        );
+      case 'ready_for_pickup':
+      case 'shipped':
+        return SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: busy
+                ? null
+                : () => _markDelivered(context, websiteService, order),
+            icon: const Icon(Icons.task_alt_outlined, size: 18),
+            label: Text(
+              order.deliveryType == 'pickup'
+                  ? 'Marcar retirado'
+                  : 'Marcar entregado',
+            ),
+          ),
+        );
+      default:
+        return null;
+    }
+  }
+
+  List<Widget> _buildSecondaryActionButtons(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    final actions = <Widget>[];
+    final hasPhone = _hasCustomerPhone(order);
+    final primaryIsInvoice = order.status == 'confirmed' &&
+        order.salesInvoiceId == null &&
+        order.paymentStatus == 'paid';
+    final primaryIsPayment =
+        order.status == 'pending' && _canConfirmPayment(order);
+
+    if (hasPhone && !_isTerminalOrder(order)) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => _openOrderMessagingConversation(
+                    context,
+                    order,
+                  ),
+          icon: const Icon(Icons.chat_bubble_outline, size: 18),
+          label: const Text('Mensajería'),
+        ),
+      );
+    }
+
+    if (order.salesInvoiceId == null &&
+        order.paymentStatus == 'paid' &&
+        !primaryIsInvoice) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed:
+              busy ? null : () => _processOrder(context, websiteService, order),
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: const Text('Crear factura'),
+        ),
+      );
+    }
+
+    if (_canConfirmPayment(order) && !primaryIsPayment) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => _confirmOrderPayment(context, websiteService, order),
+          icon: const Icon(Icons.payments_outlined, size: 18),
+          label: const Text('Confirmar pago'),
+        ),
+      );
+    }
+
+    if (order.salesInvoiceId != null) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: busy
+              ? null
+              : () => context.go(
+                    '/sales/invoices/${order.salesInvoiceId}',
+                  ),
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: const Text('Ver factura'),
+        ),
+      );
+    }
+
+    if (!_isTerminalOrder(order)) {
+      actions.add(
+        TextButton.icon(
+          onPressed:
+              busy ? null : () => _cancelOrder(context, websiteService, order),
+          icon: const Icon(Icons.cancel_outlined, size: 18),
+          label: const Text('Cancelar'),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red[700],
+          ),
+        ),
+      );
+    }
+
+    return actions;
+  }
+
+  Widget _buildPassiveActionState(OnlineOrder order) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _softSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(_attentionIcon(order), size: 18, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _nextActionLabel(order),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkflowBrief(OnlineOrder order) {
+    final blockers = _blockerLabels(order);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: SafeLayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 640;
+          final sections = [
+            _buildBriefCell(
+              'Siguiente acción',
+              _nextActionLabel(order),
+              _attentionIcon(order),
+              _isFulfillmentBlocked(order)
+                  ? const Color(0xFFB91C1C)
+                  : _getStatusTone(order.status),
+            ),
+            _buildBriefCell(
+              'Cumplimiento',
+              order.deliveryType == 'pickup'
+                  ? _pickupFulfillmentLabel(order)
+                  : _shippingFulfillmentLabel(order),
+              order.deliveryType == 'pickup'
+                  ? Icons.storefront_outlined
+                  : Icons.local_shipping_outlined,
+              const Color(0xFF475569),
+            ),
+            _buildBriefCell(
+              'Riesgo',
+              blockers.isEmpty ? 'Sin bloqueos visibles' : blockers.join(' · '),
+              blockers.isEmpty
+                  ? Icons.check_circle_outline
+                  : Icons.report_problem_outlined,
+              blockers.isEmpty
+                  ? const Color(0xFF047857)
+                  : const Color(0xFFB91C1C),
+            ),
+          ];
+
+          if (compact) {
+            return Column(
+              children: [
+                for (var i = 0; i < sections.length; i++) ...[
+                  if (i > 0) const Divider(height: 18),
+                  sections[i],
+                ],
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < sections.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    width: 1,
+                    height: 42,
+                    margin: const EdgeInsets.symmetric(horizontal: 14),
+                    color: _borderColor,
+                  ),
+                Expanded(child: sections[i]),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBriefCell(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: _hintStyle),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOperationalChecklist(OnlineOrder order) {
+    final checkpoints = _buildOrderCheckpoints(order);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fact_check_outlined,
+                  size: 17, color: _accentBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Checklist operativo',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const Spacer(),
+              Text(
+                _operationalSummary(order),
+                style: _hintStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SafeLayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 760 ? 2 : 1;
+              final tileWidth = columns == 1
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - 10) / 2;
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: checkpoints
+                    .map(
+                      (checkpoint) => SizedBox(
+                        width: tileWidth,
+                        child: _buildCheckpointTile(checkpoint),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckpointTile(_OrderCheckpoint checkpoint) {
+    final color = _checkpointColor(checkpoint.level);
+    final icon = _checkpointIcon(checkpoint.level);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(icon, size: 17, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  checkpoint.title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  checkpoint.detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.25,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryReadinessPanel(OnlineOrder order) {
+    final readiness = _inventoryReadinessForOrder(order);
+    final color = _inventoryReadinessColor(readiness.level);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(readiness.icon, size: 18, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Inventario / preparación',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      readiness.detail,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                        height: 1.25,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _buildCompactBadge(readiness.title, color),
+            ],
+          ),
+          if (readiness.items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Column(
+              children: readiness.items
+                  .map((itemReadiness) => _buildInventoryReadinessRow(
+                        itemReadiness,
+                      ))
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryReadinessRow(
+    _OrderItemReadiness itemReadiness,
+  ) {
+    final item = itemReadiness.item;
+    final color = _inventoryReadinessColor(itemReadiness.level);
+    final sku = item.liveProductSku?.trim().isNotEmpty == true
+        ? item.liveProductSku!
+        : item.productSku?.trim().isNotEmpty == true
+            ? item.productSku!
+            : 'Sin SKU';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(itemReadiness.icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$sku · Cant. ${item.quantity} · ${_itemStockLabel(item)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _hintStyle,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _buildInventoryStatusChip(itemReadiness),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryStatusChip(_OrderItemReadiness readiness) {
+    final color = _inventoryReadinessColor(readiness.level);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(readiness.icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            readiness.title,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelinePanel(OnlineOrder order) {
+    final events = _buildOrderTimelineEvents(order);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.timeline_outlined, size: 17, color: _accentBlue),
+              SizedBox(width: 8),
+              Text(
+                'Actividad del pedido',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (var index = 0; index < events.length; index++)
+            _buildTimelineEventRow(
+              events[index],
+              isLast: index == events.length - 1,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineEventRow(
+    _OrderTimelineEvent event, {
+    required bool isLast,
+  }) {
+    final color = _checkpointColor(event.level);
+    final dateText = event.date == null
+        ? event.fallbackDateLabel
+        : ChileanUtils.formatDateTime(event.date!);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.28)),
+              ),
+              child: Icon(event.icon, size: 14, color: color),
+            ),
+            if (!isLast)
+              Container(
+                width: 1,
+                height: 34,
+                color: _borderColor,
+              ),
+          ],
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(dateText, style: _hintStyle),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  event.detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.25,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<_OrderTimelineEvent> _buildOrderTimelineEvents(OnlineOrder order) {
+    final events = <_OrderTimelineEvent>[
+      _OrderTimelineEvent(
+        title: 'Pedido creado',
+        detail: 'Recibido desde la tienda online',
+        date: order.createdAt,
+        level: _CheckpointLevel.done,
+        icon: Icons.receipt_long_outlined,
+      ),
+      _paymentTimelineEvent(order),
+      _invoiceTimelineEvent(order),
+      _fulfillmentTimelineEvent(order),
+    ];
+
+    if (order.status == 'cancelled') {
+      events.add(_cancellationTimelineEvent(order));
+    }
+    if (order.paymentStatus != 'refunded' &&
+        (order.refundAmount > 0 || order.refundedAt != null)) {
+      events.add(_refundTimelineEvent(order));
+    }
+
+    return events;
+  }
+
+  _OrderTimelineEvent _paymentTimelineEvent(OnlineOrder order) {
+    switch (order.paymentStatus) {
+      case 'paid':
+        return _OrderTimelineEvent(
+          title: 'Pago confirmado',
+          detail: _paymentTimelineDetail(order),
+          date: order.paidAt,
+          fallbackDateLabel: 'Sin fecha',
+          level: _CheckpointLevel.done,
+          icon: Icons.payments_outlined,
+        );
+      case 'failed':
+        return const _OrderTimelineEvent(
+          title: 'Pago fallido',
+          detail: 'Resolver el pago antes de preparar o prometer entrega',
+          fallbackDateLabel: 'Requiere acción',
+          level: _CheckpointLevel.blocked,
+          icon: Icons.payment_outlined,
+        );
+      case 'refunded':
+        return _refundTimelineEvent(order);
+      default:
+        return const _OrderTimelineEvent(
+          title: 'Pago pendiente',
+          detail: 'Esperando comprobante, validación o captura del pago',
+          fallbackDateLabel: 'Pendiente',
+          level: _CheckpointLevel.pending,
+          icon: Icons.hourglass_empty_outlined,
+        );
+    }
+  }
+
+  String _paymentTimelineDetail(OnlineOrder order) {
+    final parts = <String>[_formatPaymentMethod(order.paymentMethod)];
+    final reference = order.paymentReference?.trim();
+    if (reference != null && reference.isNotEmpty) {
+      parts.add('ref. $reference');
+    }
+    return parts.join(' · ');
+  }
+
+  _OrderTimelineEvent _invoiceTimelineEvent(OnlineOrder order) {
+    if (order.salesInvoiceId != null) {
+      return _OrderTimelineEvent(
+        title: 'Factura vinculada',
+        detail: 'Documento de venta conectado al pedido',
+        fallbackDateLabel: 'Registrada',
+        level: _CheckpointLevel.done,
+        icon: Icons.request_quote_outlined,
+      );
+    }
+    if (order.paymentStatus == 'paid') {
+      return _OrderTimelineEvent(
+        title: 'Factura pendiente',
+        detail: _requiresHistoricalInvoiceWarning(order)
+            ? 'Pago antiguo: crear factura con fecha original'
+            : 'Crear factura antes de preparar o cerrar',
+        fallbackDateLabel: 'Bloquea preparación',
+        level: _CheckpointLevel.blocked,
+        icon: Icons.receipt_long_outlined,
+      );
+    }
+    return const _OrderTimelineEvent(
+      title: 'Factura pendiente',
+      detail: 'Se emite cuando el pago quede resuelto',
+      fallbackDateLabel: 'Pendiente',
+      level: _CheckpointLevel.pending,
+      icon: Icons.receipt_long_outlined,
+    );
+  }
+
+  _OrderTimelineEvent _fulfillmentTimelineEvent(OnlineOrder order) {
+    switch (order.status) {
+      case 'processing':
+        return _OrderTimelineEvent(
+          title: 'Preparación iniciada',
+          detail: 'El pedido está en separación/preparación',
+          date: order.updatedAt,
+          level: _CheckpointLevel.active,
+          icon: Icons.inventory_2_outlined,
+        );
+      case 'ready_for_pickup':
+        return _OrderTimelineEvent(
+          title: 'Listo para retiro',
+          detail: 'Avisar al cliente desde Mensajería',
+          date: order.readyForPickupAt,
+          fallbackDateLabel: 'Sin fecha',
+          level: _CheckpointLevel.active,
+          icon: Icons.storefront_outlined,
+        );
+      case 'shipped':
+        return _OrderTimelineEvent(
+          title: 'Despachado',
+          detail: order.trackingNumber?.trim().isNotEmpty == true
+              ? 'Seguimiento ${order.trackingNumber!.trim()}'
+              : 'Sin seguimiento registrado',
+          date: order.shippedAt,
+          fallbackDateLabel: 'Sin fecha',
+          level: _CheckpointLevel.active,
+          icon: Icons.local_shipping_outlined,
+        );
+      case 'delivered':
+        return _OrderTimelineEvent(
+          title: order.deliveryType == 'pickup' ? 'Retirado' : 'Entregado',
+          detail: 'Cumplimiento cerrado',
+          date: order.deliveredAt,
+          fallbackDateLabel: 'Sin fecha',
+          level: _CheckpointLevel.done,
+          icon: Icons.task_alt_outlined,
+        );
+      case 'cancelled':
+        return const _OrderTimelineEvent(
+          title: 'Cumplimiento detenido',
+          detail: 'El pedido fue cancelado antes de cerrar entrega',
+          fallbackDateLabel: 'Cancelado',
+          level: _CheckpointLevel.blocked,
+          icon: Icons.block_outlined,
+        );
+      case 'confirmed':
+        return const _OrderTimelineEvent(
+          title: 'Preparación pendiente',
+          detail: 'Listo para pasar a preparación cuando no existan bloqueos',
+          fallbackDateLabel: 'Pendiente',
+          level: _CheckpointLevel.pending,
+          icon: Icons.inventory_2_outlined,
+        );
+      case 'pending':
+      default:
+        return const _OrderTimelineEvent(
+          title: 'Preparación pendiente',
+          detail: 'Primero resolver pago y confirmación del pedido',
+          fallbackDateLabel: 'Pendiente',
+          level: _CheckpointLevel.pending,
+          icon: Icons.inventory_2_outlined,
+        );
+    }
+  }
+
+  _OrderTimelineEvent _cancellationTimelineEvent(OnlineOrder order) {
+    return _OrderTimelineEvent(
+      title: 'Cancelación registrada',
+      detail: order.cancelledReason?.trim().isNotEmpty == true
+          ? order.cancelledReason!.trim()
+          : 'Sin motivo registrado',
+      date: order.cancelledAt,
+      fallbackDateLabel: 'Sin fecha',
+      level: _CheckpointLevel.blocked,
+      icon: Icons.cancel_outlined,
+    );
+  }
+
+  _OrderTimelineEvent _refundTimelineEvent(OnlineOrder order) {
+    final amount = order.refundAmount > 0
+        ? ChileanUtils.formatCurrency(order.refundAmount)
+        : 'Monto no registrado';
+    return _OrderTimelineEvent(
+      title: 'Reembolso registrado',
+      detail: amount,
+      date: order.refundedAt,
+      fallbackDateLabel: 'Sin fecha',
+      level: _CheckpointLevel.done,
+      icon: Icons.replay_circle_filled_outlined,
+    );
+  }
+
+  List<_OrderCheckpoint> _buildOrderCheckpoints(OnlineOrder order) {
+    return [
+      _paymentCheckpoint(order),
+      _invoiceCheckpoint(order),
+      _contactCheckpoint(order),
+      _preparationCheckpoint(order),
+      _fulfillmentCheckpoint(order),
+    ];
+  }
+
+  _OrderCheckpoint _paymentCheckpoint(OnlineOrder order) {
+    switch (order.paymentStatus) {
+      case 'paid':
+        return _OrderCheckpoint(
+          title: 'Pago',
+          detail: order.paidAt == null
+              ? 'Pago recibido'
+              : 'Pagado ${ChileanUtils.formatDate(order.paidAt!)}',
+          level: _CheckpointLevel.done,
+        );
+      case 'failed':
+        return const _OrderCheckpoint(
+          title: 'Pago',
+          detail: 'Pago fallido; no preparar antes de resolver',
+          level: _CheckpointLevel.blocked,
+        );
+      case 'refunded':
+        return const _OrderCheckpoint(
+          title: 'Pago',
+          detail: 'Pago reembolsado; revisar antes de actuar',
+          level: _CheckpointLevel.blocked,
+        );
+      default:
+        return const _OrderCheckpoint(
+          title: 'Pago',
+          detail: 'Esperando confirmación de pago',
+          level: _CheckpointLevel.pending,
+        );
+    }
+  }
+
+  _OrderCheckpoint _invoiceCheckpoint(OnlineOrder order) {
+    if (order.salesInvoiceId != null) {
+      return const _OrderCheckpoint(
+        title: 'Factura',
+        detail: 'Factura vinculada al pedido',
+        level: _CheckpointLevel.done,
+      );
+    }
+    if (order.paymentStatus == 'paid') {
+      return const _OrderCheckpoint(
+        title: 'Factura',
+        detail: 'Crear factura antes de preparar o cerrar',
+        level: _CheckpointLevel.blocked,
+      );
+    }
+    return const _OrderCheckpoint(
+      title: 'Factura',
+      detail: 'Pendiente hasta que el pago esté resuelto',
+      level: _CheckpointLevel.pending,
+    );
+  }
+
+  _OrderCheckpoint _contactCheckpoint(OnlineOrder order) {
+    if (_hasCustomerPhone(order)) {
+      return _OrderCheckpoint(
+        title: 'Contacto',
+        detail: order.deliveryType == 'pickup'
+            ? 'Teléfono listo para coordinar retiro'
+            : 'Teléfono listo para coordinar despacho',
+        level: _CheckpointLevel.done,
+      );
+    }
+    return const _OrderCheckpoint(
+      title: 'Contacto',
+      detail: 'Sin teléfono; completar dato antes de coordinar',
+      level: _CheckpointLevel.blocked,
+    );
+  }
+
+  _OrderCheckpoint _preparationCheckpoint(OnlineOrder order) {
+    switch (order.status) {
+      case 'pending':
+        return const _OrderCheckpoint(
+          title: 'Preparación',
+          detail: 'Confirmar el pedido antes de preparar',
+          level: _CheckpointLevel.pending,
+        );
+      case 'confirmed':
+        return _OrderCheckpoint(
+          title: 'Preparación',
+          detail: order.salesInvoiceId == null && order.paymentStatus == 'paid'
+              ? 'Factura requerida antes de preparar'
+              : 'Listo para separar productos',
+          level: order.salesInvoiceId == null && order.paymentStatus == 'paid'
+              ? _CheckpointLevel.blocked
+              : _CheckpointLevel.active,
+        );
+      case 'processing':
+        return const _OrderCheckpoint(
+          title: 'Preparación',
+          detail: 'Productos en preparación',
+          level: _CheckpointLevel.active,
+        );
+      case 'ready_for_pickup':
+      case 'shipped':
+      case 'delivered':
+        return const _OrderCheckpoint(
+          title: 'Preparación',
+          detail: 'Preparación completada',
+          level: _CheckpointLevel.done,
+        );
+      case 'cancelled':
+        return const _OrderCheckpoint(
+          title: 'Preparación',
+          detail: 'Pedido cancelado',
+          level: _CheckpointLevel.pending,
+        );
+      default:
+        return const _OrderCheckpoint(
+          title: 'Preparación',
+          detail: 'Revisar estado operativo',
+          level: _CheckpointLevel.pending,
+        );
+    }
+  }
+
+  _OrderCheckpoint _fulfillmentCheckpoint(OnlineOrder order) {
+    if (order.deliveryType == 'pickup') {
+      switch (order.status) {
+        case 'ready_for_pickup':
+          return const _OrderCheckpoint(
+            title: 'Entrega',
+            detail: 'Avisar al cliente para retiro',
+            level: _CheckpointLevel.active,
+          );
+        case 'delivered':
+          return const _OrderCheckpoint(
+            title: 'Entrega',
+            detail: 'Pedido retirado en tienda',
+            level: _CheckpointLevel.done,
+          );
+        case 'cancelled':
+          return const _OrderCheckpoint(
+            title: 'Entrega',
+            detail: 'Retiro cancelado',
+            level: _CheckpointLevel.pending,
+          );
+        default:
+          return const _OrderCheckpoint(
+            title: 'Entrega',
+            detail: 'Retiro pendiente de preparación',
+            level: _CheckpointLevel.pending,
+          );
+      }
+    }
+
+    if (!_hasShippingAddress(order)) {
+      return const _OrderCheckpoint(
+        title: 'Entrega',
+        detail: 'Sin dirección suficiente para despachar',
+        level: _CheckpointLevel.blocked,
+      );
+    }
+
+    switch (order.status) {
+      case 'shipped':
+        return _OrderCheckpoint(
+          title: 'Entrega',
+          detail: order.trackingNumber?.trim().isNotEmpty == true
+              ? 'Despachado con seguimiento'
+              : 'Despachado sin seguimiento registrado',
+          level: _CheckpointLevel.active,
+        );
+      case 'delivered':
+        return const _OrderCheckpoint(
+          title: 'Entrega',
+          detail: 'Entrega completada',
+          level: _CheckpointLevel.done,
+        );
+      case 'cancelled':
+        return const _OrderCheckpoint(
+          title: 'Entrega',
+          detail: 'Despacho cancelado',
+          level: _CheckpointLevel.pending,
+        );
+      default:
+        return const _OrderCheckpoint(
+          title: 'Entrega',
+          detail: 'Despacho pendiente de preparación',
+          level: _CheckpointLevel.pending,
+        );
+    }
+  }
+
+  String _operationalSummary(OnlineOrder order) {
+    final blockers = _blockerLabels(order);
+    if (blockers.isNotEmpty) return '${blockers.length} bloqueo(s)';
+    if (_needsCoordination(order)) return 'requiere coordinación';
+    return 'sin bloqueos visibles';
+  }
+
+  bool _hasShippingAddress(OnlineOrder order) {
+    if (order.deliveryType == 'pickup') return true;
+    return order.shippingAddressLine1?.trim().isNotEmpty == true ||
+        order.customerAddress?.trim().isNotEmpty == true;
+  }
+
+  Color _checkpointColor(_CheckpointLevel level) {
+    switch (level) {
+      case _CheckpointLevel.done:
+        return const Color(0xFF047857);
+      case _CheckpointLevel.active:
+        return const Color(0xFF1D4ED8);
+      case _CheckpointLevel.blocked:
+        return const Color(0xFFB91C1C);
+      case _CheckpointLevel.pending:
+        return const Color(0xFF64748B);
+    }
+  }
+
+  IconData _checkpointIcon(_CheckpointLevel level) {
+    switch (level) {
+      case _CheckpointLevel.done:
+        return Icons.check_circle_outline;
+      case _CheckpointLevel.active:
+        return Icons.radio_button_checked;
+      case _CheckpointLevel.blocked:
+        return Icons.error_outline;
+      case _CheckpointLevel.pending:
+        return Icons.radio_button_unchecked;
+    }
   }
 
   Widget _buildInfoGrid(OnlineOrder order) {
@@ -732,20 +2224,44 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             rows: [
               _InfoRow('Estado', order.statusDisplayName),
               _InfoRow('Factura', order.salesInvoiceId ?? 'Sin factura'),
+              if (order.cancelledAt != null)
+                _InfoRow(
+                  'Cancelado',
+                  ChileanUtils.formatDateTime(order.cancelledAt!),
+                ),
+              if (order.cancelledReason?.trim().isNotEmpty == true)
+                _InfoRow('Motivo', order.cancelledReason!),
+              if (order.refundAmount > 0)
+                _InfoRow(
+                  'Reembolso',
+                  ChileanUtils.formatCurrency(order.refundAmount),
+                ),
+              if (order.refundedAt != null)
+                _InfoRow(
+                  'Reembolsado',
+                  ChileanUtils.formatDateTime(order.refundedAt!),
+                ),
               _InfoRow('Notas internas', _emptyFallback(order.internalNotes)),
               _InfoRow('Actualizado', ChileanUtils.formatDate(order.updatedAt)),
             ],
           ),
         ];
 
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: columns == 2 ? 2.35 : 2.8,
-          children: cards,
+        final cardWidth = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - 12) / 2;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: cards
+              .map(
+                (card) => SizedBox(
+                  width: cardWidth,
+                  child: card,
+                ),
+              )
+              .toList(),
         );
       },
     );
@@ -802,6 +2318,116 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
+  Widget _buildNotesPanel(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sticky_note_2_outlined,
+                  size: 17, color: _accentBlue),
+              const SizedBox(width: 8),
+              const Text(
+                'Notas y coordinación',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const Spacer(),
+              OutlinedButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => _editInternalNotes(
+                          context,
+                          websiteService,
+                          order,
+                        ),
+                icon: const Icon(Icons.edit_note_outlined, size: 18),
+                label: const Text('Editar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SafeLayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 700;
+              final customerNotes = _emptyFallback(order.customerNotes);
+              final internalNotes = _emptyFallback(order.internalNotes);
+              final children = [
+                _buildNoteBlock(
+                  'Cliente',
+                  customerNotes,
+                  Icons.person_outline,
+                ),
+                _buildNoteBlock(
+                  'Interna',
+                  internalNotes,
+                  Icons.lock_outline,
+                ),
+              ];
+
+              if (!isWide) {
+                return Column(
+                  children: [
+                    children[0],
+                    const SizedBox(height: 10),
+                    children[1],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: children[0]),
+                  const SizedBox(width: 10),
+                  Expanded(child: children[1]),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteBlock(String title, String value, IconData icon) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _softSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 15, color: Colors.grey[700]),
+              const SizedBox(width: 6),
+              Text(title, style: _hintStyle),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemsPanel(OnlineOrder order) {
     return Container(
       decoration: _panelDecoration,
@@ -824,35 +2450,38 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 columnSpacing: 24,
                 headingRowHeight: 34,
                 dataRowMinHeight: 38,
-                dataRowMaxHeight: 44,
+                dataRowMaxHeight: 52,
                 columns: const [
                   DataColumn(label: Text('Producto')),
                   DataColumn(label: Text('SKU')),
                   DataColumn(numeric: true, label: Text('Cant.')),
+                  DataColumn(numeric: true, label: Text('Stock')),
+                  DataColumn(label: Text('Revisión')),
                   DataColumn(numeric: true, label: Text('Precio')),
                   DataColumn(numeric: true, label: Text('Subtotal')),
                 ],
-                rows: order.items
-                    .map(
-                      (item) => DataRow(
-                        cells: [
-                          DataCell(SizedBox(
-                            width: 240,
-                            child: Text(
-                              item.productName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          )),
-                          DataCell(Text(item.productSku ?? '-')),
-                          DataCell(Text('${item.quantity}')),
-                          DataCell(Text(
-                              ChileanUtils.formatCurrency(item.unitPrice))),
-                          DataCell(
-                              Text(ChileanUtils.formatCurrency(item.subtotal))),
-                        ],
-                      ),
-                    )
-                    .toList(),
+                rows: order.items.map((item) {
+                  final readiness = _inventoryReadinessForItem(item);
+                  return DataRow(
+                    cells: [
+                      DataCell(SizedBox(
+                        width: 240,
+                        child: Text(
+                          item.productName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )),
+                      DataCell(Text(item.productSku ?? '-')),
+                      DataCell(Text('${item.quantity}')),
+                      DataCell(Text(_itemStockLabel(item))),
+                      DataCell(_buildInventoryStatusChip(readiness)),
+                      DataCell(
+                          Text(ChileanUtils.formatCurrency(item.unitPrice))),
+                      DataCell(
+                          Text(ChileanUtils.formatCurrency(item.subtotal))),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
         ],
@@ -892,6 +2521,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               ),
             ],
           ),
+          if (order.refundAmount > 0) ...[
+            const Divider(height: 20),
+            _buildTotalRow('Reembolso registrado', -order.refundAmount),
+          ],
         ],
       ),
     );
@@ -917,8 +2550,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     WebsiteService websiteService,
     OnlineOrder order,
   ) async {
+    final willCreateInvoice =
+        order.paymentStatus == 'paid' && order.salesInvoiceId == null;
+    if (willCreateInvoice &&
+        !await _confirmHistoricalInvoiceCreationIfNeeded(context, order)) {
+      return;
+    }
+    if (!context.mounted) return;
+
     await _runOrderAction(context, order, () async {
-      if (order.paymentStatus == 'paid' && order.salesInvoiceId == null) {
+      if (willCreateInvoice) {
         await websiteService.processOrder(order.id);
       } else {
         await websiteService.updateOrderStatus(order.id, 'confirmed');
@@ -932,6 +2573,11 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     WebsiteService websiteService,
     OnlineOrder order,
   ) async {
+    if (!await _confirmHistoricalInvoiceCreationIfNeeded(context, order)) {
+      return;
+    }
+    if (!context.mounted) return;
+
     await _runOrderAction(context, order, () async {
       final invoiceId = await websiteService.processOrder(order.id);
       if (!context.mounted) return;
@@ -948,35 +2594,607 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     });
   }
 
-  Future<void> _cancelOrder(
+  Future<bool> _confirmHistoricalInvoiceCreationIfNeeded(
     BuildContext context,
-    WebsiteService websiteService,
     OnlineOrder order,
   ) async {
+    if (!_requiresHistoricalInvoiceWarning(order)) return true;
+
+    final referenceDate = order.paidAt ?? order.createdAt;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancelar pedido'),
-        content: Text('¿Cancelar ${order.orderNumber}?'),
+        title: const Text('Crear factura de pago antiguo'),
+        content: Text(
+          'Este pedido fue pagado el '
+          '${ChileanUtils.formatDate(referenceDate)} y todavía no tiene '
+          'factura. La factura se creará usando esa fecha para no mover la '
+          'contabilidad al día de hoy.\n\n'
+          'Continúa solo si es una recuperación real, no un pedido de prueba.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
+            child: const Text('Volver'),
           ),
-          FilledButton(
+          FilledButton.icon(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancelar pedido'),
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('Crear factura'),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !context.mounted) return;
+    return confirmed == true;
+  }
+
+  bool _requiresHistoricalInvoiceWarning(OnlineOrder order) {
+    if (order.paymentStatus != 'paid' || order.salesInvoiceId != null) {
+      return false;
+    }
+
+    final referenceDate = order.paidAt ?? order.createdAt;
+    final age = DateTime.now().difference(referenceDate).inDays;
+    return age >= _historicalInvoiceWarningDays;
+  }
+
+  Future<void> _startPreparing(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    if (!await _confirmInventoryReadinessForPreparation(context, order)) {
+      return;
+    }
+    if (!context.mounted) return;
+
+    await _updateStatus(
+      context,
+      websiteService,
+      order,
+      'processing',
+      'Pedido enviado a preparación',
+    );
+  }
+
+  Future<bool> _confirmInventoryReadinessForPreparation(
+    BuildContext context,
+    OnlineOrder order,
+  ) async {
+    final readiness = _inventoryReadinessForOrder(order);
+    if (readiness.level == _InventoryReadinessLevel.ready) return true;
+
+    final problemRows = readiness.items
+        .where((item) => item.level != _InventoryReadinessLevel.ready)
+        .take(6)
+        .map((item) => '• ${item.item.productName}: ${item.title}')
+        .join('\n');
+    final extraCount = readiness.items
+            .where((item) => item.level != _InventoryReadinessLevel.ready)
+            .length -
+        6;
+    final details = [
+      if (problemRows.isNotEmpty) problemRows,
+      if (extraCount > 0)
+        '• y $extraCount línea${extraCount == 1 ? '' : 's'} más',
+    ].join('\n');
+
+    if (readiness.blocksPreparation) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No se puede preparar todavía'),
+          content: Text(
+            'Hay problemas de inventario o vínculo de producto que deben '
+            'resolverse antes de mover el pedido a preparación.\n\n$details',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Preparar con advertencias'),
+        content: Text(
+          'El pedido no tiene bloqueos duros, pero hay señales que conviene '
+          'revisar antes de preparar.\n\n$details',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.inventory_2_outlined, size: 18),
+            label: const Text('Preparar igual'),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed == true;
+  }
+
+  Future<void> _markReadyForPickup(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    await _updateStatus(
+      context,
+      websiteService,
+      order,
+      'ready_for_pickup',
+      'Pedido marcado como listo para retiro',
+    );
+  }
+
+  Future<void> _markDelivered(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    await _updateStatus(
+      context,
+      websiteService,
+      order,
+      'delivered',
+      order.deliveryType == 'pickup'
+          ? 'Pedido marcado como retirado'
+          : 'Pedido marcado como entregado',
+    );
+  }
+
+  Future<void> _markShipped(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    final details = await _showShippingDialog(context, order);
+    if (details == null || !context.mounted) return;
 
     await _runOrderAction(context, order, () async {
-      await websiteService.updateOrderStatus(order.id, 'cancelled');
-      if (context.mounted) _showSnackBar(context, 'Pedido cancelado');
+      await websiteService.updateOrderStatus(
+        order.id,
+        'shipped',
+        trackingNumber: details.trackingNumber,
+        trackingUrl: details.trackingUrl,
+        carrier: details.carrier,
+        notes: details.notes,
+      );
+      if (context.mounted) {
+        _showSnackBar(context, 'Pedido marcado como enviado');
+      }
     });
+  }
+
+  Future<void> _updateStatus(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+    String status,
+    String successMessage,
+  ) async {
+    await _runOrderAction(context, order, () async {
+      await websiteService.updateOrderStatus(order.id, status);
+      if (context.mounted) _showSnackBar(context, successMessage);
+    });
+  }
+
+  Future<_ShippingDetails?> _showShippingDialog(
+    BuildContext context,
+    OnlineOrder order,
+  ) async {
+    final carrierController =
+        TextEditingController(text: order.shippingCarrier ?? '');
+    final trackingController =
+        TextEditingController(text: order.trackingNumber ?? '');
+    final trackingUrlController =
+        TextEditingController(text: order.trackingUrl ?? '');
+    final notesController = TextEditingController();
+
+    try {
+      return await showDialog<_ShippingDetails>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Marcar ${order.orderNumber} como enviado'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: carrierController,
+                  decoration: const InputDecoration(
+                    labelText: 'Transportista',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: trackingController,
+                  decoration: const InputDecoration(
+                    labelText: 'Número de seguimiento',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: trackingUrlController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL de seguimiento',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas internas',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                context,
+                _ShippingDetails(
+                  carrier: _nullIfBlank(carrierController.text),
+                  trackingNumber: _nullIfBlank(trackingController.text),
+                  trackingUrl: _nullIfBlank(trackingUrlController.text),
+                  notes: _nullIfBlank(notesController.text),
+                ),
+              ),
+              child: const Text('Marcar enviado'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      carrierController.dispose();
+      trackingController.dispose();
+      trackingUrlController.dispose();
+      notesController.dispose();
+    }
+  }
+
+  Future<void> _editInternalNotes(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    final update = await _showInternalNotesDialog(context, order);
+    if (update == null || !context.mounted) return;
+
+    await _runOrderAction(context, order, () async {
+      await websiteService.updateOrderNotes(
+        order.id,
+        internalNotes: update.internalNotes,
+      );
+      if (context.mounted) _showSnackBar(context, 'Notas actualizadas');
+    });
+  }
+
+  Future<_InternalNotesUpdate?> _showInternalNotesDialog(
+    BuildContext context,
+    OnlineOrder order,
+  ) async {
+    final notesController = TextEditingController(text: order.internalNotes);
+
+    try {
+      return await showDialog<_InternalNotesUpdate>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Notas internas ${order.orderNumber}'),
+          content: SizedBox(
+            width: 520,
+            child: TextField(
+              controller: notesController,
+              minLines: 5,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: 'Notas para el equipo',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(
+                context,
+                _InternalNotesUpdate(
+                  internalNotes: _nullIfBlank(notesController.text),
+                ),
+              ),
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: const Text('Guardar'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      notesController.dispose();
+    }
+  }
+
+  Future<void> _confirmOrderPayment(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    final confirmation = await _showPaymentConfirmationDialog(context, order);
+    if (confirmation == null || !context.mounted) return;
+
+    await _runOrderAction(context, order, () async {
+      if (order.salesInvoiceId == null) {
+        await websiteService.processOrder(order.id);
+      }
+      await websiteService.confirmOrderPayment(
+        order.id,
+        paymentReference: confirmation.reference,
+        paymentDate: confirmation.paymentDate,
+      );
+      if (context.mounted) _showSnackBar(context, 'Pago confirmado');
+    });
+  }
+
+  Future<_PaymentConfirmation?> _showPaymentConfirmationDialog(
+    BuildContext context,
+    OnlineOrder order,
+  ) async {
+    final referenceController =
+        TextEditingController(text: order.paymentReference ?? '');
+    var paymentDate = order.paidAt ?? DateTime.now();
+
+    try {
+      return await showDialog<_PaymentConfirmation>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Confirmar pago ${order.orderNumber}'),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Confirma esta acción solo después de revisar el comprobante o la cartola. '
+                    'Si el pedido todavía no tiene factura, se creará antes de registrar el pago.',
+                    style: _hintStyle,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: referenceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Referencia / comprobante',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final now = DateTime.now();
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: paymentDate,
+                        firstDate: DateTime(now.year - 2),
+                        lastDate: DateTime(now.year + 1),
+                      );
+                      if (pickedDate == null) return;
+                      setDialogState(() {
+                        paymentDate = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          paymentDate.hour,
+                          paymentDate.minute,
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.event_outlined, size: 18),
+                    label: Text(
+                      'Fecha de pago: ${ChileanUtils.formatDate(paymentDate)}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Volver'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _PaymentConfirmation(
+                    reference: _nullIfBlank(referenceController.text),
+                    paymentDate: paymentDate,
+                  ),
+                ),
+                icon: const Icon(Icons.payments_outlined, size: 18),
+                label: const Text('Confirmar pago'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      referenceController.dispose();
+    }
+  }
+
+  Future<void> _cancelOrder(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+  ) async {
+    final cancellation = await _showCancelOrderDialog(context, order);
+    if (cancellation == null || !context.mounted) return;
+
+    await _runOrderAction(context, order, () async {
+      final result = await websiteService.cancelOrder(
+        order.id,
+        reason: cancellation.reason,
+        refundAmount: cancellation.refundAmount,
+      );
+      final refundAmount = result?['refund_amount'];
+      final refundText = refundAmount is num && refundAmount > 0
+          ? ' · Reembolso: ${ChileanUtils.formatCurrency(refundAmount.toDouble())}'
+          : '';
+      if (context.mounted) {
+        _showSnackBar(context, 'Pedido cancelado$refundText');
+      }
+    });
+  }
+
+  Future<_OrderCancellation?> _showCancelOrderDialog(
+    BuildContext context,
+    OnlineOrder order,
+  ) async {
+    final defaultReason = order.paymentStatus == 'paid'
+        ? 'Cancelación solicitada por el cliente'
+        : 'Cancelación administrativa';
+    final defaultRefund = order.paymentStatus == 'paid' ? order.total : 0.0;
+    final reasonController = TextEditingController(text: defaultReason);
+    final refundController = TextEditingController(
+      text: defaultRefund.round().toString(),
+    );
+    String? validationMessage;
+
+    try {
+      return await showDialog<_OrderCancellation>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Cancelar ${order.orderNumber}'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    order.salesInvoiceId == null
+                        ? 'El pedido quedará cancelado y se registrará el motivo.'
+                        : 'Se cancelará el pedido y la factura vinculada será revertida por el flujo de cancelación.',
+                    style: _hintStyle,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo de cancelación',
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: refundController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Monto a reembolsar',
+                      helperText:
+                          'Usa 0 si no corresponde. Máximo ${ChileanUtils.formatCurrency(order.total)}.',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      validationMessage!,
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Volver'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red[700],
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  final reason = _nullIfBlank(reasonController.text);
+                  final refundAmount = _parseCurrencyAmount(
+                    refundController.text,
+                  );
+
+                  if (reason == null) {
+                    setDialogState(() {
+                      validationMessage = 'Ingresa un motivo de cancelación.';
+                    });
+                    return;
+                  }
+                  if (refundAmount == null || refundAmount < 0) {
+                    setDialogState(() {
+                      validationMessage =
+                          'Ingresa un monto de reembolso válido.';
+                    });
+                    return;
+                  }
+                  if (refundAmount > order.total) {
+                    setDialogState(() {
+                      validationMessage =
+                          'El reembolso no puede superar el total del pedido.';
+                    });
+                    return;
+                  }
+
+                  Navigator.pop(
+                    context,
+                    _OrderCancellation(
+                      reason: reason,
+                      refundAmount: refundAmount,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Cancelar pedido'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      reasonController.dispose();
+      refundController.dispose();
+    }
   }
 
   Future<void> _openOrderMessagingConversation(
@@ -1003,9 +3221,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       context.read<ChatProvider>().setConversationDraft(
             conversationId,
             _buildOrderWhatsAppDraft(order),
-            title: 'Pedido ${order.orderNumber} listo para coordinar',
-            subtitle:
-                'No se ha enviado ningún mensaje del pedido. Revisa el texto y envíalo desde Mensajería.',
+            title: _orderMessagingDraftTitle(order),
+            subtitle: _orderMessagingDraftSubtitle(order),
           );
       context.go('/chat?conversation=$conversationId');
     });
@@ -1039,12 +3256,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         : '';
 
     final isPickup = order.deliveryType == 'pickup';
-    final deliveryText = isPickup
-        ? '''El pedido quedó marcado para retiro en tienda.
-  Punto de retiro: ${order.shippingAddressDisplay}.
-  Te avisaremos cuando esté listo. Para retirar, trae el número de pedido y el nombre de quien compra.'''
-        : '''El pedido está marcado para despacho a: ${order.shippingAddressDisplay}.
-  Para coordinar el despacho, confirma dirección, comuna y una franja horaria.''';
+    final paymentText = _buildPaymentCoordinationText(order);
+    final deliveryText = _buildDeliveryCoordinationText(order);
 
     return '''Hola $firstName, te escribimos de Viñabike por tu pedido ${order.orderNumber}.
 
@@ -1052,9 +3265,98 @@ Resumen:
 ${itemLines.isEmpty ? '- Productos registrados en tu pedido web' : itemLines}$remaining
 
 Total: ${ChileanUtils.formatCurrency(order.total)}
+$paymentText
 $deliveryText
 
 ${isPickup ? 'Si retirará otra persona, respóndenos con su nombre antes de venir. Gracias.' : 'Gracias.'}''';
+  }
+
+  String _orderMessagingDraftTitle(OnlineOrder order) {
+    if (order.deliveryType == 'pickup') {
+      return order.status == 'ready_for_pickup'
+          ? 'Pedido ${order.orderNumber} listo para retiro'
+          : 'Coordinar retiro ${order.orderNumber}';
+    }
+
+    return order.status == 'shipped'
+        ? 'Seguimiento despacho ${order.orderNumber}'
+        : 'Coordinar despacho ${order.orderNumber}';
+  }
+
+  String _orderMessagingDraftSubtitle(OnlineOrder order) {
+    if (order.paymentStatus == 'failed') {
+      return 'El pago aparece fallido; revisa y ajusta el texto antes de enviar.';
+    }
+    if (order.paymentStatus == 'pending') {
+      return 'Pide comprobante o confirma el medio de pago antes de prometer preparación.';
+    }
+
+    if (order.deliveryType == 'pickup') {
+      return order.status == 'ready_for_pickup'
+          ? 'Revisa el punto de retiro y envía el aviso desde Mensajería.'
+          : 'Confirma quién retira y recuerda que el mensaje no se envía solo.';
+    }
+
+    return order.status == 'shipped'
+        ? 'Incluye transportista/seguimiento si están disponibles; revisa antes de enviar.'
+        : 'Pide confirmación de dirección, comuna y franja horaria antes de despachar.';
+  }
+
+  String _buildPaymentCoordinationText(OnlineOrder order) {
+    switch (order.paymentStatus) {
+      case 'paid':
+        return 'El pago figura recibido.';
+      case 'failed':
+        return 'El pago aparece rechazado o fallido. Para avanzar, necesitamos revisar un nuevo comprobante o confirmar otro medio de pago.';
+      case 'refunded':
+        return 'El pago figura reembolsado en nuestro sistema.';
+      case 'pending':
+      default:
+        final method = _formatPaymentMethod(order.paymentMethod).toLowerCase();
+        if (method.contains('transfer')) {
+          return 'Todavía no vemos la transferencia confirmada. Si ya la realizaste, por favor envíanos el comprobante por este chat.';
+        }
+        return 'El pago todavía aparece pendiente en nuestro sistema.';
+    }
+  }
+
+  String _buildDeliveryCoordinationText(OnlineOrder order) {
+    if (order.deliveryType == 'pickup') {
+      if (order.status == 'ready_for_pickup') {
+        return '''Tu pedido ya está listo para retiro en tienda.
+Punto de retiro: ${order.shippingAddressDisplay}.
+Para retirar, trae el número de pedido y el nombre de quien compra.''';
+      }
+
+      return '''El pedido quedó marcado para retiro en tienda.
+Punto de retiro: ${order.shippingAddressDisplay}.
+Te avisaremos por este mismo chat apenas esté listo.''';
+    }
+
+    if (!_hasShippingAddress(order)) {
+      return '''El pedido está marcado para despacho, pero necesitamos completar la dirección antes de enviarlo.
+Por favor respóndenos con dirección, comuna, región y una franja horaria en la que puedas recibir.''';
+    }
+
+    if (order.status == 'shipped') {
+      final carrier = order.shippingCarrier?.trim();
+      final trackingNumber = order.trackingNumber?.trim();
+      final trackingUrl = order.trackingUrl?.trim();
+      final trackingLines = <String>[
+        if (carrier != null && carrier.isNotEmpty) 'Transportista: $carrier',
+        if (trackingNumber != null && trackingNumber.isNotEmpty)
+          'Seguimiento: $trackingNumber',
+        if (trackingUrl != null && trackingUrl.isNotEmpty) trackingUrl,
+      ].join('\n');
+
+      return '''Tu pedido fue marcado como despachado.
+${trackingLines.isEmpty ? 'Te compartiremos los datos de seguimiento apenas estén disponibles.' : trackingLines}''';
+    }
+
+    return '''El pedido está marcado para despacho a:
+${order.shippingAddressDisplay}
+
+Para coordinar el despacho, por favor confirma dirección, comuna y una franja horaria en la que puedas recibir.''';
   }
 
   void _showSnackBar(
@@ -1109,6 +3411,435 @@ ${isPickup ? 'Si retirará otra persona, respóndenos con su nombre antes de ven
 
   Widget _buildNoSelectionState() {
     return Center(child: Text('Selecciona un pedido', style: _hintStyle));
+  }
+
+  _OrderInventoryReadiness _inventoryReadinessForOrder(OnlineOrder order) {
+    if (order.items.isEmpty) {
+      return _OrderInventoryReadiness(
+        level: _InventoryReadinessLevel.blocked,
+        title: 'Sin productos',
+        detail: 'El pedido no tiene líneas para preparar.',
+        icon: Icons.inventory_2_outlined,
+        items: const [],
+      );
+    }
+
+    final itemReadiness = order.items.map(_inventoryReadinessForItem).toList();
+    final blockedCount = itemReadiness
+        .where((item) => item.level == _InventoryReadinessLevel.blocked)
+        .length;
+    final cautionCount = itemReadiness
+        .where((item) => item.level == _InventoryReadinessLevel.caution)
+        .length;
+
+    if (blockedCount > 0) {
+      return _OrderInventoryReadiness(
+        level: _InventoryReadinessLevel.blocked,
+        title: 'Bloqueado',
+        detail: '$blockedCount línea${blockedCount == 1 ? '' : 's'} con '
+            'problemas que impiden preparar el pedido.',
+        icon: Icons.report_problem_outlined,
+        items: itemReadiness,
+      );
+    }
+
+    if (cautionCount > 0) {
+      return _OrderInventoryReadiness(
+        level: _InventoryReadinessLevel.caution,
+        title: 'Revisar',
+        detail: '$cautionCount línea${cautionCount == 1 ? '' : 's'} requiere '
+            'confirmación antes de preparar.',
+        icon: Icons.info_outline,
+        items: itemReadiness,
+      );
+    }
+
+    return _OrderInventoryReadiness(
+      level: _InventoryReadinessLevel.ready,
+      title: 'OK para preparar',
+      detail: 'Todos los productos tienen vínculo y stock suficiente.',
+      icon: Icons.check_circle_outline,
+      items: itemReadiness,
+    );
+  }
+
+  _OrderItemReadiness _inventoryReadinessForItem(OnlineOrderItem item) {
+    final productId = item.productId?.trim();
+    if (productId == null || productId.isEmpty) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.blocked,
+        code: 'missing_link',
+        title: 'Item sin producto',
+        detail: 'La línea no tiene product_id; revisar o sustituir antes.',
+        icon: Icons.link_off_outlined,
+      );
+    }
+
+    if (!item.productContextLoaded) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.caution,
+        code: 'context_pending',
+        title: 'Revisar stock',
+        detail: 'No se pudo cargar el contexto de inventario todavía.',
+        icon: Icons.sync_problem_outlined,
+      );
+    }
+
+    if (!item.productExists) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.blocked,
+        code: 'missing_product',
+        title: 'Producto no encontrado',
+        detail: 'El product_id ya no resuelve a una ficha de producto activa.',
+        icon: Icons.inventory_2_outlined,
+      );
+    }
+
+    if (item.productIsActive == false) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.blocked,
+        code: 'inactive_product',
+        title: 'Producto inactivo',
+        detail: 'La ficha existe, pero está inactiva.',
+        icon: Icons.block_outlined,
+      );
+    }
+
+    if (!_itemTracksInventory(item)) {
+      return _OrderItemReadiness(
+        item: item,
+        level: item.productIsPublished == false
+            ? _InventoryReadinessLevel.caution
+            : _InventoryReadinessLevel.ready,
+        code: item.productIsPublished == false ? 'unpublished' : 'non_stock',
+        title: item.productIsPublished == false ? 'No publicado' : 'Sin stock',
+        detail: item.productIsPublished == false
+            ? 'Producto no publicado; confirmar que corresponde al pedido.'
+            : 'Esta línea no descuenta inventario.',
+        icon: item.productIsPublished == false
+            ? Icons.visibility_off_outlined
+            : Icons.check_circle_outline,
+      );
+    }
+
+    final stock = item.productStockQuantity;
+    if (stock == null) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.caution,
+        code: 'stock_unknown',
+        title: 'Stock sin dato',
+        detail: 'La ficha no expone stock actual para esta línea.',
+        icon: Icons.help_outline,
+      );
+    }
+
+    if (stock < item.quantity) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.blocked,
+        code: 'stock_short',
+        title: 'Stock insuficiente',
+        detail: 'Disponible $stock de ${item.quantity} requerido(s).',
+        icon: Icons.production_quantity_limits_outlined,
+      );
+    }
+
+    if (stock == item.quantity) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.caution,
+        code: 'stock_tight',
+        title: 'Stock justo',
+        detail: 'Disponible exacto: $stock de ${item.quantity}.',
+        icon: Icons.info_outline,
+      );
+    }
+
+    if (item.productIsPublished == false) {
+      return _OrderItemReadiness(
+        item: item,
+        level: _InventoryReadinessLevel.caution,
+        code: 'unpublished',
+        title: 'No publicado',
+        detail: 'Hay stock, pero la ficha no está publicada en la tienda.',
+        icon: Icons.visibility_off_outlined,
+      );
+    }
+
+    return _OrderItemReadiness(
+      item: item,
+      level: _InventoryReadinessLevel.ready,
+      code: 'ready',
+      title: 'Disponible',
+      detail: 'Disponible $stock de ${item.quantity} requerido(s).',
+      icon: Icons.check_circle_outline,
+    );
+  }
+
+  bool _itemTracksInventory(OnlineOrderItem item) {
+    if (item.productTracksStock != null) return item.productTracksStock!;
+    final productType = item.productType?.trim().toLowerCase();
+    if (productType == 'service') return false;
+    final treatment = item.productPurchaseTreatment?.trim().toLowerCase();
+    if (treatment == 'workshop_consumable') return false;
+    return true;
+  }
+
+  String _itemStockLabel(OnlineOrderItem item) {
+    if (item.productId?.trim().isNotEmpty != true) return '-';
+    if (!item.productContextLoaded) return 'Revisar';
+    if (!item.productExists) return '-';
+    if (!_itemTracksInventory(item)) return 'No aplica';
+    return item.productStockQuantity?.toString() ?? 'Sin dato';
+  }
+
+  Color _inventoryReadinessColor(_InventoryReadinessLevel level) {
+    switch (level) {
+      case _InventoryReadinessLevel.ready:
+        return const Color(0xFF047857);
+      case _InventoryReadinessLevel.caution:
+        return const Color(0xFFB45309);
+      case _InventoryReadinessLevel.blocked:
+        return const Color(0xFFB91C1C);
+    }
+  }
+
+  int _orderPriority(OnlineOrder order) {
+    if (_isFulfillmentBlocked(order)) return 0;
+    switch (order.status) {
+      case 'pending':
+        return 1;
+      case 'confirmed':
+        return 2;
+      case 'processing':
+        return 3;
+      case 'ready_for_pickup':
+        return 4;
+      case 'shipped':
+        return 5;
+      case 'delivered':
+        return 8;
+      case 'cancelled':
+        return 9;
+      default:
+        return 6;
+    }
+  }
+
+  bool _hasCustomerPhone(OnlineOrder order) {
+    return order.customerPhone?.trim().isNotEmpty == true;
+  }
+
+  bool _isTerminalOrder(OnlineOrder order) {
+    return order.status == 'cancelled' || order.status == 'delivered';
+  }
+
+  bool _canConfirmPayment(OnlineOrder order) {
+    if (_isTerminalOrder(order)) return false;
+    return order.paymentStatus == 'pending' || order.paymentStatus == 'failed';
+  }
+
+  bool _matchesLane(OnlineOrder order, String lane) {
+    switch (lane) {
+      case 'attention':
+        return !_isTerminalOrder(order) &&
+            (_isFulfillmentBlocked(order) ||
+                order.status == 'pending' ||
+                order.status == 'confirmed' ||
+                order.status == 'processing' ||
+                order.status == 'ready_for_pickup' ||
+                order.status == 'shipped');
+      case 'blocked':
+        return _isFulfillmentBlocked(order);
+      case 'prepare':
+        return !_isTerminalOrder(order) &&
+            (order.status == 'confirmed' || order.status == 'processing');
+      case 'coordination':
+        return _needsCoordination(order);
+      case 'pickup':
+        return order.deliveryType == 'pickup' && !_isTerminalOrder(order);
+      case 'shipping':
+        return order.deliveryType == 'shipping' && !_isTerminalOrder(order);
+      case 'closed':
+        return _isTerminalOrder(order);
+      case 'all':
+      default:
+        return true;
+    }
+  }
+
+  bool _needsCoordination(OnlineOrder order) {
+    if (_isTerminalOrder(order) || !_hasCustomerPhone(order)) return false;
+    if (order.deliveryType == 'pickup') {
+      return order.status == 'pending' ||
+          order.status == 'confirmed' ||
+          order.status == 'processing' ||
+          order.status == 'ready_for_pickup';
+    }
+    return order.status == 'pending' ||
+        order.status == 'confirmed' ||
+        order.status == 'processing';
+  }
+
+  bool _isFulfillmentBlocked(OnlineOrder order) {
+    if (_isTerminalOrder(order)) return false;
+    return (order.paymentStatus == 'paid' && order.salesInvoiceId == null) ||
+        order.paymentStatus == 'failed' ||
+        _requiresHistoricalInvoiceWarning(order) ||
+        _inventoryReadinessForOrder(order).blocksPreparation ||
+        !_hasCustomerPhone(order) ||
+        (order.deliveryType == 'shipping' && !_hasShippingAddress(order));
+  }
+
+  List<String> _blockerLabels(OnlineOrder order) {
+    final blockers = <String>[];
+    if (order.paymentStatus == 'paid' && order.salesInvoiceId == null) {
+      blockers.add(_requiresHistoricalInvoiceWarning(order)
+          ? 'pago antiguo sin factura'
+          : 'pagado sin factura');
+    }
+    if (order.paymentStatus == 'failed') {
+      blockers.add('pago fallido');
+    }
+    if (!_isTerminalOrder(order) && !_hasCustomerPhone(order)) {
+      blockers.add('sin teléfono cliente');
+    }
+    if (!_isTerminalOrder(order) &&
+        order.deliveryType == 'shipping' &&
+        !_hasShippingAddress(order)) {
+      blockers.add('sin dirección despacho');
+    }
+    if (!_isTerminalOrder(order)) {
+      final readiness = _inventoryReadinessForOrder(order);
+      if (readiness.blocksPreparation) {
+        final codes = readiness.items.map((item) => item.code).toSet();
+        if (order.items.isEmpty) blockers.add('sin productos');
+        if (codes.contains('missing_link') ||
+            codes.contains('missing_product')) {
+          blockers.add('item sin producto');
+        }
+        if (codes.contains('inactive_product')) {
+          blockers.add('producto inactivo');
+        }
+        if (codes.contains('stock_short')) {
+          blockers.add('stock insuficiente');
+        }
+      }
+    }
+    if (order.paymentStatus == 'pending' && order.status == 'pending') {
+      blockers.add('pago pendiente');
+    }
+    return blockers;
+  }
+
+  IconData _attentionIcon(OnlineOrder order) {
+    if (_isFulfillmentBlocked(order)) return Icons.report_problem_outlined;
+    switch (order.status) {
+      case 'pending':
+        return Icons.fiber_new_outlined;
+      case 'confirmed':
+        return Icons.inventory_2_outlined;
+      case 'processing':
+        return order.deliveryType == 'pickup'
+            ? Icons.storefront_outlined
+            : Icons.local_shipping_outlined;
+      case 'ready_for_pickup':
+        return Icons.notifications_active_outlined;
+      case 'shipped':
+        return Icons.route_outlined;
+      case 'delivered':
+        return Icons.task_alt_outlined;
+      case 'cancelled':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.receipt_long_outlined;
+    }
+  }
+
+  String _attentionLabel(OnlineOrder order) {
+    final blockers = _blockerLabels(order);
+    if (_isFulfillmentBlocked(order) && blockers.isNotEmpty) {
+      return 'Bloqueo: ${blockers.join(' · ')}';
+    }
+    return _nextActionLabel(order);
+  }
+
+  String _nextActionLabel(OnlineOrder order) {
+    switch (order.status) {
+      case 'pending':
+        if (order.paymentStatus == 'paid') return 'Confirmar y emitir factura';
+        if (_canConfirmPayment(order)) return 'Confirmar pago validado';
+        return 'Revisar pago antes de confirmar';
+      case 'confirmed':
+        if (order.salesInvoiceId != null) {
+          return 'Preparar productos del pedido';
+        }
+        return order.paymentStatus == 'paid'
+            ? 'Crear factura antes de preparar'
+            : 'Revisar pago antes de facturar';
+      case 'processing':
+        return order.deliveryType == 'pickup'
+            ? 'Dejar listo y avisar retiro'
+            : 'Despachar y registrar seguimiento';
+      case 'ready_for_pickup':
+        return 'Cliente debe retirar en tienda';
+      case 'shipped':
+        return 'Esperar confirmación de entrega';
+      case 'delivered':
+        return 'Pedido cerrado';
+      case 'cancelled':
+        return 'Pedido cancelado';
+      default:
+        return 'Revisar estado operativo';
+    }
+  }
+
+  String _pickupFulfillmentLabel(OnlineOrder order) {
+    switch (order.status) {
+      case 'ready_for_pickup':
+        return order.readyForPickupAt == null
+            ? 'Listo para retiro'
+            : 'Listo desde ${ChileanUtils.formatDate(order.readyForPickupAt!)}';
+      case 'delivered':
+        return 'Retiro completado';
+      case 'cancelled':
+        return 'Retiro cancelado';
+      default:
+        return 'Retiro en tienda pendiente';
+    }
+  }
+
+  String _shippingFulfillmentLabel(OnlineOrder order) {
+    if (order.status == 'delivered') return 'Entrega completada';
+    if (order.status == 'cancelled') return 'Despacho cancelado';
+    if (order.status == 'shipped') {
+      final tracking = order.trackingNumber?.trim();
+      return tracking == null || tracking.isEmpty
+          ? 'Enviado sin seguimiento'
+          : 'Seguimiento $tracking';
+    }
+    return 'Despacho pendiente';
+  }
+
+  static String? _nullIfBlank(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static double? _parseCurrencyAmount(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 0;
+    final normalized = trimmed
+        .replaceAll(RegExp(r'[^0-9,.-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+    if (normalized.isEmpty) return 0;
+    return double.tryParse(normalized);
   }
 
   Color _getStatusTone(String status) {
@@ -1187,4 +3918,127 @@ class _InfoRow {
 
   final String label;
   final String value;
+}
+
+enum _CheckpointLevel { done, active, blocked, pending }
+
+enum _InventoryReadinessLevel { ready, caution, blocked }
+
+class _OrderInventoryReadiness {
+  const _OrderInventoryReadiness({
+    required this.level,
+    required this.title,
+    required this.detail,
+    required this.icon,
+    required this.items,
+  });
+
+  final _InventoryReadinessLevel level;
+  final String title;
+  final String detail;
+  final IconData icon;
+  final List<_OrderItemReadiness> items;
+
+  bool get blocksPreparation => level == _InventoryReadinessLevel.blocked;
+  bool get requiresConfirmation => level == _InventoryReadinessLevel.caution;
+}
+
+class _OrderItemReadiness {
+  const _OrderItemReadiness({
+    required this.item,
+    required this.level,
+    required this.code,
+    required this.title,
+    required this.detail,
+    required this.icon,
+  });
+
+  final OnlineOrderItem item;
+  final _InventoryReadinessLevel level;
+  final String code;
+  final String title;
+  final String detail;
+  final IconData icon;
+}
+
+class _OrderCheckpoint {
+  const _OrderCheckpoint({
+    required this.title,
+    required this.detail,
+    required this.level,
+  });
+
+  final String title;
+  final String detail;
+  final _CheckpointLevel level;
+}
+
+class _OrderTimelineEvent {
+  const _OrderTimelineEvent({
+    required this.title,
+    required this.detail,
+    required this.level,
+    required this.icon,
+    this.date,
+    this.fallbackDateLabel = 'Sin fecha',
+  });
+
+  final String title;
+  final String detail;
+  final DateTime? date;
+  final String fallbackDateLabel;
+  final _CheckpointLevel level;
+  final IconData icon;
+}
+
+class _OrderLane {
+  const _OrderLane({
+    required this.key,
+    required this.label,
+    required this.icon,
+  });
+
+  final String key;
+  final String label;
+  final IconData icon;
+}
+
+class _ShippingDetails {
+  const _ShippingDetails({
+    this.carrier,
+    this.trackingNumber,
+    this.trackingUrl,
+    this.notes,
+  });
+
+  final String? carrier;
+  final String? trackingNumber;
+  final String? trackingUrl;
+  final String? notes;
+}
+
+class _InternalNotesUpdate {
+  const _InternalNotesUpdate({required this.internalNotes});
+
+  final String? internalNotes;
+}
+
+class _PaymentConfirmation {
+  const _PaymentConfirmation({
+    required this.reference,
+    required this.paymentDate,
+  });
+
+  final String? reference;
+  final DateTime paymentDate;
+}
+
+class _OrderCancellation {
+  const _OrderCancellation({
+    required this.reason,
+    required this.refundAmount,
+  });
+
+  final String reason;
+  final double refundAmount;
 }

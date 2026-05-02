@@ -38,6 +38,8 @@ class ChatWindow extends StatefulWidget {
 }
 
 class _ChatWindowState extends State<ChatWindow> {
+  static const Color _accentBlue = Color(0xFF093357);
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
@@ -767,55 +769,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
     return Column(
       children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-            color: Colors.white,
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.grey[200],
-                child: const Icon(Icons.person, color: Colors.grey),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    chatProvider.getChatTitle(widget.conversation),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    widget.conversation.type.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Link to Job/Invoice button
-              IconButton(
-                icon: Icon(
-                  widget.conversation.contextType != null
-                      ? Icons.link
-                      : Icons.link_off,
-                  color: widget.conversation.contextType != null
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-                tooltip: widget.conversation.contextType != null
-                    ? 'Vinculado a ${widget.conversation.contextType}'
-                    : 'Vincular chat...',
-                onPressed: () => _showAssignContextDialog(context),
-              ),
-            ],
-          ),
-        ),
+        _buildHeader(context, chatProvider),
 
         if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
 
@@ -909,6 +863,110 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
       ],
     );
+  }
+
+  Widget _buildHeader(BuildContext context, ChatProvider chatProvider) {
+    final conversation = widget.conversation;
+    final hasContext = conversation.contextType != null;
+    final title = chatProvider.getChatTitle(conversation);
+    final subtitle = _buildConversationSubtitle(conversation);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: Colors.white,
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: conversation.type == 'support'
+                ? _accentBlue.withValues(alpha: 0.08)
+                : Colors.grey[200],
+            child: Icon(
+              conversation.type == 'support'
+                  ? Icons.support_agent_outlined
+                  : Icons.groups_outlined,
+              color: conversation.type == 'support'
+                  ? _accentBlue
+                  : Colors.grey[700],
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              hasContext ? Icons.link : Icons.link_off,
+              color: hasContext ? _accentBlue : Colors.grey,
+            ),
+            tooltip: hasContext
+                ? 'Contexto vinculado: ${_contextLabel(conversation.contextType)}'
+                : 'Vincular contexto del chat',
+            onPressed: () => _showAssignContextDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildConversationSubtitle(Conversation conversation) {
+    final parts = <String>[
+      conversation.type == 'support' ? 'Cliente WhatsApp' : 'Chat interno',
+    ];
+
+    final contextLabel = _contextLabel(conversation.contextType);
+    if (contextLabel != null) parts.add(contextLabel);
+    parts.add(_statusLabel(conversation.status));
+
+    return parts.join(' · ');
+  }
+
+  String? _contextLabel(String? contextType) {
+    return switch (contextType) {
+      'order' => 'Pedido web',
+      'job' => 'Servicio técnico',
+      'invoice' => 'Factura',
+      'bike' => 'Bicicleta',
+      'product' => 'Producto',
+      'customer' => 'Cliente',
+      _ => null,
+    };
+  }
+
+  String _statusLabel(String status) {
+    return switch (status) {
+      'pending' => 'Pendiente',
+      'active' => 'Activa',
+      'resolved' => 'Resuelta',
+      'rejected' => 'Rechazada',
+      _ => status,
+    };
   }
 
   Widget _buildPreparedHandoffBanner(ConversationDraft draft) {

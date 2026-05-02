@@ -8,6 +8,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'tenant_service.dart';
+
 /// Top-level function required by firebase_messaging for background handling.
 /// Must be outside any class and cannot be an anonymous function.
 @pragma('vm:entry-point')
@@ -59,6 +61,11 @@ class NotificationService {
   bool get soundEnabled => _soundEnabled;
   bool get vibrationEnabled => _vibrationEnabled;
 
+  final ValueNotifier<int> onlineOrderAlertCount = ValueNotifier<int>(0);
+  final Set<String> _seenOnlineOrderAlertIds = {};
+  final List<Map<String, dynamic>> _onlineOrderAlertRows = [];
+  String? _onlineOrderTenantId;
+
   final _messageStreamController = StreamController<RemoteMessage>.broadcast();
 
   /// Stream of incoming messages (foreground & background)
@@ -72,6 +79,11 @@ class NotificationService {
   /// Stream for notification taps that require navigation (deep links)
   final _navigationStreamController = StreamController<String>.broadcast();
   Stream<String> get onNotificationTap => _navigationStreamController.stream;
+
+  String? get latestOnlineOrderAlertRoute {
+    if (_onlineOrderAlertRows.isEmpty) return null;
+    return _onlineOrderAlertRows.first['route']?.toString();
+  }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -89,6 +101,127 @@ class NotificationService {
     _vibrationEnabled = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notification_vibration', value);
+  }
+
+  Future<List<Map<String, dynamic>>> loadOnlineOrderAlerts(
+    String tenantId,
+  ) async {
+    if (tenantId.trim().isEmpty) return const [];
+    _onlineOrderTenantId = tenantId;
+
+    try {
+      final response = await _supabase
+          .from('erp_notifications')
+          .select('id,title,body,route,entity_id,created_at')
+          .eq('tenant_id', tenantId)
+          .eq('type', 'online_order_created')
+          .isFilter('read_at', null)
+          .order('created_at', ascending: false)
+          .limit(200);
+
+      final rows = (response as List<dynamic>)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      _onlineOrderAlertRows
+        ..clear()
+        ..addAll(rows);
+      _seenOnlineOrderAlertIds
+        ..clear()
+        ..addAll(rows.map((row) => row['id']?.toString() ?? ''));
+      _seenOnlineOrderAlertIds.remove('');
+      onlineOrderAlertCount.value = rows.length;
+      return rows;
+    } catch (e) {
+      debugPrint('⚠️ Could not load online order alerts: $e');
+      return const [];
+    }
+  }
+
+  bool recordOnlineOrderAlert(
+    String notificationId, {
+    Map<String, dynamic>? notification,
+  }) {
+    if (notificationId.trim().isEmpty ||
+        !_seenOnlineOrderAlertIds.add(notificationId)) {
+      return false;
+    }
+
+    if (notification != null) {
+      _onlineOrderAlertRows.insert(0, Map<String, dynamic>.from(notification));
+    }
+    onlineOrderAlertCount.value = onlineOrderAlertCount.value + 1;
+    return true;
+  }
+
+  Future<void> markOnlineOrderAlertReadForOrder(String orderId) async {
+    final tenantId =
+        _onlineOrderTenantId ?? await TenantService().getTenantId();
+    final trimmedOrderId = orderId.trim();
+    if (tenantId == null || tenantId.isEmpty || trimmedOrderId.isEmpty) return;
+    _onlineOrderTenantId = tenantId;
+
+    final existingIndex = _onlineOrderAlertRows.indexWhere(
+      (row) => row['entity_id']?.toString() == trimmedOrderId,
+    );
+    final existing = existingIndex == -1
+        ? null
+        : _onlineOrderAlertRows.removeAt(existingIndex);
+    final notificationId = existing?['id']?.toString();
+    if (existing != null) {
+      if (notificationId != null && notificationId.isNotEmpty) {
+        _seenOnlineOrderAlertIds.remove(notificationId);
+      }
+      if (onlineOrderAlertCount.value > 0) {
+        onlineOrderAlertCount.value = onlineOrderAlertCount.value - 1;
+      }
+    }
+
+    try {
+      await _supabase
+          .from('erp_notifications')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('tenant_id', tenantId)
+          .eq('type', 'online_order_created')
+          .eq('entity_type', 'online_order')
+          .eq('entity_id', trimmedOrderId)
+          .isFilter('read_at', null);
+      if (existing == null) {
+        await loadOnlineOrderAlerts(tenantId);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Could not mark online order alert read: $e');
+      if (existing != null) {
+        _onlineOrderAlertRows.insert(existingIndex, existing);
+        if (notificationId != null && notificationId.isNotEmpty) {
+          _seenOnlineOrderAlertIds.add(notificationId);
+        }
+        onlineOrderAlertCount.value = onlineOrderAlertCount.value + 1;
+      }
+    }
+  }
+
+  void clearOnlineOrderAlerts() {
+    if (onlineOrderAlertCount.value == 0) return;
+    onlineOrderAlertCount.value = 0;
+    _onlineOrderAlertRows.clear();
+    _seenOnlineOrderAlertIds.clear();
+  }
+
+  Future<void> markOnlineOrderAlertsRead() async {
+    final tenantId = _onlineOrderTenantId;
+    clearOnlineOrderAlerts();
+    if (tenantId == null || tenantId.isEmpty) return;
+
+    try {
+      await _supabase
+          .from('erp_notifications')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('tenant_id', tenantId)
+          .eq('type', 'online_order_created')
+          .isFilter('read_at', null);
+    } catch (e) {
+      debugPrint('⚠️ Could not mark online order alerts read: $e');
+    }
   }
 
   Future<void> playNotificationSound() async {
@@ -324,40 +457,6 @@ class NotificationService {
       // Fallback: just go to chat list
       debugPrint('🔔 No conversation_id, navigating to chat list');
       _navigationStreamController.add('/chat');
-    }
-  }
-
-  /// Initialize web push notifications using Firebase Messaging
-  /// NOTE: Does NOT request permission - only checks existing status
-  /// Use requestWebNotificationPermission() after user gesture
-  Future<void> _initWeb() async {
-    debugPrint('🌐 [NotificationService] Initializing Web Push...');
-
-    try {
-      // Check if Firebase is initialized
-      if (Firebase.apps.isEmpty) {
-        debugPrint('⚠️ Firebase not initialized, skipping web push setup.');
-        return;
-      }
-
-      final firebaseMessaging = FirebaseMessaging.instance;
-
-      // Check EXISTING permission status (don't request - violates Chrome policy)
-      NotificationSettings settings =
-          await firebaseMessaging.getNotificationSettings();
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        debugPrint('✅ Web push already authorized');
-        await _setupWebMessaging(firebaseMessaging);
-      } else if (settings.authorizationStatus ==
-          AuthorizationStatus.notDetermined) {
-        debugPrint('ℹ️ Web push permission not yet requested');
-        // Don't auto-request - wait for user gesture
-      } else {
-        debugPrint('❌ Web push permission denied');
-      }
-    } catch (e) {
-      debugPrint('❌ Web push init failed: $e');
     }
   }
 

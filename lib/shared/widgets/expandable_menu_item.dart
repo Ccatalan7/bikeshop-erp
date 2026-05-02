@@ -15,6 +15,8 @@ class ExpandableMenuItem extends StatelessWidget {
   final ValueChanged<bool>? onExpansionChanged;
   final bool isSingleItem;
   final int badgeCount; // For unread notification badge
+  final Map<String, int> subItemBadgeCounts;
+  final VoidCallback? onBadgeTap;
   final void Function(String route)?
       onNavigate; // Optional custom navigation handler
 
@@ -30,22 +32,44 @@ class ExpandableMenuItem extends StatelessWidget {
     this.onExpansionChanged,
     this.isSingleItem = false,
     this.badgeCount = 0,
+    this.subItemBadgeCounts = const {},
+    this.onBadgeTap,
     this.onNavigate,
   });
 
+  String _routePath(String route) {
+    return Uri.tryParse(route)?.path ?? route.split('?').first;
+  }
+
+  String _routeIdentity(String route) {
+    final uri = Uri.tryParse(route);
+    if (uri == null) return route;
+    final params = Map<String, String>.from(uri.queryParameters);
+    final sortedKeys = params.keys.toList()..sort();
+    final query = sortedKeys.map((key) => '$key=${params[key]}').join('&');
+    return query.isEmpty ? uri.path : '${uri.path}?$query';
+  }
+
+  bool _isCurrentRoute(String route) {
+    return _routeIdentity(currentLocation) == _routeIdentity(route);
+  }
+
   MenuSubItem? _resolveSelectedSubItem(String location) {
+    final locationPath = _routePath(location);
+
     for (final subItem in subItems) {
-      if (location == subItem.route) {
+      if (locationPath == _routePath(subItem.route)) {
         return subItem;
       }
     }
 
     MenuSubItem? bestMatch;
     for (final subItem in subItems) {
-      final prefix = '${subItem.route}/';
-      if (location.startsWith(prefix)) {
+      final routePath = _routePath(subItem.route);
+      final prefix = '$routePath/';
+      if (locationPath.startsWith(prefix)) {
         if (bestMatch == null ||
-            subItem.route.length > bestMatch.route.length) {
+            routePath.length > _routePath(bestMatch.route).length) {
           bestMatch = subItem;
         }
       }
@@ -104,7 +128,8 @@ class ExpandableMenuItem extends StatelessWidget {
                       color: enabled
                           ? (isAnySubItemSelected
                               ? theme.primaryColor
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.7))
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.7))
                           : theme.disabledColor,
                     ),
                     const SizedBox(width: 12),
@@ -125,20 +150,23 @@ class ExpandableMenuItem extends StatelessWidget {
                     ),
                     // Unread badge
                     if (badgeCount > 0)
-                      Container(
-                        margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 10,
+                      GestureDetector(
+                        onTap: onBadgeTap,
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            badgeCount > 99 ? '99+' : '$badgeCount',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                       ),
@@ -149,7 +177,8 @@ class ExpandableMenuItem extends StatelessWidget {
                           Icons.keyboard_arrow_down,
                           size: 20,
                           color: enabled
-                              ? theme.colorScheme.onSurface.withValues(alpha: 0.5)
+                              ? theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5)
                               : theme.disabledColor,
                         ),
                       ),
@@ -163,6 +192,8 @@ class ExpandableMenuItem extends StatelessWidget {
           Column(
             children: subItems.map((subItem) {
               final isSelected = selectedSubItem?.route == subItem.route;
+              final isCurrentRoute = _isCurrentRoute(subItem.route);
+              final subItemBadgeCount = subItemBadgeCounts[subItem.route] ?? 0;
 
               // Render as header (non-clickable)
               if (subItem.isHeader) {
@@ -185,7 +216,7 @@ class ExpandableMenuItem extends StatelessWidget {
                   color: Colors.transparent,
                   child: GestureDetector(
                     onSecondaryTapDown: enabled
-                        ? (details) {
+                        ? (details) async {
                             final renderBox =
                                 context.findRenderObject() as RenderBox;
                             final overlay = Navigator.of(context)
@@ -196,7 +227,7 @@ class ExpandableMenuItem extends StatelessWidget {
                                 details.localPosition,
                                 ancestor: overlay);
 
-                            showMenu(
+                            final value = await showMenu<String>(
                               context: context,
                               position: RelativeRect.fromLTRB(
                                 position.dx,
@@ -231,34 +262,36 @@ class ExpandableMenuItem extends StatelessWidget {
                                   ),
                                 ),
                               ],
-                            ).then((value) {
-                              if (value == 'current_tab') {
-                                if (!isSelected) {
-                                  if (onNavigate != null) {
-                                    onNavigate!(subItem.route);
-                                  } else {
-                                    context.go(subItem.route);
-                                  }
-                                }
-                              } else if (value == 'new_tab') {
-                                try {
-                                  final workspaceManager =
-                                      context.read<WorkspaceManager>();
-                                  final existingFound = workspaceManager
-                                      .switchToExistingWorkspaceWithRoute(
-                                          subItem.route);
-                                  if (!existingFound) {
-                                    workspaceManager.addWorkspace(
-                                      title: subItem.title,
-                                      initialRoute: subItem.route,
-                                    );
-                                  }
-                                } catch (e) {
-                                  // Fallback if WorkspaceManager isn't available
+                            );
+
+                            if (!context.mounted) return;
+
+                            if (value == 'current_tab') {
+                              if (!isCurrentRoute) {
+                                if (onNavigate != null) {
+                                  onNavigate!(subItem.route);
+                                } else {
                                   context.go(subItem.route);
                                 }
                               }
-                            });
+                            } else if (value == 'new_tab') {
+                              try {
+                                final workspaceManager =
+                                    context.read<WorkspaceManager>();
+                                final existingFound = workspaceManager
+                                    .switchToExistingWorkspaceWithRoute(
+                                        subItem.route);
+                                if (!existingFound) {
+                                  workspaceManager.addWorkspace(
+                                    title: subItem.title,
+                                    initialRoute: subItem.route,
+                                  );
+                                }
+                              } catch (e) {
+                                // Fallback if WorkspaceManager isn't available
+                                context.go(subItem.route);
+                              }
+                            }
                           }
                         : null,
                     child: InkWell(
@@ -268,7 +301,7 @@ class ExpandableMenuItem extends StatelessWidget {
                       hoverColor: Colors.transparent,
                       onTap: enabled
                           ? () {
-                              if (!isSelected) {
+                              if (!isCurrentRoute) {
                                 if (onNavigate != null) {
                                   onNavigate!(subItem.route);
                                 } else {
@@ -311,6 +344,26 @@ class ExpandableMenuItem extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (subItemBadgeCount > 0)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  subItemBadgeCount > 99
+                                      ? '99+'
+                                      : '$subItemBadgeCount',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.onPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),

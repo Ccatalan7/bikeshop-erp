@@ -11,7 +11,6 @@ import '../services/tenant_service.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
-import '../utils/chilean_utils.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import 'expandable_menu_item.dart';
@@ -328,11 +327,25 @@ String _getTitleFromRoute(String route) {
     '/pos': 'POS',
     '/hr/employees': 'Trabajadores',
     '/website': 'Sitio Web',
+    '/website/orders': 'Órdenes / Notificaciones',
+    '/tienda': 'Editor Web',
+    '/tienda?edit=true': 'Editor Web',
     '/settings': 'Configuración',
     '/debug': 'Debug',
   };
 
-  return routeTitles[route] ?? route.split('/').last.capitalize();
+  return routeTitles[route] ??
+      routeTitles[_routePath(route)] ??
+      _routePath(route).split('/').last.capitalize();
+}
+
+String _routePath(String route) {
+  return Uri.tryParse(route)?.path ?? route.split('?').first;
+}
+
+String _resolveWebsiteMenuRoute(String route) {
+  if (_routePath(route) != '/website/orders') return route;
+  return NotificationService().latestOnlineOrderAlertRoute ?? route;
 }
 
 extension StringExtension on String {
@@ -386,6 +399,26 @@ const List<MenuSubItem> _chatMenuItems = [
 ];
 
 const String _chatSectionKey = 'chat';
+
+const List<MenuSubItem> _websiteMenuItems = [
+  MenuSubItem(
+    icon: Icons.dashboard_outlined,
+    title: 'Dashboard',
+    route: '/website',
+  ),
+  MenuSubItem(
+    icon: Icons.design_services_outlined,
+    title: 'Editor',
+    route: '/tienda?edit=true',
+  ),
+  MenuSubItem(
+    icon: Icons.notifications_active_outlined,
+    title: 'Órdenes / Notificaciones',
+    route: '/website/orders',
+  ),
+];
+
+const String _websiteSectionKey = 'website';
 
 // Tools (WebView embedded websites)
 const List<MenuSubItem> _toolsMenuItems = [
@@ -647,16 +680,20 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   OverlayEntry? _currentNotificationOverlay;
   Timer? _notificationTimer;
+  Timer? _onlineOrdersRefreshTimer;
   StreamSubscription? _pushNotificationSubscription;
   RealtimeChannel? _onlineOrdersChannel;
   String? _lastNotifiedOnlineOrderId;
+  String? _lastSeenOnlineOrderNotificationId;
+  bool _isRefreshingOnlineOrderAlerts = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Listen for incoming messages to show in-app notification
     _pushNotificationSubscription =
         NotificationService().messageStream.listen((message) {
@@ -681,13 +718,30 @@ class _MainLayoutState extends State<MainLayout> {
     _notificationTimer?.cancel();
     _currentNotificationOverlay?.remove();
     _pushNotificationSubscription?.cancel();
+    _onlineOrdersRefreshTimer?.cancel();
     _onlineOrdersChannel?.unsubscribe();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshOnlineOrderAlerts(showTopNotification: true);
+    }
   }
 
   Future<void> _setupOnlineOrderNotifications() async {
     final tenantId = await TenantService().getTenantId();
     if (!mounted || tenantId == null || tenantId.isEmpty) return;
+
+    await _refreshOnlineOrderAlerts(showTopNotification: true);
+
+    _onlineOrdersRefreshTimer?.cancel();
+    _onlineOrdersRefreshTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _refreshOnlineOrderAlerts(showTopNotification: true),
+    );
 
     await _onlineOrdersChannel?.unsubscribe();
     _onlineOrdersChannel = Supabase.instance.client
@@ -695,7 +749,7 @@ class _MainLayoutState extends State<MainLayout> {
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
-          table: 'online_orders',
+          table: 'erp_notifications',
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: 'tenant_id',
@@ -704,29 +758,82 @@ class _MainLayoutState extends State<MainLayout> {
           callback: (payload) {
             if (!mounted) return;
             final record = payload.newRecord;
-            final orderId = record['id']?.toString();
-            if (orderId == null || orderId == _lastNotifiedOnlineOrderId) {
+            if (record['type'] != 'online_order_created') return;
+
+            final notificationId = record['id']?.toString();
+            if (notificationId == null ||
+                notificationId == _lastNotifiedOnlineOrderId) {
               return;
             }
-            _lastNotifiedOnlineOrderId = orderId;
+            _lastNotifiedOnlineOrderId = notificationId;
+            if (!NotificationService().recordOnlineOrderAlert(
+              notificationId,
+              notification: record,
+            )) {
+              return;
+            }
 
-            final orderNumber =
-                record['order_number']?.toString() ?? 'Pedido web';
-            final customerName =
-                record['customer_name']?.toString() ?? 'Cliente';
-            final total = (record['total'] as num?)?.toDouble();
-            final amount =
-                total == null ? '' : ' · ${ChileanUtils.formatCurrency(total)}';
+            final title = record['title']?.toString() ?? 'Nueva venta online';
+            final body = record['body']?.toString() ?? 'Pedido web';
+            final route = record['route']?.toString() ?? '/website/orders';
 
-            _showTopNotification(
-              'Nueva venta online',
-              '$orderNumber · $customerName$amount',
-              icon: Icons.shopping_cart_checkout_outlined,
-              route: '/website/orders',
-            );
+            if (!_isOnlineOrdersLocation()) {
+              _showTopNotification(
+                title,
+                body,
+                icon: Icons.shopping_cart_checkout_outlined,
+                route: route,
+              );
+            }
           },
         )
         .subscribe();
+  }
+
+  Future<void> _refreshOnlineOrderAlerts({
+    bool showTopNotification = false,
+  }) async {
+    if (_isRefreshingOnlineOrderAlerts) return;
+
+    _isRefreshingOnlineOrderAlerts = true;
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (!mounted || tenantId == null || tenantId.isEmpty) return;
+
+      final rows = await NotificationService().loadOnlineOrderAlerts(tenantId);
+      if (!mounted || rows.isEmpty) return;
+
+      final latest = rows.first;
+      final latestId = latest['id']?.toString();
+      if (latestId == null || latestId.isEmpty) return;
+
+      final isNewForThisSession =
+          latestId != _lastSeenOnlineOrderNotificationId;
+      _lastSeenOnlineOrderNotificationId = latestId;
+
+      if (!showTopNotification ||
+          !isNewForThisSession ||
+          _isOnlineOrdersLocation()) {
+        return;
+      }
+
+      _showTopNotification(
+        latest['title']?.toString() ?? 'Nueva venta online',
+        latest['body']?.toString() ?? 'Pedido web',
+        icon: Icons.shopping_cart_checkout_outlined,
+        route: latest['route']?.toString() ?? '/website/orders',
+      );
+    } finally {
+      _isRefreshingOnlineOrderAlerts = false;
+    }
+  }
+
+  bool _isOnlineOrdersLocation() {
+    try {
+      return GoRouterState.of(context).uri.path.startsWith('/website/orders');
+    } catch (_) {
+      return false;
+    }
   }
 
   void _showTopNotification(
@@ -1282,12 +1389,17 @@ class _AppSidebarState extends State<AppSidebar> {
     if (_matchesLocation(location, _debugMenuItems)) {
       return _debugSectionKey;
     }
+    if (_matchesLocation(location, _websiteMenuItems)) {
+      return _websiteSectionKey;
+    }
     return null;
   }
 
   bool _matchesLocation(String location, List<MenuSubItem> items) {
+    final locationPath = _routePath(location);
     for (final item in items) {
-      if (location == item.route || location.startsWith('${item.route}/')) {
+      final routePath = _routePath(item.route);
+      if (locationPath == routePath || locationPath.startsWith('$routePath/')) {
         return true;
       }
     }
@@ -1494,14 +1606,44 @@ class _AppSidebarState extends State<AppSidebar> {
                     _buildSectionDivider(context),
 
                     // Website Module
-                    _buildSidebarItem(
-                      context,
-                      icon: Icons.web_outlined,
-                      activeIcon: Icons.web,
-                      title: 'Sitio Web',
-                      route: '/website',
-                      currentLocation: currentLocation,
-                      enabled: true,
+                    ValueListenableBuilder<int>(
+                      valueListenable:
+                          NotificationService().onlineOrderAlertCount,
+                      builder: (context, onlineOrderAlerts, _) {
+                        final visibleOrderAlerts =
+                            currentLocation.startsWith('/website/orders')
+                                ? 0
+                                : onlineOrderAlerts;
+
+                        return ExpandableMenuItem(
+                          icon: Icons.web_outlined,
+                          activeIcon: Icons.web,
+                          title: 'Sitio Web',
+                          currentLocation: currentLocation,
+                          subItems: _websiteMenuItems,
+                          isExpanded: navigationService.expandedSection ==
+                              _websiteSectionKey,
+                          onExpansionChanged: (expand) =>
+                              _handleExpansionChange(
+                            _websiteSectionKey,
+                            expand,
+                            navigationService,
+                          ),
+                          enabled: true,
+                          badgeCount: visibleOrderAlerts,
+                          subItemBadgeCounts: {
+                            '/website/orders': visibleOrderAlerts,
+                          },
+                          onBadgeTap: visibleOrderAlerts > 0
+                              ? () => context.go(
+                                    _resolveWebsiteMenuRoute('/website/orders'),
+                                  )
+                              : null,
+                          onNavigate: (route) {
+                            context.go(_resolveWebsiteMenuRoute(route));
+                          },
+                        );
+                      },
                     ),
 
                     // Correo (Zoho Mail)
@@ -1681,6 +1823,7 @@ class _AppSidebarState extends State<AppSidebar> {
     required String route,
     required String currentLocation,
     bool enabled = true,
+    int badgeCount = 0,
   }) {
     final isSelected = currentLocation.startsWith(route);
     final theme = Theme.of(context);
@@ -1744,6 +1887,24 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                   ),
                 ),
+                if (badgeCount > 0)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -2314,20 +2475,47 @@ class _AppDrawerState extends State<AppDrawer> {
           ),
 
           // Sitio Web module - ADDED for mobile access
-          ExpandableMenuItem(
-            icon: Icons.web_outlined,
-            activeIcon: Icons.web,
-            title: 'Sitio Web',
-            subItems: const [
-              MenuSubItem(
-                  icon: Icons.web, title: 'Sitio Web', route: '/website')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            enabled: true,
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Sitio Web');
+          ValueListenableBuilder<int>(
+            valueListenable: NotificationService().onlineOrderAlertCount,
+            builder: (context, onlineOrderAlerts, _) {
+              final visibleOrderAlerts =
+                  currentLocation.startsWith('/website/orders')
+                      ? 0
+                      : onlineOrderAlerts;
+
+              return ExpandableMenuItem(
+                icon: Icons.web_outlined,
+                activeIcon: Icons.web,
+                title: 'Sitio Web',
+                subItems: _websiteMenuItems,
+                currentLocation: currentLocation,
+                isExpanded: _expandedSection == _websiteSectionKey,
+                onExpansionChanged: (expand) =>
+                    _handleExpansionChange(_websiteSectionKey, expand),
+                enabled: true,
+                badgeCount: visibleOrderAlerts,
+                subItemBadgeCounts: {
+                  '/website/orders': visibleOrderAlerts,
+                },
+                onBadgeTap: visibleOrderAlerts > 0
+                    ? () {
+                        final resolvedRoute =
+                            _resolveWebsiteMenuRoute('/website/orders');
+                        Navigator.pop(context);
+                        _handleMobileNavigation(
+                          context,
+                          resolvedRoute,
+                          _getTitleFromRoute(resolvedRoute),
+                        );
+                      }
+                    : null,
+                onNavigate: (route) {
+                  final resolvedRoute = _resolveWebsiteMenuRoute(route);
+                  Navigator.pop(context);
+                  _handleMobileNavigation(context, resolvedRoute,
+                      _getTitleFromRoute(resolvedRoute));
+                },
+              );
             },
           ),
 

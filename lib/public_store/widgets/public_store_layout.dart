@@ -17,7 +17,6 @@ import 'package:web/web.dart'
     as web;
 
 import '../providers/cart_provider.dart';
-import '../pages/public_home_page.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_store_scroll_state.dart';
 import '../theme/public_store_theme.dart';
@@ -181,6 +180,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   // Guard to prevent scheduling multiple navigations in the same frame
   bool _pendingModeNavigation = false;
+  bool _pendingProviderModeSync = false;
   bool _isErpMountedStore() => PublicStoreRuntimeConfig.isErpMounted;
 
   // ------------------------------------------------------------------------
@@ -524,9 +524,32 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // - Once the provider is already in editor context, ignore URL flags.
     //   Otherwise stale params (common with persistent shell pages) can cause
     //   preview/edit to "bounce" back and forth.
+    final requestedEditMode = qp['edit'] == 'true';
+    final requestedPreviewMode = qp['preview'] == 'true';
+
+    if (editProvider.isInEditorContext && !_pendingProviderModeSync) {
+      final shouldSwitchToEdit = requestedEditMode && !editProvider.isEditMode;
+      final shouldSwitchToPreview = requestedPreviewMode &&
+          !editProvider.isPreviewMode &&
+          !requestedEditMode;
+
+      if (shouldSwitchToEdit || shouldSwitchToPreview) {
+        _pendingProviderModeSync = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _pendingProviderModeSync = false;
+          if (!mounted) return;
+          if (shouldSwitchToEdit) {
+            editProvider.switchToEditMode();
+          } else if (shouldSwitchToPreview) {
+            editProvider.switchToPreviewMode();
+          }
+        });
+      }
+    }
+
     final allowUrlForce = !editProvider.isInEditorContext;
-    final forceEditMode = allowUrlForce && qp['edit'] == 'true';
-    final forcePreviewMode = allowUrlForce && qp['preview'] == 'true';
+    final forceEditMode = allowUrlForce && requestedEditMode;
+    final forcePreviewMode = allowUrlForce && requestedPreviewMode;
 
     final isEditMode = editProvider.isEditMode || forceEditMode;
     final isPreviewMode = editProvider.isPreviewMode || forcePreviewMode;
@@ -712,7 +735,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // NOTE: We guard against scheduling multiple navigations within the same
     // frame (common when provider notifies and triggers rebuild) to avoid
     // triggering "already marked needs layout" assertions.
-    if (kIsWeb && editProvider.isInEditorContext && !_pendingModeNavigation) {
+    if (kIsWeb &&
+        editProvider.isInEditorContext &&
+        !_pendingModeNavigation &&
+        !_pendingProviderModeSync) {
       final desiredModeKey = editProvider.isEditMode
           ? 'edit'
           : (editProvider.isPreviewMode ? 'preview' : null);
@@ -902,7 +928,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // pages like /checkout or /pedido/:id as the homepage.
     final currentRoute = _currentPublicStorePath(context);
     final isHomePage = _isHomePagePath(currentRoute);
-    final allowsOverlayHeader = isHomePage && widget.child is PublicHomePage;
+    final allowsOverlayHeader = isHomePage;
     final usesInlineHeaderLayout =
         widget.enablePageViewScrolling && _usesInlineHeaderLayout(currentRoute);
 

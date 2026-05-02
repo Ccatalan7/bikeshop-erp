@@ -22,7 +22,6 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/services/whatsapp_service.dart';
 import '../../../modules/crm/services/customer_service.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/bottom_bracket_canonical_data.dart';
@@ -37,6 +36,8 @@ import '../widgets/service_wizard_dialog.dart';
 import '../../../shared/services/image_service.dart'; // Add ImageService import
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
+import '../../messaging/providers/chat_provider.dart';
+import '../../messaging/services/messaging_service.dart';
 import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'bike_form_dialog.dart';
 import '../widgets/bike_diagram_illustration.dart';
@@ -2988,10 +2989,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
-  Future<void> _sendWhatsAppUpdate() async {
-    if (_selectedCustomer == null ||
-        _selectedBike == null ||
-        _existingJob == null) {
+  Future<void> _openJobStatusConversation() async {
+    await _openJobMessagingConversation(readyForPickup: false);
+  }
+
+  Future<void> _openReadyForPickupConversation() async {
+    await _openJobMessagingConversation(readyForPickup: true);
+  }
+
+  Future<void> _openJobMessagingConversation({
+    required bool readyForPickup,
+  }) async {
+    final customer = _selectedCustomer;
+    final bike = _selectedBike;
+    final job = _existingJob;
+
+    if (customer == null || bike == null || job == null || job.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('No hay datos suficientes para enviar mensaje')),
@@ -2999,8 +3012,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    // Check if customer has phone number
-    if (_selectedCustomer!.phone == null || _selectedCustomer!.phone!.isEmpty) {
+    final phone = customer.phone?.trim();
+    if (phone == null || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('El cliente no tiene número de teléfono registrado')),
@@ -3009,103 +3022,88 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     try {
-      final whatsappService = WhatsAppService();
-      final success = await whatsappService.sendJobStatusUpdate(
-        context: context,
-        customerPhone: _selectedCustomer!.phone!,
-        customerName: _selectedCustomer!.name,
-        job: _existingJob!,
-        bikeBrand: _selectedBike!.brand ?? 'Bicicleta',
-        bikeModel: _selectedBike!.model,
+      final chatProvider = context.read<ChatProvider>();
+      final conversationId =
+          await MessagingService().openWhatsAppSupportConversation(
+        phoneNumber: phone,
+        contactName: customer.name,
+        customerId: customer.id,
+        contextType: 'job',
+        contextId: job.id,
       );
 
-      if (success && mounted) {
-        final content = switch (whatsappService.lastDeliveryMethod) {
-          WhatsAppDeliveryMethod.cloudApi =>
-            'Mensaje enviado por WhatsApp Cloud API',
-          WhatsAppDeliveryMethod.manualFallback =>
-            'WhatsApp abierto con mensaje pre-llenado',
-          WhatsAppDeliveryMethod.failed => 'Mensaje procesado',
-        };
+      chatProvider.setConversationDraft(
+        conversationId,
+        _buildJobMessagingDraft(
+          customer: customer,
+          bike: bike,
+          job: job,
+          readyForPickup: readyForPickup,
+        ),
+        title: readyForPickup
+            ? 'Aviso de retiro listo'
+            : 'Actualización de servicio técnico',
+        subtitle: '${_jobReference(job)} · ${bike.displayName}',
+      );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(content),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-        );
-      }
+      if (!mounted) return;
+      context.go('/chat?conversation=$conversationId');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('No se pudo abrir la conversación: $e')),
         );
       }
     }
   }
 
-  Future<void> _sendReadyForPickupMessage() async {
-    if (_selectedCustomer == null ||
-        _selectedBike == null ||
-        _existingJob == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('No hay datos suficientes para enviar mensaje')),
-      );
-      return;
+  String _buildJobMessagingDraft({
+    required Customer customer,
+    required Bike bike,
+    required MechanicJob job,
+    required bool readyForPickup,
+  }) {
+    final firstName = customer.name.trim().split(RegExp(r'\s+')).first;
+    final jobReference = _jobReference(job);
+    final totalLine = job.totalCost > 0
+        ? '\nTotal registrado: ${_formatJobCurrency(job.totalCost)}'
+        : '';
+
+    if (readyForPickup) {
+      return '''Hola $firstName, te escribimos de Viñabike. Tu ${bike.displayName} ya está lista para retiro.
+
+Trabajo: $jobReference
+Estado: ${job.statusDisplayName}$totalLine
+
+Puedes retirarla en Álvarez 32, Local 17. Si retirará otra persona, respóndenos con su nombre antes de venir. Gracias.''';
     }
 
-    // Check if customer has phone number
-    if (_selectedCustomer!.phone == null || _selectedCustomer!.phone!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('El cliente no tiene número de teléfono registrado')),
-      );
-      return;
-    }
+    final requestLine = (job.clientRequest ?? '').trim().isNotEmpty
+        ? '\nSolicitud registrada: ${job.clientRequest!.trim()}'
+        : '';
 
-    try {
-      final whatsappService = WhatsAppService();
-      final success = await whatsappService.sendReadyForPickup(
-        context: context,
-        customerPhone: _selectedCustomer!.phone!,
-        customerName: _selectedCustomer!.name,
-        job: _existingJob!,
-        bikeBrand: _selectedBike!.brand ?? 'Bicicleta',
-        bikeModel: _selectedBike!.model,
-      );
+    return '''Hola $firstName, te escribimos de Viñabike por el servicio de tu ${bike.displayName}.
 
-      if (success && mounted) {
-        final content = switch (whatsappService.lastDeliveryMethod) {
-          WhatsAppDeliveryMethod.cloudApi =>
-            'Notificación enviada por WhatsApp Cloud API',
-          WhatsAppDeliveryMethod.manualFallback =>
-            'WhatsApp abierto - Notifica al cliente que su bici está lista',
-          WhatsAppDeliveryMethod.failed => 'Mensaje procesado',
-        };
+Trabajo: $jobReference
+Estado actual: ${job.statusDisplayName}$requestLine$totalLine
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(content),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
+Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mismo chat. Gracias.''';
+  }
+
+  String _jobReference(MechanicJob job) {
+    final jobNumber = job.jobNumber?.trim();
+    if (jobNumber != null && jobNumber.isNotEmpty) return jobNumber;
+    final id = job.id;
+    if (id == null || id.length < 8) return 'Trabajo técnico';
+    return '#${id.substring(0, 8)}';
+  }
+
+  String _formatJobCurrency(double amount) {
+    return NumberFormat.currency(
+      locale: 'es_CL',
+      symbol: r'$',
+      decimalDigits: 0,
+    ).format(amount);
   }
 
   Future<void> _confirmDeleteBike(Bike bike) async {
@@ -3311,7 +3309,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                           if (_selectedStatus == JobStatus.finalizado ||
                               _selectedStatus == JobStatus.entregado)
                             OutlinedButton.icon(
-                              onPressed: () => _sendReadyForPickupMessage(),
+                              onPressed: () =>
+                                  _openReadyForPickupConversation(),
                               icon: const Icon(Icons.check_circle,
                                   color: Colors.green),
                               label: const Text('Avisar Cliente'),
@@ -3321,7 +3320,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                             )
                           else
                             OutlinedButton.icon(
-                              onPressed: () => _sendWhatsAppUpdate(),
+                              onPressed: () => _openJobStatusConversation(),
                               icon: const Icon(Icons.message,
                                   color: Colors.green),
                               label: const Text('WhatsApp'),
@@ -3388,7 +3387,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                       if (_selectedStatus == JobStatus.finalizado ||
                           _selectedStatus == JobStatus.entregado)
                         OutlinedButton.icon(
-                          onPressed: () => _sendReadyForPickupMessage(),
+                          onPressed: () => _openReadyForPickupConversation(),
                           icon: const Icon(Icons.check_circle,
                               color: Colors.green),
                           label: const Text('Avisar Cliente'),
@@ -3398,7 +3397,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                         )
                       else
                         OutlinedButton.icon(
-                          onPressed: () => _sendWhatsAppUpdate(),
+                          onPressed: () => _openJobStatusConversation(),
                           icon: const Icon(Icons.message, color: Colors.green),
                           label: const Text('WhatsApp'),
                           style: OutlinedButton.styleFrom(
@@ -4595,7 +4594,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final currentValue = canonicalBottomBracketSpindleInterfaceValue(
       bikeProfile.technicalValues['spindleInterface']?.toString(),
     );
-    final confirmed = bikeProfile.technicalConfirmed['spindleInterface'] == true;
+    final confirmed =
+        bikeProfile.technicalConfirmed['spindleInterface'] == true;
     if (currentValue == candidate && confirmed) {
       return null;
     }
@@ -4799,7 +4799,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     if (bottomBracketShellWidth != null) {
       final currentValue = _bottomBracketMeasurementValue(
-        technicalValues['bbShellWidthMm'] ?? technicalValues['bb_shell_width_mm'],
+        technicalValues['bbShellWidthMm'] ??
+            technicalValues['bb_shell_width_mm'],
       );
       if (currentValue == null ||
           (currentValue - bottomBracketShellWidth).abs() >= 0.001 ||
@@ -6176,21 +6177,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
       final hasKnownFamily = isKnownBottomBracketFamily(rawBottomBracketFamily);
       final familyConfirmed =
-        hasKnownFamily && technicalConfirmed['bottomBracketFamily'] == true;
-      final shellWidthValue =
-        technicalValues['bbShellWidthMm'] ?? technicalValues['bb_shell_width_mm'];
+          hasKnownFamily && technicalConfirmed['bottomBracketFamily'] == true;
+      final shellWidthValue = technicalValues['bbShellWidthMm'] ??
+          technicalValues['bb_shell_width_mm'];
       final shellDiameterValue = technicalValues['bbShellDiameterMm'] ??
-        technicalValues['bb_shell_diameter_mm'];
+          technicalValues['bb_shell_diameter_mm'];
       final spindleInterfaceValue =
-        technicalValues['spindleInterface']?.toString();
+          technicalValues['spindleInterface']?.toString();
       final bikeLabel = currentTab?.displayName ?? 'Bicicleta';
       final bikeTypeLabel = currentTab?.bike?.bikeType?.displayName;
       final familyLabel = bottomBracketFamilyLabel(rawBottomBracketFamily);
       final shellWidthLabel = bottomBracketMeasurementLabel(shellWidthValue);
       final shellDiameterLabel =
-        bottomBracketMeasurementLabel(shellDiameterValue);
+          bottomBracketMeasurementLabel(shellDiameterValue);
       final spindleInterfaceLabel =
-        bottomBracketSpindleInterfaceLabel(spindleInterfaceValue);
+          bottomBracketSpindleInterfaceLabel(spindleInterfaceValue);
 
       contextSummary = ServiceWizardContextSummary(
         title: bikeLabel,

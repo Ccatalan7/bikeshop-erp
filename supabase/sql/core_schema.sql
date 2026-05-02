@@ -5855,7 +5855,8 @@ create table if not exists sales_payments (
   reference text,
   notes text,
   created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  deleted_at timestamp with time zone
 );
 
 -- Add composite FK for sales_payments.payment_method_id (tenant-scoped)
@@ -5953,7 +5954,8 @@ alter table public.sales_payments
   add column if not exists invoice_reference text,
   add column if not exists notes text,
   add column if not exists created_at timestamp with time zone not null default now(),
-  add column if not exists updated_at timestamp with time zone not null default now();
+  add column if not exists updated_at timestamp with time zone not null default now(),
+  add column if not exists deleted_at timestamp with time zone;
 
 do $$
 begin
@@ -18232,6 +18234,128 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in online_order_items';
 end $$;
 
+-- Durable ERP notifications for app-shell alerts that must survive refresh/login.
+create table if not exists erp_notifications (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  type text not null,
+  title text not null,
+  body text,
+  route text,
+  entity_type text,
+  entity_id uuid,
+  severity text not null default 'info'
+    check (severity in ('info', 'success', 'warning', 'critical')),
+  data jsonb not null default '{}'::jsonb,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  unique(tenant_id, type, entity_type, entity_id)
+);
+
+create index if not exists idx_erp_notifications_tenant_unread
+  on erp_notifications(tenant_id, type, created_at desc)
+  where read_at is null;
+create index if not exists idx_erp_notifications_entity
+  on erp_notifications(tenant_id, entity_type, entity_id);
+
+alter table erp_notifications enable row level security;
+
+drop policy if exists "erp_notifications_select" on erp_notifications;
+create policy "erp_notifications_select" on erp_notifications
+  for select using (tenant_id = public.user_tenant_id());
+
+drop policy if exists "erp_notifications_update" on erp_notifications;
+create policy "erp_notifications_update" on erp_notifications
+  for update using (tenant_id = public.user_tenant_id())
+  with check (tenant_id = public.user_tenant_id());
+
+grant select, update on public.erp_notifications to authenticated;
+
+drop trigger if exists trg_erp_notifications_updated_at on erp_notifications;
+create trigger trg_erp_notifications_updated_at
+  before update on erp_notifications
+  for each row execute procedure public.set_updated_at();
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'erp_notifications'
+  ) then
+    alter publication supabase_realtime add table erp_notifications;
+  end if;
+end $$;
+
+create or replace function public.create_online_order_erp_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_body text;
+begin
+  v_body := coalesce(nullif(NEW.order_number, ''), 'Pedido web')
+    || ' · '
+    || coalesce(nullif(NEW.customer_name, ''), 'Cliente');
+
+  if coalesce(NEW.total, 0) > 0 then
+    v_body := v_body || ' · $' || trim(to_char(NEW.total, 'FM999G999G999G990'));
+  end if;
+
+  insert into public.erp_notifications (
+    tenant_id,
+    type,
+    title,
+    body,
+    route,
+    entity_type,
+    entity_id,
+    severity,
+    data
+  ) values (
+    NEW.tenant_id,
+    'online_order_created',
+    'Nueva venta online',
+    v_body,
+    '/website/orders?order=' || NEW.id::text,
+    'online_order',
+    NEW.id,
+    'success',
+    jsonb_build_object(
+      'order_id', NEW.id,
+      'order_number', NEW.order_number,
+      'customer_name', NEW.customer_name,
+      'total', NEW.total,
+      'payment_status', NEW.payment_status,
+      'delivery_type', NEW.delivery_type
+    )
+  ) on conflict (tenant_id, type, entity_type, entity_id) do update
+    set title = excluded.title,
+        body = excluded.body,
+        route = excluded.route,
+        severity = excluded.severity,
+        data = excluded.data,
+        read_at = null,
+        updated_at = now();
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_online_order_erp_notification on online_orders;
+create trigger trg_online_order_erp_notification
+  after insert on online_orders
+  for each row execute function public.create_online_order_erp_notification();
+
 -- Product visibility for online store (control which products appear on website)
 alter table public.products
   add column if not exists show_on_website boolean default true,
@@ -18466,6 +18590,7 @@ declare
   v_tax_treatment text;
   v_invoice_status text;
   v_should_create_payment boolean;
+  v_invoice_date timestamp with time zone;
 begin
   -- Get order details WITH ROW LOCK to prevent race conditions
   -- This ensures only one process can create an invoice for this order
@@ -18612,9 +18737,16 @@ begin
     v_invoice_status := 'sent';
     v_should_create_payment := false;
   end if;
+
+  v_invoice_date := case
+    when v_order.payment_status = 'paid' then
+      coalesce(v_order.paid_at, v_order.created_at, now())
+    else
+      coalesce(v_order.created_at, now())
+  end;
   
   -- Generate invoice number PER TENANT in format: INV-25-00001
-  v_year := to_char(now(), 'YY');
+  v_year := to_char(v_invoice_date, 'YY');
   
   select coalesce(max(cast(substring(invoice_number from '\d+$') as integer)), 0) + 1
   into v_next_number
@@ -18668,8 +18800,8 @@ begin
     v_invoice_number,
     v_order.customer_id,
     v_order.customer_name,
-    now(),
-    now() + interval '30 days',
+    v_invoice_date,
+    v_invoice_date + interval '30 days',
     v_invoice_status,
     v_tax_treatment,
     v_net_amount,
@@ -18742,7 +18874,7 @@ begin
       v_invoice_number,
       v_payment_method.id,
       v_order.total,
-      coalesce(v_order.paid_at, now()),
+      coalesce(v_order.paid_at, v_invoice_date),
       v_order.payment_reference,
       'Pago automático - Pedido online #' || v_order.order_number ||
       ' (' || coalesce(v_payment_method.name, v_order.payment_method) || ')'
@@ -18772,6 +18904,7 @@ create or replace function public.cancel_online_order(
 returns jsonb
 language plpgsql
 security definer
+set search_path = public
 as $$
 declare
   v_order record;
@@ -18812,13 +18945,20 @@ begin
   -- 1. Cancel/delete the invoice (which will restore inventory and delete journal entries)
   if v_invoice is not null then
     -- If invoice is posted (confirmada/pagada), we need to revert it first
-    if v_invoice.status in ('confirmada', 'pagada') then
+    if lower(coalesce(v_invoice.status, '')) in (
+      'confirmed',
+      'confirmado',
+      'confirmada',
+      'paid',
+      'pagado',
+      'pagada'
+    ) then
       -- Delete payments first (triggers will handle journal entry reversal)
       delete from sales_payments where invoice_id = v_invoice.id;
       
-      -- Set invoice back to borrador (which triggers inventory restoration)
+      -- Set invoice back to draft (which triggers inventory restoration)
       update sales_invoices
-      set status = 'borrador',
+      set status = 'draft',
           updated_at = now()
       where id = v_invoice.id;
     end if;
@@ -18837,7 +18977,7 @@ begin
     cancelled_reason = p_reason,
     refund_amount = v_actual_refund,
     refunded_at = case when v_actual_refund > 0 then now() else null end,
-    invoice_id = null, -- Clear invoice reference
+    sales_invoice_id = null, -- Clear invoice reference
     updated_at = now()
   where id = p_order_id;
   

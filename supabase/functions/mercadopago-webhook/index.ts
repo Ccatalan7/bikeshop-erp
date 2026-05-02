@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+type MercadoPagoToken = {
+  tenant_id: string | null
+  access_token: string
+}
+
 serve(async (req) => {
   console.log('🔔 [WEBHOOK] ========== REQUEST RECEIVED ==========')
   console.log('🔔 [WEBHOOK] Method:', req.method)
@@ -33,28 +38,13 @@ serve(async (req) => {
     const { type, action, data } = body
     console.log('🔔 [WEBHOOK] Event type:', type, '| Action:', action, '| Data ID:', data?.id)
 
-    // Get MercadoPago access token (use .limit(1) instead of .single() for reliability)
-    console.log('🔔 [WEBHOOK] Step 3: Fetching MercadoPago access token...')
-    const { data: settings, error: settingsError } = await supabase
-      .from('website_settings')
-      .select('value')
-      .eq('key', 'mercadopago_access_token')
-      .limit(1)
+    console.log('🔔 [WEBHOOK] Step 3: Fetching configured MercadoPago tenant tokens...')
+    const accessTokens = await loadMercadoPagoTokens(supabase)
+    console.log('🔔 [WEBHOOK] Step 3: ✅ Token count:', accessTokens.length)
 
-    if (settingsError) {
-      console.error('🔔 [WEBHOOK] Step 3: ❌ Settings query error:', settingsError)
-      return new Response(JSON.stringify({ error: 'Settings query failed', details: settingsError }), { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    const accessToken = settings?.[0]?.value
-    console.log('🔔 [WEBHOOK] Step 3: ✅ Access token found:', accessToken ? 'YES (hidden)' : 'NO')
-
-    if (!accessToken) {
-      console.error('🔔 [WEBHOOK] Step 3: ❌ No access token in website_settings')
-      return new Response(JSON.stringify({ error: 'No access token configured' }), { 
+    if (accessTokens.length === 0) {
+      console.error('🔔 [WEBHOOK] Step 3: ❌ No MercadoPago access tokens in website_settings')
+      return new Response(JSON.stringify({ error: 'No access token configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -66,42 +56,46 @@ serve(async (req) => {
       const orderId = data?.id
       if (!orderId) {
         console.log('🔔 [WEBHOOK] Step 4: ⚠️ No order ID in merchant_order event')
-        return new Response(JSON.stringify({ status: 'ok', message: 'No order ID' }), { 
+        return new Response(JSON.stringify({ status: 'ok', message: 'No order ID' }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
       console.log('🔔 [WEBHOOK] Step 4a: Fetching merchant order from MP API:', orderId)
-      const mpResponse = await fetch(`https://api.mercadopago.com/merchant_orders/${orderId}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      })
+      const merchantOrderResult = await fetchMercadoPagoResource(
+        accessTokens,
+        `https://api.mercadopago.com/merchant_orders/${encodeURIComponent(orderId)}`,
+        'merchant_order'
+      )
 
-      if (!mpResponse.ok) {
-        const errorText = await mpResponse.text()
-        console.error('🔔 [WEBHOOK] Step 4a: ❌ MercadoPago API error:', errorText)
-        return new Response(JSON.stringify({ error: 'MercadoPago API error', details: errorText }), { 
-          status: mpResponse.status,
+      if (!merchantOrderResult.ok) {
+        console.error('🔔 [WEBHOOK] Step 4a: ❌ MercadoPago API error:', merchantOrderResult.errorText)
+        return new Response(JSON.stringify({ error: 'MercadoPago API error', details: merchantOrderResult.errorText }), {
+          status: merchantOrderResult.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      const merchantOrder = await mpResponse.json()
+      const merchantOrder = merchantOrderResult.data
       console.log('🔔 [WEBHOOK] Step 4a: ✅ Merchant order fetched, payments:', merchantOrder.payments?.length || 0)
-      
+
       const payments = merchantOrder.payments || []
       if (payments.length > 0) {
         const payment = payments[0]
         console.log('🔔 [WEBHOOK] Step 4b: Processing payment ID:', payment.id)
-        await processPayment(supabase, payment.id, accessToken)
+        await processPayment(
+          supabase,
+          payment.id,
+          accessTokens,
+          merchantOrderResult.token?.tenant_id ?? null
+        )
       } else {
         console.log('🔔 [WEBHOOK] Step 4b: ⚠️ No payments in merchant order')
       }
 
       console.log('🔔 [WEBHOOK] ========== MERCHANT_ORDER COMPLETE ==========')
-      return new Response(JSON.stringify({ status: 'ok' }), { 
+      return new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -113,17 +107,17 @@ serve(async (req) => {
       const paymentId = data?.id
       if (!paymentId) {
         console.log('🔔 [WEBHOOK] Step 4: ⚠️ No payment ID in event')
-        return new Response(JSON.stringify({ status: 'ok', message: 'No payment ID' }), { 
+        return new Response(JSON.stringify({ status: 'ok', message: 'No payment ID' }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
       console.log('🔔 [WEBHOOK] Step 4a: Payment ID:', paymentId)
-      await processPayment(supabase, paymentId, accessToken)
-      
+      await processPayment(supabase, paymentId, accessTokens)
+
       console.log('🔔 [WEBHOOK] ========== PAYMENT COMPLETE ==========')
-      return new Response(JSON.stringify({ status: 'ok' }), { 
+      return new Response(JSON.stringify({ status: 'ok' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -131,39 +125,122 @@ serve(async (req) => {
 
     // Unknown event type - still return 200 to acknowledge
     console.log('🔔 [WEBHOOK] ⚠️ Unknown event type:', type, '- acknowledging anyway')
-    return new Response(JSON.stringify({ status: 'ok', message: 'Unknown event type', type }), { 
+    return new Response(JSON.stringify({ status: 'ok', message: 'Unknown event type', type }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
     console.error('🔔 [WEBHOOK] ❌❌❌ FATAL ERROR:', error)
     console.error('🔔 [WEBHOOK] Error stack:', error.stack)
-    return new Response(JSON.stringify({ error: error.message, stack: error.stack }), { 
+    return new Response(JSON.stringify({ error: error.message, stack: error.stack }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
 })
 
-async function processPayment(supabase: any, paymentId: string, accessToken: string) {
+async function loadMercadoPagoTokens(supabase: any): Promise<MercadoPagoToken[]> {
+  const { data: settings, error } = await supabase
+    .from('website_settings')
+    .select('tenant_id, value')
+    .eq('key', 'mercadopago_access_token')
+
+  if (error) {
+    console.error('🔔 [WEBHOOK] ❌ Settings query error:', error)
+    throw new Error(`Settings query failed: ${error.message}`)
+  }
+
+  return (settings ?? [])
+    .filter((setting: any) => typeof setting.value === 'string' && setting.value.trim().length > 0)
+    .map((setting: any) => ({
+      tenant_id: setting.tenant_id ?? null,
+      access_token: setting.value.trim(),
+    }))
+}
+
+function orderedTokens(
+  tokens: MercadoPagoToken[],
+  preferredTenantId?: string | null,
+): MercadoPagoToken[] {
+  if (!preferredTenantId) return tokens
+
+  return [
+    ...tokens.filter((token) => token.tenant_id === preferredTenantId),
+    ...tokens.filter((token) => token.tenant_id !== preferredTenantId),
+  ]
+}
+
+async function fetchMercadoPagoResource(
+  tokens: MercadoPagoToken[],
+  url: string,
+  label: string,
+  preferredTenantId?: string | null,
+): Promise<{
+  ok: boolean
+  status: number
+  data?: any
+  errorText?: string
+  token?: MercadoPagoToken
+}> {
+  let lastStatus = 500
+  let lastError = 'No configured MercadoPago token could fetch the resource'
+
+  for (const token of orderedTokens(tokens, preferredTenantId)) {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token.access_token}`,
+      },
+    })
+
+    if (response.ok) {
+      return {
+        ok: true,
+        status: response.status,
+        data: await response.json(),
+        token,
+      }
+    }
+
+    lastStatus = response.status
+    lastError = await response.text()
+    console.warn(
+      `🔔 [WEBHOOK] ${label} fetch failed for tenant ${token.tenant_id ?? 'global'}:`,
+      response.status,
+      lastError,
+    )
+  }
+
+  return {
+    ok: false,
+    status: lastStatus,
+    errorText: lastError,
+  }
+}
+
+async function processPayment(
+  supabase: any,
+  paymentId: string,
+  accessTokens: MercadoPagoToken[],
+  preferredTenantId: string | null = null,
+) {
   console.log('💳 [PROCESS_PAYMENT] ========== START ==========')
   console.log('💳 [PROCESS_PAYMENT] Payment ID:', paymentId)
 
   // Fetch payment details from MercadoPago
   console.log('💳 [PROCESS_PAYMENT] Step 1: Fetching payment from MP API...')
-  const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  })
+  let paymentResult = await fetchMercadoPagoResource(
+    accessTokens,
+    `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+    'payment',
+    preferredTenantId,
+  )
 
-  if (!mpResponse.ok) {
-    const errorText = await mpResponse.text()
-    console.error('💳 [PROCESS_PAYMENT] Step 1: ❌ MP API error:', errorText)
-    throw new Error(`Failed to fetch payment details: ${errorText}`)
+  if (!paymentResult.ok) {
+    console.error('💳 [PROCESS_PAYMENT] Step 1: ❌ MP API error:', paymentResult.errorText)
+    throw new Error(`Failed to fetch payment details: ${paymentResult.errorText}`)
   }
 
-  const payment = await mpResponse.json()
+  let payment = paymentResult.data
   console.log('💳 [PROCESS_PAYMENT] Step 1: ✅ Payment fetched')
   console.log('💳 [PROCESS_PAYMENT] - Status:', payment.status)
   console.log('💳 [PROCESS_PAYMENT] - External Reference (Order ID):', payment.external_reference)
@@ -171,11 +248,56 @@ async function processPayment(supabase: any, paymentId: string, accessToken: str
   console.log('💳 [PROCESS_PAYMENT] - Payer Email:', payment.payer?.email)
 
   const orderId = payment.external_reference
-  const status = payment.status
+  let status = payment.status
 
   if (!orderId) {
     console.error('💳 [PROCESS_PAYMENT] ❌ No external_reference (order ID) in payment!')
     throw new Error('Payment has no external_reference')
+  }
+
+  const { data: order, error: orderError } = await supabase
+    .from('online_orders')
+    .select('id, tenant_id')
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (orderError) {
+    console.error('💳 [PROCESS_PAYMENT] ❌ Order lookup error:', orderError)
+    throw new Error(`Failed to look up order: ${orderError.message}`)
+  }
+
+  if (!order?.tenant_id) {
+    console.error('💳 [PROCESS_PAYMENT] ❌ Order not found for external_reference:', orderId)
+    throw new Error(`Order not found for external_reference: ${orderId}`)
+  }
+
+  if (paymentResult.token?.tenant_id && paymentResult.token.tenant_id !== order.tenant_id) {
+    console.warn(
+      '💳 [PROCESS_PAYMENT] Payment token tenant differed from order tenant; retrying exact tenant token.',
+      paymentResult.token.tenant_id,
+      order.tenant_id,
+    )
+
+    const tenantScopedTokens = accessTokens.filter(
+      (token) => token.tenant_id === order.tenant_id || token.tenant_id === null,
+    )
+    const tenantPaymentResult = await fetchMercadoPagoResource(
+      tenantScopedTokens,
+      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+      'payment',
+      order.tenant_id,
+    )
+
+    if (
+      !tenantPaymentResult.ok ||
+      (tenantPaymentResult.token?.tenant_id && tenantPaymentResult.token.tenant_id !== order.tenant_id)
+    ) {
+      throw new Error(`Payment ${paymentId} does not match order tenant ${order.tenant_id}`)
+    }
+
+    paymentResult = tenantPaymentResult
+    payment = tenantPaymentResult.data
+    status = payment.status
   }
 
   let paymentStatus = 'pending'
@@ -197,6 +319,7 @@ async function processPayment(supabase: any, paymentId: string, accessToken: str
       paid_at: status === 'approved' ? new Date().toISOString() : null,
     })
     .eq('id', orderId)
+    .eq('tenant_id', order.tenant_id)
     .select()
 
   if (updateError) {
@@ -209,7 +332,7 @@ async function processPayment(supabase: any, paymentId: string, accessToken: str
   if (status === 'approved') {
     console.log('💳 [PROCESS_PAYMENT] Step 4: Payment APPROVED - calling process_online_order...')
     const { data: invoiceId, error: rpcError } = await supabase.rpc('process_online_order', { p_order_id: orderId })
-    
+
     if (rpcError) {
       console.error('💳 [PROCESS_PAYMENT] Step 4: ❌ RPC error:', rpcError)
       throw new Error(`Failed to process order: ${rpcError.message}`)

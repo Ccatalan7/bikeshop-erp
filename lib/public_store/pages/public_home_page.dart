@@ -224,9 +224,10 @@ class _PublicHomePageState extends State<PublicHomePage>
     final goRouterState = GoRouterState.of(context);
     final queryParams = goRouterState.uri.queryParameters;
 
-    final shouldPreview = queryParams['preview'] == 'true';
-    // If both are present, preview wins (prevents mode bouncing).
-    final shouldEdit = !shouldPreview && queryParams['edit'] == 'true';
+    final shouldEdit = queryParams['edit'] == 'true';
+    // If both are present, edit wins because explicit editor entry points use
+    // edit=true to override stale preview URLs in the persistent shell.
+    final shouldPreview = !shouldEdit && queryParams['preview'] == 'true';
 
     // Only process once per navigation (avoid infinite rebuilds)
     if (_editModeChecked) return;

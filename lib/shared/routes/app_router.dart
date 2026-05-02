@@ -134,6 +134,9 @@ import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../public_store/widgets/public_store_layout.dart';
 import '../../public_store/services/public_store_scroll_state.dart';
+import '../../public_store/providers/public_store_tenant_provider.dart';
+import '../../modules/website/services/website_service.dart';
+import '../services/tenant_service.dart';
 
 class _EnsurePublicStoreScrollState extends StatelessWidget {
   final Widget child;
@@ -223,6 +226,63 @@ class _PublicStoreShell extends StatefulWidget {
 }
 
 class _PublicStoreShellState extends State<_PublicStoreShell> {
+  bool _storeDataLoadStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _ensureStoreDataLoaded();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PublicStoreShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_storeDataLoadStarted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _ensureStoreDataLoaded();
+      });
+    }
+  }
+
+  Future<String?> _resolveStoreTenantId() async {
+    try {
+      final tenantProvider = context.read<PublicStoreTenantProvider>();
+      final tenantId = tenantProvider.tenantId;
+      if (tenantId != null && tenantId.isNotEmpty) return tenantId;
+    } on ProviderNotFoundException {
+      // ERP host may resolve tenant through the authenticated tenant service.
+    }
+
+    try {
+      return await context.read<TenantService>().getTenantId();
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  Future<void> _ensureStoreDataLoaded() async {
+    if (_storeDataLoadStarted) return;
+    _storeDataLoadStarted = true;
+
+    final tenantId = await _resolveStoreTenantId();
+    if (!mounted) return;
+    if (tenantId == null || tenantId.isEmpty) {
+      _storeDataLoadStarted = false;
+      return;
+    }
+
+    final websiteService = context.read<WebsiteService>();
+    websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
+    await websiteService.loadPublicStoreDataUnified(
+      tenantId,
+      forceRefresh: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final disablePageViewScrolling =
@@ -2364,13 +2424,17 @@ class AppRouter {
             // Online Orders
             GoRoute(
               path: 'orders',
-              pageBuilder: (context, state) =>
-                  _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                erp.loadLibrary(),
-                () => erp.OnlineOrdersPage(),
-              ),
+              pageBuilder: (context, state) {
+                final initialOrderId = state.uri.queryParameters['order'];
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.OnlineOrdersPage(
+                    initialOrderId: initialOrderId,
+                  ),
+                );
+              },
             ),
             // Website Settings
             GoRoute(

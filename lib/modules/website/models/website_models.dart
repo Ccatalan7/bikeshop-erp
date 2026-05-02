@@ -404,6 +404,8 @@ class OnlineOrder {
   final DateTime? readyForPickupAt;
   final DateTime? cancelledAt;
   final String? cancelledReason;
+  final double refundAmount;
+  final DateTime? refundedAt;
 
   final String? salesInvoiceId;
 
@@ -450,6 +452,8 @@ class OnlineOrder {
     this.readyForPickupAt,
     this.cancelledAt,
     this.cancelledReason,
+    this.refundAmount = 0.0,
+    this.refundedAt,
     this.salesInvoiceId,
     this.customerNotes,
     this.internalNotes,
@@ -504,6 +508,10 @@ class OnlineOrder {
           ? DateTime.parse(json['cancelled_at'] as String)
           : null,
       cancelledReason: json['cancelled_reason'] as String?,
+      refundAmount: (json['refund_amount'] as num?)?.toDouble() ?? 0.0,
+      refundedAt: json['refunded_at'] != null
+          ? DateTime.parse(json['refunded_at'] as String)
+          : null,
       salesInvoiceId: json['sales_invoice_id'] as String?,
       customerNotes: json['customer_notes'] as String?,
       internalNotes: json['internal_notes'] as String?,
@@ -553,6 +561,8 @@ class OnlineOrder {
       'ready_for_pickup_at': readyForPickupAt?.toIso8601String(),
       'cancelled_at': cancelledAt?.toIso8601String(),
       'cancelled_reason': cancelledReason,
+      'refund_amount': refundAmount,
+      'refunded_at': refundedAt?.toIso8601String(),
       'sales_invoice_id': salesInvoiceId,
       'customer_notes': customerNotes,
       'internal_notes': internalNotes,
@@ -596,6 +606,8 @@ class OnlineOrder {
     DateTime? readyForPickupAt,
     DateTime? cancelledAt,
     String? cancelledReason,
+    double? refundAmount,
+    DateTime? refundedAt,
     String? salesInvoiceId,
     String? customerNotes,
     String? internalNotes,
@@ -638,6 +650,8 @@ class OnlineOrder {
       readyForPickupAt: readyForPickupAt ?? this.readyForPickupAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       cancelledReason: cancelledReason ?? this.cancelledReason,
+      refundAmount: refundAmount ?? this.refundAmount,
+      refundedAt: refundedAt ?? this.refundedAt,
       salesInvoiceId: salesInvoiceId ?? this.salesInvoiceId,
       customerNotes: customerNotes ?? this.customerNotes,
       internalNotes: internalNotes ?? this.internalNotes,
@@ -728,6 +742,17 @@ class OnlineOrderItem {
   final double unitPrice;
   final double subtotal;
   final DateTime createdAt;
+  final bool productContextLoaded;
+  final bool productExists;
+  final String? liveProductName;
+  final String? liveProductSku;
+  final String? productCategoryName;
+  final int? productStockQuantity;
+  final bool? productIsActive;
+  final bool? productIsPublished;
+  final bool? productTracksStock;
+  final String? productType;
+  final String? productPurchaseTreatment;
 
   OnlineOrderItem({
     required this.id,
@@ -739,9 +764,31 @@ class OnlineOrderItem {
     required this.unitPrice,
     required this.subtotal,
     required this.createdAt,
+    this.productContextLoaded = false,
+    this.productExists = false,
+    this.liveProductName,
+    this.liveProductSku,
+    this.productCategoryName,
+    this.productStockQuantity,
+    this.productIsActive,
+    this.productIsPublished,
+    this.productTracksStock,
+    this.productType,
+    this.productPurchaseTreatment,
   });
 
   factory OnlineOrderItem.fromJson(Map<String, dynamic> json) {
+    final productRaw = json.containsKey('product')
+        ? json['product']
+        : json.containsKey('products')
+            ? json['products']
+            : null;
+    final productContextLoaded =
+        json.containsKey('product') || json.containsKey('products');
+    final product = productRaw is Map
+        ? Map<String, dynamic>.from(productRaw)
+        : <String, dynamic>{};
+
     return OnlineOrderItem(
       id: json['id']?.toString() ?? '',
       orderId: json['order_id']?.toString() ?? '',
@@ -754,6 +801,22 @@ class OnlineOrderItem {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
+      productContextLoaded: productContextLoaded,
+      productExists: product.isNotEmpty,
+      liveProductName: product['name']?.toString(),
+      liveProductSku: product['sku']?.toString(),
+      productCategoryName: product['category_name']?.toString(),
+      productStockQuantity: (product['stock_quantity'] is num
+              ? product['stock_quantity'] as num
+              : product['inventory_qty'] is num
+                  ? product['inventory_qty'] as num
+                  : null)
+          ?.toInt(),
+      productIsActive: product['is_active'] as bool?,
+      productIsPublished: product['is_published'] as bool?,
+      productTracksStock: product['track_stock'] as bool?,
+      productType: product['product_type']?.toString(),
+      productPurchaseTreatment: product['purchase_treatment']?.toString(),
     );
   }
 
@@ -769,5 +832,52 @@ class OnlineOrderItem {
       'subtotal': subtotal,
       'created_at': createdAt.toIso8601String(),
     };
+  }
+
+  OnlineOrderItem copyWith({
+    String? id,
+    String? orderId,
+    String? productId,
+    String? productName,
+    String? productSku,
+    int? quantity,
+    double? unitPrice,
+    double? subtotal,
+    DateTime? createdAt,
+    bool? productContextLoaded,
+    bool? productExists,
+    String? liveProductName,
+    String? liveProductSku,
+    String? productCategoryName,
+    int? productStockQuantity,
+    bool? productIsActive,
+    bool? productIsPublished,
+    bool? productTracksStock,
+    String? productType,
+    String? productPurchaseTreatment,
+  }) {
+    return OnlineOrderItem(
+      id: id ?? this.id,
+      orderId: orderId ?? this.orderId,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productSku: productSku ?? this.productSku,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      subtotal: subtotal ?? this.subtotal,
+      createdAt: createdAt ?? this.createdAt,
+      productContextLoaded: productContextLoaded ?? this.productContextLoaded,
+      productExists: productExists ?? this.productExists,
+      liveProductName: liveProductName ?? this.liveProductName,
+      liveProductSku: liveProductSku ?? this.liveProductSku,
+      productCategoryName: productCategoryName ?? this.productCategoryName,
+      productStockQuantity: productStockQuantity ?? this.productStockQuantity,
+      productIsActive: productIsActive ?? this.productIsActive,
+      productIsPublished: productIsPublished ?? this.productIsPublished,
+      productTracksStock: productTracksStock ?? this.productTracksStock,
+      productType: productType ?? this.productType,
+      productPurchaseTreatment:
+          productPurchaseTreatment ?? this.productPurchaseTreatment,
+    );
   }
 }

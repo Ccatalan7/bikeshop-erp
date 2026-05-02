@@ -41,6 +41,9 @@ class WebsiteService extends ChangeNotifier {
   // BLOCK NORMALIZATION (Phase 2 - Jan 2026)
   // ============================================================
   static const int _currentBlockSchemaVersion = 1;
+  static const String _orderItemProductContextSelect =
+      'id,name,sku,category_name,stock_quantity,inventory_qty,is_active,'
+      'is_published,product_type,track_stock,purchase_treatment';
 
   Map<String, dynamic> _deepMergeMaps(
     Map<String, dynamic> base,
@@ -1940,15 +1943,26 @@ class WebsiteService extends ChangeNotifier {
     if (!_isInitializing) _safeNotifyListeners();
 
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No tenant_id found for current user');
+      }
+
       // Load orders with items in a SINGLE query (no N+1 problem)
       // Limit to recent 100 orders for performance - use pagination for full list
-      final response = await _supabase.from('online_orders').select('''
+      final response = await _supabase
+          .from('online_orders')
+          .select('''
             *,
             online_order_items (*)
-          ''').order('created_at', ascending: false).limit(100);
+          ''')
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false)
+          .limit(100);
 
-      _orders =
+      final loadedOrders =
           (response as List).map((json) => OnlineOrder.fromJson(json)).toList();
+      _orders = await _attachProductContextToOrders(loadedOrders, tenantId);
 
       _error = null;
     } catch (e) {
@@ -1962,25 +1976,130 @@ class WebsiteService extends ChangeNotifier {
 
   Future<List<OnlineOrderItem>> _loadOrderItems(String orderId) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return [];
+
       final response = await _supabase
           .from('online_order_items')
           .select()
+          .eq('tenant_id', tenantId)
           .eq('order_id', orderId);
 
-      return (response as List)
+      final items = (response as List)
           .map((json) => OnlineOrderItem.fromJson(json))
           .toList();
+      return _attachProductContextToItems(items, tenantId);
     } catch (e) {
       debugPrint('Error loading order items: $e');
       return [];
     }
   }
 
+  Future<List<OnlineOrder>> _attachProductContextToOrders(
+    List<OnlineOrder> orders,
+    String tenantId,
+  ) async {
+    final allItems = orders.expand((order) => order.items).toList();
+    if (allItems.isEmpty) return orders;
+
+    final enrichedItems =
+        await _attachProductContextToItems(allItems, tenantId);
+    final itemsByOrder = <String, List<OnlineOrderItem>>{};
+    for (final item in enrichedItems) {
+      itemsByOrder.putIfAbsent(item.orderId, () => []).add(item);
+    }
+
+    return orders
+        .map((order) => order.copyWith(
+              items: itemsByOrder[order.id] ?? const [],
+            ))
+        .toList();
+  }
+
+  Future<List<OnlineOrderItem>> _attachProductContextToItems(
+    List<OnlineOrderItem> items,
+    String tenantId,
+  ) async {
+    final productIds = items
+        .map((item) => item.productId?.trim())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final productsById = <String, Map<String, dynamic>>{};
+    if (productIds.isNotEmpty) {
+      try {
+        final response = await _supabase
+            .from('products')
+            .select(_orderItemProductContextSelect)
+            .eq('tenant_id', tenantId)
+            .inFilter('id', productIds.toList());
+
+        for (final row in response as List) {
+          final product = Map<String, dynamic>.from(row as Map);
+          final id = product['id']?.toString();
+          if (id != null && id.isNotEmpty) {
+            productsById[id] = product;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading order product context: $e');
+        return items;
+      }
+    }
+
+    return items.map((item) {
+      final productId = item.productId?.trim();
+      if (productId == null || productId.isEmpty) {
+        return item.copyWith(
+          productContextLoaded: true,
+          productExists: false,
+        );
+      }
+
+      final product = productsById[productId];
+      if (product == null) {
+        return item.copyWith(
+          productContextLoaded: true,
+          productExists: false,
+        );
+      }
+
+      return item.copyWith(
+        productContextLoaded: true,
+        productExists: true,
+        liveProductName: product['name']?.toString(),
+        liveProductSku: product['sku']?.toString(),
+        productCategoryName: product['category_name']?.toString(),
+        productStockQuantity: _intFromProductValue(
+          product['stock_quantity'] ?? product['inventory_qty'],
+        ),
+        productIsActive: product['is_active'] as bool?,
+        productIsPublished: product['is_published'] as bool?,
+        productTracksStock: product['track_stock'] as bool?,
+        productType: product['product_type']?.toString(),
+        productPurchaseTreatment: product['purchase_treatment']?.toString(),
+      );
+    }).toList();
+  }
+
+  int? _intFromProductValue(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   Future<OnlineOrder?> getOrderById(String id) async {
     try {
       debugPrint('🎉 [WebsiteService] getOrderById($id) called');
-      final response =
-          await _supabase.from('online_orders').select().eq('id', id).single();
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return null;
+
+      final response = await _supabase
+          .from('online_orders')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('id', id)
+          .single();
       debugPrint('🎉 [WebsiteService] Order response received');
 
       final order = OnlineOrder.fromJson(response);
@@ -2082,6 +2201,76 @@ class WebsiteService extends ChangeNotifier {
       await loadOrders();
     } catch (e) {
       _error = 'Error al actualizar estado de pago: $e';
+      debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updateOrderNotes(
+    String orderId, {
+    String? internalNotes,
+  }) async {
+    try {
+      await _supabase.from('online_orders').update({
+        'internal_notes': internalNotes,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
+
+      await loadOrders();
+    } catch (e) {
+      _error = 'Error al actualizar notas del pedido: $e';
+      debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> cancelOrder(
+    String orderId, {
+    required String reason,
+    double? refundAmount,
+  }) async {
+    try {
+      final response = await _supabase.rpc('cancel_online_order', params: {
+        'p_order_id': orderId,
+        'p_reason': reason,
+        'p_refund_amount': refundAmount,
+      });
+
+      await loadOrders();
+      return response is Map<String, dynamic>
+          ? response
+          : response is Map
+              ? Map<String, dynamic>.from(response)
+              : null;
+    } catch (e) {
+      _error = 'Error al cancelar pedido: $e';
+      debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<String?> confirmOrderPayment(
+    String orderId, {
+    String? paymentReference,
+    required DateTime paymentDate,
+  }) async {
+    try {
+      final response = await _supabase.rpc(
+        'confirm_online_order_payment',
+        params: {
+          'p_order_id': orderId,
+          'p_payment_reference': paymentReference,
+          'p_payment_date': paymentDate.toIso8601String(),
+        },
+      );
+
+      await loadOrders();
+      return response?.toString();
+    } catch (e) {
+      _error = 'Error al confirmar pago del pedido: $e';
       debugPrint(_error);
       _safeNotifyListeners();
       rethrow;
