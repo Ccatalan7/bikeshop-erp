@@ -2116,11 +2116,53 @@ class WebsiteService extends ChangeNotifier {
     }
   }
 
+  Future<OnlineOrder?> getPublicOrderById({
+    required String orderId,
+    required String tenantId,
+  }) async {
+    try {
+      final response = await _supabase.rpc('get_public_online_order', params: {
+        'p_order_id': orderId,
+        'p_tenant_id': tenantId,
+      });
+
+      if (response == null) return null;
+
+      return OnlineOrder.fromJson(Map<String, dynamic>.from(response as Map));
+    } catch (e, stackTrace) {
+      debugPrint('❌ [WebsiteService] Error loading public order: $e');
+      debugPrint('❌ [WebsiteService] Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
   /// Create a new online order from the public store
   Future<String> createOrder(Map<String, dynamic> orderData,
       List<Map<String, dynamic>> orderItems) async {
     try {
       debugPrint('🛒 [WebsiteService] createOrder() called');
+
+      try {
+        final orderId =
+            await _supabase.rpc('create_public_online_order', params: {
+          'p_order_data': orderData,
+          'p_order_items': orderItems,
+        });
+
+        if (orderId is String && orderId.isNotEmpty) {
+          debugPrint(
+              '🛒 [WebsiteService] Secure order RPC created id: $orderId');
+          return orderId;
+        }
+      } on PostgrestException catch (e) {
+        if (e.code != '42883' &&
+            !e.message.contains('create_public_online_order')) {
+          rethrow;
+        }
+
+        debugPrint(
+            '🛒 [WebsiteService] Secure order RPC is not deployed yet; falling back to legacy insert.');
+      }
 
       // Insert order and get the generated ID
       final orderResponse = await _supabase

@@ -31,14 +31,57 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   static const Color _accentBlue = Color(0xFF093357);
   static const Color _borderColor = Color(0xFFE5E7EB);
   static const Color _softSurface = Color(0xFFF8FAFC);
-  static const double _desktopBreakpoint = 980;
+  static const double _desktopBreakpoint = 1180;
   static const int _historicalInvoiceWarningDays = 7;
+  static const List<_OrderLane> _lanes = [
+    _OrderLane(
+      key: 'attention',
+      label: 'Atención',
+      icon: Icons.priority_high_outlined,
+    ),
+    _OrderLane(
+      key: 'blocked',
+      label: 'Bloqueados',
+      icon: Icons.report_problem_outlined,
+    ),
+    _OrderLane(
+      key: 'prepare',
+      label: 'Preparar',
+      icon: Icons.inventory_2_outlined,
+    ),
+    _OrderLane(
+      key: 'coordination',
+      label: 'Coordinar',
+      icon: Icons.forum_outlined,
+    ),
+    _OrderLane(
+      key: 'pickup',
+      label: 'Retiro',
+      icon: Icons.storefront_outlined,
+    ),
+    _OrderLane(
+      key: 'shipping',
+      label: 'Despacho',
+      icon: Icons.local_shipping_outlined,
+    ),
+    _OrderLane(
+      key: 'closed',
+      label: 'Cerrados',
+      icon: Icons.task_alt_outlined,
+    ),
+    _OrderLane(
+      key: 'all',
+      label: 'Todos',
+      icon: Icons.view_list_outlined,
+    ),
+  ];
 
   final TextEditingController _searchController = TextEditingController();
 
-  String _selectedLane = 'attention';
+  String _selectedLane = 'all';
   String _selectedStatus = 'all';
   String _selectedPaymentStatus = 'all';
+  String _selectedInspectorSection = 'workflow';
   String _searchQuery = '';
   String? _selectedOrderId;
   String? _busyOrderId;
@@ -94,58 +137,48 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final filteredOrders = _filterOrders(allOrders);
     final selectedOrder = _resolveSelectedOrder(filteredOrders);
 
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildHeader(context, websiteService, allOrders),
-        _buildSummaryStrip(allOrders),
-        _buildLaneStrip(allOrders),
-        _buildToolbar(filteredOrders.length),
-        Expanded(
-          child: websiteService.isLoading && allOrders.isEmpty
-              ? const Center(child: BrandedLoading())
-              : filteredOrders.isEmpty
-                  ? _buildEmptyState()
+    final body = SelectionContainer.disabled(
+      child: Container(
+        color: _softSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(
+              context,
+              websiteService,
+              allOrders,
+              visibleCount: filteredOrders.length,
+            ),
+            Expanded(
+              child: websiteService.isLoading && allOrders.isEmpty
+                  ? const Center(child: BrandedLoading())
                   : ConstraintLayoutBuilder(
                       builder: (context, constraints) {
                         final isDesktop =
                             constraints.maxWidth >= _desktopBreakpoint;
 
                         if (!isDesktop) {
-                          return _buildMobileOrdersList(
+                          return _buildCompactWorkbench(
                             context,
                             websiteService,
+                            allOrders,
                             filteredOrders,
                           );
                         }
 
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              width: 430,
-                              child: _buildOrdersList(
-                                context,
-                                filteredOrders,
-                                selectedOrder,
-                              ),
-                            ),
-                            const VerticalDivider(width: 1),
-                            Expanded(
-                              child: selectedOrder == null
-                                  ? _buildNoSelectionState()
-                                  : _buildOrderInspector(
-                                      context,
-                                      websiteService,
-                                      selectedOrder,
-                                    ),
-                            ),
-                          ],
+                        return _buildDesktopWorkbench(
+                          context,
+                          websiteService,
+                          allOrders,
+                          filteredOrders,
+                          selectedOrder,
                         );
                       },
                     ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
 
     if (widget.embedded) return body;
@@ -173,331 +206,119 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           order.customerEmail.toLowerCase().contains(query) ||
           (order.customerPhone ?? '').toLowerCase().contains(query);
     }).toList()
-      ..sort((a, b) {
-        final priorityCompare = _orderPriority(a).compareTo(_orderPriority(b));
-        if (priorityCompare != 0) return priorityCompare;
-        return b.createdAt.compareTo(a.createdAt);
-      });
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return filtered;
   }
 
   OnlineOrder? _resolveSelectedOrder(List<OnlineOrder> orders) {
-    if (orders.isEmpty) return null;
+    final selectedId = _selectedOrderId?.trim();
+    if (selectedId == null || selectedId.isEmpty) return null;
 
-    final selectedId = _selectedOrderId;
-    if (selectedId != null) {
-      for (final order in orders) {
-        if (order.id == selectedId) return order;
-      }
+    for (final order in orders) {
+      if (order.id == selectedId) return order;
     }
 
-    return orders.first;
+    return null;
   }
 
   Widget _buildHeader(
     BuildContext context,
     WebsiteService websiteService,
-    List<OnlineOrder> orders,
-  ) {
+    List<OnlineOrder> orders, {
+    required int visibleCount,
+  }) {
     final theme = Theme.of(context);
     final pendingCount =
         orders.where((order) => order.status == 'pending').length;
+    final blockedCount = _laneCount(orders, 'blocked');
+    final prepareCount = _laneCount(orders, 'prepare');
+    final summary =
+        '$visibleCount visibles · $blockedCount bloqueados · $prepareCount para preparar';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: _borderColor)),
-      ),
-      child: Row(
-        children: [
-          if (!widget.embedded) ...[
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Volver',
-              onPressed: () => context.go('/website'),
-            ),
-            const SizedBox(width: 4),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pedidos online',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  pendingCount == 0
-                      ? 'Ventas web sincronizadas con facturación e inventario'
-                      : '$pendingCount pedido${pendingCount == 1 ? '' : 's'} pendiente${pendingCount == 1 ? '' : 's'} de gestión',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => websiteService.loadOrders(),
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Actualizar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryStrip(List<OnlineOrder> orders) {
-    final newOrders = orders.where((order) => order.status == 'pending').length;
-    final paid = orders.where((order) => order.paymentStatus == 'paid').length;
-    final awaitingCoordination = orders.where(_needsCoordination).length;
-    final readyForPickup =
-        orders.where((order) => order.status == 'ready_for_pickup').length;
-    final blocked = orders.where(_isFulfillmentBlocked).length;
-
-    return Container(
-      color: _softSurface,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          _buildMetricPill(
-              'Nuevos', newOrders.toString(), Icons.fiber_new_outlined),
-          _buildMetricPill('Pagados', paid.toString(), Icons.payments_outlined),
-          _buildMetricPill('Por coordinar', awaitingCoordination.toString(),
-              Icons.forum_outlined),
-          _buildMetricPill('Listo retiro', readyForPickup.toString(),
-              Icons.storefront_outlined),
-          _buildMetricPill(
-              'Bloqueados', blocked.toString(), Icons.report_problem_outlined),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricPill(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.grey[700]),
-          const SizedBox(width: 8),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLaneStrip(List<OnlineOrder> orders) {
-    final lanes = [
-      const _OrderLane(
-        key: 'attention',
-        label: 'Atención',
-        icon: Icons.priority_high_outlined,
-      ),
-      const _OrderLane(
-        key: 'blocked',
-        label: 'Bloqueados',
-        icon: Icons.report_problem_outlined,
-      ),
-      const _OrderLane(
-        key: 'prepare',
-        label: 'Preparar',
-        icon: Icons.inventory_2_outlined,
-      ),
-      const _OrderLane(
-        key: 'coordination',
-        label: 'Coordinar',
-        icon: Icons.forum_outlined,
-      ),
-      const _OrderLane(
-        key: 'pickup',
-        label: 'Retiro',
-        icon: Icons.storefront_outlined,
-      ),
-      const _OrderLane(
-        key: 'shipping',
-        label: 'Despacho',
-        icon: Icons.local_shipping_outlined,
-      ),
-      const _OrderLane(
-        key: 'closed',
-        label: 'Cerrados',
-        icon: Icons.task_alt_outlined,
-      ),
-      const _OrderLane(
-        key: 'all',
-        label: 'Todos',
-        icon: Icons.view_list_outlined,
-      ),
-    ];
-
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final lane in lanes) ...[
-              _buildLaneChip(
-                lane,
-                count: orders
-                    .where((order) => _matchesLane(order, lane.key))
-                    .length,
-                selected: _selectedLane == lane.key,
-              ),
-              const SizedBox(width: 8),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLaneChip(
-    _OrderLane lane, {
-    required int count,
-    required bool selected,
-  }) {
-    final color = selected ? _accentBlue : const Color(0xFF475569);
-
-    return Material(
-      color: selected ? _accentBlue.withValues(alpha: 0.06) : Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _selectedLane = lane.key;
-            _selectedOrderId = null;
-          });
-        },
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? _accentBlue : _borderColor,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(lane.icon, size: 16, color: color),
-              const SizedBox(width: 7),
-              Text(
-                lane.label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                '$count',
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToolbar(int visibleCount) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: _borderColor)),
       ),
       child: ConstraintLayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 760;
-          final filters = [
-            _buildFilterDropdown(
-              label: 'Estado',
-              value: _selectedStatus,
-              options: const {
-                'all': 'Todos',
-                'pending': 'Pendiente',
-                'confirmed': 'Confirmado',
-                'processing': 'Preparación',
-                'ready_for_pickup': 'Listo retiro',
-                'shipped': 'Enviado',
-                'delivered': 'Entregado',
-                'cancelled': 'Cancelado',
-              },
-              onChanged: (value) => setState(() => _selectedStatus = value),
-            ),
-            _buildFilterDropdown(
-              label: 'Pago',
-              value: _selectedPaymentStatus,
-              options: const {
-                'all': 'Todos',
-                'pending': 'Pendiente',
-                'paid': 'Pagado',
-                'failed': 'Fallido',
-                'refunded': 'Reembolsado',
-              },
-              onChanged: (value) =>
-                  setState(() => _selectedPaymentStatus = value),
-            ),
-          ];
+          final isNarrow = constraints.maxWidth < 720;
+          final titleBlock = Row(
+            children: [
+              if (!widget.embedded) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                  onPressed: () => context.go('/website'),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pedidos online',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      pendingCount == 0
+                          ? 'Ventas web sincronizadas con facturación e inventario'
+                          : '$pendingCount pedido${pendingCount == 1 ? '' : 's'} pendiente${pendingCount == 1 ? '' : 's'} de gestión',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+          final refreshButton = OutlinedButton.icon(
+            onPressed: () => websiteService.loadOrders(),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Actualizar'),
+          );
 
           if (isNarrow) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildSearchField(),
+                titleBlock,
                 const SizedBox(height: 10),
-                Wrap(spacing: 10, runSpacing: 10, children: filters),
-                const SizedBox(height: 8),
-                Text('$visibleCount pedidos visibles', style: _hintStyle),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _hintStyle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    refreshButton,
+                  ],
+                ),
               ],
             );
           }
 
           return Row(
             children: [
-              SizedBox(width: 320, child: _buildSearchField()),
-              const SizedBox(width: 12),
-              ...filters.map(
-                (filter) => Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: filter,
-                ),
-              ),
-              const Spacer(),
-              Text('$visibleCount pedidos visibles', style: _hintStyle),
+              Expanded(child: titleBlock),
+              const SizedBox(width: 16),
+              Text(summary, style: _hintStyle),
+              const SizedBox(width: 16),
+              refreshButton,
             ],
           );
         },
@@ -505,7 +326,307 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
-  Widget _buildSearchField() {
+  Widget _buildDesktopWorkbench(
+    BuildContext context,
+    WebsiteService websiteService,
+    List<OnlineOrder> allOrders,
+    List<OnlineOrder> filteredOrders,
+    OnlineOrder? selectedOrder,
+  ) {
+    return ConstraintLayoutBuilder(
+      builder: (context, constraints) {
+        final showInspector = selectedOrder != null;
+        final inspectorWidth = showInspector
+            ? (constraints.maxWidth * 0.44).clamp(460.0, 620.0)
+            : 0.0;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildToolbar(
+                      allOrders,
+                      filteredOrders.length,
+                    ),
+                    Expanded(
+                      child: filteredOrders.isEmpty
+                          ? _buildEmptyState()
+                          : _buildOrdersDenseList(
+                              context,
+                              filteredOrders,
+                              selectedOrder,
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: inspectorWidth,
+              decoration: const BoxDecoration(
+                border: Border(left: BorderSide(color: _borderColor)),
+              ),
+              child: showInspector
+                  ? _buildOrderInspector(
+                      context,
+                      websiteService,
+                      selectedOrder,
+                      onClose: () => setState(() => _selectedOrderId = null),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactWorkbench(
+    BuildContext context,
+    WebsiteService websiteService,
+    List<OnlineOrder> allOrders,
+    List<OnlineOrder> filteredOrders,
+  ) {
+    return Column(
+      children: [
+        _buildToolbar(allOrders, filteredOrders.length),
+        Expanded(
+          child: filteredOrders.isEmpty
+              ? _buildEmptyState()
+              : _buildMobileOrdersList(
+                  context,
+                  websiteService,
+                  filteredOrders,
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildToolbar(
+    List<OnlineOrder> orders,
+    int visibleCount,
+  ) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: ConstraintLayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 980;
+          final isTight = constraints.maxWidth < 620;
+          final filters = _buildToolbarFilters();
+
+          if (isWide) {
+            return Row(
+              children: [
+                Expanded(child: _buildLaneBar(orders)),
+                const SizedBox(width: 12),
+                Text('$visibleCount visibles', style: _hintStyle),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 340,
+                  child: _buildSearchField(isDense: true),
+                ),
+                const SizedBox(width: 10),
+                filters,
+              ],
+            );
+          }
+
+          if (isTight) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildLaneBar(orders),
+                const SizedBox(height: 10),
+                _buildSearchField(isDense: true),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: filters),
+                    const SizedBox(width: 10),
+                    Text('$visibleCount', style: _hintStyle),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildLaneBar(orders),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _buildSearchField(isDense: true)),
+                  const SizedBox(width: 10),
+                  filters,
+                  const SizedBox(width: 10),
+                  Text('$visibleCount', style: _hintStyle),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLaneBar(List<OnlineOrder> orders) {
+    final currentLane = _lanes.any((lane) => lane.key == _selectedLane)
+        ? _selectedLane
+        : 'attention';
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _lanes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final lane = _lanes[index];
+          final selected = lane.key == currentLane;
+          final count = _laneCount(orders, lane.key);
+
+          return OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                _selectedLane = lane.key;
+                _selectedOrderId = null;
+              });
+            },
+            icon: Icon(lane.icon, size: 16),
+            label: Text('${lane.label} $count'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: selected ? _accentBlue : const Color(0xFF475569),
+              backgroundColor:
+                  selected ? _accentBlue.withValues(alpha: 0.06) : null,
+              side: BorderSide(
+                color: selected ? _accentBlue : _borderColor,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              minimumSize: const Size(0, 36),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildToolbarFilters() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildPillMenu(
+          label: 'Estado',
+          value: _selectedStatus,
+          options: const {
+            'all': 'Todos',
+            'pending': 'Pendiente',
+            'confirmed': 'Confirmado',
+            'processing': 'Preparación',
+            'ready_for_pickup': 'Listo retiro',
+            'shipped': 'Enviado',
+            'delivered': 'Entregado',
+            'cancelled': 'Cancelado',
+          },
+          onSelected: (next) => setState(() => _selectedStatus = next),
+        ),
+        const SizedBox(width: 8),
+        _buildPillMenu(
+          label: 'Pago',
+          value: _selectedPaymentStatus,
+          options: const {
+            'all': 'Todos',
+            'pending': 'Pendiente',
+            'paid': 'Pagado',
+            'failed': 'Fallido',
+            'refunded': 'Reembolsado',
+          },
+          onSelected: (next) => setState(() => _selectedPaymentStatus = next),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPillMenu({
+    required String label,
+    required String value,
+    required Map<String, String> options,
+    required ValueChanged<String> onSelected,
+  }) {
+    final selectedLabel = options[value] ?? options['all'] ?? label;
+
+    return PopupMenuButton<String>(
+      initialValue: value,
+      tooltip: label,
+      onSelected: onSelected,
+      itemBuilder: (context) => options.entries
+          .map(
+            (entry) => PopupMenuItem(
+              value: entry.key,
+              child: Row(
+                children: [
+                  Icon(
+                    entry.key == value ? Icons.check : Icons.circle_outlined,
+                    size: 16,
+                    color: entry.key == value
+                        ? _accentBlue
+                        : const Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(entry.value),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$label: $selectedLabel',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.expand_more, size: 18, color: Color(0xFF475569)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField({bool isDense = false}) {
     return TextField(
       controller: _searchController,
       onChanged: (value) => setState(() => _searchQuery = value),
@@ -522,197 +643,156 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   setState(() => _searchQuery = '');
                 },
               ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            EdgeInsets.symmetric(horizontal: 12, vertical: isDense ? 10 : 12),
       ),
     );
   }
 
-  Widget _buildFilterDropdown({
-    required String label,
-    required String value,
-    required Map<String, String> options,
-    required ValueChanged<String> onChanged,
-  }) {
-    return SizedBox(
-      width: 170,
-      child: DropdownButtonFormField<String>(
-        initialValue: value,
-        isDense: true,
-        decoration: InputDecoration(
-          labelText: label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        ),
-        items: options.entries
-            .map((entry) => DropdownMenuItem(
-                  value: entry.key,
-                  child: Text(entry.value),
-                ))
-            .toList(),
-        onChanged: (next) => onChanged(next ?? 'all'),
-      ),
-    );
-  }
-
-  Widget _buildOrdersList(
+  Widget _buildOrdersDenseList(
     BuildContext context,
     List<OnlineOrder> orders,
     OnlineOrder? selectedOrder,
   ) {
-    return Container(
-      color: Colors.white,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: orders.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          return _buildOrderListItem(
-            order,
-            selected: order.id == selectedOrder?.id,
-            onTap: () => setState(() => _selectedOrderId = order.id),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMobileOrdersList(
-    BuildContext context,
-    WebsiteService websiteService,
-    List<OnlineOrder> orders,
-  ) {
     return ListView.separated(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.only(top: 6, bottom: 6),
       itemCount: orders.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: _borderColor),
       itemBuilder: (context, index) {
         final order = orders[index];
-        return Column(
-          children: [
-            _buildOrderListItem(
-              order,
-              selected: _selectedOrderId == order.id,
-              onTap: () => setState(() => _selectedOrderId = order.id),
-            ),
-            if (_selectedOrderId == order.id)
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                decoration: _panelDecoration,
-                child: _buildOrderInspector(context, websiteService, order),
-              ),
-          ],
+        final selected = order.id == selectedOrder?.id;
+        return _buildOrderRow(
+          order,
+          selected: selected,
+          onTap: () => setState(() {
+            _selectedOrderId = selected ? null : order.id;
+          }),
         );
       },
     );
   }
 
-  Widget _buildOrderListItem(
+  Widget _buildOrderRow(
     OnlineOrder order, {
     required bool selected,
     required VoidCallback onTap,
   }) {
     final statusTone = _getStatusTone(order.status);
-    final queueSignals = _buildQueueSignals(order);
+    final priorityTone =
+        _isFulfillmentBlocked(order) ? const Color(0xFFB91C1C) : statusTone;
 
     return Material(
-      color: selected ? _accentBlue.withValues(alpha: 0.04) : Colors.white,
-      borderRadius: BorderRadius.circular(8),
+      color: selected ? _accentBlue.withValues(alpha: 0.03) : Colors.white,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? _accentBlue : _borderColor,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Column(
+        hoverColor: _accentBlue.withValues(alpha: 0.025),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      order.orderNumber,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        letterSpacing: 0.2,
-                      ),
+              Container(
+                width: 3,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: priorityTone,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            order.orderNumber,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          ChileanUtils.formatDate(order.createdAt),
+                          style: _hintStyle,
+                        ),
+                      ],
                     ),
-                  ),
-                  _buildCompactBadge(order.statusDisplayName, statusTone),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                order.customerName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                order.customerEmail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _hintStyle,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(Icons.schedule_outlined,
-                      size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 5),
-                  Text(ChileanUtils.formatDate(order.createdAt),
-                      style: _hintStyle),
-                  const SizedBox(width: 12),
-                  Icon(
-                    order.deliveryType == 'pickup'
-                        ? Icons.storefront_outlined
-                        : Icons.local_shipping_outlined,
-                    size: 14,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      order.deliveryDisplayName,
-                      overflow: TextOverflow.ellipsis,
-                      style: _hintStyle,
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            order.customerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Icon(
+                          order.deliveryType == 'pickup'
+                              ? Icons.storefront_outlined
+                              : Icons.local_shipping_outlined,
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: Text(
+                            order.deliveryDisplayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _hintStyle,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    _buildAttentionRow(order),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              _buildAttentionRow(order),
-              if (queueSignals.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: queueSignals),
-              ],
-              const SizedBox(height: 10),
-              Row(
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _buildCompactBadge(
-                    order.paymentStatusDisplayName,
-                    _getPaymentTone(order.paymentStatus),
-                  ),
-                  const Spacer(),
                   Text(
                     ChileanUtils.formatCurrency(order.total),
                     style: const TextStyle(
                       color: _accentBlue,
                       fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      _buildCompactBadge(
+                        order.statusDisplayName,
+                        statusTone,
+                      ),
+                      _buildCompactBadge(
+                        order.paymentStatusDisplayName,
+                        _getPaymentTone(order.paymentStatus),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -723,6 +803,221 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
+  Widget _buildMobileOrdersList(
+    BuildContext context,
+    WebsiteService websiteService,
+    List<OnlineOrder> orders,
+  ) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(top: 6, bottom: 16),
+      itemCount: orders.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: _borderColor),
+      itemBuilder: (context, index) {
+        final order = orders[index];
+        final selected = _selectedOrderId == order.id;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildOrderRow(
+              order,
+              selected: selected,
+              onTap: () => setState(() {
+                _selectedOrderId = selected ? null : order.id;
+              }),
+            ),
+            if (selected)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                decoration: _panelDecoration.copyWith(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: _buildOrderInspector(
+                  context,
+                  websiteService,
+                  order,
+                  embedded: true,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Legacy card-based list item (kept temporarily).
+  // ignore: unused_element
+  Widget _buildOrderListItem(
+    OnlineOrder order, {
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final statusTone = _getStatusTone(order.status);
+    final queueSignals = _buildQueueSignals(order);
+    final visibleSignals = queueSignals.take(2).toList();
+    final hiddenSignalCount = queueSignals.length - visibleSignals.length;
+    final priorityTone =
+        _isFulfillmentBlocked(order) ? const Color(0xFFB91C1C) : statusTone;
+
+    return Material(
+      color: selected ? _accentBlue.withValues(alpha: 0.035) : Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? _accentBlue : _borderColor,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: priorityTone,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 11, 12, 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            order.orderNumber,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          ChileanUtils.formatCurrency(order.total),
+                          style: const TextStyle(
+                            color: _accentBlue,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      order.customerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule_outlined,
+                            size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 5),
+                        Text(ChileanUtils.formatDate(order.createdAt),
+                            style: _hintStyle),
+                        const SizedBox(width: 12),
+                        Icon(
+                          order.deliveryType == 'pickup'
+                              ? Icons.storefront_outlined
+                              : Icons.local_shipping_outlined,
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            order.deliveryDisplayName,
+                            overflow: TextOverflow.ellipsis,
+                            style: _hintStyle,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    _buildAttentionRow(order),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        _buildCompactBadge(order.statusDisplayName, statusTone),
+                        const SizedBox(width: 6),
+                        _buildCompactBadge(
+                          order.paymentStatusDisplayName,
+                          _getPaymentTone(order.paymentStatus),
+                        ),
+                      ],
+                    ),
+                    if (visibleSignals.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ...visibleSignals,
+                          if (hiddenSignalCount > 0)
+                            _buildQueueSignalOverflowChip(hiddenSignalCount),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  // Legacy queue signals (kept temporarily).
+  Widget _buildQueueSignalOverflowChip(int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF475569).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: const Color(0xFF475569).withValues(alpha: 0.24),
+        ),
+      ),
+      child: Text(
+        '+$count más',
+        style: const TextStyle(
+          color: Color(0xFF475569),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  // Legacy queue signals (kept temporarily).
   List<Widget> _buildQueueSignals(OnlineOrder order) {
     final signals = <Widget>[];
 
@@ -791,6 +1086,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     return signals;
   }
 
+  // ignore: unused_element
+  // Legacy queue signals (kept temporarily).
   List<Widget> _buildInventoryQueueSignals(OnlineOrder order) {
     if (_isTerminalOrder(order)) return const [];
 
@@ -852,8 +1149,11 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     return chips;
   }
 
+  // ignore: unused_element
+  // Legacy queue signals (kept temporarily).
   Widget _buildQueueSignalChip(String label, IconData icon, Color color) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.06),
@@ -865,12 +1165,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -908,146 +1212,160 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   Widget _buildOrderInspector(
     BuildContext context,
     WebsiteService websiteService,
-    OnlineOrder order,
-  ) {
-    final theme = Theme.of(context);
+    OnlineOrder order, {
+    VoidCallback? onClose,
+    bool embedded = false,
+  }) {
     final busy = _busyOrderId == order.id;
+    final blockers = _blockerLabels(order);
+    final readiness = _inventoryReadinessForOrder(order);
+
+    final inspectorBody = ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      shrinkWrap: embedded,
+      primary: !embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
+      children: [
+        _buildInspectorIdentityBar(order, onClose: onClose),
+        const SizedBox(height: 10),
+        _buildFlatActionBar(context, websiteService, order, busy: busy),
+        const SizedBox(height: 12),
+        _buildInspectorTabs(),
+        const SizedBox(height: 12),
+        ..._buildInspectorSection(
+          context,
+          websiteService,
+          order,
+          blockers,
+          readiness,
+          busy: busy,
+        ),
+      ],
+    );
 
     return Container(
-      color: _softSurface,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            decoration: _panelDecoration,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      color: embedded ? Colors.transparent : _softSurface,
+      child: inspectorBody,
+    );
+  }
+
+  List<Widget> _buildInspectorSection(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order,
+    List<String> blockers,
+    _OrderInventoryReadiness readiness, {
+    required bool busy,
+  }) {
+    switch (_selectedInspectorSection) {
+      case 'products':
+        return [
+          _buildItemsPanel(order),
+          const SizedBox(height: 8),
+          _buildTotalsPanel(order),
+        ];
+      case 'customer':
+        return [
+          _buildCompactInfoStrip(order),
+        ];
+      case 'activity':
+        return [
+          _buildInlineNotes(context, websiteService, order, busy: busy),
+          const SizedBox(height: 12),
+          _buildTimelinePanel(order),
+        ];
+      case 'workflow':
+      default:
+        return [
+          _buildStatusStrip(order, blockers),
+          const SizedBox(height: 12),
+          _buildCombinedChecklistAndInventory(order, readiness),
+        ];
+    }
+  }
+
+  Widget _buildInspectorIdentityBar(
+    OnlineOrder order, {
+    VoidCallback? onClose,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: ConstraintLayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 620;
+          final title = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                order.orderNumber,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${order.customerName} · ${ChileanUtils.formatDate(order.createdAt)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _hintStyle,
+              ),
+            ],
+          );
+          final closeButton = onClose == null
+              ? null
+              : IconButton(
+                  tooltip: 'Cerrar',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close),
+                );
+          final badges = Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: isNarrow ? WrapAlignment.start : WrapAlignment.end,
+            children: [
+              _buildCompactBadge(
+                order.statusDisplayName,
+                _getStatusTone(order.status),
+              ),
+              _buildCompactBadge(
+                order.paymentStatusDisplayName,
+                _getPaymentTone(order.paymentStatus),
+              ),
+            ],
+          );
+          final total = Text(
+            ChileanUtils.formatCurrency(order.total),
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: _accentBlue,
+            ),
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            order.orderNumber,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Creado ${ChileanUtils.formatDate(order.createdAt)}',
-                            style: _hintStyle,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _buildCompactBadge(
-                          order.statusDisplayName,
-                          _getStatusTone(order.status),
-                        ),
-                        const SizedBox(height: 6),
-                        _buildCompactBadge(
-                          order.paymentStatusDisplayName,
-                          _getPaymentTone(order.paymentStatus),
-                        ),
-                      ],
-                    ),
+                    Expanded(child: title),
+                    if (closeButton != null) closeButton,
                   ],
                 ),
-                const SizedBox(height: 16),
-                _buildWorkflowActions(
-                  context,
-                  websiteService,
-                  order,
-                  busy: busy,
-                ),
-                const SizedBox(height: 12),
-                _buildWorkflowBrief(order),
-                const SizedBox(height: 12),
-                _buildOperationalChecklist(order),
-                const SizedBox(height: 12),
-                _buildInventoryReadinessPanel(order),
-                const SizedBox(height: 12),
-                _buildTimelinePanel(order),
-                const SizedBox(height: 18),
-                _buildInfoGrid(order),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildNotesPanel(context, websiteService, order, busy: busy),
-          const SizedBox(height: 12),
-          _buildItemsPanel(order),
-          const SizedBox(height: 12),
-          _buildTotalsPanel(order),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWorkflowActions(
-    BuildContext context,
-    WebsiteService websiteService,
-    OnlineOrder order, {
-    required bool busy,
-  }) {
-    final primaryAction = _buildPrimaryActionButton(
-      context,
-      websiteService,
-      order,
-      busy: busy,
-    );
-    final secondaryActions = _buildSecondaryActionButtons(
-      context,
-      websiteService,
-      order,
-      busy: busy,
-    );
-
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: SafeLayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 680;
-          final primaryColumn = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Acción recomendada', style: _hintStyle),
-              const SizedBox(height: 8),
-              primaryAction ?? _buildPassiveActionState(order),
-            ],
-          );
-          final secondaryColumn = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Acciones secundarias', style: _hintStyle),
-              const SizedBox(height: 8),
-              if (secondaryActions.isEmpty)
-                Text('Sin acciones adicionales', style: _hintStyle)
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: secondaryActions,
-                ),
-            ],
-          );
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                primaryColumn,
-                const Divider(height: 24),
-                secondaryColumn,
+                const SizedBox(height: 10),
+                badges,
+                const SizedBox(height: 10),
+                Align(alignment: Alignment.centerLeft, child: total),
               ],
             );
           }
@@ -1055,17 +1373,526 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 260, child: primaryColumn),
-              Container(
-                width: 1,
-                height: 72,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                color: _borderColor,
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: title),
+                    if (closeButton != null) closeButton,
+                  ],
+                ),
               ),
-              Expanded(child: secondaryColumn),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  total,
+                  const SizedBox(height: 8),
+                  badges,
+                ],
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildInspectorTabs() {
+    const tabs = [
+      _InspectorTab('workflow', 'Operación', Icons.fact_check_outlined),
+      _InspectorTab('products', 'Productos', Icons.inventory_2_outlined),
+      _InspectorTab('customer', 'Cliente', Icons.person_outline),
+      _InspectorTab('activity', 'Actividad', Icons.timeline_outlined),
+    ];
+
+    return Container(
+      decoration: _panelDecoration,
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final tab in tabs) _buildInspectorTab(tab),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInspectorTab(_InspectorTab tab) {
+    final selected = _selectedInspectorSection == tab.key;
+    final color = selected ? _accentBlue : const Color(0xFF475569);
+
+    return Material(
+      color: selected ? _accentBlue.withValues(alpha: 0.06) : Colors.white,
+      child: InkWell(
+        onTap: () => setState(() => _selectedInspectorSection = tab.key),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? _accentBlue : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(tab.icon, size: 16, color: color),
+              const SizedBox(width: 7),
+              Text(
+                tab.label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlatActionBar(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    final primary = _buildPrimaryActionButton(
+      context,
+      websiteService,
+      order,
+      busy: busy,
+    );
+    final secondary = _buildSecondaryActionRow(
+      context,
+      websiteService,
+      order,
+      busy: busy,
+    );
+    final blockers = _blockerLabels(order);
+    final tone = blockers.isEmpty ? _getStatusTone(order.status) : Colors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(_attentionIcon(order), size: 20, color: tone),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Siguiente acción', style: _hintStyle),
+                    const SizedBox(height: 2),
+                    Text(
+                      _nextActionLabel(order),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (blockers.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        blockers.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.red[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (primary != null) ...[
+            const SizedBox(height: 12),
+            primary,
+          ],
+          if (secondary != null) ...[
+            const SizedBox(height: 10),
+            secondary,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusStrip(OnlineOrder order, List<String> blockers) {
+    final cells = [
+      _buildBriefCell(
+        'Siguiente acción',
+        _nextActionLabel(order),
+        _attentionIcon(order),
+        _isFulfillmentBlocked(order)
+            ? const Color(0xFFB91C1C)
+            : _getStatusTone(order.status),
+      ),
+      _buildBriefCell(
+        order.deliveryType == 'pickup' ? 'Retiro' : 'Despacho',
+        order.deliveryType == 'pickup'
+            ? _pickupFulfillmentLabel(order)
+            : _shippingFulfillmentLabel(order),
+        order.deliveryType == 'pickup'
+            ? Icons.storefront_outlined
+            : Icons.local_shipping_outlined,
+        const Color(0xFF475569),
+      ),
+      _buildBriefCell(
+        'Estado de bloqueos',
+        blockers.isEmpty ? 'Sin bloqueos' : blockers.join(' · '),
+        blockers.isEmpty
+            ? Icons.check_circle_outline
+            : Icons.report_problem_outlined,
+        blockers.isEmpty ? const Color(0xFF047857) : const Color(0xFFB91C1C),
+      ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: ConstraintLayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 720;
+          if (isNarrow) {
+            return Column(
+              children: [
+                for (var i = 0; i < cells.length; i++) ...[
+                  if (i > 0) const Divider(height: 18),
+                  cells[i],
+                ],
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < cells.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    width: 1,
+                    height: 38,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    color: _borderColor,
+                  ),
+                Expanded(child: cells[i]),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCompactInfoStrip(OnlineOrder order) {
+    final deliveryRows = order.deliveryType == 'pickup'
+        ? [
+            _InfoRow('Tipo', order.deliveryDisplayName),
+            _InfoRow('Punto', order.shippingAddressDisplay),
+          ]
+        : [
+            _InfoRow('Tipo', order.deliveryDisplayName),
+            _InfoRow('Dirección', order.shippingAddressDisplay),
+            if (order.shippingCity?.isNotEmpty == true)
+              _InfoRow('Comuna', order.shippingCity!),
+          ];
+
+    final cards = [
+      _buildMiniInfoCard(
+        'Cliente',
+        Icons.person_outline,
+        [
+          _InfoRow('Nombre', order.customerName),
+          _InfoRow('Email', order.customerEmail),
+          _InfoRow('Teléfono', order.customerPhone ?? 'Sin teléfono'),
+        ],
+      ),
+      _buildMiniInfoCard(
+        'Entrega',
+        Icons.local_shipping_outlined,
+        deliveryRows,
+      ),
+      _buildMiniInfoCard(
+        'Pago',
+        Icons.payments_outlined,
+        [
+          _InfoRow('Método', _formatPaymentMethod(order.paymentMethod)),
+          _InfoRow('Referencia', order.paymentReference ?? 'Sin referencia'),
+          _InfoRow(
+            'Pagado',
+            order.paidAt == null
+                ? 'Sin fecha'
+                : ChileanUtils.formatDate(order.paidAt!),
+          ),
+        ],
+      ),
+    ];
+
+    return ConstraintLayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                cards[i],
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(child: cards[i]),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMiniInfoCard(
+    String title,
+    IconData icon,
+    List<_InfoRow> rows,
+  ) {
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: _accentBlue),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 60,
+                    child: Text(row.label,
+                        style: _hintStyle.copyWith(fontSize: 11)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCombinedChecklistAndInventory(
+    OnlineOrder order,
+    _OrderInventoryReadiness readiness,
+  ) {
+    final checkpoints = _buildOrderCheckpoints(order);
+    final color = _inventoryReadinessColor(readiness.level);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fact_check_outlined,
+                  size: 15, color: _accentBlue),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Checklist operativo',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(readiness.icon, size: 14, color: color),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  'Inventario: ${readiness.title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: checkpoints
+                .map((cp) => _buildCompactCheckpointChip(cp))
+                .toList(),
+          ),
+          if (readiness.level != _InventoryReadinessLevel.ready &&
+              readiness.items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            ...readiness.items.map((r) => _buildInventoryReadinessRow(r)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactCheckpointChip(_OrderCheckpoint checkpoint) {
+    final color = _checkpointColor(checkpoint.level);
+    final icon = _checkpointIcon(checkpoint.level);
+    return Tooltip(
+      message: checkpoint.detail,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.30)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(
+              checkpoint.title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineNotes(
+    BuildContext context,
+    WebsiteService websiteService,
+    OnlineOrder order, {
+    required bool busy,
+  }) {
+    final customerNotes = _emptyFallback(order.customerNotes);
+    final internalNotes = _emptyFallback(order.internalNotes);
+
+    return Container(
+      decoration: _panelDecoration,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sticky_note_2_outlined,
+                  size: 15, color: _accentBlue),
+              const SizedBox(width: 7),
+              const Text(
+                'Notas',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => _editInternalNotes(
+                          context,
+                          websiteService,
+                          order,
+                        ),
+                icon: const Icon(Icons.edit_note_outlined, size: 16),
+                label: const Text('Editar interna'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ConstraintLayoutBuilder(
+            builder: (context, constraints) {
+              final blocks = [
+                _buildNoteBlock('Cliente', customerNotes, Icons.person_outline),
+                _buildNoteBlock('Interna', internalNotes, Icons.lock_outline),
+              ];
+              if (constraints.maxWidth < 620) {
+                return Column(
+                  children: [
+                    blocks[0],
+                    const SizedBox(height: 8),
+                    blocks[1],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: blocks[0]),
+                  const SizedBox(width: 8),
+                  Expanded(child: blocks[1]),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -1174,13 +2001,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
-  List<Widget> _buildSecondaryActionButtons(
+  Widget? _buildSecondaryActionRow(
     BuildContext context,
     WebsiteService websiteService,
     OnlineOrder order, {
     required bool busy,
   }) {
-    final actions = <Widget>[];
     final hasPhone = _hasCustomerPhone(order);
     final primaryIsInvoice = order.status == 'confirmed' &&
         order.salesInvoiceId == null &&
@@ -1188,172 +2014,151 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final primaryIsPayment =
         order.status == 'pending' && _canConfirmPayment(order);
 
-    if (hasPhone && !_isTerminalOrder(order)) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy
-              ? null
-              : () => _openOrderMessagingConversation(
-                    context,
-                    order,
-                  ),
-          icon: const Icon(Icons.chat_bubble_outline, size: 18),
-          label: const Text('Mensajería'),
-        ),
-      );
-    }
+    final canMessage = hasPhone && !_isTerminalOrder(order);
+    final canViewInvoice = order.salesInvoiceId != null;
+    final overflowActions = <_InspectorOverflowAction>[];
 
     if (order.salesInvoiceId == null &&
         order.paymentStatus == 'paid' &&
         !primaryIsInvoice) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed:
-              busy ? null : () => _processOrder(context, websiteService, order),
-          icon: const Icon(Icons.receipt_long_outlined, size: 18),
-          label: const Text('Crear factura'),
-        ),
-      );
+      overflowActions.add(_InspectorOverflowAction.createInvoice);
     }
 
     if (_canConfirmPayment(order) && !primaryIsPayment) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy
-              ? null
-              : () => _confirmOrderPayment(context, websiteService, order),
-          icon: const Icon(Icons.payments_outlined, size: 18),
-          label: const Text('Confirmar pago'),
-        ),
-      );
-    }
-
-    if (order.salesInvoiceId != null) {
-      actions.add(
-        OutlinedButton.icon(
-          onPressed: busy
-              ? null
-              : () => context.go(
-                    '/sales/invoices/${order.salesInvoiceId}',
-                  ),
-          icon: const Icon(Icons.receipt_long_outlined, size: 18),
-          label: const Text('Ver factura'),
-        ),
-      );
+      overflowActions.add(_InspectorOverflowAction.confirmPayment);
     }
 
     if (!_isTerminalOrder(order)) {
-      actions.add(
-        TextButton.icon(
-          onPressed:
-              busy ? null : () => _cancelOrder(context, websiteService, order),
-          icon: const Icon(Icons.cancel_outlined, size: 18),
-          label: const Text('Cancelar'),
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.red[700],
-          ),
-        ),
-      );
+      overflowActions.add(_InspectorOverflowAction.cancelOrder);
     }
 
-    return actions;
-  }
+    if (!canMessage && !canViewInvoice && overflowActions.isEmpty) {
+      return null;
+    }
 
-  Widget _buildPassiveActionState(OnlineOrder order) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _softSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
-      ),
-      child: Row(
-        children: [
-          Icon(_attentionIcon(order), size: 18, color: Colors.grey[700]),
+    final iconStyle = IconButton.styleFrom(
+      backgroundColor: _accentBlue.withValues(alpha: 0.06),
+      foregroundColor: const Color(0xFF334155),
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(38, 38),
+    );
+
+    return Row(
+      mainAxisAlignment: (canMessage || canViewInvoice)
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.end,
+      children: [
+        if (canMessage)
+          IconButton(
+            tooltip: 'Mensajería',
+            style: iconStyle,
+            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+            onPressed: busy
+                ? null
+                : () => _openOrderMessagingConversation(
+                      context,
+                      order,
+                    ),
+          ),
+        if (canMessage && (canViewInvoice || overflowActions.isNotEmpty))
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _nextActionLabel(order),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+        if (canViewInvoice)
+          IconButton(
+            tooltip: 'Ver factura',
+            style: iconStyle,
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            onPressed: busy
+                ? null
+                : () => context.go('/sales/invoices/${order.salesInvoiceId}'),
+          ),
+        if ((canMessage || canViewInvoice) && overflowActions.isNotEmpty)
+          const Spacer(),
+        if (overflowActions.isNotEmpty)
+          PopupMenuButton<_InspectorOverflowAction>(
+            enabled: !busy,
+            tooltip: 'Más acciones',
+            onSelected: (action) {
+              switch (action) {
+                case _InspectorOverflowAction.createInvoice:
+                  _processOrder(context, websiteService, order);
+                  break;
+                case _InspectorOverflowAction.confirmPayment:
+                  _confirmOrderPayment(context, websiteService, order);
+                  break;
+                case _InspectorOverflowAction.cancelOrder:
+                  _cancelOrder(context, websiteService, order);
+                  break;
+              }
+            },
+            itemBuilder: (context) {
+              return overflowActions
+                  .map(
+                    (action) => PopupMenuItem<_InspectorOverflowAction>(
+                      value: action,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          _overflowActionIcon(action),
+                          size: 18,
+                          color: action == _InspectorOverflowAction.cancelOrder
+                              ? Colors.red[700]
+                              : const Color(0xFF334155),
+                        ),
+                        title: Text(
+                          _overflowActionLabel(action),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color:
+                                action == _InspectorOverflowAction.cancelOrder
+                                    ? Colors.red[700]
+                                    : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList();
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _accentBlue.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _borderColor),
+              ),
+              child: const Icon(
+                Icons.more_horiz,
+                size: 18,
+                color: Color(0xFF334155),
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
-  Widget _buildWorkflowBrief(OnlineOrder order) {
-    final blockers = _blockerLabels(order);
+  IconData _overflowActionIcon(_InspectorOverflowAction action) {
+    switch (action) {
+      case _InspectorOverflowAction.createInvoice:
+        return Icons.receipt_long_outlined;
+      case _InspectorOverflowAction.confirmPayment:
+        return Icons.payments_outlined;
+      case _InspectorOverflowAction.cancelOrder:
+        return Icons.cancel_outlined;
+    }
+  }
 
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: SafeLayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 640;
-          final sections = [
-            _buildBriefCell(
-              'Siguiente acción',
-              _nextActionLabel(order),
-              _attentionIcon(order),
-              _isFulfillmentBlocked(order)
-                  ? const Color(0xFFB91C1C)
-                  : _getStatusTone(order.status),
-            ),
-            _buildBriefCell(
-              'Cumplimiento',
-              order.deliveryType == 'pickup'
-                  ? _pickupFulfillmentLabel(order)
-                  : _shippingFulfillmentLabel(order),
-              order.deliveryType == 'pickup'
-                  ? Icons.storefront_outlined
-                  : Icons.local_shipping_outlined,
-              const Color(0xFF475569),
-            ),
-            _buildBriefCell(
-              'Riesgo',
-              blockers.isEmpty ? 'Sin bloqueos visibles' : blockers.join(' · '),
-              blockers.isEmpty
-                  ? Icons.check_circle_outline
-                  : Icons.report_problem_outlined,
-              blockers.isEmpty
-                  ? const Color(0xFF047857)
-                  : const Color(0xFFB91C1C),
-            ),
-          ];
-
-          if (compact) {
-            return Column(
-              children: [
-                for (var i = 0; i < sections.length; i++) ...[
-                  if (i > 0) const Divider(height: 18),
-                  sections[i],
-                ],
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              for (var i = 0; i < sections.length; i++) ...[
-                if (i > 0)
-                  Container(
-                    width: 1,
-                    height: 42,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                    color: _borderColor,
-                  ),
-                Expanded(child: sections[i]),
-              ],
-            ],
-          );
-        },
-      ),
-    );
+  String _overflowActionLabel(_InspectorOverflowAction action) {
+    switch (action) {
+      case _InspectorOverflowAction.createInvoice:
+        return 'Crear factura';
+      case _InspectorOverflowAction.confirmPayment:
+        return 'Confirmar pago';
+      case _InspectorOverflowAction.cancelOrder:
+        return 'Cancelar pedido';
+    }
   }
 
   Widget _buildBriefCell(
@@ -1386,177 +2191,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildOperationalChecklist(OnlineOrder order) {
-    final checkpoints = _buildOrderCheckpoints(order);
-
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.fact_check_outlined,
-                  size: 17, color: _accentBlue),
-              const SizedBox(width: 8),
-              const Text(
-                'Checklist operativo',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-              const Spacer(),
-              Text(
-                _operationalSummary(order),
-                style: _hintStyle,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SafeLayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 760 ? 2 : 1;
-              final tileWidth = columns == 1
-                  ? constraints.maxWidth
-                  : (constraints.maxWidth - 10) / 2;
-
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: checkpoints
-                    .map(
-                      (checkpoint) => SizedBox(
-                        width: tileWidth,
-                        child: _buildCheckpointTile(checkpoint),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckpointTile(_OrderCheckpoint checkpoint) {
-    final color = _checkpointColor(checkpoint.level);
-    final icon = _checkpointIcon(checkpoint.level);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Icon(icon, size: 17, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  checkpoint.title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  checkpoint.detail,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.25,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInventoryReadinessPanel(OnlineOrder order) {
-    final readiness = _inventoryReadinessForOrder(order);
-    final color = _inventoryReadinessColor(readiness.level);
-
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(readiness.icon, size: 18, color: color),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Inventario / preparación',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      readiness.detail,
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                        fontSize: 12,
-                        height: 1.25,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              _buildCompactBadge(readiness.title, color),
-            ],
-          ),
-          if (readiness.items.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Column(
-              children: readiness.items
-                  .map((itemReadiness) => _buildInventoryReadinessRow(
-                        itemReadiness,
-                      ))
-                  .toList(),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -1811,7 +2445,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   _OrderTimelineEvent _invoiceTimelineEvent(OnlineOrder order) {
     if (order.salesInvoiceId != null) {
-      return _OrderTimelineEvent(
+      return const _OrderTimelineEvent(
         title: 'Factura vinculada',
         detail: 'Documento de venta conectado al pedido',
         fallbackDateLabel: 'Registrada',
@@ -2128,13 +2762,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
-  String _operationalSummary(OnlineOrder order) {
-    final blockers = _blockerLabels(order);
-    if (blockers.isNotEmpty) return '${blockers.length} bloqueo(s)';
-    if (_needsCoordination(order)) return 'requiere coordinación';
-    return 'sin bloqueos visibles';
-  }
-
   bool _hasShippingAddress(OnlineOrder order) {
     if (order.deliveryType == 'pickup') return true;
     return order.shippingAddressLine1?.trim().isNotEmpty == true ||
@@ -2165,236 +2792,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       case _CheckpointLevel.pending:
         return Icons.radio_button_unchecked;
     }
-  }
-
-  Widget _buildInfoGrid(OnlineOrder order) {
-    return SafeLayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth > 720 ? 2 : 1;
-        final deliveryRows = order.deliveryType == 'pickup'
-            ? [
-                _InfoRow('Tipo', order.deliveryDisplayName),
-                _InfoRow('Punto de retiro', order.shippingAddressDisplay),
-                const _InfoRow(
-                  'Instrucción',
-                  'Avisar al cliente cuando el pedido esté listo para retiro.',
-                ),
-              ]
-            : [
-                _InfoRow('Tipo', order.deliveryDisplayName),
-                _InfoRow('Dirección', order.shippingAddressDisplay),
-                _InfoRow('Comuna', order.shippingCity ?? 'Sin comuna'),
-                _InfoRow('Región', order.shippingState ?? 'Sin región'),
-              ];
-        final cards = [
-          _buildInfoPanel(
-            title: 'Cliente',
-            icon: Icons.person_outline,
-            rows: [
-              _InfoRow('Nombre', order.customerName),
-              _InfoRow('Email', order.customerEmail),
-              _InfoRow('Teléfono', order.customerPhone ?? 'Sin teléfono'),
-              _InfoRow('Notas', _emptyFallback(order.customerNotes)),
-            ],
-          ),
-          _buildInfoPanel(
-            title: 'Entrega',
-            icon: Icons.local_shipping_outlined,
-            rows: deliveryRows,
-          ),
-          _buildInfoPanel(
-            title: 'Pago',
-            icon: Icons.payments_outlined,
-            rows: [
-              _InfoRow('Método', _formatPaymentMethod(order.paymentMethod)),
-              _InfoRow('Estado', order.paymentStatusDisplayName),
-              _InfoRow(
-                  'Referencia', order.paymentReference ?? 'Sin referencia'),
-              _InfoRow(
-                'Pagado',
-                order.paidAt == null
-                    ? 'Sin fecha'
-                    : ChileanUtils.formatDate(order.paidAt!),
-              ),
-            ],
-          ),
-          _buildInfoPanel(
-            title: 'Operación',
-            icon: Icons.tune_outlined,
-            rows: [
-              _InfoRow('Estado', order.statusDisplayName),
-              _InfoRow('Factura', order.salesInvoiceId ?? 'Sin factura'),
-              if (order.cancelledAt != null)
-                _InfoRow(
-                  'Cancelado',
-                  ChileanUtils.formatDateTime(order.cancelledAt!),
-                ),
-              if (order.cancelledReason?.trim().isNotEmpty == true)
-                _InfoRow('Motivo', order.cancelledReason!),
-              if (order.refundAmount > 0)
-                _InfoRow(
-                  'Reembolso',
-                  ChileanUtils.formatCurrency(order.refundAmount),
-                ),
-              if (order.refundedAt != null)
-                _InfoRow(
-                  'Reembolsado',
-                  ChileanUtils.formatDateTime(order.refundedAt!),
-                ),
-              _InfoRow('Notas internas', _emptyFallback(order.internalNotes)),
-              _InfoRow('Actualizado', ChileanUtils.formatDate(order.updatedAt)),
-            ],
-          ),
-        ];
-
-        final cardWidth = columns == 1
-            ? constraints.maxWidth
-            : (constraints.maxWidth - 12) / 2;
-
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: cards
-              .map(
-                (card) => SizedBox(
-                  width: cardWidth,
-                  child: card,
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildInfoPanel({
-    required String title,
-    required IconData icon,
-    required List<_InfoRow> rows,
-  }) {
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 17, color: _accentBlue),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...rows.map(
-            (row) => Padding(
-              padding: const EdgeInsets.only(bottom: 7),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 78,
-                    child: Text(row.label, style: _hintStyle),
-                  ),
-                  Expanded(
-                    child: Text(
-                      row.value,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotesPanel(
-    BuildContext context,
-    WebsiteService websiteService,
-    OnlineOrder order, {
-    required bool busy,
-  }) {
-    return Container(
-      decoration: _panelDecoration,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.sticky_note_2_outlined,
-                  size: 17, color: _accentBlue),
-              const SizedBox(width: 8),
-              const Text(
-                'Notas y coordinación',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: busy
-                    ? null
-                    : () => _editInternalNotes(
-                          context,
-                          websiteService,
-                          order,
-                        ),
-                icon: const Icon(Icons.edit_note_outlined, size: 18),
-                label: const Text('Editar'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SafeLayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 700;
-              final customerNotes = _emptyFallback(order.customerNotes);
-              final internalNotes = _emptyFallback(order.internalNotes);
-              final children = [
-                _buildNoteBlock(
-                  'Cliente',
-                  customerNotes,
-                  Icons.person_outline,
-                ),
-                _buildNoteBlock(
-                  'Interna',
-                  internalNotes,
-                  Icons.lock_outline,
-                ),
-              ];
-
-              if (!isWide) {
-                return Column(
-                  children: [
-                    children[0],
-                    const SizedBox(height: 10),
-                    children[1],
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: children[0]),
-                  const SizedBox(width: 10),
-                  Expanded(child: children[1]),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildNoteBlock(String title, String value, IconData icon) {
@@ -2443,48 +2840,110 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           if (order.items.isEmpty)
             Text('Sin items registrados', style: _hintStyle)
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                horizontalMargin: 0,
-                columnSpacing: 24,
-                headingRowHeight: 34,
-                dataRowMinHeight: 38,
-                dataRowMaxHeight: 52,
-                columns: const [
-                  DataColumn(label: Text('Producto')),
-                  DataColumn(label: Text('SKU')),
-                  DataColumn(numeric: true, label: Text('Cant.')),
-                  DataColumn(numeric: true, label: Text('Stock')),
-                  DataColumn(label: Text('Revisión')),
-                  DataColumn(numeric: true, label: Text('Precio')),
-                  DataColumn(numeric: true, label: Text('Subtotal')),
-                ],
-                rows: order.items.map((item) {
-                  final readiness = _inventoryReadinessForItem(item);
-                  return DataRow(
-                    cells: [
-                      DataCell(SizedBox(
-                        width: 240,
-                        child: Text(
-                          item.productName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )),
-                      DataCell(Text(item.productSku ?? '-')),
-                      DataCell(Text('${item.quantity}')),
-                      DataCell(Text(_itemStockLabel(item))),
-                      DataCell(_buildInventoryStatusChip(readiness)),
-                      DataCell(
-                          Text(ChileanUtils.formatCurrency(item.unitPrice))),
-                      DataCell(
-                          Text(ChileanUtils.formatCurrency(item.subtotal))),
-                    ],
-                  );
-                }).toList(),
-              ),
+            Column(
+              children: [
+                for (var index = 0; index < order.items.length; index++)
+                  _buildOrderItemRow(
+                    order.items[index],
+                    isLast: index == order.items.length - 1,
+                  ),
+              ],
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOrderItemRow(
+    OnlineOrderItem item, {
+    required bool isLast,
+  }) {
+    final readiness = _inventoryReadinessForItem(item);
+    final sku = item.productSku?.trim().isNotEmpty == true
+        ? item.productSku!
+        : 'Sin SKU';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: _borderColor)),
+      ),
+      child: ConstraintLayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 640;
+          final product = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.productName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$sku · Cant. ${item.quantity} · Stock ${_itemStockLabel(item)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _hintStyle,
+              ),
+            ],
+          );
+          final totals = Column(
+            crossAxisAlignment:
+                isNarrow ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+            children: [
+              Text(
+                ChileanUtils.formatCurrency(item.subtotal),
+                style: const TextStyle(
+                  color: _accentBlue,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${ChileanUtils.formatCurrency(item.unitPrice)} c/u',
+                style: _hintStyle,
+              ),
+            ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                product,
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _buildInventoryStatusChip(readiness),
+                    totals,
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: product),
+              const SizedBox(width: 16),
+              _buildInventoryStatusChip(readiness),
+              const SizedBox(width: 16),
+              SizedBox(width: 116, child: totals),
+            ],
+          );
+        },
       ),
     );
   }
@@ -3409,18 +3868,19 @@ Para coordinar el despacho, por favor confirma dirección, comuna y una franja h
     );
   }
 
+  // ignore: unused_element
   Widget _buildNoSelectionState() {
     return Center(child: Text('Selecciona un pedido', style: _hintStyle));
   }
 
   _OrderInventoryReadiness _inventoryReadinessForOrder(OnlineOrder order) {
     if (order.items.isEmpty) {
-      return _OrderInventoryReadiness(
+      return const _OrderInventoryReadiness(
         level: _InventoryReadinessLevel.blocked,
         title: 'Sin productos',
         detail: 'El pedido no tiene líneas para preparar.',
         icon: Icons.inventory_2_outlined,
-        items: const [],
+        items: [],
       );
     }
 
@@ -3609,28 +4069,6 @@ Para coordinar el despacho, por favor confirma dirección, comuna y una franja h
     }
   }
 
-  int _orderPriority(OnlineOrder order) {
-    if (_isFulfillmentBlocked(order)) return 0;
-    switch (order.status) {
-      case 'pending':
-        return 1;
-      case 'confirmed':
-        return 2;
-      case 'processing':
-        return 3;
-      case 'ready_for_pickup':
-        return 4;
-      case 'shipped':
-        return 5;
-      case 'delivered':
-        return 8;
-      case 'cancelled':
-        return 9;
-      default:
-        return 6;
-    }
-  }
-
   bool _hasCustomerPhone(OnlineOrder order) {
     return order.customerPhone?.trim().isNotEmpty == true;
   }
@@ -3642,6 +4080,10 @@ Para coordinar el despacho, por favor confirma dirección, comuna y una franja h
   bool _canConfirmPayment(OnlineOrder order) {
     if (_isTerminalOrder(order)) return false;
     return order.paymentStatus == 'pending' || order.paymentStatus == 'failed';
+  }
+
+  int _laneCount(List<OnlineOrder> orders, String lane) {
+    return orders.where((order) => _matchesLane(order, lane)).length;
   }
 
   bool _matchesLane(OnlineOrder order, String lane) {
@@ -3988,6 +4430,20 @@ class _OrderTimelineEvent {
   final DateTime? date;
   final String fallbackDateLabel;
   final _CheckpointLevel level;
+  final IconData icon;
+}
+
+enum _InspectorOverflowAction {
+  createInvoice,
+  confirmPayment,
+  cancelOrder,
+}
+
+class _InspectorTab {
+  const _InspectorTab(this.key, this.label, this.icon);
+
+  final String key;
+  final String label;
   final IconData icon;
 }
 

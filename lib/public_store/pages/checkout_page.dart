@@ -30,6 +30,7 @@ class _CheckoutPageState extends State<CheckoutPage>
   static const Color _warmLine = Color(0xFFE8E2D8);
   static const Color _warmSurface = Color(0xFFF7F4EE);
   static const Color _softSurface = Color(0xFFFCFBF8);
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -620,7 +621,10 @@ class _CheckoutPageState extends State<CheckoutPage>
           }
           debugPrint('✅ [Checkout] MercadoPago is configured');
 
-          final order = await websiteService.getOrderById(orderId);
+          final order = await websiteService.getPublicOrderById(
+            orderId: orderId,
+            tenantId: tenantId,
+          );
           if (order == null) {
             debugPrint('❌ [Checkout] Order not found: $orderId');
             throw Exception('Order not found');
@@ -911,7 +915,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     if (value == null || value.trim().isEmpty) {
                       return 'El correo es requerido';
                     }
-                    if (!value.contains('@')) {
+                    if (!_emailPattern.hasMatch(value.trim())) {
                       return 'Ingresa un correo válido';
                     }
                     return null;
@@ -929,6 +933,10 @@ class _CheckoutPageState extends State<CheckoutPage>
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'El teléfono es requerido';
+                    }
+                    final digits = value.replaceAll(RegExp(r'\D'), '');
+                    if (digits.length < 8 || digits.length > 15) {
+                      return 'Ingresa un teléfono válido';
                     }
                     return null;
                   },

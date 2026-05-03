@@ -15,7 +15,8 @@ import '../../../shared/config/supabase_config.dart';
 class MercadoPagoService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // MercadoPago credentials (should be stored in Supabase settings or .env)
+  // The access token is intentionally never loaded in public storefront flows.
+  // Edge Functions read it with the service role when creating/verifying payments.
   String? _publicKey;
   String? _accessToken;
   bool _isTestMode = true; // Start in test mode
@@ -24,7 +25,8 @@ class MercadoPagoService extends ChangeNotifier {
 
   String? get publicKey => _publicKey;
   bool get isTestMode => _isTestMode;
-  bool get isConfigured => _publicKey != null && _accessToken != null;
+  bool get hasAdminAccessTokenInMemory => _accessToken?.isNotEmpty == true;
+  bool get isConfigured => _publicKey != null || _tenantId != null;
 
   /// Set the tenant ID for multi-tenant filtering
   void setTenantId(String tenantId) {
@@ -46,7 +48,6 @@ class MercadoPagoService extends ChangeNotifier {
           .select('key, value')
           .inFilter('key', [
         'mercadopago_public_key',
-        'mercadopago_access_token',
         'mercadopago_test_mode',
         'store_url',
       ]);
@@ -65,9 +66,6 @@ class MercadoPagoService extends ChangeNotifier {
         switch (key) {
           case 'mercadopago_public_key':
             _publicKey = value;
-            break;
-          case 'mercadopago_access_token':
-            _accessToken = value;
             break;
           case 'mercadopago_test_mode':
             _isTestMode = value == 'true' || value == '1';
@@ -145,10 +143,6 @@ class MercadoPagoService extends ChangeNotifier {
   /// Get official payment methods from MercadoPago API
   /// Returns a list of payment methods with secure_thumbnail
   Future<List<Map<String, dynamic>>> getPaymentMethods() async {
-    if (!isConfigured) {
-      debugPrint('🔧 [MercadoPago] Not configured, skipping getPaymentMethods');
-      return [];
-    }
     if (_publicKey == null) {
       debugPrint('🔧 [MercadoPago] No public key, skipping getPaymentMethods');
       return [];
@@ -204,9 +198,8 @@ class MercadoPagoService extends ChangeNotifier {
     required String customerEmail,
     String? customerName,
   }) async {
-    if (!isConfigured) {
-      throw Exception(
-          'MercadoPago no está configurado. Configure las credenciales primero.');
+    if (_tenantId == null) {
+      throw Exception('No se pudo detectar la tienda para iniciar el pago.');
     }
 
     try {
@@ -256,9 +249,12 @@ class MercadoPagoService extends ChangeNotifier {
   }
 
   /// Get payment status from MercadoPago
-  Future<Map<String, dynamic>?> getPaymentStatus(String paymentId) async {
-    if (!isConfigured) {
-      throw Exception('MercadoPago no está configurado.');
+  Future<Map<String, dynamic>?> getPaymentStatus(
+    String paymentId, {
+    String? orderId,
+  }) async {
+    if (_tenantId == null) {
+      throw Exception('No se pudo detectar la tienda para verificar el pago.');
     }
 
     try {
@@ -267,6 +263,7 @@ class MercadoPagoService extends ChangeNotifier {
         body: {
           'payment_id': paymentId,
           'tenant_id': _tenantId,
+          if (orderId != null) 'order_id': orderId,
         },
       );
 
@@ -291,45 +288,7 @@ class MercadoPagoService extends ChangeNotifier {
     required String paymentId,
     required String status,
   }) async {
-    try {
-      // Update order payment status
-      String paymentStatus;
-      switch (status) {
-        case 'approved':
-          paymentStatus = 'paid';
-          break;
-        case 'pending':
-        case 'in_process':
-          paymentStatus = 'pending';
-          break;
-        case 'rejected':
-        case 'cancelled':
-          paymentStatus = 'failed';
-          break;
-        default:
-          paymentStatus = 'pending';
-      }
-
-      // Only update the order status
-      // The database trigger (trg_auto_process_paid_online_order) will
-      // automatically call process_online_order when payment_status = 'paid'
-      await _supabase.from('online_orders').update({
-        'payment_status': paymentStatus,
-        'payment_method': 'mercadopago',
-        'payment_reference': paymentId,
-        'paid_at':
-            status == 'approved' ? DateTime.now().toIso8601String() : null,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
-
-      // DO NOT call process_online_order here - the trigger handles it
-      // This was causing duplicate invoices!
-
-      debugPrint('✅ [MercadoPago] Order $orderId updated to $paymentStatus');
-    } catch (e) {
-      debugPrint('Error processing payment callback: $e');
-      rethrow;
-    }
+    await getPaymentStatus(paymentId, orderId: orderId);
   }
 
   /// Handle MercadoPago webhook notification

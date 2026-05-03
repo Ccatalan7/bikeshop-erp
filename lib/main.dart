@@ -163,6 +163,10 @@ Future<void> main() async {
         debugPrint(
             '⚠️ [Main] Safari/iOS detected - skipping Firebase initialization');
         _logTiming('FIREBASE_INIT_SKIPPED', 'safari_ios');
+      } else if (!_supportsFirebaseInitialization()) {
+        debugPrint(
+            'ℹ️ [Main] Firebase initialization skipped on ${defaultTargetPlatform.name}');
+        _logTiming('FIREBASE_INIT_SKIPPED', defaultTargetPlatform.name);
       } else {
         try {
           await Firebase.initializeApp(
@@ -722,44 +726,35 @@ class VinabikeApp extends StatelessWidget {
                                   return Row(
                                     children: [
                                       Expanded(
-                                        // SelectionArea works here (no Overlay
-                                        // wrapper needed) because we are already
-                                        // inside the outer MaterialApp Navigator's
-                                        // own Overlay.
-                                        child: SelectionArea(
-                                          child: IndexedStack(
-                                            index: data.$1,
-                                            sizing: StackFit.expand,
-                                            children: workspaceManager
-                                                .workspaces
-                                                .map((workspace) {
-                                              return _WorkspaceRouterView(
-                                                key: ValueKey(workspace.id),
-                                                workspace: workspace,
-                                                authService: authService,
-                                              );
-                                            }).toList(),
-                                          ),
+                                        child: IndexedStack(
+                                          index: data.$1,
+                                          sizing: StackFit.expand,
+                                          children: workspaceManager.workspaces
+                                              .map((workspace) {
+                                            return _WorkspaceRouterView(
+                                              key: ValueKey(workspace.id),
+                                              workspace: workspace,
+                                              authService: authService,
+                                            );
+                                          }).toList(),
                                         ),
                                       ),
                                       // Right panel – only mounted when open, but
                                       // its addition/removal never shifts the
                                       // workspace pane above.
                                       if (data.$3)
-                                        SelectionArea(
-                                          child: Container(
-                                            width: 400,
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .scaffoldBackgroundColor,
-                                              border: Border(
-                                                left: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .dividerColor),
-                                              ),
+                                        Container(
+                                          width: 400,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .scaffoldBackgroundColor,
+                                            border: Border(
+                                              left: BorderSide(
+                                                  color: Theme.of(context)
+                                                      .dividerColor),
                                             ),
-                                            child: const AIChatPanel(jobs: []),
                                           ),
+                                          child: const AIChatPanel(jobs: []),
                                         ),
                                     ],
                                   );
@@ -779,6 +774,21 @@ class VinabikeApp extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+bool _supportsFirebaseInitialization() {
+  if (kIsWeb) return true;
+
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+    case TargetPlatform.windows:
+      return true;
+    case TargetPlatform.macOS:
+    case TargetPlatform.linux:
+    case TargetPlatform.fuchsia:
+      return false;
   }
 }
 
@@ -826,6 +836,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     // Only handle if this is the active workspace
     _notificationTapSubscription =
         NotificationService().onNotificationTap.listen((route) {
+      if (!mounted) return;
       final workspaceManager =
           Provider.of<WorkspaceManager>(context, listen: false);
       final myIndex = workspaceManager.workspaces.indexOf(widget.workspace);

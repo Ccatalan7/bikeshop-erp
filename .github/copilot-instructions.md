@@ -3107,6 +3107,28 @@ When choosing between alternatives, prefer the option that best satisfies all of
 
 If a change improves one page while making the overall storefront less coherent, less trustworthy, or harder to reason about, it is not the right change.
 
+## ⚡ Public Store Performance & Freshness Doctrine (May 2026)
+
+The public storefront uses a deliberate fast-first-render / fast-revalidation model. Do not replace it with sticky caches that make website-editor changes slow to appear.
+
+The current intended architecture is:
+
+- `lib/main_store.dart` initializes `SharedPreferences` before the app starts and injects it into `WebsiteService`.
+- `PublicStoreBootstrap` detects the tenant, optionally hydrates a synchronous local cache, renders the storefront quickly, then revalidates in the background.
+- `WebsiteService.preloadPublicStoreFromSynchronousCache()` may hydrate settings, blocks, and navigation only when the local cache is fresh according to `website_public_store_last_refresh_<tenantId>`.
+- `WebsiteService.loadPublicStoreDataUnified(forceRefresh: true)` must bypass JS prefetch and edge cache, reading origin data directly so editor changes repair the first paint quickly.
+- The normal fast path may use JS prefetch / edge cache, but the origin revalidation after first paint is mandatory.
+
+Deployment/cache rules:
+
+- Store builds must keep using `flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store` unless a replacement invalidation strategy is explicitly designed and tested.
+- Firebase headers for `index.html`, `flutter_bootstrap.js`, `flutter.js`, `main.dart.js`, manifest/version files, asset manifests, and service-worker files must remain `Cache-Control: public, max-age=0, must-revalidate` or equally fresh.
+- Long-lived caching is acceptable for immutable/static media assets such as product images, optimized images, icons, and generated snapshots, not for Flutter boot/runtime files or website JSON truth.
+- Do not increase the public-store bootstrap TTL or add service-worker/CDN persistence without proving that website block/theme/navigation edits still appear within one post-paint origin refresh.
+- Debug reset flags such as `PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE` must stay local/debug-only and must never be required for normal production freshness.
+
+When optimizing first-load speed, improve parallelism, bundle size, image payloads, or edge warm-up first. Treat slower website-editor reflection as a regression, even if Lighthouse improves.
+
 ---
 
 ## 🚨 CRITICAL: EDITOR ARCHITECTURE (Dec 2025)

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'order_confirmation_pdf.dart' deferred as order_pdf;
+import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
@@ -38,6 +39,14 @@ class _OrderConfirmationCache {
   static final Map<String, String?> paymentMessages = {};
 }
 
+enum _PaymentPresentation {
+  paid,
+  failed,
+  pending,
+  transferPending,
+  orderReceived,
+}
+
 class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     with AutomaticKeepAliveClientMixin {
   static const Color _logoBlue = Color(0xFF093357);
@@ -48,6 +57,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   OnlineOrder? _order;
   bool _isLoading = true;
+  bool _isRetryingPayment = false;
   String? _error;
   String? _paymentMessage;
 
@@ -94,11 +104,44 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   Future<void> _loadWebsiteSettings() async {
     try {
-      await context.read<WebsiteService>().loadSettings();
+      final tenantId = await _resolveTenantId(
+        timeout: const Duration(seconds: 4),
+      );
+      if (!mounted || tenantId == null) return;
+
+      await context.read<WebsiteService>().loadSettingsForTenant(tenantId);
     } catch (e) {
       debugPrint(
           '🎉 [OrderConfirmationPage] Error loading website settings: $e');
     }
+  }
+
+  Future<String?> _resolveTenantId({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final startedAt = DateTime.now();
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+
+    while (mounted && DateTime.now().difference(startedAt) < timeout) {
+      final tenantId = tenantProvider.tenantId;
+
+      if (tenantId != null && tenantId.isNotEmpty) {
+        return tenantId;
+      }
+
+      if (!tenantProvider.isLoading) {
+        await tenantProvider.detectTenant();
+        final detectedTenantId = tenantProvider.tenantId;
+        if (detectedTenantId != null && detectedTenantId.isNotEmpty) {
+          return detectedTenantId;
+        }
+      }
+
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+
+    if (!mounted) return null;
+    return tenantProvider.tenantId;
   }
 
   /// Wait for another instance to finish loading, then use cached data
@@ -109,13 +152,23 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       if (!mounted) return;
     }
 
+    final cachedOrder = _OrderConfirmationCache.loadedOrders[widget.orderId];
+    final cachedError = _OrderConfirmationCache.loadErrors[widget.orderId];
+
+    if (cachedOrder == null && cachedError == null) {
+      debugPrint(
+          '🎉 [OrderConfirmationPage] Loader finished without cache, retrying from active instance...');
+      await _loadOrder();
+      return;
+    }
+
     // Use cached data
     if (mounted) {
       setState(() {
-        _order = _OrderConfirmationCache.loadedOrders[widget.orderId];
+        _order = cachedOrder;
         _paymentMessage =
             _OrderConfirmationCache.paymentMessages[widget.orderId];
-        _error = _OrderConfirmationCache.loadErrors[widget.orderId];
+        _error = cachedError;
         _isLoading = false;
       });
     }
@@ -134,13 +187,12 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     debugPrint(
         '🎉 [OrderConfirmationPage] Processing MercadoPago callback: status=$status');
 
-    // Mark as processed to prevent duplicate calls on rebuild
-    _OrderConfirmationCache.processedOrderIds.add(widget.orderId);
-
     if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
+
+    var callbackProcessed = false;
 
     try {
       // Get payment_id from URL query params (MercadoPago adds it)
@@ -159,22 +211,27 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
         final mercadopagoService =
             Provider.of<MercadoPagoService>(context, listen: false);
-        final tenantProvider =
-            Provider.of<PublicStoreTenantProvider>(context, listen: false);
+        final tenantId = await _resolveTenantId();
 
-        if (tenantProvider.tenantId != null) {
-          await mercadopagoService.initialize(
-              tenantId: tenantProvider.tenantId!);
+        if (tenantId == null || tenantId.isEmpty) {
+          throw Exception(
+              'No se pudo detectar la tienda para verificar el pago.');
         }
+
+        await mercadopagoService.initialize(tenantId: tenantId);
 
         if (paymentId == null || paymentId.isEmpty) {
           _paymentMessage =
               'MercadoPago no devolvió un identificador de pago. Revisaremos el pedido y te contactaremos si el pago se acredita.';
+          callbackProcessed = true;
           await _loadOrder();
           return;
         }
 
-        final payment = await mercadopagoService.getPaymentStatus(paymentId);
+        final payment = await mercadopagoService.getPaymentStatus(
+          paymentId,
+          orderId: widget.orderId,
+        );
         final paymentStatus = payment?['status']?.toString();
         final externalReference = payment?['external_reference']?.toString();
 
@@ -183,20 +240,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             externalReference != widget.orderId) {
           _paymentMessage =
               'MercadoPago todavía no confirmó el pago. Te notificaremos cuando se procese.';
+          callbackProcessed = true;
           await _loadOrder();
           return;
         }
 
-        // Process the payment callback
-        // NOTE: This updates the order status. The webhook will create the invoice.
-        // If webhook already processed, this will just update the order.
-        await mercadopagoService.processPaymentCallback(
-          orderId: widget.orderId,
-          paymentId: paymentId,
-          status: 'approved',
-        );
-
         _paymentMessage = '¡Pago exitoso! Tu pedido está siendo procesado.';
+        callbackProcessed = true;
 
         // Clear the cart
         if (mounted) {
@@ -206,16 +256,101 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       } else if (status == 'pending' || status == 'in_process') {
         _paymentMessage =
             'Tu pago está pendiente de confirmación. Te notificaremos cuando se procese.';
+        callbackProcessed = true;
       } else if (status == 'failure' || status == 'rejected') {
         _paymentMessage = 'El pago no se completó. Puedes intentar nuevamente.';
+        callbackProcessed = true;
       }
     } catch (e) {
       debugPrint('🎉 [OrderConfirmationPage] Error processing callback: $e');
-      // Don't show error to user - the order was created, payment might have gone through
+      _paymentMessage =
+          'Estamos confirmando tu pago. Si ya fue aprobado, el pedido se actualizará en unos segundos.';
+    } finally {
+      if (callbackProcessed) {
+        _OrderConfirmationCache.processedOrderIds.add(widget.orderId);
+      }
     }
 
     // Load the order regardless of payment processing result
     await _loadOrder();
+  }
+
+  bool _canRetryMercadoPago(OnlineOrder order) {
+    final method = (order.paymentMethod ?? '').toLowerCase();
+    final paymentStatus = order.paymentStatus.toLowerCase();
+    final orderStatus = order.status.toLowerCase();
+
+    return method == 'mercadopago' &&
+        paymentStatus != 'paid' &&
+        orderStatus != 'cancelled';
+  }
+
+  Future<void> _retryMercadoPagoPayment(OnlineOrder order) async {
+    if (_isRetryingPayment) return;
+
+    setState(() => _isRetryingPayment = true);
+
+    final tenantProvider = context.read<PublicStoreTenantProvider>();
+    final tenantId = tenantProvider.tenantId ?? order.tenantId;
+    final mercadopagoService = context.read<MercadoPagoService>();
+
+    try {
+      if (tenantId.isEmpty) {
+        throw Exception(
+            'No se pudo detectar la tienda para reintentar el pago.');
+      }
+
+      await mercadopagoService.initialize(tenantId: tenantId);
+
+      if (!mercadopagoService.isConfigured) {
+        throw Exception('MercadoPago no está configurado para esta tienda.');
+      }
+
+      final preference = await mercadopagoService.createPreference(
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        items: order.items
+            .map((item) => {
+                  'title': item.productName,
+                  'quantity': item.quantity,
+                  'unit_price': item.unitPrice,
+                })
+            .toList(),
+        customerEmail: order.customerEmail,
+        customerName: order.customerName,
+      );
+
+      final initPoint = preference['init_point'] as String?;
+      if (initPoint == null || initPoint.isEmpty) {
+        throw Exception('MercadoPago no devolvió URL de pago.');
+      }
+
+      if (kIsWeb) {
+        web_utils.WebUtils.openUrl(initPoint);
+      } else {
+        final url = Uri.parse(initPoint);
+        if (!await canLaunchUrl(url)) {
+          throw Exception('No se pudo abrir MercadoPago.');
+        }
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (error) {
+      debugPrint('MercadoPago retry failed: $error');
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No pudimos reintentar el pago: $error'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRetryingPayment = false);
+      }
+    }
   }
 
   Future<void> _loadOrder() async {
@@ -257,34 +392,37 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     try {
       // Small delay to let database trigger complete
       await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
 
       debugPrint(
           '🎉 [OrderConfirmationPage] Loading order directly from Supabase...');
 
-      // Load order directly from Supabase - NO Provider dependency
-      // This prevents issues when widget rebuilds during provider notifications
-      final supabase = Supabase.instance.client;
+      final websiteService =
+          Provider.of<WebsiteService>(context, listen: false);
+      final tenantId = await _resolveTenantId();
 
-      final response = await supabase.from('online_orders').select('''
-            *,
-            online_order_items (*)
-          ''').eq('id', widget.orderId).maybeSingle();
+      if (tenantId == null || tenantId.isEmpty) {
+        throw Exception('No se pudo detectar la tienda del pedido');
+      }
 
-      if (response == null) {
+      final order = await websiteService.getPublicOrderById(
+        orderId: widget.orderId,
+        tenantId: tenantId,
+      );
+
+      if (order == null) {
         throw Exception('Order not found');
       }
 
       debugPrint(
-          '🎉 [OrderConfirmationPage] Order data received: ${response['order_number']}');
-
-      final order = OnlineOrder.fromJson(response);
+          '🎉 [OrderConfirmationPage] Order data received: ${order.orderNumber}');
       debugPrint(
           '🎉 [OrderConfirmationPage] Order parsed: ${order.orderNumber}');
 
       // Cache the result regardless of mount state
       _OrderConfirmationCache.loadedOrders[widget.orderId] = order;
       _OrderConfirmationCache.paymentMessages[widget.orderId] = _paymentMessage;
-      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
+      _OrderConfirmationCache.loadErrors.remove(widget.orderId);
 
       if (mounted) {
         setState(() {
@@ -304,7 +442,6 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       // Cache the error
       _OrderConfirmationCache.loadErrors[widget.orderId] =
           'Error al cargar el pedido: $e';
-      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
 
       if (mounted) {
         setState(() {
@@ -312,6 +449,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           _isLoading = false;
         });
       }
+    } finally {
+      _OrderConfirmationCache.currentlyLoading.remove(widget.orderId);
     }
   }
 
@@ -387,7 +526,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             ? 'Una vez realizada la transferencia, envía el comprobante a $transferContactEmail con tu número de pedido.'
             : '';
 
-    final paymentTonePositive = _isPositivePaymentMessage(_paymentMessage);
+    final paymentPresentation = _paymentPresentationFor(order);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -408,13 +547,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 children: [
                   _buildConfirmationHero(
                     order: order,
-                    paymentTonePositive: paymentTonePositive,
+                    paymentPresentation: paymentPresentation,
                   ),
                   const SizedBox(height: 32),
                   if (isMobile) ...[
                     _buildSummaryRail(
                       order,
-                      paymentTonePositive: paymentTonePositive,
+                      paymentPresentation: paymentPresentation,
                     ),
                     const SizedBox(height: 24),
                     _buildOrderDetailsSection(order),
@@ -434,7 +573,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                       ),
                     ],
                     const SizedBox(height: 24),
-                    _buildNextStepsSection(),
+                    _buildNextStepsSection(paymentPresentation),
                   ] else ...[
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,7 +602,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                                 ),
                               ],
                               const SizedBox(height: 24),
-                              _buildNextStepsSection(),
+                              _buildNextStepsSection(paymentPresentation),
                             ],
                           ),
                         ),
@@ -472,7 +611,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                           flex: 4,
                           child: _buildSummaryRail(
                             order,
-                            paymentTonePositive: paymentTonePositive,
+                            paymentPresentation: paymentPresentation,
                           ),
                         ),
                       ],
@@ -573,11 +712,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   Widget _buildConfirmationHero({
     required OnlineOrder order,
-    required bool paymentTonePositive,
+    required _PaymentPresentation paymentPresentation,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 820;
+        final statusLine =
+            _paymentMessage ?? _presentationStatusLine(paymentPresentation);
 
         final titleBlock = Column(
           crossAxisAlignment:
@@ -590,18 +731,18 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: _successGreen,
+                    color: _presentationAccentColor(paymentPresentation),
                     borderRadius: BorderRadius.circular(17),
                   ),
-                  child: const Icon(
-                    Icons.check,
+                  child: Icon(
+                    _presentationIcon(paymentPresentation),
                     size: 22,
                     color: Colors.white,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  paymentTonePositive ? 'PAGO CONFIRMADO' : 'PEDIDO RECIBIDO',
+                  _presentationKicker(paymentPresentation),
                   style: TextStyle(
                     fontFamily: PublicStoreTheme.defaultBodyFont,
                     fontSize: 12,
@@ -613,9 +754,9 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               ],
             ),
             const SizedBox(height: 28),
-            const Text(
-              'Tu compra ya entró al taller.',
-              style: TextStyle(
+            Text(
+              _presentationTitle(paymentPresentation),
+              style: const TextStyle(
                 fontFamily: PublicStoreTheme.defaultHeadingFont,
                 fontSize: 52,
                 fontWeight: FontWeight.w700,
@@ -625,7 +766,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             ),
             const SizedBox(height: 18),
             Text(
-              'Recibimos el pedido y dejamos el comprobante listo. Te avisaremos apenas el equipo lo prepare para retiro o despacho.',
+              _presentationSubtitle(paymentPresentation),
               style: TextStyle(
                 fontFamily: PublicStoreTheme.defaultBodyFont,
                 fontSize: 16,
@@ -706,11 +847,11 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                     orderBlock,
                   ],
                 ),
-              if (_paymentMessage != null) ...[
+              if (statusLine != null) ...[
                 const SizedBox(height: 28),
                 _buildHeroStatusLine(
-                  _paymentMessage!,
-                  positive: paymentTonePositive,
+                  statusLine,
+                  paymentPresentation: paymentPresentation,
                 ),
               ],
             ],
@@ -753,8 +894,11 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     );
   }
 
-  Widget _buildHeroStatusLine(String message, {required bool positive}) {
-    final accent = positive ? _successGreen : const Color(0xFFF59E0B);
+  Widget _buildHeroStatusLine(
+    String message, {
+    required _PaymentPresentation paymentPresentation,
+  }) {
+    final accent = _presentationAccentColor(paymentPresentation);
 
     return Container(
       width: double.infinity,
@@ -769,7 +913,11 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            positive ? Icons.check_circle_outline : Icons.info_outline,
+            paymentPresentation == _PaymentPresentation.failed
+                ? Icons.error_outline
+                : paymentPresentation == _PaymentPresentation.paid
+                    ? Icons.check_circle_outline
+                    : Icons.info_outline,
             size: 20,
             color: accent,
           ),
@@ -910,12 +1058,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     );
   }
 
-  Widget _buildNextStepsSection() {
-    const steps = [
-      'Te enviaremos un email de confirmación con los detalles de tu pedido.',
-      'Procesaremos tu pedido en 1-2 días hábiles.',
-      'Te contactaremos si necesitamos más información.',
-    ];
+  Widget _buildNextStepsSection(_PaymentPresentation paymentPresentation) {
+    final steps = _nextStepsFor(paymentPresentation);
 
     return _buildContentSection(
       title: 'Qué sigue',
@@ -933,8 +1077,12 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
 
   Widget _buildSummaryRail(
     OnlineOrder order, {
-    required bool paymentTonePositive,
+    required _PaymentPresentation paymentPresentation,
   }) {
+    final retryLabel = paymentPresentation == _PaymentPresentation.failed
+        ? 'PAGAR CON OTRO MEDIO'
+        : 'REINTENTAR PAGO';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -948,9 +1096,11 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'RESUMEN DE COMPRA',
-            style: TextStyle(
+          Text(
+            paymentPresentation == _PaymentPresentation.paid
+                ? 'RESUMEN DE COMPRA'
+                : 'RESUMEN DEL PEDIDO',
+            style: const TextStyle(
               fontFamily: PublicStoreTheme.defaultHeadingFont,
               fontSize: 32,
               fontWeight: FontWeight.w700,
@@ -977,8 +1127,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 _formatPaymentMethod(order.paymentMethod ?? ''),
               ),
               _buildMetaPill(
-                paymentTonePositive ? 'PAGO PROCESADO' : 'PAGO EN REVISIÓN',
-                accent: paymentTonePositive ? _successGreen : _logoBlue,
+                _summaryPaymentLabel(paymentPresentation),
+                accent: _presentationAccentColor(paymentPresentation),
               ),
             ],
           ),
@@ -1045,6 +1195,38 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             ],
           ),
           const SizedBox(height: 26),
+          if (_canRetryMercadoPago(order)) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isRetryingPayment
+                    ? null
+                    : () => _retryMercadoPagoPayment(order),
+                icon: _isRetryingPayment
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.payment, size: 18),
+                label: Text(
+                  _isRetryingPayment ? 'ABRIENDO MERCADOPAGO' : retryLabel,
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _logoBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -1100,9 +1282,9 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             color: _warmLine,
           ),
           const SizedBox(height: 18),
-          const Text(
-            'Guarda tu número de pedido y revisa tu correo para seguir el estado de la compra.',
-            style: TextStyle(
+          Text(
+            _summaryFooterText(paymentPresentation),
+            style: const TextStyle(
               fontFamily: PublicStoreTheme.defaultBodyFont,
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -1426,12 +1608,185 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     );
   }
 
-  bool _isPositivePaymentMessage(String? message) {
-    final normalized = (message ?? '').toLowerCase();
-    return normalized.contains('exitoso') ||
-        normalized.contains('confirmado') ||
-        normalized.contains('procesado') ||
-        normalized.contains('aprobado');
+  _PaymentPresentation _paymentPresentationFor(OnlineOrder order) {
+    final callbackStatus = (widget.paymentStatus ?? '').trim().toLowerCase();
+    final paymentStatus = order.paymentStatus.trim().toLowerCase();
+    final paymentMethod = (order.paymentMethod ?? '').trim().toLowerCase();
+
+    if (paymentStatus == 'paid' || order.paidAt != null) {
+      return _PaymentPresentation.paid;
+    }
+
+    if (callbackStatus == 'failure' ||
+        callbackStatus == 'rejected' ||
+        paymentStatus == 'failed' ||
+        paymentStatus == 'refunded') {
+      return _PaymentPresentation.failed;
+    }
+
+    if (callbackStatus == 'pending' ||
+        callbackStatus == 'in_process' ||
+        (paymentMethod == 'mercadopago' && paymentStatus == 'pending')) {
+      return _PaymentPresentation.pending;
+    }
+
+    if (paymentMethod == 'transfer') {
+      return _PaymentPresentation.transferPending;
+    }
+
+    return _PaymentPresentation.orderReceived;
+  }
+
+  Color _presentationAccentColor(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+      case _PaymentPresentation.orderReceived:
+        return _successGreen;
+      case _PaymentPresentation.failed:
+        return const Color(0xFFDC2626);
+      case _PaymentPresentation.pending:
+        return const Color(0xFFF59E0B);
+      case _PaymentPresentation.transferPending:
+        return _logoBlue;
+    }
+  }
+
+  IconData _presentationIcon(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+      case _PaymentPresentation.orderReceived:
+        return Icons.check;
+      case _PaymentPresentation.failed:
+        return Icons.close;
+      case _PaymentPresentation.pending:
+        return Icons.schedule;
+      case _PaymentPresentation.transferPending:
+        return Icons.account_balance;
+    }
+  }
+
+  String _presentationKicker(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return 'PAGO CONFIRMADO';
+      case _PaymentPresentation.failed:
+        return 'PAGO NO COMPLETADO';
+      case _PaymentPresentation.pending:
+        return 'PAGO EN REVISIÓN';
+      case _PaymentPresentation.transferPending:
+        return 'PAGO POR CONFIRMAR';
+      case _PaymentPresentation.orderReceived:
+        return 'PEDIDO RECIBIDO';
+    }
+  }
+
+  String _presentationTitle(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return 'Pago confirmado. Estamos preparando tu pedido.';
+      case _PaymentPresentation.failed:
+        return 'El pago no se completó.';
+      case _PaymentPresentation.pending:
+        return 'Estamos confirmando tu pago.';
+      case _PaymentPresentation.transferPending:
+        return 'Pedido recibido. Falta confirmar el pago.';
+      case _PaymentPresentation.orderReceived:
+        return 'Pedido recibido.';
+    }
+  }
+
+  String _presentationSubtitle(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return 'Recibimos tu pago y dejaremos el pedido listo para retiro o despacho.';
+      case _PaymentPresentation.failed:
+        return 'Tu pedido quedó guardado, pero no será preparado hasta que completes el pago. Puedes reintentar Mercado Pago desde el resumen.';
+      case _PaymentPresentation.pending:
+        return 'Mercado Pago todavía está revisando la operación. Evita pagar de nuevo mientras el estado siga pendiente.';
+      case _PaymentPresentation.transferPending:
+        return 'Realiza la transferencia con los datos indicados y envía el comprobante para que podamos preparar el pedido.';
+      case _PaymentPresentation.orderReceived:
+        return 'Recibimos el pedido y te avisaremos apenas el equipo lo prepare para retiro o despacho.';
+    }
+  }
+
+  String? _presentationStatusLine(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.failed:
+        return 'El pago no se completó. Puedes intentar nuevamente.';
+      case _PaymentPresentation.pending:
+        return 'El pago sigue pendiente de confirmación en Mercado Pago.';
+      case _PaymentPresentation.transferPending:
+        return 'Esperamos el comprobante de transferencia para confirmar el pago.';
+      case _PaymentPresentation.paid:
+      case _PaymentPresentation.orderReceived:
+        return null;
+    }
+  }
+
+  String _summaryPaymentLabel(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return 'PAGO PROCESADO';
+      case _PaymentPresentation.failed:
+        return 'PAGO FALLIDO';
+      case _PaymentPresentation.pending:
+        return 'PAGO EN REVISIÓN';
+      case _PaymentPresentation.transferPending:
+        return 'ESPERANDO TRANSFERENCIA';
+      case _PaymentPresentation.orderReceived:
+        return 'PAGO POR CONFIRMAR';
+    }
+  }
+
+  String _summaryFooterText(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return 'Guarda tu número de pedido y revisa tu correo para seguir el estado de la compra.';
+      case _PaymentPresentation.failed:
+        return 'Tu pedido está guardado, pero debes completar el pago para que podamos prepararlo.';
+      case _PaymentPresentation.pending:
+        return 'Guarda tu número de pedido. Te avisaremos cuando Mercado Pago confirme el resultado.';
+      case _PaymentPresentation.transferPending:
+        return 'Guarda tu número de pedido y envía el comprobante para confirmar la compra.';
+      case _PaymentPresentation.orderReceived:
+        return 'Guarda tu número de pedido y revisa tu correo para seguir el estado del pedido.';
+    }
+  }
+
+  List<String> _nextStepsFor(_PaymentPresentation paymentPresentation) {
+    switch (paymentPresentation) {
+      case _PaymentPresentation.paid:
+        return const [
+          'Te enviaremos un email de confirmación con los detalles de tu pedido.',
+          'Procesaremos tu pedido en 1-2 días hábiles.',
+          'Te contactaremos si necesitamos más información.',
+        ];
+      case _PaymentPresentation.failed:
+        return const [
+          'Reintenta el pago desde el resumen del pedido.',
+          'Si Mercado Pago vuelve a rechazarlo, prueba con otro medio de pago.',
+          'Te podemos ayudar si nos escribes con tu número de pedido.',
+        ];
+      case _PaymentPresentation.pending:
+        return const [
+          'Mercado Pago está revisando el pago.',
+          'No vuelvas a pagar mientras el estado siga pendiente.',
+          'Te notificaremos apenas se confirme o si necesitamos otro medio de pago.',
+        ];
+      case _PaymentPresentation.transferPending:
+        return const [
+          'Realiza la transferencia por el total indicado.',
+          'Envía el comprobante con tu número de pedido.',
+          'Prepararemos el pedido cuando el pago quede confirmado.',
+        ];
+      case _PaymentPresentation.orderReceived:
+        return const [
+          'Te enviaremos un email de confirmación con los detalles de tu pedido.',
+          'Procesaremos tu pedido en 1-2 días hábiles.',
+          'Te contactaremos si necesitamos más información.',
+        ];
+    }
   }
 
   String _formatPaymentMethod(String paymentMethod) {

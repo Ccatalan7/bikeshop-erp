@@ -6,19 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+function mapPaymentStatus(status: string): string {
+  if (status === 'approved') return 'paid'
+  if (status === 'rejected' || status === 'cancelled') return 'failed'
+  return 'pending'
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  try {
-    const { payment_id, tenant_id } = await req.json()
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
 
-    if (!payment_id) {
-      return new Response(
-        JSON.stringify({ error: 'payment_id is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+  try {
+    const { payment_id, tenant_id, order_id } = await req.json()
+
+    if (!payment_id || !tenant_id) {
+      return jsonResponse({ error: 'payment_id and tenant_id are required' }, 400)
     }
 
     const supabase = createClient(
@@ -26,57 +40,100 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    let query = supabase
+    const { data: settings, error: settingsError } = await supabase
       .from('website_settings')
       .select('value')
+      .eq('tenant_id', tenant_id)
       .eq('key', 'mercadopago_access_token')
       .limit(1)
-
-    if (tenant_id) {
-      query = query.eq('tenant_id', tenant_id)
-    }
-
-    const { data: settings, error: settingsError } = await query
 
     if (settingsError) {
       throw new Error(`Settings query failed: ${settingsError.message}`)
     }
 
     const accessToken = settings?.[0]?.value
-
     if (!accessToken) {
-      return new Response(
-        JSON.stringify({ error: 'MercadoPago not configured for this tenant' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+      return jsonResponse({ error: 'MercadoPago not configured for this tenant' }, 400)
     }
 
     const mpResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${encodeURIComponent(payment_id)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
     )
 
     const payment = await mpResponse.json()
 
     if (!mpResponse.ok) {
-      return new Response(
-        JSON.stringify({ error: 'MercadoPago API error', details: payment }),
-        { status: mpResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+      console.error('[MercadoPago] Payment fetch failed', mpResponse.status, payment)
+      return jsonResponse({ error: 'MercadoPago API error' }, mpResponse.status)
     }
 
-    return new Response(
-      JSON.stringify(payment),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
+    const externalReference = payment?.external_reference?.toString() ?? ''
+    if (order_id && externalReference !== order_id.toString()) {
+      return jsonResponse({ error: 'Payment does not match order' }, 409)
+    }
+
+    if (!externalReference) {
+      return jsonResponse({ error: 'Payment has no order reference' }, 409)
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from('online_orders')
+      .select('id, tenant_id, total')
+      .eq('id', externalReference)
+      .eq('tenant_id', tenant_id)
+      .maybeSingle()
+
+    if (orderError) {
+      throw new Error(`Order query failed: ${orderError.message}`)
+    }
+
+    if (!order) {
+      return jsonResponse({ error: 'Order not found for payment' }, 404)
+    }
+
+    const paidAmount = Number(payment?.transaction_amount ?? 0)
+    const orderTotal = Number(order.total ?? 0)
+    if (payment.status === 'approved' && Math.abs(paidAmount - orderTotal) > 1) {
+      return jsonResponse({ error: 'Payment amount does not match order total' }, 409)
+    }
+
+    const paymentStatus = mapPaymentStatus(payment.status)
+    const { error: updateError } = await supabase
+      .from('online_orders')
+      .update({
+        payment_status: paymentStatus,
+        payment_method: 'mercadopago',
+        payment_reference: payment_id.toString(),
+        paid_at: payment.status === 'approved' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', order.id)
+      .eq('tenant_id', tenant_id)
+
+    if (updateError) {
+      throw new Error(`Order update failed: ${updateError.message}`)
+    }
+
+    if (payment.status === 'approved') {
+      const { error: rpcError } = await supabase.rpc('process_online_order', {
+        p_order_id: order.id,
+      })
+
+      if (rpcError) {
+        throw new Error(`Order processing failed: ${rpcError.message}`)
+      }
+    }
+
+    return jsonResponse({
+      id: payment.id?.toString() ?? payment_id.toString(),
+      status: payment.status,
+      status_detail: payment.status_detail ?? null,
+      external_reference: externalReference,
+      payment_status: paymentStatus,
+    })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    )
+    console.error('[MercadoPago] Get payment error', error)
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Unknown error' }, 500)
   }
 })

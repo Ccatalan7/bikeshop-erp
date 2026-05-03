@@ -14,7 +14,6 @@ type MercadoPagoToken = {
 serve(async (req) => {
   console.log('🔔 [WEBHOOK] ========== REQUEST RECEIVED ==========')
   console.log('🔔 [WEBHOOK] Method:', req.method)
-  console.log('🔔 [WEBHOOK] URL:', req.url)
   console.log('🔔 [WEBHOOK] Time:', new Date().toISOString())
 
   // Handle CORS preflight
@@ -33,7 +32,7 @@ serve(async (req) => {
 
     console.log('🔔 [WEBHOOK] Step 2: Parsing request body...')
     const body = await req.json()
-    console.log('🔔 [WEBHOOK] Step 2: ✅ Body parsed:', JSON.stringify(body, null, 2))
+    console.log('🔔 [WEBHOOK] Step 2: ✅ Body parsed')
 
     const { type, action, data } = body
     console.log('🔔 [WEBHOOK] Event type:', type, '| Action:', action, '| Data ID:', data?.id)
@@ -131,8 +130,7 @@ serve(async (req) => {
     })
   } catch (error) {
     console.error('🔔 [WEBHOOK] ❌❌❌ FATAL ERROR:', error)
-    console.error('🔔 [WEBHOOK] Error stack:', error.stack)
-    return new Response(JSON.stringify({ error: error.message, stack: error.stack }), {
+    return new Response(JSON.stringify({ error: 'Webhook processing failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -245,7 +243,6 @@ async function processPayment(
   console.log('💳 [PROCESS_PAYMENT] - Status:', payment.status)
   console.log('💳 [PROCESS_PAYMENT] - External Reference (Order ID):', payment.external_reference)
   console.log('💳 [PROCESS_PAYMENT] - Amount:', payment.transaction_amount)
-  console.log('💳 [PROCESS_PAYMENT] - Payer Email:', payment.payer?.email)
 
   const orderId = payment.external_reference
   let status = payment.status
