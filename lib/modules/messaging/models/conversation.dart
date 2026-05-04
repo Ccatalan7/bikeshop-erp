@@ -1,6 +1,7 @@
 class Conversation {
   final String id;
   final String type; // 'internal' or 'support'
+  final String channel; // 'internal', 'website_portal', or 'whatsapp'
   final String status; // 'pending', 'active', 'resolved', 'rejected'
   final String? title;
   final String? contextType;
@@ -15,6 +16,7 @@ class Conversation {
   Conversation({
     required this.id,
     required this.type,
+    required this.channel,
     this.status = 'active',
     this.title,
     this.contextType,
@@ -26,6 +28,43 @@ class Conversation {
     this.createdBy,
     this.creatorName,
   });
+
+  static String normalizeChannel(dynamic rawChannel, String type) {
+    final value = rawChannel?.toString().trim();
+    if (value == 'internal' ||
+        value == 'website_portal' ||
+        value == 'whatsapp') {
+      return value!;
+    }
+
+    return type == 'internal' ? 'internal' : 'website_portal';
+  }
+
+  static bool supportsContextPanel(String? contextType) {
+    return contextType == 'job' ||
+        contextType == 'invoice' ||
+        contextType == 'order';
+  }
+
+  bool get isInternal => channel == 'internal' || type == 'internal';
+  bool get isSupport => type == 'support';
+  bool get isWhatsApp => channel == 'whatsapp';
+  bool get isWebsitePortal => channel == 'website_portal';
+  bool get hasLinkedContext => contextType != null && contextId != null;
+  bool get hasSupportedContextPanel =>
+      contextId != null && supportsContextPanel(contextType);
+
+  String get channelLabel {
+    if (isWhatsApp) return 'Cliente WhatsApp';
+    if (isWebsitePortal) return 'Cliente web';
+    return 'Chat interno';
+  }
+
+  String get shortChannelLabel {
+    if (isWhatsApp) return 'WhatsApp';
+    if (isWebsitePortal) return 'Web';
+    return 'Interno';
+  }
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
     var pIds = <String>[];
@@ -52,9 +91,12 @@ class Conversation {
       }
     }
 
+    final type = json['type']?.toString() ?? 'support';
+
     return Conversation(
       id: json['id'],
-      type: json['type'],
+      type: type,
+      channel: normalizeChannel(json['channel'], type),
       status: json['status'] ?? 'active',
       title: json['title'],
       contextType: cType,

@@ -26,6 +26,7 @@ class ChatProvider extends ChangeNotifier {
   // State
   List<Conversation> _conversations = [];
   List<Message> _activeMessages = [];
+  final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
   bool _isLoading = false;
@@ -34,12 +35,68 @@ class ChatProvider extends ChangeNotifier {
   // Subscriptions
   StreamSubscription? _messagesSubscription;
   RealtimeChannel? _conversationsSubscription;
+  StreamSubscription? _notificationSubscription;
+  Timer? _conversationsRefreshTimer;
 
   // Getters
   List<Conversation> get conversations => _conversations;
-  List<Message> get activeMessages => _activeMessages;
+  List<Message> get activeMessages => _mergedActiveMessages;
   bool get isLoading => _isLoading;
   String? get activeConversationId => _activeConversationId;
+
+  List<Message> get _mergedActiveMessages {
+    final merged = <Message>[..._activeMessages];
+    for (final message in _optimisticMessages.values) {
+      if (message.conversationId != _activeConversationId) continue;
+      if (_hasMatchingServerMessage(message, merged)) continue;
+      merged.add(message);
+    }
+
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return merged;
+  }
+
+  bool _hasMatchingServerMessage(Message optimistic, List<Message> server) {
+    final clientMessageId =
+        optimistic.metadata['client_message_id']?.toString();
+    final externalMessageId =
+        optimistic.metadata['external_message_id']?.toString();
+
+    return server.any((message) {
+      if (message.id == optimistic.id) return true;
+      if (message.conversationId != optimistic.conversationId) return false;
+
+      final messageClientId = message.metadata['client_message_id']?.toString();
+      if (clientMessageId != null &&
+          clientMessageId.isNotEmpty &&
+          messageClientId == clientMessageId) {
+        return true;
+      }
+
+      final messageExternalId =
+          message.metadata['external_message_id']?.toString();
+      if (externalMessageId != null &&
+          externalMessageId.isNotEmpty &&
+          messageExternalId == externalMessageId) {
+        return true;
+      }
+
+      if (message.senderId != optimistic.senderId) return false;
+      if (message.content != optimistic.content) return false;
+
+      final deltaMs = message.createdAt
+          .difference(optimistic.createdAt)
+          .inMilliseconds
+          .abs();
+      return deltaMs < const Duration(seconds: 20).inMilliseconds;
+    });
+  }
+
+  void _pruneConfirmedOptimisticMessages(List<Message> serverMessages) {
+    _optimisticMessages.removeWhere(
+      (_, optimistic) => _hasMatchingServerMessage(optimistic, serverMessages),
+    );
+  }
 
   /// Total unread messages across all conversations + pending requests
   int get totalUnreadCount => _conversations.fold(0, (sum, c) {
@@ -78,16 +135,26 @@ class ChatProvider extends ChangeNotifier {
     loadConversations(); // Initial load
 
     _conversationsSubscription = _service.subscribeToConversationsUpdates(() {
-      loadConversations(); // Re-fetch on any change
+      // Refresh immediately for fast list reordering, then once more after the
+      // unread-count view has caught up to the message/conversation triggers.
+      loadConversations();
+      _scheduleConversationRefresh();
     });
 
     // Also listen to NotificationService for realtime alerts (triggers badge update)
-    NotificationService().onMessageReceived.listen((_) {
-      // Small delay to ensure DB view is updated by trigger
-      Future.delayed(const Duration(milliseconds: 500), () {
-        loadConversations();
-      });
-    });
+    _notificationSubscription = NotificationService().onMessageReceived.listen(
+      (_) {
+        _scheduleConversationRefresh();
+      },
+    );
+  }
+
+  void _scheduleConversationRefresh() {
+    _conversationsRefreshTimer?.cancel();
+    _conversationsRefreshTimer = Timer(
+      const Duration(milliseconds: 500),
+      loadConversations,
+    );
   }
 
   /// Get display title for a conversation
@@ -178,6 +245,7 @@ class ChatProvider extends ChangeNotifier {
 
     _activeConversationId = conversationId;
     _activeMessages = []; // Clear previous chat immediately
+    _optimisticMessages.clear();
     _isLoading = true; // Show loader while stream connects
     notifyListeners();
 
@@ -189,6 +257,7 @@ class ChatProvider extends ChangeNotifier {
       _conversations[index] = Conversation(
         id: old.id,
         type: old.type,
+        channel: old.channel,
         status: old.status,
         title: old.title,
         contextType: old.contextType,
@@ -216,6 +285,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       _messagesSubscription = _service.getMessagesStream(conversationId).listen(
         (messages) {
+          _pruneConfirmedOptimisticMessages(messages);
           _activeMessages = messages;
           _isLoading = false;
           notifyListeners();
@@ -300,6 +370,39 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Open or create a WhatsApp-backed support conversation with a CRM customer.
+  Future<void> openWhatsAppCustomerChat({
+    required String phoneNumber,
+    required String contactName,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final conversationId = await _service.openWhatsAppSupportConversation(
+        phoneNumber: phoneNumber,
+        contactName: contactName,
+        customerId: customerId,
+        contextType: contextType,
+        contextId: contextId,
+      );
+
+      await loadConversations();
+      setActiveConversation(conversationId);
+    } catch (e) {
+      debugPrint('❌ Error opening WhatsApp customer chat: $e');
+      rethrow;
+    } finally {
+      if (_activeConversationId == null) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Send a message in the active conversation
   Future<void> sendMessage(String content,
       {String type = 'text', Map<String, dynamic>? metadata}) async {
@@ -307,6 +410,10 @@ class ChatProvider extends ChangeNotifier {
     if (activeId == null || content.trim().isEmpty) return;
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
+    final messageMetadata = <String, dynamic>{
+      ...?metadata,
+      'client_message_id': tempId,
+    };
 
     // 1. Optimistic Update: Add message immediately
     final tempMessage = Message(
@@ -315,27 +422,25 @@ class ChatProvider extends ChangeNotifier {
       senderId: _service.currentUserId,
       content: content,
       type: type,
-      metadata: metadata ?? {},
+      metadata: messageMetadata,
       createdAt: DateTime.now(),
       isMe: true,
     );
 
-    _activeMessages.add(tempMessage);
-    notifyListeners();
+    addOptimisticMessage(tempMessage);
 
     try {
       await _service.sendMessage(
         conversationId: activeId,
         content: content,
         type: type,
-        metadata: metadata,
+        metadata: messageMetadata,
       );
       // Realtime stream will handle the validation/replacement
     } catch (e) {
       debugPrint('❌ Error sending message: $e');
       // On error, remove the temp message
-      _activeMessages.removeWhere((m) => m.id == tempId);
-      notifyListeners();
+      removeMessageById(tempId);
       // TODO: Show error toast
     }
   }
@@ -345,14 +450,15 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    _activeMessages.add(message);
+    _optimisticMessages[message.id] = message;
     notifyListeners();
   }
 
   void removeMessageById(String messageId) {
+    final removedOptimistic = _optimisticMessages.remove(messageId) != null;
     final previousLength = _activeMessages.length;
     _activeMessages.removeWhere((message) => message.id == messageId);
-    if (_activeMessages.length != previousLength) {
+    if (removedOptimistic || _activeMessages.length != previousLength) {
       notifyListeners();
     }
   }
@@ -363,6 +469,26 @@ class ChatProvider extends ChangeNotifier {
   ) {
     final index =
         _activeMessages.indexWhere((message) => message.id == messageId);
+    final optimisticMessage = _optimisticMessages[messageId];
+    if (optimisticMessage != null) {
+      final updatedMetadata = Map<String, dynamic>.from(
+        optimisticMessage.metadata,
+      )..addAll(metadataUpdates);
+
+      _optimisticMessages[messageId] = Message(
+        id: optimisticMessage.id,
+        conversationId: optimisticMessage.conversationId,
+        senderId: optimisticMessage.senderId,
+        content: optimisticMessage.content,
+        type: optimisticMessage.type,
+        metadata: updatedMetadata,
+        createdAt: optimisticMessage.createdAt,
+        isMe: optimisticMessage.isMe,
+      );
+      notifyListeners();
+      return;
+    }
+
     if (index == -1) {
       return;
     }
@@ -392,6 +518,29 @@ class ChatProvider extends ChangeNotifier {
   }) {
     final index =
         _activeMessages.indexWhere((message) => message.id == messageId);
+    final optimisticMessage = _optimisticMessages[messageId];
+    if (optimisticMessage != null) {
+      final updatedMetadata = Map<String, dynamic>.from(
+        optimisticMessage.metadata,
+      );
+      if (metadataUpdates != null) {
+        updatedMetadata.addAll(metadataUpdates);
+      }
+
+      _optimisticMessages[messageId] = Message(
+        id: optimisticMessage.id,
+        conversationId: optimisticMessage.conversationId,
+        senderId: optimisticMessage.senderId,
+        content: content ?? optimisticMessage.content,
+        type: optimisticMessage.type,
+        metadata: updatedMetadata,
+        createdAt: optimisticMessage.createdAt,
+        isMe: optimisticMessage.isMe,
+      );
+      notifyListeners();
+      return;
+    }
+
     if (index == -1) {
       return;
     }
@@ -475,8 +624,10 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _conversationsRefreshTimer?.cancel();
     _messagesSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
+    _notificationSubscription?.cancel();
     super.dispose();
   }
 }

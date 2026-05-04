@@ -428,7 +428,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
   Widget _buildButtonContent() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(4),
@@ -438,10 +438,11 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
         children: [
           Text(
             widget.parent.label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: _isOpen ? Colors.white : widget.textColor,
-                  letterSpacing: 0.3,
+                  letterSpacing: 0.1,
                 ),
           ),
           const SizedBox(width: 4),

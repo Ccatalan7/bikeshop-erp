@@ -98,18 +98,31 @@ class _NewChatDialogState extends State<NewChatDialog> {
       }
 
       // Process Customers
-      final customerCandidates = customers.map((c) {
+      final customerCandidates = customers.where((c) => c.id != null).map((c) {
         final hasAuth = c.authUserId != null;
+        final phone = c.phone?.trim();
+        final hasPhone = phone != null && phone.isNotEmpty;
+        final canChat = c.isActive && (hasPhone || hasAuth);
         return ChatCandidate(
-          id: c.authUserId ??
-              c.id!, // authId if available, else CRM Id (not usable for chat yet)
+          id: c.id!,
+          authUserId: c.authUserId,
+          customerId: c.id,
+          phoneNumber: phone,
           displayName: c.name,
-          subtitle: hasAuth ? (c.email ?? 'Cliente App') : 'Cliente sin App',
+          subtitle: hasPhone
+              ? 'WhatsApp • $phone'
+              : hasAuth
+                  ? (c.email ?? 'Chat web')
+                  : 'Sin canal disponible',
           initials: c.initials,
           isActive: c.isActive,
-          canChat: hasAuth && c.isActive,
+          canChat: canChat,
           type: CandidateType.customer,
-          errorMessage: hasAuth ? null : 'No registrado en App',
+          errorMessage: canChat
+              ? null
+              : c.isActive
+                  ? 'Sin teléfono ni cuenta App'
+                  : 'Cliente inactivo',
         );
       }).toList();
 
@@ -158,9 +171,9 @@ class _NewChatDialogState extends State<NewChatDialog> {
     }
   }
 
-  void _createCustomerChat(String authUserId) async {
+  void _createCustomerChat(String customerId) async {
     // Find candidate for display name
-    final candidate = _customerCandidates.firstWhere((c) => c.id == authUserId);
+    final candidate = _customerCandidates.firstWhere((c) => c.id == customerId);
     final navigator = Navigator.of(context);
 
     // Show specialized dialog
@@ -396,6 +409,9 @@ enum CandidateType { user, employee, customer }
 
 class ChatCandidate {
   final String id;
+  final String? authUserId;
+  final String? customerId;
+  final String? phoneNumber;
   final String displayName;
   final String subtitle;
   final String initials;
@@ -406,6 +422,9 @@ class ChatCandidate {
 
   ChatCandidate({
     required this.id,
+    this.authUserId,
+    this.customerId,
+    this.phoneNumber,
     required this.displayName,
     required this.subtitle,
     required this.initials,
@@ -438,27 +457,10 @@ class _ContextSelectionDialogState extends State<ContextSelectionDialog> {
 
   Future<void> _loadContexts() async {
     try {
-      final customerService = context.read<CustomerService>();
       final bikeshopService = context.read<BikeshopService>();
       final salesService = context.read<SalesService>();
 
-      // 1. Fetch Open Jobs
-      // Note: customerId in bikeshop is usually the CRM numeric ID, not auth ID.
-      // But ChatCandidate ID is authId.
-      // We need to map authId to CRM customer ID first?
-      // CustomerService usually maps this.
-
-      // Let's deduce CRM ID from user details or trust CustomerService
-      // Wait, getCustomers() gives us ALL customers.
-      // BikeshopService.getJobs takes `customerId` (numeric string).
-      // We need the CRM ID.
-
-      // We need to fetch the customer record by authId to get the numeric ID.
-      final customers = await customerService.getCustomersForList();
-      final customer =
-          customers.firstWhere((c) => c.authUserId == widget.candidate.id);
-
-      final crmId = customer.id;
+      final crmId = widget.candidate.customerId;
 
       if (crmId != null) {
         final jobs = await bikeshopService.getJobs(
@@ -502,14 +504,30 @@ class _ContextSelectionDialogState extends State<ContextSelectionDialog> {
   void _confirm() async {
     try {
       if (!mounted) return;
+      final chatProvider = context.read<ChatProvider>();
+
       // Close dialog immediately
       Navigator.of(context).pop(true);
 
-      await context.read<ChatProvider>().createCustomerChat(
-            widget.candidate.id,
-            contextType: _selectedOption?.type, // Nullable
-            contextId: _selectedOption?.id, // Nullable
-          );
+      final phoneNumber = widget.candidate.phoneNumber;
+      final authUserId = widget.candidate.authUserId;
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        await chatProvider.openWhatsAppCustomerChat(
+          phoneNumber: phoneNumber,
+          contactName: widget.candidate.displayName,
+          customerId: widget.candidate.customerId,
+          contextType: _selectedOption?.type,
+          contextId: _selectedOption?.id,
+        );
+      } else if (authUserId != null && authUserId.isNotEmpty) {
+        await chatProvider.createCustomerChat(
+          authUserId,
+          contextType: _selectedOption?.type,
+          contextId: _selectedOption?.id,
+        );
+      } else {
+        throw Exception('El cliente no tiene teléfono ni cuenta App');
+      }
     } catch (e) {
       debugPrint('Error creating chat with context: $e');
     }

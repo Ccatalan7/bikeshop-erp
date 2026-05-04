@@ -11,11 +11,13 @@ import '../../website/services/website_service.dart';
 class ChatContextPanel extends StatefulWidget {
   final String contextType;
   final String contextId;
+  final VoidCallback? onClose;
 
   const ChatContextPanel({
     super.key,
     required this.contextType,
     required this.contextId,
+    this.onClose,
   });
 
   @override
@@ -105,7 +107,7 @@ class _ChatContextPanelState extends State<ChatContextPanel>
           _error = 'Pedido web no encontrado';
         }
       } else {
-        _error = 'Tipo de contexto desconocido';
+        _data = const _UnsupportedChatContext();
       }
     } catch (e) {
       _error = 'Error cargando datos';
@@ -128,34 +130,62 @@ class _ChatContextPanelState extends State<ChatContextPanel>
           child: Text(_error!, style: const TextStyle(color: Colors.red)));
     }
 
+    if (_data is _UnsupportedChatContext) return const SizedBox.shrink();
+
     if (_data == null) return const Center(child: Text('Sin datos'));
 
     if (widget.contextType == 'job') {
-      return _buildJobTabs(_data as MechanicJob);
+      return _withCloseButton(_buildJobTabs(_data as MechanicJob));
     } else if (widget.contextType == 'invoice') {
-      return Container(
+      return _withCloseButton(Container(
           width: 300,
           decoration: BoxDecoration(
             border: Border(left: BorderSide(color: Colors.grey[300]!)),
             color: Colors.grey[50],
           ),
           padding: const EdgeInsets.all(16),
-          child: _buildInvoiceContent(_data as Invoice));
+          child: _buildInvoiceContent(_data as Invoice)));
     } else if (widget.contextType == 'order') {
-      return Container(
-        width: 320,
+      return _withCloseButton(Container(
+        width: 300,
         decoration: BoxDecoration(
           border: Border(left: BorderSide(color: Colors.grey[300]!)),
           color: Colors.grey[50],
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: _buildOrderContent(_data as OnlineOrder),
-        ),
-      );
+        padding: const EdgeInsets.all(16),
+        child: _buildOrderContent(_data as OnlineOrder),
+      ));
     }
 
     return const SizedBox.shrink();
+  }
+
+  Widget _withCloseButton(Widget child) {
+    if (widget.onClose == null) return child;
+
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Material(
+            color: Colors.transparent,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: widget.onClose,
+              tooltip: 'Cerrar panel',
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
+                width: 32,
+                height: 32,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildJobTabs(MechanicJob job) {
@@ -358,12 +388,10 @@ class _ChatContextPanelState extends State<ChatContextPanel>
             const Icon(Icons.shopping_cart_outlined,
                 size: 20, color: Color(0xFF093357)),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'PEDIDO WEB',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+            Text(
+              'PEDIDO WEB',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -375,60 +403,42 @@ class _ChatContextPanelState extends State<ChatContextPanel>
             color: _getPaymentStatusColor(order.paymentStatus)),
         _buildInfoRow('Entrega', deliveryLabel),
         const Divider(height: 24),
-        Text('Cliente',
-            style:
-                theme.textTheme.labelSmall?.copyWith(color: Colors.grey[600])),
-        const SizedBox(height: 6),
-        Text(order.customerName,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        if (order.customerEmail.isNotEmpty)
-          Text(order.customerEmail, style: theme.textTheme.bodySmall),
-        if (order.customerPhone?.isNotEmpty == true)
-          Text(order.customerPhone!, style: theme.textTheme.bodySmall),
-        const Divider(height: 24),
         if (order.items.isNotEmpty) ...[
-          Text('Productos (${order.items.length})',
+          Text('Items (${order.items.length})',
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: Colors.grey[600])),
           const SizedBox(height: 8),
-          ...order.items.take(8).map((item) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: Text('${item.quantity}x',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                  ),
-                  Expanded(
-                    child: Column(
+          Column(
+            children: order.items.map((item) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                        child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(item.productName,
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                        if (item.productSku?.isNotEmpty == true)
-                          Text('SKU ${item.productSku}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 10,
-                                color: Colors.grey[600],
-                              )),
+                            style: theme.textTheme.bodySmall),
+                        Text(
+                            '${item.quantity} x ${currencyFormat.format(item.unitPrice)}',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(fontSize: 10, color: Colors.grey)),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(currencyFormat.format(item.subtotal),
-                      style: theme.textTheme.bodySmall),
-                ],
-              ),
-            );
-          }),
-        ],
+                    )),
+                    Text(currencyFormat.format(item.subtotal),
+                        style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ] else
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: Text('Sin items')),
+          ),
         const Divider(height: 24),
         _buildInfoRow('Total', currencyFormat.format(order.total),
             isBold: true),
@@ -490,4 +500,8 @@ class _ChatContextPanelState extends State<ChatContextPanel>
       _ => Colors.orange,
     };
   }
+}
+
+class _UnsupportedChatContext {
+  const _UnsupportedChatContext();
 }

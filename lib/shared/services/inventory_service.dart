@@ -815,8 +815,10 @@ class InventoryService extends ChangeNotifier {
       brandId: json['brand_id']?.toString(),
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+      specifications: (json['specifications'] as Map?)?.map(
+            (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+          ) ??
+          const {},
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name'] as String?,
       supplierReference: json['supplier_reference'] as String?,

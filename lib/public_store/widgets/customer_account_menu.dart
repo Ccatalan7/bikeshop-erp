@@ -45,7 +45,10 @@ class CustomerAccountMenu extends StatelessWidget {
           foregroundColor: foregroundColor,
           backgroundColor: backgroundColor,
           side: BorderSide(color: borderColor, width: 1.2),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 18 : 14,
+            vertical: isMobile ? 11 : 9,
+          ),
           minimumSize: isMobile ? const Size(double.infinity, 48) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -116,7 +119,7 @@ class CustomerAccountMenu extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           CircleAvatar(
-            radius: 18,
+            radius: 17,
             backgroundColor: textColor?.withValues(alpha: 0.1) ??
                 PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
             child: Text(

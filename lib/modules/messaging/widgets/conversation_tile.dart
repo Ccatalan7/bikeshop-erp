@@ -50,6 +50,18 @@ class _ConversationTileState extends State<ConversationTile> {
     final conv = widget.conversation;
     final isPending = conv.status == 'pending';
     final hasUnread = conv.unreadCount > 0;
+    final channelIcon = conv.isWhatsApp
+        ? Icons.phone_in_talk_outlined
+        : conv.isWebsitePortal
+            ? Icons.language_outlined
+            : Icons.people_outline;
+    final channelColor = isPending
+        ? Colors.orange[700]
+        : conv.isWhatsApp
+            ? const Color(0xFF047857)
+            : conv.isWebsitePortal
+                ? const Color(0xFF093357)
+                : Colors.grey[600];
 
     Widget content = ListTile(
       selected: widget.isActive,
@@ -61,8 +73,8 @@ class _ConversationTileState extends State<ConversationTile> {
           CircleAvatar(
             backgroundColor: isPending ? Colors.orange[100] : Colors.grey[200],
             child: Icon(
-              conv.type == 'support' ? Icons.person : Icons.people,
-              color: isPending ? Colors.orange[700] : Colors.grey[600],
+              channelIcon,
+              color: channelColor,
               size: 20,
             ),
           ),

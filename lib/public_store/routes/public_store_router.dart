@@ -439,6 +439,16 @@ class PublicStoreRouter {
           ),
         ),
 
+        // Services catalog
+        GoRoute(
+          path: '/servicios',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ProductCatalogPage(),
+          ),
+        ),
+
         // Contact
         GoRoute(
           path: '/contacto',
@@ -721,6 +731,16 @@ class PublicStoreRouter {
             final qp = state.uri.queryParameters;
             return Uri(
               path: '/productos',
+              queryParameters: qp.isEmpty ? null : qp,
+            ).toString();
+          },
+        ),
+        GoRoute(
+          path: '/tienda/servicios',
+          redirect: (context, state) {
+            final qp = state.uri.queryParameters;
+            return Uri(
+              path: '/servicios',
               queryParameters: qp.isEmpty ? null : qp,
             ).toString();
           },

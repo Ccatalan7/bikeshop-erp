@@ -76,6 +76,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         PaymentsPage,
         PegasTablePage,
         ProductFormPage,
+        ProductWebsiteVisibilityPage,
         ProductImportPage,
         ProductListPage,
         PurchaseInvoiceFormPage,
@@ -2408,6 +2409,17 @@ class AppRouter {
                 state,
                 erp.loadLibrary(),
                 () => erp.FeaturedProductsPage(),
+              ),
+            ),
+            // Product website visibility
+            GoRoute(
+              path: 'product-visibility',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                erp.loadLibrary(),
+                () => erp.ProductWebsiteVisibilityPage(),
               ),
             ),
             // Content Management

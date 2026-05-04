@@ -15,7 +15,8 @@ class Product {
       'id,name,sku,barcode,price,inventory_qty,stock_quantity,'
       'image_url,image_url_optimized,image_urls,description,'
       'website_description,category,category_id,category_name,brand_id,brand,'
-      'model,manufacturer,manufacturer_sku,gtin,product_type,track_stock,'
+      'model,manufacturer,manufacturer_sku,gtin,color,size,material,weight,'
+      'specifications,product_type,track_stock,'
       'is_active,is_published,show_on_website,created_at,updated_at';
 
   final String id;
@@ -187,8 +188,10 @@ class Product {
       brandId: json['brand_id'] as String? ?? json['brandId'] as String?,
       brand: json['brand'] as String?,
       model: json['model'] as String?,
-      specifications:
-          Map<String, String>.from(json['specifications'] as Map? ?? {}),
+      specifications: (json['specifications'] as Map?)?.map(
+            (key, value) => MapEntry(key.toString(), value?.toString() ?? ''),
+          ) ??
+          const {},
       supplierId: json['supplier_id'] as String?,
       supplierName: json['supplier_name'] as String?,
       supplierReference: json['supplier_reference'] as String?,

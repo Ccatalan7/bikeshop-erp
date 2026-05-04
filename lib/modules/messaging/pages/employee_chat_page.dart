@@ -32,6 +32,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   late TabController _tabController;
   ReferenceSegment? _activeReference;
   bool _isSidePanelExpanded = false;
+  String? _closedContextConversationId;
 
   @override
   void initState() {
@@ -123,21 +124,23 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     });
   }
 
+  void _closeConversationContextPanel(Conversation? activeConversation) {
+    if (activeConversation == null) return;
+    setState(() {
+      _closedContextConversationId = activeConversation.id;
+    });
+  }
+
+  void _reopenConversationContextPanel() {
+    setState(() {
+      _closedContextConversationId = null;
+    });
+  }
+
   void _toggleSidePanelExpansion() {
     setState(() {
       _isSidePanelExpanded = !_isSidePanelExpanded;
     });
-  }
-
-  /// Group customer conversations by status
-  Map<String, List<Conversation>> _groupByStatus(List<Conversation> convs) {
-    return {
-      'pending': convs.where((c) => c.status == 'pending').toList(),
-      'active': convs
-          .where((c) => c.status != 'pending' && c.status != 'resolved')
-          .toList(),
-      'resolved': convs.where((c) => c.status == 'resolved').toList(),
-    };
   }
 
   /// Count pending customer requests
@@ -271,6 +274,13 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     int activeSupportCount,
     int internalCount,
   ) {
+    final hasConversationContext =
+        activeConversation?.hasSupportedContextPanel ?? false;
+    final isConversationContextClosed = hasConversationContext &&
+        activeConversation?.id == _closedContextConversationId;
+    final showConversationContextPanel =
+        hasConversationContext && !isConversationContextClosed;
+
     return Scaffold(
       body: Row(
         children: [
@@ -338,6 +348,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               child: activeConversation != null
                   ? ChatWindow(
                       conversation: activeConversation,
+                      isContextPanelClosed: isConversationContextClosed,
+                      onShowContextPanel: _reopenConversationContextPanel,
                       onReferenceTap: (ref) {
                         setState(() {
                           _activeReference = ref;
@@ -374,11 +386,12 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 isExpanded: _isSidePanelExpanded,
               ),
             )
-          else if (activeConversation?.contextId != null &&
-              activeConversation?.contextType != null)
+          else if (activeConversation?.hasSupportedContextPanel == true &&
+              showConversationContextPanel)
             ChatContextPanel(
               contextType: activeConversation!.contextType!,
               contextId: activeConversation.contextId!,
+              onClose: () => _closeConversationContextPanel(activeConversation),
             ),
         ],
       ),
@@ -428,7 +441,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ),
           const SizedBox(height: 4),
           Text(
-            'Equipo y clientes WhatsApp, separados por flujo de trabajo.',
+            'Equipo, chat web y WhatsApp separados por canal.',
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 12,
@@ -521,9 +534,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   Widget _buildInternalList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
     // For internal tab, show filtered internal conversations
-    final internalConvs =
-        conversations.where((c) => c.type == 'internal').toList()
-          ..sort(_compareConversations);
+    final internalConvs = conversations
+        .where((c) => c.type == 'internal')
+        .toList()
+      ..sort(_compareConversations);
 
     if (internalConvs.isEmpty) {
       return _buildEmptyState(
@@ -551,57 +565,90 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   /// Build grouped list for customer chats
   Widget _buildCustomerList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
-    final customerConvs =
-        conversations.where((c) => c.type == 'support').toList()
-          ..sort(_compareConversations);
-    final grouped = _groupByStatus(customerConvs);
+    final customerConvs = conversations
+        .where((c) => c.type == 'support')
+        .toList()
+      ..sort(_compareConversations);
 
     if (customerConvs.isEmpty) {
       return _buildEmptyState(
         icon: Icons.support_agent_outlined,
-        title: 'Sin conversaciones de WhatsApp',
+        title: 'Sin conversaciones de clientes',
         subtitle: 'Los contactos con clientes aparecerán aquí',
       );
     }
+
+    final pendingConvs = customerConvs
+        .where((conversation) => conversation.status == 'pending')
+        .toList();
+    final whatsAppConvs = customerConvs
+        .where((conversation) =>
+            conversation.isWhatsApp &&
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .toList();
+    final websiteConvs = customerConvs
+        .where((conversation) =>
+            conversation.isWebsitePortal &&
+            conversation.status != 'pending' &&
+            conversation.status != 'resolved')
+        .toList();
+    final resolvedConvs = customerConvs
+        .where((conversation) => conversation.status == 'resolved')
+        .toList();
 
     return ListView(
       children: [
         _buildSupportOverview(customerConvs),
         // Pending Section
-        if (grouped['pending']!.isNotEmpty)
+        if (pendingConvs.isNotEmpty)
           _buildSection(
             icon: Icons.pending_actions,
             title: 'Solicitudes pendientes',
-            subtitle: 'Requieren aceptación antes de responder como equipo.',
-            count: grouped['pending']!.length,
+            subtitle:
+                'Solicitudes nuevas. Cada fila indica si viene de web o WhatsApp.',
+            count: pendingConvs.length,
             color: const Color(0xFFB45309),
-            conversations: grouped['pending']!,
+            conversations: pendingConvs,
             provider: provider,
             activeId: activeId,
           ),
 
-        // Active Section
-        if (grouped['active']!.isNotEmpty)
+        // WhatsApp Section
+        if (whatsAppConvs.isNotEmpty)
           _buildSection(
-            icon: Icons.chat_bubble,
-            title: 'Conversaciones activas',
-            subtitle: 'Clientes WhatsApp ya atendidos por el equipo.',
-            count: grouped['active']!.length,
+            icon: Icons.phone_in_talk_outlined,
+            title: 'WhatsApp',
+            subtitle: 'Mensajes que salen y entran por WhatsApp Cloud API.',
+            count: whatsAppConvs.length,
             color: const Color(0xFF047857),
-            conversations: grouped['active']!,
+            conversations: whatsAppConvs,
+            provider: provider,
+            activeId: activeId,
+          ),
+
+        // Website Section
+        if (websiteConvs.isNotEmpty)
+          _buildSection(
+            icon: Icons.language_outlined,
+            title: 'Chat web',
+            subtitle: 'Conversaciones del cliente desde cuenta web o tienda.',
+            count: websiteConvs.length,
+            color: _accentBlue,
+            conversations: websiteConvs,
             provider: provider,
             activeId: activeId,
           ),
 
         // Resolved Section
-        if (grouped['resolved']!.isNotEmpty)
+        if (resolvedConvs.isNotEmpty)
           _buildSection(
             icon: Icons.check_circle,
             title: 'Resueltas',
             subtitle: 'Historial cerrado, disponible para consulta.',
-            count: grouped['resolved']!.length,
+            count: resolvedConvs.length,
             color: Colors.grey,
-            conversations: grouped['resolved']!,
+            conversations: resolvedConvs,
             provider: provider,
             activeId: activeId,
           ),
@@ -659,6 +706,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     final orderContexts = conversations
         .where((conversation) => conversation.contextType == 'order')
         .length;
+    final webConversations = conversations
+        .where((conversation) => conversation.isWebsitePortal)
+        .length;
+    final whatsAppConversations =
+        conversations.where((conversation) => conversation.isWhatsApp).length;
     final unread = conversations.fold<int>(
       0,
       (sum, conversation) => sum + conversation.unreadCount,
@@ -676,7 +728,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Bandeja de clientes WhatsApp',
+            'Bandeja de clientes',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -684,7 +736,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ),
           const SizedBox(height: 4),
           Text(
-            'Usa esta bandeja para revisar, personalizar y enviar respuestas al cliente.',
+            'Chat web y WhatsApp viven separados para no mezclar canales ni permisos de envío.',
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 12,
@@ -696,12 +748,32 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             children: [
               Expanded(
                 child: _buildMiniMetric(
+                  'Web',
+                  webConversations,
+                  Icons.language_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMiniMetric(
+                  'WhatsApp',
+                  whatsAppConversations,
+                  Icons.phone_in_talk_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMiniMetric(
                   'Pedidos',
                   orderContexts,
                   Icons.receipt_long_outlined,
                 ),
               ),
-              const SizedBox(width: 8),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Expanded(
                 child: _buildMiniMetric(
                   'Sin leer',
@@ -781,8 +853,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border(
-              top: BorderSide(color: _borderColor),
-              bottom: BorderSide(color: _borderColor),
+              top: const BorderSide(color: _borderColor),
+              bottom: const BorderSide(color: _borderColor),
               left: BorderSide(color: color, width: 3),
             ),
           ),
@@ -863,6 +935,13 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       isMobile: isMobile,
       subtitle: _getSubtitle(conv),
       onTap: () {
+        if (conv.id != activeId) {
+          setState(() {
+            _closedContextConversationId = null;
+            _activeReference = null;
+            _isSidePanelExpanded = false;
+          });
+        }
         context.read<ChatProvider>().setActiveConversation(conv.id);
         if (isMobile) {
           Navigator.push(
@@ -915,9 +994,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     if (conv.type == 'support') {
       final statusLabel = switch (conv.status) {
-        'pending' => 'Solicitud pendiente',
+        'pending' =>
+          'Solicitud ${conv.shortChannelLabel.toLowerCase()} pendiente',
         'resolved' => 'Resuelto',
-        _ => 'Cliente WhatsApp',
+        _ => conv.channelLabel,
       };
       return contextLabel == null
           ? statusLabel

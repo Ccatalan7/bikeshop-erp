@@ -2347,6 +2347,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       final updates = <String, dynamic>{
         'show_on_website': showOnWebsite,
+        'is_published': showOnWebsite,
       };
 
       if (websiteDescription != null) {
@@ -3094,7 +3095,7 @@ class WebsiteService extends ChangeNotifier {
             'menu_location': 'footer',
             'label': 'Servicios',
             'link_type': 'page',
-            'link_value': '/productos?type=service',
+            'link_value': '/servicios',
             'open_in_new_tab': false,
             'parent_id': enlacesParentId,
             'order_index': 2,

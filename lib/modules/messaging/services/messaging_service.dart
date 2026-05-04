@@ -388,6 +388,7 @@ class MessagingService {
     }
 
     await _client.from('conversations').update({
+      'channel': 'whatsapp',
       'status': 'active',
       'accepted_by': userId,
       'accepted_at': DateTime.now().toIso8601String(),
@@ -445,6 +446,7 @@ class MessagingService {
         .from('conversations')
         .insert({
           'type': 'support',
+          'channel': 'website_portal',
           'title': title,
           'context_type': contextType,
           'context_id': contextId,
@@ -532,6 +534,7 @@ class MessagingService {
         .from('conversations')
         .insert({
           'type': 'internal',
+          'channel': 'internal',
           'last_message_at': DateTime.now().toIso8601String(),
         })
         .select()
@@ -573,6 +576,7 @@ class MessagingService {
         .from('conversations')
         .insert({
           'type': 'internal',
+          'channel': 'internal',
           'title': title,
           'last_message_at': DateTime.now().toIso8601String(),
         })
@@ -607,6 +611,7 @@ class MessagingService {
         .from('conversations')
         .insert({
           'type': 'support',
+          'channel': 'website_portal',
           'status': 'active', // Active immediately as staff initiated it
           'created_by': userId,
           'accepted_by': userId, // Auto-accepted
@@ -708,6 +713,7 @@ class MessagingService {
         .from('conversations')
         .insert({
           'type': 'support',
+          'channel': 'website_portal',
           'status': 'pending',
           'context_type': contextType,
           'context_id': contextId,
@@ -765,7 +771,7 @@ class MessagingService {
       *,
       conversation_participants!inner(user_id, role),
       messages(id, content, sender_id, created_at, type)
-    ''').eq('type', 'support');
+    ''').eq('type', 'support').eq('channel', 'website_portal');
 
     if (status != null) {
       query = query.eq('status', status);
@@ -921,7 +927,44 @@ class MessagingService {
         return null;
       }
 
+      Future<String?> loadLastInboundMessageAt() async {
+        final messages = await _client
+            .from('messages')
+            .select('created_at, sender_id, type, content, message_direction')
+            .eq('conversation_id', conversationId)
+            .order('created_at', ascending: false)
+            .limit(50);
+
+        for (final message in messages) {
+          final direction = message['message_direction']?.toString();
+          final senderId = message['sender_id']?.toString();
+          final type = message['type']?.toString();
+          final content = message['content']?.toString().trim() ?? '';
+          final isInbound = direction == 'inbound' ||
+              (senderId == null && type != 'system' && content.isNotEmpty);
+
+          if (isInbound) {
+            return message['created_at']?.toString();
+          }
+        }
+
+        return null;
+      }
+
+      String? latestTimestamp(String? first, String? second) {
+        if (first == null || first.isEmpty) return second;
+        if (second == null || second.isEmpty) return first;
+
+        final firstDate = DateTime.tryParse(first);
+        final secondDate = DateTime.tryParse(second);
+        if (firstDate == null) return second;
+        if (secondDate == null) return first;
+
+        return secondDate.toUtc().isAfter(firstDate.toUtc()) ? second : first;
+      }
+
       final lastFirstContactTemplateAt = await loadLastFirstContactTemplateAt();
+      final lastInboundMessageAt = await loadLastInboundMessageAt();
 
       final binding = await _client
           .from('whatsapp_conversation_bindings')
@@ -935,7 +978,10 @@ class MessagingService {
       String? customerId = binding?['customer_id']?.toString();
       String? contactName = binding?['contact_name']?.toString();
       String? phoneNumber = binding?['external_phone_number']?.toString();
-      final lastInboundAt = binding?['last_inbound_at']?.toString();
+      final lastInboundAt = latestTimestamp(
+        binding?['last_inbound_at']?.toString(),
+        lastInboundMessageAt,
+      );
       final lastOutboundAt = binding?['last_outbound_at']?.toString();
 
       if (customerId != null && customerId.isNotEmpty) {
@@ -1007,6 +1053,35 @@ class MessagingService {
           if (customerContact != null) {
             contactName = customerContact['name']?.toString() ?? contactName;
             phoneNumber = customerContact['phone']?.toString() ?? phoneNumber;
+          }
+        }
+
+        if (contextType == 'order' &&
+            contextId != null &&
+            contextId.isNotEmpty) {
+          final order = await _client
+              .from('online_orders')
+              .select('customer_id, customer_name, customer_phone')
+              .eq('id', contextId)
+              .limit(1)
+              .maybeSingle();
+
+          customerId = order?['customer_id']?.toString() ?? customerId;
+
+          final orderCustomerName = order?['customer_name']?.toString();
+          if (orderCustomerName != null && orderCustomerName.isNotEmpty) {
+            contactName = orderCustomerName;
+          }
+
+          final orderPhone = order?['customer_phone']?.toString();
+          if (orderPhone != null && orderPhone.isNotEmpty) {
+            phoneNumber = orderPhone;
+          } else {
+            final customerContact = await loadCustomerById(customerId);
+            if (customerContact != null) {
+              contactName = customerContact['name']?.toString() ?? contactName;
+              phoneNumber = customerContact['phone']?.toString() ?? phoneNumber;
+            }
           }
         }
       }

@@ -138,7 +138,7 @@ class WhatsAppService {
 
   bool _isCustomerServiceWindowOpen(DateTime? lastInboundAt) {
     if (lastInboundAt == null) {
-      return true;
+      return false;
     }
 
     return DateTime.now().toUtc().difference(lastInboundAt.toUtc()) <
@@ -516,6 +516,7 @@ Viña Bike
     String? contextType,
     String? contextId,
     DateTime? lastInboundAt,
+    String? clientMessageId,
   }) async {
     _resetLastAttemptState(resolvedMessageText: message);
 
@@ -531,6 +532,7 @@ Viña Bike
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
+        clientMessageId: clientMessageId,
       );
     }
 
@@ -544,6 +546,7 @@ Viña Bike
       'text': message,
       'metadata': {
         'source': 'flutter_erp',
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
       },
     };
 
@@ -558,6 +561,7 @@ Viña Bike
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
+        clientMessageId: clientMessageId,
       );
 
       if (templateSuccess) {
@@ -584,6 +588,7 @@ Viña Bike
     String? conversationId,
     String? contextType,
     String? contextId,
+    String? clientMessageId,
   }) async {
     final templateSettings = await _loadFirstContactTemplateSettings();
     final resolvedAgentName = (agentName != null && agentName.trim().isNotEmpty)
@@ -623,6 +628,7 @@ Viña Bike
       ],
       'metadata': {
         'source': 'flutter_erp',
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
         'template_purpose': 'first_contact',
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,

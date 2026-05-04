@@ -27,6 +27,18 @@ class Message {
     if (externalStatus != null) {
       metadata['external_status'] = externalStatus;
     }
+    final externalProvider = json['external_provider'];
+    if (externalProvider != null) {
+      metadata['external_provider'] = externalProvider;
+    }
+    final messageDirection = json['message_direction'];
+    if (messageDirection != null) {
+      metadata['message_direction'] = messageDirection;
+    }
+    final externalMessageId = json['external_message_id'];
+    if (externalMessageId != null) {
+      metadata['external_message_id'] = externalMessageId;
+    }
 
     return Message(
       id: json['id'],

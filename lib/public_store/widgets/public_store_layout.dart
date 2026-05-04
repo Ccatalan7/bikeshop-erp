@@ -39,6 +39,7 @@ import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
         OnlineOrdersPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        ProductWebsiteVisibilityPage,
         ProductListPage,
         SeoSettingsPage,
         WebsiteManagementPage,
@@ -143,6 +144,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const String _actionSiteOpenWebsiteHub = 'site_hub';
 
   static const String _actionEcomProducts = 'ecom_products';
+  static const String _actionEcomVisibility = 'ecom_visibility';
   static const String _actionEcomCategories = 'ecom_categories';
   static const String _actionEcomFeatured = 'ecom_featured';
   static const String _actionEcomOrders = 'ecom_orders';
@@ -1497,6 +1499,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 icon: Icons.inventory_2_outlined,
               ),
               _PreviewNavAction(
+                id: _actionEcomVisibility,
+                label: 'Visibilidad de productos',
+                icon: Icons.visibility_outlined,
+              ),
+              _PreviewNavAction(
                 id: _actionEcomCategories,
                 label: 'Categorías',
                 icon: Icons.category_outlined,
@@ -2132,6 +2139,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         kind: _PageNavKind.core,
       ),
       _PageNavTarget(
+        key: 'servicios',
+        title: 'Servicios',
+        href: '/tienda/servicios',
+        kind: _PageNavKind.core,
+      ),
+      _PageNavTarget(
         key: 'contacto',
         title: 'Contacto',
         href: '/tienda/contacto',
@@ -2224,6 +2237,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Slugs that map to clean top-level routes (not /pagina/*).
     const direct = <String>{
       'productos',
+      'servicios',
       'contacto',
       'carrito',
       'checkout',
@@ -2303,6 +2317,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           return;
         }
         goAdmin('/inventory/products');
+        return;
+      case _actionEcomVisibility:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomVisibility);
+          return;
+        }
+        goAdmin('/website/product-visibility');
         return;
       case _actionEcomCategories:
         if (editProvider.isInEditorContext) {
@@ -3041,19 +3062,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       path = '/$path';
     }
 
-    // Backward-compat: historically, footer navigation used `/tienda/servicios`
-    // for a services catalog. That path is now used for account service history,
-    // so we remap it to a filtered catalog view.
-    if (path == '/tienda/servicios' || path == '/tienda/servicios/') {
-      final nextQp = Map<String, String>.from(uri.queryParameters);
-      nextQp.putIfAbsent('type', () => 'service');
-      uri = uri.replace(
-        path: '/tienda/productos',
-        queryParameters: nextQp,
-      );
-      path = uri.path;
-    }
-
     // When running the public store entrypoint on localhost, we still want the
     // clean store routes (/, /productos, /contacto, ...) instead of /tienda/*.
     // We can infer this safely from the current browser path:
@@ -3110,6 +3118,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // Map common clean store routes into the ERP-mounted `/tienda/*` space.
     if (path == '/productos') path = '/tienda/productos';
+    if (path == '/servicios') path = '/tienda/servicios';
     if (path == '/carrito') path = '/tienda/carrito';
     if (path == '/checkout') path = '/tienda/checkout';
     if (path == '/contacto') path = '/tienda/contacto';
@@ -3290,7 +3299,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   (isMenuOpen || isOverlay) ? 0.0 : (headerShadow ? 2.0 : 0.0);
 
               final screenWidth = constraints.maxWidth;
+              final isDesktopHeader = screenWidth >= 900;
               final useMobileGradient = screenWidth < 900 && isOverlay;
+              final headerHorizontalPadding = isDesktopHeader ? 24.0 : 16.0;
+              final headerVerticalPadding = isDesktopHeader ? 8.0 : 10.0;
+              final headerLogoHeight = isDesktopHeader ? 38.0 : 40.0;
+              final headerIconSize = isDesktopHeader ? 22.0 : 23.0;
+              final headerIconBox = isDesktopHeader ? 40.0 : 42.0;
 
               // Wrap with MegaMenuHeaderWrapper to enable dark background (#111111) when menu is open
               // Also wrap with Transform.translate to force a new stacking context on Web
@@ -3332,7 +3347,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   ? Colors.black.withValues(alpha: 0.3)
                                   : primaryColor,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 10),
+                                  horizontal: 24, vertical: 6),
                               child: Row(
                                 children: [
                                   const Icon(Icons.local_shipping_outlined,
@@ -3407,8 +3422,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                           Center(
                             child: Container(
                               constraints: const BoxConstraints(maxWidth: 1200),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 16),
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: headerHorizontalPadding,
+                                  vertical: headerVerticalPadding),
                               child: Row(
                                 children: [
                                   // Logo - uses URL if set, otherwise falls back to asset, then text
@@ -3432,10 +3448,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                       storeName: storeName,
                                       textColor: textColor,
                                       isDarkMode: isDarkMode,
-                                      height: 48,
+                                      height: headerLogoHeight,
                                     ),
                                   ),
-                                  const SizedBox(width: 24),
+                                  SizedBox(width: isDesktopHeader ? 22 : 16),
                                   // Only show nav links on desktop, use Spacer on mobile
                                   if (screenWidth >= 900)
                                     Expanded(
@@ -3456,6 +3472,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   'Productos',
                                                   _routeForPublicStore(
                                                       '/productos'),
+                                                  textColor,
+                                                  isEditMode: isEditMode,
+                                                ),
+                                                const SizedBox(width: 32),
+                                                _buildNavLink(
+                                                  context,
+                                                  'Servicios',
+                                                  _routeForPublicStore(
+                                                      '/servicios'),
                                                   textColor,
                                                   isEditMode: isEditMode,
                                                 ),
@@ -3480,7 +3505,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                     return Padding(
                                                       padding:
                                                           const EdgeInsets.only(
-                                                              right: 32),
+                                                              right: 24),
                                                       child: MegaMenuButton(
                                                         key: ValueKey(
                                                             'mega_${nav.id}_${nav.label}'),
@@ -3501,7 +3526,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   return Padding(
                                                     padding:
                                                         const EdgeInsets.only(
-                                                            right: 32),
+                                                            right: 24),
                                                     child: _buildNavItemLink(
                                                       context,
                                                       nav,
@@ -3518,19 +3543,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   Row(
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.search),
+                                        icon: Icon(Icons.search,
+                                            size: headerIconSize),
                                         color: iconColor,
                                         onPressed: () =>
                                             SearchOverlay.show(context),
                                         tooltip: 'Buscar',
+                                        constraints: BoxConstraints.tightFor(
+                                          width: headerIconBox,
+                                          height: headerIconBox,
+                                        ),
+                                        padding: EdgeInsets.zero,
                                       ),
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: isDesktopHeader ? 2 : 4),
                                       Stack(
                                         clipBehavior: Clip.none,
                                         children: [
                                           IconButton(
-                                            icon: const Icon(
-                                                Icons.shopping_cart_outlined),
+                                            icon: Icon(
+                                              Icons.shopping_cart_outlined,
+                                              size: headerIconSize,
+                                            ),
                                             color: iconColor,
                                             onPressed: () => _navigateToHref(
                                               context,
@@ -3538,6 +3571,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                   '/tienda/carrito'),
                                             ),
                                             tooltip: 'Carrito',
+                                            constraints:
+                                                BoxConstraints.tightFor(
+                                              width: headerIconBox,
+                                              height: headerIconBox,
+                                            ),
+                                            padding: EdgeInsets.zero,
                                           ),
                                           if (cart.itemCount > 0)
                                             Positioned(
@@ -3572,17 +3611,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                         ],
                                       ),
                                       if (screenWidth >= 900) ...[
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 10),
                                         CustomerAccountMenu(
                                             textColor: textColor),
                                       ] else ...[
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 4),
                                         IconButton(
-                                          icon: const Icon(Icons.menu),
+                                          icon: Icon(Icons.menu,
+                                              size: headerIconSize),
                                           color: iconColor,
                                           onPressed: () => _showMobileMenu(
                                               context, navItems),
                                           tooltip: 'Menú',
+                                          constraints: BoxConstraints.tightFor(
+                                            width: headerIconBox,
+                                            height: headerIconBox,
+                                          ),
+                                          padding: EdgeInsets.zero,
                                         ),
                                       ]
                                     ],
@@ -4798,7 +4843,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               _buildFooterLinkDesktop(
                 context,
                 'Servicios',
-                _routeForPublicStore('/productos?type=service'),
+                _routeForPublicStore('/servicios'),
                 primaryColor,
                 isEditMode: isEditMode,
               ),
@@ -5121,7 +5166,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               _buildFooterLinkMobile(
                 context,
                 'Servicios',
-                _routeForPublicStore('/productos?type=service'),
+                _routeForPublicStore('/servicios'),
                 isEditMode: isEditMode,
               ),
               _buildFooterLinkMobile(
@@ -5429,7 +5474,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               );
             },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -5440,9 +5485,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontFamily: PublicStoreTheme.defaultHeadingFont,
-                letterSpacing: 0.25,
+                fontSize: 14,
+                letterSpacing: 0.1,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 color: isActive
                     ? primaryColor
@@ -5725,6 +5771,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     // Product list is top-level; product detail should remain push().
     if (normalized == '/productos') return true;
+    if (normalized == '/servicios') return true;
     if (normalized.startsWith('/productos/')) return false;
 
     // Top-level pages
@@ -5764,7 +5811,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
             },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -5775,7 +5822,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
         child: Text(
           nav.label,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                letterSpacing: 0.1,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                 color: isActive
                     ? primaryColor
@@ -6075,6 +6124,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             // E-commerce
             case _EditorConfigHubTab.ecomProducts:
               return erp.ProductListPage(embedded: true);
+            case _EditorConfigHubTab.ecomVisibility:
+              return erp.ProductWebsiteVisibilityPage(embedded: true);
             case _EditorConfigHubTab.ecomCategories:
               return erp.HierarchicalCategoryPage(embedded: true);
             case _EditorConfigHubTab.ecomFeatured:
@@ -6232,6 +6283,7 @@ enum _EditorConfigHubTab {
 
   // E-commerce
   ecomProducts,
+  ecomVisibility,
   ecomCategories,
   ecomFeatured,
   ecomOrders,
@@ -6261,6 +6313,8 @@ extension on _EditorConfigHubTab {
         return 'Ajustes del sitio';
       case _EditorConfigHubTab.ecomProducts:
         return 'Productos (publicar en web)';
+      case _EditorConfigHubTab.ecomVisibility:
+        return 'Visibilidad de productos';
       case _EditorConfigHubTab.ecomCategories:
         return 'Categorías';
       case _EditorConfigHubTab.ecomFeatured:
@@ -6856,7 +6910,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
 }
 
 class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
-  static const double _fallbackReservedHeaderHeight = 92;
+  static const double _fallbackReservedHeaderHeight = 66;
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _headerKey = GlobalKey();

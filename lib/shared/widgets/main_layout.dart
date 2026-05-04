@@ -327,6 +327,7 @@ String _getTitleFromRoute(String route) {
     '/pos': 'POS',
     '/hr/employees': 'Trabajadores',
     '/website': 'Sitio Web',
+    '/website/product-visibility': 'Visibilidad de productos',
     '/website/orders': 'Órdenes / Notificaciones',
     '/tienda': 'Editor Web',
     '/tienda?edit=true': 'Editor Web',
@@ -415,6 +416,11 @@ const List<MenuSubItem> _websiteMenuItems = [
     icon: Icons.notifications_active_outlined,
     title: 'Órdenes / Notificaciones',
     route: '/website/orders',
+  ),
+  MenuSubItem(
+    icon: Icons.visibility_outlined,
+    title: 'Visibilidad productos',
+    route: '/website/product-visibility',
   ),
 ];
 

@@ -326,7 +326,7 @@ class NotificationService {
         defaultTargetPlatform == TargetPlatform.iOS) {
       await _initMobile();
     } else {
-      // await _initDesktop();
+      await _initDesktop();
     }
   }
 

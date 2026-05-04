@@ -54,6 +54,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   bool _isLoading = true;
+  bool _hasLoadedInitialProducts = false;
   int _totalProductCount = 0;
   int _categoryTotalCount = 0;
   int _loadToken = 0;
@@ -72,6 +73,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   final TextEditingController _filtersSearchController =
       TextEditingController();
+  final FocusNode _filtersSearchFocusNode = FocusNode();
 
   // Pagination state
   int _currentPage = 1;
@@ -81,7 +83,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   String _searchQuery = '';
   String _lastRouteFiltersSignature = '';
   String? _selectedCategoryId;
-  ProductType? _selectedProductType;
+  ProductType? _selectedProductType = ProductType.product;
   String? _pendingRouteCategoryValue;
   String _sortBy = 'name'; // name, price_asc, price_desc, newest
   bool _isGridView = true; // Grid view vs list view
@@ -92,20 +94,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   bool get wantKeepAlive => false;
 
   @override
-  void initState() {
-    super.initState();
-    // Debug: initState
-    _loadProducts();
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _syncFiltersFromRoute();
   }
 
   void _syncFiltersFromRoute() {
-    final qp = GoRouterState.of(context).uri.queryParameters;
+    final uri = GoRouterState.of(context).uri;
+    final qp = uri.queryParameters;
+    final routePath = uri.path.trim().toLowerCase();
     final legacyCategoria = (qp['categoria'] ?? '').trim();
     var routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
     final routeCategory =
@@ -120,11 +117,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       routeQuery = legacyCategoria;
     }
 
-    final signature = '$routeQuery|$routeCategory|$routeType|$legacyCategoria';
+    final signature =
+        '$routePath|$routeQuery|$routeCategory|$routeType|$legacyCategoria';
     if (signature == _lastRouteFiltersSignature) return;
     _lastRouteFiltersSignature = signature;
 
     final parsedType = _parseProductType(routeType);
+    final routeDefaultType = _defaultProductTypeForRoute(routePath);
 
     // Avoid calling setState during build (this page can be kept-alive/offstage).
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -132,7 +131,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
       setState(() {
         _searchQuery = routeQuery;
-        _selectedProductType = parsedType;
+        _selectedProductType = parsedType ?? routeDefaultType;
 
         // Keep the visible search field in sync so users can see
         // what term is currently filtering the catalog.
@@ -189,6 +188,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       return ProductType.product;
     }
     return null;
+  }
+
+  ProductType _defaultProductTypeForRoute(String path) {
+    final normalized =
+        path.startsWith('/tienda/') ? path.substring('/tienda'.length) : path;
+    if (normalized == '/servicios' || normalized == '/servicios/') {
+      return ProductType.service;
+    }
+    return ProductType.product;
   }
 
   bool _looksLikeUuid(String value) {
@@ -274,7 +282,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _currentPage = 1;
     }
 
-    if (_allProducts.isEmpty || resetPage) {
+    if (!_hasLoadedInitialProducts) {
       setState(() => _isLoading = true);
     }
 
@@ -358,6 +366,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         _allProducts = page.products;
         _filteredProducts = page.products;
         _totalProductCount = page.totalCount;
+        _hasLoadedInitialProducts = true;
       });
 
       debugPrint(
@@ -366,7 +375,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       debugPrint('[ProductCatalogPage] Error loading products: $e');
     } finally {
       if (mounted && token == _loadToken) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _hasLoadedInitialProducts = true;
+        });
       }
     }
   }
@@ -759,6 +771,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // Debug: dispose
     _searchDebounce?.cancel();
     _filtersSearchController.dispose();
+    _filtersSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -851,9 +864,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                                 color: Colors.black,
                                 margin: const EdgeInsets.only(right: 12),
                               ),
-                              const Text(
-                                'PRODUCTOS',
-                                style: TextStyle(
+                              Text(
+                                _catalogTitle(),
+                                style: const TextStyle(
                                   fontFamily:
                                       PublicStoreTheme.defaultHeadingFont,
                                   fontSize: 20,
@@ -866,7 +879,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '$_totalProductCount productos',
+                            '$_totalProductCount ${_catalogNounPlural()}',
                             style: TextStyle(
                               fontFamily: PublicStoreTheme.defaultBodyFont,
                               fontSize: 13,
@@ -1034,8 +1047,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         // Search
         TextField(
           controller: _filtersSearchController,
+          focusNode: _filtersSearchFocusNode,
           decoration: InputDecoration(
-            hintText: 'Buscar productos',
+            hintText: 'Buscar ${_catalogNounPlural()}',
             hintStyle: TextStyle(
               fontFamily: PublicStoreTheme.defaultBodyFont,
               color: Colors.grey.shade500,
@@ -1068,7 +1082,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             fontSize: 14,
           ),
           onChanged: (value) {
-            _searchQuery = value;
+            setState(() => _searchQuery = value);
             _handleFiltersChanged(debounce: true);
           },
         ),
@@ -1305,9 +1319,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final totalProducts = _totalProductCount;
     final startIndex = ((_currentPage - 1) * _itemsPerPage) + 1;
     final endIndex = (_currentPage * _itemsPerPage).clamp(0, totalProducts);
-    final isServicesView = _selectedProductType == ProductType.service;
-    final titleText = isServicesView ? 'SERVICIOS' : 'PRODUCTOS';
-    final noun = isServicesView ? 'servicios' : 'productos';
+    final titleText = _catalogTitle();
+    final noun = _catalogNounPlural();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1437,6 +1450,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
+  String _catalogTitle() {
+    return _selectedProductType == ProductType.service
+        ? 'SERVICIOS'
+        : 'PRODUCTOS';
+  }
+
+  String _catalogNounPlural() {
+    return _selectedProductType == ProductType.service
+        ? 'servicios'
+        : 'productos';
+  }
+
   Widget _buildProductGrid(String modeKey) {
     if (_filteredProducts.isEmpty) {
       return Center(
@@ -1450,9 +1475,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 color: Colors.grey.shade400,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'No se encontraron productos',
-                style: TextStyle(
+              Text(
+                'No se encontraron ${_catalogNounPlural()}',
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: Colors.black54,
