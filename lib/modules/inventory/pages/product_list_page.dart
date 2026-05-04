@@ -29,6 +29,24 @@ import '../widgets/product_movements_tab.dart';
 
 enum ProductViewMode { table, cards }
 
+enum InventoryCatalogScope { products, services }
+
+extension InventoryCatalogScopeX on InventoryCatalogScope {
+  bool get isServices => this == InventoryCatalogScope.services;
+
+  String get title => isServices ? 'Servicios' : 'Productos';
+  String get singularLabel => isServices ? 'servicio' : 'producto';
+  String get pluralLabel => isServices ? 'servicios' : 'productos';
+  String get newButtonLabel => isServices ? 'Nuevo Servicio' : 'Nuevo Producto';
+  String get searchHint => isServices
+      ? 'Buscar por nombre, código o categoría...'
+      : 'Buscar por nombre, SKU, marca...';
+  String get mobileSearchHint =>
+      isServices ? 'Buscar servicios...' : 'Buscar productos...';
+  String get baseRoute =>
+      isServices ? '/inventory/services' : '/inventory/products';
+}
+
 enum StockFilter { all, inStock, lowStock, outOfStock }
 
 extension StockFilterX on StockFilter {
@@ -81,6 +99,7 @@ class ProductListPage extends StatefulWidget {
   final String? initialCategoryId;
   final String? initialSupplierId;
   final String? refreshToken; // Add refresh parameter
+  final InventoryCatalogScope catalogScope;
 
   final bool embedded;
 
@@ -89,11 +108,35 @@ class ProductListPage extends StatefulWidget {
     this.initialCategoryId,
     this.initialSupplierId,
     this.refreshToken,
+    this.catalogScope = InventoryCatalogScope.products,
     this.embedded = false,
   });
 
   @override
   State<ProductListPage> createState() => _ProductListPageState();
+}
+
+class ServiceListPage extends StatelessWidget {
+  final String? initialCategoryId;
+  final String? refreshToken;
+  final bool embedded;
+
+  const ServiceListPage({
+    super.key,
+    this.initialCategoryId,
+    this.refreshToken,
+    this.embedded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ProductListPage(
+      initialCategoryId: initialCategoryId,
+      refreshToken: refreshToken,
+      embedded: embedded,
+      catalogScope: InventoryCatalogScope.services,
+    );
+  }
 }
 
 class _ProductListPageState extends State<ProductListPage> {
@@ -117,11 +160,15 @@ class _ProductListPageState extends State<ProductListPage> {
   bool _isLoading = true;
   String _searchTerm = '';
 
+  bool get _isServicesScope => widget.catalogScope.isServices;
+  String get _catalogTitle => widget.catalogScope.title;
+  String get _catalogPlural => widget.catalogScope.pluralLabel;
+  String get _catalogBaseRoute => widget.catalogScope.baseRoute;
+
   // 🔍 Smart Filters State
   String? _selectedCategoryId;
   String? _selectedSupplierId;
   String? _selectedBrandId;
-  ProductType? _selectedProductType;
   StockFilter _stockFilter = StockFilter.all;
   bool _filterWebPublished = false; // is_published = true
   bool _filterGoogleMerchant = false; // is_google_merchant = true
@@ -145,7 +192,9 @@ class _ProductListPageState extends State<ProductListPage> {
   final Set<String> _expandedSets = {}; // Track which sets are expanded
 
   // Column visibility (table view)
-  static const String _columnsPrefsKey = 'products_table_columns_v1';
+  String get _columnsPrefsKey => _isServicesScope
+      ? 'services_table_columns_v1'
+      : 'products_table_columns_v1';
   Set<ProductTableColumn> _visibleColumns = {
     ProductTableColumn.product,
     ProductTableColumn.sku,
@@ -180,12 +229,11 @@ class _ProductListPageState extends State<ProductListPage> {
       _selectedCategoryId != null ||
       _selectedSupplierId != null ||
       _selectedBrandId != null ||
-      _selectedProductType != null ||
       _stockFilter != StockFilter.all ||
       _filterWebPublished ||
-      _filterGoogleMerchant ||
+      (!_isServicesScope && _filterGoogleMerchant) ||
       _showInactive ||
-      _filterMissingServiceStructuredProfile ||
+      (_isServicesScope && _filterMissingServiceStructuredProfile) ||
       _searchTerm.isNotEmpty;
 
   String get _missingServiceStructuredProfileChipLabel {
@@ -233,6 +281,16 @@ class _ProductListPageState extends State<ProductListPage> {
   @override
   void initState() {
     super.initState();
+    if (_isServicesScope) {
+      _visibleColumns = {
+        ProductTableColumn.product,
+        ProductTableColumn.sku,
+        ProductTableColumn.category,
+        ProductTableColumn.price,
+        ProductTableColumn.cost,
+        ProductTableColumn.margin,
+      };
+    }
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
         listen: false);
@@ -278,7 +336,7 @@ class _ProductListPageState extends State<ProductListPage> {
       _loadSuppliers();
       _loadBrands();
       _applyFilters(resetPagination: false);
-      if (_selectedProductType == ProductType.service) {
+      if (_isServicesScope) {
         unawaited(
           _loadServiceStructuredProfileMappings(forceRefresh: false),
         );
@@ -351,7 +409,6 @@ class _ProductListPageState extends State<ProductListPage> {
       _selectedCategoryId = null;
       _selectedSupplierId = null;
       _selectedBrandId = null;
-      _selectedProductType = null;
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
       _filterGoogleMerchant = false;
@@ -418,18 +475,19 @@ class _ProductListPageState extends State<ProductListPage> {
     _selectedCategoryId = _inventoryService.savedCategoryId;
     _selectedSupplierId = _inventoryService.savedSupplierId;
 
-    // Restore ProductType enum
-    if (_inventoryService.savedProductTypeIndex != null) {
-      _selectedProductType =
-          ProductType.values[_inventoryService.savedProductTypeIndex!];
-    }
-
     // Restore StockFilter enum
     _stockFilter = StockFilter.values[_inventoryService.savedStockFilterIndex];
 
     _filterWebPublished = _inventoryService.savedFilterWebPublished;
     _filterGoogleMerchant = _inventoryService.savedFilterGoogleMerchant;
     _showInactive = _inventoryService.savedShowInactive;
+
+    if (_isServicesScope) {
+      _selectedSupplierId = null;
+      _selectedBrandId = null;
+      _stockFilter = StockFilter.all;
+      _filterGoogleMerchant = false;
+    }
 
     // Restore sort option
     _sortOption =
@@ -467,11 +525,12 @@ class _ProductListPageState extends State<ProductListPage> {
       scrollOffset:
           _tableScrollController.hasClients ? _tableScrollController.offset : 0,
       categoryId: _selectedCategoryId,
-      supplierId: _selectedSupplierId,
-      productTypeIndex: _selectedProductType?.index,
-      stockFilterIndex: _stockFilter.index,
+      supplierId: _isServicesScope ? null : _selectedSupplierId,
+      productTypeIndex: null,
+      stockFilterIndex:
+          _isServicesScope ? StockFilter.all.index : _stockFilter.index,
       filterWebPublished: _filterWebPublished,
-      filterGoogleMerchant: _filterGoogleMerchant,
+      filterGoogleMerchant: _isServicesScope ? false : _filterGoogleMerchant,
       showInactive: _showInactive,
       sortOptionIndex: _sortOption.index,
     );
@@ -596,7 +655,7 @@ class _ProductListPageState extends State<ProductListPage> {
         _saveCurrentState();
 
         final result =
-            await context.push('/inventory/products/${product.id}/edit');
+            await context.push('$_catalogBaseRoute/${product.id}/edit');
         if (!mounted) return;
 
         // Always restore state when coming back (even without saving)
@@ -779,9 +838,6 @@ class _ProductListPageState extends State<ProductListPage> {
 
     setState(() {
       _filterMissingServiceStructuredProfile = value;
-      if (value && _selectedProductType != ProductType.service) {
-        _selectedProductType = ProductType.service;
-      }
     });
 
     if (value) {
@@ -829,8 +885,7 @@ class _ProductListPageState extends State<ProductListPage> {
         _isLoading = false;
       });
 
-      if (_selectedProductType == ProductType.service ||
-          _filterMissingServiceStructuredProfile) {
+      if (_isServicesScope || _filterMissingServiceStructuredProfile) {
         unawaited(
           _loadServiceStructuredProfileMappings(forceRefresh: forceRefresh),
         );
@@ -851,7 +906,7 @@ class _ProductListPageState extends State<ProductListPage> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error cargando productos: $e'),
+          content: Text('Error cargando $_catalogPlural: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -927,31 +982,33 @@ class _ProductListPageState extends State<ProductListPage> {
   void _applyFilters({bool resetPagination = true}) {
     List<Product> filtered = List<Product>.from(_products);
 
-    // 1. Hide set components from main list
+    // 1. Scope the module first: Productos never shows services, Servicios never
+    // shows physical stock products.
+    filtered = filtered.where((product) {
+      if (_isServicesScope) {
+        return product.productType == ProductType.service;
+      }
+      return product.productType != ProductType.service;
+    }).toList();
+
+    // 2. Hide set components from main list
     filtered = filtered.where((product) => !product.isSetComponent).toList();
 
-    // 2. Category Filter
+    // 3. Category Filter
     if (_selectedCategoryId != null && _selectedCategoryId!.isNotEmpty) {
       filtered = filtered
           .where((product) => product.categoryId == _selectedCategoryId)
           .toList();
     }
 
-    // 3. Supplier Filter
+    // 4. Supplier Filter
     if (_selectedSupplierId != null && _selectedSupplierId!.isNotEmpty) {
       filtered = filtered
           .where((product) => product.supplierId == _selectedSupplierId)
           .toList();
     }
 
-    // 3.5 Product Type Filter
-    if (_selectedProductType != null) {
-      filtered = filtered
-          .where((product) => product.productType == _selectedProductType)
-          .toList();
-    }
-
-    // 3.6 Service structured profile filter
+    // 5. Service structured profile filter
     if (_filterMissingServiceStructuredProfile) {
       filtered = filtered.where((product) {
         if (product.productType != ProductType.service) return false;
@@ -961,42 +1018,41 @@ class _ProductListPageState extends State<ProductListPage> {
       }).toList();
     }
 
-    // 4. Stock Filters
-    switch (_stockFilter) {
-      case StockFilter.all:
-        // No filtration
-        break;
-      case StockFilter.inStock:
-        // Show only products with positive stock
-        filtered = filtered
-            .where((product) =>
-                product.tracksInventory && product.inventoryQty > 0)
-            .toList();
-        break;
-      case StockFilter.lowStock:
-        // Show low stock (includes out of stock usually, or strictly low?)
-        // User said "Bajo stock", "Sin stock", "Con stock".
-        // Low stock usually implies it needs attention.
-        filtered = filtered
-            .where((product) => product.tracksInventory && product.isLowStock)
-            .toList();
-        break;
-      case StockFilter.outOfStock:
-        filtered = filtered
-            .where((product) => product.tracksInventory && product.isOutOfStock)
-            .toList();
-        break;
+    // 6. Stock Filters (physical products only)
+    if (!_isServicesScope) {
+      switch (_stockFilter) {
+        case StockFilter.all:
+          // No filtration
+          break;
+        case StockFilter.inStock:
+          filtered = filtered
+              .where((product) =>
+                  product.tracksInventory && product.inventoryQty > 0)
+              .toList();
+          break;
+        case StockFilter.lowStock:
+          filtered = filtered
+              .where((product) => product.tracksInventory && product.isLowStock)
+              .toList();
+          break;
+        case StockFilter.outOfStock:
+          filtered = filtered
+              .where(
+                  (product) => product.tracksInventory && product.isOutOfStock)
+              .toList();
+          break;
+      }
     }
 
     if (_filterWebPublished) {
       filtered = filtered.where((product) => product.isPublished).toList();
     }
 
-    if (_filterGoogleMerchant) {
+    if (!_isServicesScope && _filterGoogleMerchant) {
       filtered = filtered.where((product) => product.isGoogleMerchant).toList();
     }
 
-    if (_selectedBrandId != null) {
+    if (!_isServicesScope && _selectedBrandId != null) {
       final brand = _brands.firstWhere(
         (b) => b.id == _selectedBrandId,
         orElse: () => _brands.first,
@@ -1196,10 +1252,9 @@ class _ProductListPageState extends State<ProductListPage> {
                           ),
                         ),
                         Text(
-                          'Productos',
+                          _catalogTitle,
                           style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
                           ),
                         ),
                       ],
@@ -1208,7 +1263,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       Padding(
                         padding: const EdgeInsets.only(left: 14),
                         child: Text(
-                          '${_filteredProducts.length} productos',
+                          '${_filteredProducts.length} $_catalogPlural',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,
@@ -1238,7 +1293,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   textAlignVertical: TextAlignVertical.center,
                   style: theme.textTheme.bodyMedium,
                   decoration: InputDecoration(
-                    hintText: 'Buscar por nombre, SKU, marca...',
+                    hintText: widget.catalogScope.searchHint,
                     hintStyle: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant
                           .withValues(alpha: 0.7),
@@ -1279,42 +1334,44 @@ class _ProductListPageState extends State<ProductListPage> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildScannerToggle(theme),
-                        const SizedBox(width: 10),
-                        _buildSecondaryActionButton(
-                          theme: theme,
-                          icon: Icons.file_upload_outlined,
-                          label: 'Importar',
-                          onPressed: () async {
-                            final result = await context
-                                .push('/inventory/products/import');
-                            if (result == true) {
-                              _loadProducts(forceRefresh: true);
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 10),
-                        _buildSecondaryActionButton(
-                          theme: theme,
-                          icon: Icons.add_box_outlined,
-                          label: 'Creación masiva',
-                          onPressed: _openBulkCreateWorkspace,
-                        ),
-                        const SizedBox(width: 10),
-                        _buildSecondaryActionButton(
-                          theme: theme,
-                          icon: Icons.rule_folder_outlined,
-                          label: 'Edición masiva',
-                          onPressed: _openBulkEditWorkspace,
-                        ),
-                        const SizedBox(width: 10),
+                        if (!_isServicesScope) ...[
+                          _buildScannerToggle(theme),
+                          const SizedBox(width: 10),
+                          _buildSecondaryActionButton(
+                            theme: theme,
+                            icon: Icons.file_upload_outlined,
+                            label: 'Importar',
+                            onPressed: () async {
+                              final result = await context
+                                  .push('/inventory/products/import');
+                              if (result == true) {
+                                _loadProducts(forceRefresh: true);
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                          _buildSecondaryActionButton(
+                            theme: theme,
+                            icon: Icons.add_box_outlined,
+                            label: 'Creación masiva',
+                            onPressed: _openBulkCreateWorkspace,
+                          ),
+                          const SizedBox(width: 10),
+                          _buildSecondaryActionButton(
+                            theme: theme,
+                            icon: Icons.rule_folder_outlined,
+                            label: 'Edición masiva',
+                            onPressed: _openBulkEditWorkspace,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
                         _buildPrimaryCTA(
                           theme: theme,
                           icon: Icons.add_rounded,
-                          label: 'Nuevo Producto',
+                          label: widget.catalogScope.newButtonLabel,
                           onPressed: () async {
-                            final result =
-                                await context.push('/inventory/products/new');
+                            final result = await context
+                                .push('${widget.catalogScope.baseRoute}/new');
                             if (result == true) {
                               _loadProducts(forceRefresh: true);
                             }
@@ -1442,62 +1499,63 @@ class _ProductListPageState extends State<ProductListPage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Productos',
+                  Text(_catalogTitle,
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.bold)),
-                  Text('${_filteredProducts.length} items',
+                  Text('${_filteredProducts.length} $_catalogPlural',
                       style: theme.textTheme.bodySmall),
                 ],
               ),
               Row(
                 children: [
-                  // Scanner Toggle (Mobile Compact)
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.add_box_outlined, size: 20),
-                    onPressed: _openBulkCreateWorkspace,
-                    tooltip: 'Creación masiva',
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.rule_folder_outlined, size: 20),
-                    onPressed: _openBulkEditWorkspace,
-                    tooltip: 'Edición masiva',
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    icon: Icon(
-                      _isScannerEnabled
-                          ? Icons.qr_code_scanner
-                          : Icons.qr_code_2_outlined,
-                      size: 20,
-                      color: _isScannerEnabled
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                  if (!_isServicesScope) ...[
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.add_box_outlined, size: 20),
+                      onPressed: _openBulkCreateWorkspace,
+                      tooltip: 'Creación masiva',
+                      visualDensity: VisualDensity.compact,
                     ),
-                    onPressed: () {
-                      setState(() => _isScannerEnabled = !_isScannerEnabled);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(_isScannerEnabled
-                                ? 'Escáner activado'
-                                : 'Escáner desactivado')),
-                      );
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: _isScannerEnabled
-                          ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceContainerHighest,
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.rule_folder_outlined, size: 20),
+                      onPressed: _openBulkEditWorkspace,
+                      tooltip: 'Edición masiva',
+                      visualDensity: VisualDensity.compact,
                     ),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      icon: Icon(
+                        _isScannerEnabled
+                            ? Icons.qr_code_scanner
+                            : Icons.qr_code_2_outlined,
+                        size: 20,
+                        color: _isScannerEnabled
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: () {
+                        setState(() => _isScannerEnabled = !_isScannerEnabled);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(_isScannerEnabled
+                                  ? 'Escáner activado'
+                                  : 'Escáner desactivado')),
+                        );
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: _isScannerEnabled
+                            ? theme.colorScheme.primaryContainer
+                            : theme.colorScheme.surfaceContainerHighest,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   IconButton.filled(
                     icon: const Icon(Icons.add, size: 20),
                     onPressed: () async {
-                      final result =
-                          await context.push('/inventory/products/new');
+                      final result = await context
+                          .push('${widget.catalogScope.baseRoute}/new');
                       if (result == true) _loadProducts(forceRefresh: true);
                     },
                     visualDensity: VisualDensity.compact,
@@ -1659,45 +1717,38 @@ class _ProductListPageState extends State<ProductListPage> {
                       );
                     },
                   ),
-                  const SizedBox(width: 8),
-                  _ModernFilterChip(
-                    theme: theme,
-                    label: _selectedSupplierId != null
-                        ? (_suppliers
-                                .where((s) => s.id == _selectedSupplierId)
-                                .firstOrNull
-                                ?.name ??
-                            'Proveedor')
-                        : 'Proveedor',
-                    isActive: _selectedSupplierId != null,
-                    onTap: (chipCtx, link) {
-                      _showFilterMenu<Supplier>(
-                        buttonContext: chipCtx,
-                        layerLink: link,
-                        theme: theme,
-                        title: 'Proveedor',
-                        items: _suppliers,
-                        labelBuilder: (s) => s.name,
-                        selectedId: _selectedSupplierId,
-                        idExtractor: (s) => s.id,
-                        onSelected: (id) {
-                          setState(() {
-                            _selectedSupplierId = id;
-                            _applyFilters();
-                          });
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _ModernFilterChip(
-                    theme: theme,
-                    label: _selectedProductType?.displayName ?? 'Tipo',
-                    isActive: _selectedProductType != null,
-                    onTap: (chipCtx, link) =>
-                        _showProductTypeMenu(chipCtx, link, theme),
-                  ),
-                  if (_selectedProductType == ProductType.service) ...[
+                  if (!_isServicesScope) ...[
+                    const SizedBox(width: 8),
+                    _ModernFilterChip(
+                      theme: theme,
+                      label: _selectedSupplierId != null
+                          ? (_suppliers
+                                  .where((s) => s.id == _selectedSupplierId)
+                                  .firstOrNull
+                                  ?.name ??
+                              'Proveedor')
+                          : 'Proveedor',
+                      isActive: _selectedSupplierId != null,
+                      onTap: (chipCtx, link) {
+                        _showFilterMenu<Supplier>(
+                          buttonContext: chipCtx,
+                          layerLink: link,
+                          theme: theme,
+                          title: 'Proveedor',
+                          items: _suppliers,
+                          labelBuilder: (s) => s.name,
+                          selectedId: _selectedSupplierId,
+                          idExtractor: (s) => s.id,
+                          onSelected: (id) {
+                            setState(() {
+                              _selectedSupplierId = id;
+                              _applyFilters();
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ] else ...[
                     const SizedBox(width: 8),
                     _ModernFilterChip(
                       theme: theme,
@@ -1710,54 +1761,59 @@ class _ProductListPageState extends State<ProductListPage> {
                       ),
                     ),
                   ],
-                  const SizedBox(width: 8),
-                  _ModernFilterChip(
-                    theme: theme,
-                    label: _stockFilter != StockFilter.all
-                        ? _stockFilter.label
-                        : 'Inventario',
-                    isActive: _stockFilter != StockFilter.all,
-                    onTap: (chipCtx, link) =>
-                        _showStockFilterMenu(chipCtx, link, theme),
-                  ),
+                  if (!_isServicesScope) ...[
+                    const SizedBox(width: 8),
+                    _ModernFilterChip(
+                      theme: theme,
+                      label: _stockFilter != StockFilter.all
+                          ? _stockFilter.label
+                          : 'Inventario',
+                      isActive: _stockFilter != StockFilter.all,
+                      onTap: (chipCtx, link) =>
+                          _showStockFilterMenu(chipCtx, link, theme),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   _ModernFilterChip(
                     theme: theme,
                     label: 'Canales',
-                    isActive: _filterWebPublished || _filterGoogleMerchant,
+                    isActive: _filterWebPublished ||
+                        (!_isServicesScope && _filterGoogleMerchant),
                     onTap: (chipCtx, link) =>
                         _showChannelsMenu(chipCtx, link, theme),
                   ),
-                  const SizedBox(width: 8),
-                  _ModernFilterChip(
-                    theme: theme,
-                    label: _selectedBrandId != null
-                        ? (_brands
-                                .where((b) => b.id == _selectedBrandId)
-                                .firstOrNull
-                                ?.name ??
-                            'Marca')
-                        : 'Marca',
-                    isActive: _selectedBrandId != null,
-                    onTap: (chipCtx, link) {
-                      _showFilterMenu<ProductBrand>(
-                        buttonContext: chipCtx,
-                        layerLink: link,
-                        theme: theme,
-                        title: 'Marca',
-                        items: _brands,
-                        labelBuilder: (b) => b.name,
-                        selectedId: _selectedBrandId,
-                        idExtractor: (b) => b.id,
-                        onSelected: (id) {
-                          setState(() {
-                            _selectedBrandId = id;
-                            _applyFilters();
-                          });
-                        },
-                      );
-                    },
-                  ),
+                  if (!_isServicesScope) ...[
+                    const SizedBox(width: 8),
+                    _ModernFilterChip(
+                      theme: theme,
+                      label: _selectedBrandId != null
+                          ? (_brands
+                                  .where((b) => b.id == _selectedBrandId)
+                                  .firstOrNull
+                                  ?.name ??
+                              'Marca')
+                          : 'Marca',
+                      isActive: _selectedBrandId != null,
+                      onTap: (chipCtx, link) {
+                        _showFilterMenu<ProductBrand>(
+                          buttonContext: chipCtx,
+                          layerLink: link,
+                          theme: theme,
+                          title: 'Marca',
+                          items: _brands,
+                          labelBuilder: (b) => b.name,
+                          selectedId: _selectedBrandId,
+                          idExtractor: (b) => b.id,
+                          onSelected: (id) {
+                            setState(() {
+                              _selectedBrandId = id;
+                              _applyFilters();
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   _ModernFilterChip(
                     theme: theme,
@@ -2121,136 +2177,6 @@ class _ProductListPageState extends State<ProductListPage> {
     }
   }
 
-  void _showProductTypeMenu(
-      BuildContext context, LayerLink link, ThemeData theme) {
-    final isDesktop = MediaQuery.of(context).size.width >= 800;
-
-    Widget buildMenuContent(BuildContext ctx) => Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tipo de Producto',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              ListTile(
-                title: const Text('Todos'),
-                leading: Radio<ProductType?>(
-                    value: null,
-                    groupValue: _selectedProductType,
-                    onChanged: (_) {
-                      setState(() {
-                        _selectedProductType = null;
-                        _filterMissingServiceStructuredProfile = false;
-                        _applyFilters();
-                      });
-                      Navigator.pop(ctx);
-                    }),
-                onTap: () {
-                  setState(() {
-                    _selectedProductType = null;
-                    _filterMissingServiceStructuredProfile = false;
-                    _applyFilters();
-                  });
-                  Navigator.pop(ctx);
-                },
-              ),
-              ...ProductType.values.map((type) => ListTile(
-                    title: Text(type.displayName),
-                    leading: Radio<ProductType?>(
-                        value: type,
-                        groupValue: _selectedProductType,
-                        onChanged: (_) {
-                          setState(() {
-                            _selectedProductType = type;
-                            if (type != ProductType.service) {
-                              _filterMissingServiceStructuredProfile = false;
-                            }
-                            _applyFilters();
-                          });
-                          if (type == ProductType.service) {
-                            unawaited(
-                              _loadServiceStructuredProfileMappings(
-                                forceRefresh: false,
-                              ),
-                            );
-                          }
-                          Navigator.pop(ctx);
-                        }),
-                    onTap: () {
-                      setState(() {
-                        _selectedProductType = type;
-                        if (type != ProductType.service) {
-                          _filterMissingServiceStructuredProfile = false;
-                        }
-                        _applyFilters();
-                      });
-                      if (type == ProductType.service) {
-                        unawaited(
-                          _loadServiceStructuredProfileMappings(
-                            forceRefresh: false,
-                          ),
-                        );
-                      }
-                      Navigator.pop(ctx);
-                    },
-                  )),
-            ],
-          ),
-        );
-
-    if (isDesktop) {
-      showGeneralDialog(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: 'Dismiss',
-        barrierColor: Colors.transparent,
-        pageBuilder: (context, anim1, anim2) {
-          return Stack(
-            children: [
-              CompositedTransformFollower(
-                link: link,
-                targetAnchor: Alignment.bottomLeft,
-                followerAnchor: Alignment.topLeft,
-                offset: const Offset(0, 4),
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: SizedBox(
-                    width: 300,
-                    child: Material(
-                      elevation: 8,
-                      borderRadius: BorderRadius.circular(8),
-                      clipBehavior: Clip.antiAlias,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          border:
-                              Border.all(color: Theme.of(context).dividerColor),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: buildMenuContent(context),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      showModalBottomSheet(
-        context: context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: buildMenuContent,
-      );
-    }
-  }
-
   void _showServiceProfileLinkMenu(
       BuildContext context, LayerLink link, ThemeData theme) {
     final isDesktop = MediaQuery.of(context).size.width >= 800;
@@ -2462,14 +2388,15 @@ class _ProductListPageState extends State<ProductListPage> {
                   setState(() => _applyFilters());
                 },
               ),
-              CheckboxListTile(
-                title: const Text('Google Merchant'),
-                value: _filterGoogleMerchant,
-                onChanged: (val) {
-                  setModalState(() => _filterGoogleMerchant = val ?? false);
-                  setState(() => _applyFilters());
-                },
-              ),
+              if (!_isServicesScope)
+                CheckboxListTile(
+                  title: const Text('Google Merchant'),
+                  value: _filterGoogleMerchant,
+                  onChanged: (val) {
+                    setModalState(() => _filterGoogleMerchant = val ?? false);
+                    setState(() => _applyFilters());
+                  },
+                ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -2644,6 +2571,43 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildSlimStatsBar(ThemeData theme) {
     if (_filteredProducts.isEmpty) return const SizedBox.shrink();
 
+    if (_isServicesScope) {
+      final published = _filteredProducts.where((p) => p.isPublished).length;
+      final missingProfile = _filteredProducts.where((p) {
+        final productId = p.id;
+        return productId == null ||
+            productId.isEmpty ||
+            !_serviceStructuredProfileMappedProductIds.contains(productId);
+      }).length;
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLowest,
+          border: Border(
+            bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          ),
+        ),
+        child: Row(
+          children: [
+            _buildCompactStat(
+                theme,
+                Icons.design_services_outlined,
+                'Servicios:',
+                '${_filteredProducts.length}',
+                theme.colorScheme.primary),
+            const SizedBox(width: 24),
+            _buildCompactStat(theme, Icons.language_outlined, 'Publicados:',
+                '$published', theme.colorScheme.secondary),
+            const SizedBox(width: 24),
+            _buildCompactStat(theme, Icons.schema_outlined, 'Sin perfil:',
+                '$missingProfile', const Color(0xFFE67E22)),
+          ],
+        ),
+      );
+    }
+
     final stockProducts =
         _filteredProducts.where((p) => p.tracksInventory).toList();
     final lowStock =
@@ -2730,7 +2694,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   onChanged: _onSearchChanged,
                   style: const TextStyle(fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'Buscar productos...',
+                    hintText: widget.catalogScope.mobileSearchHint,
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _hasActiveFilters
                         ? IconButton(
@@ -2921,15 +2885,10 @@ class _ProductListPageState extends State<ProductListPage> {
 
                 const SizedBox(width: 8),
 
-                // Product Type Filter
-                _buildProductTypeFilterDropdown(theme),
-
-                const SizedBox(width: 8),
-
                 // Stock Filter Dropdown
-                _buildStockFilterDropdown(theme),
+                if (!_isServicesScope) _buildStockFilterDropdown(theme),
 
-                const SizedBox(width: 8),
+                if (!_isServicesScope) const SizedBox(width: 8),
 
                 // Channels (Internet) Dropdown
                 _buildChannelsFilterDropdown(theme),
@@ -3173,7 +3132,7 @@ class _ProductListPageState extends State<ProductListPage> {
     final isInactiveSelected = _showInactive;
 
     return PopupMenuButton<bool>(
-      tooltip: 'Estado del producto',
+      tooltip: _isServicesScope ? 'Estado del servicio' : 'Estado del producto',
       initialValue: _showInactive,
       onSelected: (bool value) {
         setState(() {
@@ -3232,113 +3191,6 @@ class _ProductListPageState extends State<ProductListPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCompactDropdown<T>({
-    required ThemeData theme,
-    required String hint,
-    required T? value,
-    required List<T> items,
-    required String Function(T) labelBuilder,
-    required ValueChanged<T?> onChanged,
-  }) {
-    final hasValue = value != null;
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: hasValue
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-              hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          hint: Text(hint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500)),
-          icon: Icon(Icons.arrow_drop_down,
-              size: 18,
-              color: hasValue
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: hasValue
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface,
-            fontWeight: hasValue ? FontWeight.bold : FontWeight.normal,
-          ),
-          selectedItemBuilder: (context) {
-            return [
-              // Logic to show null item? No, value is T?.
-              // We just map items.
-              // If value is null, hint is shown.
-              // If value matches, selectedItemBuilder index is used.
-              // Wait, SelectedItemBuilder requires mapping ALL items including null if items has it?
-              // The original impl had custom selectedItemBuilder.
-
-              // Simplification: Standard builder.
-              ...[null, ...items].map((item) {
-                if (item == null) {
-                  return Text(hint,
-                      style:
-                          TextStyle(color: theme.colorScheme.onSurfaceVariant));
-                }
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(labelBuilder(item as T),
-                      overflow: TextOverflow.ellipsis),
-                );
-              }),
-            ];
-          },
-          items: [
-            DropdownMenuItem<T>(
-              value: null,
-              child: Text('Todos',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.primary)),
-            ),
-            ...items.map((item) => DropdownMenuItem<T>(
-                  value: item,
-                  child: Text(labelBuilder(item),
-                      style: theme.textTheme.bodySmall),
-                )),
-          ],
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductTypeFilterDropdown(ThemeData theme) {
-    return _buildCompactDropdown<ProductType>(
-      theme: theme,
-      hint: 'Tipo',
-      value: _selectedProductType,
-      items: ProductType.values,
-      labelBuilder: (type) => type.displayName,
-      onChanged: (val) {
-        setState(() {
-          _selectedProductType = val;
-          if (val != ProductType.service) {
-            _filterMissingServiceStructuredProfile = false;
-          }
-          _applyFilters();
-        });
-        if (val == ProductType.service) {
-          unawaited(
-            _loadServiceStructuredProfileMappings(forceRefresh: false),
-          );
-        }
-      },
     );
   }
 
@@ -3436,7 +3288,6 @@ class _ProductListPageState extends State<ProductListPage> {
       _selectedCategoryId = null;
       _selectedSupplierId = null;
       _selectedBrandId = null;
-      _selectedProductType = null;
       _stockFilter = StockFilter.all;
       _filterWebPublished = false;
       _filterGoogleMerchant = false;
@@ -3466,6 +3317,13 @@ class _ProductListPageState extends State<ProductListPage> {
     return _visibleColumns.contains(column);
   }
 
+  String _columnLabel(ProductTableColumn column) {
+    if (_isServicesScope && column == ProductTableColumn.product) {
+      return 'Servicio';
+    }
+    return column.label;
+  }
+
   Future<void> _toggleColumn(ProductTableColumn column, bool isVisible) async {
     setState(() {
       if (isVisible) {
@@ -3480,14 +3338,23 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> _resetColumnPreferences() async {
     setState(() {
-      _visibleColumns = {
-        ProductTableColumn.product,
-        ProductTableColumn.sku,
-        ProductTableColumn.category,
-        ProductTableColumn.stock,
-        ProductTableColumn.price,
-        ProductTableColumn.cost,
-      };
+      _visibleColumns = _isServicesScope
+          ? {
+              ProductTableColumn.product,
+              ProductTableColumn.sku,
+              ProductTableColumn.category,
+              ProductTableColumn.price,
+              ProductTableColumn.cost,
+              ProductTableColumn.margin,
+            }
+          : {
+              ProductTableColumn.product,
+              ProductTableColumn.sku,
+              ProductTableColumn.category,
+              ProductTableColumn.stock,
+              ProductTableColumn.price,
+              ProductTableColumn.cost,
+            };
     });
     await _saveColumnPreferences();
   }
@@ -3517,7 +3384,7 @@ class _ProductListPageState extends State<ProductListPage> {
                                 await _toggleColumn(column, value);
                                 setModalState(() {});
                               },
-                        title: Text(column.label),
+                        title: Text(_columnLabel(column)),
                         subtitle:
                             isLocked ? const Text('Siempre visible') : null,
                         controlAffinity: ListTileControlAffinity.leading,
@@ -3870,7 +3737,7 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
           _buildHeaderCell(
             theme,
-            'Producto',
+            _isServicesScope ? 'Servicio' : 'Producto',
             flex: 4,
             sortOptionAsc: ProductSortOption.nameAsc,
             sortOptionDesc: ProductSortOption.nameDesc,
@@ -4659,7 +4526,7 @@ class _ProductListPageState extends State<ProductListPage> {
     // Save current state to service before navigating
     _saveCurrentState();
 
-    final result = await context.push('/inventory/products/${product.id}/edit');
+    final result = await context.push('$_catalogBaseRoute/${product.id}/edit');
     if (!mounted) return;
 
     // Always restore state when coming back (even without saving)
@@ -4698,7 +4565,11 @@ class _ProductListPageState extends State<ProductListPage> {
         await _inventoryService.deleteProduct(product.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Producto eliminado')),
+            SnackBar(
+              content: Text(
+                _isServicesScope ? 'Servicio eliminado' : 'Producto eliminado',
+              ),
+            ),
           );
           // Preserve pagination after delete
           _loadProducts(forceRefresh: true, preserveState: true);
@@ -4719,13 +4590,17 @@ class _ProductListPageState extends State<ProductListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined,
-              size: 64, color: theme.colorScheme.outline),
+          Icon(
+              _isServicesScope
+                  ? Icons.design_services_outlined
+                  : Icons.inventory_2_outlined,
+              size: 64,
+              color: theme.colorScheme.outline),
           const SizedBox(height: 16),
           Text(
             _searchTerm.isNotEmpty || _hasActiveFilters
-                ? 'No se encontraron productos'
-                : 'No hay productos registrados',
+                ? 'No se encontraron $_catalogPlural'
+                : 'No hay $_catalogPlural registrados',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -5006,6 +4881,7 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Widget _buildDetailPane(ThemeData theme) {
     if (_selectedProduct == null) return const SizedBox.shrink();
+    final hasMovementsTab = !_selectedProduct!.isService;
 
     return Container(
       decoration: BoxDecoration(
@@ -5014,7 +4890,7 @@ class _ProductListPageState extends State<ProductListPage> {
         color: theme.colorScheme.surface,
       ),
       child: DefaultTabController(
-        length: 2,
+        length: hasMovementsTab ? 2 : 1,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -5035,9 +4911,9 @@ class _ProductListPageState extends State<ProductListPage> {
                       indicatorSize: TabBarIndicatorSize.tab,
                       labelStyle: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.w600),
-                      tabs: const [
-                        Tab(text: 'Detalles'),
-                        Tab(text: 'Movimientos'),
+                      tabs: [
+                        const Tab(text: 'Detalles'),
+                        if (hasMovementsTab) const Tab(text: 'Movimientos'),
                       ],
                     ),
                   ),
@@ -5141,7 +5017,9 @@ class _ProductListPageState extends State<ProductListPage> {
                         SizedBox(
                           width: double.infinity,
                           child: AppButton(
-                            text: 'Editar Producto',
+                            text: _isServicesScope
+                                ? 'Editar Servicio'
+                                : 'Editar Producto',
                             icon: Icons.edit_outlined,
                             onPressed: () => _openEditor(_selectedProduct!),
                           ),
@@ -5150,10 +5028,12 @@ class _ProductListPageState extends State<ProductListPage> {
                     ),
                   ),
 
-                  // Tab 2: Stock Movements
-                  _selectedProduct!.id != null
-                      ? ProductMovementsTab(productId: _selectedProduct!.id!)
-                      : const Center(child: Text('Guarde el producto primero')),
+                  if (hasMovementsTab)
+                    _selectedProduct!.id != null
+                        ? ProductMovementsTab(productId: _selectedProduct!.id!)
+                        : const Center(
+                            child: Text('Guarde el producto primero'),
+                          ),
                 ],
               ),
             ),
@@ -5288,37 +5168,31 @@ class _ProductListPageState extends State<ProductListPage> {
                               },
                             ),
                             const SizedBox(height: 24),
-
-                            Text('Proveedor',
-                                style: theme.textTheme.titleSmall),
-                            const SizedBox(height: 8),
-                            _buildSearchableMenu<Supplier>(
-                              theme: theme,
-                              hint: 'Seleccionar proveedor...',
-                              allLabel: 'Todos',
-                              value: _suppliers.cast<Supplier?>().firstWhere(
-                                    (s) => s!.id == _selectedSupplierId,
-                                    orElse: () => null,
-                                  ),
-                              items: _suppliers,
-                              labelBuilder: (s) => s.name,
-                              onChanged: (val) {
-                                setModalState(
-                                    () => _selectedSupplierId = val?.id);
-                                setState(() {
-                                  _selectedSupplierId = val?.id;
-                                  _applyFilters();
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 24),
-
-                            Text('Tipo de Producto',
-                                style: theme.textTheme.titleSmall),
-                            const SizedBox(height: 8),
-                            _buildProductTypeFilterDropdown(theme),
-
-                            if (_selectedProductType == ProductType.service) ...[
+                            if (!_isServicesScope) ...[
+                              Text('Proveedor',
+                                  style: theme.textTheme.titleSmall),
+                              const SizedBox(height: 8),
+                              _buildSearchableMenu<Supplier>(
+                                theme: theme,
+                                hint: 'Seleccionar proveedor...',
+                                allLabel: 'Todos',
+                                value: _suppliers.cast<Supplier?>().firstWhere(
+                                      (s) => s!.id == _selectedSupplierId,
+                                      orElse: () => null,
+                                    ),
+                                items: _suppliers,
+                                labelBuilder: (s) => s.name,
+                                onChanged: (val) {
+                                  setModalState(
+                                      () => _selectedSupplierId = val?.id);
+                                  setState(() {
+                                    _selectedSupplierId = val?.id;
+                                    _applyFilters();
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 24),
+                            ] else ...[
                               const SizedBox(height: 12),
                               SwitchListTile(
                                 title:
@@ -5335,49 +5209,49 @@ class _ProductListPageState extends State<ProductListPage> {
                                 },
                               ),
                             ],
-
-                            const SizedBox(height: 24),
-
-                            Text('Inventario',
-                                style: theme.textTheme.titleSmall),
-                            const SizedBox(height: 8),
-                            // Custom segment control for stock
-                            LayoutBuilder(builder: (context, constraints) {
-                              return ToggleButtons(
-                                isSelected: [
-                                  _stockFilter == StockFilter.all,
-                                  _stockFilter == StockFilter.inStock,
-                                  _stockFilter == StockFilter.lowStock,
-                                  _stockFilter == StockFilter.outOfStock,
-                                ],
-                                onPressed: (index) {
-                                  final newFilter = StockFilter.values[index];
-                                  setModalState(() => _stockFilter = newFilter);
-                                  setState(() {
-                                    _stockFilter = newFilter;
-                                    _applyFilters();
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                constraints: BoxConstraints(
-                                  minWidth: (constraints.maxWidth - 6) / 4,
-                                  minHeight: 40,
-                                ),
-                                children: const [
-                                  Text('Todos', style: TextStyle(fontSize: 12)),
-                                  Text('Con Stock',
-                                      style: TextStyle(fontSize: 12)),
-                                  Text('Bajo', style: TextStyle(fontSize: 12)),
-                                  Text('Sin Stock',
-                                      style: TextStyle(fontSize: 12)),
-                                ],
-                              );
-                            }),
-
+                            if (!_isServicesScope) ...[
+                              const SizedBox(height: 24),
+                              Text('Inventario',
+                                  style: theme.textTheme.titleSmall),
+                              const SizedBox(height: 8),
+                              LayoutBuilder(builder: (context, constraints) {
+                                return ToggleButtons(
+                                  isSelected: [
+                                    _stockFilter == StockFilter.all,
+                                    _stockFilter == StockFilter.inStock,
+                                    _stockFilter == StockFilter.lowStock,
+                                    _stockFilter == StockFilter.outOfStock,
+                                  ],
+                                  onPressed: (index) {
+                                    final newFilter = StockFilter.values[index];
+                                    setModalState(
+                                        () => _stockFilter = newFilter);
+                                    setState(() {
+                                      _stockFilter = newFilter;
+                                      _applyFilters();
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  constraints: BoxConstraints(
+                                    minWidth: (constraints.maxWidth - 6) / 4,
+                                    minHeight: 40,
+                                  ),
+                                  children: const [
+                                    Text('Todos',
+                                        style: TextStyle(fontSize: 12)),
+                                    Text('Con Stock',
+                                        style: TextStyle(fontSize: 12)),
+                                    Text('Bajo',
+                                        style: TextStyle(fontSize: 12)),
+                                    Text('Sin Stock',
+                                        style: TextStyle(fontSize: 12)),
+                                  ],
+                                );
+                              }),
+                            ],
                             const SizedBox(height: 24),
                             const Divider(),
                             const SizedBox(height: 16),
-
                             SwitchListTile(
                               title: const Text('Publicado en Web'),
                               value: _filterWebPublished,
@@ -5389,18 +5263,19 @@ class _ProductListPageState extends State<ProductListPage> {
                                 });
                               },
                             ),
-                            SwitchListTile(
-                              title: const Text('Google Merchant'),
-                              value: _filterGoogleMerchant,
-                              onChanged: (val) {
-                                setModalState(
-                                    () => _filterGoogleMerchant = val);
-                                setState(() {
-                                  _filterGoogleMerchant = val;
-                                  _applyFilters();
-                                });
-                              },
-                            ),
+                            if (!_isServicesScope)
+                              SwitchListTile(
+                                title: const Text('Google Merchant'),
+                                value: _filterGoogleMerchant,
+                                onChanged: (val) {
+                                  setModalState(
+                                      () => _filterGoogleMerchant = val);
+                                  setState(() {
+                                    _filterGoogleMerchant = val;
+                                    _applyFilters();
+                                  });
+                                },
+                              ),
                             SwitchListTile(
                               title: const Text('Mostrar Inactivos'),
                               value: _showInactive,
@@ -5423,8 +5298,8 @@ class _ProductListPageState extends State<ProductListPage> {
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: () => Navigator.pop(context),
-                          child:
-                              Text('Ver ${_filteredProducts.length} productos'),
+                          child: Text(
+                              'Ver ${_filteredProducts.length} $_catalogPlural'),
                         ),
                       ),
                     ),

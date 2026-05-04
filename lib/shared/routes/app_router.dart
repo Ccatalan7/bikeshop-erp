@@ -76,9 +76,12 @@ import 'erp_routes_barrel.dart' deferred as erp
         PaymentsPage,
         PegasTablePage,
         ProductFormPage,
+        ProductType,
+        InventoryCatalogScope,
         ProductWebsiteVisibilityPage,
         ProductImportPage,
         ProductListPage,
+        ServiceListPage,
         PurchaseInvoiceFormPage,
         PurchaseInvoiceListPage,
         PurchasePaymentFormPage,
@@ -1660,6 +1663,7 @@ class AppRouter {
                 initialCategoryId: categoryId,
                 initialSupplierId: supplierId,
                 refreshToken: refreshToken,
+                catalogScope: erp.InventoryCatalogScope.products,
               ),
             );
           },
@@ -1671,7 +1675,7 @@ class AppRouter {
                 context,
                 state,
                 erp.loadLibrary(),
-                () => erp.ProductFormPage(),
+                () => erp.ProductFormPage(lockProductType: true),
               ),
             ),
             GoRoute(
@@ -1692,7 +1696,57 @@ class AppRouter {
                   context,
                   state,
                   erp.loadLibrary(),
-                  () => erp.ProductFormPage(productId: id),
+                  () => erp.ProductFormPage(
+                    productId: id,
+                    lockProductType: true,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/inventory/services',
+          pageBuilder: (context, state) {
+            final categoryId = state.uri.queryParameters['category'];
+            final refreshToken = state.uri.queryParameters['refresh'];
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.ServiceListPage(
+                initialCategoryId: categoryId,
+                refreshToken: refreshToken,
+              ),
+            );
+          },
+          routes: [
+            GoRoute(
+              path: 'new',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                erp.loadLibrary(),
+                () => erp.ProductFormPage(
+                  initialProductType: erp.ProductType.service,
+                  lockProductType: true,
+                ),
+              ),
+            ),
+            GoRoute(
+              path: ':id/edit',
+              pageBuilder: (context, state) {
+                final id = state.pathParameters['id']!;
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  erp.loadLibrary(),
+                  () => erp.ProductFormPage(
+                    productId: id,
+                    initialProductType: erp.ProductType.service,
+                    lockProductType: true,
+                  ),
                 );
               },
             ),

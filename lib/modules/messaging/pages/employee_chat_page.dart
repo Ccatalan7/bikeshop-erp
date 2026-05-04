@@ -83,11 +83,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         if (targetConv != null) {
           debugPrint('🔔 Found conversation type: ${targetConv.type}');
 
-          // Switch to correct tab (0 = Internal, 1 = Clients)
+          // Switch to correct tab (0 = Clients, 1 = Internal)
           if (targetConv.type == 'support') {
-            _tabController.animateTo(1); // Clients tab
+            _tabController.animateTo(0); // Clients tab
           } else {
-            _tabController.animateTo(0); // Internal tab
+            _tabController.animateTo(1); // Internal tab
           }
 
           // On mobile, navigate directly to the chat
@@ -107,7 +107,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   void _syncTabToActiveConversation(Conversation? conversation) {
     if (conversation == null) return;
-    final targetIndex = conversation.type == 'support' ? 1 : 0;
+    final targetIndex = conversation.type == 'support' ? 0 : 1;
     if (_tabController.index == targetIndex) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -235,7 +235,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           unselectedLabelColor: Colors.grey[600],
           indicatorColor: Theme.of(context).primaryColor,
           tabs: [
-            const Tab(icon: Icon(Icons.people), text: 'Equipo'),
             Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -250,16 +249,17 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 ],
               ),
             ),
+            const Tab(icon: Icon(Icons.people), text: 'Equipo'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Internal Tab
-          _buildInternalList(provider, activeId, allConversations),
           // Customer Tab
           _buildCustomerList(provider, activeId, allConversations),
+          // Internal Tab
+          _buildInternalList(provider, activeId, allConversations),
         ],
       ),
     );
@@ -312,7 +312,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     unselectedLabelColor: Colors.grey[600],
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
-                      Tab(text: 'Equipo ($internalCount)'),
                       Tab(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -325,6 +324,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                           ],
                         ),
                       ),
+                      Tab(text: 'Equipo ($internalCount)'),
                     ],
                   ),
                 ),
@@ -333,8 +333,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildInternalList(provider, activeId, allConversations),
                       _buildCustomerList(provider, activeId, allConversations),
+                      _buildInternalList(provider, activeId, allConversations),
                     ],
                   ),
                 ),

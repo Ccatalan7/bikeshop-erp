@@ -29,6 +29,7 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
+  final Map<String, int> _conversationOpeningUnreadCounts = {};
   bool _isLoading = false;
   String? _activeConversationId;
 
@@ -212,6 +213,10 @@ class ChatProvider extends ChangeNotifier {
     return _conversationDrafts[conversationId];
   }
 
+  int takeOpeningUnreadCount(String conversationId, {int fallback = 0}) {
+    return _conversationOpeningUnreadCounts.remove(conversationId) ?? fallback;
+  }
+
   String? takeConversationDraft(String conversationId) {
     final draft = _conversationDrafts.remove(conversationId);
     if (draft != null) notifyListeners();
@@ -253,6 +258,11 @@ class ChatProvider extends ChangeNotifier {
     final index = _conversations.indexWhere((c) => c.id == conversationId);
     if (index != -1) {
       final old = _conversations[index];
+      if (old.unreadCount > 0) {
+        _conversationOpeningUnreadCounts[conversationId] = old.unreadCount;
+      } else {
+        _conversationOpeningUnreadCounts.remove(conversationId);
+      }
       // Create copy with unreadCount = 0
       _conversations[index] = Conversation(
         id: old.id,

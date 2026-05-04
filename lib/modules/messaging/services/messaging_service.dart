@@ -65,6 +65,64 @@ class MessagingService {
     }
   }
 
+  Future<void> _setPrimaryConversationContext({
+    required String conversationId,
+    required String contextType,
+    required String contextId,
+    required String userId,
+    String? tenantId,
+  }) async {
+    await _client
+        .from('conversation_contexts')
+        .update({'is_primary': false}).eq('conversation_id', conversationId);
+
+    await _client.from('conversation_contexts').upsert(
+      {
+        'conversation_id': conversationId,
+        'context_type': contextType,
+        'context_id': contextId,
+        'is_primary': true,
+        'added_by': userId,
+        if (tenantId != null) 'tenant_id': tenantId,
+      },
+      onConflict: 'conversation_id,context_type,context_id',
+    );
+  }
+
+  Future<void> _clearConversationContexts(String conversationId) async {
+    await _client
+        .from('conversation_contexts')
+        .delete()
+        .eq('conversation_id', conversationId);
+  }
+
+  Future<Set<String>> getConversationIdsForContext({
+    required String contextType,
+    required String contextId,
+  }) async {
+    final normalizedContextType = _normalizeConversationContextType(
+      contextType,
+    );
+    if (normalizedContextType == null || contextId.isEmpty) return {};
+
+    final activeRows = await _client
+        .from('conversations')
+        .select('id')
+        .eq('context_type', normalizedContextType)
+        .eq('context_id', contextId);
+
+    final contextRows = await _client
+        .from('conversation_contexts')
+        .select('conversation_id')
+        .eq('context_type', normalizedContextType)
+        .eq('context_id', contextId);
+
+    return {
+      for (final row in activeRows) row['id']?.toString(),
+      for (final row in contextRows) row['conversation_id']?.toString(),
+    }.whereType<String>().toSet();
+  }
+
   /// Fetch conversations for the current user with unread counts
   /// [type] filter: 'internal' or 'support'
   Future<List<Conversation>> getConversations({String? type}) async {
@@ -409,6 +467,104 @@ class MessagingService {
     return conversationId;
   }
 
+  /// Resolve the customer contact directly from a business context before a
+  /// conversation exists. Used by embedded entity chat surfaces.
+  Future<Map<String, dynamic>?> getSupportContextContact({
+    required String contextType,
+    required String contextId,
+  }) async {
+    try {
+      Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
+        if (customerId == null || customerId.isEmpty) return null;
+
+        final customer = await _client
+            .from('customers')
+            .select('id, name, phone')
+            .eq('id', customerId)
+            .limit(1)
+            .maybeSingle();
+
+        if (customer == null) return null;
+
+        final phone = customer['phone']?.toString().trim();
+        if (phone == null || phone.isEmpty) return null;
+
+        return {
+          'customer_id': customer['id']?.toString(),
+          'name': customer['name']?.toString(),
+          'phone': phone,
+        };
+      }
+
+      final normalizedContextType = _normalizeConversationContextType(
+        contextType,
+      );
+
+      if (normalizedContextType == 'customer') {
+        return loadCustomerById(contextId);
+      }
+
+      if (normalizedContextType == 'job') {
+        final job = await _client
+            .from('mechanic_jobs')
+            .select('customer_id')
+            .eq('id', contextId)
+            .limit(1)
+            .maybeSingle();
+
+        return loadCustomerById(job?['customer_id']?.toString());
+      }
+
+      if (normalizedContextType == 'invoice') {
+        final invoice = await _client
+            .from('sales_invoices')
+            .select('customer_id, customer_name')
+            .eq('id', contextId)
+            .limit(1)
+            .maybeSingle();
+
+        final customerContact = await loadCustomerById(
+          invoice?['customer_id']?.toString(),
+        );
+        if (customerContact == null) return null;
+
+        final invoiceCustomerName = invoice?['customer_name']?.toString();
+        if (invoiceCustomerName != null && invoiceCustomerName.isNotEmpty) {
+          customerContact['name'] = invoiceCustomerName;
+        }
+
+        return customerContact;
+      }
+
+      if (normalizedContextType == 'order') {
+        final order = await _client
+            .from('online_orders')
+            .select('customer_id, customer_name, customer_phone')
+            .eq('id', contextId)
+            .limit(1)
+            .maybeSingle();
+
+        if (order == null) return null;
+
+        final orderPhone = order['customer_phone']?.toString().trim();
+        if (orderPhone != null && orderPhone.isNotEmpty) {
+          return {
+            'customer_id': order['customer_id']?.toString(),
+            'name': order['customer_name']?.toString(),
+            'phone': orderPhone,
+          };
+        }
+
+        return loadCustomerById(order['customer_id']?.toString());
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('⚠️ Error resolving support context contact: $e');
+      return null;
+    }
+  }
+
   /// Listen for ANY changes to the conversations table (for list re-fetch)
   RealtimeChannel subscribeToConversationsUpdates(VoidCallback onUpdate) {
     // We listen to the global 'conversations' table changes
@@ -440,6 +596,9 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
+    final normalizedContextType = _normalizeConversationContextType(
+      contextType,
+    );
 
     // 1. Create Conversation
     final conversation = await _client
@@ -448,7 +607,7 @@ class MessagingService {
           'type': 'support',
           'channel': 'website_portal',
           'title': title,
-          'context_type': contextType,
+          'context_type': normalizedContextType,
           'context_id': contextId,
           'last_message_at': DateTime.now().toIso8601String(),
         })
@@ -463,6 +622,15 @@ class MessagingService {
       'user_id': userId,
       'role': 'admin', // Creator is admin of the thread
     });
+
+    if (normalizedContextType != null && contextId != null) {
+      await _setPrimaryConversationContext(
+        conversationId: conversationId,
+        contextType: normalizedContextType,
+        contextId: contextId,
+        userId: userId,
+      );
+    }
 
     return conversationId;
   }
@@ -675,16 +843,30 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
+    final normalizedContextType = _normalizeConversationContextType(
+      contextType,
+    );
 
     debugPrint(
-        '🔗 Linking conversation $conversationId to $contextType/$contextId');
+        '🔗 Linking conversation $conversationId to $normalizedContextType/$contextId');
 
     try {
       await _client.from('conversations').update({
-        'context_type': contextType,
+        'context_type': normalizedContextType,
         'context_id': contextId,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', conversationId);
+
+      if (normalizedContextType != null && contextId != null) {
+        await _setPrimaryConversationContext(
+          conversationId: conversationId,
+          contextType: normalizedContextType,
+          contextId: contextId,
+          userId: userId,
+        );
+      } else {
+        await _clearConversationContexts(conversationId);
+      }
 
       debugPrint('✅ Conversation context updated successfully');
     } catch (e) {

@@ -36,6 +36,7 @@ export '../../modules/bikeshop/pages/bike_encyclopedia_page.dart';
 export '../../modules/inventory/pages/product_list_page.dart';
 export '../../modules/inventory/pages/product_form_page.dart';
 export '../../modules/inventory/pages/product_import_page.dart';
+export '../../modules/inventory/models/inventory_models.dart';
 export '../../modules/inventory/pages/hierarchical_category_page.dart';
 export '../../modules/inventory/pages/category_form_page.dart';
 export '../../modules/inventory/pages/brand_list_page.dart';

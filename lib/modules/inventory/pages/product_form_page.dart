@@ -40,8 +40,16 @@ import '../../bikeshop/widgets/service_wizard_dialog.dart';
 class ProductFormPage extends StatefulWidget {
   final String? productId;
   final bool showInDialog; // Hide MainLayout when true
+  final ProductType initialProductType;
+  final bool lockProductType;
 
-  const ProductFormPage({super.key, this.productId, this.showInDialog = false});
+  const ProductFormPage({
+    super.key,
+    this.productId,
+    this.showInDialog = false,
+    this.initialProductType = ProductType.product,
+    this.lockProductType = false,
+  });
 
   @override
   State<ProductFormPage> createState() => _ProductFormPageState();
@@ -325,6 +333,11 @@ class _ProductFormPageState extends State<ProductFormPage>
   @override
   void initState() {
     super.initState();
+    _selectedProductType = widget.initialProductType;
+    if (_selectedProductType == ProductType.service) {
+      _selectedPurchaseTreatment = PurchaseTreatment.inventory;
+      _isGoogleMerchant = false;
+    }
     _createTabController();
     _inventoryService = Provider.of<inventory_services.InventoryService>(
         context,
@@ -347,6 +360,9 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     if (widget.productId != null) {
       _loadProduct();
+    } else if (_selectedProductType == ProductType.service) {
+      unawaited(_generateSku(autoTriggered: true));
+      unawaited(_ensureServiceWizardPreviewSeedData());
     }
 
     // Remote scans arrive via the unified barcode stream.
@@ -525,6 +541,21 @@ class _ProductFormPageState extends State<ProductFormPage>
       if (mounted) {
         setState(() {
           _categories = categories;
+
+          if (_selectedProductType == ProductType.service &&
+              widget.productId == null &&
+              (_selectedCategoryId == null || _selectedCategoryId!.isEmpty)) {
+            for (final category in _categories) {
+              final name = category.name.trim().toLowerCase();
+              if (name == 'servicio' || name == 'servicios') {
+                final id = category.id;
+                if (id != null && id.isNotEmpty) {
+                  _selectedCategoryId = id;
+                  break;
+                }
+              }
+            }
+          }
 
           // Validate that selected category exists in loaded categories
           if (_selectedCategoryId != null) {
@@ -7359,6 +7390,10 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   Widget _buildProductTypeField() {
+    if (widget.lockProductType) {
+      return const SizedBox.shrink();
+    }
+
     return DropdownButtonFormField<ProductType>(
       initialValue: _selectedProductType,
       decoration: const InputDecoration(
@@ -7451,8 +7486,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ),
       const SizedBox(height: 16),
-      _buildProductTypeField(),
-      const SizedBox(height: 16),
+      if (!widget.lockProductType) ...[
+        _buildProductTypeField(),
+        const SizedBox(height: 16),
+      ],
       TextFormField(
         controller: _nameController,
         decoration: const InputDecoration(
@@ -7628,8 +7665,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ),
       const SizedBox(height: 16),
-      _buildProductTypeField(),
-      const SizedBox(height: 16),
+      if (!widget.lockProductType) ...[
+        _buildProductTypeField(),
+        const SizedBox(height: 16),
+      ],
       if (_selectedProductType != ProductType.service) ...[
         InputDecorator(
           decoration: const InputDecoration(

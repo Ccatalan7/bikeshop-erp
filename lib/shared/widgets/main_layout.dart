@@ -162,6 +162,11 @@ const List<MenuSubItem> _inventoryMenuItems = [
     route: '/inventory/products',
   ),
   MenuSubItem(
+    icon: Icons.design_services_outlined,
+    title: 'Servicios',
+    route: '/inventory/services',
+  ),
+  MenuSubItem(
     icon: Icons.category_outlined,
     title: 'Categorías',
     route: '/inventory/categories',
@@ -318,6 +323,7 @@ String _getTitleFromRoute(String route) {
     '/taller/wheel-rims': 'Rims',
     '/taller/wheel-spokes': 'Spokes',
     '/inventory/products': 'Productos',
+    '/inventory/services': 'Servicios',
     '/inventory/categories': 'Categorías',
     '/sales/invoices': 'Ventas',
     '/sales/reports': 'Informes de Ventas',

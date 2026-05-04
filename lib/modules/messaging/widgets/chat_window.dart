@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../sales/services/sales_service.dart';
 import '../../sales/models/sales_models.dart';
+import '../../website/services/website_service.dart';
 import '../models/conversation.dart';
 import '../services/messaging_service.dart';
 import '../models/message.dart';
@@ -23,11 +24,39 @@ import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 
+class _EmojiGroup {
+  final String label;
+  final IconData icon;
+  final List<String> keywords;
+  final List<String> emojis;
+
+  const _EmojiGroup({
+    required this.label,
+    required this.icon,
+    required this.keywords,
+    required this.emojis,
+  });
+}
+
+class _EmojiSection {
+  final String label;
+  final List<String> emojis;
+
+  const _EmojiSection(this.label, this.emojis);
+}
+
+class _UnreadMessagesMarker {
+  final int count;
+
+  const _UnreadMessagesMarker(this.count);
+}
+
 class ChatWindow extends StatefulWidget {
   final Conversation conversation;
   final Function(ReferenceSegment)? onReferenceTap;
   final bool isContextPanelClosed;
   final VoidCallback? onShowContextPanel;
+  final List<Widget> headerActions;
 
   const ChatWindow({
     super.key,
@@ -35,6 +64,7 @@ class ChatWindow extends StatefulWidget {
     this.onReferenceTap,
     this.isContextPanelClosed = false,
     this.onShowContextPanel,
+    this.headerActions = const [],
   });
 
   @override
@@ -43,42 +73,172 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
-  static const List<String> _emojiChoices = [
+  static const String _googleMapsReviewUrl =
+      'https://g.page/r/CYVszP1uXQfgEBM/review';
+  static final List<_EmojiGroup> _emojiGroups = [
+    _EmojiGroup(
+      label: 'Smileys y personas',
+      icon: Icons.emoji_emotions_outlined,
+      keywords: const ['cara', 'risa', 'feliz', 'triste', 'smiley', 'face'],
+      emojis:
+          '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 🫠 😉 😊 😇 🥰 😍 🤩 😘 😗 ☺️ 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🫢 🫣 🤫 🤔 🫡 🤐 🤨 😐 😑 😶 🫥 😏 😒 🙄 😬 😮‍💨 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 😵‍💫 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 🫤 😟 🙁 ☹️ 😮 😯 😲 😳 🥺 🥹 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Gestos y cuerpo',
+      icon: Icons.waving_hand_outlined,
+      keywords: const ['mano', 'gesto', 'persona', 'people', 'hand'],
+      emojis:
+          '👋 🤚 🖐️ ✋ 🖖 🫱 🫲 🫳 🫴 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 🫵 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 🫶 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦿 🦵 🦶 👂 🦻 👃 🧠 🫀 🫁 🦷 🦴 👀 👁️ 👅 👄 🫦 👶 🧒 👦 👧 🧑 👨 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 👮 🕵️ 💂 🥷 👷 🫅 🤴 👸 👳 👲 🧕 🤵 👰 🤰 🫃 🫄 👼 🎅 🤶 🧑‍🎄 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 🧌 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 🕴️ 👯 🧖 🧗 🤺 🏇 ⛷️ 🏂 🏌️ 🏄 🚣 🏊 ⛹️ 🏋️ 🚴 🚵 🤸 🤼 🤽 🤾 🤹 🧘 🛀 🛌'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Animales y naturaleza',
+      icon: Icons.pets_outlined,
+      keywords: const ['animal', 'naturaleza', 'clima', 'nature', 'weather'],
+      emojis:
+          '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐽 🐸 🐵 🙈 🙉 🙊 🐒 🐔 🐧 🐦 🐤 🐣 🐥 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🫎 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🪰 🪲 🪳 🦟 🦗 🕷️ 🕸️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🪼 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🦭 🐊 🐅 🐆 🦓 🦍 🦧 🦣 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🦬 🐃 🐂 🐄 🫏 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🦮 🐕‍🦺 🐈 🐈‍⬛ 🪶 🐓 🦃 🦤 🦚 🦜 🪽 🐇 🦝 🦨 🦡 🦫 🦦 🦥 🐁 🐀 🐿️ 🦔 🌵 🎄 🌲 🌳 🌴 🪵 🌱 🌿 ☘️ 🍀 🎍 🪴 🎋 🍃 🍂 🍁 🍄 🪨 🪸 🪷 🌹 🥀 🌺 🌸 🪻 🌼 🌻 🌞 🌝 🌛 🌜 🌚 🌕 🌖 🌗 🌘 🌑 🌒 🌓 🌔 🌙 🌎 🌍 🌏 🪐 💫 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⛄ 🌬️ 💨 💧 💦 ☔ ☂️ 🌊'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Comida y bebida',
+      icon: Icons.restaurant_outlined,
+      keywords: const ['comida', 'bebida', 'food', 'drink'],
+      emojis:
+          '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🫛 🥬 🥒 🌶️ 🫑 🌽 🥕 🫒 🧄 🧅 🥔 🍠 🫚 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🦴 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🫘 🍯 🥛 🫗 🍼 🫖 ☕ 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️ 🥣 🥡 🥢 🧂'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Viajes y lugares',
+      icon: Icons.directions_bike_outlined,
+      keywords: const ['viaje', 'lugar', 'auto', 'bici', 'bike', 'travel'],
+      emojis:
+          '🚲 🚴 🚵 🛴 🛹 🛼 🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🦯 🦽 🦼 🛺 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ 🛟 🪝 ⛽ 🚧 🚦 🚥 🚏 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🛖 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🛤️ 🛣️ 🗾 🎑 🏞️ 🌅 🌄 🌠 🎇 🎆 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Actividades',
+      icon: Icons.sports_soccer_outlined,
+      keywords: const ['actividad', 'deporte', 'juego', 'sport', 'game'],
+      emojis:
+          '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🪃 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 ⛷️ 🏂 🪂 🏋️ 🤼 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🤽 🚣 🧗 🚵 🚴 🏆 🥇 🥈 🥉 🏅 🎖️ 🏵️ 🎗️ 🎫 🎟️ 🎪 🤹 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🪗 🎸 🪕 🎻 🪈 🎲 ♟️ 🎯 🎳 🎮 🎰 🧩'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Objetos',
+      icon: Icons.lightbulb_outline,
+      keywords: const ['objeto', 'herramienta', 'tool', 'work', 'camera'],
+      emojis:
+          '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🖲️ 🕹️ 🗜️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ 🎚️ 🎛️ 🧭 ⏱️ ⏲️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🪫 🔌 💡 🔦 🕯️ 🪔 🧯 🛢️ 💸 💵 💴 💶 💷 🪙 💰 💳 🧾 💎 ⚖️ 🪜 🧰 🪛 🔧 🔨 ⚒️ 🛠️ ⛏️ 🪚 🔩 ⚙️ 🪤 🧱 ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🪦 ⚱️ 🏺 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🪠 🧺 🧻 🚽 🚰 🚿 🛁 🛀 🧼 🪥 🪒 🧽 🪣 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🛌 🧸 🪆 🖼️ 🪞 🪟 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🎊 🎉 🪩 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 🪧 📪 📫 📬 📭 📮 📯 📜 📃 📄 📑 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Símbolos',
+      icon: Icons.tag_outlined,
+      keywords: const ['simbolo', 'corazon', 'alerta', 'check', 'symbol'],
+      emojis:
+          '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 ❤️‍🔥 ❤️‍🩹 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 🈶 🈚 🈸 🈺 🈷️ ✴️ 🆚 💮 🉐 ㊙️ ㊗️ 🈴 🈵 🈹 🈲 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 〽️ ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 🈯 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🛗 🈳 🈂️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 ⚧️ 🚻 🚮 🎦 📶 🈁 🔣 ℹ️ 🔤 🔡 🔠 🆖 🆗 🆙 🆒 🆕 🆓 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 🔢 #️⃣ *️⃣ ▶️ ⏸️ ⏯️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ 🔀 🔁 🔂 ◀️ 🔼 🔽 ⏫ ⏬ ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔃 🔄 🔙 🔚 🔛 🔜 🔝'
+              .split(' '),
+    ),
+    _EmojiGroup(
+      label: 'Banderas',
+      icon: Icons.flag_outlined,
+      keywords: const ['bandera', 'pais', 'flag', 'country'],
+      emojis:
+          '🏁 🚩 🎌 🏴 🏳️ 🏳️‍🌈 🏳️‍⚧️ 🏴‍☠️ 🇨🇱 🇦🇷 🇧🇷 🇺🇾 🇵🇪 🇧🇴 🇨🇴 🇪🇨 🇻🇪 🇲🇽 🇺🇸 🇨🇦 🇪🇸 🇫🇷 🇩🇪 🇮🇹 🇬🇧 🇵🇹 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇮🇪 🇯🇵 🇨🇳 🇰🇷 🇮🇳 🇦🇺 🇳🇿 🇿🇦'
+              .split(' '),
+    ),
+  ];
+
+  static const Map<String, String> _emojiAliases = {
+    '😀': 'feliz sonrisa happy smile',
+    '😂': 'risa carcajada jajaja laugh joy',
+    '🤣': 'risa carcajada rolling laugh',
+    '😊': 'feliz amable smile blush',
+    '😍': 'amor enamorado love heart eyes',
+    '😘': 'beso kiss',
+    '😎': 'cool lentes sunglasses',
+    '😭': 'llanto llorar cry sob',
+    '😡': 'enojo rabia angry',
+    '👍': 'ok bien like pulgar',
+    '👎': 'mal dislike',
+    '🙏': 'gracias por favor pray thanks',
+    '🙌': 'celebrar manos hooray',
+    '👏': 'aplauso clap',
+    '❤️': 'amor corazon heart love',
+    '💔': 'corazon roto broken heart',
+    '✅': 'check listo correcto ok',
+    '❌': 'x error cancelar no',
+    '⚠️': 'alerta advertencia warning',
+    '📍': 'ubicacion direccion pin location',
+    '📸': 'foto camara photo camera',
+    '💬': 'mensaje chat comment',
+    '🚲': 'bicicleta bici bike',
+    '🔧': 'herramienta llave taller tool wrench',
+    '🧰': 'herramientas taller toolbox',
+    '💵': 'dinero plata money cash',
+    '💳': 'tarjeta pago card payment',
+    '🧾': 'boleta factura recibo invoice receipt',
+    '📦': 'paquete entrega package box',
+  };
+
+  static const List<String> _defaultRecentEmojis = [
     '😀',
+    '✌️',
+    '😅',
     '😂',
-    '😊',
-    '😍',
-    '😎',
-    '👍',
-    '🙌',
     '🙏',
+    '😰',
+    '🥺',
+    '🙌',
+    '😢',
+    '🤣',
+    '❤️',
+    '👍',
+    '✅',
     '🚲',
     '🔧',
-    '✅',
-    '⚠️',
     '📍',
     '📸',
-    '💬',
-    '❤️',
   ];
 
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _emojiScrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  final FocusNode _emojiSearchFocusNode = FocusNode();
+  final TextEditingController _emojiSearchController = TextEditingController();
   final MessagingService _messagingService = MessagingService();
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
+  OverlayEntry? _emojiOverlayEntry;
+  int _selectedEmojiCategoryIndex = 0;
+  int _openingUnreadCount = 0;
+  String? _openingUnreadConversationId;
+  TextSelection _lastComposerSelection = const TextSelection.collapsed(
+    offset: 0,
+  );
+  final List<String> _recentEmojiChoices = [..._defaultRecentEmojis];
 
   // Autocomplete State
   List<AutocompleteSuggestion> _suggestions = [];
   Timer? _debounce;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _composerMenuOverlayEntry;
+  String? _activeComposerMenuName;
+  bool _showAutomaticMessagesPanel = false;
+  final GlobalKey _smartActionsButtonKey = GlobalKey();
+  final GlobalKey _emojiButtonKey = GlobalKey();
+  final GlobalKey _attachmentButtonKey = GlobalKey();
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
+
+  bool get _canUseSmartActions =>
+      widget.conversation.isSupport && !widget.conversation.isInternal;
 
   bool get _canStartWhatsAppFromConversation =>
       widget.conversation.isSupport && widget.conversation.isWebsitePortal;
@@ -88,7 +248,10 @@ class _ChatWindowState extends State<ChatWindow> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
       _senderInfoFutureCache.clear();
-      _isEmojiPickerOpen = false;
+      _removeEmojiOverlay();
+      _removeComposerMenuOverlay(notify: false);
+      _showAutomaticMessagesPanel = false;
+      _captureOpeningUnreadCount();
       _loadMessages();
       _applyPendingDraft();
     }
@@ -97,6 +260,7 @@ class _ChatWindowState extends State<ChatWindow> {
   @override
   void initState() {
     super.initState();
+    _captureOpeningUnreadCount();
     _loadMessages();
     _applyPendingDraft();
     _messageController.addListener(_onTextChanged);
@@ -104,12 +268,17 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    _removeOverlay();
+    _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
     _scrollController.dispose();
+    _emojiScrollController.dispose();
     _focusNode.dispose();
-    _debounce?.cancel();
-    _removeOverlay();
+    _emojiSearchFocusNode.dispose();
+    _emojiSearchController.dispose();
     super.dispose();
   }
 
@@ -118,6 +287,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
     final text = _messageController.text;
     final selection = _messageController.selection;
+
+    if (_focusNode.hasFocus && selection.isValid) {
+      _lastComposerSelection = selection;
+    }
 
     if (selection.baseOffset < 0) return;
 
@@ -276,6 +449,304 @@ class _ChatWindowState extends State<ChatWindow> {
     _overlayEntry = null;
   }
 
+  void _toggleEmojiPicker() {
+    if (_emojiOverlayEntry != null) {
+      _hideEmojiPicker(restoreComposerFocus: true);
+      return;
+    }
+
+    _removeOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    _rememberComposerSelection();
+    _isEmojiPickerOpen = true;
+    _emojiOverlayEntry = OverlayEntry(
+      builder: (context) => _buildEmojiOverlay(context),
+    );
+    Overlay.of(context).insert(_emojiOverlayEntry!);
+    setState(() {});
+  }
+
+  void _hideEmojiPicker({bool restoreComposerFocus = false}) {
+    _removeEmojiOverlay();
+    if (mounted) setState(() {});
+    if (restoreComposerFocus) _restoreComposerFocus();
+  }
+
+  void _removeEmojiOverlay() {
+    _emojiOverlayEntry?.remove();
+    _emojiOverlayEntry = null;
+    _isEmojiPickerOpen = false;
+    _emojiSearchController.clear();
+  }
+
+  void _refreshEmojiPicker() {
+    if (mounted) setState(() {});
+    _emojiOverlayEntry?.markNeedsBuild();
+  }
+
+  void _toggleComposerMenu({
+    required String name,
+    required GlobalKey anchorKey,
+    required double width,
+    required double estimatedHeight,
+    required Widget Function(BuildContext overlayContext) panelBuilder,
+  }) {
+    if (_activeComposerMenuName == name && _composerMenuOverlayEntry != null) {
+      _removeComposerMenuOverlay(restoreComposerFocus: true);
+      return;
+    }
+
+    _removeEmojiOverlay();
+    _removeOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    _rememberComposerSelection();
+
+    _activeComposerMenuName = name;
+    _composerMenuOverlayEntry = OverlayEntry(
+      builder: (overlayContext) => _buildAnchoredComposerOverlay(
+        overlayContext: overlayContext,
+        anchorKey: anchorKey,
+        width: width,
+        estimatedHeight: estimatedHeight,
+        onDismiss: () => _removeComposerMenuOverlay(
+          restoreComposerFocus: true,
+        ),
+        child: panelBuilder(overlayContext),
+      ),
+    );
+    Overlay.of(context).insert(_composerMenuOverlayEntry!);
+    if (mounted) setState(() {});
+  }
+
+  void _removeComposerMenuOverlay({
+    bool restoreComposerFocus = false,
+    bool notify = true,
+  }) {
+    _composerMenuOverlayEntry?.remove();
+    _composerMenuOverlayEntry = null;
+    _activeComposerMenuName = null;
+    _showAutomaticMessagesPanel = false;
+    if (notify && mounted) setState(() {});
+    if (restoreComposerFocus) _restoreComposerFocus();
+  }
+
+  Widget _buildAnchoredComposerOverlay({
+    required BuildContext overlayContext,
+    required GlobalKey anchorKey,
+    required double width,
+    required double estimatedHeight,
+    required Widget child,
+    required VoidCallback onDismiss,
+  }) {
+    final overlayBox = Overlay.of(
+      overlayContext,
+    ).context.findRenderObject() as RenderBox?;
+    final anchorBox =
+        anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final screenSize = MediaQuery.sizeOf(overlayContext);
+    final overlaySize = overlayBox?.size ?? screenSize;
+    final effectiveWidth = width
+        .clamp(260.0, (overlaySize.width - 24).clamp(260.0, width))
+        .toDouble();
+    final anchorOffset = overlayBox != null && anchorBox != null
+        ? overlayBox.globalToLocal(anchorBox.localToGlobal(Offset.zero))
+        : Offset(12, overlaySize.height - estimatedHeight - 72);
+    final anchorSize = anchorBox?.size ?? const Size(40, 40);
+    final anchorRect = anchorOffset & anchorSize;
+    final horizontalLimit =
+        (overlaySize.width - effectiveWidth - 12).clamp(12.0, double.infinity);
+    final left = (anchorRect.center.dx - effectiveWidth / 2)
+        .clamp(12.0, horizontalLimit)
+        .toDouble();
+    final preferredTop = anchorRect.top - estimatedHeight - 8;
+    final fallbackTop = anchorRect.bottom + 8;
+    final verticalLimit = (overlaySize.height - estimatedHeight - 12)
+        .clamp(12.0, double.infinity);
+    final top = (preferredTop >= 12 ? preferredTop : fallbackTop)
+        .clamp(12.0, verticalLimit)
+        .toDouble();
+    final maxPanelHeight = (overlaySize.height - top - 12)
+        .clamp(120.0, overlaySize.height - 24)
+        .toDouble();
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: onDismiss,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          left: left,
+          top: top,
+          width: effectiveWidth,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxPanelHeight),
+              child: SingleChildScrollView(child: child),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildComposerPopoverPanel({
+    required BuildContext context,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required List<Widget> children,
+  }) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.8)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, size: 18, color: iconColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => _removeComposerMenuOverlay(
+                      restoreComposerFocus: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposerPopoverAction({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(icon, color: color, size: 19),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _captureOpeningUnreadCount() {
+    final provider = context.read<ChatProvider>();
+    final count = provider.takeOpeningUnreadCount(
+      widget.conversation.id,
+      fallback: widget.conversation.unreadCount,
+    );
+    _openingUnreadConversationId = widget.conversation.id;
+    _openingUnreadCount = count > 0 ? count : 0;
+  }
+
+  TextSelection _safeComposerSelection(
+      TextSelection selection, int textLength) {
+    if (!selection.isValid) {
+      final offset = _lastComposerSelection.baseOffset.clamp(0, textLength);
+      return TextSelection.collapsed(offset: offset);
+    }
+
+    final start = selection.start.clamp(0, textLength);
+    final end = selection.end.clamp(0, textLength);
+    return TextSelection(baseOffset: start, extentOffset: end);
+  }
+
+  void _rememberComposerSelection() {
+    final textLength = _messageController.text.length;
+    _lastComposerSelection = _safeComposerSelection(
+      _messageController.selection,
+      textLength,
+    );
+  }
+
   void _applySuggestion(AutocompleteSuggestion item) {
     final text = _messageController.text;
     final selection = _messageController.selection;
@@ -297,26 +768,88 @@ class _ChatWindowState extends State<ChatWindow> {
   void _insertEmoji(String emoji) {
     final value = _messageController.value;
     final text = value.text;
-    final selection = value.selection;
+    final selection = _focusNode.hasFocus
+        ? _safeComposerSelection(value.selection, text.length)
+        : _safeComposerSelection(_lastComposerSelection, text.length);
     final start = selection.isValid ? selection.start : text.length;
     final end = selection.isValid ? selection.end : text.length;
     final safeStart = start.clamp(0, text.length);
     final safeEnd = end.clamp(0, text.length);
     final newText = text.replaceRange(safeStart, safeEnd, emoji);
+    final nextSelection = TextSelection.collapsed(
+      offset: safeStart + emoji.length,
+    );
 
     _messageController.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: safeStart + emoji.length),
+      selection: nextSelection,
     );
-    _restoreComposerFocus();
+    _lastComposerSelection = nextSelection;
+    setState(() {
+      _recentEmojiChoices.remove(emoji);
+      _recentEmojiChoices.insert(0, emoji);
+      if (_recentEmojiChoices.length > 32) {
+        _recentEmojiChoices.removeRange(32, _recentEmojiChoices.length);
+      }
+    });
+    _emojiOverlayEntry?.markNeedsBuild();
+    _restoreComposerFocus(selection: nextSelection);
   }
 
   void _loadMessages() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context
-          .read<ChatProvider>()
-          .setActiveConversation(widget.conversation.id);
+      final provider = context.read<ChatProvider>();
+      provider.setActiveConversation(widget.conversation.id);
+      if (_openingUnreadCount == 0) {
+        final count = provider.takeOpeningUnreadCount(widget.conversation.id);
+        if (count > 0 && mounted) {
+          setState(() {
+            _openingUnreadConversationId = widget.conversation.id;
+            _openingUnreadCount = count;
+          });
+        }
+      }
     });
+  }
+
+  List<Object> _buildTimelineItems(List<Message> messages) {
+    final markerMessageId = _unreadMarkerBeforeMessageId(messages);
+    final items = <Object>[];
+
+    for (final message in messages) {
+      if (message.id == markerMessageId) {
+        items.add(_UnreadMessagesMarker(_openingUnreadCount));
+      }
+      items.add(message);
+    }
+
+    return items;
+  }
+
+  String? _unreadMarkerBeforeMessageId(List<Message> messages) {
+    if (_openingUnreadConversationId != widget.conversation.id ||
+        _openingUnreadCount <= 0 ||
+        messages.isEmpty) {
+      return null;
+    }
+
+    var remainingUnreadInbound = _openingUnreadCount;
+    String? oldestAvailableUnreadId;
+
+    for (var index = messages.length - 1; index >= 0; index--) {
+      final message = messages[index];
+      if (!_isUnreadInboundCandidate(message)) continue;
+
+      oldestAvailableUnreadId = message.id;
+      remainingUnreadInbound--;
+      if (remainingUnreadInbound <= 0) return message.id;
+    }
+
+    return oldestAvailableUnreadId;
+  }
+
+  bool _isUnreadInboundCandidate(Message message) {
+    return !message.isMe && message.type != 'system';
   }
 
   void _applyPendingDraft() {
@@ -528,12 +1061,19 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  void _restoreComposerFocus() {
+  void _restoreComposerFocus({TextSelection? selection}) {
     // On Web, post-frame callback isn't always enough due to engine/DOM sync.
     // A small delay ensures the focus request happens after the UI settles.
     Future.delayed(const Duration(milliseconds: 50), () {
       if (mounted) {
         FocusScope.of(context).requestFocus(_focusNode);
+        if (selection != null) {
+          final textLength = _messageController.text.length;
+          final offset = selection.baseOffset.clamp(0, textLength);
+          final safeSelection = TextSelection.collapsed(offset: offset);
+          _messageController.selection = safeSelection;
+          _lastComposerSelection = safeSelection;
+        }
       }
     });
   }
@@ -622,35 +1162,57 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  /// Pick and send a file (image, PDF, document, etc.)
-  Future<void> _pickAndSendFile() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Galería'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
+  void _showAttachmentOptions() {
+    _toggleComposerMenu(
+      name: 'attachments',
+      anchorKey: _attachmentButtonKey,
+      width: 330,
+      estimatedHeight: kIsWeb ? 210 : 260,
+      panelBuilder: (overlayContext) => _buildComposerPopoverPanel(
+        context: overlayContext,
+        icon: Icons.attach_file,
+        iconColor: _accentBlue,
+        title: 'Adjuntar',
+        children: [
+          _buildComposerPopoverAction(
+            icon: Icons.photo_library_outlined,
+            color: const Color(0xFF2563EB),
+            title: 'Galería',
+            subtitle: 'Enviar una imagen desde el equipo',
+            onTap: () {
+              _removeComposerMenuOverlay(notify: true);
+              _pickAndSendFile('gallery');
+            },
+          ),
+          if (!kIsWeb)
+            _buildComposerPopoverAction(
+              icon: Icons.camera_alt_outlined,
+              color: const Color(0xFF059669),
+              title: 'Cámara',
+              subtitle: 'Tomar una foto y enviarla',
+              onTap: () {
+                _removeComposerMenuOverlay(notify: true);
+                _pickAndSendFile('camera');
+              },
             ),
-            if (!kIsWeb)
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Cámara'),
-                onTap: () => Navigator.pop(ctx, 'camera'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.insert_drive_file),
-              title: const Text('Archivo (PDF, Doc, etc.)'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-          ],
-        ),
+          _buildComposerPopoverAction(
+            icon: Icons.insert_drive_file_outlined,
+            color: const Color(0xFF7C3AED),
+            title: 'Archivo',
+            subtitle: 'PDF, documento, planilla o imagen',
+            onTap: () {
+              _removeComposerMenuOverlay(notify: true);
+              _pickAndSendFile('file');
+            },
+          ),
+        ],
       ),
     );
+  }
 
-    if (choice == null || !mounted) return;
+  /// Pick and send a file (image, PDF, document, etc.)
+  Future<void> _pickAndSendFile(String choice) async {
+    if (!mounted) return;
 
     try {
       late String fileName;
@@ -787,6 +1349,7 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget build(BuildContext context) {
     final chatProvider = context.watch<ChatProvider>();
     final messages = chatProvider.activeMessages;
+    final timelineItems = _buildTimelineItems(messages);
     final isLoading = chatProvider.isLoading;
     final pendingDraft =
         chatProvider.getConversationDraft(widget.conversation.id);
@@ -865,10 +1428,16 @@ class _ChatWindowState extends State<ChatWindow> {
                     controller: _scrollController,
                     reverse: true, // Start from bottom
                     padding: const EdgeInsets.all(16),
-                    itemCount: messages.length,
+                    itemCount: timelineItems.length,
                     itemBuilder: (context, index) {
                       // Reverse index to show newest at bottom
-                      final msg = messages[messages.length - 1 - index];
+                      final item =
+                          timelineItems[timelineItems.length - 1 - index];
+                      if (item is _UnreadMessagesMarker) {
+                        return _buildUnreadMessagesMarker(item.count);
+                      }
+
+                      final msg = item as Message;
                       // Check continuity for bubble grouping (optional enhancement space)
                       return _buildMessageBubble(context, msg);
                     },
@@ -976,6 +1545,56 @@ class _ChatWindowState extends State<ChatWindow> {
                 ? 'Contexto vinculado: ${_contextLabel(conversation.contextType)}'
                 : 'Vincular contexto del chat',
             onPressed: () => _showAssignContextDialog(context),
+          ),
+          ...widget.headerActions,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnreadMessagesMarker(int count) {
+    final label =
+        count == 1 ? '1 mensaje sin leer' : '$count mensajes sin leer';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: Colors.grey.shade300,
+              thickness: 1,
+              endIndent: 10,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.58),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: Colors.grey.shade300,
+              thickness: 1,
+              indent: 10,
+            ),
           ),
         ],
       ),
@@ -1170,87 +1789,714 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _showSmartActions(BuildContext context) {
-    if (!_isWhatsAppConversation) {
+    if (!_canUseSmartActions) {
       _showErrorSnackBar(
         context,
-        'Las acciones rápidas de WhatsApp solo están disponibles en conversaciones de WhatsApp.',
+        'Las acciones rápidas solo están disponibles en conversaciones de clientes.',
       );
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    _toggleComposerMenu(
+      name: 'smart_actions',
+      anchorKey: _smartActionsButtonKey,
+      width: 460,
+      estimatedHeight: _isWhatsAppConversation ? 430 : 270,
+      panelBuilder: (overlayContext) => _buildSmartActionsPanel(
+        overlayContext,
+        parentContext: context,
       ),
-      builder: (ctx) => SafeArea(
+    );
+  }
+
+  Widget _buildSmartActionsPanel(
+    BuildContext overlayContext, {
+    required BuildContext parentContext,
+  }) {
+    final theme = Theme.of(overlayContext);
+    final showingAutomaticMessages = _showAutomaticMessagesPanel;
+    final panelHeight = _isWhatsAppConversation ? 430.0 : 270.0;
+    final headerColor =
+        showingAutomaticMessages ? const Color(0xFF2DD4BF) : Colors.amber;
+    final headerIcon =
+        showingAutomaticMessages ? Icons.quickreply_outlined : Icons.flash_on;
+    final headerTitle = showingAutomaticMessages
+        ? 'Mensajes automáticos'
+        : 'Centro de acciones';
+    final headerSubtitle = showingAutomaticMessages
+        ? 'Textos listos usando datos del ERP'
+        : _isWhatsAppConversation
+            ? 'Solicitudes interactivas y mensajes preparados'
+            : 'Mensajes preparados para este chat de cliente';
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: panelHeight,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Acciones Rápidas',
-                style: Theme.of(context).textTheme.titleMedium,
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0F172A),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: headerColor.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: headerColor.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Icon(
+                      headerIcon,
+                      color: headerColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          headerTitle,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          headerSubtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.68),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (showingAutomaticMessages)
+                    IconButton(
+                      tooltip: 'Volver',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: () {
+                        setState(() => _showAutomaticMessagesPanel = false);
+                        _composerMenuOverlayEntry?.markNeedsBuild();
+                      },
+                    ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    visualDensity: VisualDensity.compact,
+                    icon:
+                        const Icon(Icons.close, size: 18, color: Colors.white),
+                    onPressed: () => _removeComposerMenuOverlay(
+                      restoreComposerFocus: true,
+                    ),
+                  ),
+                ],
               ),
             ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.orange,
-                child: Icon(Icons.description, color: Colors.white, size: 20),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (showingAutomaticMessages)
+                        _buildAutomaticMessagesPanelBody(theme)
+                      else ...[
+                        if (_isWhatsAppConversation) ...[
+                          _buildPopoverSectionHeader(
+                            'Solicitudes al cliente',
+                            'Acciones con respuesta o pago desde WhatsApp',
+                          ),
+                          const SizedBox(height: 8),
+                          _buildCommandActionTile(
+                            icon: Icons.assignment_turned_in_outlined,
+                            color: const Color(0xFFD97706),
+                            title: 'Aprobación de presupuesto',
+                            subtitle:
+                                'Solicita aprobar o rechazar el presupuesto activo',
+                            badge: 'INTERACTIVO',
+                            onTap: () {
+                              _removeComposerMenuOverlay(notify: true);
+                              _sendActionRequest(
+                                  parentContext, 'approve_quote');
+                            },
+                          ),
+                          _buildCommandActionTile(
+                            icon: Icons.payments_outlined,
+                            color: const Color(0xFF059669),
+                            title: 'Solicitud de pago',
+                            subtitle:
+                                'Envía el botón de pago para la factura asociada',
+                            badge: 'COBRO',
+                            onTap: () {
+                              _removeComposerMenuOverlay(notify: true);
+                              _sendActionRequest(parentContext, 'pay_now');
+                            },
+                          ),
+                          _buildCommandActionTile(
+                            icon: Icons.inventory_2_outlined,
+                            color: const Color(0xFF2563EB),
+                            title: 'Confirmación de entrega',
+                            subtitle:
+                                'El cliente confirma recepción del producto o servicio',
+                            badge: 'ENTREGA',
+                            onTap: () {
+                              _removeComposerMenuOverlay(notify: true);
+                              _sendActionRequest(
+                                parentContext,
+                                'confirm_delivery',
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ] else ...[
+                          _buildWhatsAppOnlyActionsNotice(theme),
+                          const SizedBox(height: 12),
+                        ],
+                        _buildAutomaticMessagesSection(theme),
+                        if (_isWhatsAppConversation) ...[
+                          const SizedBox(height: 10),
+                          _buildCommandActionTile(
+                            icon: Icons.history_toggle_off_outlined,
+                            color: const Color(0xFF64748B),
+                            title: 'Enviar presupuesto antiguo',
+                            subtitle:
+                                'Compatibilidad: actualiza estado y notifica',
+                            badge: 'LEGACY',
+                            compact: true,
+                            onTap: () {
+                              _removeComposerMenuOverlay(notify: true);
+                              _handleSendQuote(parentContext);
+                            },
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
               ),
-              title: const Text('Solicitar Aprobación de Presupuesto'),
-              subtitle: const Text('El cliente puede aprobar o rechazar'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _sendActionRequest(context, 'approve_quote');
-              },
             ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.green,
-                child: Icon(Icons.payment, color: Colors.white, size: 20),
-              ),
-              title: const Text('Solicitar Pago'),
-              subtitle: const Text('Envía botón de pago al cliente'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _sendActionRequest(context, 'pay_now');
-              },
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.blue,
-                child:
-                    Icon(Icons.local_shipping, color: Colors.white, size: 20),
-              ),
-              title: const Text('Confirmar Entrega'),
-              subtitle: const Text('Cliente confirma recepción del producto'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _sendActionRequest(context, 'confirm_delivery');
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.grey,
-                child: Icon(Icons.receipt_long, color: Colors.white, size: 20),
-              ),
-              title: const Text('Enviar Presupuesto (Antiguo)'),
-              subtitle: const Text('Actualiza estado y notifica'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _handleSendQuote(context);
-              },
-            ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildWhatsAppOnlyActionsNotice(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFF64748B).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.lock_outline,
+              color: Color(0xFF64748B),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Solicitudes interactivas solo por WhatsApp',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Este chat es ${widget.conversation.channelLabel.toLowerCase()}. Los mensajes automáticos sí pueden enviarse desde aquí.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPopoverSectionHeader(String title, String subtitle) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommandActionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    String? badge,
+    bool compact = false,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 0 : 6),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: compact ? 9 : 10,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: compact ? 32 : 36,
+                  height: compact ? 32 : 36,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withValues(alpha: 0.18)),
+                  ),
+                  child: Icon(icon, color: color, size: compact ? 18 : 20),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF111827),
+                              ),
+                            ),
+                          ),
+                          if (badge != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                badge,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: color,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: Color(0xFF94A3B8),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutomaticMessagesSection(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {
+          setState(() => _showAutomaticMessagesPanel = true);
+          _composerMenuOverlayEntry?.markNeedsBuild();
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F766E).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.quickreply_outlined,
+                  color: Color(0xFF0F766E),
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mensajes automáticos',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Textos listos usando datos del ERP',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: Color(0xFF94A3B8),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutomaticMessagesPanelBody(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildAutomaticMessageTile(
+            icon: Icons.account_balance_outlined,
+            title: 'Datos de transferencia',
+            subtitle: 'Envía banco, cuenta, titular, RUT e instrucciones',
+            onTap: _sendTransferDataMessage,
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _buildAutomaticMessageTile(
+            icon: Icons.rate_review_outlined,
+            title: 'Pedir reseña en Google',
+            subtitle: 'Solicita una reseña con enlace a Google Maps',
+            onTap: _sendGoogleMapsReviewRequestMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutomaticMessageTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF093357).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: const Color(0xFF093357), size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.send_outlined, size: 17, color: Color(0xFF64748B)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendTransferDataMessage() async {
+    _removeComposerMenuOverlay(notify: true);
+
+    try {
+      final message = await _buildTransferDataMessage();
+      if (message == null || message.trim().isEmpty) {
+        if (mounted) {
+          _showErrorSnackBar(
+            context,
+            'No hay datos de transferencia configurados en Sitio Web.',
+          );
+        }
+        return;
+      }
+
+      await _sendPreparedMessage(message);
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar(
+        context,
+        'No se pudieron preparar los datos de transferencia: $e',
+      );
+    }
+  }
+
+  Future<String?> _buildTransferDataMessage() async {
+    final websiteService = context.read<WebsiteService>();
+    await websiteService.loadSettings();
+
+    final bankName =
+        websiteService.getSetting('payment_transfer_bank_name', '').trim();
+    final accountType =
+        websiteService.getSetting('payment_transfer_account_type', '').trim();
+    final accountNumber =
+        websiteService.getSetting('payment_transfer_account_number', '').trim();
+    final accountHolder =
+        websiteService.getSetting('payment_transfer_account_holder', '').trim();
+    final rut = websiteService.getSetting('payment_transfer_rut', '').trim();
+    final contactEmail = websiteService
+        .getSetting(
+          'payment_transfer_contact_email',
+          websiteService.getSetting('contact_email', ''),
+        )
+        .trim();
+    final instructions =
+        websiteService.getSetting('payment_transfer_instructions', '').trim();
+
+    final hasTransferDestination = [
+      bankName,
+      accountNumber,
+      accountHolder,
+      rut,
+    ].any((value) => value.isNotEmpty);
+
+    if (!hasTransferDestination &&
+        contactEmail.isEmpty &&
+        instructions.isEmpty) {
+      return null;
+    }
+
+    final lines = <String>[
+      'Hola, te compartimos los datos para transferencia bancaria:',
+      '',
+      if (bankName.isNotEmpty) 'Banco: $bankName',
+      if (accountType.isNotEmpty) 'Tipo de cuenta: $accountType',
+      if (accountNumber.isNotEmpty) 'N° de cuenta: $accountNumber',
+      if (accountHolder.isNotEmpty) 'Titular: $accountHolder',
+      if (rut.isNotEmpty) 'RUT: $rut',
+      if (contactEmail.isNotEmpty) 'Comprobante: $contactEmail',
+    ];
+
+    final proofInstructions = instructions.isNotEmpty
+        ? instructions
+        : contactEmail.isNotEmpty
+            ? 'Una vez realizada la transferencia, envíanos el comprobante a $contactEmail.'
+            : '';
+
+    if (proofInstructions.isNotEmpty) {
+      lines.addAll(['', proofInstructions]);
+    }
+
+    return lines.join('\n');
+  }
+
+  Future<void> _sendGoogleMapsReviewRequestMessage() async {
+    _removeComposerMenuOverlay(notify: true);
+
+    try {
+      final message = await _buildGoogleMapsReviewRequestMessage();
+      await _sendPreparedMessage(message);
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar(
+        context,
+        'No se pudo preparar la solicitud de reseña: $e',
+      );
+    }
+  }
+
+  Future<String> _buildGoogleMapsReviewRequestMessage() async {
+    final websiteService = context.read<WebsiteService>();
+    await websiteService.loadSettings();
+
+    final businessName = websiteService
+        .getSetting(
+          'store_name',
+          websiteService.getSetting(
+            'business_name',
+            websiteService.getSetting('company_name', 'Viñabike'),
+          ),
+        )
+        .trim();
+    final displayName = businessName.isEmpty ? 'Viñabike' : businessName;
+
+    return [
+      'Hola, gracias por confiar en $displayName.',
+      '',
+      'Si quedaste conforme con la atención, nos ayudaría muchísimo que nos dejes una reseña en Google Maps:',
+      '',
+      _googleMapsReviewUrl,
+      '',
+      'Tu opinión ayuda a que más ciclistas nos encuentren y también nos ayuda a seguir mejorando. ¡Gracias!',
+      '',
+      'Si hubo algo pendiente, escríbenos por aquí y lo revisamos contigo.',
+    ].join('\n');
+  }
+
+  Future<void> _sendPreparedMessage(String message) async {
+    if (_isSendingMessage) {
+      _showErrorSnackBar(
+        context,
+        'Espera a que termine el envío anterior antes de mandar otro mensaje.',
+      );
+      return;
+    }
+
+    final previousValue = _messageController.value;
+    _messageController.value = TextEditingValue(
+      text: message,
+      selection: TextSelection.collapsed(offset: message.length),
+    );
+
+    await _sendMessage();
+
+    if (!mounted) return;
+    if (previousValue.text.trim().isNotEmpty &&
+        _messageController.text.trim().isEmpty) {
+      _messageController.value = previousValue;
+      if (previousValue.selection.isValid) {
+        _lastComposerSelection = previousValue.selection;
+      }
+    }
   }
 
   /// Send an action request message to the customer
@@ -1723,7 +2969,7 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildComposer(BuildContext context) {
     return _buildTextComposer(
       context,
-      showSmartActions: _isWhatsAppConversation,
+      showSmartActions: _canUseSmartActions,
     );
   }
 
@@ -1734,30 +2980,36 @@ class _ChatWindowState extends State<ChatWindow> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_isEmojiPickerOpen) _buildEmojiPicker(),
         Row(
           children: [
             if (showSmartActions)
-              IconButton(
-                icon: const Icon(Icons.flash_on, color: Colors.amber),
-                tooltip: 'Acciones Rápidas',
-                onPressed: () => _showSmartActions(context),
+              KeyedSubtree(
+                key: _smartActionsButtonKey,
+                child: IconButton(
+                  icon: const Icon(Icons.flash_on, color: Colors.amber),
+                  tooltip: 'Acciones Rápidas',
+                  onPressed: () => _showSmartActions(context),
+                ),
               ),
-            IconButton(
-              icon: Icon(
-                _isEmojiPickerOpen
-                    ? Icons.keyboard_alt_outlined
-                    : Icons.emoji_emotions_outlined,
+            KeyedSubtree(
+              key: _emojiButtonKey,
+              child: IconButton(
+                icon: Icon(
+                  _isEmojiPickerOpen
+                      ? Icons.keyboard_alt_outlined
+                      : Icons.emoji_emotions_outlined,
+                ),
+                tooltip: _isEmojiPickerOpen ? 'Cerrar emojis' : 'Emojis',
+                onPressed: _toggleEmojiPicker,
               ),
-              tooltip: _isEmojiPickerOpen ? 'Cerrar emojis' : 'Emojis',
-              onPressed: () {
-                setState(() => _isEmojiPickerOpen = !_isEmojiPickerOpen);
-                if (!_isEmojiPickerOpen) _restoreComposerFocus();
-              },
             ),
-            IconButton(
-              icon: const Icon(Icons.attach_file),
-              onPressed: _pickAndSendFile,
+            KeyedSubtree(
+              key: _attachmentButtonKey,
+              child: IconButton(
+                icon: const Icon(Icons.attach_file),
+                tooltip: 'Adjuntar',
+                onPressed: _showAttachmentOptions,
+              ),
             ),
             Expanded(
               child: CompositedTransformTarget(
@@ -1790,39 +3042,333 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildEmojiPicker() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border.all(color: Colors.grey[200]!),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: _emojiChoices.map((emoji) {
-          return SizedBox(
-            width: 36,
-            height: 36,
-            child: TextButton(
-              onPressed: () => _insertEmoji(emoji),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                emoji,
-                style: const TextStyle(fontSize: 20),
+  Widget _buildEmojiOverlay(BuildContext overlayContext) {
+    final overlayBox = Overlay.of(
+      overlayContext,
+    ).context.findRenderObject() as RenderBox?;
+    final buttonBox =
+        _emojiButtonKey.currentContext?.findRenderObject() as RenderBox?;
+
+    final screenSize = MediaQuery.sizeOf(overlayContext);
+    final panelWidth = screenSize.width < 430 ? screenSize.width - 24 : 390.0;
+    final panelHeight = screenSize.height < 720 ? 350.0 : 430.0;
+    final width = panelWidth.clamp(280.0, 390.0).toDouble();
+    final height = panelHeight;
+
+    final overlaySize = overlayBox?.size ?? screenSize;
+    final buttonOffset = overlayBox != null && buttonBox != null
+        ? overlayBox.globalToLocal(buttonBox.localToGlobal(Offset.zero))
+        : Offset(12, overlaySize.height - height - 72);
+    final buttonSize = buttonBox?.size ?? const Size(40, 40);
+    final buttonRect = buttonOffset & buttonSize;
+    final horizontalLimit =
+        (overlaySize.width - width - 12).clamp(12.0, double.infinity);
+    final left = buttonRect.left.clamp(12.0, horizontalLimit).toDouble();
+    final preferredTop = buttonRect.top - height - 8;
+    final fallbackTop = buttonRect.bottom + 8;
+    final verticalLimit =
+        (overlaySize.height - height - 12).clamp(12.0, double.infinity);
+    final top = (preferredTop >= 12 ? preferredTop : fallbackTop)
+        .clamp(12.0, verticalLimit)
+        .toDouble();
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => _hideEmojiPicker(restoreComposerFocus: true),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          left: left,
+          top: top,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: _buildEmojiPickerPanel(
+              overlayContext,
+              width: width,
+              height: height,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmojiPickerPanel(
+    BuildContext panelContext, {
+    required double width,
+    required double height,
+  }) {
+    final theme = Theme.of(panelContext);
+    final query = _emojiSearchController.text.trim();
+    final sections = _emojiSectionsForPicker(query);
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+              child: TextField(
+                controller: _emojiSearchController,
+                focusNode: _emojiSearchFocusNode,
+                onChanged: (_) => _refreshEmojiPicker(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Buscar con texto o emoji',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Limpiar',
+                          onPressed: () {
+                            _emojiSearchController.clear();
+                            _refreshEmojiPicker();
+                          },
+                        ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
               ),
             ),
-          );
-        }).toList(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: _buildEmojiModeTabs(theme),
+            ),
+            Expanded(
+              child: sections.isEmpty
+                  ? _buildEmojiEmptyState(theme)
+                  : ListView.builder(
+                      controller: _emojiScrollController,
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                      itemCount: sections.length,
+                      itemBuilder: (context, index) {
+                        final section = sections[index];
+                        return _buildEmojiSection(section, theme);
+                      },
+                    ),
+            ),
+            _buildEmojiCategoryBar(theme),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildEmojiModeTabs(ThemeData theme) {
+    Widget tab(String label, {required bool selected}) {
+      return Expanded(
+        child: Container(
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? Colors.grey.shade200 : Colors.transparent,
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: selected ? Colors.black87 : Colors.grey.shade500,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          tab('Emojis', selected: true),
+          tab('GIFs', selected: false),
+          tab('Stickers', selected: false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmojiSection(_EmojiSection section, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              section.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 2,
+            runSpacing: 2,
+            children: section.emojis.map(_buildEmojiButton).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmojiButton(String emoji) {
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () => _insertEmoji(emoji),
+          child: Center(
+            child: Text(
+              emoji,
+              style: const TextStyle(fontSize: 22, height: 1),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmojiCategoryBar(ThemeData theme) {
+    final items = <({IconData icon, String label})>[
+      (icon: Icons.access_time, label: 'Recientes'),
+      ..._emojiGroups.map((group) => (icon: group.icon, label: group.label)),
+    ];
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Row(
+          children: List.generate(items.length, (index) {
+            final item = items[index];
+            final selected = index == _selectedEmojiCategoryIndex &&
+                _emojiSearchController.text.trim().isEmpty;
+            return Tooltip(
+              message: item.label,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  _emojiSearchController.clear();
+                  _selectedEmojiCategoryIndex = index;
+                  if (_emojiScrollController.hasClients) {
+                    _emojiScrollController.jumpTo(0);
+                  }
+                  _refreshEmojiPicker();
+                },
+                child: Container(
+                  width: 36,
+                  height: 34,
+                  margin: const EdgeInsets.symmetric(horizontal: 1),
+                  decoration: BoxDecoration(
+                    color: selected ? Colors.grey.shade200 : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    item.icon,
+                    size: 19,
+                    color: selected ? _accentBlue : Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmojiEmptyState(ThemeData theme) {
+    return Center(
+      child: Text(
+        'Sin resultados',
+        style: TextStyle(
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  List<_EmojiSection> _emojiSectionsForPicker(String rawQuery) {
+    final query = rawQuery.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      return _emojiGroups
+          .map((group) {
+            final emojis = group.emojis
+                .where((emoji) => _emojiMatchesQuery(emoji, group, query))
+                .toList();
+            return _EmojiSection(group.label, emojis);
+          })
+          .where((section) => section.emojis.isNotEmpty)
+          .toList();
+    }
+
+    if (_selectedEmojiCategoryIndex == 0) {
+      return [
+        _EmojiSection('Recientes', _recentEmojiChoices),
+        _EmojiSection('Smileys y personas', _emojiGroups.first.emojis),
+      ];
+    }
+
+    final groupIndex = (_selectedEmojiCategoryIndex - 1)
+        .clamp(0, _emojiGroups.length - 1)
+        .toInt();
+    final group = _emojiGroups[groupIndex];
+    return [_EmojiSection(group.label, group.emojis)];
+  }
+
+  bool _emojiMatchesQuery(String emoji, _EmojiGroup group, String query) {
+    if (emoji.contains(query)) return true;
+    if (group.label.toLowerCase().contains(query)) return true;
+    if (group.keywords.any((keyword) => keyword.contains(query))) return true;
+    final alias = _emojiAliases[emoji]?.toLowerCase();
+    return alias?.contains(query) ?? false;
   }
 
   void _showWhatsAppResultSnackbar({

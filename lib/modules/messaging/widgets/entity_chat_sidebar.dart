@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/messaging_service.dart';
 import '../models/conversation.dart';
 import '../widgets/chat_window.dart';
+
+enum _EntityChatStartChannel { website, whatsapp }
 
 /// A collapsible chat sidebar for embedding in detail pages (Job, Invoice, etc.)
 /// Shows conversations linked to a specific entity and allows creating new ones.
@@ -25,10 +28,21 @@ class EntityChatSidebar extends StatefulWidget {
 }
 
 class _EntityChatSidebarState extends State<EntityChatSidebar> {
+  static const double _collapsedWidth = 48;
+  static const double _defaultExpandedWidth = 380;
+  static const double _minExpandedWidth = 320;
+  static const double _maxExpandedWidth = 640;
+  static const String _widthPreferenceKey = 'entity_chat_sidebar_width';
+
   List<Conversation> _conversations = [];
   Conversation? _activeConversation;
   bool _isLoading = true;
   bool _isExpanded = false; // Collapsed by default
+  bool _isResizing = false;
+  bool _isCreatingChat = false;
+  bool _isChoosingChannel = false;
+  final Set<String> _deletingConversationIds = {};
+  double _expandedWidth = _defaultExpandedWidth;
   RealtimeChannel? _realtimeChannel;
 
   void _safeSetState(VoidCallback update) {
@@ -44,11 +58,42 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   @override
   void initState() {
     super.initState();
+    _loadSavedWidth();
     // Defer provider access to after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadConversations();
       _subscribeToUpdates();
     });
+  }
+
+  Future<void> _loadSavedWidth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedWidth = prefs.getDouble(_widthPreferenceKey);
+      if (savedWidth == null || !mounted) return;
+      setState(() {
+        _expandedWidth =
+            savedWidth.clamp(_minExpandedWidth, _maxExpandedWidth).toDouble();
+      });
+    } catch (e) {
+      debugPrint('Could not load entity chat sidebar width: $e');
+    }
+  }
+
+  Future<void> _saveWidthPreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_widthPreferenceKey, _expandedWidth);
+    } catch (e) {
+      debugPrint('Could not save entity chat sidebar width: $e');
+    }
+  }
+
+  void _setExpandedWidth(double width) {
+    final nextWidth =
+        width.clamp(_minExpandedWidth, _maxExpandedWidth).toDouble();
+    if ((_expandedWidth - nextWidth).abs() < 0.5) return;
+    setState(() => _expandedWidth = nextWidth);
   }
 
   @override
@@ -77,17 +122,24 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
           Provider.of<MessagingService>(context, listen: false);
 
       // Get all conversations and filter by context
+      final linkedConversationIds =
+          await messagingService.getConversationIdsForContext(
+        contextType: widget.entityType,
+        contextId: widget.entityId,
+      );
       final allConversations = await messagingService.getConversations();
       debugPrint(
           '🔍 EntityChatSidebar: Found ${allConversations.length} total conversations');
       debugPrint(
           '🔍 Looking for: entityType=${widget.entityType}, entityId=${widget.entityId}');
       debugPrint('🔍 Entity title: ${widget.entityTitle}');
+      debugPrint('🔍 Context table matches: ${linkedConversationIds.length}');
 
       // Primary filter: exact context match
       var filtered = allConversations.where((c) {
-        return c.contextType == widget.entityType &&
-            c.contextId == widget.entityId;
+        return linkedConversationIds.contains(c.id) ||
+            (c.contextType == widget.entityType &&
+                c.contextId == widget.entityId);
       }).toList();
       debugPrint('🔍 Context-linked matches: ${filtered.length}');
 
@@ -120,6 +172,10 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         _safeSetState(() {
           _conversations = filtered;
           _isLoading = false;
+          if (_activeConversation != null &&
+              !filtered.any((item) => item.id == _activeConversation!.id)) {
+            _activeConversation = null;
+          }
           // Auto-select if only one conversation
           if (filtered.length == 1 && _activeConversation == null) {
             _activeConversation = filtered.first;
@@ -134,35 +190,276 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     }
   }
 
-  Future<void> _startNewChat() async {
+  Future<void> _startNewChat(_EntityChatStartChannel selectedChannel) async {
+    setState(() => _isCreatingChat = true);
+
     try {
       final messagingService =
           Provider.of<MessagingService>(context, listen: false);
 
-      // Create a support ticket linked to this entity
-      final newConvId = await messagingService.createSupportTicket(
-        title: 'Chat: ${widget.entityTitle}',
-        contextType: widget.entityType,
-        contextId: widget.entityId,
-      );
+      final newConvId = switch (selectedChannel) {
+        _EntityChatStartChannel.website =>
+          await messagingService.createSupportTicket(
+            title: 'Chat: ${widget.entityTitle}',
+            contextType: widget.entityType,
+            contextId: widget.entityId,
+          ),
+        _EntityChatStartChannel.whatsapp =>
+          await _openWhatsAppConversation(messagingService),
+      };
 
       if (mounted) {
         // Reload conversations to get the new one as a Conversation object
         await _loadConversations();
         // Find and select the newly created conversation
-        final newConv = _conversations.firstWhere(
-          (c) => c.id == newConvId,
-          orElse: () => _conversations.first,
-        );
-        _safeSetState(() {
-          _activeConversation = newConv;
-        });
+        final matching = _conversations.where((c) => c.id == newConvId);
+        if (matching.isNotEmpty) {
+          _safeSetState(() {
+            _activeConversation = matching.first;
+            _isChoosingChannel = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating chat: $e')),
+          SnackBar(content: Text('Error creando chat: $e')),
         );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreatingChat = false);
+    }
+  }
+
+  Widget _buildStartChatOption({
+    required ThemeData theme,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStartChatPanel(
+    ThemeData theme, {
+    bool showCancel = false,
+    bool compact = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 10 : 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Iniciar conversación',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (showCancel)
+                IconButton(
+                  tooltip: 'Cerrar opciones',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: _isCreatingChat
+                      ? null
+                      : () => setState(() => _isChoosingChannel = false),
+                ),
+            ],
+          ),
+          if (!compact) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Elige el canal para este registro.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          _buildStartChatOption(
+            theme: theme,
+            icon: Icons.language_outlined,
+            color: const Color(0xFF2563EB),
+            title: 'Chat web',
+            subtitle: 'Conversación del portal web vinculada a este registro.',
+            onTap: _isCreatingChat
+                ? () {}
+                : () => _startNewChat(_EntityChatStartChannel.website),
+          ),
+          const SizedBox(height: 8),
+          _buildStartChatOption(
+            theme: theme,
+            icon: Icons.phone_in_talk_outlined,
+            color: const Color(0xFF128C7E),
+            title: 'Chat WhatsApp',
+            subtitle:
+                'Usa el teléfono del cliente y abre el hilo WhatsApp del ERP.',
+            onTap: _isCreatingChat
+                ? () {}
+                : () => _startNewChat(_EntityChatStartChannel.whatsapp),
+          ),
+          if (_isCreatingChat) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<String> _openWhatsAppConversation(
+    MessagingService messagingService,
+  ) async {
+    final contact = await messagingService.getSupportContextContact(
+      contextType: widget.entityType,
+      contextId: widget.entityId,
+    );
+
+    final phone = contact?['phone']?.toString();
+    if (phone == null || phone.trim().isEmpty) {
+      throw Exception('El cliente no tiene teléfono configurado.');
+    }
+
+    return messagingService.openWhatsAppSupportConversation(
+      phoneNumber: phone,
+      contactName: contact?['name']?.toString() ?? widget.entityTitle,
+      customerId: contact?['customer_id']?.toString(),
+      contextType: widget.entityType,
+      contextId: widget.entityId,
+    );
+  }
+
+  Future<void> _confirmDeleteConversation(Conversation conversation) async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Eliminar chat'),
+          content: Text(
+            'Esto eliminará la conversación "${conversation.title ?? conversation.channelLabel}" y sus mensajes. Esta acción no se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await _deleteConversation(conversation);
+  }
+
+  Future<void> _deleteConversation(Conversation conversation) async {
+    setState(() => _deletingConversationIds.add(conversation.id));
+    try {
+      final messagingService =
+          Provider.of<MessagingService>(context, listen: false);
+      await messagingService.deleteConversation(conversation.id);
+      if (!mounted) return;
+
+      _safeSetState(() {
+        _conversations.removeWhere((item) => item.id == conversation.id);
+        if (_activeConversation?.id == conversation.id) {
+          _activeConversation =
+              _conversations.length == 1 ? _conversations.first : null;
+        }
+      });
+      await _loadConversations();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chat eliminado')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error eliminando chat: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingConversationIds.remove(conversation.id));
       }
     }
   }
@@ -172,21 +469,72 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     final theme = Theme.of(context);
 
     return AnimatedContainer(
-      duration: kDebugMode ? Duration.zero : const Duration(milliseconds: 300),
+      duration: _isResizing || kDebugMode
+          ? Duration.zero
+          : const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      width: _isExpanded ? 380 : 48,
-      child: Card(
-        elevation: 2,
-        margin: EdgeInsets.zero,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
+      width: _isExpanded ? _expandedWidth : _collapsedWidth,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Card(
+              elevation: 2,
+              margin: EdgeInsets.zero,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+              child: _isExpanded
+                  ? _buildExpandedContent(theme)
+                  : _buildCollapsedBar(theme),
+            ),
+          ),
+          if (_isExpanded) _buildResizeHandle(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResizeHandle(ThemeData theme) {
+    final handleColor = _isResizing
+        ? theme.colorScheme.primary.withValues(alpha: 0.35)
+        : theme.dividerColor.withValues(alpha: 0.65);
+
+    return Positioned(
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 10,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeColumn,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragStart: (_) => setState(() => _isResizing = true),
+          onHorizontalDragUpdate: (details) {
+            _setExpandedWidth(_expandedWidth - details.delta.dx);
+          },
+          onHorizontalDragEnd: (_) {
+            setState(() => _isResizing = false);
+            _saveWidthPreference();
+          },
+          onHorizontalDragCancel: () {
+            setState(() => _isResizing = false);
+            _saveWidthPreference();
+          },
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              width: 3,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: handleColor,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
           ),
         ),
-        child: _isExpanded
-            ? _buildExpandedContent(theme)
-            : _buildCollapsedBar(theme),
       ),
     );
   }
@@ -282,7 +630,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     if (_conversations.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -296,11 +644,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                 ),
               ),
               const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _startNewChat,
-                icon: const Icon(Icons.add),
-                label: const Text('Iniciar Chat'),
-              ),
+              _buildStartChatPanel(theme),
             ],
           ),
         ),
@@ -314,10 +658,11 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
             itemCount: _conversations.length,
             itemBuilder: (context, index) {
               final conv = _conversations[index];
+              final isDeleting = _deletingConversationIds.contains(conv.id);
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Icon(Icons.chat,
+                  child: Icon(_channelIcon(conv),
                       size: 18, color: theme.colorScheme.primary),
                 ),
                 title: Text(
@@ -326,11 +671,15 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  conv.type == 'support' ? 'Soporte' : 'Interno',
+                  conv.channelLabel,
                   style: theme.textTheme.bodySmall,
                 ),
-                trailing: conv.unreadCount > 0
-                    ? Container(
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (conv.unreadCount > 0)
+                      Container(
+                        margin: const EdgeInsets.only(right: 2),
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary,
@@ -343,8 +692,23 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                             fontSize: 10,
                           ),
                         ),
-                      )
-                    : null,
+                      ),
+                    IconButton(
+                      tooltip: 'Eliminar chat',
+                      visualDensity: VisualDensity.compact,
+                      icon: isDeleting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline, size: 18),
+                      onPressed: isDeleting
+                          ? null
+                          : () => _confirmDeleteConversation(conv),
+                    ),
+                  ],
+                ),
                 onTap: () => _safeSetState(() => _activeConversation = conv),
               );
             },
@@ -353,11 +717,17 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
         const Divider(height: 1),
         Padding(
           padding: const EdgeInsets.all(8),
-          child: TextButton.icon(
-            onPressed: _startNewChat,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Nueva Conversación'),
-          ),
+          child: _isChoosingChannel
+              ? _buildStartChatPanel(theme, showCancel: true, compact: true)
+              : TextButton.icon(
+                  onPressed: _isCreatingChat
+                      ? null
+                      : () => setState(() => _isChoosingChannel = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(
+                    _isCreatingChat ? 'Creando...' : 'Nueva conversación',
+                  ),
+                ),
         ),
       ],
     );
@@ -366,40 +736,46 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   Widget _buildChatView() {
     final activeConv = _activeConversation;
     if (activeConv == null) return const SizedBox.shrink();
+    final isDeleting = _deletingConversationIds.contains(activeConv.id);
 
     return Column(
       children: [
-        // Back button when viewing a chat
-        if (_conversations.length > 1)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () =>
-                      _safeSetState(() => _activeConversation = null),
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text('Lista'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  activeConv.title ?? '',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        // Chat window
         Expanded(
           child: ChatWindow(
             conversation: activeConv,
+            headerActions: [
+              if (_conversations.length > 1)
+                IconButton(
+                  tooltip: 'Volver a la lista',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  onPressed: () =>
+                      _safeSetState(() => _activeConversation = null),
+                ),
+              IconButton(
+                tooltip: 'Eliminar chat',
+                visualDensity: VisualDensity.compact,
+                icon: isDeleting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline, size: 18),
+                onPressed: isDeleting
+                    ? null
+                    : () => _confirmDeleteConversation(activeConv),
+              ),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  IconData _channelIcon(Conversation conversation) {
+    if (conversation.isWhatsApp) return Icons.phone_in_talk_outlined;
+    if (conversation.isWebsitePortal) return Icons.language_outlined;
+    return Icons.chat_bubble_outline;
   }
 }
