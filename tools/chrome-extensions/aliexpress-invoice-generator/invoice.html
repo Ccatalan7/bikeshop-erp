@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AliExpress OCR Invoice</title>
+    <link rel="stylesheet" href="invoice.css">
+  </head>
+  <body>
+    <div class="toolbar">
+      <div>
+        <strong>Factura OCR AliExpress</strong>
+        <span id="toolbarMeta"></span>
+      </div>
+      <div class="toolbar-actions">
+        <button id="copyTextButton" type="button">Copiar texto OCR</button>
+        <button id="downloadHtmlButton" type="button">Descargar HTML</button>
+        <button id="downloadJsonButton" type="button">Descargar JSON</button>
+        <button id="printButton" type="button" class="primary">Imprimir / Guardar PDF</button>
+      </div>
+    </div>
+
+    <main id="invoiceRoot" class="paper" aria-live="polite"></main>
+    <script src="invoice.js"></script>
+  </body>
+</html>

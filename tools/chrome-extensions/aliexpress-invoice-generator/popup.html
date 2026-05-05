@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AliExpress Invoice Generator</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <div>
+          <p class="eyebrow">AliExpress</p>
+          <h1>Factura para OCR</h1>
+        </div>
+        <button id="extractButton" class="icon-button" type="button" title="Extraer pagina actual">Extraer</button>
+      </header>
+
+      <section id="status" class="status neutral">Abre una compra u orden de AliExpress y pulsa Extraer.</section>
+
+      <section class="panel ai-panel">
+        <div class="section-heading">
+          <div>
+            <h2>AI Vision OCR</h2>
+            <p class="helper-text">Fallback para cuando AliExpress cambia el HTML. Captura el area visible y extrae lineas con Gemini.</p>
+          </div>
+          <button id="aiExtractButton" type="button" class="secondary-button">AI OCR visible</button>
+        </div>
+        <div class="ai-key-row">
+          <label>
+            Gemini API key
+            <input id="geminiApiKey" type="password" placeholder="AIza..." autocomplete="off">
+          </label>
+          <button id="saveGeminiKeyButton" type="button" class="secondary-button">Guardar</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Cabecera</h2>
+        <label>
+          Proveedor
+          <input id="supplierName" type="text" value="AliExpress Marketplace" autocomplete="off">
+        </label>
+        <label>
+          RUT / Tax ID proveedor (opcional)
+          <input id="supplierTaxId" type="text" placeholder="Solo si lo tienes" autocomplete="off">
+        </label>
+        <div class="grid-two">
+          <label>
+            Pedido / factura
+            <input id="orderNumber" type="text" autocomplete="off">
+          </label>
+          <label>
+            Fecha
+            <input id="orderDate" type="date">
+          </label>
+        </div>
+        <div class="grid-two">
+          <label>
+            Moneda
+            <input id="currency" type="text" value="CLP" autocomplete="off" readonly>
+          </label>
+          <label>
+            Total
+            <input id="total" type="number" step="0.01" min="0">
+          </label>
+        </div>
+        <div class="grid-two">
+          <label>
+            Subtotal
+            <input id="subtotal" type="number" step="0.01" min="0">
+          </label>
+          <label>
+            Shipping
+            <input id="shipping" type="number" step="0.01" min="0">
+          </label>
+        </div>
+        <label>
+          Notas
+          <textarea id="notes" rows="3" placeholder="Tracking, metodo de pago u observaciones."></textarea>
+        </label>
+      </section>
+
+      <section class="panel items-panel">
+        <div class="section-heading">
+          <h2>Productos</h2>
+          <button id="addItemButton" type="button" class="secondary-button">Agregar linea</button>
+        </div>
+        <div id="itemsList" class="items-list"></div>
+      </section>
+
+      <footer class="actions">
+        <button id="copyTextButton" type="button" class="secondary-button">Copiar texto OCR</button>
+        <button id="downloadJsonButton" type="button" class="secondary-button">JSON</button>
+        <button id="generateButton" type="button" class="primary-button">Generar PDF</button>
+      </footer>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
