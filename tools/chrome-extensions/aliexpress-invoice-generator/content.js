@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.3.29';
+  const CONTENT_VERSION = '0.3.32';
 
   function getPageMetrics() {
     return {
@@ -169,7 +169,7 @@
       await traverseLoadedOrdersList(initialX);
       scrollPasses += 1;
 
-      if (ordersListHasReachedDate(filters.fromDate)) break;
+      if (ordersListHasReachedDate(filters.exactDate || filters.fromDate)) break;
 
       const loadMoreButton = findOrdersListLoadMoreButton();
       if (!loadMoreButton || loadMoreClicks >= maxLoadClicks) break;
@@ -237,7 +237,7 @@
     return collectOrderListCards().some((card) => {
       const text = normalizeText(card.innerText || card.textContent || '').trim();
       const date = extractOrderListDate(text.split('\n').map((line) => line.trim()).filter(Boolean));
-      return date && date <= target;
+      return date && date < target;
     });
   }
 
@@ -340,14 +340,18 @@
   }
 
   function extractOrdersList(filters = {}) {
-    const fromDate = String(filters.fromDate || '').trim();
-    const toDate = String(filters.toDate || '').trim();
+    const exactDate = String(filters.exactDate || '').trim();
+    const dateMode = (exactDate || filters.dateMode === 'day') ? 'day' : 'range';
+    const fromDate = exactDate || String(filters.fromDate || '').trim();
+    const toDate = exactDate || String(filters.toDate || '').trim();
     const warnings = [];
     const cards = collectOrderListCards();
-    const orders = cards
+    const allOrders = cards
       .map(buildOrderListInvoice)
-      .filter(Boolean)
+      .filter(Boolean);
+    const orders = allOrders
       .filter((order) => isDateInRange(order.orderDate, fromDate, toDate));
+    const undatedCount = allOrders.filter((order) => !order.orderDate).length;
 
     if (cards.length === 0) {
       warnings.push('No se encontraron tarjetas de orden en la lista actual. Abre Account > Orders y deja cargadas las ordenes visibles.');
@@ -355,11 +359,16 @@
     if (cards.length > 0 && orders.length === 0) {
       warnings.push('Se encontraron ordenes, pero ninguna calza con el rango de fechas seleccionado.');
     }
+    if (undatedCount > 0) {
+      warnings.push(`${undatedCount} orden(es) no tenian fecha de compra parseable en la lista; se incluyeron para revision manual.`);
+    }
 
     return {
       pageUrl: location.href,
       pageTitle: document.title || '',
       collectedAt: new Date().toISOString(),
+      dateMode,
+      exactDate,
       fromDate,
       toDate,
       scannedCount: cards.length,
@@ -452,7 +461,7 @@
       supplierName: 'AliExpress Marketplace',
       supplierTaxId: '',
       orderNumber,
-      orderDate: orderDate || new Date().toISOString().slice(0, 10),
+      orderDate: orderDate || '',
       currency: totalMoney ? (totalMoney.currency || 'CLP') : 'CLP',
       subtotal: total,
       shipping: null,
@@ -465,7 +474,10 @@
         detailUrl ? `URL: ${detailUrl}` : '',
       ].filter(Boolean).join('\n'),
       items: resolvedItems,
-      warnings: ['Orden extraida desde lista; si necesitas shipping/subtotal exacto, abre el detalle y usa Extraer.'],
+      warnings: [
+        'Orden extraida desde lista; si necesitas shipping/subtotal exacto, abre el detalle y usa Extraer.',
+        orderDate ? '' : 'No se pudo leer la fecha de compra desde la lista; verifica el detalle antes de contabilizar.',
+      ].filter(Boolean),
       listTextPreview: text.slice(0, 1200),
     };
   }
@@ -833,6 +845,9 @@
     if (match) return toIsoDate(Number(match[3]), monthNumber(match[1]), Number(match[2]));
 
     match = text.match(/\b(\d{1,2})\s+([A-Za-z.]+)\s+(20\d{2})\b/);
+    if (match) return toIsoDate(Number(match[3]), monthNumber(match[2]), Number(match[1]));
+
+    match = text.match(/\b(\d{1,2})\s+(?:de\s+)?([A-Za-z.]+)\s+(?:de\s+)?(20\d{2})\b/i);
     if (match) return toIsoDate(Number(match[3]), monthNumber(match[2]), Number(match[1]));
 
     return '';

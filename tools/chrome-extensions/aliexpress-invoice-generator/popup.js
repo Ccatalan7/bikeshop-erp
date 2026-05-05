@@ -3,12 +3,13 @@
 
   const STORAGE_PREFIX = 'aliexpressInvoiceDraft:';
   const GEMINI_KEY_STORAGE = 'aliexpressInvoiceGeminiApiKey';
+  const BULK_WORKSPACE_STORAGE = 'aliexpressInvoiceBulkWorkspace';
   const GEMINI_MODELS = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.29';
+  const CONTENT_SCRIPT_VERSION = '0.3.32';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -23,6 +24,7 @@
     lastDebug: null,
     bulkOrders: [],
     bulkMeta: null,
+    bulkProgress: null,
   };
 
   const el = {
@@ -32,10 +34,20 @@
     downloadJsonButton: document.getElementById('downloadJsonButton'),
     copyTextButton: document.getElementById('copyTextButton'),
     collectBulkButton: document.getElementById('collectBulkButton'),
+    openWorkspaceButton: document.getElementById('openWorkspaceButton'),
     generateBulkButton: document.getElementById('generateBulkButton'),
     downloadBulkJsonButton: document.getElementById('downloadBulkJsonButton'),
     bulkFromDate: document.getElementById('bulkFromDate'),
     bulkToDate: document.getElementById('bulkToDate'),
+    bulkDateMode: document.getElementById('bulkDateMode'),
+    bulkExactDate: document.getElementById('bulkExactDate'),
+    bulkExactDateField: document.getElementById('bulkExactDateField'),
+    bulkRangeFields: document.getElementById('bulkRangeFields'),
+    bulkProgress: document.getElementById('bulkProgress'),
+    bulkProgressLabel: document.getElementById('bulkProgressLabel'),
+    bulkProgressCount: document.getElementById('bulkProgressCount'),
+    bulkProgressBar: document.getElementById('bulkProgressBar'),
+    bulkProgressDetail: document.getElementById('bulkProgressDetail'),
     bulkOutputMode: document.getElementById('bulkOutputMode'),
     bulkOrdersList: document.getElementById('bulkOrdersList'),
     aiExtractButton: document.getElementById('aiExtractButton'),
@@ -57,9 +69,12 @@
   document.addEventListener('DOMContentLoaded', () => {
     setDefaultDate();
     setDefaultBulkDates();
+    applyWorkspaceUrlParams();
+    syncBulkDateModeUi();
+    renderBulkProgress();
     loadGeminiKey();
     renderItems();
-    renderBulkOrders();
+    restoreBulkWorkspaceState();
   });
 
   el.extractButton.addEventListener('click', extractCurrentPage);
@@ -73,9 +88,31 @@
   el.generateButton.addEventListener('click', generateInvoice);
   el.downloadJsonButton.addEventListener('click', downloadJson);
   el.copyTextButton.addEventListener('click', copyOcrText);
+  el.openWorkspaceButton.addEventListener('click', () => openBulkWorkspace({ autocollect: false }));
   el.collectBulkButton.addEventListener('click', collectBulkOrders);
   el.generateBulkButton.addEventListener('click', generateBulkInvoices);
   el.downloadBulkJsonButton.addEventListener('click', downloadBulkJson);
+
+  el.bulkDateMode.addEventListener('change', () => {
+    syncBulkDateModeUi({ syncInputs: true });
+    saveBulkWorkspaceState();
+  });
+  el.bulkExactDate.addEventListener('change', () => {
+    syncBulkDateModeUi({ syncInputs: true });
+    saveBulkWorkspaceState();
+  });
+  el.bulkFromDate.addEventListener('change', () => {
+    syncBulkDateModeUi();
+    saveBulkWorkspaceState();
+  });
+  el.bulkToDate.addEventListener('change', () => {
+    syncBulkDateModeUi();
+    saveBulkWorkspaceState();
+  });
+  el.bulkOutputMode.addEventListener('change', saveBulkWorkspaceState);
+  el.bulkOrdersList.addEventListener('change', (event) => {
+    if (event.target && event.target.matches('[data-bulk-check]')) saveBulkWorkspaceState();
+  });
 
   el.itemsList.addEventListener('input', (event) => {
     const row = event.target.closest('[data-index]');
@@ -822,22 +859,35 @@
   }
 
   async function collectBulkOrders() {
+    if (!isWorkspaceMode()) {
+      await openBulkWorkspace({ autocollect: true });
+      setStatus('Abrimos el panel bulk estable para que Chrome no pierda el progreso si cierras el popup.', 'success');
+      return;
+    }
+
+    const filters = getBulkDateFilters({ syncInputs: true });
     setStatus('Colectando ordenes cargadas en la lista de AliExpress...', 'neutral');
+    setBulkProgress({
+      active: true,
+      label: 'Colectando ordenes',
+      detail: filters.label,
+      percent: 18,
+      type: 'active',
+    });
     el.collectBulkButton.disabled = true;
     el.generateBulkButton.disabled = true;
 
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await saveBulkWorkspaceState('Colectando ordenes cargadas en la lista de AliExpress...', 'neutral');
+      const tab = await getAliExpressSourceTab();
       if (!tab || !tab.id) throw new Error('No se encontro una pestana activa.');
       if (!/^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(tab.url || '')) {
         throw new Error('Abre Account > Orders en AliExpress antes de colectar.');
       }
 
       await ensureFreshContentBridge(tab.id);
-      const response = await executeContentCommand(tab.id, 'ordersList', {
-        fromDate: el.bulkFromDate.value || '',
-        toDate: el.bulkToDate.value || '',
-      });
+      setBulkProgress({ active: true, label: 'Leyendo lista AliExpress', detail: 'Escaneando ordenes visibles y View orders.', percent: 42, type: 'active' });
+      const response = await executeContentCommand(tab.id, 'ordersList', filters);
 
       if (!response || !response.ok) {
         throw new Error(response && response.error ? response.error : 'No se pudo colectar la lista de ordenes.');
@@ -848,22 +898,35 @@
         pageUrl: result.pageUrl || tab.url || '',
         collectedAt: result.collectedAt || new Date().toISOString(),
         scannedCount: result.scannedCount || 0,
-        fromDate: result.fromDate || el.bulkFromDate.value || '',
-        toDate: result.toDate || el.bulkToDate.value || '',
+        dateMode: result.dateMode || filters.dateMode,
+        exactDate: result.exactDate || filters.exactDate || '',
+        fromDate: result.fromDate || filters.fromDate || '',
+        toDate: result.toDate || filters.toDate || '',
         preload: result.preload || null,
         warnings: result.warnings || [],
       };
       state.bulkOrders = Array.isArray(result.orders) ? result.orders.map(normalizeBulkInvoice) : [];
       renderBulkOrders();
+      await saveBulkWorkspaceState();
 
       const warningText = state.bulkMeta.warnings.length ? ` ${state.bulkMeta.warnings.join(' ')}` : '';
       const statusType = state.bulkOrders.length > 0 ? (state.bulkMeta.warnings.length ? 'warning' : 'success') : 'warning';
       const loadText = state.bulkMeta.preload && state.bulkMeta.preload.loadMoreClicks
         ? ` Se abrio View orders ${state.bulkMeta.preload.loadMoreClicks} vez/veces.`
         : '';
+      setBulkProgress({
+        active: false,
+        label: state.bulkOrders.length > 0 ? 'Bulk listo' : 'Sin ordenes en rango',
+        detail: `${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es). ${filters.label}${loadText}`,
+        percent: 100,
+        type: statusType,
+      });
       setStatus(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
+      await saveBulkWorkspaceState(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
     } catch (error) {
+      setBulkProgress({ active: false, label: 'Bulk fallo', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
+      await saveBulkWorkspaceState(error.message || String(error), 'error');
     } finally {
       el.collectBulkButton.disabled = false;
       el.generateBulkButton.disabled = false;
@@ -879,7 +942,7 @@
 
     el.bulkOrdersList.innerHTML = state.bulkOrders.map((order, index) => `
       <label class="bulk-order-row" data-bulk-index="${index}">
-        <input type="checkbox" data-bulk-check="${index}" checked>
+        <input type="checkbox" data-bulk-check="${index}" ${isBulkOrderSelected(order) ? 'checked' : ''}>
         <span class="bulk-order-main">
           <strong># ${escapeHtml(order.orderNumber || `Orden ${index + 1}`)}</strong>
           <span class="bulk-order-meta">${escapeHtml(order.orderDate || '')} · ${order.items.length} linea(s)</span>
@@ -888,6 +951,16 @@
         <span class="bulk-order-total">$ ${escapeHtml(formatDecimalComma(order.total || sumItems(order.items)))}</span>
       </label>
     `).join('');
+  }
+
+  function isBulkOrderSelected(order) {
+    if (!state.bulkSelection || state.bulkSelection.length === 0) return true;
+    const key = bulkOrderSelectionKey(order);
+    return state.bulkSelection.includes(key);
+  }
+
+  function bulkOrderSelectionKey(order) {
+    return String((order && order.orderNumber) || (order && order.pageUrl) || '').trim();
   }
 
   function firstOrderItemTitle(order) {
@@ -912,6 +985,8 @@
 
     el.generateBulkButton.disabled = true;
     try {
+      await saveBulkWorkspaceState('Generando bulk...', 'neutral');
+      setBulkProgress({ active: true, label: 'Preparando bulk', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
       orders = await enrichBulkOrdersFromDetails(orders);
       const mode = el.bulkOutputMode ? el.bulkOutputMode.value : 'separate';
       if (mode === 'combined') {
@@ -919,17 +994,26 @@
         const validationError = validateInvoice(invoice);
         if (validationError) throw new Error(validationError);
         await openInvoiceDraft(invoice, true);
+        setBulkProgress({ active: false, label: 'Factura consolidada lista', detail: `${orders.length} orden(es), ${invoice.items.length} linea(s).`, percent: 100, type: 'success' });
         setStatus(`Factura consolidada creada con ${orders.length} orden(es) y ${invoice.items.length} linea(s).`, 'success');
+        await saveBulkWorkspaceState(`Factura consolidada creada con ${orders.length} orden(es) y ${invoice.items.length} linea(s).`, 'success');
         return;
       }
 
       const maxTabs = 20;
       const limited = orders.slice(0, maxTabs);
-      for (const order of limited) await openInvoiceDraft(normalizeBulkInvoice(order), false);
+      for (let index = 0; index < limited.length; index += 1) {
+        setBulkProgress({ active: true, label: 'Generando PDFs', detail: `${index + 1}/${limited.length}: ${limited[index].orderNumber || 'orden AliExpress'}`, current: index, total: limited.length, type: 'active' });
+        await openInvoiceDraft(normalizeBulkInvoice(limited[index]), false);
+      }
       const suffix = orders.length > maxTabs ? ` Se abrieron las primeras ${maxTabs}; reduce seleccion para el resto.` : '';
+      setBulkProgress({ active: false, label: 'PDFs generados', detail: `${limited.length} factura(s).${suffix}`, percent: 100, type: orders.length > maxTabs ? 'warning' : 'success' });
       setStatus(`Se generaron ${limited.length} factura(s) en pestanas nuevas.${suffix}`, orders.length > maxTabs ? 'warning' : 'success');
+      await saveBulkWorkspaceState(`Se generaron ${limited.length} factura(s) en pestanas nuevas.${suffix}`, orders.length > maxTabs ? 'warning' : 'success');
     } catch (error) {
+      setBulkProgress({ active: false, label: 'Generacion fallo', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
+      await saveBulkWorkspaceState(error.message || String(error), 'error');
     } finally {
       el.generateBulkButton.disabled = false;
     }
@@ -937,6 +1021,7 @@
 
   async function enrichBulkOrdersFromDetails(orders) {
     const result = [];
+    setBulkProgress({ active: true, label: 'Leyendo detalles', detail: `0/${orders.length}`, current: 0, total: orders.length, type: 'active' });
     for (let index = 0; index < orders.length; index += 1) {
       const listOrder = normalizeBulkInvoice(orders[index]);
       const detailUrl = resolveOrderDetailUrl(listOrder);
@@ -949,6 +1034,8 @@
       }
 
       setStatus(`Enriqueciendo detalle ${index + 1}/${orders.length}: ${listOrder.orderNumber || 'orden AliExpress'}...`, 'neutral');
+        setBulkProgress({ active: true, label: 'Leyendo detalles', detail: `${index + 1}/${orders.length}: ${listOrder.orderNumber || 'orden AliExpress'}`, current: index, total: orders.length, type: 'active' });
+      await saveBulkWorkspaceState(`Enriqueciendo detalle ${index + 1}/${orders.length}: ${listOrder.orderNumber || 'orden AliExpress'}...`, 'neutral');
       let detailTab = null;
       try {
         detailTab = await chrome.tabs.create({ url: detailUrl, active: false });
@@ -967,11 +1054,13 @@
         if (detailTab && detailTab.id) {
           try { await chrome.tabs.remove(detailTab.id); } catch (_) { /* tab already closed */ }
         }
+        setBulkProgress({ active: true, label: 'Leyendo detalles', detail: `${Math.min(index + 1, orders.length)}/${orders.length}`, current: index + 1, total: orders.length, type: 'active' });
       }
     }
 
     state.bulkOrders = result.map(normalizeBulkInvoice);
     renderBulkOrders();
+    await saveBulkWorkspaceState();
     return state.bulkOrders;
   }
 
@@ -1052,6 +1141,8 @@
 
     el.downloadBulkJsonButton.disabled = true;
     try {
+      await saveBulkWorkspaceState('Exportando JSON bulk...', 'neutral');
+      setBulkProgress({ active: true, label: 'Exportando JSON', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
       orders = await enrichBulkOrdersFromDetails(orders);
       const combined = orders.length ? buildCombinedBulkInvoice(orders) : null;
       downloadBlob(
@@ -1059,9 +1150,13 @@
         `aliexpress-bulk-${safeFilePart(el.bulkFromDate.value || 'from')}-${safeFilePart(el.bulkToDate.value || 'to')}.json`,
         'application/json',
       );
+      setBulkProgress({ active: false, label: 'JSON exportado', detail: `${orders.length} orden(es) enriquecidas.`, percent: 100, type: 'success' });
       setStatus(`JSON bulk exportado con ${orders.length} orden(es) enriquecidas.`, 'success');
+      await saveBulkWorkspaceState(`JSON bulk exportado con ${orders.length} orden(es) enriquecidas.`, 'success');
     } catch (error) {
+      setBulkProgress({ active: false, label: 'Exportacion fallo', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
+      await saveBulkWorkspaceState(error.message || String(error), 'error');
     } finally {
       el.downloadBulkJsonButton.disabled = false;
     }
@@ -2233,15 +2328,288 @@
   }
 
   function setDefaultDate() {
-    if (!el.orderDate.value) el.orderDate.value = new Date().toISOString().slice(0, 10);
+    if (!el.orderDate.value) el.orderDate.value = todayIso();
   }
 
   function setDefaultBulkDates() {
     const today = new Date();
     const from = new Date(today);
     from.setDate(from.getDate() - 30);
-    if (el.bulkToDate && !el.bulkToDate.value) el.bulkToDate.value = today.toISOString().slice(0, 10);
-    if (el.bulkFromDate && !el.bulkFromDate.value) el.bulkFromDate.value = from.toISOString().slice(0, 10);
+    if (el.bulkToDate && !el.bulkToDate.value) el.bulkToDate.value = todayIso(today);
+    if (el.bulkFromDate && !el.bulkFromDate.value) el.bulkFromDate.value = todayIso(from);
+    if (el.bulkExactDate && !el.bulkExactDate.value) el.bulkExactDate.value = el.bulkToDate.value || todayIso(today);
+  }
+
+  function todayIso(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function syncBulkDateModeUi({ syncInputs = false } = {}) {
+    if (!el.bulkDateMode) return;
+    const isDay = el.bulkDateMode.value === 'day';
+    el.bulkExactDateField.classList.toggle('visible', isDay);
+    el.bulkRangeFields.classList.toggle('hidden', isDay);
+    if (isDay && !el.bulkExactDate.value) {
+      el.bulkExactDate.value = el.bulkFromDate.value || el.bulkToDate.value || todayIso();
+    }
+    if (syncInputs && isDay && el.bulkExactDate.value) {
+      el.bulkFromDate.value = el.bulkExactDate.value;
+      el.bulkToDate.value = el.bulkExactDate.value;
+    }
+  }
+
+  function getBulkDateFilters({ syncInputs = false } = {}) {
+    const mode = el.bulkDateMode && el.bulkDateMode.value === 'day' ? 'day' : 'range';
+    let exactDate = normalizeDateInputValue(el.bulkExactDate && el.bulkExactDate.value);
+    let fromDate = normalizeDateInputValue(el.bulkFromDate && el.bulkFromDate.value);
+    let toDate = normalizeDateInputValue(el.bulkToDate && el.bulkToDate.value);
+
+    if (mode === 'day') {
+      exactDate = exactDate || fromDate || toDate || todayIso();
+      fromDate = exactDate;
+      toDate = exactDate;
+      if (syncInputs) {
+        el.bulkExactDate.value = exactDate;
+        el.bulkFromDate.value = exactDate;
+        el.bulkToDate.value = exactDate;
+      }
+      return {
+        dateMode: 'day',
+        exactDate,
+        fromDate,
+        toDate,
+        label: `Dia exacto ${formatDateForStatus(exactDate)}`,
+      };
+    }
+
+    if (fromDate && toDate && fromDate > toDate) {
+      const originalFrom = fromDate;
+      fromDate = toDate;
+      toDate = originalFrom;
+    }
+    if (syncInputs) {
+      if (fromDate) el.bulkFromDate.value = fromDate;
+      if (toDate) el.bulkToDate.value = toDate;
+    }
+
+    return {
+      dateMode: 'range',
+      exactDate: '',
+      fromDate,
+      toDate,
+      label: `Rango ${formatDateForStatus(fromDate) || 'sin inicio'} a ${formatDateForStatus(toDate) || 'sin fin'}`,
+    };
+  }
+
+  function normalizeDateInputValue(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    let match = text.match(/^(20\d{2})-(\d{2})-(\d{2})$/);
+    if (match) return text;
+    match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](20\d{2}|\d{2})$/);
+    if (match) {
+      const year = Number(match[3]) < 100 ? 2000 + Number(match[3]) : Number(match[3]);
+      return `${String(year).padStart(4, '0')}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`;
+    }
+    return '';
+  }
+
+  function formatDateForStatus(isoDate) {
+    const value = normalizeDateInputValue(isoDate);
+    if (!value) return '';
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  function setBulkProgress(progress) {
+    state.bulkProgress = {
+      active: Boolean(progress && progress.active),
+      label: progress && progress.label || 'Listo',
+      detail: progress && progress.detail || '',
+      current: Number(progress && progress.current) || 0,
+      total: Number(progress && progress.total) || 0,
+      percent: Number.isFinite(Number(progress && progress.percent)) ? Number(progress.percent) : null,
+      type: progress && progress.type || 'neutral',
+    };
+    renderBulkProgress();
+  }
+
+  function renderBulkProgress(progress = state.bulkProgress) {
+    if (!el.bulkProgress) return;
+    const currentProgress = progress || {
+      active: false,
+      label: 'Listo',
+      detail: 'Sin proceso bulk activo.',
+      current: 0,
+      total: 0,
+      percent: 0,
+      type: 'idle',
+    };
+    const percent = Math.max(0, Math.min(100, currentProgress.percent !== null && currentProgress.percent !== undefined
+      ? Number(currentProgress.percent)
+      : (currentProgress.total ? (Number(currentProgress.current) / Number(currentProgress.total)) * 100 : 0)));
+    const typeClass = currentProgress.type === 'success' || currentProgress.type === 'error' || currentProgress.type === 'warning'
+      ? currentProgress.type
+      : (currentProgress.active ? 'active' : 'idle');
+    el.bulkProgress.className = `bulk-progress ${typeClass}`;
+    el.bulkProgressLabel.textContent = currentProgress.label || 'Listo';
+    el.bulkProgressCount.textContent = currentProgress.total
+      ? `${Math.min(Number(currentProgress.current) || 0, Number(currentProgress.total))}/${currentProgress.total}`
+      : `${Math.round(percent)}%`;
+    el.bulkProgressBar.style.width = `${percent}%`;
+    el.bulkProgressDetail.textContent = currentProgress.detail || 'Sin proceso bulk activo.';
+  }
+
+  function workspaceParams() {
+    return new URLSearchParams(location.search || '');
+  }
+
+  function isWorkspaceMode() {
+    return workspaceParams().get('workspace') === '1' || document.body.dataset.workspace === '1';
+  }
+
+  function applyWorkspaceUrlParams() {
+    const params = workspaceParams();
+    if (params.get('from')) el.bulkFromDate.value = params.get('from');
+    if (params.get('to')) el.bulkToDate.value = params.get('to');
+    if (params.get('dateMode') && el.bulkDateMode) el.bulkDateMode.value = params.get('dateMode');
+    if (params.get('exactDate') && el.bulkExactDate) el.bulkExactDate.value = params.get('exactDate');
+    if (params.get('mode') && el.bulkOutputMode) el.bulkOutputMode.value = params.get('mode');
+    if (isWorkspaceMode()) {
+      document.body.classList.add('workspace-mode');
+      if (el.openWorkspaceButton) el.openWorkspaceButton.textContent = 'Panel estable';
+      if (params.get('autocollect') === '1') {
+        window.setTimeout(() => collectBulkOrders(), 250);
+      }
+    }
+  }
+
+  async function openBulkWorkspace({ autocollect }) {
+    try {
+      const sourceTab = await getAliExpressSourceTab();
+      const filters = getBulkDateFilters({ syncInputs: true });
+      state.bulkSourceTabId = sourceTab.id;
+      await saveBulkWorkspaceState('Abriendo panel lateral bulk...', 'neutral', {
+        sourceTabId: sourceTab.id,
+        pendingAutocollect: Boolean(autocollect),
+      });
+
+      if (chrome.sidePanel && chrome.sidePanel.open) {
+        try {
+          if (chrome.sidePanel.setOptions) {
+            await chrome.sidePanel.setOptions({ path: 'sidepanel.html', enabled: true });
+          }
+          await chrome.sidePanel.open({ windowId: sourceTab.windowId });
+          setStatus('Panel lateral bulk abierto. Puedes seguir navegando sin perder el progreso.', 'success');
+          return;
+        } catch (sidePanelError) {
+          await saveBulkWorkspaceState(`No se pudo abrir panel lateral (${sidePanelError.message || String(sidePanelError)}). Usando pestana estable.`, 'warning', {
+            sourceTabId: sourceTab.id,
+            pendingAutocollect: Boolean(autocollect),
+          });
+        }
+      }
+
+      const params = new URLSearchParams({
+        workspace: '1',
+        sourceTab: String(sourceTab.id),
+        dateMode: filters.dateMode,
+        exactDate: filters.exactDate || '',
+        from: filters.fromDate || '',
+        to: filters.toDate || '',
+        mode: el.bulkOutputMode ? el.bulkOutputMode.value : 'separate',
+      });
+      await chrome.tabs.create({ url: chrome.runtime.getURL(`popup.html?${params.toString()}`), active: true });
+    } catch (error) {
+      setStatus(error.message || String(error), 'error');
+    }
+  }
+
+  async function getAliExpressSourceTab() {
+    const params = workspaceParams();
+    const sourceTabId = Number(params.get('sourceTab') || 0);
+    if (sourceTabId) {
+      try {
+        const tab = await chrome.tabs.get(sourceTabId);
+        if (tab && /^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(tab.url || '')) return tab;
+      } catch (_) {
+        // Fall back to active tab below.
+      }
+    }
+    if (state.bulkSourceTabId) {
+      try {
+        const tab = await chrome.tabs.get(state.bulkSourceTabId);
+        if (tab && /^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(tab.url || '')) return tab;
+      } catch (_) {
+        // Fall back to active tab below.
+      }
+    }
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const activeTab = tabs && tabs[0];
+    if (activeTab && /^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(activeTab.url || '')) return activeTab;
+    const aliTabs = await chrome.tabs.query({ url: ['https://*.aliexpress.com/*', 'https://aliexpress.com/*'] });
+    if (aliTabs && aliTabs.length) return aliTabs[0];
+    throw new Error('No encontre una pestana de AliExpress abierta para usar como origen.');
+  }
+
+  async function restoreBulkWorkspaceState() {
+    try {
+      const stored = await chrome.storage.local.get(BULK_WORKSPACE_STORAGE);
+      const snapshot = stored && stored[BULK_WORKSPACE_STORAGE];
+      if (snapshot) {
+        if (snapshot.dateMode && el.bulkDateMode && !workspaceParams().get('dateMode')) el.bulkDateMode.value = snapshot.dateMode;
+        if (snapshot.exactDate && !workspaceParams().get('exactDate')) el.bulkExactDate.value = snapshot.exactDate;
+        if (snapshot.fromDate && !workspaceParams().get('from')) el.bulkFromDate.value = snapshot.fromDate;
+        if (snapshot.toDate && !workspaceParams().get('to')) el.bulkToDate.value = snapshot.toDate;
+        syncBulkDateModeUi();
+        if (snapshot.outputMode && el.bulkOutputMode && !workspaceParams().get('mode')) el.bulkOutputMode.value = snapshot.outputMode;
+        state.bulkMeta = snapshot.bulkMeta || state.bulkMeta;
+        state.bulkOrders = Array.isArray(snapshot.bulkOrders) ? snapshot.bulkOrders.map(normalizeBulkInvoice) : state.bulkOrders;
+        state.bulkSelection = Array.isArray(snapshot.bulkSelection) ? snapshot.bulkSelection : state.bulkSelection;
+        state.bulkSourceTabId = snapshot.sourceTabId || state.bulkSourceTabId;
+        state.bulkProgress = snapshot.bulkProgress || state.bulkProgress;
+        renderBulkProgress();
+        if (snapshot.statusMessage) setStatus(snapshot.statusMessage, snapshot.statusType || 'neutral');
+        if (isWorkspaceMode() && snapshot.pendingAutocollect) {
+          await chrome.storage.local.set({
+            [BULK_WORKSPACE_STORAGE]: { ...snapshot, pendingAutocollect: false },
+          });
+          window.setTimeout(() => collectBulkOrders(), 250);
+        }
+      }
+    } catch (_) {
+      // Local restore is convenience only; extraction still works without it.
+    }
+    renderBulkOrders();
+  }
+
+  async function saveBulkWorkspaceState(statusMessage, statusType, extra = {}) {
+    const selection = Array.from(el.bulkOrdersList.querySelectorAll('[data-bulk-check]:checked'))
+      .map((input) => state.bulkOrders[Number(input.dataset.bulkCheck)])
+      .filter(Boolean)
+      .map(bulkOrderSelectionKey)
+      .filter(Boolean);
+    if (selection.length || state.bulkOrders.length) state.bulkSelection = selection;
+
+    const filters = getBulkDateFilters();
+    const snapshot = {
+      updatedAt: new Date().toISOString(),
+      dateMode: filters.dateMode,
+      exactDate: filters.exactDate || '',
+      fromDate: filters.fromDate || '',
+      toDate: filters.toDate || '',
+      outputMode: el.bulkOutputMode ? el.bulkOutputMode.value : 'separate',
+      bulkMeta: state.bulkMeta,
+      bulkOrders: state.bulkOrders.map(normalizeBulkInvoice),
+      bulkSelection: state.bulkSelection || [],
+      bulkProgress: state.bulkProgress,
+      sourceTabId: extra.sourceTabId || state.bulkSourceTabId || null,
+      pendingAutocollect: Boolean(extra.pendingAutocollect),
+      statusMessage: statusMessage || el.status.textContent || '',
+      statusType: statusType || Array.from(el.status.classList).find((name) => name !== 'status') || 'neutral',
+    };
+    await chrome.storage.local.set({ [BULK_WORKSPACE_STORAGE]: snapshot });
   }
 
   function setStatus(message, type) {

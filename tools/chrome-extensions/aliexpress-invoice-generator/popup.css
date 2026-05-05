@@ -25,6 +25,11 @@ body {
   font-size: 13px;
 }
 
+body.workspace-mode {
+  width: min(760px, 100vw);
+  margin: 0 auto;
+}
+
 .shell {
   padding: 14px;
 }
@@ -114,6 +119,111 @@ h2 {
 
 .bulk-panel .section-heading {
   align-items: flex-start;
+}
+
+.bulk-heading-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.bulk-date-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.bulk-date-mode-grid select {
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+.bulk-exact-date-field,
+.bulk-range-fields.hidden {
+  display: none;
+}
+
+.bulk-exact-date-field.visible {
+  display: block;
+}
+
+.bulk-progress {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 9px;
+}
+
+.bulk-progress-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bulk-progress-track {
+  height: 8px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6ebf2;
+}
+
+.bulk-progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width .18s ease, background-color .18s ease;
+}
+
+.bulk-progress-detail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.bulk-progress.active .bulk-progress-bar {
+  background: #3451b2;
+}
+
+.bulk-progress.success {
+  border-color: #a7d8c5;
+  background: #f0fbf6;
+}
+
+.bulk-progress.success .bulk-progress-bar {
+  background: var(--ok);
+}
+
+.bulk-progress.error {
+  border-color: #f3b4ad;
+  background: #fff4f2;
+}
+
+.bulk-progress.error .bulk-progress-bar {
+  background: var(--danger);
+}
+
+.bulk-progress.warning {
+  border-color: #e9c47d;
+  background: #fff8e8;
+}
+
+.bulk-progress.warning .bulk-progress-bar {
+  background: var(--warn);
 }
 
 .bulk-orders-list {

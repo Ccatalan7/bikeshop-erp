@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AliExpress Invoice Generator</title>
+    <title>AliExpress Invoice Bulk Workspace</title>
     <link rel="stylesheet" href="popup.css">
   </head>
-  <body>
+  <body data-workspace="1" data-sidepanel="1">
     <main class="shell">
       <header class="header">
         <div>
@@ -16,7 +16,7 @@
         <button id="extractButton" class="icon-button" type="button" title="Extraer pagina actual">Extraer</button>
       </header>
 
-      <section id="status" class="status neutral">Abre una compra u orden de AliExpress y pulsa Extraer.</section>
+      <section id="status" class="status neutral">Panel bulk estable listo.</section>
 
       <section class="panel bulk-panel">
         <div class="section-heading">
@@ -25,7 +25,7 @@
             <p class="helper-text">En Account &gt; Orders, filtra por fecha y genera facturas desde las ordenes cargadas en la lista.</p>
           </div>
           <div class="bulk-heading-actions">
-            <button id="openWorkspaceButton" type="button" class="secondary-button">Abrir panel</button>
+            <button id="openWorkspaceButton" type="button" class="secondary-button">Panel estable</button>
             <button id="collectBulkButton" type="button" class="secondary-button">Colectar</button>
           </div>
         </div>
@@ -135,7 +135,7 @@
         </div>
         <label>
           Notas
-          <textarea id="notes" rows="3" placeholder="Tracking, metodo de pago u observaciones."></textarea>
+          <textarea id="notes" rows="3" placeholder="Opcional"></textarea>
         </label>
       </section>
 
@@ -144,15 +144,16 @@
           <h2>Productos</h2>
           <button id="addItemButton" type="button" class="secondary-button">Agregar linea</button>
         </div>
-        <div id="itemsList" class="items-list"></div>
+        <div id="itemsList"></div>
       </section>
 
       <footer class="actions">
         <button id="copyTextButton" type="button" class="secondary-button">Copiar texto OCR</button>
-        <button id="downloadJsonButton" type="button" class="secondary-button">JSON</button>
+        <button id="downloadJsonButton" type="button" class="secondary-button">Descargar JSON</button>
         <button id="generateButton" type="button" class="primary-button">Generar PDF</button>
       </footer>
     </main>
+
     <script src="popup.js"></script>
   </body>
 </html>
