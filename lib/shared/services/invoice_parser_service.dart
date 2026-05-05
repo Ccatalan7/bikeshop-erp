@@ -257,9 +257,9 @@ class InvoiceParserService {
   /// Patterns: "FOLIO: 12345", "N° 12345", "Factura 12345", "Pedido # \n 262040"
   String? _extractInvoiceNumber(List<String> lines) {
     for (final line in lines) {
-      final aliExpressMatch = RegExp(r'^#\s*(AE-[A-Z0-9\-]+)$',
-              caseSensitive: false)
-          .firstMatch(line.trim());
+      final aliExpressMatch =
+          RegExp(r'^#\s*(AE-[A-Z0-9\-]+)$', caseSensitive: false)
+              .firstMatch(line.trim());
       if (aliExpressMatch != null) {
         final number = aliExpressMatch.group(1)!.trim();
         print('✅ Found invoice number (AliExpress): $number');
@@ -582,7 +582,8 @@ class InvoiceParserService {
 
     final aliExpressItems = _extractGeneratedAliExpressLineItems(lines);
     if (aliExpressItems.isNotEmpty) {
-      print('📦 Extracted ${aliExpressItems.length} AliExpress generated line items');
+      print(
+          '📦 Extracted ${aliExpressItems.length} AliExpress generated line items');
       return aliExpressItems;
     }
 
@@ -772,13 +773,15 @@ class InvoiceParserService {
       final product = productBlocks[i];
       final amount = i < amountRows.length ? amountRows[i] : null;
       final description = _cleanGeneratedDescription(product.description);
-      if (description.isEmpty && (product.sku == null || product.sku!.isEmpty)) {
+      if (description.isEmpty &&
+          (product.sku == null || product.sku!.isEmpty)) {
         continue;
       }
 
       items.add(ParsedLineItem(
-        description:
-            description.isEmpty ? product.sku ?? 'AliExpress item' : description,
+        description: description.isEmpty
+            ? product.sku ?? 'AliExpress item'
+            : description,
         sku: product.sku,
         rawRowText: [
           if (amount != null) amount.rawText,
@@ -889,7 +892,8 @@ class InvoiceParserService {
 
       final amount = _parseSignedGeneratedMoneyLine(line);
       if (amount != null) {
-        quantity ??= quantityCandidates.isEmpty ? null : quantityCandidates.last;
+        quantity ??=
+            quantityCandidates.isEmpty ? null : quantityCandidates.last;
         amounts.add(amount);
         continue;
       }
@@ -923,7 +927,8 @@ class InvoiceParserService {
     );
   }
 
-  List<_GeneratedAliExpressProductBlock> _extractGeneratedAliExpressProductBlocks(
+  List<_GeneratedAliExpressProductBlock>
+      _extractGeneratedAliExpressProductBlocks(
     List<String> lines,
   ) {
     final blocks = <_GeneratedAliExpressProductBlock>[];
@@ -977,9 +982,8 @@ class InvoiceParserService {
           continue;
         }
 
-        final extractedProductUrl =
-            _extractMetadataUrl(line, 'PRODUCT_URL') ??
-                _extractAliExpressProductUrl(line);
+        final extractedProductUrl = _extractMetadataUrl(line, 'PRODUCT_URL') ??
+            _extractAliExpressProductUrl(line);
         if (extractedProductUrl != null) {
           productUrl = extractedProductUrl;
           cursor++;
@@ -1116,12 +1120,17 @@ class InvoiceParserService {
   String _cleanGeneratedDescription(String value) {
     return value
         .replaceAll(RegExp(r'^\s*\[\d{8,}\]\s*'), '')
-        .replaceAll(RegExp(r'\s*SKU\s*:\s*\S+.*$',
-            caseSensitive: false, dotAll: true), '')
-        .replaceAll(RegExp(r'\s*Item\s*ID\s*:?\s*\d+.*$',
-            caseSensitive: false, dotAll: true), '')
-        .replaceAll(RegExp(r'\s*ORIGINAL_TITLE\s*:.*$',
-            caseSensitive: false, dotAll: true), '')
+        .replaceAll(
+            RegExp(r'\s*SKU\s*:\s*\S+.*$', caseSensitive: false, dotAll: true),
+            '')
+        .replaceAll(
+            RegExp(r'\s*Item\s*ID\s*:?\s*\d+.*$',
+                caseSensitive: false, dotAll: true),
+            '')
+        .replaceAll(
+            RegExp(r'\s*ORIGINAL_TITLE\s*:.*$',
+                caseSensitive: false, dotAll: true),
+            '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }

@@ -245,167 +245,173 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-        // Title
-        Text(
-          widget.documentType == OCRDocumentType.invoice
-              ? 'Escanear Factura'
-              : 'Escanear Boleta/Recibo',
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Provider indicator
-        if (_initialized)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _useVeryfi ? Colors.purple.shade50 : Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color:
-                    _useVeryfi ? Colors.purple.shade200 : Colors.blue.shade200,
+            // Title
+            Text(
+              widget.documentType == OCRDocumentType.invoice
+                  ? 'Escanear Factura'
+                  : 'Escanear Boleta/Recibo',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _useVeryfi ? Icons.cloud : Icons.phone_android,
-                  size: 16,
-                  color: _useVeryfi ? Colors.purple : Colors.blue,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    _useVeryfi ? 'Veryfi Cloud OCR' : 'OCR Local (ML Kit)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _useVeryfi
-                          ? Colors.purple.shade700
-                          : Colors.blue.shade700,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 8),
+
+            // Provider indicator
+            if (_initialized)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color:
+                      _useVeryfi ? Colors.purple.shade50 : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _useVeryfi
+                        ? Colors.purple.shade200
+                        : Colors.blue.shade200,
                   ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _useVeryfi ? Icons.cloud : Icons.phone_android,
+                      size: 16,
+                      color: _useVeryfi ? Colors.purple : Colors.blue,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        _useVeryfi ? 'Veryfi Cloud OCR' : 'OCR Local (ML Kit)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _useVeryfi
+                              ? Colors.purple.shade700
+                              : Colors.blue.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 8),
+            Text(
+              _isDraggingInvoiceFile
+                  ? 'Suelta la factura aquí'
+                  : 'Toma una foto, selecciona una imagen o arrastra un PDF aquí',
+              style: TextStyle(
+                fontSize: 14,
+                color: _isDraggingInvoiceFile
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey[600],
+                fontWeight: _isDraggingInvoiceFile
+                    ? FontWeight.w600
+                    : FontWeight.normal,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Upload buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Camera button
+                _buildActionButton(
+                  icon: Icons.camera_alt,
+                  label: 'Cámara',
+                  onPressed: _isProcessing
+                      ? null
+                      : () => _pickImage(ImageSource.camera),
+                ),
+                // Gallery button
+                _buildActionButton(
+                  icon: Icons.photo_library,
+                  label: 'Galería',
+                  onPressed: _isProcessing
+                      ? null
+                      : () => _pickImage(ImageSource.gallery),
+                ),
+                // PDF button
+                _buildActionButton(
+                  icon: Icons.picture_as_pdf,
+                  label: 'Archivo',
+                  onPressed: _isProcessing ? null : _pickPDFFile,
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
 
-        const SizedBox(height: 8),
-        Text(
-          _isDraggingInvoiceFile
-              ? 'Suelta la factura aquí'
-              : 'Toma una foto, selecciona una imagen o arrastra un PDF aquí',
-          style: TextStyle(
-            fontSize: 14,
-            color: _isDraggingInvoiceFile
-                ? Theme.of(context).colorScheme.primary
-                : Colors.grey[600],
-            fontWeight:
-                _isDraggingInvoiceFile ? FontWeight.w600 : FontWeight.normal,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-
-        // Upload buttons
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Camera button
-            _buildActionButton(
-              icon: Icons.camera_alt,
-              label: 'Cámara',
-              onPressed:
-                  _isProcessing ? null : () => _pickImage(ImageSource.camera),
-            ),
-            // Gallery button
-            _buildActionButton(
-              icon: Icons.photo_library,
-              label: 'Galería',
-              onPressed:
-                  _isProcessing ? null : () => _pickImage(ImageSource.gallery),
-            ),
-            // PDF button
-            _buildActionButton(
-              icon: Icons.picture_as_pdf,
-              label: 'Archivo',
-              onPressed: _isProcessing ? null : _pickPDFFile,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Processing indicator
-        if (_isProcessing)
-          Column(
-            children: [
-              const SizedBox(height: 16),
-              const CircularProgressIndicator(),
-              const SizedBox(height: 8),
-              Text(_useVeryfi
-                  ? 'Procesando con Veryfi...'
-                  : 'Procesando imagen...'),
-            ],
-          ),
-
-        // Error message
-        if (_errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red[300]!),
-              ),
-              child: Row(
+            // Processing indicator
+            if (_isProcessing)
+              Column(
                 children: [
-                  Icon(Icons.error_outline, color: Colors.red[700]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(color: Colors.red[700]),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 8),
+                  Text(_useVeryfi
+                      ? 'Procesando con Veryfi...'
+                      : 'Procesando imagen...'),
                 ],
               ),
-            ),
-          ),
 
-        // Cloud OCR warning (shown only if proxy availability is explicitly false)
-        if (widget.provider == OCRProvider.veryfi &&
-            !_veryfiAvailable &&
-            _initialized)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[300]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber, color: Colors.orange[700]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'El OCR en la nube no está configurado en el servidor. Configura los secrets de Veryfi en Supabase Edge Functions.',
-                      style: TextStyle(color: Colors.orange[700]),
-                    ),
+            // Error message
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red[300]!),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red[700]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(color: Colors.red[700]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
+
+            // Cloud OCR warning (shown only if proxy availability is explicitly false)
+            if (widget.provider == OCRProvider.veryfi &&
+                !_veryfiAvailable &&
+                _initialized)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange[700]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'El OCR en la nube no está configurado en el servidor. Configura los secrets de Veryfi en Supabase Edge Functions.',
+                          style: TextStyle(color: Colors.orange[700]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -3151,93 +3157,92 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     required Uint8List fileBytes,
     required String extension,
   }) async {
-      ParsedInvoice? parsedData;
-      ParsedInvoice? directPdfParsedData;
-      final isPdf = extension == 'pdf';
+    ParsedInvoice? parsedData;
+    ParsedInvoice? directPdfParsedData;
+    final isPdf = extension == 'pdf';
 
-      if (isPdf) {
-        directPdfParsedData = await _pdfService.parseInvoiceFromBytes(
-          fileBytes,
-          filename: fileName,
-        );
-      }
-
-      if (extension == 'json') {
-        parsedData = _parseAliExpressJsonFile(fileBytes);
-      } else if (extension == 'html' || extension == 'htm') {
-        parsedData = _parseAliExpressHtmlFile(fileBytes);
-      } else if (directPdfParsedData != null &&
-          directPdfParsedData.lineItems.isNotEmpty &&
-          _looksLikeAliExpressInvoice(directPdfParsedData,
-              fileName: fileName)) {
-        parsedData = directPdfParsedData;
-      } else if (_useVeryfi) {
-        // Use Veryfi for PDF
-        parsedData = await _processWithVeryfi(fileBytes, fileName);
-        parsedData = _mergeLineItemMedia(parsedData, directPdfParsedData);
-      } else {
-        if (directPdfParsedData != null &&
-            directPdfParsedData.lineItems.isNotEmpty) {
-          parsedData = directPdfParsedData;
-        } else {
-          debugPrint('📄 PDF picked: $fileName');
-          parsedData = await _pdfService.parseInvoiceFromBytes(fileBytes,
-              filename: fileName);
-        }
-      }
-
-      if (parsedData == null) {
-        throw Exception(
-            'Este PDF parece ser escaneado (sin texto seleccionable).\n\n'
-            'Por favor, usa la opción de Cámara o Galería para escanear el documento.');
-      }
-
-      debugPrint('📋 Parsed PDF data: $parsedData');
-
-      // Verify products against database
-      parsedData = await _verifyProductsInDatabase(parsedData);
-      ParsedInvoice baseParsedData = parsedData;
-
-      String? matchedSupplierName = parsedData.supplierName;
-      String? matchedSupplierId;
-      shared_supplier.Supplier? matchedSupplier;
-
-      matchedSupplier = await _matchSupplierForInvoice(
-        parsedData,
-        fileName: fileName,
+    if (isPdf) {
+      directPdfParsedData = await _pdfService.parseInvoiceFromBytes(
+        fileBytes,
+        filename: fileName,
       );
-      if (matchedSupplier != null) {
-        matchedSupplierName = matchedSupplier.name;
-        matchedSupplierId = matchedSupplier.id;
-        parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
-        debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
-      } else if (parsedData.supplierName != null) {
-        // If supplier not found in DB, clear it to avoid phantom suppliers
-        matchedSupplierName = null;
-        debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-        baseParsedData = ParsedInvoice(
-          rut: parsedData.rut,
-          invoiceNumber: parsedData.invoiceNumber,
-          date: parsedData.date,
-          total: parsedData.total,
-          supplierName: null, // Clear supplier name
-          lineItems: parsedData.lineItems,
-          rawText: parsedData.rawText,
-        );
-        parsedData = baseParsedData;
-      }
+    }
 
-      setState(() {
-        _baseParsedData = baseParsedData;
-        _parsedData = parsedData;
-        _ocrSupplier = matchedSupplier;
-        _ocrSupplierName = matchedSupplierName;
-        _supplierIdForNewProducts = matchedSupplierId;
-        _isProcessing = false;
-      });
-      if (!widget.showPreview) {
-        await _handleUseParsedData(parsedData);
+    if (extension == 'json') {
+      parsedData = _parseAliExpressJsonFile(fileBytes);
+    } else if (extension == 'html' || extension == 'htm') {
+      parsedData = _parseAliExpressHtmlFile(fileBytes);
+    } else if (directPdfParsedData != null &&
+        directPdfParsedData.lineItems.isNotEmpty &&
+        _looksLikeAliExpressInvoice(directPdfParsedData, fileName: fileName)) {
+      parsedData = directPdfParsedData;
+    } else if (_useVeryfi) {
+      // Use Veryfi for PDF
+      parsedData = await _processWithVeryfi(fileBytes, fileName);
+      parsedData = _mergeLineItemMedia(parsedData, directPdfParsedData);
+    } else {
+      if (directPdfParsedData != null &&
+          directPdfParsedData.lineItems.isNotEmpty) {
+        parsedData = directPdfParsedData;
+      } else {
+        debugPrint('📄 PDF picked: $fileName');
+        parsedData = await _pdfService.parseInvoiceFromBytes(fileBytes,
+            filename: fileName);
       }
+    }
+
+    if (parsedData == null) {
+      throw Exception(
+          'Este PDF parece ser escaneado (sin texto seleccionable).\n\n'
+          'Por favor, usa la opción de Cámara o Galería para escanear el documento.');
+    }
+
+    debugPrint('📋 Parsed PDF data: $parsedData');
+
+    // Verify products against database
+    parsedData = await _verifyProductsInDatabase(parsedData);
+    ParsedInvoice baseParsedData = parsedData;
+
+    String? matchedSupplierName = parsedData.supplierName;
+    String? matchedSupplierId;
+    shared_supplier.Supplier? matchedSupplier;
+
+    matchedSupplier = await _matchSupplierForInvoice(
+      parsedData,
+      fileName: fileName,
+    );
+    if (matchedSupplier != null) {
+      matchedSupplierName = matchedSupplier.name;
+      matchedSupplierId = matchedSupplier.id;
+      parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+      debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
+    } else if (parsedData.supplierName != null) {
+      // If supplier not found in DB, clear it to avoid phantom suppliers
+      matchedSupplierName = null;
+      debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+      baseParsedData = ParsedInvoice(
+        rut: parsedData.rut,
+        invoiceNumber: parsedData.invoiceNumber,
+        date: parsedData.date,
+        total: parsedData.total,
+        supplierName: null, // Clear supplier name
+        lineItems: parsedData.lineItems,
+        rawText: parsedData.rawText,
+      );
+      parsedData = baseParsedData;
+    }
+
+    setState(() {
+      _baseParsedData = baseParsedData;
+      _parsedData = parsedData;
+      _ocrSupplier = matchedSupplier;
+      _ocrSupplierName = matchedSupplierName;
+      _supplierIdForNewProducts = matchedSupplierId;
+      _isProcessing = false;
+    });
+    if (!widget.showPreview) {
+      await _handleUseParsedData(parsedData);
+    }
   }
 
   void _handleInvoiceFileProcessingError(Object error) {
@@ -3427,8 +3432,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           imageUrl == null ? null : 'IMAGE_URL: $imageUrl',
         ].whereType<Object>().join('\n'),
         imageUrl: imageUrl == null ? null : _decodeHtmlEntities(imageUrl),
-        productUrl:
-            productUrl == null ? null : _decodeHtmlEntities(productUrl),
+        productUrl: productUrl == null ? null : _decodeHtmlEntities(productUrl),
         quantity: cells.isNotEmpty ? parseMoney(cells[0]) : null,
         unitPrice: cells.length > 1 ? parseMoney(cells[1]) : null,
         total: cells.length > 2 ? parseMoney(cells[2]) : null,
