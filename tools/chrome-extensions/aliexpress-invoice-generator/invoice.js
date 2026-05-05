@@ -188,7 +188,7 @@
       supplierName: invoice.supplierName || 'AliExpress Marketplace',
       supplierTaxId: invoice.supplierTaxId || '',
       orderNumber: invoice.orderNumber || '',
-      orderDate: invoice.orderDate || new Date().toISOString().slice(0, 10),
+      orderDate: invoice.orderDate || '',
       currency: 'CLP',
       subtotal: toNullableNumber(invoice.subtotal),
       shipping: toNullableNumber(invoice.shipping),

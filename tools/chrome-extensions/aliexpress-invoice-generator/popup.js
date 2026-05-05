@@ -18,7 +18,7 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.35';
+  const CONTENT_SCRIPT_VERSION = '0.3.36';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -810,7 +810,7 @@
       if (!el.supplierName.value.trim()) el.supplierName.value = domOrder.supplierName || 'AliExpress Marketplace';
       if (!el.supplierTaxId.value.trim()) el.supplierTaxId.value = domOrder.supplierTaxId || '';
       if (!el.orderNumber.value.trim()) el.orderNumber.value = domOrder.orderNumber || '';
-      if (!el.orderDate.value) el.orderDate.value = domOrder.orderDate || new Date().toISOString().slice(0, 10);
+      if (!el.orderDate.value && domOrder.orderDate) el.orderDate.value = domOrder.orderDate;
       if (!el.notes.value.trim()) el.notes.value = domOrder.notes || '';
     }
 
@@ -852,7 +852,7 @@
     el.supplierName.value = order.supplierName || 'AliExpress Marketplace';
     el.supplierTaxId.value = order.supplierTaxId || '';
     el.orderNumber.value = order.orderNumber || '';
-    el.orderDate.value = order.orderDate || new Date().toISOString().slice(0, 10);
+    el.orderDate.value = order.orderDate || '';
     el.currency.value = 'CLP';
     el.total.value = numberForInput(order.total || sumItems(state.items));
     el.subtotal.value = numberForInput(state.subtotal || sumItems(state.items));
@@ -1271,7 +1271,7 @@
       supplierName: 'AliExpress Marketplace',
       supplierTaxId: '',
       orderNumber: buildCombinedOrderNumber(orderNumbers),
-      orderDate: orderDates[orderDates.length - 1] || new Date().toISOString().slice(0, 10),
+      orderDate: orderDates[orderDates.length - 1] || '',
       currency: 'CLP',
       subtotal: combinedSubtotal,
       shipping: knownShipping || null,
@@ -1338,7 +1338,7 @@
       supplierName: order && order.supplierName || 'AliExpress Marketplace',
       supplierTaxId: order && order.supplierTaxId || '',
       orderNumber: order && order.orderNumber || '',
-      orderDate: order && order.orderDate || new Date().toISOString().slice(0, 10),
+      orderDate: order && order.orderDate || '',
       currency: 'CLP',
       subtotal: toNullableNumber(order && order.subtotal) || sumItems(items),
       shipping: toNullableNumber(order && order.shipping),
@@ -1418,7 +1418,7 @@
       supplierName: el.supplierName.value.trim() || 'AliExpress Marketplace',
       supplierTaxId: el.supplierTaxId.value.trim(),
       orderNumber: el.orderNumber.value.trim(),
-      orderDate: el.orderDate.value || new Date().toISOString().slice(0, 10),
+      orderDate: el.orderDate.value || '',
       currency: 'CLP',
       subtotal: toNullableNumber(el.subtotal.value),
       shipping: toNullableNumber(el.shipping.value),

@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.3.35';
+  const CONTENT_VERSION = '0.3.36';
 
   function getPageMetrics() {
     return {
@@ -318,7 +318,7 @@
       supplierName: 'AliExpress Marketplace',
       supplierTaxId: '',
       orderNumber: orderNumber || '',
-      orderDate: orderDate || new Date().toISOString().slice(0, 10),
+      orderDate: orderDate || '',
       currency: 'CLP',
       subtotal: totals.subtotal || null,
       shipping: totals.shipping || null,
@@ -349,8 +349,9 @@
     const allOrders = cards
       .map(buildOrderListInvoice)
       .filter(Boolean);
+    const dateFilterActive = Boolean(fromDate || toDate);
     const orders = allOrders
-      .filter((order) => isDateInRange(order.orderDate, fromDate, toDate));
+      .filter((order) => isDateInRange(order.orderDate, fromDate, toDate, dateFilterActive));
     const undatedCount = allOrders.filter((order) => !order.orderDate).length;
 
     if (cards.length === 0) {
@@ -360,7 +361,9 @@
       warnings.push('Se encontraron ordenes, pero ninguna calza con el rango de fechas seleccionado.');
     }
     if (undatedCount > 0) {
-      warnings.push(`${undatedCount} orden(es) no tenian fecha de compra parseable en la lista; se incluyeron para revision manual.`);
+      warnings.push(dateFilterActive
+        ? `${undatedCount} orden(es) no tenian fecha de compra parseable en la lista y se omitieron por el filtro de fecha.`
+        : `${undatedCount} orden(es) no tenian fecha de compra parseable en la lista; se incluyeron para revision manual.`);
     }
 
     return {
@@ -497,7 +500,7 @@
   function extractOrderListDate(lines) {
     const dateLine = lines.find((line) => /\border\s*date\b|\bfecha\s*(?:del\s*)?pedido\b|\bpedido\s+efectuado\b/i.test(line) && !isDeliveryDateLine(line));
     if (dateLine) {
-      const afterLabel = dateLine.replace(/^.*?(?:order\s*date|fecha\s*(?:del\s*)?pedido|pedido\s+efectuado)\s*[:\-]?\s*/i, '');
+      const afterLabel = dateLine.replace(/^.*?(?:order\s*date|fecha\s*(?:del\s*)?pedido|pedido\s+efectuado)(?:\s+el)?\s*[:\-]?\s*/i, '');
       return parseDateString(afterLabel) || parseDateString(dateLine);
     }
     return extractDate(lines);
@@ -697,8 +700,8 @@
     };
   }
 
-  function isDateInRange(date, fromDate, toDate) {
-    if (!date) return true;
+  function isDateInRange(date, fromDate, toDate, dateFilterActive = Boolean(fromDate || toDate)) {
+    if (!date) return !dateFilterActive;
     if (fromDate && date < fromDate) return false;
     if (toDate && date > toDate) return false;
     return true;
@@ -798,7 +801,7 @@
   }
 
   function extractDate(lines) {
-    const labelPattern = /(order\s*(date|time)|placed\s*on|paid\s*on|fecha\s*(del\s*pedido)?|pedido\s*realizado)\s*[:\-]?\s*(.+)/i;
+    const labelPattern = /(order\s*(date|time)|placed\s*on|paid\s*on|fecha\s*(del\s*pedido)?|pedido\s*(?:realizado|efectuado)(?:\s+el)?)\s*[:\-]?\s*(.+)/i;
 
     for (const line of lines.slice(0, 80)) {
       if (isDeliveryDateLine(line)) continue;
@@ -838,16 +841,16 @@
     match = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2}|\d{2})\b/);
     if (match) {
       const year = normalizeYear(Number(match[3]));
-      return toIsoDate(year, Number(match[2]), Number(match[1]));
+      const first = Number(match[1]);
+      const second = Number(match[2]);
+      if (first <= 12 && second > 12) return toIsoDate(year, first, second);
+      return toIsoDate(year, second, first);
     }
 
-    match = text.match(/\b([A-Za-z.]+)\s+(\d{1,2}),?\s+(20\d{2})\b/);
+    match = text.match(/\b([\p{L}.]+)\s+(\d{1,2}),?\s+(20\d{2})\b/u);
     if (match) return toIsoDate(Number(match[3]), monthNumber(match[1]), Number(match[2]));
 
-    match = text.match(/\b(\d{1,2})\s+([A-Za-z.]+)\s+(20\d{2})\b/);
-    if (match) return toIsoDate(Number(match[3]), monthNumber(match[2]), Number(match[1]));
-
-    match = text.match(/\b(\d{1,2})\s+(?:de\s+)?([A-Za-z.]+)\s+(?:de\s+)?(20\d{2})\b/i);
+    match = text.match(/\b(\d{1,2})\s+(?:de\s+)?([\p{L}.]+),?\s+(?:de\s+)?(20\d{2})\b/iu);
     if (match) return toIsoDate(Number(match[3]), monthNumber(match[2]), Number(match[1]));
 
     return '';
