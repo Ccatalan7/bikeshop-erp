@@ -2347,12 +2347,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final oldItem = entry.originalItem;
     final existingSku = product.sku.trim();
     final updatedItem = oldItem.copyWith(
+      description: product.name,
       existsInDatabase: true,
       matchedProductId: productId,
       matchedProductName: product.name,
       currentStock: product.inventoryQty,
-      sku:
-          (oldItem.sku?.trim().isNotEmpty ?? false) ? oldItem.sku : existingSku,
+      sku: existingSku.isNotEmpty ? existingSku : oldItem.sku,
     );
 
     final rowIndex = _parsedData!.lineItems.indexOf(oldItem);
