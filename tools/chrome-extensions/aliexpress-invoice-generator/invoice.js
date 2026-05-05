@@ -41,14 +41,14 @@
     const itemRows = invoice.items.map((item, index) => `
       <tr>
         <td class="index-cell">${index + 1}</td>
+        <td class="image-cell">
+          ${item.imageUrl ? `<img class="item-image" src="${escapeAttr(item.imageUrl)}" alt="" referrerpolicy="no-referrer">` : '<div class="item-image-empty"></div>'}
+        </td>
         <td>
-          <div class="article-cell">
-            ${item.imageUrl ? `<img class="item-image" src="${escapeAttr(item.imageUrl)}" alt="" referrerpolicy="no-referrer">` : '<div class="item-image-empty"></div>'}
-            <div class="article-copy">
-              <strong>${escapeHtml(item.description || 'AliExpress item')}</strong>
-              <div class="muted">SKU: ${escapeHtml(item.sku || 'AE-ITEM')}</div>
-              ${item.itemId ? `<div class="muted">Item ID: ${escapeHtml(item.itemId)}</div>` : ''}
-            </div>
+          <div class="article-copy">
+            <strong>${escapeHtml(item.description || 'AliExpress item')}</strong>
+            <div class="muted">SKU: ${escapeHtml(item.sku || 'AE-ITEM')}</div>
+            <span class="machine-metadata">${buildMachineMetadata(item)}</span>
           </div>
         </td>
         <td class="numeric">${formatQuantity(item.quantity)}</td>
@@ -98,6 +98,7 @@
           <thead>
             <tr>
               <th>#</th>
+              <th>Imagen</th>
               <th>Artículo &amp; Descripción</th>
               <th class="numeric">Cantidad</th>
               <th class="numeric">Tarifa</th>
@@ -117,6 +118,8 @@
         <div class="totals-row paid-row"><span>Pago realizado</span><span>${formatMoney(paidAmount, invoice.currency)}</span></div>
         <div class="totals-row balance-row"><span>Saldo adeudado</span><span>${formatMoney(balance, invoice.currency)}</span></div>
       </section>
+
+      <script type="application/json" id="aliexpress-invoice-data">${escapeHtml(JSON.stringify(invoice))}</script>
     `;
 
     wireImageFallbacks();
@@ -152,7 +155,6 @@
 
     invoice.items.forEach((item) => {
       lines.push(`[${item.sku || 'AE-ITEM'}] ${item.description}`);
-      if (item.productUrl) lines.push(item.productUrl);
       lines.push(formatDecimalComma(item.quantity || 1));
       lines.push('Unidades');
       lines.push(formatDecimalComma(item.unitPrice || 0));
@@ -167,14 +169,29 @@
     return lines.join('\n');
   }
 
+  function buildMachineMetadata(item) {
+    const lines = [];
+    if (item.productUrl) lines.push(`PRODUCT_URL: ${item.productUrl}`);
+    if (item.imageUrl) lines.push(`IMAGE_URL: ${item.imageUrl}`);
+    return escapeHtml(lines.join('\n'));
+  }
+
   function normalizeInvoice(invoice) {
     const items = (invoice.items || []).map((item, index) => {
       const quantity = toNumber(item.quantity) || 1;
       const unitPrice = toNumber(item.unitPrice);
       const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
+      const sourceDescription = String(item.originalDescription || item.description || 'AliExpress item').trim();
+      const cleanedDescription = smartProductName(sourceDescription, item);
+      const currentDescription = cleanVisibleProductName(item.description);
+      const description = cleanedDescription || currentDescription || 'AliExpress item';
+      const originalDescription = sourceDescription && sourceDescription !== description
+        ? sourceDescription
+        : String(item.originalDescription || '').trim();
       return {
         sku: String(item.sku || `AE-${String(index + 1).padStart(3, '0')}`).trim(),
-        description: String(item.description || 'AliExpress item').trim(),
+        description,
+        originalDescription,
         quantity,
         unitPrice,
         total,
@@ -199,6 +216,181 @@
       pageUrl: invoice.pageUrl || '',
       items,
     };
+  }
+
+  function smartProductName(description, item = {}) {
+    const raw = String(description || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+
+    const base = stripAliExpressTitleNoise(raw);
+    const normalized = normalizeNameKey(base);
+    const brand = extractCatalogBrand(base);
+    const variant = extractTrailingVariant(base);
+
+    if (isBottomBracketTitle(normalized)) {
+      return compactName([
+        'Motor sellado',
+        brand,
+        bottomBracketSizeLabel(base),
+        bottomBracketStandardLabel(base),
+      ]);
+    }
+
+    if (isFrontLightTitle(normalized)) {
+      return compactName([
+        'Luz delantera',
+        brand,
+        extractLightEmitterLabel(base),
+        usbTypeCLabel(normalized),
+        variant,
+      ]);
+    }
+
+    if (isRearLightTitle(normalized)) {
+      return compactName([
+        'Luz trasera',
+        brand,
+        /\bled\b/i.test(base) ? 'LED' : '',
+        usbTypeCLabel(normalized),
+        variant,
+      ]);
+    }
+
+    return compactGenericProductName(base, variant, item);
+  }
+
+  function stripAliExpressTitleNoise(value) {
+    return String(value || '')
+      .replace(/^\s*\[\d{8,}\]\s*/, '')
+      .replace(/\s*\bItem\s*ID\s*:?\s*\d{8,}\b/gi, '')
+      .replace(/\s*\bORIGINAL_TITLE\s*:.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function cleanVisibleProductName(value) {
+    return stripAliExpressTitleNoise(value)
+      .replace(/\s*\bPRODUCT_URL\s*:.*$/i, '')
+      .replace(/\s*\bIMAGE_URL\s*:.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function normalizeNameKey(value) {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function extractTrailingVariant(value) {
+    const match = String(value || '').match(/\(([^()]{2,50})\)\s*$/);
+    if (!match) return '';
+    const variant = match[1].replace(/\s+/g, ' ').trim();
+    if (/^\d{8,}$/.test(variant)) return '';
+    return variant;
+  }
+
+  function extractCatalogBrand(value) {
+    const knownBrands = [
+      'ZTTO', 'Shimano', 'SRAM', 'KMC', 'Rockbros', 'Wake', 'GUB', 'Litepro',
+      'Bolany', 'Zoom', 'Tektro', 'Magura', 'Ltwoo', 'Sensah', 'YBN', 'Sunrace',
+      'Maxxis', 'Kenda', 'Continental', 'Vittoria', 'Schwalbe', 'Prowheel',
+      'MZYRH', 'Bafang', 'RISK', 'TOSEEK', 'UNO', 'Meroca', 'Bucklos', 'CST',
+    ];
+    const text = String(value || '');
+    for (const brand of knownBrands) {
+      if (new RegExp(`\\b${escapeRegExp(brand)}\\b`, 'i').test(text)) return brand;
+    }
+    const acronym = text.match(/\b[A-Z][A-Z0-9]{2,8}\b/);
+    if (!acronym) return '';
+    const blocked = new Set(['USB', 'LED', 'BSA', 'ISO', 'JIS', 'MTB', 'BMX', 'BB', 'T6']);
+    if (blocked.has(acronym[0]) || /^[A-Z]{1,4}\d{1,5}$/.test(acronym[0])) return '';
+    return acronym[0];
+  }
+
+  function isBottomBracketTitle(normalized) {
+    return /\b(soporte inferior|bottom bracket|movimiento central|pedalier|caja de motor|eje de motor|motor sellado|bsa \d{2}|bb iso|bb jis|hollowtech|pressfit|bb30|pf30|square taper)\b/.test(normalized);
+  }
+
+  function bottomBracketSizeLabel(value) {
+    const text = String(value || '').replace(/,/g, '.');
+    const sizeMatch = text.match(/\b(\d{2,3})\s*[xX×]\s*(\d{2,3}(?:\.\d+)?)\s*L?\b/);
+    if (sizeMatch) return `BSA ${sizeMatch[1]}X${trimDecimal(sizeMatch[2])}`;
+    const bsaMatch = text.match(/\bBSA\s*(\d{2,3})\b/i);
+    return bsaMatch ? `BSA ${bsaMatch[1]}` : '';
+  }
+
+  function bottomBracketStandardLabel(value) {
+    const text = String(value || '');
+    if (/\bBB\s*ISO\b|\bISO\b/i.test(text)) return 'ISO';
+    if (/\bJIS\b/i.test(text)) return 'JIS';
+    return '';
+  }
+
+  function isFrontLightTitle(normalized) {
+    return /\b(luz delantera|faro|front light|headlight)\b/.test(normalized);
+  }
+
+  function isRearLightTitle(normalized) {
+    return /\b(luz trasera|lampara trasera|rear light|tail light)\b/.test(normalized);
+  }
+
+  function extractLightEmitterLabel(value) {
+    const match = String(value || '').match(/\b(\d+)\s*T6\b/i) || String(value || '').match(/\bT6\b/i);
+    if (!match) return '';
+    return 'T6';
+  }
+
+  function usbTypeCLabel(normalized) {
+    return /\b(usb c|usb tipo c|tipo c|type c|carga tipo c)\b/.test(normalized) ? 'USB C' : '';
+  }
+
+  function compactGenericProductName(base, variant, item) {
+    const withoutVariant = String(base || '').replace(/\s*\([^()]{2,50}\)\s*$/, '');
+    const cleaned = withoutVariant
+      .replace(/\b(de|para)\s+bicicleta\b/gi, '')
+      .replace(/\bbicicleta\b/gi, '')
+      .replace(/\b(montana|montaña|carretera|ciclismo nocturno|conduccion nocturna|conducción nocturna|accesorios? de seguridad)\b/gi, '')
+      .replace(/[,;]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 9).join(' ');
+    const fallback = words || String(item && item.sku || '').trim() || base;
+    return compactName([sentenceCaseProductName(fallback), variant]);
+  }
+
+  function sentenceCaseProductName(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function compactName(parts) {
+    const seen = new Set();
+    return parts
+      .map((part) => String(part || '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .filter((part) => {
+        const key = normalizeNameKey(part);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function trimDecimal(value) {
+    return String(value || '').replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+  }
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   function renderError(message) {

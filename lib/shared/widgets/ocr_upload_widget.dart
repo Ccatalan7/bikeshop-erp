@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
 import 'dart:math' as math;
+import 'dart:convert';
 
 import 'dart:async';
 import 'package:flutter/foundation.dart'
@@ -8,6 +9,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../services/ocr_service.dart';
 import '../services/invoice_parser_service.dart';
@@ -22,9 +24,14 @@ import '../../modules/inventory/services/category_service.dart';
 import '../../modules/inventory/models/category_models.dart' show Category;
 import '../../modules/inventory/services/inventory_service.dart' as inv_service;
 import '../../modules/inventory/models/inventory_models.dart' as inv_models;
+import '../../modules/inventory/models/product_duplicate_candidate.dart';
 import '../../modules/inventory/services/brand_service.dart';
+import '../../modules/inventory/services/product_duplicate_matcher_service.dart';
+import '../../modules/inventory/services/product_image_fingerprint_service.dart';
+import '../../modules/inventory/widgets/product_duplicate_review_dialog.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
+import '../../modules/ai_assistant/services/ai_service.dart';
 import '../models/supplier_ocr_template.dart';
 import '../services/image_service.dart';
 import '../utils/chilean_utils.dart';
@@ -105,6 +112,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   final PDFParserService _pdfService = PDFParserService();
 
   bool _isProcessing = false;
+  bool _isDraggingInvoiceFile = false;
   String? _errorMessage;
   ParsedInvoice? _parsedData;
   ParsedInvoice? _baseParsedData;
@@ -130,6 +138,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   shared_supplier.Supplier? _ocrSupplier;
   bool _showStock = false; // Toggle to show/hide stock column
   bool _isSavingSupplierTemplate = false;
+  bool _isCheckingSimilarProducts = false;
+  String? _similarProductMessage;
+  final AIAssistantService _aiAssistantService = AIAssistantService();
 
   @override
   void initState() {
@@ -211,9 +222,29 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Widget _buildUploadScreen() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+    final accentColor = _isDraggingInvoiceFile
+        ? Theme.of(context).colorScheme.primary
+        : Colors.transparent;
+
+    return DropTarget(
+      enable: !_isProcessing,
+      onDragEntered: (_) => setState(() => _isDraggingInvoiceFile = true),
+      onDragExited: (_) => setState(() => _isDraggingInvoiceFile = false),
+      onDragDone: (details) => _handleDroppedInvoiceFiles(details.files),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _isDraggingInvoiceFile
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.04)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: accentColor, width: 2),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
         // Title
         Text(
           widget.documentType == OCRDocumentType.invoice
@@ -266,10 +297,16 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
         const SizedBox(height: 8),
         Text(
-          'Toma una foto o selecciona una imagen para extraer los datos automáticamente',
+          _isDraggingInvoiceFile
+              ? 'Suelta la factura aquí'
+              : 'Toma una foto, selecciona una imagen o arrastra un PDF aquí',
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: _isDraggingInvoiceFile
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey[600],
+            fontWeight:
+                _isDraggingInvoiceFile ? FontWeight.w600 : FontWeight.normal,
           ),
           textAlign: TextAlign.center,
         ),
@@ -296,7 +333,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             // PDF button
             _buildActionButton(
               icon: Icons.picture_as_pdf,
-              label: 'PDF',
+              label: 'Archivo',
               onPressed: _isProcessing ? null : _pickPDFFile,
             ),
           ],
@@ -369,7 +406,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               ),
             ),
           ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -409,7 +448,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final data = _parsedData!;
     final theme = Theme.of(context);
     final invoiceDiagnostics = _getInvoiceDiagnostics(data);
-    final supplierTemplateActive = _ocrSupplier?.ocrTemplate.enabled ?? false;
+    final aliExpressTemplateActive = _looksLikeAliExpressInvoice(data);
+    final supplierTemplateActive =
+        (_ocrSupplier?.ocrTemplate.enabled ?? false) ||
+            aliExpressTemplateActive;
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -556,9 +598,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          supplierTemplateActive
-                              ? 'Plantilla OCR activa'
-                              : 'Sin plantilla OCR',
+                          aliExpressTemplateActive
+                              ? 'Plantilla AliExpress activa'
+                              : supplierTemplateActive
+                                  ? 'Plantilla OCR activa'
+                                  : 'Sin plantilla OCR',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -1357,14 +1401,19 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       setState(() {
         entry.imageUrl = result.optimizedUrl ?? result.originalUrl;
         entry.imageUrlOptimized = result.optimizedUrl;
+        entry.imageBytes = bytes;
+        entry.imageFileName = fileName;
       });
     } catch (e) {
       debugPrint('Error uploading image: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al subir imagen: $e')),
       );
     } finally {
-      setState(() => entry.isUploadingImage = false);
+      if (mounted) {
+        setState(() => entry.isUploadingImage = false);
+      }
     }
   }
 
@@ -1399,7 +1448,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             ))
         .toList();
 
-    setState(() => _showBulkCreate = true);
+    setState(() {
+      _showBulkCreate = true;
+      _similarProductMessage = null;
+    });
+
+    if (_looksLikeAliExpressInvoice(_parsedData!)) {
+      await _checkSimilarProductsForNewEntries(autoTriggered: true);
+    }
   }
 
   Future<void> _showSupplierSelectionDialog() async {
@@ -1530,6 +1586,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         const double baseWImg = 58;
         const double baseWSku = 130;
         const double baseWName = 260;
+        const double baseWSimilar = 210;
         const double baseWCost = 110;
         const double baseWPrice = 110;
         const double baseWCat = 170;
@@ -1537,17 +1594,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         const double baseWTaller = 72;
         const double gap = 8;
         const double hPad = 12;
+        const double borderAllowance = 2;
         const double minTableInnerWidth = hPad * 2 +
+            borderAllowance +
             baseWChk +
             baseWImg +
             baseWSku +
             baseWName +
+            baseWSimilar +
             baseWCost +
             baseWPrice +
             baseWCat +
             baseWBrand +
             baseWTaller +
-            gap * 7;
+            gap * 8;
 
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
@@ -1558,7 +1618,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         const wChk = baseWChk;
         const wImg = baseWImg;
         final wSku = baseWSku + (extraWidth * 0.14);
-        final wName = baseWName + (extraWidth * 0.42);
+        final wName = baseWName + (extraWidth * 0.30);
+        final wSimilar = baseWSimilar + (extraWidth * 0.12);
         const wCost = baseWCost;
         const wPrice = baseWPrice;
         final wCat = baseWCat + (extraWidth * 0.22);
@@ -1639,6 +1700,55 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               ),
               const SizedBox(height: 20),
 
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.manage_search,
+                      size: 18,
+                      color: Colors.grey.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _similarProductMessage ??
+                            (_looksLikeAliExpressInvoice(_parsedData!)
+                                ? 'Plantilla AliExpress: revisa parecidos antes de crear productos nuevos.'
+                                : 'Busca parecidos para reutilizar productos existentes antes de crear nuevos.'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isCheckingSimilarProducts
+                          ? null
+                          : () => _checkSimilarProductsForNewEntries(),
+                      icon: _isCheckingSimilarProducts
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.search, size: 16),
+                      label: Text(_isCheckingSimilarProducts
+                          ? 'Buscando...'
+                          : 'Buscar parecidos'),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
               // Table — always tableInnerWidth wide, scrolls horizontally if needed
               Scrollbar(
                 controller: _bulkCreateHorizontalScrollController,
@@ -1670,12 +1780,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              const SizedBox(width: wChk), // checkbox placeholder
+                              const SizedBox(
+                                  width: wChk), // checkbox placeholder
                               headerCell('Img', wImg),
                               const SizedBox(width: gap),
                               headerCell('SKU', wSku),
                               const SizedBox(width: gap),
                               headerCell('Nombre', wName),
+                              const SizedBox(width: gap),
+                              headerCell('Parecidos', wSimilar),
                               const SizedBox(width: gap),
                               headerCell('Costo', wCost,
                                   align: TextAlign.center),
@@ -1803,6 +1916,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                               onTap: () => setState(() {
                                                 entry.imageUrl = null;
                                                 entry.imageUrlOptimized = null;
+                                                entry.imageBytes = null;
+                                                entry.imageFileName = null;
                                               }),
                                               child: Container(
                                                 width: 16,
@@ -1861,6 +1976,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                     ),
                                     style: const TextStyle(fontSize: 12),
                                   ),
+                                ),
+                                const SizedBox(width: gap),
+                                SizedBox(
+                                  width: wSimilar,
+                                  child: _buildSimilarProductCell(entry),
                                 ),
                                 const SizedBox(width: gap),
                                 // Cost
@@ -2055,6 +2175,208 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
+  Widget _buildSimilarProductCell(_NewProductEntry entry) {
+    if (entry.isCheckingSimilar) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Buscando...',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
+        ],
+      );
+    }
+
+    return ProductDuplicateSummaryButton(
+      candidates: entry.similarCandidates,
+      isEnabled: entry.isSelected,
+      onPressed: () => entry.similarCandidates.isEmpty
+          ? _checkSimilarProductsForNewEntries(entry: entry)
+          : _showSimilarProductsDialog(entry),
+    );
+  }
+
+  Future<void> _checkSimilarProductsForNewEntries({
+    _NewProductEntry? entry,
+    bool autoTriggered = false,
+  }) async {
+    final entries = entry == null
+        ? _newProductEntries.where((e) => e.isSelected).toList()
+        : [entry];
+    if (entries.isEmpty) return;
+
+    setState(() {
+      _isCheckingSimilarProducts = entry == null;
+      _similarProductMessage = autoTriggered
+          ? 'Plantilla AliExpress: buscando parecidos antes de crear productos.'
+          : 'Buscando productos parecidos...';
+      for (final current in entries) {
+        current.isCheckingSimilar = true;
+      }
+    });
+
+    try {
+      final inventoryService = context.read<inv_service.InventoryService>();
+      final allProducts = await inventoryService.getProducts();
+      final duplicateMatcher = ProductDuplicateMatcherService(
+        inventoryService: inventoryService,
+        aiAssistantService: _aiAssistantService,
+      );
+
+      var flagged = 0;
+      for (final current in entries) {
+        final candidates = await duplicateMatcher.findCandidates(
+          probe: ProductDuplicateProbe(
+            name: current.nameController.text,
+            description: current.originalItem.description,
+            sku: current.skuController.text.trim().isNotEmpty
+                ? current.skuController.text.trim()
+                : current.originalItem.sku,
+            rawText: current.originalItem.rawRowText,
+            categoryName: current.selectedCategory?.name,
+            brandName: current.selectedBrand?.name,
+            supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+            supplierName: _ocrSupplierName ?? widget.supplierName,
+            imageUrl: current.imageUrl,
+            imageBytes: current.imageBytes,
+            imageFileName: current.imageFileName,
+            price: current.price,
+            cost: current.cost,
+          ),
+          products: allProducts,
+        );
+        current.similarCandidates = candidates;
+        if (candidates.isNotEmpty) flagged++;
+        current.isCheckingSimilar = false;
+        if (mounted) setState(() {});
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _similarProductMessage = flagged == 0
+            ? 'No encontré parecidos fuertes en el catálogo actual.'
+            : 'Encontré parecidos para $flagged producto${flagged == 1 ? '' : 's'}. Revisa antes de crear.';
+      });
+
+      if (entry != null && entry.similarCandidates.isNotEmpty) {
+        await _showSimilarProductsDialog(entry);
+      }
+    } catch (e) {
+      debugPrint('Error checking OCR similar products: $e');
+      if (!mounted) return;
+      setState(() {
+        _similarProductMessage =
+            'No se pudo completar la búsqueda de parecidos.';
+        for (final current in entries) {
+          current.isCheckingSimilar = false;
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingSimilarProducts = false);
+      }
+    }
+  }
+
+  String _normalizeSimilarityText(String value) {
+    final lower = value.toLowerCase();
+    final withoutAccents = lower
+        .replaceAll(RegExp(r'[áàäâã]'), 'a')
+        .replaceAll(RegExp(r'[éèëê]'), 'e')
+        .replaceAll(RegExp(r'[íìïî]'), 'i')
+        .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+        .replaceAll(RegExp(r'[úùüû]'), 'u')
+        .replaceAll('ñ', 'n');
+    return withoutAccents
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  Future<void> _showSimilarProductsDialog(_NewProductEntry entry) async {
+    final selected = await showDialog<inv_models.Product>(
+      context: context,
+      builder: (context) => ProductDuplicateReviewDialog(
+        rows: [
+          ProductDuplicateReviewRow(
+            title: entry.nameController.text,
+            subtitle: entry.originalItem.description,
+            imageUrl: entry.imageUrl,
+            badges: [
+              if (entry.sku.isNotEmpty) entry.sku,
+              if ((entry.selectedCategory?.name ?? '').isNotEmpty)
+                entry.selectedCategory!.name,
+              if ((entry.selectedBrand?.name ?? '').isNotEmpty)
+                entry.selectedBrand!.name,
+            ],
+            candidates: entry.similarCandidates,
+            onCandidateSelected: (product) =>
+                Navigator.of(context).pop(product),
+          ),
+        ],
+        title: 'Productos parecidos',
+        subtitle: entry.nameController.text,
+        emptyActionLabel: 'Crear como producto nuevo',
+      ),
+    );
+
+    if (selected != null) {
+      _useExistingProductForEntry(entry, selected);
+    }
+  }
+
+  void _useExistingProductForEntry(
+    _NewProductEntry entry,
+    inv_models.Product product,
+  ) {
+    final productId = product.id;
+    if (productId == null || _parsedData == null) return;
+
+    final oldItem = entry.originalItem;
+    final existingSku = product.sku.trim();
+    final updatedItem = oldItem.copyWith(
+      existsInDatabase: true,
+      matchedProductId: productId,
+      matchedProductName: product.name,
+      currentStock: product.inventoryQty,
+      sku:
+          (oldItem.sku?.trim().isNotEmpty ?? false) ? oldItem.sku : existingSku,
+    );
+
+    final rowIndex = _parsedData!.lineItems.indexOf(oldItem);
+    final updatedItems = _parsedData!.lineItems.map((item) {
+      return identical(item, oldItem) || item == oldItem ? updatedItem : item;
+    }).toList();
+
+    if (rowIndex >= 0) {
+      _skuControllers[rowIndex]?.text = updatedItem.sku ?? '';
+    }
+
+    setState(() {
+      _parsedData = _parsedData!.copyWith(lineItems: updatedItems);
+      if (_baseParsedData != null &&
+          rowIndex >= 0 &&
+          rowIndex < _baseParsedData!.lineItems.length) {
+        final baseItems = List<ParsedLineItem>.from(_baseParsedData!.lineItems);
+        baseItems[rowIndex] = updatedItem;
+        _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
+      }
+      _newProductEntries.remove(entry);
+      entry.dispose();
+      _similarProductMessage =
+          'Producto existente seleccionado: ${product.name}. Esa fila salió de la lista de creación.';
+      if (_newProductEntries.isEmpty) {
+        _showBulkCreate = false;
+      }
+    });
+  }
+
   /// Create products from the bulk creation form
   Future<void> _createBulkProducts() async {
     final selectedEntries =
@@ -2068,9 +2390,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       final tenantService = TenantService();
       final inventoryService =
           inv_service.InventoryService(dbService, tenantService);
+      final sharedInventoryService = context.read<InventoryService>();
       int created = 0;
 
       for (final entry in selectedEntries) {
+        await _ensureEntryImageBytes(entry);
         final product = inv_models.Product(
           tenantId: tenantService.currentTenantId ?? '',
           name: entry.nameController.text.trim(),
@@ -2096,6 +2420,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           updatedAt: DateTime.now(),
           imageUrl: entry.imageUrl,
           imageUrlOptimized: entry.imageUrlOptimized,
+          imageFingerprint: entry.imageBytes == null
+              ? null
+              : ProductImageFingerprintService.computeStorageJson(
+                  entry.imageBytes!,
+                ),
         );
 
         try {
@@ -2110,9 +2439,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // Re-verify products after creation
       if (_parsedData != null && created > 0) {
         // Refresh shared inventory cache to ensure newly created products are found
-        await Provider.of<InventoryService>(context, listen: false).refresh();
+        await sharedInventoryService.refresh();
 
+        if (!mounted) return;
         final verifiedInvoice = await _verifyProductsInDatabase(_parsedData!);
+        if (!mounted) return;
         setState(() {
           _parsedData = verifiedInvoice;
           _showBulkCreate = false;
@@ -2145,6 +2476,29 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
     } finally {
       setState(() => _creatingProducts = false);
+    }
+  }
+
+  Future<void> _ensureEntryImageBytes(_NewProductEntry entry) async {
+    if (entry.imageBytes != null) return;
+    final imageUrl = entry.imageUrl?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) return;
+
+    try {
+      final uri = Uri.tryParse(imageUrl);
+      if (uri == null || !uri.hasScheme) return;
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+      final contentType = response.headers['content-type'] ?? '';
+      if (contentType.isNotEmpty && !contentType.startsWith('image/')) return;
+      if (response.bodyBytes.isEmpty ||
+          response.bodyBytes.length > 8 * 1024 * 1024) {
+        return;
+      }
+      entry.imageBytes = response.bodyBytes;
+      entry.imageFileName ??= _NewProductEntry._imageFileNameFromUrl(imageUrl);
+    } catch (e) {
+      debugPrint('Could not download OCR row image for fingerprint: $e');
     }
   }
 
@@ -2236,36 +2590,88 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
-  /// Try to match OCR supplier string against database suppliers
-  Future<shared_supplier.Supplier?> _matchSupplier(String rawName) async {
+  bool _isAliExpressSupplierName(String? value) {
+    final normalized = _normalizeSimilarityText(value ?? '');
+    return normalized.contains('aliexpress') ||
+        normalized.contains('ali express') ||
+        normalized.contains('ali express marketplace');
+  }
+
+  bool _looksLikeAliExpressInvoice(ParsedInvoice invoice, {String? fileName}) {
+    return _isAliExpressSupplierName(invoice.supplierName) ||
+        _isAliExpressSupplierName(widget.supplierName) ||
+        _isAliExpressSupplierName(fileName) ||
+        _isAliExpressSupplierName(invoice.rawText);
+  }
+
+  Future<shared_supplier.Supplier?> _matchSupplierForInvoice(
+    ParsedInvoice invoice, {
+    String? fileName,
+  }) async {
+    final supplierProbe = invoice.supplierName?.trim();
+    final widgetSupplierId = widget.supplierId?.trim();
+
     try {
       final purchaseService = context.read<PurchaseService>();
       final suppliers = await purchaseService.getSuppliers();
       if (suppliers.isEmpty) return null;
 
-      final normalizedRaw = rawName.toLowerCase().trim();
+      final isAliExpressInvoice =
+          _looksLikeAliExpressInvoice(invoice, fileName: fileName);
 
-      // 1. Exact match
-      try {
-        return suppliers
-            .firstWhere((s) => s.name.toLowerCase().trim() == normalizedRaw);
-      } catch (_) {}
+      if (isAliExpressInvoice) {
+        try {
+          return suppliers.firstWhere((s) => _isAliExpressSupplierName(s.name));
+        } catch (_) {}
+      }
 
-      // 2. Database name contains OCR name (e.g. DB: "Big Supplier Inc", OCR: "Supplier")
-      try {
-        return suppliers
-            .firstWhere((s) => s.name.toLowerCase().contains(normalizedRaw));
-      } catch (_) {}
+      if (widgetSupplierId != null && widgetSupplierId.isNotEmpty) {
+        try {
+          return suppliers.firstWhere((s) => s.id == widgetSupplierId);
+        } catch (_) {}
+      }
 
-      // 3. OCR name contains Database name (e.g. OCR: "Big Supplier Limitada", DB: "Big Supplier")
-      // This solves the "DERMAN CICLISMO..." -> "Derman" case
-      try {
-        return suppliers.firstWhere(
-            (s) => normalizedRaw.contains(s.name.toLowerCase().trim()));
-      } catch (_) {}
+      if (supplierProbe == null || supplierProbe.isEmpty) return null;
+      return _matchSupplierFromList(supplierProbe, suppliers);
     } catch (e) {
       debugPrint('Error matching supplier: $e');
     }
+    return null;
+  }
+
+  shared_supplier.Supplier? _matchSupplierFromList(
+    String rawName,
+    List<shared_supplier.Supplier> suppliers,
+  ) {
+    if (suppliers.isEmpty) return null;
+
+    final normalizedRaw = rawName.toLowerCase().trim();
+    if (normalizedRaw.isEmpty) return null;
+
+    if (_isAliExpressSupplierName(normalizedRaw)) {
+      try {
+        return suppliers.firstWhere((s) => _isAliExpressSupplierName(s.name));
+      } catch (_) {}
+    }
+
+    // 1. Exact match
+    try {
+      return suppliers
+          .firstWhere((s) => s.name.toLowerCase().trim() == normalizedRaw);
+    } catch (_) {}
+
+    // 2. Database name contains OCR name (e.g. DB: "Big Supplier Inc", OCR: "Supplier")
+    try {
+      return suppliers
+          .firstWhere((s) => s.name.toLowerCase().contains(normalizedRaw));
+    } catch (_) {}
+
+    // 3. OCR name contains Database name (e.g. OCR: "DERMAN CICLISMO...", DB: "Derman")
+    try {
+      return suppliers.firstWhere(
+          (s) => normalizedRaw.contains(s.name.toLowerCase().trim()));
+    } catch (_) {}
+
     return null;
   }
 
@@ -2363,6 +2769,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (shouldSave != true || _ocrSupplier == null) {
       return;
     }
+
+    if (!mounted) return;
 
     final template = SupplierOcrTemplate(
       enabled: enabled,
@@ -2616,29 +3024,30 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       String? matchedSupplierId;
       shared_supplier.Supplier? matchedSupplier;
 
-      if (parsedData.supplierName != null) {
-        matchedSupplier = await _matchSupplier(parsedData.supplierName!);
-        if (matchedSupplier != null) {
-          matchedSupplierName = matchedSupplier.name;
-          matchedSupplierId = matchedSupplier.id;
-          parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
-          debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
-        } else {
-          // If supplier not found in DB, clear it to avoid phantom suppliers
-          // forcing user to select a valid one later
-          matchedSupplierName = null;
-          debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-          baseParsedData = ParsedInvoice(
-            rut: parsedData.rut,
-            invoiceNumber: parsedData.invoiceNumber,
-            date: parsedData.date,
-            total: parsedData.total,
-            supplierName: null, // Clear supplier name
-            lineItems: parsedData.lineItems,
-            rawText: parsedData.rawText,
-          );
-          parsedData = baseParsedData;
-        }
+      matchedSupplier = await _matchSupplierForInvoice(
+        parsedData,
+        fileName: image.name,
+      );
+      if (matchedSupplier != null) {
+        matchedSupplierName = matchedSupplier.name;
+        matchedSupplierId = matchedSupplier.id;
+        parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+        debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
+      } else if (parsedData.supplierName != null) {
+        // If supplier not found in DB, clear it to avoid phantom suppliers
+        // forcing user to select a valid one later
+        matchedSupplierName = null;
+        debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+        baseParsedData = ParsedInvoice(
+          rut: parsedData.rut,
+          invoiceNumber: parsedData.invoiceNumber,
+          date: parsedData.date,
+          total: parsedData.total,
+          supplierName: null, // Clear supplier name
+          lineItems: parsedData.lineItems,
+          rawText: parsedData.rawText,
+        );
+        parsedData = baseParsedData;
       }
 
       setState(() {
@@ -2671,13 +3080,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
+      _isDraggingInvoiceFile = false;
     });
 
     try {
-      // Pick PDF file (withData: true for web compatibility)
+      // Pick invoice file (withData: true for web compatibility)
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf'],
+        allowedExtensions: ['pdf', 'json', 'html', 'htm'],
         withData: true, // Load bytes for web
       );
 
@@ -2686,35 +3096,93 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         return;
       }
 
-      final file = result.files.first;
+      await _processInvoicePlatformFile(result.files.first);
+    } catch (e) {
+      _handleInvoiceFileProcessingError(e);
+    }
+  }
 
-      ParsedInvoice? parsedData;
+  Future<void> _handleDroppedInvoiceFiles(List<DropItem> files) async {
+    if (_isProcessing) return;
 
-      if (_useVeryfi) {
-        // Use Veryfi for PDF
-        Uint8List pdfBytes;
-        if (file.bytes != null) {
-          pdfBytes = file.bytes!;
-        } else if (file.path != null && !kIsWeb) {
-          pdfBytes = await File(file.path!).readAsBytes();
-        } else {
-          throw Exception('No se pudo acceder al archivo PDF');
+    setState(() {
+      _isProcessing = true;
+      _isDraggingInvoiceFile = false;
+      _errorMessage = null;
+    });
+
+    try {
+      DropItem? invoiceFile;
+      for (final file in files) {
+        final name = _dropFileName(file);
+        final extension = _fileExtension(name);
+        if (_isSupportedInvoiceFileExtension(extension)) {
+          invoiceFile = file;
+          break;
         }
+      }
 
-        parsedData = await _processWithVeryfi(pdfBytes, file.name);
+      if (invoiceFile == null) {
+        throw Exception('Arrastra un archivo PDF, HTML o JSON de factura.');
+      }
+
+      final fileName = _dropFileName(invoiceFile);
+      final bytes = await invoiceFile.readAsBytes();
+      await _processInvoiceBytes(
+        fileName: fileName,
+        fileBytes: bytes,
+        extension: _fileExtension(fileName),
+      );
+    } catch (e) {
+      _handleInvoiceFileProcessingError(e);
+    }
+  }
+
+  Future<void> _processInvoicePlatformFile(PlatformFile file) async {
+    await _processInvoiceBytes(
+      fileName: file.name,
+      fileBytes: await _readPickedFileBytes(file),
+      extension: _fileExtension(file.name, fallback: file.extension),
+    );
+  }
+
+  Future<void> _processInvoiceBytes({
+    required String fileName,
+    required Uint8List fileBytes,
+    required String extension,
+  }) async {
+      ParsedInvoice? parsedData;
+      ParsedInvoice? directPdfParsedData;
+      final isPdf = extension == 'pdf';
+
+      if (isPdf) {
+        directPdfParsedData = await _pdfService.parseInvoiceFromBytes(
+          fileBytes,
+          filename: fileName,
+        );
+      }
+
+      if (extension == 'json') {
+        parsedData = _parseAliExpressJsonFile(fileBytes);
+      } else if (extension == 'html' || extension == 'htm') {
+        parsedData = _parseAliExpressHtmlFile(fileBytes);
+      } else if (directPdfParsedData != null &&
+          directPdfParsedData.lineItems.isNotEmpty &&
+          _looksLikeAliExpressInvoice(directPdfParsedData,
+              fileName: fileName)) {
+        parsedData = directPdfParsedData;
+      } else if (_useVeryfi) {
+        // Use Veryfi for PDF
+        parsedData = await _processWithVeryfi(fileBytes, fileName);
+        parsedData = _mergeLineItemMedia(parsedData, directPdfParsedData);
       } else {
-        // Local PDF processing
-        if (file.bytes != null) {
-          // Web platform - use bytes
-          debugPrint('📄 PDF picked (web): ${file.name}');
-          parsedData = await _pdfService.parseInvoiceFromBytes(file.bytes!,
-              filename: file.name);
-        } else if (file.path != null && !kIsWeb) {
-          // Native platform - use path
-          debugPrint('📄 PDF picked (native): ${file.path}');
-          parsedData = await _pdfService.parseInvoiceFromPDF(file.path!);
+        if (directPdfParsedData != null &&
+            directPdfParsedData.lineItems.isNotEmpty) {
+          parsedData = directPdfParsedData;
         } else {
-          throw Exception('No se pudo acceder al archivo PDF');
+          debugPrint('📄 PDF picked: $fileName');
+          parsedData = await _pdfService.parseInvoiceFromBytes(fileBytes,
+              filename: fileName);
         }
       }
 
@@ -2734,28 +3202,29 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       String? matchedSupplierId;
       shared_supplier.Supplier? matchedSupplier;
 
-      if (parsedData.supplierName != null) {
-        matchedSupplier = await _matchSupplier(parsedData.supplierName!);
-        if (matchedSupplier != null) {
-          matchedSupplierName = matchedSupplier.name;
-          matchedSupplierId = matchedSupplier.id;
-          parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
-          debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
-        } else {
-          // If supplier not found in DB, clear it to avoid phantom suppliers
-          matchedSupplierName = null;
-          debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
-          baseParsedData = ParsedInvoice(
-            rut: parsedData.rut,
-            invoiceNumber: parsedData.invoiceNumber,
-            date: parsedData.date,
-            total: parsedData.total,
-            supplierName: null, // Clear supplier name
-            lineItems: parsedData.lineItems,
-            rawText: parsedData.rawText,
-          );
-          parsedData = baseParsedData;
-        }
+      matchedSupplier = await _matchSupplierForInvoice(
+        parsedData,
+        fileName: fileName,
+      );
+      if (matchedSupplier != null) {
+        matchedSupplierName = matchedSupplier.name;
+        matchedSupplierId = matchedSupplier.id;
+        parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+        debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
+      } else if (parsedData.supplierName != null) {
+        // If supplier not found in DB, clear it to avoid phantom suppliers
+        matchedSupplierName = null;
+        debugPrint('⚠️ Supplier not found in DB, clearing OCR result');
+        baseParsedData = ParsedInvoice(
+          rut: parsedData.rut,
+          invoiceNumber: parsedData.invoiceNumber,
+          date: parsedData.date,
+          total: parsedData.total,
+          supplierName: null, // Clear supplier name
+          lineItems: parsedData.lineItems,
+          rawText: parsedData.rawText,
+        );
+        parsedData = baseParsedData;
       }
 
       setState(() {
@@ -2769,19 +3238,335 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (!widget.showPreview) {
         await _handleUseParsedData(parsedData);
       }
-    } catch (e) {
-      debugPrint('❌ PDF processing error: $e');
-      final errorMsg = _formatError(e);
+  }
 
-      setState(() {
-        _errorMessage = errorMsg;
-        _isProcessing = false;
-      });
+  void _handleInvoiceFileProcessingError(Object error) {
+    debugPrint('❌ PDF processing error: $error');
+    final errorMsg = _formatError(error);
 
-      if (widget.onError != null) {
-        widget.onError!(errorMsg);
+    setState(() {
+      _errorMessage = errorMsg;
+      _isProcessing = false;
+      _isDraggingInvoiceFile = false;
+    });
+
+    if (widget.onError != null) {
+      widget.onError!(errorMsg);
+    }
+  }
+
+  String _dropFileName(DropItem file) {
+    final name = file.name.trim();
+    if (name.isNotEmpty) return name;
+    return file.path.split(RegExp(r'[/\\]')).last;
+  }
+
+  String _fileExtension(String fileName, {String? fallback}) {
+    final fallbackText = fallback?.trim().toLowerCase();
+    final dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex >= 0 && dotIndex < fileName.length - 1) {
+      return fileName.substring(dotIndex + 1).toLowerCase();
+    }
+    return fallbackText ?? '';
+  }
+
+  bool _isSupportedInvoiceFileExtension(String extension) {
+    return const {'pdf', 'json', 'html', 'htm'}.contains(extension);
+  }
+
+  Future<Uint8List> _readPickedFileBytes(PlatformFile file) async {
+    if (file.bytes != null) return file.bytes!;
+    if (file.path != null && !kIsWeb) {
+      return File(file.path!).readAsBytes();
+    }
+    throw Exception('No se pudo acceder al archivo seleccionado');
+  }
+
+  ParsedInvoice _parseAliExpressJsonFile(Uint8List bytes) {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) {
+      throw Exception('El JSON de AliExpress no tiene formato de factura');
+    }
+    return _parseAliExpressInvoiceMap(Map<String, dynamic>.from(decoded));
+  }
+
+  ParsedInvoice _parseAliExpressHtmlFile(Uint8List bytes) {
+    final html = utf8.decode(bytes, allowMalformed: true);
+    final jsonScript = RegExp(
+      '<script[^>]+type=["\\\']application/json["\\\'][^>]+id=["\\\']aliexpress-invoice-data["\\\'][^>]*>(.*?)</script>',
+      caseSensitive: false,
+      dotAll: true,
+    ).firstMatch(html);
+    if (jsonScript != null) {
+      final decoded =
+          jsonDecode(_decodeHtmlEntities(jsonScript.group(1) ?? ''));
+      if (decoded is Map) {
+        return _parseAliExpressInvoiceMap(Map<String, dynamic>.from(decoded));
       }
     }
+
+    return _parseAliExpressInvoiceHtml(html);
+  }
+
+  ParsedInvoice _parseAliExpressInvoiceMap(Map<String, dynamic> invoice) {
+    DateTime? parseDate(dynamic value) {
+      final text = value?.toString().trim();
+      if (text == null || text.isEmpty) return null;
+      return DateTime.tryParse(text);
+    }
+
+    double? parseNumber(dynamic value) {
+      if (value is num) return value.toDouble();
+      final text = value?.toString().trim();
+      if (text == null || text.isEmpty) return null;
+      return double.tryParse(text.replaceAll('.', '').replaceAll(',', '.')) ??
+          double.tryParse(text);
+    }
+
+    final items =
+        (invoice['items'] as List? ?? const []).whereType<Map>().map((raw) {
+      final item = Map<String, dynamic>.from(raw);
+      final description = item['description']?.toString().trim();
+      return ParsedLineItem(
+        description: description == null || description.isEmpty
+            ? 'AliExpress item'
+            : description,
+        sku: item['sku']?.toString().trim(),
+        rawRowText: [
+          item['description'],
+          item['originalDescription'] == null
+              ? null
+              : 'ORIGINAL_TITLE: ${item['originalDescription']}',
+          item['productUrl'],
+          item['imageUrl'] == null ? null : 'IMAGE_URL: ${item['imageUrl']}',
+        ].whereType<Object>().join('\n'),
+        imageUrl: item['imageUrl']?.toString().trim(),
+        productUrl: item['productUrl']?.toString().trim(),
+        quantity: parseNumber(item['quantity']),
+        unitPrice: parseNumber(item['unitPrice']),
+        total: parseNumber(item['total']),
+      );
+    }).toList(growable: false);
+
+    final supplierName = invoice['supplierName']?.toString().trim();
+    return ParsedInvoice(
+      invoiceNumber: invoice['orderNumber']?.toString().trim(),
+      date: parseDate(invoice['orderDate']),
+      total: parseNumber(invoice['total']),
+      supplierName: supplierName == null || supplierName.isEmpty
+          ? 'AliExpress Marketplace'
+          : supplierName,
+      lineItems: items,
+      rawText: jsonEncode(invoice),
+    );
+  }
+
+  ParsedInvoice _parseAliExpressInvoiceHtml(String html) {
+    String? firstText(RegExp pattern) {
+      final value =
+          _decodeHtmlEntities(pattern.firstMatch(html)?.group(1) ?? '').trim();
+      return value.isEmpty ? null : value;
+    }
+
+    double? parseMoney(String? value) {
+      if (value == null || value.trim().isEmpty) return null;
+      final numeric = value.replaceAll(RegExp(r'[^0-9,\.]'), '').trim();
+      if (numeric.isEmpty) return null;
+      return double.tryParse(
+              numeric.replaceAll('.', '').replaceAll(',', '.')) ??
+          double.tryParse(numeric);
+    }
+
+    final itemRows = RegExp(
+      r'<tr>\s*<td class="index-cell">.*?</tr>',
+      caseSensitive: false,
+      dotAll: true,
+    )
+        .allMatches(html)
+        .map((match) => match.group(0) ?? '')
+        .where((row) => row.contains('article-cell'));
+
+    final items = <ParsedLineItem>[];
+    for (final row in itemRows) {
+      final imageUrl = RegExp(
+        r'<img[^>]+class="item-image"[^>]+src="([^"]+)"',
+        caseSensitive: false,
+      ).firstMatch(row)?.group(1);
+      final description = _firstTextIn(
+        row,
+        RegExp(r'<strong>(.*?)</strong>', caseSensitive: false, dotAll: true),
+      );
+      final sku = _firstTextIn(
+        row,
+        RegExp(r'SKU:\s*([^<\n]+)', caseSensitive: false),
+      );
+      final originalDescription = _firstTextIn(
+        row,
+        RegExp(r'ORIGINAL_TITLE:\s*([^<]+)', caseSensitive: false),
+      );
+      final productUrl =
+          RegExp(r'PRODUCT_URL:\s*(https?://[^<\s]+)', caseSensitive: false)
+              .firstMatch(row)
+              ?.group(1);
+      final cells = RegExp(
+        r'<td[^>]*class="numeric"[^>]*>(.*?)</td>',
+        caseSensitive: false,
+        dotAll: true,
+      ).allMatches(row).map((cell) => _stripHtml(cell.group(1) ?? '')).toList();
+
+      if ((description ?? '').isEmpty) continue;
+      items.add(ParsedLineItem(
+        description: description!,
+        sku: sku,
+        rawRowText: [
+          description,
+          originalDescription == null
+              ? null
+              : 'ORIGINAL_TITLE: $originalDescription',
+          productUrl,
+          imageUrl == null ? null : 'IMAGE_URL: $imageUrl',
+        ].whereType<Object>().join('\n'),
+        imageUrl: imageUrl == null ? null : _decodeHtmlEntities(imageUrl),
+        productUrl:
+            productUrl == null ? null : _decodeHtmlEntities(productUrl),
+        quantity: cells.isNotEmpty ? parseMoney(cells[0]) : null,
+        unitPrice: cells.length > 1 ? parseMoney(cells[1]) : null,
+        total: cells.length > 2 ? parseMoney(cells[2]) : null,
+      ));
+    }
+
+    return ParsedInvoice(
+      invoiceNumber: firstText(RegExp(
+        r'<strong>#\s*([^<]+)</strong>',
+        caseSensitive: false,
+        dotAll: true,
+      )),
+      supplierName: 'AliExpress Marketplace',
+      lineItems: items,
+      rawText: _stripHtml(html),
+    );
+  }
+
+  ParsedInvoice _mergeLineItemMedia(
+    ParsedInvoice primary,
+    ParsedInvoice? mediaSource,
+  ) {
+    if (mediaSource == null || mediaSource.lineItems.isEmpty) return primary;
+
+    final updatedItems = <ParsedLineItem>[];
+    var changed = false;
+
+    for (var index = 0; index < primary.lineItems.length; index++) {
+      final item = primary.lineItems[index];
+      final source = index < mediaSource.lineItems.length
+          ? mediaSource.lineItems[index]
+          : _matchMediaLineItem(item, mediaSource.lineItems);
+      if (source == null) {
+        updatedItems.add(item);
+        continue;
+      }
+
+      final imageUrl = _firstNonEmpty(item.imageUrl, source.imageUrl);
+      final productUrl = _firstNonEmpty(item.productUrl, source.productUrl);
+      final rawRowText = _mergeRawRowText(item.rawRowText, source.rawRowText);
+      final itemChanged = imageUrl != item.imageUrl ||
+          productUrl != item.productUrl ||
+          rawRowText != item.rawRowText;
+
+      updatedItems.add(itemChanged
+          ? item.copyWith(
+              imageUrl: imageUrl,
+              productUrl: productUrl,
+              rawRowText: rawRowText,
+            )
+          : item);
+      changed = changed || itemChanged;
+    }
+
+    if (!changed) return primary;
+    return primary.copyWith(
+      lineItems: updatedItems,
+      rawText: _mergeRawRowText(primary.rawText, mediaSource.rawText),
+    );
+  }
+
+  ParsedLineItem? _matchMediaLineItem(
+    ParsedLineItem item,
+    List<ParsedLineItem> sources,
+  ) {
+    final sku = item.sku?.trim().toLowerCase();
+    final itemIds = _extractAliExpressItemIds(
+      '${item.description}\n${item.rawRowText ?? ''}\n${item.productUrl ?? ''}',
+    );
+    for (final source in sources) {
+      final sourceSku = source.sku?.trim().toLowerCase();
+      if (sku != null && sku.isNotEmpty && sourceSku == sku) return source;
+      final sourceIds = _extractAliExpressItemIds(
+        '${source.description}\n${source.rawRowText ?? ''}\n${source.productUrl ?? ''}',
+      );
+      if (itemIds.intersection(sourceIds).isNotEmpty) return source;
+    }
+    return null;
+  }
+
+  Set<String> _extractAliExpressItemIds(String value) {
+    final ids = <String>{};
+    final patterns = [
+      RegExp(r'item\s*id\s*:?\s*(\d{8,})', caseSensitive: false),
+      RegExp(r'itemId=(\d{8,})', caseSensitive: false),
+      RegExp(r'/item/(\d{8,})', caseSensitive: false),
+      RegExp(r'productId=(\d{8,})', caseSensitive: false),
+    ];
+    for (final pattern in patterns) {
+      for (final match in pattern.allMatches(value)) {
+        final id = match.group(1);
+        if (id != null && id.isNotEmpty) ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  String? _firstNonEmpty(String? preferred, String? fallback) {
+    final preferredText = preferred?.trim();
+    if (preferredText != null && preferredText.isNotEmpty) return preferredText;
+    final fallbackText = fallback?.trim();
+    if (fallbackText != null && fallbackText.isNotEmpty) return fallbackText;
+    return null;
+  }
+
+  String? _mergeRawRowText(String? first, String? second) {
+    final firstText = first?.trim();
+    final secondText = second?.trim();
+    if (firstText == null || firstText.isEmpty) {
+      return secondText == null || secondText.isEmpty ? null : secondText;
+    }
+    if (secondText == null || secondText.isEmpty) return firstText;
+    if (firstText.contains(secondText)) return firstText;
+    if (secondText.contains(firstText)) return secondText;
+    return '$firstText\n$secondText';
+  }
+
+  String? _firstTextIn(String html, RegExp pattern) {
+    final value = pattern.firstMatch(html)?.group(1);
+    if (value == null) return null;
+    final decoded = _decodeHtmlEntities(_stripHtml(value)).trim();
+    return decoded.isEmpty ? null : decoded;
+  }
+
+  String _stripHtml(String value) {
+    return _decodeHtmlEntities(value
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim());
+  }
+
+  String _decodeHtmlEntities(String value) {
+    return value
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'");
   }
 
   /// Process document bytes with Veryfi cloud OCR
@@ -2896,9 +3681,13 @@ class _NewProductEntry {
   ProductBrand? selectedBrand;
   String? imageUrl;
   String? imageUrlOptimized;
+  Uint8List? imageBytes;
+  String? imageFileName;
   bool isUploadingImage = false;
   bool isHoveringImage = false;
   bool isWorkshopConsumable = false;
+  bool isCheckingSimilar = false;
+  List<ProductDuplicateCandidate> similarCandidates = [];
 
   _NewProductEntry({
     required this.originalItem,
@@ -2911,7 +3700,24 @@ class _NewProductEntry {
         costController =
             TextEditingController(text: _calculateDefaultCost(originalItem)),
         priceController =
-            TextEditingController(text: _calculateDefaultPrice(originalItem));
+            TextEditingController(text: _calculateDefaultPrice(originalItem)) {
+    final sourceImageUrl = originalItem.imageUrl?.trim();
+    if (sourceImageUrl != null && sourceImageUrl.isNotEmpty) {
+      imageUrl = sourceImageUrl;
+      imageUrlOptimized = sourceImageUrl;
+      imageFileName = _imageFileNameFromUrl(sourceImageUrl);
+    }
+  }
+
+  static String? _imageFileNameFromUrl(String url) {
+    final uri = Uri.tryParse(url);
+    final segment = uri?.pathSegments.isNotEmpty == true
+        ? uri!.pathSegments.last
+        : 'aliexpress-product-image.jpg';
+    final clean = segment.split('?').first.trim();
+    if (clean.isEmpty) return 'aliexpress-product-image.jpg';
+    return clean.contains('.') ? clean : '$clean.jpg';
+  }
 
   static String _calculateDefaultCost(ParsedLineItem item) {
     final qty = item.quantity ?? 1;

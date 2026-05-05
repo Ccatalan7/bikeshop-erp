@@ -554,14 +554,27 @@ class DatabaseService extends ChangeNotifier {
           ? _client.from(table).select()
           : _client.from(table).select(selectColumns);
 
+      var hasAppliedFilter = false;
+
       // For every search token, it MUST be present in AT LEAST ONE of the columns
       for (final term in searchTerms) {
-        final safeTerm = term.replaceAll('%', '\\%').replaceAll('_', '\\_');
+        final normalizedTerm = term
+            .trim()
+            .replaceAll(RegExp(r'[,()]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        if (normalizedTerm.isEmpty) continue;
+
+        final safeTerm =
+            normalizedTerm.replaceAll('%', '\\%').replaceAll('_', '\\_');
         // e.g. "name.ilike.%term%,sku.ilike.%term%"
         final orFilter =
             columns.map((col) => '$col.ilike.%$safeTerm%').join(',');
         query = query.or(orFilter);
+        hasAppliedFilter = true;
       }
+
+      if (!hasAppliedFilter) return [];
 
       final data = await query.limit(limit);
       final rows = List<Map<String, dynamic>>.from(data);

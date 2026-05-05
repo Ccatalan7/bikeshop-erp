@@ -51,6 +51,8 @@ class ParsedLineItem {
   final String description;
   final String? sku;
   final String? rawRowText;
+  final String? imageUrl;
+  final String? productUrl;
   final double? quantity;
   final double? unitPrice;
   final double? total;
@@ -70,6 +72,8 @@ class ParsedLineItem {
     required this.description,
     this.sku,
     this.rawRowText,
+    this.imageUrl,
+    this.productUrl,
     this.quantity,
     this.unitPrice,
     this.total,
@@ -89,6 +93,8 @@ class ParsedLineItem {
     String? description,
     String? sku,
     String? rawRowText,
+    String? imageUrl,
+    String? productUrl,
     double? quantity,
     double? unitPrice,
     double? total,
@@ -106,6 +112,8 @@ class ParsedLineItem {
       description: description ?? this.description,
       sku: sku ?? this.sku,
       rawRowText: rawRowText ?? this.rawRowText,
+      imageUrl: imageUrl ?? this.imageUrl,
+      productUrl: productUrl ?? this.productUrl,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       total: total ?? this.total,
@@ -125,6 +133,38 @@ class ParsedLineItem {
   String toString() {
     return 'LineItem($description, sku: $sku, qty: $quantity, price: $unitPrice, total: $total, discount: $discount, rate: $discountRate, inferred: $discountInferred, adjusted: $wasAutoAdjusted, exists: $existsInDatabase)';
   }
+}
+
+class _GeneratedAliExpressAmountRow {
+  final int rowNumber;
+  final double? quantity;
+  final double? unitPrice;
+  final double? total;
+  final String rawText;
+
+  const _GeneratedAliExpressAmountRow({
+    required this.rowNumber,
+    required this.quantity,
+    required this.unitPrice,
+    required this.total,
+    required this.rawText,
+  });
+}
+
+class _GeneratedAliExpressProductBlock {
+  final String description;
+  final String? sku;
+  final String? imageUrl;
+  final String? productUrl;
+  final String rawText;
+
+  const _GeneratedAliExpressProductBlock({
+    required this.description,
+    this.sku,
+    this.imageUrl,
+    this.productUrl,
+    required this.rawText,
+  });
 }
 
 /// Service to parse invoice data from OCR text
@@ -216,6 +256,17 @@ class InvoiceParserService {
   /// Extract invoice/folio number
   /// Patterns: "FOLIO: 12345", "N° 12345", "Factura 12345", "Pedido # \n 262040"
   String? _extractInvoiceNumber(List<String> lines) {
+    for (final line in lines) {
+      final aliExpressMatch = RegExp(r'^#\s*(AE-[A-Z0-9\-]+)$',
+              caseSensitive: false)
+          .firstMatch(line.trim());
+      if (aliExpressMatch != null) {
+        final number = aliExpressMatch.group(1)!.trim();
+        print('✅ Found invoice number (AliExpress): $number');
+        return number;
+      }
+    }
+
     // Pattern 1: Number on same line
     final sameLinePatterns = [
       RegExp(r'(?:FOLIO|Folio|folio)[:\s]+(\d+)', caseSensitive: false),
@@ -397,8 +448,14 @@ class InvoiceParserService {
       final lastComma = cleaned.lastIndexOf(',');
 
       if (lastDot > lastComma) {
-        // Format: 12,345.67 (US format)
-        cleaned = cleaned.replaceAll(',', '');
+        if (lastComma < 0 &&
+            RegExp(r'^\d{1,3}(?:\.\d{3})+$').hasMatch(cleaned)) {
+          // Format: 12.345 (Chilean thousands, no decimals)
+          cleaned = cleaned.replaceAll('.', '');
+        } else {
+          // Format: 12,345.67 (US format)
+          cleaned = cleaned.replaceAll(',', '');
+        }
       } else if (lastComma > lastDot) {
         // Format: 12.345,67 (Chilean format)
         cleaned = cleaned.replaceAll('.', '').replaceAll(',', '.');
@@ -438,6 +495,13 @@ class InvoiceParserService {
   /// For purchase orders: Supplier is usually at the BOTTOM (sender info)
   /// For invoices: Supplier is usually at the TOP
   String? _extractSupplierNameFromLines(List<String> lines) {
+    for (final line in lines) {
+      if (line.toUpperCase().contains('ALIEXPRESS MARKETPLACE')) {
+        print('✅ Found supplier name (AliExpress): AliExpress Marketplace');
+        return 'AliExpress Marketplace';
+      }
+    }
+
     // Strategy 1: Look for "Mauricio Kishinevsky" or company patterns at bottom
     for (var i = lines.length - 1; i >= 0 && i > lines.length - 20; i--) {
       final text = lines[i].trim();
@@ -516,6 +580,12 @@ class InvoiceParserService {
 
     print('🔍 Extracting line items from ${lines.length} lines...');
 
+    final aliExpressItems = _extractGeneratedAliExpressLineItems(lines);
+    if (aliExpressItems.isNotEmpty) {
+      print('📦 Extracted ${aliExpressItems.length} AliExpress generated line items');
+      return aliExpressItems;
+    }
+
     // Find table boundaries
     int startIndex = -1;
     int endIndex = lines.length;
@@ -558,16 +628,48 @@ class InvoiceParserService {
         productCount++;
         final code = productMatch.group(1)!;
         var description = productMatch.group(2)!;
+        String? imageUrl;
+        String? productUrl;
+        final rawRowBuffer = StringBuffer(line);
 
         print('📦 Found product code: [$code] $description at line $i');
 
         // Collect description lines (until we hit a barcode-like number or "Unidades")
         i++;
         int safetyCounter = 0;
-        const maxDescLines = 5; // Safety: Max 5 description lines per product
+        const maxDescLines = 10; // URLs from generated invoices may wrap.
 
         while (i < endIndex && safetyCounter < maxDescLines) {
           final descLine = lines[i].trim();
+          rawRowBuffer.writeln(descLine);
+
+          if (_isMetadataLine(descLine, 'ORIGINAL_TITLE')) {
+            i++;
+            safetyCounter++;
+            continue;
+          }
+
+          final extractedImageUrl = _extractMetadataUrl(descLine, 'IMAGE_URL');
+          if (extractedImageUrl != null) {
+            imageUrl = extractedImageUrl;
+            i++;
+            safetyCounter++;
+            continue;
+          }
+
+          final extractedProductUrl =
+              _extractMetadataUrl(descLine, 'PRODUCT_URL') ??
+                  _extractAliExpressProductUrl(descLine);
+          if (extractedProductUrl != null) {
+            productUrl = extractedProductUrl;
+            i++;
+            safetyCounter++;
+            continue;
+          }
+
+          if (_looksLikeQuantityBeforeUnit(lines, i, endIndex)) {
+            break;
+          }
 
           // Stop if we hit quantity-related keywords
           if (descLine.toUpperCase().contains('UNIDADES') ||
@@ -630,7 +732,9 @@ class InvoiceParserService {
           items.add(ParsedLineItem(
             description: description.trim(),
             sku: code,
-            rawRowText: description.trim(),
+            rawRowText: rawRowBuffer.toString().trim(),
+            imageUrl: imageUrl,
+            productUrl: productUrl,
             quantity: quantity,
             unitPrice: unitPrice,
             total: lineTotal,
@@ -648,6 +752,412 @@ class InvoiceParserService {
 
     print('📦 Extracted ${items.length} line items');
     return items;
+  }
+
+  List<ParsedLineItem> _extractGeneratedAliExpressLineItems(
+      List<String> lines) {
+    final looksGenerated = lines.any((line) =>
+            line.toUpperCase().contains('ALIEXPRESS MARKETPLACE') ||
+            line.toUpperCase().contains('FACTURA OCR ALIEXPRESS')) &&
+        lines.any((line) => line.toUpperCase().contains('SKU:')) &&
+        lines.any((line) => line.toUpperCase().contains('IMPORTE'));
+    if (!looksGenerated) return const [];
+
+    final amountRows = _extractGeneratedAliExpressAmountRows(lines);
+    final productBlocks = _extractGeneratedAliExpressProductBlocks(lines);
+    if (productBlocks.isEmpty) return const [];
+
+    final items = <ParsedLineItem>[];
+    for (var i = 0; i < productBlocks.length && i < 100; i++) {
+      final product = productBlocks[i];
+      final amount = i < amountRows.length ? amountRows[i] : null;
+      final description = _cleanGeneratedDescription(product.description);
+      if (description.isEmpty && (product.sku == null || product.sku!.isEmpty)) {
+        continue;
+      }
+
+      items.add(ParsedLineItem(
+        description:
+            description.isEmpty ? product.sku ?? 'AliExpress item' : description,
+        sku: product.sku,
+        rawRowText: [
+          if (amount != null) amount.rawText,
+          product.rawText,
+        ].join('\n').trim(),
+        imageUrl: product.imageUrl,
+        productUrl: product.productUrl,
+        quantity: amount?.quantity,
+        unitPrice: amount?.unitPrice,
+        total: amount?.total,
+      ));
+    }
+
+    return items;
+  }
+
+  List<_GeneratedAliExpressAmountRow> _extractGeneratedAliExpressAmountRows(
+    List<String> lines,
+  ) {
+    var tableStart = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].toUpperCase().trim() == 'IMPORTE') {
+        tableStart = i + 1;
+        break;
+      }
+    }
+    if (tableStart < 0) return const [];
+
+    var tableEnd = lines.length;
+    for (var i = tableStart; i < lines.length; i++) {
+      final upper = lines[i].toUpperCase();
+      if (upper.contains('SUBTOTAL') || upper == 'TOTAL') {
+        tableEnd = i;
+        break;
+      }
+    }
+
+    final rows = <_GeneratedAliExpressAmountRow>[];
+    var expectedIndex = 1;
+    var cursor = tableStart;
+
+    while (cursor < tableEnd && expectedIndex <= 100) {
+      final rowStart = _findGeneratedAmountRowStart(
+        lines,
+        cursor,
+        tableEnd,
+        expectedIndex,
+      );
+      if (rowStart < 0) break;
+
+      final nextRowStart = _findGeneratedAmountRowStart(
+        lines,
+        rowStart + 1,
+        tableEnd,
+        expectedIndex + 1,
+      );
+      final rowEnd = nextRowStart < 0 ? tableEnd : nextRowStart;
+      final row = _parseGeneratedAliExpressAmountRow(
+        lines.sublist(rowStart, rowEnd),
+        expectedIndex,
+      );
+      if (row != null) rows.add(row);
+
+      cursor = rowEnd;
+      expectedIndex++;
+    }
+
+    return rows;
+  }
+
+  int _findGeneratedAmountRowStart(
+    List<String> lines,
+    int start,
+    int end,
+    int expectedIndex,
+  ) {
+    final expected = expectedIndex.toString();
+    for (var i = start; i < end; i++) {
+      if (lines[i].trim() != expected) continue;
+      final lookaheadEnd = (i + 12).clamp(0, end).toInt();
+      final window = lines.sublist(i + 1, lookaheadEnd);
+      final hasQuantity =
+          window.any((line) => _looksLikeGeneratedPlainNumber(line.trim()));
+      final amountCount = window
+          .where((line) => _parseSignedGeneratedMoneyLine(line) != null)
+          .length;
+      if (hasQuantity && amountCount >= 2) return i;
+    }
+    return -1;
+  }
+
+  _GeneratedAliExpressAmountRow? _parseGeneratedAliExpressAmountRow(
+    List<String> row,
+    int rowNumber,
+  ) {
+    if (row.isEmpty) return null;
+
+    final rawRowBuffer = StringBuffer();
+    final amounts = <double>[];
+    final quantityCandidates = <double>[];
+    double? quantity;
+
+    for (var i = 0; i < row.length; i++) {
+      final line = row[i].trim();
+      if (line.isEmpty) continue;
+      rawRowBuffer.writeln(line);
+      if (i == 0 && RegExp(r'^\d{1,3}$').hasMatch(line)) continue;
+
+      final amount = _parseSignedGeneratedMoneyLine(line);
+      if (amount != null) {
+        quantity ??= quantityCandidates.isEmpty ? null : quantityCandidates.last;
+        amounts.add(amount);
+        continue;
+      }
+      if (line == '\$' && i + 1 < row.length) {
+        final splitAmount = _parseSignedAmount(row[i + 1]);
+        if (splitAmount != null) {
+          quantity ??=
+              quantityCandidates.isEmpty ? null : quantityCandidates.last;
+          amounts.add(splitAmount);
+          i++;
+          continue;
+        }
+      }
+
+      if (_looksLikeGeneratedPlainNumber(line)) {
+        final parsedQuantity = _parseAmount(line);
+        if (parsedQuantity != null && parsedQuantity > 0) {
+          quantityCandidates.add(parsedQuantity);
+        }
+      }
+    }
+
+    quantity ??= quantityCandidates.isEmpty ? null : quantityCandidates.last;
+    if (quantity == null && amounts.isEmpty) return null;
+    return _GeneratedAliExpressAmountRow(
+      rowNumber: rowNumber,
+      quantity: quantity,
+      unitPrice: amounts.isNotEmpty ? amounts.first : null,
+      total: amounts.length > 1 ? amounts[1] : null,
+      rawText: rawRowBuffer.toString().trim(),
+    );
+  }
+
+  List<_GeneratedAliExpressProductBlock> _extractGeneratedAliExpressProductBlocks(
+    List<String> lines,
+  ) {
+    final blocks = <_GeneratedAliExpressProductBlock>[];
+    var i = 0;
+
+    while (i < lines.length && blocks.length < 100) {
+      if (!_isGeneratedDescriptionStart(lines, i)) {
+        i++;
+        continue;
+      }
+
+      final skuIndex = _findGeneratedSkuLine(lines, i + 1, maxDistance: 8);
+      if (skuIndex < 0) {
+        i++;
+        continue;
+      }
+
+      final descriptionLines = <String>[];
+      final rawRowBuffer = StringBuffer();
+      for (var j = i; j < skuIndex; j++) {
+        final line = lines[j].trim();
+        if (_isSkippableGeneratedDescriptionPart(line)) continue;
+        descriptionLines.add(line);
+        rawRowBuffer.writeln(line);
+      }
+
+      final skuLine = lines[skuIndex].trim();
+      rawRowBuffer.writeln(skuLine);
+      final sku = RegExp(r'^SKU\s*:\s*(\S+)', caseSensitive: false)
+          .firstMatch(skuLine)
+          ?.group(1)
+          ?.trim();
+
+      String? imageUrl;
+      String? productUrl;
+      var cursor = skuIndex + 1;
+      while (cursor < lines.length) {
+        if (_isGeneratedDescriptionStart(lines, cursor)) break;
+
+        final line = lines[cursor].trim();
+        if (line.isEmpty) {
+          cursor++;
+          continue;
+        }
+
+        rawRowBuffer.writeln(line);
+        final extractedImageUrl = _extractMetadataUrl(line, 'IMAGE_URL');
+        if (extractedImageUrl != null) {
+          imageUrl = extractedImageUrl;
+          cursor++;
+          continue;
+        }
+
+        final extractedProductUrl =
+            _extractMetadataUrl(line, 'PRODUCT_URL') ??
+                _extractAliExpressProductUrl(line);
+        if (extractedProductUrl != null) {
+          productUrl = extractedProductUrl;
+          cursor++;
+          continue;
+        }
+
+        cursor++;
+      }
+
+      final description =
+          _cleanGeneratedDescription(descriptionLines.join(' '));
+      blocks.add(_GeneratedAliExpressProductBlock(
+        description: description,
+        sku: sku,
+        imageUrl: imageUrl,
+        productUrl: productUrl,
+        rawText: rawRowBuffer.toString().trim(),
+      ));
+      i = cursor;
+    }
+
+    return blocks;
+  }
+
+  bool _isGeneratedDescriptionStart(List<String> lines, int index) {
+    if (index < 0 || index >= lines.length) return false;
+    final line = lines[index].trim();
+    if (_isSkippableGeneratedProductLine(line)) return false;
+    return _findGeneratedSkuLine(lines, index + 1, maxDistance: 8) > index;
+  }
+
+  int _findGeneratedSkuLine(
+    List<String> lines,
+    int start, {
+    required int maxDistance,
+  }) {
+    final end = (start + maxDistance).clamp(0, lines.length).toInt();
+    for (var i = start; i < end; i++) {
+      if (RegExp(r'^SKU\s*:', caseSensitive: false).hasMatch(lines[i].trim())) {
+        return i;
+      }
+      if (i > start && _isGeneratedDescriptionStartBoundary(lines[i])) break;
+    }
+    return -1;
+  }
+
+  bool _isGeneratedDescriptionStartBoundary(String line) {
+    final upper = line.trim().toUpperCase();
+    return upper.startsWith('SUBTOTAL') ||
+        upper == 'TOTAL' ||
+        upper.startsWith('PAGO REALIZADO') ||
+        upper.startsWith('SALDO ADEUDADO');
+  }
+
+  bool _isSkippableGeneratedDescriptionPart(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return true;
+    if (trimmed.toUpperCase() == 'OR') return true;
+    if (_isGeneratedInvoiceNoiseLine(trimmed)) return true;
+    if (_looksLikeGeneratedAmount(trimmed)) return true;
+    if (_looksLikeGeneratedPlainNumber(trimmed)) return true;
+    if (_isMetadataLine(trimmed, 'ORIGINAL_TITLE') ||
+        _isMetadataLine(trimmed, 'PRODUCT_URL') ||
+        _isMetadataLine(trimmed, 'IMAGE_URL')) {
+      return true;
+    }
+    if (_extractAliExpressProductUrl(trimmed) != null) return true;
+    if (RegExp(r'^SKU\s*:', caseSensitive: false).hasMatch(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _isSkippableGeneratedProductLine(String line) {
+    final trimmed = line.trim();
+    if (_isSkippableGeneratedDescriptionPart(trimmed)) return true;
+    return !_looksLikeGeneratedDescriptionLine(trimmed);
+  }
+
+  bool _looksLikeGeneratedPlainNumber(String line) {
+    return RegExp(r'^\d{1,4}(?:[\.,]\d{1,2})?$').hasMatch(line.trim());
+  }
+
+  double? _parseSignedAmount(String amountStr) {
+    final amount = _parseAmount(amountStr);
+    if (amount == null) return null;
+    final isNegative = RegExp(r'[-−–]').hasMatch(amountStr);
+    return isNegative ? -amount : amount;
+  }
+
+  double? _parseSignedGeneratedMoneyLine(String line) {
+    final trimmed = line.trim();
+    if (!trimmed.contains('\$')) return null;
+    return _parseSignedAmount(trimmed);
+  }
+
+  bool _looksLikeGeneratedAmount(String line) {
+    return _parseSignedGeneratedMoneyLine(line) != null;
+  }
+
+  bool _isGeneratedInvoiceNoiseLine(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return true;
+    final upper = trimmed.toUpperCase();
+    return upper == '#' ||
+        upper == 'IMAGEN' ||
+        upper == 'ARTÍCULO & DESCRIPCIÓN' ||
+        upper == 'ARTICULO & DESCRIPCION' ||
+        upper == 'CANTIDAD' ||
+        upper == 'TARIFA' ||
+        upper == 'IMPORTE' ||
+        upper == 'UNIDADES' ||
+        upper == '\$' ||
+        upper.startsWith('PEDIDO ') ||
+        upper.startsWith('FACTURA ') ||
+        upper.startsWith('FECHA') ||
+        upper.startsWith('PROVEEDOR') ||
+        upper.startsWith('PAGO REALIZADO') ||
+        upper.startsWith('SALDO ') ||
+        upper.startsWith('SUBTOTAL') ||
+        upper == 'TOTAL';
+  }
+
+  bool _looksLikeGeneratedDescriptionLine(String line) {
+    final trimmed = _cleanGeneratedDescription(line);
+    if (trimmed.length < 8) return false;
+    if (RegExp(r'^[A-Z0-9\-]{2,10}$').hasMatch(trimmed)) return false;
+    if (RegExp(r'^AE-[A-Z0-9\-]+$', caseSensitive: false).hasMatch(trimmed)) {
+      return false;
+    }
+    return true;
+  }
+
+  String _cleanGeneratedDescription(String value) {
+    return value
+        .replaceAll(RegExp(r'^\s*\[\d{8,}\]\s*'), '')
+        .replaceAll(RegExp(r'\s*SKU\s*:\s*\S+.*$',
+            caseSensitive: false, dotAll: true), '')
+        .replaceAll(RegExp(r'\s*Item\s*ID\s*:?\s*\d+.*$',
+            caseSensitive: false, dotAll: true), '')
+        .replaceAll(RegExp(r'\s*ORIGINAL_TITLE\s*:.*$',
+            caseSensitive: false, dotAll: true), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  bool _looksLikeQuantityBeforeUnit(
+      List<String> lines, int index, int endIndex) {
+    final current = lines[index].trim();
+    if (!RegExp(r'^\d{1,4}(?:[\.,]\d{1,2})?$').hasMatch(current)) {
+      return false;
+    }
+    if (index + 1 >= endIndex) return false;
+    return lines[index + 1].toUpperCase().contains('UNIDADES');
+  }
+
+  String? _extractMetadataUrl(String line, String key) {
+    final match = RegExp('^$key\\s*:\\s*(\\S+)', caseSensitive: false)
+        .firstMatch(line.trim());
+    final value = match?.group(1)?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  bool _isMetadataLine(String line, String key) {
+    return RegExp('^$key\\s*:', caseSensitive: false).hasMatch(line.trim());
+  }
+
+  String? _extractAliExpressProductUrl(String line) {
+    final trimmed = line.trim();
+    if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(trimmed)) {
+      return null;
+    }
+    if (!RegExp(r'aliexpress|/item/|itemId=|productId=', caseSensitive: false)
+        .hasMatch(trimmed)) {
+      return null;
+    }
+    return trimmed;
   }
 
   /// Parse receipt (simpler format than invoice)

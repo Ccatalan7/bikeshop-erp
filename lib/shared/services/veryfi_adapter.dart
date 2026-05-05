@@ -455,6 +455,33 @@ class VeryfiAdapter {
       // Get SKU from Veryfi, or try to extract from description if not detected
       var sku = map['sku']?.toString();
       final rawText = map['text']?.toString() ?? '';
+      final urlSearchText = [
+        rawText,
+        desc,
+        map['full_description']?.toString(),
+        map['normalized_description']?.toString(),
+      ]
+          .whereType<String>()
+          .where((value) => value.trim().isNotEmpty)
+          .join('\n');
+      final imageUrl = _extractLineItemUrl(
+        map,
+        urlSearchText,
+        const [
+          'image_url',
+          'imageUrl',
+          'img_url',
+          'thumbnail',
+          'thumbnail_url'
+        ],
+        'IMAGE_URL',
+      );
+      final productUrl = _extractLineItemUrl(
+        map,
+        urlSearchText,
+        const ['product_url', 'productUrl', 'url', 'link'],
+        'PRODUCT_URL',
+      );
 
       if (sku == null || sku.isEmpty) {
         sku = _extractSkuFromDescription(desc);
@@ -609,6 +636,8 @@ class VeryfiAdapter {
         description: desc,
         sku: sku,
         rawRowText: rawText.isNotEmpty ? rawText : null,
+        imageUrl: imageUrl,
+        productUrl: productUrl,
         quantity: qty,
         unitPrice: price,
         total: lineTotal,
@@ -653,6 +682,37 @@ class VeryfiAdapter {
       lineItems: parsedItems,
       rawText: buffer.toString(),
     );
+  }
+
+  static String? _extractLineItemUrl(
+    Map<String, dynamic> map,
+    String rawText,
+    List<String> keys,
+    String textLabel,
+  ) {
+    for (final key in keys) {
+      final value = map[key]?.toString().trim();
+      if (value != null && value.isNotEmpty && value != 'null') {
+        return value;
+      }
+    }
+
+    final match = RegExp('^$textLabel\\s*:\\s*(\\S+)',
+            caseSensitive: false, multiLine: true)
+        .firstMatch(rawText);
+    final value = match?.group(1)?.trim();
+    if (value != null && value.isNotEmpty) return value;
+
+    if (textLabel.toUpperCase() == 'PRODUCT_URL') {
+      final plainUrl = RegExp(r'https?://\S*(?:aliexpress|/item/|itemId=)\S*',
+              caseSensitive: false)
+          .firstMatch(rawText)
+          ?.group(0)
+          ?.trim();
+      if (plainUrl != null && plainUrl.isNotEmpty) return plainUrl;
+    }
+
+    return null;
   }
 }
 

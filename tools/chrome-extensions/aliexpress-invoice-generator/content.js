@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.3.36';
+  const CONTENT_VERSION = '0.3.40';
 
   function getPageMetrics() {
     return {

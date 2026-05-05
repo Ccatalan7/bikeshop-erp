@@ -6,7 +6,8 @@ class Product {
       'id,tenant_id,name,sku,category_id,category_name,supplier_id,'
       'supplier_name,supplier_code,brand_id,brand,model,barcode,price,cost,'
       'inventory_qty,stock_quantity,min_stock_level,max_stock_level,'
-      'image_url,image_url_optimized,warehouse_location,is_active,'
+      'image_url,image_url_optimized,image_fingerprint,image_urls,'
+      'warehouse_location,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
       'component_position,created_at,updated_at';
@@ -286,7 +287,6 @@ class Product {
       'image_url_optimized': imageUrlOptimized,
       'image_fingerprint': imageFingerprint,
       'image_urls': additionalImages,
-      'additional_images': additionalImages,
       'specifications': specifications,
       'tags': tags,
       'warranty_months': warrantyMonths,

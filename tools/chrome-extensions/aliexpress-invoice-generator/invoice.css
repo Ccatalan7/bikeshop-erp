@@ -191,15 +191,25 @@ th {
   width: 35px;
 }
 
-.items-table th:nth-child(3),
-.items-table td:nth-child(3) {
-  width: 60px;
+.items-table th:nth-child(2),
+.items-table td:nth-child(2) {
+  width: 112px;
 }
 
 .items-table th:nth-child(4),
-.items-table td:nth-child(4),
+.items-table td:nth-child(4) {
+  width: 60px;
+}
+
+.items-table th:nth-child(3),
+.items-table td:nth-child(3) {
+  min-width: 270px;
+}
+
 .items-table th:nth-child(5),
-.items-table td:nth-child(5) {
+.items-table td:nth-child(5),
+.items-table th:nth-child(6),
+.items-table td:nth-child(6) {
   width: 70px;
 }
 
@@ -216,30 +226,27 @@ th {
   color: var(--muted);
 }
 
-.article-cell {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  min-height: 98px;
+.image-cell {
+  text-align: center;
+  vertical-align: middle;
 }
 
 .item-image {
   width: 96px;
   height: 96px;
   object-fit: contain;
-  flex: 0 0 96px;
-  display: block;
+  display: inline-block;
   background: #fff;
 }
 
 .item-image-empty {
   width: 96px;
   height: 96px;
-  flex: 0 0 96px;
-  display: block;
+  display: inline-block;
 }
 
 .article-copy {
+  position: relative;
   min-width: 0;
   padding-top: 0;
 }
@@ -247,6 +254,45 @@ th {
 .article-copy strong {
   display: block;
   font-size: 10px;
+}
+
+.ocr-metadata {
+  display: block;
+  margin-top: 2px;
+  max-width: 520px;
+  color: #4b5563;
+  font-size: 6.5px;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+#aliexpress-invoice-data {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  font-size: 1px;
+  line-height: 1px;
+  color: #fff;
+}
+
+.machine-metadata {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  display: block;
+  width: max-content;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  color: #fff;
+  background: #fff;
+  font-size: 1px;
+  line-height: 1px;
+  pointer-events: none;
+  white-space: pre;
 }
 
 .article-copy .muted {
