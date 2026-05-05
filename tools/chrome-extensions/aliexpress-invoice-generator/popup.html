@@ -18,6 +18,38 @@
 
       <section id="status" class="status neutral">Abre una compra u orden de AliExpress y pulsa Extraer.</section>
 
+      <section class="panel bulk-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Bulk desde lista</h2>
+            <p class="helper-text">En Account &gt; Orders, filtra por fecha y genera facturas desde las ordenes cargadas en la lista.</p>
+          </div>
+          <button id="collectBulkButton" type="button" class="secondary-button">Colectar</button>
+        </div>
+        <div class="grid-two">
+          <label>
+            Desde
+            <input id="bulkFromDate" type="date">
+          </label>
+          <label>
+            Hasta
+            <input id="bulkToDate" type="date">
+          </label>
+        </div>
+        <div id="bulkOrdersList" class="bulk-orders-list"></div>
+        <label class="bulk-mode-field">
+          Salida
+          <select id="bulkOutputMode">
+            <option value="separate">Una factura por orden seleccionada</option>
+            <option value="combined">Una factura consolidada</option>
+          </select>
+        </label>
+        <div class="bulk-actions">
+          <button id="downloadBulkJsonButton" type="button" class="secondary-button">JSON bulk</button>
+          <button id="generateBulkButton" type="button" class="primary-button">Generar</button>
+        </div>
+      </section>
+
       <section class="panel ai-panel">
         <div class="section-heading">
           <div>

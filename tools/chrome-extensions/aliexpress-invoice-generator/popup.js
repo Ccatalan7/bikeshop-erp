@@ -8,7 +8,7 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.24';
+  const CONTENT_SCRIPT_VERSION = '0.3.29';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -21,6 +21,8 @@
     tax: null,
     discount: null,
     lastDebug: null,
+    bulkOrders: [],
+    bulkMeta: null,
   };
 
   const el = {
@@ -29,6 +31,13 @@
     generateButton: document.getElementById('generateButton'),
     downloadJsonButton: document.getElementById('downloadJsonButton'),
     copyTextButton: document.getElementById('copyTextButton'),
+    collectBulkButton: document.getElementById('collectBulkButton'),
+    generateBulkButton: document.getElementById('generateBulkButton'),
+    downloadBulkJsonButton: document.getElementById('downloadBulkJsonButton'),
+    bulkFromDate: document.getElementById('bulkFromDate'),
+    bulkToDate: document.getElementById('bulkToDate'),
+    bulkOutputMode: document.getElementById('bulkOutputMode'),
+    bulkOrdersList: document.getElementById('bulkOrdersList'),
     aiExtractButton: document.getElementById('aiExtractButton'),
     saveGeminiKeyButton: document.getElementById('saveGeminiKeyButton'),
     geminiApiKey: document.getElementById('geminiApiKey'),
@@ -47,8 +56,10 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     setDefaultDate();
+    setDefaultBulkDates();
     loadGeminiKey();
     renderItems();
+    renderBulkOrders();
   });
 
   el.extractButton.addEventListener('click', extractCurrentPage);
@@ -62,6 +73,9 @@
   el.generateButton.addEventListener('click', generateInvoice);
   el.downloadJsonButton.addEventListener('click', downloadJson);
   el.copyTextButton.addEventListener('click', copyOcrText);
+  el.collectBulkButton.addEventListener('click', collectBulkOrders);
+  el.generateBulkButton.addEventListener('click', generateBulkInvoices);
+  el.downloadBulkJsonButton.addEventListener('click', downloadBulkJson);
 
   el.itemsList.addEventListener('input', (event) => {
     const row = event.target.closest('[data-index]');
@@ -150,6 +164,8 @@
               return { ok: true, order: await bridge.extractOrder() };
             case 'productMediaRows':
               return { ok: true, media: await bridge.extractProductMediaRows() };
+            case 'ordersList':
+              return { ok: true, result: await bridge.extractOrdersList(requestedPayload || {}) };
             case 'visibleProductImageRects':
               return { ok: true, rects: bridge.visibleProductImageRects ? bridge.visibleProductImageRects() : [] };
             case 'pageMetrics':
@@ -803,6 +819,396 @@
         </div>
       </article>
     `).join('');
+  }
+
+  async function collectBulkOrders() {
+    setStatus('Colectando ordenes cargadas en la lista de AliExpress...', 'neutral');
+    el.collectBulkButton.disabled = true;
+    el.generateBulkButton.disabled = true;
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab || !tab.id) throw new Error('No se encontro una pestana activa.');
+      if (!/^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(tab.url || '')) {
+        throw new Error('Abre Account > Orders en AliExpress antes de colectar.');
+      }
+
+      await ensureFreshContentBridge(tab.id);
+      const response = await executeContentCommand(tab.id, 'ordersList', {
+        fromDate: el.bulkFromDate.value || '',
+        toDate: el.bulkToDate.value || '',
+      });
+
+      if (!response || !response.ok) {
+        throw new Error(response && response.error ? response.error : 'No se pudo colectar la lista de ordenes.');
+      }
+
+      const result = response.result || {};
+      state.bulkMeta = {
+        pageUrl: result.pageUrl || tab.url || '',
+        collectedAt: result.collectedAt || new Date().toISOString(),
+        scannedCount: result.scannedCount || 0,
+        fromDate: result.fromDate || el.bulkFromDate.value || '',
+        toDate: result.toDate || el.bulkToDate.value || '',
+        preload: result.preload || null,
+        warnings: result.warnings || [],
+      };
+      state.bulkOrders = Array.isArray(result.orders) ? result.orders.map(normalizeBulkInvoice) : [];
+      renderBulkOrders();
+
+      const warningText = state.bulkMeta.warnings.length ? ` ${state.bulkMeta.warnings.join(' ')}` : '';
+      const statusType = state.bulkOrders.length > 0 ? (state.bulkMeta.warnings.length ? 'warning' : 'success') : 'warning';
+      const loadText = state.bulkMeta.preload && state.bulkMeta.preload.loadMoreClicks
+        ? ` Se abrio View orders ${state.bulkMeta.preload.loadMoreClicks} vez/veces.`
+        : '';
+      setStatus(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
+    } catch (error) {
+      setStatus(error.message || String(error), 'error');
+    } finally {
+      el.collectBulkButton.disabled = false;
+      el.generateBulkButton.disabled = false;
+    }
+  }
+
+  function renderBulkOrders() {
+    if (!el.bulkOrdersList) return;
+    if (!state.bulkOrders.length) {
+      el.bulkOrdersList.innerHTML = '<p class="status neutral">Sin ordenes colectadas. Abre la lista de AliExpress y pulsa Colectar.</p>';
+      return;
+    }
+
+    el.bulkOrdersList.innerHTML = state.bulkOrders.map((order, index) => `
+      <label class="bulk-order-row" data-bulk-index="${index}">
+        <input type="checkbox" data-bulk-check="${index}" checked>
+        <span class="bulk-order-main">
+          <strong># ${escapeHtml(order.orderNumber || `Orden ${index + 1}`)}</strong>
+          <span class="bulk-order-meta">${escapeHtml(order.orderDate || '')} · ${order.items.length} linea(s)</span>
+          <span class="bulk-order-meta">${escapeHtml(firstOrderItemTitle(order))}</span>
+        </span>
+        <span class="bulk-order-total">$ ${escapeHtml(formatDecimalComma(order.total || sumItems(order.items)))}</span>
+      </label>
+    `).join('');
+  }
+
+  function firstOrderItemTitle(order) {
+    const item = order && order.items && order.items[0] ? order.items[0] : null;
+    if (!item) return 'Sin descripcion';
+    return String(item.description || item.sku || 'Sin descripcion').slice(0, 90);
+  }
+
+  function selectedBulkOrders() {
+    const checked = Array.from(el.bulkOrdersList.querySelectorAll('[data-bulk-check]:checked'))
+      .map((input) => state.bulkOrders[Number(input.dataset.bulkCheck)])
+      .filter(Boolean);
+    return checked.length ? checked : [];
+  }
+
+  async function generateBulkInvoices() {
+    let orders = selectedBulkOrders();
+    if (!orders.length) {
+      setStatus('Selecciona al menos una orden bulk para generar PDFs.', 'error');
+      return;
+    }
+
+    el.generateBulkButton.disabled = true;
+    try {
+      orders = await enrichBulkOrdersFromDetails(orders);
+      const mode = el.bulkOutputMode ? el.bulkOutputMode.value : 'separate';
+      if (mode === 'combined') {
+        const invoice = buildCombinedBulkInvoice(orders);
+        const validationError = validateInvoice(invoice);
+        if (validationError) throw new Error(validationError);
+        await openInvoiceDraft(invoice, true);
+        setStatus(`Factura consolidada creada con ${orders.length} orden(es) y ${invoice.items.length} linea(s).`, 'success');
+        return;
+      }
+
+      const maxTabs = 20;
+      const limited = orders.slice(0, maxTabs);
+      for (const order of limited) await openInvoiceDraft(normalizeBulkInvoice(order), false);
+      const suffix = orders.length > maxTabs ? ` Se abrieron las primeras ${maxTabs}; reduce seleccion para el resto.` : '';
+      setStatus(`Se generaron ${limited.length} factura(s) en pestanas nuevas.${suffix}`, orders.length > maxTabs ? 'warning' : 'success');
+    } catch (error) {
+      setStatus(error.message || String(error), 'error');
+    } finally {
+      el.generateBulkButton.disabled = false;
+    }
+  }
+
+  async function enrichBulkOrdersFromDetails(orders) {
+    const result = [];
+    for (let index = 0; index < orders.length; index += 1) {
+      const listOrder = normalizeBulkInvoice(orders[index]);
+      const detailUrl = resolveOrderDetailUrl(listOrder);
+      if (!detailUrl) {
+        result.push({
+          ...listOrder,
+          warnings: [...(listOrder.warnings || []), 'No se encontro URL de detalle; se uso la informacion visible en la lista.'],
+        });
+        continue;
+      }
+
+      setStatus(`Enriqueciendo detalle ${index + 1}/${orders.length}: ${listOrder.orderNumber || 'orden AliExpress'}...`, 'neutral');
+      let detailTab = null;
+      try {
+        detailTab = await chrome.tabs.create({ url: detailUrl, active: false });
+        await waitForTabComplete(detailTab.id, 18000);
+        await ensureFreshContentBridge(detailTab.id);
+        const response = await executeContentCommand(detailTab.id, 'extract');
+        if (!response || !response.ok || !response.order) throw new Error(response && response.error ? response.error : 'Detalle sin datos.');
+        const merged = mergeBulkListAndDetailOrder(listOrder, response.order, detailUrl);
+        result.push(merged);
+      } catch (error) {
+        result.push({
+          ...listOrder,
+          warnings: [...(listOrder.warnings || []), `No se pudo leer detalle (${error.message || String(error)}); se uso la informacion visible en la lista.`],
+        });
+      } finally {
+        if (detailTab && detailTab.id) {
+          try { await chrome.tabs.remove(detailTab.id); } catch (_) { /* tab already closed */ }
+        }
+      }
+    }
+
+    state.bulkOrders = result.map(normalizeBulkInvoice);
+    renderBulkOrders();
+    return state.bulkOrders;
+  }
+
+  function resolveOrderDetailUrl(order) {
+    const pageUrl = String(order && order.pageUrl || '').trim();
+    if (isUsableOrderDetailUrl(pageUrl, order && order.orderNumber)) return pageUrl;
+    const orderNumber = String(order && order.orderNumber || '').replace(/\D+/g, '');
+    return orderNumber ? `https://www.aliexpress.com/p/order/detail.html?orderId=${encodeURIComponent(orderNumber)}` : '';
+  }
+
+  function isUsableOrderDetailUrl(url, orderNumber) {
+    const value = String(url || '');
+    if (!/^https:\/\/([^/]+\.)?aliexpress\.com\//i.test(value)) return false;
+    if (/\/p\/order\/index\.html/i.test(value)) return false;
+    if (/order.*detail|detail.*order|orderId|order_id|orderIdList/i.test(value)) return true;
+    const digits = String(orderNumber || '').replace(/\D+/g, '');
+    return Boolean(digits && value.includes(digits));
+  }
+
+  function waitForTabComplete(tabId, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const timeout = window.setTimeout(() => finish(false), timeoutMs || 15000);
+      const listener = (updatedTabId, changeInfo) => {
+        if (updatedTabId === tabId && changeInfo.status === 'complete') finish(true);
+      };
+      function finish(success) {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(listener);
+        success ? resolve() : reject(new Error('Timeout cargando detalle AliExpress.'));
+      }
+      chrome.tabs.onUpdated.addListener(listener);
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError) return;
+        if (tab && tab.status === 'complete') finish(true);
+      });
+    });
+  }
+
+  function mergeBulkListAndDetailOrder(listOrder, detailOrder, detailUrl) {
+    const detail = normalizeBulkInvoice(detailOrder);
+    const list = normalizeBulkInvoice(listOrder);
+    const detailItems = detail.items.filter((item) => item.description || item.sku);
+    const listItems = list.items.filter((item) => item.description || item.sku);
+    const useDetailItems = detailItems.length >= listItems.length || detailItems.some((item) => item.imageUrl);
+    const items = useDetailItems ? detailItems : listItems;
+    const subtotal = toNullableNumber(detail.subtotal) ?? toNullableNumber(list.subtotal) ?? sumItems(items);
+    const total = toNullableNumber(detail.total) ?? toNullableNumber(list.total) ?? roundMoney(sumItems(items) + (toNullableNumber(detail.shipping) || toNullableNumber(list.shipping) || 0));
+
+    return {
+      ...list,
+      ...detail,
+      pageUrl: detail.pageUrl || detailUrl || list.pageUrl,
+      pageTitle: detail.pageTitle || list.pageTitle,
+      orderNumber: detail.orderNumber || list.orderNumber,
+      orderDate: detail.orderDate || list.orderDate,
+      supplierName: detail.supplierName || list.supplierName || 'AliExpress Marketplace',
+      supplierTaxId: detail.supplierTaxId || list.supplierTaxId || '',
+      subtotal,
+      shipping: toNullableNumber(detail.shipping) ?? toNullableNumber(list.shipping),
+      tax: toNullableNumber(detail.tax) ?? toNullableNumber(list.tax),
+      discount: toNullableNumber(detail.discount) ?? toNullableNumber(list.discount),
+      total,
+      notes: [detail.notes || list.notes || '', `Detalle enriquecido desde: ${detailUrl}`].filter(Boolean).join('\n'),
+      items,
+      warnings: [...(list.warnings || []), ...(detail.warnings || [])],
+    };
+  }
+
+  async function downloadBulkJson() {
+    let orders = selectedBulkOrders();
+    if (!orders.length) {
+      setStatus('Selecciona al menos una orden bulk para exportar JSON.', 'error');
+      return;
+    }
+
+    el.downloadBulkJsonButton.disabled = true;
+    try {
+      orders = await enrichBulkOrdersFromDetails(orders);
+      const combined = orders.length ? buildCombinedBulkInvoice(orders) : null;
+      downloadBlob(
+        JSON.stringify({ meta: state.bulkMeta, orders: orders.map(normalizeBulkInvoice), combined }, null, 2),
+        `aliexpress-bulk-${safeFilePart(el.bulkFromDate.value || 'from')}-${safeFilePart(el.bulkToDate.value || 'to')}.json`,
+        'application/json',
+      );
+      setStatus(`JSON bulk exportado con ${orders.length} orden(es) enriquecidas.`, 'success');
+    } catch (error) {
+      setStatus(error.message || String(error), 'error');
+    } finally {
+      el.downloadBulkJsonButton.disabled = false;
+    }
+  }
+
+  async function openInvoiceDraft(invoice, active) {
+    const validationError = validateInvoice(invoice);
+    if (validationError) throw new Error(`# ${invoice.orderNumber || 'orden'}: ${validationError}`);
+    const draftId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    await chrome.storage.local.set({ [`${STORAGE_PREFIX}${draftId}`]: invoice });
+    await chrome.tabs.create({ url: chrome.runtime.getURL(`invoice.html?draft=${encodeURIComponent(draftId)}`), active: Boolean(active) });
+  }
+
+  function buildCombinedBulkInvoice(orders) {
+    const normalizedOrders = orders.map(normalizeBulkInvoice);
+    const orderDates = normalizedOrders.map((order) => order.orderDate).filter(Boolean).sort();
+    const orderNumbers = normalizedOrders.map((order) => order.orderNumber).filter(Boolean);
+    const items = normalizedOrders.flatMap((order) => order.items.map((item) => ({
+      ...item,
+      sku: item.sku || (order.orderNumber ? `AE-${lastDigits(order.orderNumber, 8)}` : ''),
+      description: `[${order.orderNumber || 'AliExpress'}] ${item.description || item.sku || 'Linea AliExpress'}`,
+      sourceOrderNumber: order.orderNumber || '',
+      sourceOrderDate: order.orderDate || '',
+      sourceOrderUrl: order.pageUrl || '',
+    })));
+    const itemSubtotal = sumItems(items);
+    const knownShipping = sumKnownTotals(normalizedOrders, 'shipping');
+    const knownTax = sumKnownTotals(normalizedOrders, 'tax');
+    const knownDiscount = sumKnownDiscounts(normalizedOrders);
+    const orderGrandTotal = sumKnownTotals(normalizedOrders, 'total') || itemSubtotal;
+    const componentsTotal = roundMoney(itemSubtotal + knownShipping + knownTax - knownDiscount);
+    const adjustment = roundMoney(orderGrandTotal - componentsTotal);
+    const finalItems = [...items];
+
+    if (Math.abs(adjustment) >= 0.01) {
+      finalItems.push({
+        sku: 'AE-BULK-ADJ',
+        description: adjustment > 0
+          ? 'Ajuste consolidado AliExpress (shipping/tax/costos no detallados por orden)'
+          : 'Ajuste consolidado AliExpress (descuentos/cupones no detallados por orden)',
+        quantity: 1,
+        unitPrice: adjustment,
+        total: adjustment,
+        productUrl: '',
+        itemId: '',
+        imageUrl: '',
+      });
+    }
+
+    const combinedSubtotal = roundMoney(sumItems(finalItems));
+    const finalTotal = roundMoney(combinedSubtotal + knownShipping + knownTax - knownDiscount);
+    const notes = [
+      `Factura consolidada desde ${normalizedOrders.length} orden(es) AliExpress.`,
+      orderNumbers.length ? `Pedidos: ${orderNumbers.join(', ')}.` : '',
+      `Rango: ${orderDates[0] || el.bulkFromDate.value || ''}${orderDates.length ? ` a ${orderDates[orderDates.length - 1]}` : ''}.`,
+      Math.abs(adjustment) >= 0.01
+        ? `Ajuste automatico: ${formatDecimalComma(adjustment)} para reconciliar lineas/componentes (${formatDecimalComma(componentsTotal)}) con total de ordenes (${formatDecimalComma(orderGrandTotal)}).`
+        : '',
+    ].filter(Boolean).join('\n');
+
+    return {
+      source: 'AliExpress',
+      generatedAt: new Date().toISOString(),
+      extractedAt: new Date().toISOString(),
+      pageUrl: state.bulkMeta && state.bulkMeta.pageUrl || normalizedOrders[0]?.pageUrl || '',
+      pageTitle: 'AliExpress bulk consolidated invoice',
+      supplierName: 'AliExpress Marketplace',
+      supplierTaxId: '',
+      orderNumber: buildCombinedOrderNumber(orderNumbers),
+      orderDate: orderDates[orderDates.length - 1] || new Date().toISOString().slice(0, 10),
+      currency: 'CLP',
+      subtotal: combinedSubtotal,
+      shipping: knownShipping || null,
+      tax: knownTax || null,
+      discount: knownDiscount || null,
+      total: finalTotal,
+      notes,
+      items: finalItems,
+      warnings: normalizedOrders.flatMap((order) => order.warnings || []).concat(
+        'Factura consolidada: las lineas incluyen el pedido origen entre corchetes.',
+      ),
+      sourceOrders: normalizedOrders.map((order) => ({
+        orderNumber: order.orderNumber,
+        orderDate: order.orderDate,
+        total: order.total,
+        subtotal: order.subtotal,
+        shipping: order.shipping,
+        tax: order.tax,
+        discount: order.discount,
+        pageUrl: order.pageUrl,
+      })),
+      bulkMath: {
+        itemSubtotal,
+        knownShipping,
+        knownTax,
+        knownDiscount,
+        componentsTotal,
+        orderGrandTotal,
+        finalTotal,
+        adjustment,
+      },
+    };
+  }
+
+  function sumKnownTotals(orders, field) {
+    return roundMoney(orders.reduce((sum, order) => {
+      const value = toNullableNumber(order[field]);
+      return value === null ? sum : sum + value;
+    }, 0));
+  }
+
+  function sumKnownDiscounts(orders) {
+    return roundMoney(orders.reduce((sum, order) => {
+      const value = toNullableNumber(order.discount);
+      return value === null ? sum : sum + Math.abs(value);
+    }, 0));
+  }
+
+  function buildCombinedOrderNumber(orderNumbers) {
+    if (!orderNumbers.length) return `AE-BULK-${new Date().toISOString().slice(0, 10)}`;
+    if (orderNumbers.length === 1) return orderNumbers[0];
+    return `AE-BULK-${lastDigits(orderNumbers[0], 6)}-${lastDigits(orderNumbers[orderNumbers.length - 1], 6)}-${orderNumbers.length}`;
+  }
+
+  function normalizeBulkInvoice(order) {
+    const items = Array.isArray(order && order.items) ? order.items.map(normalizeItem).filter((item) => item.description || item.sku) : [];
+    const total = toNumber(order && order.total) || sumItems(items);
+    return {
+      source: 'AliExpress',
+      generatedAt: new Date().toISOString(),
+      extractedAt: order && order.extractedAt || new Date().toISOString(),
+      pageUrl: order && order.pageUrl || '',
+      pageTitle: order && order.pageTitle || '',
+      supplierName: order && order.supplierName || 'AliExpress Marketplace',
+      supplierTaxId: order && order.supplierTaxId || '',
+      orderNumber: order && order.orderNumber || '',
+      orderDate: order && order.orderDate || new Date().toISOString().slice(0, 10),
+      currency: 'CLP',
+      subtotal: toNullableNumber(order && order.subtotal) || sumItems(items),
+      shipping: toNullableNumber(order && order.shipping),
+      tax: toNullableNumber(order && order.tax),
+      discount: toNullableNumber(order && order.discount),
+      total,
+      notes: order && order.notes || '',
+      items,
+      warnings: order && order.warnings || [],
+    };
   }
 
   function renderDebug(debug) {
@@ -1830,6 +2236,14 @@
     if (!el.orderDate.value) el.orderDate.value = new Date().toISOString().slice(0, 10);
   }
 
+  function setDefaultBulkDates() {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - 30);
+    if (el.bulkToDate && !el.bulkToDate.value) el.bulkToDate.value = today.toISOString().slice(0, 10);
+    if (el.bulkFromDate && !el.bulkFromDate.value) el.bulkFromDate.value = from.toISOString().slice(0, 10);
+  }
+
   function setStatus(message, type) {
     el.status.textContent = message;
     el.status.className = `status ${type || 'neutral'}`;
@@ -1882,6 +2296,10 @@
 
   function safeFilePart(value) {
     return String(value || 'invoice').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'invoice';
+  }
+
+  function lastDigits(value, length) {
+    return String(value || '').replace(/\D+/g, '').slice(-length) || String(value || '').slice(-length);
   }
 
   function downloadBlob(content, filename, type) {

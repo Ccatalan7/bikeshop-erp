@@ -112,6 +112,77 @@ h2 {
   margin-bottom: 0;
 }
 
+.bulk-panel .section-heading {
+  align-items: flex-start;
+}
+
+.bulk-orders-list {
+  display: grid;
+  gap: 8px;
+  max-height: 190px;
+  overflow: auto;
+  margin-top: 10px;
+}
+
+.bulk-order-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 8px;
+}
+
+.bulk-order-row input[type="checkbox"] {
+  width: auto;
+  margin: 2px 0 0;
+}
+
+.bulk-order-main strong,
+.bulk-order-meta {
+  display: block;
+}
+
+.bulk-order-main strong {
+  font-size: 12px;
+}
+
+.bulk-order-meta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.bulk-order-total {
+  white-space: nowrap;
+  font-weight: 700;
+  text-align: right;
+}
+
+.bulk-mode-field {
+  margin-top: 10px;
+}
+
+.bulk-mode-field select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+.bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .status {
   padding: 10px 12px;
   color: var(--muted);
