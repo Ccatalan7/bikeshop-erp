@@ -8,7 +8,7 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.23';
+  const CONTENT_SCRIPT_VERSION = '0.3.24';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -1100,6 +1100,19 @@
 
   function imageIdentityKey(imageUrl) {
     return normalizeAliExpressImageUrl(imageUrl).replace(/[?#].*$/, '').replace(/_[0-9]+x[0-9]+\.(jpg|jpeg|png|webp)$/i, '.$1');
+  }
+
+  function normalizeProductUrl(url) {
+    try {
+      const parsed = new URL(String(url || ''), 'https://www.aliexpress.com');
+      const itemId = parsed.pathname.match(/\/item\/(\d+)\.html/i)?.[1]
+        || parsed.searchParams.get('itemId')
+        || parsed.searchParams.get('productId')
+        || '';
+      return itemId || parsed.pathname;
+    } catch (_error) {
+      return String(url || '').split(/[?#]/)[0];
+    }
   }
 
   function hydrateMissingOrderCropImages(screenshots) {

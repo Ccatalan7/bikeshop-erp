@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AliExpress Invoice Generator",
-  "version": "0.3.23",
+  "version": "0.3.24",
   "description": "Extract visible AliExpress order data and generate an OCR-friendly purchase invoice PDF.",
   "permissions": ["activeTab", "scripting", "storage", "tabs"],
   "host_permissions": [
