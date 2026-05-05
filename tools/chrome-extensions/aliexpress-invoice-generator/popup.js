@@ -4,12 +4,21 @@
   const STORAGE_PREFIX = 'aliexpressInvoiceDraft:';
   const GEMINI_KEY_STORAGE = 'aliexpressInvoiceGeminiApiKey';
   const BULK_WORKSPACE_STORAGE = 'aliexpressInvoiceBulkWorkspace';
+  const SETTINGS_STORAGE = 'aliexpressInvoiceSettings';
+  const DEFAULT_SETTINGS = {
+    defaultDateMode: 'range',
+    rangeDays: 30,
+    defaultOutputMode: 'separate',
+    autoSelectCollectedOrders: true,
+    enrichDetailsBeforeOutput: true,
+    maxSeparateInvoices: 20,
+  };
   const GEMINI_MODELS = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.32';
+  const CONTENT_SCRIPT_VERSION = '0.3.35';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -25,6 +34,8 @@
     bulkOrders: [],
     bulkMeta: null,
     bulkProgress: null,
+    bulkSelection: null,
+    settings: { ...DEFAULT_SETTINGS },
   };
 
   const el = {
@@ -50,6 +61,16 @@
     bulkProgressDetail: document.getElementById('bulkProgressDetail'),
     bulkOutputMode: document.getElementById('bulkOutputMode'),
     bulkOrdersList: document.getElementById('bulkOrdersList'),
+    settingsDetails: document.getElementById('settingsDetails'),
+    settingsDefaultDateMode: document.getElementById('settingsDefaultDateMode'),
+    settingsRangeDays: document.getElementById('settingsRangeDays'),
+    settingsDefaultOutputMode: document.getElementById('settingsDefaultOutputMode'),
+    settingsMaxSeparateInvoices: document.getElementById('settingsMaxSeparateInvoices'),
+    settingsAutoSelectOrders: document.getElementById('settingsAutoSelectOrders'),
+    settingsEnrichDetails: document.getElementById('settingsEnrichDetails'),
+    resetSettingsButton: document.getElementById('resetSettingsButton'),
+    applySettingsButton: document.getElementById('applySettingsButton'),
+    saveSettingsButton: document.getElementById('saveSettingsButton'),
     aiExtractButton: document.getElementById('aiExtractButton'),
     saveGeminiKeyButton: document.getElementById('saveGeminiKeyButton'),
     geminiApiKey: document.getElementById('geminiApiKey'),
@@ -67,6 +88,11 @@
   };
 
   document.addEventListener('DOMContentLoaded', () => {
+    initializePanel();
+  });
+
+  async function initializePanel() {
+    await loadSettings();
     setDefaultDate();
     setDefaultBulkDates();
     applyWorkspaceUrlParams();
@@ -75,7 +101,8 @@
     loadGeminiKey();
     renderItems();
     restoreBulkWorkspaceState();
-  });
+    setupBulkWorkspaceStorageListener();
+  }
 
   el.extractButton.addEventListener('click', extractCurrentPage);
   el.aiExtractButton.addEventListener('click', extractCurrentVisibleAreaWithAi);
@@ -92,6 +119,9 @@
   el.collectBulkButton.addEventListener('click', collectBulkOrders);
   el.generateBulkButton.addEventListener('click', generateBulkInvoices);
   el.downloadBulkJsonButton.addEventListener('click', downloadBulkJson);
+  el.saveSettingsButton.addEventListener('click', () => saveSettings({ applyNow: false }));
+  el.applySettingsButton.addEventListener('click', () => saveSettings({ applyNow: true }));
+  el.resetSettingsButton.addEventListener('click', resetSettings);
 
   el.bulkDateMode.addEventListener('change', () => {
     syncBulkDateModeUi({ syncInputs: true });
@@ -860,8 +890,8 @@
 
   async function collectBulkOrders() {
     if (!isWorkspaceMode()) {
+      setStatus('Abriendo panel estable y empezando colecta...', 'neutral');
       await openBulkWorkspace({ autocollect: true });
-      setStatus('Abrimos el panel bulk estable para que Chrome no pierda el progreso si cierras el popup.', 'success');
       return;
     }
 
@@ -906,6 +936,9 @@
         warnings: result.warnings || [],
       };
       state.bulkOrders = Array.isArray(result.orders) ? result.orders.map(normalizeBulkInvoice) : [];
+      state.bulkSelection = state.settings.autoSelectCollectedOrders
+        ? state.bulkOrders.map(bulkOrderSelectionKey).filter(Boolean)
+        : [];
       renderBulkOrders();
       await saveBulkWorkspaceState();
 
@@ -954,7 +987,7 @@
   }
 
   function isBulkOrderSelected(order) {
-    if (!state.bulkSelection || state.bulkSelection.length === 0) return true;
+    if (!Array.isArray(state.bulkSelection)) return state.settings.autoSelectCollectedOrders;
     const key = bulkOrderSelectionKey(order);
     return state.bulkSelection.includes(key);
   }
@@ -987,7 +1020,7 @@
     try {
       await saveBulkWorkspaceState('Generando bulk...', 'neutral');
       setBulkProgress({ active: true, label: 'Preparando bulk', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
-      orders = await enrichBulkOrdersFromDetails(orders);
+      orders = await maybeEnrichBulkOrdersFromDetails(orders);
       const mode = el.bulkOutputMode ? el.bulkOutputMode.value : 'separate';
       if (mode === 'combined') {
         const invoice = buildCombinedBulkInvoice(orders);
@@ -1000,7 +1033,7 @@
         return;
       }
 
-      const maxTabs = 20;
+      const maxTabs = state.settings.maxSeparateInvoices;
       const limited = orders.slice(0, maxTabs);
       for (let index = 0; index < limited.length; index += 1) {
         setBulkProgress({ active: true, label: 'Generando PDFs', detail: `${index + 1}/${limited.length}: ${limited[index].orderNumber || 'orden AliExpress'}`, current: index, total: limited.length, type: 'active' });
@@ -1062,6 +1095,18 @@
     renderBulkOrders();
     await saveBulkWorkspaceState();
     return state.bulkOrders;
+  }
+
+  async function maybeEnrichBulkOrdersFromDetails(orders) {
+    if (state.settings.enrichDetailsBeforeOutput) return enrichBulkOrdersFromDetails(orders);
+    setBulkProgress({
+      active: false,
+      label: 'Usando datos de lista',
+      detail: 'Lectura de detalles desactivada en Ajustes.',
+      percent: 100,
+      type: 'warning',
+    });
+    return orders.map(normalizeBulkInvoice);
   }
 
   function resolveOrderDetailUrl(order) {
@@ -1143,7 +1188,7 @@
     try {
       await saveBulkWorkspaceState('Exportando JSON bulk...', 'neutral');
       setBulkProgress({ active: true, label: 'Exportando JSON', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
-      orders = await enrichBulkOrdersFromDetails(orders);
+      orders = await maybeEnrichBulkOrdersFromDetails(orders);
       const combined = orders.length ? buildCombinedBulkInvoice(orders) : null;
       downloadBlob(
         JSON.stringify({ meta: state.bulkMeta, orders: orders.map(normalizeBulkInvoice), combined }, null, 2),
@@ -2334,10 +2379,100 @@
   function setDefaultBulkDates() {
     const today = new Date();
     const from = new Date(today);
-    from.setDate(from.getDate() - 30);
+    from.setDate(from.getDate() - clampInteger(state.settings.rangeDays, 1, 365, DEFAULT_SETTINGS.rangeDays));
+    if (el.bulkDateMode && !el.bulkDateMode.value) el.bulkDateMode.value = state.settings.defaultDateMode;
+    if (el.bulkDateMode) el.bulkDateMode.value = state.settings.defaultDateMode;
+    if (el.bulkOutputMode) el.bulkOutputMode.value = state.settings.defaultOutputMode;
     if (el.bulkToDate && !el.bulkToDate.value) el.bulkToDate.value = todayIso(today);
     if (el.bulkFromDate && !el.bulkFromDate.value) el.bulkFromDate.value = todayIso(from);
     if (el.bulkExactDate && !el.bulkExactDate.value) el.bulkExactDate.value = el.bulkToDate.value || todayIso(today);
+  }
+
+  async function loadSettings() {
+    try {
+      const stored = await chrome.storage.local.get(SETTINGS_STORAGE);
+      state.settings = sanitizeSettings(stored && stored[SETTINGS_STORAGE]);
+    } catch (_error) {
+      state.settings = { ...DEFAULT_SETTINGS };
+    }
+    renderSettings();
+  }
+
+  function renderSettings() {
+    if (!el.settingsDefaultDateMode) return;
+    el.settingsDefaultDateMode.value = state.settings.defaultDateMode;
+    el.settingsRangeDays.value = String(state.settings.rangeDays);
+    el.settingsDefaultOutputMode.value = state.settings.defaultOutputMode;
+    el.settingsMaxSeparateInvoices.value = String(state.settings.maxSeparateInvoices);
+    el.settingsAutoSelectOrders.checked = state.settings.autoSelectCollectedOrders;
+    el.settingsEnrichDetails.checked = state.settings.enrichDetailsBeforeOutput;
+  }
+
+  async function saveSettings({ applyNow }) {
+    state.settings = readSettingsFromControls();
+    await chrome.storage.local.set({ [SETTINGS_STORAGE]: state.settings });
+    renderSettings();
+    if (applyNow) {
+      applySettingsToCurrentBulkRun();
+      setStatus('Ajustes guardados y aplicados a esta colecta. Vuelve a colectar para refrescar la lista.', 'success');
+    } else {
+      setStatus('Ajustes guardados. Se usaran como default en el panel.', 'success');
+    }
+  }
+
+  async function resetSettings() {
+    state.settings = { ...DEFAULT_SETTINGS };
+    await chrome.storage.local.set({ [SETTINGS_STORAGE]: state.settings });
+    renderSettings();
+    applySettingsToCurrentBulkRun();
+    setStatus('Ajustes restaurados y aplicados.', 'success');
+  }
+
+  function applySettingsToCurrentBulkRun() {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - clampInteger(state.settings.rangeDays, 1, 365, DEFAULT_SETTINGS.rangeDays));
+    el.bulkDateMode.value = state.settings.defaultDateMode;
+    el.bulkFromDate.value = todayIso(from);
+    el.bulkToDate.value = todayIso(today);
+    el.bulkExactDate.value = todayIso(today);
+    el.bulkOutputMode.value = state.settings.defaultOutputMode;
+    syncBulkDateModeUi({ syncInputs: true });
+    state.bulkOrders = [];
+    state.bulkMeta = null;
+    state.bulkSelection = null;
+    setBulkProgress({ active: false, label: 'Listo', detail: 'Ajustes aplicados. Colecta nuevamente.', percent: 0, type: 'neutral' });
+    renderBulkOrders();
+    saveBulkWorkspaceState('Ajustes aplicados. Colecta nuevamente.', 'neutral');
+  }
+
+  function readSettingsFromControls() {
+    return sanitizeSettings({
+      defaultDateMode: el.settingsDefaultDateMode.value,
+      rangeDays: el.settingsRangeDays.value,
+      defaultOutputMode: el.settingsDefaultOutputMode.value,
+      maxSeparateInvoices: el.settingsMaxSeparateInvoices.value,
+      autoSelectCollectedOrders: el.settingsAutoSelectOrders.checked,
+      enrichDetailsBeforeOutput: el.settingsEnrichDetails.checked,
+    });
+  }
+
+  function sanitizeSettings(settings) {
+    const value = settings && typeof settings === 'object' ? settings : {};
+    return {
+      defaultDateMode: value.defaultDateMode === 'day' ? 'day' : 'range',
+      rangeDays: clampInteger(value.rangeDays, 1, 365, DEFAULT_SETTINGS.rangeDays),
+      defaultOutputMode: value.defaultOutputMode === 'combined' ? 'combined' : 'separate',
+      autoSelectCollectedOrders: value.autoSelectCollectedOrders !== false,
+      enrichDetailsBeforeOutput: value.enrichDetailsBeforeOutput !== false,
+      maxSeparateInvoices: clampInteger(value.maxSeparateInvoices, 1, 50, DEFAULT_SETTINGS.maxSeparateInvoices),
+    };
+  }
+
+  function clampInteger(value, min, max, fallback) {
+    const number = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
   }
 
   function todayIso(date = new Date()) {
@@ -2477,10 +2612,14 @@
     if (params.get('mode') && el.bulkOutputMode) el.bulkOutputMode.value = params.get('mode');
     if (isWorkspaceMode()) {
       document.body.classList.add('workspace-mode');
-      if (el.openWorkspaceButton) el.openWorkspaceButton.textContent = 'Panel estable';
+      if (el.openWorkspaceButton) el.openWorkspaceButton.hidden = true;
+      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Colectar';
       if (params.get('autocollect') === '1') {
         window.setTimeout(() => collectBulkOrders(), 250);
       }
+    } else {
+      if (el.openWorkspaceButton) el.openWorkspaceButton.textContent = 'Abrir panel estable';
+      if (el.collectBulkButton) el.collectBulkButton.textContent = 'Abrir panel y colectar';
     }
   }
 
@@ -2501,6 +2640,7 @@
           }
           await chrome.sidePanel.open({ windowId: sourceTab.windowId });
           setStatus('Panel lateral bulk abierto. Puedes seguir navegando sin perder el progreso.', 'success');
+          closeTransientPopupSoon();
           return;
         } catch (sidePanelError) {
           await saveBulkWorkspaceState(`No se pudo abrir panel lateral (${sidePanelError.message || String(sidePanelError)}). Usando pestana estable.`, 'warning', {
@@ -2519,10 +2659,18 @@
         to: filters.toDate || '',
         mode: el.bulkOutputMode ? el.bulkOutputMode.value : 'separate',
       });
-      await chrome.tabs.create({ url: chrome.runtime.getURL(`popup.html?${params.toString()}`), active: true });
+      await chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel.html?${params.toString()}`), active: true });
+      closeTransientPopupSoon();
     } catch (error) {
       setStatus(error.message || String(error), 'error');
     }
+  }
+
+  function closeTransientPopupSoon() {
+    if (isWorkspaceMode()) return;
+    window.setTimeout(() => {
+      try { window.close(); } catch (_) { /* Chrome may ignore close outside action popup. */ }
+    }, 120);
   }
 
   async function getAliExpressSourceTab() {
@@ -2558,12 +2706,14 @@
       const stored = await chrome.storage.local.get(BULK_WORKSPACE_STORAGE);
       const snapshot = stored && stored[BULK_WORKSPACE_STORAGE];
       if (snapshot) {
-        if (snapshot.dateMode && el.bulkDateMode && !workspaceParams().get('dateMode')) el.bulkDateMode.value = snapshot.dateMode;
-        if (snapshot.exactDate && !workspaceParams().get('exactDate')) el.bulkExactDate.value = snapshot.exactDate;
-        if (snapshot.fromDate && !workspaceParams().get('from')) el.bulkFromDate.value = snapshot.fromDate;
-        if (snapshot.toDate && !workspaceParams().get('to')) el.bulkToDate.value = snapshot.toDate;
+        const hasStoredOrders = Array.isArray(snapshot.bulkOrders) && snapshot.bulkOrders.length > 0;
+        const shouldRestoreBulkInputs = hasStoredOrders || snapshot.pendingAutocollect;
+        if (shouldRestoreBulkInputs && snapshot.dateMode && el.bulkDateMode && !workspaceParams().get('dateMode')) el.bulkDateMode.value = snapshot.dateMode;
+        if (shouldRestoreBulkInputs && snapshot.exactDate && !workspaceParams().get('exactDate')) el.bulkExactDate.value = snapshot.exactDate;
+        if (shouldRestoreBulkInputs && snapshot.fromDate && !workspaceParams().get('from')) el.bulkFromDate.value = snapshot.fromDate;
+        if (shouldRestoreBulkInputs && snapshot.toDate && !workspaceParams().get('to')) el.bulkToDate.value = snapshot.toDate;
         syncBulkDateModeUi();
-        if (snapshot.outputMode && el.bulkOutputMode && !workspaceParams().get('mode')) el.bulkOutputMode.value = snapshot.outputMode;
+        if (shouldRestoreBulkInputs && snapshot.outputMode && el.bulkOutputMode && !workspaceParams().get('mode')) el.bulkOutputMode.value = snapshot.outputMode;
         state.bulkMeta = snapshot.bulkMeta || state.bulkMeta;
         state.bulkOrders = Array.isArray(snapshot.bulkOrders) ? snapshot.bulkOrders.map(normalizeBulkInvoice) : state.bulkOrders;
         state.bulkSelection = Array.isArray(snapshot.bulkSelection) ? snapshot.bulkSelection : state.bulkSelection;
@@ -2582,6 +2732,34 @@
       // Local restore is convenience only; extraction still works without it.
     }
     renderBulkOrders();
+  }
+
+  function setupBulkWorkspaceStorageListener() {
+    if (!isWorkspaceMode() || !chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local' || !changes[BULK_WORKSPACE_STORAGE]) return;
+      const snapshot = changes[BULK_WORKSPACE_STORAGE].newValue;
+      if (!snapshot) return;
+      applyBulkWorkspaceSnapshot(snapshot);
+      if (!snapshot.pendingAutocollect) return;
+      chrome.storage.local.set({
+        [BULK_WORKSPACE_STORAGE]: { ...snapshot, pendingAutocollect: false },
+      }).then(() => {
+        setStatus('Solicitud recibida desde el popup. Colectando en este panel...', 'neutral');
+        window.setTimeout(() => collectBulkOrders(), 150);
+      });
+    });
+  }
+
+  function applyBulkWorkspaceSnapshot(snapshot) {
+    if (!snapshot) return;
+    if (snapshot.dateMode && el.bulkDateMode) el.bulkDateMode.value = snapshot.dateMode;
+    if (snapshot.exactDate && el.bulkExactDate) el.bulkExactDate.value = snapshot.exactDate;
+    if (snapshot.fromDate && el.bulkFromDate) el.bulkFromDate.value = snapshot.fromDate;
+    if (snapshot.toDate && el.bulkToDate) el.bulkToDate.value = snapshot.toDate;
+    if (snapshot.outputMode && el.bulkOutputMode) el.bulkOutputMode.value = snapshot.outputMode;
+    state.bulkSourceTabId = snapshot.sourceTabId || state.bulkSourceTabId;
+    syncBulkDateModeUi();
   }
 
   async function saveBulkWorkspaceState(statusMessage, statusType, extra = {}) {

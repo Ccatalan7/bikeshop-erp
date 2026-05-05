@@ -117,6 +117,78 @@ h2 {
   margin-bottom: 0;
 }
 
+.settings-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-details summary::after {
+  content: "▾";
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform .16s ease;
+}
+
+.settings-details[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.settings-details strong,
+.settings-details small {
+  display: block;
+}
+
+.settings-details strong {
+  font-size: 13px;
+}
+
+.settings-details small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.settings-grid select,
+.settings-grid input {
+  width: 100%;
+}
+
+.settings-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.settings-check-row input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .bulk-panel .section-heading {
   align-items: flex-start;
 }

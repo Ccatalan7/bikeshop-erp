@@ -18,11 +18,59 @@
 
       <section id="status" class="status neutral">Panel bulk estable listo.</section>
 
+      <section class="panel settings-panel">
+        <details id="settingsDetails" class="settings-details">
+          <summary>
+            <span>
+              <strong>Ajustes</strong>
+              <small>Defaults del bulk y seguridad de salida</small>
+            </span>
+          </summary>
+          <div class="settings-grid">
+            <label>
+              Fecha por defecto
+              <select id="settingsDefaultDateMode">
+                <option value="range">Rango</option>
+                <option value="day">Dia exacto</option>
+              </select>
+            </label>
+            <label>
+              Dias del rango
+              <input id="settingsRangeDays" type="number" min="1" max="365" step="1">
+            </label>
+            <label>
+              Salida por defecto
+              <select id="settingsDefaultOutputMode">
+                <option value="separate">Una factura por orden</option>
+                <option value="combined">Factura consolidada</option>
+              </select>
+            </label>
+            <label>
+              Max. facturas separadas
+              <input id="settingsMaxSeparateInvoices" type="number" min="1" max="50" step="1">
+            </label>
+          </div>
+          <label class="settings-check-row">
+            <input id="settingsAutoSelectOrders" type="checkbox">
+            Seleccionar automaticamente las ordenes colectadas
+          </label>
+          <label class="settings-check-row">
+            <input id="settingsEnrichDetails" type="checkbox">
+            Leer el detalle de cada orden antes de generar/exportar
+          </label>
+          <div class="settings-actions">
+            <button id="resetSettingsButton" type="button" class="secondary-button">Restaurar</button>
+            <button id="applySettingsButton" type="button" class="secondary-button">Aplicar ahora</button>
+            <button id="saveSettingsButton" type="button" class="primary-button">Guardar</button>
+          </div>
+        </details>
+      </section>
+
       <section class="panel bulk-panel">
         <div class="section-heading">
           <div>
             <h2>Bulk desde lista</h2>
-            <p class="helper-text">En Account &gt; Orders, filtra por fecha y genera facturas desde las ordenes cargadas en la lista.</p>
+            <p class="helper-text">Panel estable: colecta, revisa, exporta y genera sin depender del popup.</p>
           </div>
           <div class="bulk-heading-actions">
             <button id="openWorkspaceButton" type="button" class="secondary-button">Panel estable</button>
