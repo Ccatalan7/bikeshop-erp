@@ -2610,6 +2610,77 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _isAliExpressSupplierName(invoice.rawText);
   }
 
+  ParsedInvoice _applyAliExpressInvoiceNumber(
+    ParsedInvoice invoice, {
+    String? fileName,
+  }) {
+    if (!_looksLikeAliExpressInvoice(invoice, fileName: fileName)) {
+      return invoice;
+    }
+
+    final invoiceDate = invoice.date ?? _extractAliExpressDate(invoice.rawText);
+    if (invoiceDate == null) return invoice;
+
+    final invoiceNumber = _formatAliExpressInvoiceNumber(invoiceDate);
+    return invoice.copyWith(
+      invoiceNumber: invoiceNumber,
+      date: invoice.date ?? invoiceDate,
+    );
+  }
+
+  String _formatAliExpressInvoiceNumber(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = (date.year % 100).toString().padLeft(2, '0');
+    return 'AE$day$month$year';
+  }
+
+  DateTime? _extractAliExpressDate(String rawText) {
+    final text = rawText.trim();
+    if (text.isEmpty) return null;
+
+    final isoMatch =
+        RegExp(r'\b(20\d{2})-(\d{1,2})-(\d{1,2})\b').firstMatch(text);
+    if (isoMatch != null) {
+      return _buildDate(
+        year: int.tryParse(isoMatch.group(1) ?? ''),
+        month: int.tryParse(isoMatch.group(2) ?? ''),
+        day: int.tryParse(isoMatch.group(3) ?? ''),
+      );
+    }
+
+    final dateMatches = RegExp(
+      r'\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2}|\d{2})\b',
+    ).allMatches(text);
+    for (final match in dateMatches) {
+      final first = int.tryParse(match.group(1) ?? '');
+      final second = int.tryParse(match.group(2) ?? '');
+      var year = int.tryParse(match.group(3) ?? '');
+      if (year != null && year < 100) year += 2000;
+      if (first == null || second == null || year == null) continue;
+
+      final firstLooksLikeMonth = first <= 12 && second > 12;
+      final day = firstLooksLikeMonth ? second : first;
+      final month = firstLooksLikeMonth ? first : second;
+      final parsed = _buildDate(year: year, month: month, day: day);
+      if (parsed != null) return parsed;
+    }
+
+    return null;
+  }
+
+  DateTime? _buildDate({int? year, int? month, int? day}) {
+    if (year == null || month == null || day == null) return null;
+    if (year < 2000 || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
+      return null;
+    }
+    return date;
+  }
+
   Future<shared_supplier.Supplier?> _matchSupplierForInvoice(
     ParsedInvoice invoice, {
     String? fileName,
@@ -3022,6 +3093,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       debugPrint('📋 Parsed data: $parsedData');
 
+      parsedData = _applyAliExpressInvoiceNumber(
+        parsedData,
+        fileName: image.name,
+      );
+
       // Verify products against database
       parsedData = await _verifyProductsInDatabase(parsedData);
       ParsedInvoice baseParsedData = parsedData;
@@ -3198,6 +3274,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
 
     debugPrint('📋 Parsed PDF data: $parsedData');
+
+    parsedData = _applyAliExpressInvoiceNumber(
+      parsedData,
+      fileName: fileName,
+    );
 
     // Verify products against database
     parsedData = await _verifyProductsInDatabase(parsedData);

@@ -18,7 +18,7 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.40';
+  const CONTENT_SCRIPT_VERSION = '0.3.41';
   const imageDimensionCache = new Map();
   const state = {
     items: [],
@@ -1035,9 +1035,10 @@
 
       const maxTabs = state.settings.maxSeparateInvoices;
       const limited = orders.slice(0, maxTabs);
+      const exactInvoiceDate = selectedBulkExactInvoiceDate();
       for (let index = 0; index < limited.length; index += 1) {
         setBulkProgress({ active: true, label: 'Generando PDFs', detail: `${index + 1}/${limited.length}: ${limited[index].orderNumber || 'orden AliExpress'}`, current: index, total: limited.length, type: 'active' });
-        await openInvoiceDraft(normalizeBulkInvoice(limited[index]), false);
+        await openInvoiceDraft(applyGeneratedInvoiceDate(normalizeBulkInvoice(limited[index]), exactInvoiceDate), false);
       }
       const suffix = orders.length > maxTabs ? ` Se abrieron las primeras ${maxTabs}; reduce seleccion para el resto.` : '';
       setBulkProgress({ active: false, label: 'PDFs generados', detail: `${limited.length} factura(s).${suffix}`, percent: 100, type: orders.length > maxTabs ? 'warning' : 'success' });
@@ -1218,6 +1219,8 @@
   function buildCombinedBulkInvoice(orders) {
     const normalizedOrders = orders.map(normalizeBulkInvoice);
     const orderDates = normalizedOrders.map((order) => order.orderDate).filter(Boolean).sort();
+    const exactInvoiceDate = selectedBulkExactInvoiceDate();
+    const generatedInvoiceDate = exactInvoiceDate || orderDates[orderDates.length - 1] || '';
     const orderNumbers = normalizedOrders.map((order) => order.orderNumber).filter(Boolean);
     const items = normalizedOrders.flatMap((order) => order.items.map((item) => ({
       ...item,
@@ -1256,7 +1259,9 @@
     const notes = [
       `Factura consolidada desde ${normalizedOrders.length} orden(es) AliExpress.`,
       orderNumbers.length ? `Pedidos: ${orderNumbers.join(', ')}.` : '',
-      `Rango: ${orderDates[0] || el.bulkFromDate.value || ''}${orderDates.length ? ` a ${orderDates[orderDates.length - 1]}` : ''}.`,
+      exactInvoiceDate
+        ? `Fecha de factura tomada del filtro Dia exacto: ${formatDateForStatus(exactInvoiceDate)}.`
+        : `Rango: ${orderDates[0] || el.bulkFromDate.value || ''}${orderDates.length ? ` a ${orderDates[orderDates.length - 1]}` : ''}.`,
       Math.abs(adjustment) >= 0.01
         ? `Ajuste automatico: ${formatDecimalComma(adjustment)} para reconciliar lineas/componentes (${formatDecimalComma(componentsTotal)}) con total de ordenes (${formatDecimalComma(orderGrandTotal)}).`
         : '',
@@ -1271,7 +1276,7 @@
       supplierName: 'AliExpress Marketplace',
       supplierTaxId: '',
       orderNumber: buildCombinedOrderNumber(orderNumbers),
-      orderDate: orderDates[orderDates.length - 1] || '',
+      orderDate: generatedInvoiceDate,
       currency: 'CLP',
       subtotal: combinedSubtotal,
       shipping: knownShipping || null,
@@ -1324,6 +1329,26 @@
     if (!orderNumbers.length) return `AE-BULK-${new Date().toISOString().slice(0, 10)}`;
     if (orderNumbers.length === 1) return orderNumbers[0];
     return `AE-BULK-${lastDigits(orderNumbers[0], 6)}-${lastDigits(orderNumbers[orderNumbers.length - 1], 6)}-${orderNumbers.length}`;
+  }
+
+  function selectedBulkExactInvoiceDate() {
+    if (!el.bulkDateMode || el.bulkDateMode.value !== 'day') return '';
+    return normalizeDateInputValue(el.bulkExactDate && el.bulkExactDate.value)
+      || normalizeDateInputValue(el.bulkFromDate && el.bulkFromDate.value)
+      || normalizeDateInputValue(el.bulkToDate && el.bulkToDate.value)
+      || '';
+  }
+
+  function applyGeneratedInvoiceDate(invoice, exactInvoiceDate) {
+    if (!exactInvoiceDate) return invoice;
+    return {
+      ...invoice,
+      orderDate: exactInvoiceDate,
+      notes: [
+        invoice.notes || '',
+        `Fecha de factura tomada del filtro Dia exacto: ${formatDateForStatus(exactInvoiceDate)}.`,
+      ].filter(Boolean).join('\n'),
+    };
   }
 
   function normalizeBulkInvoice(order) {
