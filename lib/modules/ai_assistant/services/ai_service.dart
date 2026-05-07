@@ -82,6 +82,42 @@ class _PreparedGeminiImage {
   final String mimeType;
 }
 
+/// Result of [AIAssistantService.cleanProductTitleFromImage]: a clean,
+/// shop-friendly product name plus structured metadata derived from BOTH
+/// the noisy supplier title (e.g. AliExpress) and the actual product photo.
+class AICleanedProductName {
+  const AICleanedProductName({
+    required this.cleanedName,
+    required this.componentType,
+    this.brand,
+    this.model,
+    this.categoryName,
+    this.confidence = 0.0,
+  });
+
+  /// Short, store-ready product name. Chilean Spanish vocabulary.
+  /// Format: "<Component> <Brand?> <Model/Spec?>" — capped ~60 chars.
+  final String cleanedName;
+
+  /// Concrete component type (e.g. "postiza", "polea", "pastillas freno").
+  /// Used to seed `categoryName` on the duplicate-matcher probe so the
+  /// family detector classifies the row correctly.
+  final String componentType;
+
+  /// Brand visible in the photo / inferable from the title (e.g. "ZTTO").
+  final String? brand;
+
+  /// Model / part number visible in the photo (e.g. "001", "RD-M5100").
+  final String? model;
+
+  /// Suggested catalog category, mapped to local Chilean shop vocabulary.
+  /// Examples: "Postizas", "Poleas", "Pastillas de freno", "Cassettes".
+  final String? categoryName;
+
+  /// 0-1 confidence in the cleaned result.
+  final double confidence;
+}
+
 class _TireWidthRange {
   const _TireWidthRange({
     required this.minWidth,
@@ -319,6 +355,190 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
       );
     } catch (e) {
       debugPrint('❌ [AI] Product image analysis error: $e');
+      return null;
+    }
+  }
+
+  /// Cache for cleaned product names. Keyed by image hash + raw title so
+  /// repeated rows in the same AliExpress invoice share one Gemini call.
+  final Map<String, AICleanedProductName> _cleanedNameCache = {};
+
+  /// Generate a clean, shop-friendly product name + category + brand from a
+  /// noisy supplier title (e.g. AliExpress) and the actual product photo.
+  ///
+  /// Returns `null` on error. Results are cached in-memory per session so
+  /// the same image+title pair only costs one Gemini call.
+  Future<AICleanedProductName?> cleanProductTitleFromImage({
+    required String rawTitle,
+    Uint8List? imageBytes,
+    String? imageUrl,
+    String? supplierName,
+    String visionModel = 'gemini-2.5-flash',
+  }) async {
+    if (rawTitle.trim().isEmpty) return null;
+
+    // Build cache key. Prefer image hash (stable across URL changes) but fall
+    // back to URL when only the URL is known.
+    final cacheKey = StringBuffer();
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      cacheKey.write('b:${imageBytes.lengthInBytes}:'
+          '${imageBytes.take(64).fold<int>(0, (a, b) => (a * 31 + b) & 0x7fffffff)}');
+    } else if (imageUrl != null && imageUrl.isNotEmpty) {
+      cacheKey.write('u:$imageUrl');
+    } else {
+      cacheKey.write('t:');
+    }
+    cacheKey.write('|${rawTitle.trim().toLowerCase()}');
+    final cached = _cleanedNameCache[cacheKey.toString()];
+    if (cached != null) return cached;
+
+    // Make sure we have bytes if a URL was provided.
+    Uint8List? bytes = imageBytes;
+    if ((bytes == null || bytes.isEmpty) &&
+        imageUrl != null &&
+        imageUrl.trim().isNotEmpty) {
+      bytes = await _downloadImageBytes(imageUrl.trim());
+    }
+
+    final hintLines = <String>[
+      'titulo_crudo: ${rawTitle.trim()}',
+      if (supplierName != null && supplierName.trim().isNotEmpty)
+        'proveedor: ${supplierName.trim()}',
+    ];
+
+    final prompt = '''
+Eres el catalogador de una bicicleteria chilena. Tu trabajo es convertir
+titulos crudos y ruidosos de proveedores (AliExpress, eBay, etc.) en
+nombres limpios y vendibles para el catalogo local de la tienda.
+
+Recibiras el titulo crudo del proveedor y, cuando sea posible, una foto
+real del producto. Si la foto y el titulo se contradicen, PRIORIZA la
+foto.
+
+Devuelve SOLO JSON valido con esta forma exacta:
+{
+  "cleaned_name": "Postiza ZTTO 001",
+  "component_type": "postiza",
+  "brand": "ZTTO",
+  "model": "001",
+  "category_name": "Postizas",
+  "confidence": 0.92
+}
+
+Reglas duras:
+- cleaned_name debe ser corto (<= 60 caracteres) y con formato:
+  "<Componente en singular> <Marca opcional> <Modelo/Spec opcional>".
+  Ejemplos buenos:
+    * "Postiza ZTTO 001"
+    * "Polea jockey ceramica 14T"
+    * "Pastillas freno hidraulico Shimano B01S"
+    * "Cassette Shimano HG200 9v 11-32T"
+  Ejemplos malos (evitar): "ZTTO 001 Postiza para MTB Bicicleta de Montana
+  Aluminio CNC Mecanizado de Alta Calidad Compatible con Shimano SRAM..."
+- Usa vocabulario chileno de bicicleteria: postiza (no "gancho de cambio"),
+  polea (no "rueda guia"), plato (no "chainring"), piola (no "cable"),
+  pastilla (no "pad"), camara (no "tubo"), llanta (no "aro" cuando hablamos
+  de la rueda completa), tripa/tubeless cuando aplica.
+- IMPORTANTE: NO incluyas cantidad de empaque ni multiplicadores en el
+  nombre. Quita expresiones como "Set 5", "5 pares", "100 unidades",
+  "(50 unidades)", "pack 10", "x4", "4pcs", "kit 3". El nombre describe
+  UNA unidad del producto. Si el producto es naturalmente plural
+  ("Pastillas de freno", "Pernos"), conserva esa forma sin numeros.
+- component_type debe ser un sustantivo singular en minusculas, util como
+  filtro de categoria (ej: "postiza", "polea", "plato", "pastillas freno",
+  "cassette", "cadena", "manilla", "desviador", "cambio trasero").
+- brand y model son opcionales; SOLO incluyelos si son claramente visibles
+  en la foto o explicitamente nombrados en el titulo. NO inventes marca.
+- category_name debe ser una categoria humana en plural ("Postizas",
+  "Poleas", "Pastillas de freno", "Cassettes", "Cadenas", "Cambios
+  traseros"). Sirve para sugerir la categoria de catalogo.
+- confidence entre 0 y 1.
+- NO escribas nada fuera del JSON.
+
+Contexto:
+${hintLines.join('\n')}
+''';
+
+    try {
+      final parts = <Map<String, dynamic>>[
+        {'text': prompt},
+      ];
+      if (bytes != null && bytes.isNotEmpty) {
+        final prepared = _prepareImageForGemini(bytes);
+        parts.add({
+          'inlineData': {
+            'mimeType': prepared.mimeType,
+            'data': base64Encode(prepared.bytes),
+          },
+        });
+      }
+
+      final response = await _geminiProxy.generateContent(
+        model: visionModel,
+        contents: [
+          {'role': 'user', 'parts': parts},
+        ],
+      );
+
+      final rawText = response.text.trim();
+      if (rawText.isEmpty) return null;
+
+      final jsonBlock = _extractJsonObject(rawText);
+      if (jsonBlock == null) {
+        debugPrint('⚠️ [AI] Clean product title returned non-JSON: $rawText');
+        return null;
+      }
+
+      final decoded = jsonDecode(jsonBlock);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      String coerce(Object? v, {int max = 80}) {
+        if (v == null) return '';
+        var s = v.toString().trim();
+        if (s.isEmpty) return '';
+        s = s.replaceAll(RegExp(r'\s+'), ' ');
+        if (s.length > max) s = s.substring(0, max).trim();
+        return s;
+      }
+
+      final cleanedName = coerce(decoded['cleaned_name'], max: 80);
+      final componentType =
+          coerce(decoded['component_type'], max: 40).toLowerCase();
+      final brand = coerce(decoded['brand'], max: 40);
+      final model = coerce(decoded['model'], max: 40);
+      final categoryName = coerce(decoded['category_name'], max: 60);
+      final confidence = _coerceAnalysisConfidence(decoded['confidence']);
+
+      if (cleanedName.isEmpty || componentType.isEmpty) return null;
+
+      final result = AICleanedProductName(
+        cleanedName: cleanedName,
+        componentType: componentType,
+        brand: brand.isEmpty ? null : brand,
+        model: model.isEmpty ? null : model,
+        categoryName: categoryName.isEmpty ? null : categoryName,
+        confidence: confidence,
+      );
+
+      _cleanedNameCache[cacheKey.toString()] = result;
+      return result;
+    } catch (e) {
+      debugPrint('❌ [AI] Clean product title error: $e');
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _downloadImageBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        return response.bodyBytes;
+      }
+      debugPrint(
+          '⚠️ [AI] Image download failed (${response.statusCode}) for $url');
+      return null;
+    } catch (e) {
+      debugPrint('❌ [AI] Image download error for $url: $e');
       return null;
     }
   }

@@ -153,6 +153,47 @@ class ProductDuplicateMatcherService {
       if (familyConflict && identityScore < 1) {
         continue;
       }
+      // Soft category gate: when the probe carries a confident category and
+      // the candidate's category is set but completely unrelated (no shared
+      // word, no substring), drop it unless image/identity is already strong.
+      // Avoids "buscar parecidos" surfacing pastillas when probe is cassette.
+      if (identityScore < 1 &&
+          probe.categoryName != null &&
+          probe.categoryName!.trim().isNotEmpty &&
+          (product.categoryName ?? '').trim().isNotEmpty) {
+        final probeCat = _normalizeSimilarityText(probe.categoryName!);
+        final productCat = _normalizeSimilarityText(product.categoryName!);
+        if (probeCat.isNotEmpty &&
+            productCat.isNotEmpty &&
+            probeCat != productCat &&
+            !productCat.contains(probeCat) &&
+            !probeCat.contains(productCat)) {
+          final probeCatTokens =
+              probeCat.split(' ').where((t) => t.length >= 4).toSet();
+          final productCatTokens =
+              productCat.split(' ').where((t) => t.length >= 4).toSet();
+          if (probeCatTokens.isNotEmpty &&
+              productCatTokens.isNotEmpty &&
+              probeCatTokens.intersection(productCatTokens).isEmpty) {
+            // No category overlap at all. Require an image-based or catalog
+            // spec match to keep this candidate.
+            if (catalogSpecScore < 0.86) {
+              // Will be re-evaluated below; mark with a sentinel by skipping
+              // unless the image score (computed next) is strong enough.
+              // Compute image score now so we can decide.
+              final earlyImageScore = await _computeImageScore(
+                probe,
+                probeFingerprint,
+                product,
+                allowRemoteFingerprint: false,
+              );
+              if (earlyImageScore < 0.7) {
+                continue;
+              }
+            }
+          }
+        }
+      }
       final metadataScore = _computeMetadataScore(probe, product);
       final semanticScore = semanticScores[product.id] ?? 0.0;
       final sameAliExpressFamily =
@@ -312,15 +353,75 @@ class ProductDuplicateMatcherService {
         .trim();
   }
 
+  // Families that, when present on the probe, REQUIRE the candidate to share
+  // at least one family. Used by the hard-conflict gate to refuse falling back
+  // to "unknown product family => allow" behaviour for narrow component types
+  // that frequently get confused with adjacent components (e.g. derailleur
+  // hangers vs derailleurs, pulleys vs derailleurs, cable+housing vs brakes).
+  static const Set<String> _narrowFamilies = {
+    'derailleur_hanger',
+    'pulley',
+    'chainring',
+    'cable_housing',
+    'brake_pad',
+    'brake_rotor',
+    'brake_caliper',
+    'brake_lever',
+    'helmet',
+    'light',
+    'lock',
+    'bell',
+    'mirror',
+    'bottle_cage',
+    'bottle',
+    'bag',
+    'fender',
+    'kickstand',
+    'rack',
+    'tube',
+    'tire',
+    'spoke',
+    'grip',
+    'pedal',
+    'saddle',
+    'seatpost',
+    'stem',
+    'handlebar',
+    'headset',
+    'fork',
+    'shock',
+    'chain',
+    'cassette',
+    'hub',
+    'rim',
+  };
+
   Set<String> _inferProductFamilies(String value) {
-    final text = ' ${_normalizeSimilarityText(value)} ';
+    final normalized = ' ${_normalizeSimilarityText(value)} ';
     final families = <String>{};
 
+    // Whole-token matcher: matches " foo " exactly, no plural / derivative.
     void addIf(String family, List<String> phrases) {
       for (final phrase in phrases) {
-        final normalized = _normalizeSimilarityText(phrase);
-        if (normalized.isEmpty) continue;
-        if (text.contains(' $normalized ')) {
+        final p = _normalizeSimilarityText(phrase);
+        if (p.isEmpty) continue;
+        if (normalized.contains(' $p ')) {
+          families.add(family);
+          return;
+        }
+      }
+    }
+
+    // Stem matcher: matches the phrase at a word start, allowing plural /
+    // gender / derivative endings (so "desviador" hits "desviadores",
+    // "cambio" hits "cambiador" / "cambiadores", "pastilla" hits
+    // "pastillas", etc). Use this for short Spanish stems where exact
+    // whole-token matching misses real product names.
+    void addStem(String family, List<String> stems) {
+      for (final stem in stems) {
+        final s = _normalizeSimilarityText(stem);
+        if (s.isEmpty) continue;
+        if (normalized.contains(' $s')) {
           families.add(family);
           return;
         }
@@ -367,18 +468,76 @@ class ProductDuplicateMatcherService {
     addIf('crankset', const ['biela', 'bielas', 'crankset', 'crank arm']);
     addIf('pedal', const ['pedal', 'pedales']);
     addIf('chain', const ['cadena', 'chain']);
-    addIf('cassette', const ['cassette', 'piñon', 'pinon', 'freewheel']);
-    addIf('brake_rotor', const ['rotor', 'disco freno', 'disco de freno']);
-    addIf('brake_pad', const ['pastilla', 'pastillas', 'brake pad']);
-    addIf('brake_caliper', const ['caliper', 'calipers', 'herradura']);
-    addIf('brake_lever', const ['manilla freno', 'brake lever']);
-    addIf('hub', const ['maza', 'mazas', 'hub']);
-    addIf('rim', const ['llanta', 'aro', 'rim']);
-    addIf('spoke', const ['rayo', 'rayos', 'spoke']);
-    addIf('tire', const ['neumatico', 'cubierta', 'tire', 'tyre']);
-    addIf('tube', const ['camara', 'tube']);
-    addIf('derailleur', const ['cambio', 'derailleur', 'desviador']);
-    addIf('shifter', const ['manilla cambio', 'mando cambio', 'shifter']);
+    addStem('cassette',
+        const ['cassette', 'casete', 'piñon', 'pinon', 'freewheel']);
+    addStem('brake_rotor', const ['rotor', 'disco freno', 'disco de freno']);
+    addStem('brake_pad', const ['pastilla', 'brake pad', 'brake-pad']);
+    addStem('brake_caliper', const ['caliper', 'herradura']);
+    addStem('brake_lever', const ['manilla freno', 'brake lever']);
+    addStem('hub', const ['maza', 'hub']);
+    addStem('rim', const ['llanta', 'aro', 'rim']);
+    addStem('spoke', const ['rayo', 'spoke']);
+    addStem('tire', const ['neumatico', 'cubierta', 'tire', 'tyre']);
+    addStem('tube', const ['camara', 'tube']);
+    // Derailleur stems: "cambio", "cambiador(es)", "desviador(es)", "derailleur".
+    addStem('derailleur', const ['cambiador', 'desviador', 'derailleur']);
+    addStem('shifter', const ['manilla cambio', 'mando cambio', 'shifter']);
+    addStem('derailleur_hanger', const [
+      'percha',
+      'postiza',
+      'patilla cambio',
+      'patilla de cambio',
+      'gancho cambio',
+      'gancho de cambio',
+      'derailleur hanger',
+      'rear hanger',
+      'mech hanger',
+      'rd hanger',
+      'dropout hanger',
+      'hanger cambio',
+    ]);
+    // "hanger" alone is ambiguous in English — only treat as a hanger if no
+    // other stronger family is present yet.
+    if (families.isEmpty && normalized.contains(' hanger')) {
+      families.add('derailleur_hanger');
+    }
+    addStem('pulley', const [
+      'polea',
+      'pulley',
+      'jockey wheel',
+      'roldana',
+    ]);
+    addStem('chainring', const [
+      'plato',
+      'chainring',
+      'chain ring',
+      'narrow wide',
+    ]);
+    addIf('cable_housing', const [
+      'piola',
+      'piolas',
+      'funda',
+      'fundas',
+      'cable freno',
+      'cable cambio',
+      'cable de freno',
+      'cable de cambio',
+      'housing',
+      'inner wire',
+      'cable interior',
+    ]);
+    addIf('helmet', const ['casco', 'helmet']);
+    addIf('light', const ['luz', 'foco', 'lampara', 'light', 'headlight']);
+    addIf('lock', const ['candado', 'lock', 'cadena candado']);
+    addIf('bell', const ['timbre', 'bell']);
+    addIf('mirror', const ['espejo', 'mirror']);
+    addIf('bottle_cage',
+        const ['portabidon', 'porta bidon', 'porta botella', 'bottle cage']);
+    addIf('bottle', const ['bidon', 'botella', 'water bottle']);
+    addIf('bag', const ['alforja', 'bolso', 'mochila', 'pannier', 'bag']);
+    addIf('fender', const ['barrofango', 'guardabarro', 'fender', 'mudguard']);
+    addIf('kickstand', const ['pata bicicleta', 'pie bicicleta', 'kickstand']);
+    addIf('rack', const ['parrilla', 'portaequipaje', 'rear rack', 'rack']);
     addIf('fork', const ['horquilla', 'fork']);
     addIf('shock', const ['amortiguador', 'shock']);
     addIf('grip', const ['puño', 'punos', 'grip']);
@@ -386,12 +545,47 @@ class ProductDuplicateMatcherService {
     if (families.contains('bottom_bracket')) families.remove('crankset');
     if (families.contains('seatpost')) families.remove('saddle');
     if (families.contains('brake_rotor')) families.remove('brake_caliper');
+    // A derailleur HANGER is a frame mount, not a derailleur. The text almost
+    // always contains "cambio" / "desviador" because it describes which
+    // derailleur it supports, so we must drop the noisy `derailleur` family
+    // (and `pulley`, since the same descriptors apply) when we are confident
+    // the item is actually a hanger.
+    if (families.contains('derailleur_hanger')) {
+      families.remove('derailleur');
+      families.remove('pulley');
+      families.remove('shifter');
+    }
+    // Pulleys ("poleas", "roldanas") are a wear part for derailleurs, not the
+    // derailleur itself. Same narrowing rule.
+    if (families.contains('pulley')) {
+      families.remove('derailleur');
+    }
+    // Cable / housing kits often mention "cambio" or "freno" — narrow them.
+    if (families.contains('cable_housing')) {
+      families.remove('derailleur');
+      families.remove('shifter');
+      families.remove('brake_caliper');
+      families.remove('brake_lever');
+    }
+    // Bottle cage vs bottle: keep the cage when both fire.
+    if (families.contains('bottle_cage')) families.remove('bottle');
     return families;
   }
 
   bool _hasHardFamilyConflict(
       Set<String> probeFamilies, Set<String> productFamilies) {
-    if (probeFamilies.isEmpty || productFamilies.isEmpty) return false;
+    if (probeFamilies.isEmpty) return false;
+    // If the probe expresses a NARROW family (e.g. derailleur_hanger,
+    // brake_pad, helmet), require the candidate to share at least one
+    // family. An empty product family set is treated as a conflict, since
+    // "unknown" matches against narrow probes are exactly what produces the
+    // current bad suggestions (a percha probe matching real derailleurs).
+    final probeIsNarrow = probeFamilies.any(_narrowFamilies.contains);
+    if (probeIsNarrow) {
+      if (productFamilies.isEmpty) return true;
+      return probeFamilies.intersection(productFamilies).isEmpty;
+    }
+    if (productFamilies.isEmpty) return false;
     return probeFamilies.intersection(productFamilies).isEmpty;
   }
 
@@ -627,7 +821,8 @@ class ProductDuplicateMatcherService {
     return score.clamp(0, 1).toDouble();
   }
 
-  double _computeCatalogSpecScore(ProductDuplicateProbe probe, Product product) {
+  double _computeCatalogSpecScore(
+      ProductDuplicateProbe probe, Product product) {
     final probeText = _buildProbeIntrinsicText(probe);
     final productText = _buildProductSimilarityText(product);
     final probeSpec = _extractBottomBracketSpec(probeText);
@@ -701,7 +896,8 @@ class ProductDuplicateMatcherService {
       'taper',
     };
     final leftTokens = _extractSimilarityTokens(left).intersection(descriptors);
-    final rightTokens = _extractSimilarityTokens(right).intersection(descriptors);
+    final rightTokens =
+        _extractSimilarityTokens(right).intersection(descriptors);
     return leftTokens.intersection(rightTokens).length;
   }
 
@@ -737,18 +933,40 @@ class ProductDuplicateMatcherService {
     final categoryName = probe.categoryName;
     if (categoryName != null && categoryName.trim().isNotEmpty) {
       weight += 0.35;
-      if (_normalizeSimilarityText(categoryName) ==
-          _normalizeSimilarityText(product.categoryName ?? '')) {
-        score += 0.35;
+      final probeCat = _normalizeSimilarityText(categoryName);
+      final productCat = _normalizeSimilarityText(product.categoryName ?? '');
+      if (probeCat.isNotEmpty && productCat.isNotEmpty) {
+        if (probeCat == productCat) {
+          score += 0.35;
+        } else if (productCat.contains(probeCat) ||
+            probeCat.contains(productCat)) {
+          // Fuzzy contains: AI says "pastillas" vs catalog "pastillas freno".
+          score += 0.25;
+        } else {
+          // Word overlap (>=1 meaningful token).
+          final probeTokens =
+              probeCat.split(' ').where((t) => t.length >= 4).toSet();
+          final productTokens =
+              productCat.split(' ').where((t) => t.length >= 4).toSet();
+          if (probeTokens.intersection(productTokens).isNotEmpty) {
+            score += 0.15;
+          }
+        }
       }
     }
 
     final brandName = probe.brandName;
     if (brandName != null && brandName.trim().isNotEmpty) {
       weight += 0.30;
-      if (_normalizeSimilarityText(brandName) ==
-          _normalizeSimilarityText(product.brand ?? '')) {
-        score += 0.30;
+      final probeBrand = _normalizeSimilarityText(brandName);
+      final productBrand = _normalizeSimilarityText(product.brand ?? '');
+      if (probeBrand.isNotEmpty && productBrand.isNotEmpty) {
+        if (probeBrand == productBrand) {
+          score += 0.30;
+        } else if (productBrand.contains(probeBrand) ||
+            probeBrand.contains(productBrand)) {
+          score += 0.20;
+        }
       }
     }
 
@@ -798,8 +1016,11 @@ class ProductDuplicateMatcherService {
     if (catalogSpecScore >= 0.94) return 0.96;
     if (catalogSpecScore >= 0.86) return 0.90;
     final textScore = math.max(keywordScore, semanticScore);
-    final imageWeight = hasImageProbe ? 0.42 : 0.08;
-    final textWeight = hasImageProbe ? 0.41 : 0.70;
+    // When we actually have an image to compare, the image carries more real
+    // "is this the same physical part" signal than Spanish keyword overlap
+    // on AliExpress titles. Bias the combiner toward image evidence.
+    final imageWeight = hasImageProbe ? 0.55 : 0.08;
+    final textWeight = hasImageProbe ? 0.28 : 0.70;
     const metadataWeight = 0.12;
     const identityWeight = 0.05;
     return (textScore * textWeight +

@@ -124,6 +124,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   // Bulk product creation state
   bool _showBulkCreate = false;
+  // True when the costs coming from OCR/JSON already include IVA (19%).
+  // Auto-detected from the parsed invoice (e.g. AliExpress allocates IVA into
+  // each unit price). Used to compute the suggested selling price correctly
+  // and to avoid double-charging IVA when the user reviews the bulk dialog.
+  bool _costsIncludeIva = false;
   List<_NewProductEntry> _newProductEntries = [];
   List<Category> _categories = [];
   List<ProductBrand> _brands = [];
@@ -1445,12 +1450,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       debugPrint('Failed to load categories/brands: $e');
     }
 
+    // Auto-detect tax-inclusive cost source. AliExpress invoices allocate
+    // IVA into each item's unitPrice, so the unit cost already contains IVA.
+    // For typical Chilean purchase invoices the cost is pre-tax (Net).
+    _costsIncludeIva = _looksLikeAliExpressInvoice(_parsedData!);
+
     // Create entries for each new product
     _newProductEntries = newProducts
         .map((item) => _NewProductEntry(
               originalItem: item,
               isSelected: true,
               selectedCategory: null, // No default - user must choose
+              costIncludesIva: _costsIncludeIva,
             ))
         .toList();
 
@@ -1460,6 +1471,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     });
 
     if (_looksLikeAliExpressInvoice(_parsedData!)) {
+      // Fire AI cleanup of noisy supplier titles in the background and the
+      // similar-products check at the same time. Both are independent and
+      // both update individual rows as their results land.
+      unawaited(_aiCleanProductNamesForEntries());
       await _checkSimilarProductsForNewEntries(autoTriggered: true);
     }
   }
@@ -1582,6 +1597,99 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
       debugPrint('Error loading suppliers: $e');
     }
+  }
+
+  /// Recompute the suggested selling price for every entry whose user has not
+  /// manually overridden it. Called when the "costs already include IVA"
+  /// toggle flips so the math stays consistent across all rows.
+  void _recomputeSuggestedPricesFromCost() {
+    for (final entry in _newProductEntries) {
+      entry.costIncludesIva = _costsIncludeIva;
+      final cost =
+          double.tryParse(entry.costController.text.replaceAll(',', '.')) ?? 0;
+      entry.priceController.text = _NewProductEntry._suggestedPriceFromCost(
+        cost,
+        costIncludesIva: _costsIncludeIva,
+      );
+    }
+  }
+
+  /// Compact info strip explaining how the suggested price is calculated and
+  /// letting the user toggle whether the OCR/JSON cost already contains IVA.
+  Widget _buildPricingRuleStrip() {
+    final formula = _costsIncludeIva
+        ? 'Precio sugerido = Costo × 2  (el costo ya incluye IVA, no se vuelve a sumar)'
+        : 'Precio sugerido = Costo × 1,19 × 2  (Neto + IVA, luego margen 2x)';
+    final hint = _costsIncludeIva
+        ? 'Detectado: el proveedor distribuye IVA, envío y descuentos en el costo unitario (ej. AliExpress).'
+        : 'Modo estándar: el costo es Neto y se le suma 19% de IVA antes del margen.';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color:
+            _costsIncludeIva ? Colors.amber.shade50 : Colors.blueGrey.shade50,
+        border: Border.all(
+          color: _costsIncludeIva
+              ? Colors.amber.shade200
+              : Colors.blueGrey.shade200,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.calculate_outlined,
+            size: 18,
+            color: _costsIncludeIva
+                ? Colors.amber.shade800
+                : Colors.blueGrey.shade700,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formula,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hint,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Tooltip(
+            message:
+                'Activa si el costo ya trae IVA incluido (no se vuelve a sumar 19%).',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Costo con IVA',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                Switch(
+                  value: _costsIncludeIva,
+                  onChanged: (v) {
+                    setState(() {
+                      _costsIncludeIva = v;
+                      _recomputeSuggestedPricesFromCost();
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Build the bulk product creation screen
@@ -1753,6 +1861,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 ),
               ),
 
+              const SizedBox(height: 8),
+
+              // Pricing rule strip ─ explains the suggested-price formula and
+              // lets the user toggle whether the OCR/JSON cost already
+              // includes IVA (e.g. AliExpress allocates tax into each unit).
+              _buildPricingRuleStrip(),
+
               const SizedBox(height: 12),
 
               // Table — always tableInnerWidth wide, scrolls horizontally if needed
@@ -1796,10 +1911,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                               const SizedBox(width: gap),
                               headerCell('Parecidos', wSimilar),
                               const SizedBox(width: gap),
-                              headerCell('Costo', wCost,
+                              headerCell(
+                                  _costsIncludeIva
+                                      ? 'Costo (c/IVA)'
+                                      : 'Costo (Neto)',
+                                  wCost,
                                   align: TextAlign.center),
                               const SizedBox(width: gap),
-                              headerCell('Precio', wPrice,
+                              headerCell(
+                                  _costsIncludeIva
+                                      ? 'Precio (×2)'
+                                      : 'Precio (×1,19×2)',
+                                  wPrice,
                                   align: TextAlign.center),
                               const SizedBox(width: gap),
                               headerCell('Categoría', wCat),
@@ -1968,19 +2091,76 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                 // Name
                                 SizedBox(
                                   width: wName,
-                                  child: TextField(
-                                    controller: entry.nameController,
-                                    enabled: entry.isSelected,
-                                    onChanged: (_) => setState(() {}),
-                                    minLines: 1,
-                                    maxLines: 2,
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 8),
-                                    ),
-                                    style: const TextStyle(fontSize: 12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      TextField(
+                                        controller: entry.nameController,
+                                        enabled: entry.isSelected,
+                                        onChanged: (_) => setState(() {}),
+                                        minLines: 1,
+                                        maxLines: 2,
+                                        decoration: const InputDecoration(
+                                          isDense: true,
+                                          border: OutlineInputBorder(),
+                                          contentPadding: EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 8),
+                                        ),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      if (entry.isAICleaningName ||
+                                          entry.nameWasAICleaned)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 3),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (entry.isAICleaningName)
+                                                const SizedBox(
+                                                  width: 10,
+                                                  height: 10,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                          strokeWidth: 1.5),
+                                                )
+                                              else
+                                                const Text('✨',
+                                                    style: TextStyle(
+                                                        fontSize: 11)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                entry.isAICleaningName
+                                                    ? 'IA limpiando título…'
+                                                    : 'Limpiado por IA',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: entry.isAICleaningName
+                                                      ? Colors.grey.shade600
+                                                      : Colors
+                                                          .deepPurple.shade400,
+                                                ),
+                                              ),
+                                              if (entry.nameWasAICleaned &&
+                                                  entry.originalNoisyTitle !=
+                                                      null) ...[
+                                                const SizedBox(width: 6),
+                                                Tooltip(
+                                                  message:
+                                                      'Título original:\n${entry.originalNoisyTitle}',
+                                                  child: Icon(
+                                                    Icons.info_outline,
+                                                    size: 12,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: gap),
@@ -2208,6 +2388,174 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
+  /// Run the AI cleaner over noisy supplier titles (e.g. AliExpress) and
+  /// rewrite each row's name field with a short, shop-friendly title plus
+  /// suggested category/brand. Skips rows the user has already edited.
+  /// Concurrency is capped to avoid hammering the Gemini proxy.
+  Future<void> _aiCleanProductNamesForEntries({
+    int concurrency = 3,
+  }) async {
+    if (_newProductEntries.isEmpty) return;
+
+    // Lightweight normalizer: lowercase, strip accents, drop non-alphanumeric.
+    String norm(String value) {
+      final lower = value.toLowerCase();
+      final unaccented = lower
+          .replaceAll(RegExp(r'[áàäâã]'), 'a')
+          .replaceAll(RegExp(r'[éèëê]'), 'e')
+          .replaceAll(RegExp(r'[íìïî]'), 'i')
+          .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+          .replaceAll(RegExp(r'[úùüû]'), 'u')
+          .replaceAll('ñ', 'n');
+      return unaccented.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    }
+
+    // Fuzzy resolver: exact normalized match first, then bidirectional
+    // contains, then significant word overlap. Returns null when nothing is
+    // confidently close so we don't auto-pick obviously wrong rows.
+    Category? resolveCategory(String? suggested) {
+      if (suggested == null) return null;
+      final target = norm(suggested);
+      if (target.isEmpty) return null;
+      // Exact normalized match.
+      for (final c in _categories) {
+        if (norm(c.name) == target) return c;
+      }
+      // Substring either way ("Pastillas" vs "Pastillas de freno").
+      for (final c in _categories) {
+        final cn = norm(c.name);
+        if (cn.isEmpty) continue;
+        if (cn.contains(target) || target.contains(cn)) return c;
+      }
+      // Word overlap (>=1 meaningful word, ignoring tiny stop tokens).
+      final stop = {'de', 'del', 'la', 'el', 'los', 'las', 'para', 'y'};
+      final targetTokens = target
+          .split(' ')
+          .where((t) => t.length >= 4 && !stop.contains(t))
+          .toSet();
+      if (targetTokens.isEmpty) return null;
+      for (final c in _categories) {
+        final cTokens = norm(c.name)
+            .split(' ')
+            .where((t) => t.length >= 4 && !stop.contains(t))
+            .toSet();
+        if (cTokens.intersection(targetTokens).isNotEmpty) return c;
+      }
+      return null;
+    }
+
+    ProductBrand? resolveBrand(String? suggested) {
+      if (suggested == null) return null;
+      final target = norm(suggested);
+      if (target.isEmpty) return null;
+      for (final b in _brands) {
+        if (norm(b.name) == target) return b;
+      }
+      for (final b in _brands) {
+        final bn = norm(b.name);
+        if (bn.isEmpty) continue;
+        if (bn.contains(target) || target.contains(bn)) return b;
+      }
+      return null;
+    }
+
+    // Short-circuit: rows that already came in with addon AI cleanup.
+    // The Chrome addon (>=0.4.0) stamps `aiCleaned/originalDescription/
+    // aiCategory/aiBrand` per item; the JSON parser stuffs those into
+    // rawRowText. We honor that here so we don't pay Gemini twice.
+    String? extractMarker(String? raw, String key) {
+      if (raw == null) return null;
+      final regex = RegExp('$key:\\s*([^\\n]+)', caseSensitive: false);
+      final match = regex.firstMatch(raw);
+      final value = match?.group(1)?.trim();
+      return (value == null || value.isEmpty) ? null : value;
+    }
+
+    for (final entry in _newProductEntries) {
+      if (entry.nameUserEdited) continue;
+      final raw = entry.originalItem.rawRowText;
+      final isAddonCleaned = raw != null &&
+          RegExp(r'AI_CLEANED:\s*true', caseSensitive: false).hasMatch(raw);
+      if (!isAddonCleaned) continue;
+      final originalTitle = extractMarker(raw, 'ORIGINAL_TITLE');
+      final addonCategory = extractMarker(raw, 'AI_CATEGORY');
+      final addonBrand = extractMarker(raw, 'AI_BRAND');
+      if (originalTitle != null) entry.originalNoisyTitle = originalTitle;
+      if (addonCategory != null) entry.aiSuggestedCategoryName = addonCategory;
+      if (addonBrand != null) entry.aiSuggestedBrandName = addonBrand;
+      entry.nameWasAICleaned = true;
+      if (entry.selectedBrand == null && addonBrand != null) {
+        final match = resolveBrand(addonBrand);
+        if (match != null) entry.selectedBrand = match;
+      }
+      if (entry.selectedCategory == null && addonCategory != null) {
+        final match = resolveCategory(addonCategory);
+        if (match != null) entry.selectedCategory = match;
+      }
+    }
+
+    for (final entry in _newProductEntries) {
+      if (entry.nameUserEdited) continue;
+      if (entry.nameWasAICleaned) continue; // addon already cleaned this row
+      entry.isAICleaningName = true;
+    }
+    if (mounted) setState(() {});
+
+    final pending = _newProductEntries
+        .where((e) => !e.nameUserEdited && !e.nameWasAICleaned)
+        .toList();
+    if (pending.isEmpty) {
+      // Nothing left for Gemini to do; just refresh the UI.
+      if (mounted) setState(() {});
+      return;
+    }
+    final supplierName = _ocrSupplierName ?? widget.supplierName;
+
+    Future<void> processOne(_NewProductEntry entry) async {
+      try {
+        final raw =
+            (entry.originalNoisyTitle ?? entry.nameController.text).trim();
+        if (raw.isEmpty) {
+          entry.isAICleaningName = false;
+          return;
+        }
+        final result = await _aiAssistantService.cleanProductTitleFromImage(
+          rawTitle: raw,
+          imageBytes: entry.imageBytes,
+          imageUrl: entry.imageUrl,
+          supplierName: supplierName,
+        );
+        if (!mounted) return;
+        if (result != null) {
+          entry.aiSuggestedCategoryName = result.categoryName;
+          entry.aiSuggestedBrandName = result.brand;
+          entry.applyAICleanedName(result.cleanedName);
+          if (entry.selectedBrand == null && result.brand != null) {
+            final match = resolveBrand(result.brand);
+            if (match != null) entry.selectedBrand = match;
+          }
+          if (entry.selectedCategory == null && result.categoryName != null) {
+            final match = resolveCategory(result.categoryName);
+            if (match != null) entry.selectedCategory = match;
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ [OCR] AI clean name failed for row: $e');
+      } finally {
+        entry.isAICleaningName = false;
+        if (mounted) setState(() {});
+      }
+    }
+
+    final iterator = pending.iterator;
+    final workers = List.generate(concurrency, (_) async {
+      while (iterator.moveNext()) {
+        await processOne(iterator.current);
+      }
+    });
+    await Future.wait(workers);
+  }
+
   Future<void> _checkSimilarProductsForNewEntries({
     _NewProductEntry? entry,
     bool autoTriggered = false,
@@ -2245,8 +2593,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 ? current.skuController.text.trim()
                 : current.originalItem.sku,
             rawText: current.originalItem.rawRowText,
-            categoryName: current.selectedCategory?.name,
-            brandName: current.selectedBrand?.name,
+            categoryName: current.selectedCategory?.name ??
+                current.aiSuggestedCategoryName,
+            brandName:
+                current.selectedBrand?.name ?? current.aiSuggestedBrandName,
             supplierId: _supplierIdForNewProducts ?? widget.supplierId,
             supplierName: _ocrSupplierName ?? widget.supplierName,
             imageUrl: current.imageUrl,
@@ -3423,6 +3773,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           item['originalDescription'] == null
               ? null
               : 'ORIGINAL_TITLE: ${item['originalDescription']}',
+          item['aiCleaned'] == true ? 'AI_CLEANED: true' : null,
+          (item['aiCategory'] is String &&
+                  (item['aiCategory'] as String).trim().isNotEmpty)
+              ? 'AI_CATEGORY: ${(item['aiCategory'] as String).trim()}'
+              : null,
+          (item['aiBrand'] is String &&
+                  (item['aiBrand'] as String).trim().isNotEmpty)
+              ? 'AI_BRAND: ${(item['aiBrand'] as String).trim()}'
+              : null,
           item['productUrl'],
           item['imageUrl'] == null ? null : 'IMAGE_URL: ${item['imageUrl']}',
         ].whereType<Object>().join('\n'),
@@ -3774,24 +4133,80 @@ class _NewProductEntry {
   bool isCheckingSimilar = false;
   List<ProductDuplicateCandidate> similarCandidates = [];
 
+  /// AI-cleanup state for AliExpress (and other noisy supplier) titles.
+  /// When true, the row name field is being rewritten by the AI cleaner.
+  bool isAICleaningName = false;
+
+  /// Set to `true` after the AI cleaner successfully replaced the name.
+  /// Drives the small "✨ Limpio por IA" badge in the row UI.
+  bool nameWasAICleaned = false;
+
+  /// Set to `true` once the user has manually edited the name field. After
+  /// this, the AI cleaner must NOT overwrite the user's edit.
+  bool nameUserEdited = false;
+
+  /// AI-suggested category name (e.g. "Postizas"). Used to seed the
+  /// duplicate-matcher probe so the family detector classifies the row
+  /// correctly even before the user picks a category from the dropdown.
+  String? aiSuggestedCategoryName;
+
+  /// AI-detected brand visible in the photo (e.g. "ZTTO", "Shimano"). Used
+  /// to seed the duplicate-matcher probe.
+  String? aiSuggestedBrandName;
+
+  /// Original noisy supplier title preserved as the description fallback so
+  /// the long AliExpress text doesn't get lost when the name is cleaned.
+  String? originalNoisyTitle;
+
+  /// True when the cost in [costController] already includes 19% IVA (e.g.
+  /// AliExpress unit prices, where shipping/tax/discount have been allocated
+  /// into each unit). Drives the suggested-price formula:
+  ///   - tax-included cost: price = cost * 2 (IVA already inside the cost)
+  ///   - tax-excluded cost: price = cost * 1.19 * 2 (Net + IVA, then x2)
+  bool costIncludesIva;
+
   _NewProductEntry({
     required this.originalItem,
     this.isSelected = true,
     String? initialName,
     this.selectedCategory,
+    this.costIncludesIva = false,
   })  : nameController = TextEditingController(
             text: initialName ?? _cleanDescription(originalItem.description)),
         skuController = TextEditingController(text: originalItem.sku),
         costController =
             TextEditingController(text: _calculateDefaultCost(originalItem)),
-        priceController =
-            TextEditingController(text: _calculateDefaultPrice(originalItem)) {
+        priceController = TextEditingController(
+            text: _calculateDefaultPrice(originalItem,
+                costIncludesIva: costIncludesIva)) {
     final sourceImageUrl = originalItem.imageUrl?.trim();
     if (sourceImageUrl != null && sourceImageUrl.isNotEmpty) {
       imageUrl = sourceImageUrl;
       imageUrlOptimized = sourceImageUrl;
       imageFileName = _imageFileNameFromUrl(sourceImageUrl);
     }
+    originalNoisyTitle = nameController.text;
+    // Track manual edits so the AI cleaner never overwrites the user.
+    nameController.addListener(() {
+      if (_suppressNameEditTracking) return;
+      nameUserEdited = true;
+    });
+  }
+
+  /// Set by the AI cleaner around `nameController.text = ...` so the
+  /// controller listener does NOT mark the value as a user edit.
+  bool _suppressNameEditTracking = false;
+
+  /// Replace the row name with an AI-cleaned title without tripping the
+  /// "user edited" guard. Returns false if the user has already edited the
+  /// name, in which case the AI suggestion is dropped silently.
+  bool applyAICleanedName(String cleanedName) {
+    if (nameUserEdited) return false;
+    _suppressNameEditTracking = true;
+    nameController.text = cleanedName;
+    _suppressNameEditTracking = false;
+    nameWasAICleaned = true;
+    return true;
   }
 
   static String? _imageFileNameFromUrl(String url) {
@@ -3830,14 +4245,32 @@ class _NewProductEntry {
     return '';
   }
 
-  /// Calculate default sale price: 2x cost, rounded to nearest 100
-  static String _calculateDefaultPrice(ParsedLineItem item) {
+  /// Calculate default sale price (rounded to nearest 100).
+  ///
+  /// When [costIncludesIva] is true, the cost already contains IVA (e.g.
+  /// AliExpress allocates tax into each unit), so the suggested price is
+  /// `cost * 2` (a clean 100% margin over the all-in landed cost).
+  ///
+  /// When [costIncludesIva] is false, the cost is a Net (pre-tax) value, so
+  /// IVA must be added before the markup: `cost * 1.19 * 2`.
+  static String _calculateDefaultPrice(
+    ParsedLineItem item, {
+    bool costIncludesIva = false,
+  }) {
     final rawCost = _calculateDefaultCost(item);
     final cost = double.tryParse(rawCost.replaceAll(',', '.')) ?? 0;
+    return _suggestedPriceFromCost(cost, costIncludesIva: costIncludesIva);
+  }
+
+  /// Shared formula used both for first render and live recompute when the
+  /// user toggles the "costs already include IVA" switch in the dialog.
+  static String _suggestedPriceFromCost(
+    double cost, {
+    bool costIncludesIva = false,
+  }) {
     if (cost <= 0) return '';
-    // Cost + IVA (19%) * 2, rounded to nearest 100
-    // Formula: Cost * 1.19 * 2
-    final price = (cost * 1.19 * 2 / 100).round() * 100;
+    final base = costIncludesIva ? cost * 2 : cost * 1.19 * 2;
+    final price = (base / 100).round() * 100;
     return price.toString();
   }
 

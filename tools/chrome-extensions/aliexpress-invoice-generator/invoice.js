@@ -52,14 +52,18 @@
           </div>
         </td>
         <td class="numeric">${formatQuantity(item.quantity)}</td>
-        <td class="numeric">${formatMoney(item.unitPrice, invoice.currency)}</td>
+        <td class="numeric">${formatUnitMoney(item.sourceUnitPrice ?? item.unitPrice, invoice.currency)}</td>
+        <td class="numeric allocation-cell">${formatOptionalUnitMoney(-Math.abs(toNumber(item.allocatedDiscount)), invoice.currency)}</td>
+        <td class="numeric allocation-cell">${formatOptionalUnitMoney(item.allocatedShipping, invoice.currency)}</td>
+        <td class="numeric allocation-cell">${formatOptionalUnitMoney(item.allocatedTax, invoice.currency)}</td>
+        <td class="numeric calculated-cost-cell">${formatUnitMoney(item.unitPrice, invoice.currency)}</td>
         <td class="numeric">${formatMoney(item.total, invoice.currency)}</td>
       </tr>
     `).join('');
 
     const itemSubtotal = sumItems(invoice.items);
-    const subtotal = invoice.subtotal || itemSubtotal;
-    const shipping = invoice.shipping || Math.max(0, roundMoney(invoice.total - subtotal - (invoice.tax || 0) + (invoice.discount || 0)));
+    const sourceSubtotal = invoice.subtotal || sumSourceItems(invoice.items) || itemSubtotal;
+    const shipping = toNumber(invoice.shipping);
     const paidAmount = invoice.total;
     const balance = Math.max(0, roundMoney(invoice.total - paidAmount));
 
@@ -101,7 +105,11 @@
               <th>Imagen</th>
               <th>Artículo &amp; Descripción</th>
               <th class="numeric">Cantidad</th>
-              <th class="numeric">Tarifa</th>
+              <th class="numeric">Tarifa origen</th>
+              <th class="numeric">Desc./coins u.</th>
+              <th class="numeric">Envío u.</th>
+              <th class="numeric">Tax u.</th>
+              <th class="numeric">Costo unit. calc.</th>
               <th class="numeric">Importe</th>
             </tr>
           </thead>
@@ -110,9 +118,10 @@
       </section>
 
       <section class="section totals">
-        <div class="totals-row"><span>Subtotal (Neto)</span><span>${formatMoney(subtotal, invoice.currency)}</span></div>
-        ${invoice.discount ? `<div class="totals-row"><span>Descuento</span><span>${formatMoney(-invoice.discount, invoice.currency)}</span></div>` : ''}
+        <div class="totals-row"><span>Subtotal productos</span><span>${formatMoney(sourceSubtotal, invoice.currency)}</span></div>
+        ${invoice.discount ? `<div class="totals-row"><span>Descuento / coins</span><span>${formatMoney(-Math.abs(invoice.discount), invoice.currency)}</span></div>` : ''}
         ${shipping > 0 ? `<div class="totals-row"><span>Shipping</span><span>${formatMoney(shipping, invoice.currency)}</span></div>` : ''}
+        <div class="totals-row subtotal-row"><span>Neto (subtotal imponible)</span><span>${formatMoney(sourceSubtotal - Math.abs(invoice.discount || 0) + shipping, invoice.currency)}</span></div>
         ${invoice.tax ? `<div class="totals-row"><span>IVA / Tax</span><span>${formatMoney(invoice.tax, invoice.currency)}</span></div>` : ''}
         <div class="totals-row grand-total"><span>TOTAL</span><span>${formatMoney(invoice.total, invoice.currency)}</span></div>
         <div class="totals-row paid-row"><span>Pago realizado</span><span>${formatMoney(paidAmount, invoice.currency)}</span></div>
@@ -150,20 +159,25 @@
     lines.push(`Pedido # ${invoice.orderNumber}`);
     lines.push(`Factura ${invoice.orderNumber}`);
     lines.push(`Fecha: ${formatDate(invoice.orderDate)}`);
-    lines.push('SKU DESCRIPCION CANTIDAD PRECIO IMPORTE');
+    lines.push('SKU DESCRIPCION CANTIDAD TARIFA_ORIGEN DESC_UNIT ENVIO_UNIT TAX_UNIT COSTO_UNIT IMPORTE');
     lines.push('IMPORTE');
 
     invoice.items.forEach((item) => {
       lines.push(`[${item.sku || 'AE-ITEM'}] ${item.description}`);
       lines.push(formatDecimalComma(item.quantity || 1));
       lines.push('Unidades');
-      lines.push(formatDecimalComma(item.unitPrice || 0));
-      lines.push('$');
-      lines.push(formatDecimalComma(item.total || 0));
+      lines.push(`$ ${formatDecimalComma((item.sourceUnitPrice ?? item.unitPrice) || 0)}`);
+      lines.push(`$ ${formatDecimalComma(-Math.abs(toNumber(item.allocatedDiscount)))}`);
+      lines.push(`$ ${formatDecimalComma(item.allocatedShipping || 0)}`);
+      lines.push(`$ ${formatDecimalComma(item.allocatedTax || 0)}`);
+      lines.push(`$ ${formatDecimalComma(item.unitPrice || 0)}`);
+      lines.push(`$ ${formatDecimalComma(item.total || 0)}`);
     });
 
-    lines.push(`Total neto $ ${formatDecimalComma(invoice.subtotal || sumItems(invoice.items))}`);
+    lines.push(`Total neto $ ${formatDecimalComma(invoice.subtotal || sumSourceItems(invoice.items) || sumItems(invoice.items))}`);
+    if (invoice.discount) lines.push(`Descuento coins $ ${formatDecimalComma(-Math.abs(invoice.discount))}`);
     if (invoice.shipping) lines.push(`Envio $ ${formatDecimalComma(invoice.shipping)}`);
+    if (invoice.tax) lines.push(`IVA Tax $ ${formatDecimalComma(invoice.tax)}`);
     lines.push(`TOTAL $ ${formatDecimalComma(invoice.total)}`);
     if (invoice.notes) lines.push(invoice.notes);
     return lines.join('\n');
@@ -181,6 +195,11 @@
       const quantity = toNumber(item.quantity) || 1;
       const unitPrice = toNumber(item.unitPrice);
       const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
+      const sourceUnitPrice = toNullableNumber(item.sourceUnitPrice) ?? unitPrice;
+      const allocatedDiscountTotal = toNullableNumber(item.allocatedDiscountTotal);
+      const allocatedShippingTotal = toNullableNumber(item.allocatedShippingTotal);
+      const allocatedTaxTotal = toNullableNumber(item.allocatedTaxTotal);
+      const allocationGranularity = item.allocationGranularity === 'unit' ? 'unit' : '';
       const sourceDescription = String(item.originalDescription || item.description || 'AliExpress item').trim();
       const cleanedDescription = smartProductName(sourceDescription, item);
       const currentDescription = cleanVisibleProductName(item.description);
@@ -195,6 +214,15 @@
         quantity,
         unitPrice,
         total,
+        sourceUnitPrice,
+        sourceTotal: toNullableNumber(item.sourceTotal) ?? roundMoney(sourceUnitPrice * quantity),
+        allocatedDiscount: normalizeAllocationUnit(item.allocatedDiscount, allocatedDiscountTotal, quantity, allocationGranularity),
+        allocatedDiscountTotal,
+        allocatedShipping: normalizeAllocationUnit(item.allocatedShipping, allocatedShippingTotal, quantity, allocationGranularity),
+        allocatedShippingTotal,
+        allocatedTax: normalizeAllocationUnit(item.allocatedTax, allocatedTaxTotal, quantity, allocationGranularity),
+        allocatedTaxTotal,
+        allocationGranularity: 'unit',
         itemId: item.itemId || '',
         productUrl: item.productUrl || '',
         imageUrl: item.imageUrl || '',
@@ -216,6 +244,14 @@
       pageUrl: invoice.pageUrl || '',
       items,
     };
+  }
+
+  function normalizeAllocationUnit(unitValue, totalValue, quantity, granularity) {
+    const total = toNullableNumber(totalValue);
+    if (total !== null) return roundMoney(total / (quantity || 1));
+    const unit = toNullableNumber(unitValue);
+    if (unit === null) return null;
+    return granularity === 'unit' ? unit : roundMoney(unit / (quantity || 1));
   }
 
   function smartProductName(description, item = {}) {
@@ -433,6 +469,24 @@
     return `$ ${rounded.toLocaleString('es-CL')}`;
   }
 
+  function formatUnitMoney(value, currency) {
+    const number = toNumber(value);
+    if (Math.abs(number - Math.round(number)) < 0.005) return formatMoney(number, currency);
+    return `$ ${number.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  function formatOptionalMoney(value, currency) {
+    const number = toNumber(value);
+    if (Math.abs(number) < 0.01) return '—';
+    return formatMoney(number, currency);
+  }
+
+  function formatOptionalUnitMoney(value, currency) {
+    const number = toNumber(value);
+    if (Math.abs(number) < 0.005) return '—';
+    return formatUnitMoney(number, currency);
+  }
+
   function formatQuantity(value) {
     return (Number(value) || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 });
   }
@@ -448,6 +502,13 @@
 
   function sumItems(items) {
     return roundMoney((items || []).reduce((sum, item) => sum + toNumber(item.total), 0));
+  }
+
+  function sumSourceItems(items) {
+    return roundMoney((items || []).reduce((sum, item) => {
+      const sourceTotal = toNullableNumber(item.sourceTotal);
+      return sum + (sourceTotal === null ? toNumber(item.total) : sourceTotal);
+    }, 0));
   }
 
   function roundMoney(value) {

@@ -177,9 +177,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           _inventoryService.loadedPreviewPageCount > 0);
 
   void _replaceProductCache(Iterable<Product> products) {
-    final filteredProducts =
-        products.where((product) => product.parentSetId == null).toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final filteredProducts = products
+        .where((product) => product.parentSetId == null)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _productCache = filteredProducts;
   }
 
@@ -233,8 +234,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               product != null &&
               (product.sku.toLowerCase() == normalizedCode ||
                   product.barcode?.toLowerCase() == normalizedCode ||
-                  product.supplierCode?.trim().toLowerCase() ==
-                      normalizedCode),
+                  product.supplierCode?.trim().toLowerCase() == normalizedCode),
           orElse: () => null,
         );
   }
@@ -252,7 +252,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     Product? product = await _inventoryService.getProductBySku(normalizedCode);
     product ??= await _inventoryService.getProductByBarcode(normalizedCode);
-    product ??= await _inventoryService.getProductBySupplierCode(normalizedCode);
+    product ??=
+        await _inventoryService.getProductBySupplierCode(normalizedCode);
 
     if (product != null) {
       _upsertProductCache(product);
@@ -457,8 +458,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           view.physicalSize.width / view.devicePixelRatio,
           view.physicalSize.height / view.devicePixelRatio,
         );
-        final dialogWidth = math.min(windowSize.width - 32, 1360.0);
-        final dialogHeight = math.min(windowSize.height * 0.9, 860.0);
+        final dialogWidth = windowSize.width - 32;
+        final dialogHeight = windowSize.height - 40;
 
         return Dialog(
           insetPadding:
@@ -3748,9 +3749,7 @@ enum DiscountType { amount, percentage }
 
 class _PurchaseLineEntry {
   _PurchaseLineEntry(
-      {required this.line,
-      this.product,
-      this.shouldAutoFocus = false})
+      {required this.line, this.product, this.shouldAutoFocus = false})
       : quantityController =
             TextEditingController(text: line.quantity.toStringAsFixed(0)),
         unitCostController =

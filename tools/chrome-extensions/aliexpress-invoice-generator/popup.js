@@ -5,6 +5,9 @@
   const GEMINI_KEY_STORAGE = 'aliexpressInvoiceGeminiApiKey';
   const BULK_WORKSPACE_STORAGE = 'aliexpressInvoiceBulkWorkspace';
   const SETTINGS_STORAGE = 'aliexpressInvoiceSettings';
+  const AI_AUTO_CLEAN_STORAGE = 'aliexpressInvoiceAiAutoClean';
+  const AI_NAME_CACHE_STORAGE = 'aliexpressInvoiceAiNameCache';
+  const AI_NAME_CACHE_LIMIT = 500;
   const DEFAULT_SETTINGS = {
     defaultDateMode: 'range',
     rangeDays: 30,
@@ -18,8 +21,12 @@
     'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ];
-  const CONTENT_SCRIPT_VERSION = '0.3.41';
+  const CONTENT_SCRIPT_VERSION = '0.4.0';
   const imageDimensionCache = new Map();
+  // In-memory mirror of the persisted AI cleaned-name cache.
+  // Key: `${imageHashOrUrl}|${rawTitle.toLowerCase()}` → cleaned payload.
+  const aiNameCache = new Map();
+  let aiAutoCleanEnabled = false;
   const state = {
     items: [],
     pageUrl: '',
@@ -74,6 +81,8 @@
     aiExtractButton: document.getElementById('aiExtractButton'),
     saveGeminiKeyButton: document.getElementById('saveGeminiKeyButton'),
     geminiApiKey: document.getElementById('geminiApiKey'),
+    aiCleanNamesButton: document.getElementById('aiCleanNamesButton'),
+    aiAutoCleanToggle: document.getElementById('aiAutoCleanToggle'),
     status: document.getElementById('status'),
     supplierName: document.getElementById('supplierName'),
     supplierTaxId: document.getElementById('supplierTaxId'),
@@ -99,6 +108,8 @@
     syncBulkDateModeUi();
     renderBulkProgress();
     loadGeminiKey();
+    loadAiAutoCleanPreference();
+    loadAiNameCache();
     renderItems();
     restoreBulkWorkspaceState();
     setupBulkWorkspaceStorageListener();
@@ -107,6 +118,12 @@
   el.extractButton.addEventListener('click', extractCurrentPage);
   el.aiExtractButton.addEventListener('click', extractCurrentVisibleAreaWithAi);
   el.saveGeminiKeyButton.addEventListener('click', saveGeminiKey);
+  if (el.aiCleanNamesButton) {
+    el.aiCleanNamesButton.addEventListener('click', () => cleanAllNamesWithAi({ trigger: 'manual' }));
+  }
+  if (el.aiAutoCleanToggle) {
+    el.aiAutoCleanToggle.addEventListener('change', saveAiAutoCleanPreference);
+  }
   el.addItemButton.addEventListener('click', () => {
     state.items.push(createEmptyItem());
     renderItems();
@@ -195,6 +212,8 @@
         ? ` ${response.order.warnings.join(' ')}`
         : '';
       setStatus(`Datos extraidos. Revisa los campos antes de generar el PDF.${warningText}`, response.order.warnings && response.order.warnings.length ? 'warning' : 'success');
+      // Optional auto-cleanup right after DOM extraction.
+      maybeAutoCleanAfter('dom-extract');
     } catch (error) {
       setStatus(error.message || String(error), 'error');
     } finally {
@@ -276,6 +295,294 @@
     setStatus('Clave Gemini guardada localmente en Chrome.', 'success');
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ✨ AI title cleanup
+  //
+  // Mirrors `AIAssistantService.cleanProductTitleFromImage` in the ERP
+  // (lib/modules/ai_assistant/services/ai_service.dart). Runs at scrape time
+  // so the JSON exported by the addon is already shop-friendly. The ERP
+  // still has its own fallback cleaner for invoices that don't come from
+  // this addon.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async function loadAiAutoCleanPreference() {
+    try {
+      const stored = await chrome.storage.local.get(AI_AUTO_CLEAN_STORAGE);
+      aiAutoCleanEnabled = Boolean(stored[AI_AUTO_CLEAN_STORAGE]);
+    } catch (_error) {
+      aiAutoCleanEnabled = false;
+    }
+    if (el.aiAutoCleanToggle) el.aiAutoCleanToggle.checked = aiAutoCleanEnabled;
+  }
+
+  async function saveAiAutoCleanPreference() {
+    aiAutoCleanEnabled = Boolean(el.aiAutoCleanToggle && el.aiAutoCleanToggle.checked);
+    try {
+      await chrome.storage.local.set({ [AI_AUTO_CLEAN_STORAGE]: aiAutoCleanEnabled });
+    } catch (_error) {/* ignore */}
+  }
+
+  async function loadAiNameCache() {
+    try {
+      const stored = await chrome.storage.local.get(AI_NAME_CACHE_STORAGE);
+      const raw = stored[AI_NAME_CACHE_STORAGE];
+      if (raw && typeof raw === 'object') {
+        Object.entries(raw).forEach(([k, v]) => {
+          if (v && typeof v === 'object') aiNameCache.set(k, v);
+        });
+      }
+    } catch (_error) {/* ignore */}
+  }
+
+  async function persistAiNameCache() {
+    try {
+      // Bound the cache so chrome.storage.local doesn't grow unbounded.
+      if (aiNameCache.size > AI_NAME_CACHE_LIMIT) {
+        const overflow = aiNameCache.size - AI_NAME_CACHE_LIMIT;
+        const it = aiNameCache.keys();
+        for (let i = 0; i < overflow; i++) {
+          const next = it.next();
+          if (next.done) break;
+          aiNameCache.delete(next.value);
+        }
+      }
+      const obj = {};
+      aiNameCache.forEach((v, k) => { obj[k] = v; });
+      await chrome.storage.local.set({ [AI_NAME_CACHE_STORAGE]: obj });
+    } catch (_error) {/* ignore */}
+  }
+
+  function aiCacheKeyFor(rawTitle, imageUrl) {
+    const t = String(rawTitle || '').trim().toLowerCase();
+    const i = String(imageUrl || '').trim();
+    return `${i || 'noimg'}|${t}`;
+  }
+
+  async function fetchImageAsBase64(imageUrl) {
+    if (!imageUrl) return null;
+    try {
+      const response = await fetch(imageUrl, { method: 'GET' });
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      // Skip absurdly large images so we don't blow Gemini quotas.
+      if (blob.size > 4 * 1024 * 1024) return null;
+      const arrayBuf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      const mime = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+      return { base64: btoa(binary), mime };
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function buildCleanNamePrompt(rawTitle, supplierName) {
+    const sup = supplierName ? ` (proveedor: ${supplierName})` : '';
+    return [
+      'Eres un asistente experto en taller de bicicletas en Chile.',
+      `Recibes el titulo bruto de un producto AliExpress${sup} y, cuando esta disponible, una foto.`,
+      'Tu tarea: reescribirlo como un nombre CORTO, claro y consistente para el catalogo de un taller chileno.',
+      '',
+      'Reglas:',
+      '- Maximo 60 caracteres.',
+      '- Empieza por el componente en singular y en espanol chileno de taller (postiza, polea, plato, piola, pastilla, camara, cassette, cadena, manilla, eslabon, etc.).',
+      '- Si la marca es clara, agregala (ZTTO, Shimano, KMC, SRAM, RISK, ENLEE, ODI, etc.). Si no, deja el campo brand vacio.',
+      '- Si el modelo es claro, agregalo (ej. "001", "M-310", "HG-200", "9v").',
+      '- IMPORTANTE: NO incluyas cantidad de empaque ni multiplicadores en el nombre. Quita expresiones como "Set 5", "5 pares", "100 unidades", "(50 unidades)", "pack 10", "x4", "4pcs", "kit 3". El nombre describe UNA unidad del producto.',
+      '- Si el producto es naturalmente plural (ej. "Pastillas de freno", "Pernos"), conserva esa forma sin numeros.',
+      '- NO copies marketing como "for MTB Bike Bicycle Universal Steel Aluminum 2024 New".',
+      '- NO inventes datos que no estan en titulo o imagen.',
+      '- category_name debe ser una categoria humana, simple, en plural, en espanol chileno de taller (ej. "Pastillas", "Cadenas", "Eslabones", "Postizas", "Pedales", "Puños", "Pernos", "Cassettes", "Rotores", "Camaras", "Herramientas"). Una sola palabra cuando sea posible.',
+      '- Devuelve SOLO un objeto JSON valido con esta forma EXACTA, sin texto adicional:',
+      '  {"cleaned_name": "Postiza ZTTO 001", "component_type": "postiza", "brand": "ZTTO", "model": "001", "category_name": "Postizas", "confidence": 0.0-1.0}',
+      '',
+      `Titulo bruto: ${rawTitle}`,
+    ].join('\n');
+  }
+
+  function parseCleanedNameJson(payload) {
+    const text = (payload && payload.candidates && payload.candidates[0]
+      && payload.candidates[0].content && payload.candidates[0].content.parts)
+      ? payload.candidates[0].content.parts.map((p) => p.text || '').join('\n')
+      : '';
+    if (!text) return null;
+    let obj;
+    try {
+      obj = JSON.parse(text);
+    } catch (_error) {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return null;
+      try { obj = JSON.parse(match[0]); } catch (_e2) { return null; }
+    }
+    const coerce = (v, max = 80) => {
+      if (v == null) return '';
+      let s = String(v).trim().replace(/\s+/g, ' ');
+      if (s.length > max) s = s.slice(0, max).trim();
+      return s;
+    };
+    const cleanedName = coerce(obj.cleaned_name, 80);
+    if (!cleanedName) return null;
+    const conf = Number(obj.confidence);
+    return {
+      cleanedName,
+      componentType: coerce(obj.component_type, 40).toLowerCase(),
+      brand: coerce(obj.brand, 40),
+      model: coerce(obj.model, 40),
+      categoryName: coerce(obj.category_name, 60),
+      confidence: Number.isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0.6,
+    };
+  }
+
+  async function aiCleanProductTitle(apiKey, { rawTitle, imageUrl, supplierName }) {
+    const trimmed = String(rawTitle || '').trim();
+    if (!trimmed) return null;
+
+    const cacheKey = aiCacheKeyFor(trimmed, imageUrl);
+    if (aiNameCache.has(cacheKey)) return aiNameCache.get(cacheKey);
+
+    const parts = [{ text: buildCleanNamePrompt(trimmed, supplierName) }];
+    const imagePart = await fetchImageAsBase64(imageUrl);
+    if (imagePart) {
+      parts.push({ inline_data: { mime_type: imagePart.mime, data: imagePart.base64 } });
+    }
+
+    const { payload } = await callGeminiGenerateContent(apiKey, {
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        temperature: 0.2,
+        response_mime_type: 'application/json',
+      },
+    });
+
+    const result = parseCleanedNameJson(payload);
+    if (result) {
+      aiNameCache.set(cacheKey, result);
+      // Fire-and-forget; persisting on every hit is fine because the addon
+      // never runs more than a few dozen rows in parallel.
+      persistAiNameCache();
+    }
+    return result;
+  }
+
+  function applyAiCleanedNameToItem(item, cleaned) {
+    if (!item || !cleaned || !cleaned.cleanedName) return false;
+    const original = String(item.originalDescription || item.description || '').trim();
+    item.originalDescription = original;
+    item.description = cleaned.cleanedName;
+    item.aiCleaned = true;
+    item.aiCategory = cleaned.categoryName || '';
+    item.aiBrand = cleaned.brand || '';
+    item.aiModel = cleaned.model || '';
+    item.aiComponent = cleaned.componentType || '';
+    item.aiConfidence = cleaned.confidence;
+    return true;
+  }
+
+  // Run the cleaner over `state.items` (single invoice) and over every
+  // selected bulk order's items. Cap concurrency so we don't hammer Gemini.
+  async function cleanAllNamesWithAi({ trigger = 'manual', concurrency = 3 } = {}) {
+    const apiKey = (el.geminiApiKey && el.geminiApiKey.value || '').trim();
+    if (!apiKey) {
+      if (trigger === 'manual') {
+        setStatus('Pega tu Gemini API key y pulsa Guardar antes de limpiar nombres.', 'error');
+      }
+      return { processed: 0, total: 0 };
+    }
+
+    const supplierName = (el.supplierName && el.supplierName.value || '').trim() || 'AliExpress Marketplace';
+
+    // Collect every item that hasn't been AI-cleaned and isn't user-edited.
+    const targets = [];
+    state.items.forEach((item, idx) => {
+      if (!item || item.aiCleaned) return;
+      const raw = String(item.originalDescription || item.description || '').trim();
+      if (!raw) return;
+      targets.push({ item, scope: 'single', idx, raw });
+    });
+    if (Array.isArray(state.bulkOrders)) {
+      state.bulkOrders.forEach((order, oIdx) => {
+        if (!order || !Array.isArray(order.items)) return;
+        order.items.forEach((item, iIdx) => {
+          if (!item || item.aiCleaned) return;
+          const raw = String(item.originalDescription || item.description || '').trim();
+          if (!raw) return;
+          targets.push({ item, scope: 'bulk', oIdx, iIdx, raw });
+        });
+      });
+    }
+
+    if (targets.length === 0) {
+      if (trigger === 'manual') setStatus('No hay nombres pendientes de limpiar.', 'neutral');
+      return { processed: 0, total: 0 };
+    }
+
+    if (el.aiCleanNamesButton) el.aiCleanNamesButton.disabled = true;
+    setStatus(`Limpiando ${targets.length} nombre(s) con Gemini...`, 'neutral');
+
+    let done = 0;
+    let failures = 0;
+    const queue = targets.slice();
+    const workers = Array.from({ length: Math.max(1, Math.min(concurrency, targets.length)) }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) break;
+        try {
+          const cleaned = await aiCleanProductTitle(apiKey, {
+            rawTitle: next.raw,
+            imageUrl: next.item.imageUrl || '',
+            supplierName,
+          });
+          if (cleaned) applyAiCleanedNameToItem(next.item, cleaned);
+        } catch (error) {
+          failures += 1;
+          // Surface only the first error in the status line; keep going.
+          if (failures === 1) {
+            console.warn('[AliExpress AI cleanup] Gemini call failed:', error && error.message ? error.message : error);
+          }
+        } finally {
+          done += 1;
+          if (done % 3 === 0 || done === targets.length) {
+            setStatus(`Limpiando nombres con IA... ${done}/${targets.length}`, 'neutral');
+          }
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    // Re-render any view that may show stale text.
+    renderItems();
+    if (typeof renderBulkOrders === 'function') {
+      try { renderBulkOrders(); } catch (_e) {/* ignore */}
+    }
+    // Persist the bulk workspace so the cleaned names survive panel reloads.
+    if (typeof saveBulkWorkspaceState === 'function' && Array.isArray(state.bulkOrders) && state.bulkOrders.length) {
+      try { await saveBulkWorkspaceState(); } catch (_e) {/* ignore */}
+    }
+
+    const tone = failures === 0 ? 'success' : 'warning';
+    const msg = failures === 0
+      ? `Limpieza IA lista: ${done}/${targets.length} nombre(s) actualizado(s).`
+      : `Limpieza IA: ${done - failures}/${targets.length} ok, ${failures} fallaron (revisa la consola).`;
+    setStatus(msg, tone);
+    if (el.aiCleanNamesButton) el.aiCleanNamesButton.disabled = false;
+    return { processed: done - failures, total: targets.length, failures };
+  }
+
+  async function maybeAutoCleanAfter(trigger) {
+    if (!aiAutoCleanEnabled) return;
+    const apiKey = (el.geminiApiKey && el.geminiApiKey.value || '').trim();
+    if (!apiKey) return;
+    try {
+      await cleanAllNamesWithAi({ trigger });
+    } catch (error) {
+      console.warn('[AliExpress AI cleanup] Auto cleanup failed:', error);
+    }
+  }
+
   async function extractCurrentVisibleAreaWithAi() {
     const apiKey = el.geminiApiKey.value.trim();
     if (!apiKey) {
@@ -341,6 +648,8 @@
         resultItems: state.items.slice(0, 8).map(toDebugItem),
       };
       renderDebug(state.lastDebug);
+      // Optional auto-cleanup right after AI extraction when the user opted in.
+      maybeAutoCleanAfter('ai-ocr');
     } catch (error) {
       renderDebug(null);
       setStatus(error.message || String(error), 'error');
@@ -873,7 +1182,8 @@
         <div class="item-row-header">
           <span class="item-row-title">
             ${item.imageUrl ? `<img class="item-thumb" src="${escapeAttr(item.imageUrl)}" alt="">` : ''}
-            Linea ${index + 1}
+            Linea ${index + 1}${item.aiCleaned ? ' <span class="ai-clean-badge" title="Nombre limpiado por IA. Original: '
+              + escapeAttr(String(item.originalDescription || '')) + '">✨ IA</span>' : ''}
           </span>
           <button type="button" class="remove-item-button" data-remove-index="${index}">Quitar</button>
         </div>
@@ -956,6 +1266,8 @@
       });
       setStatus(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
       await saveBulkWorkspaceState(`Bulk listo: ${state.bulkOrders.length}/${state.bulkMeta.scannedCount} orden(es) en rango.${loadText}${warningText}`, statusType);
+      // Optional auto-cleanup right after bulk collect.
+      maybeAutoCleanAfter('bulk-collect');
     } catch (error) {
       setBulkProgress({ active: false, label: 'Bulk fallo', detail: error.message || String(error), percent: 100, type: 'error' });
       setStatus(error.message || String(error), 'error');
@@ -1020,8 +1332,8 @@
     try {
       await saveBulkWorkspaceState('Generando bulk...', 'neutral');
       setBulkProgress({ active: true, label: 'Preparando bulk', detail: `${orders.length} orden(es) seleccionadas.`, percent: 8, type: 'active' });
-      orders = await maybeEnrichBulkOrdersFromDetails(orders);
       const mode = el.bulkOutputMode ? el.bulkOutputMode.value : 'separate';
+      orders = await maybeEnrichBulkOrdersFromDetails(orders, { force: mode === 'combined' });
       if (mode === 'combined') {
         const invoice = buildCombinedBulkInvoice(orders);
         const validationError = validateInvoice(invoice);
@@ -1055,6 +1367,7 @@
 
   async function enrichBulkOrdersFromDetails(orders) {
     const result = [];
+    state.lastEnrichmentDebug = []; // [v0.3.50 DEBUG] reset audit log per batch
     setBulkProgress({ active: true, label: 'Leyendo detalles', detail: `0/${orders.length}`, current: 0, total: orders.length, type: 'active' });
     for (let index = 0; index < orders.length; index += 1) {
       const listOrder = normalizeBulkInvoice(orders[index]);
@@ -1077,7 +1390,33 @@
         await ensureFreshContentBridge(detailTab.id);
         const response = await executeContentCommand(detailTab.id, 'extract');
         if (!response || !response.ok || !response.order) throw new Error(response && response.error ? response.error : 'Detalle sin datos.');
-        const merged = mergeBulkListAndDetailOrder(listOrder, response.order, detailUrl);
+        const detailOrder = response.order;
+        // [v0.3.50 DEBUG] Per-order enrichment audit. Open popup DevTools (right-click popup -> Inspect) to view.
+        try {
+          const audit = {
+            orderNumber: detailOrder.orderNumber || listOrder.orderNumber || '',
+            detailUrl,
+            list: { subtotal: listOrder.subtotal, shipping: listOrder.shipping, tax: listOrder.tax, discount: listOrder.discount, total: listOrder.total },
+            detail: { subtotal: detailOrder.subtotal, shipping: detailOrder.shipping, tax: detailOrder.tax, discount: detailOrder.discount, total: detailOrder.total },
+            balance: (() => {
+              const sub = Number(detailOrder.subtotal) || 0;
+              const ship = Number(detailOrder.shipping) || 0;
+              const tax = Number(detailOrder.tax) || 0;
+              const disc = Number(detailOrder.discount) || 0;
+              const tot = Number(detailOrder.total) || 0;
+              const calc = Math.round((sub + ship + tax - disc) * 100) / 100;
+              return { calc, total: tot, residual: Math.round((tot - calc) * 100) / 100 };
+            })(),
+            rawTextPreview: (detailOrder.rawTextPreview || '').slice(0, 2500),
+            expandDebug: detailOrder.__expandDebug || null,
+          };
+          // eslint-disable-next-line no-console
+          console.log('[AE-INV 0.3.51] enrichment audit', audit);
+          state.lastEnrichmentDebug = state.lastEnrichmentDebug || [];
+          state.lastEnrichmentDebug.push(audit);
+          try { await chrome.storage.local.set({ aliExpressLastEnrichmentDebug: state.lastEnrichmentDebug }); } catch (_) { /* ignore */ }
+        } catch (_) { /* never let debug break enrichment */ }
+        const merged = mergeBulkListAndDetailOrder(listOrder, detailOrder, detailUrl);
         result.push(merged);
       } catch (error) {
         result.push({
@@ -1098,8 +1437,8 @@
     return state.bulkOrders;
   }
 
-  async function maybeEnrichBulkOrdersFromDetails(orders) {
-    if (state.settings.enrichDetailsBeforeOutput) return enrichBulkOrdersFromDetails(orders);
+  async function maybeEnrichBulkOrdersFromDetails(orders, options = {}) {
+    if (options.force || state.settings.enrichDetailsBeforeOutput) return enrichBulkOrdersFromDetails(orders);
     setBulkProgress({
       active: false,
       label: 'Usando datos de lista',
@@ -1158,6 +1497,25 @@
     const subtotal = toNullableNumber(detail.subtotal) ?? toNullableNumber(list.subtotal) ?? sumItems(items);
     const total = toNullableNumber(detail.total) ?? toNullableNumber(list.total) ?? roundMoney(sumItems(items) + (toNullableNumber(detail.shipping) || toNullableNumber(list.shipping) || 0));
 
+    const warnings = [...(list.warnings || []), ...(detail.warnings || [])];
+    if (toNullableNumber(detail.total) !== null && toNullableNumber(detail.subtotal) !== null) {
+      const missing = ['shipping', 'tax', 'discount'].filter((field) => toNullableNumber(detail[field]) === null);
+      if (missing.length) {
+        warnings.push(`Detalle AliExpress incompleto: no se pudo leer ${missing.join(', ')} desde la pagina de detalle.`);
+      }
+    }
+
+    // [v0.3.51] When the detail page produced an authoritative balanced totals card,
+    // its null shipping/tax/discount mean "definitively absent" and must NOT fall back to
+    // the noisy list-page values (those often misread promo/coupon copy as a discount).
+    const detailAuthoritative = detailOrder && detailOrder.__authoritativeTotals === true;
+    const pickComponent = (field) => {
+      const detailValue = toNullableNumber(detail[field]);
+      if (detailValue !== null) return detailValue;
+      if (detailAuthoritative) return null;
+      return toNullableNumber(list[field]);
+    };
+
     return {
       ...list,
       ...detail,
@@ -1168,13 +1526,13 @@
       supplierName: detail.supplierName || list.supplierName || 'AliExpress Marketplace',
       supplierTaxId: detail.supplierTaxId || list.supplierTaxId || '',
       subtotal,
-      shipping: toNullableNumber(detail.shipping) ?? toNullableNumber(list.shipping),
-      tax: toNullableNumber(detail.tax) ?? toNullableNumber(list.tax),
-      discount: toNullableNumber(detail.discount) ?? toNullableNumber(list.discount),
+      shipping: pickComponent('shipping'),
+      tax: pickComponent('tax'),
+      discount: pickComponent('discount'),
       total,
       notes: [detail.notes || list.notes || '', `Detalle enriquecido desde: ${detailUrl}`].filter(Boolean).join('\n'),
       items,
-      warnings: [...(list.warnings || []), ...(detail.warnings || [])],
+      warnings,
     };
   }
 
@@ -1216,6 +1574,166 @@
     await chrome.tabs.create({ url: chrome.runtime.getURL(`invoice.html?draft=${encodeURIComponent(draftId)}`), active: Boolean(active) });
   }
 
+  function allocateInvoiceComponents(invoice) {
+    const items = Array.isArray(invoice.items) ? invoice.items.map(normalizeItem).filter((item) => item.description || item.sku) : [];
+    if (!items.length) return { ...invoice, items };
+
+    const sourceTotals = items.map(sourceItemTotal);
+    const calculatedSubtotal = roundMoney(sourceTotals.reduce((sum, value) => sum + value, 0));
+    const providedSubtotal = toNullableNumber(invoice.subtotal);
+    const subtotal = calculatedSubtotal > (providedSubtotal || 0)
+      ? calculatedSubtotal
+      : (providedSubtotal ?? calculatedSubtotal);
+    const hasKnownShipping = toNullableNumber(invoice.shipping) !== null;
+    const hasKnownTax = toNullableNumber(invoice.tax) !== null;
+    let shipping = positiveComponentAmount(invoice.shipping);
+    let tax = positiveComponentAmount(invoice.tax);
+    let discount = positiveComponentAmount(invoice.discount);
+    const statedTotal = toNullableNumber(invoice.total);
+
+    if (statedTotal !== null) {
+      const componentTotal = roundMoney(subtotal + shipping + tax - discount);
+      const residual = roundMoney(statedTotal - componentTotal);
+      // [v0.3.51] Only fabricate a missing component when the gap is large enough that it
+      // is clearly a real missing line (shipping / tax / discount). Small gaps (CLP rounding,
+      // ~$1-$50 on a multi-thousand-CLP order) are absorbed silently by the per-row adjustment
+      // below at line ~1325, so we never invent a fake discount that mirrors shipping.
+      const fabricationThreshold = Math.max(50, Math.abs(statedTotal) * 0.02);
+      if (residual > fabricationThreshold) {
+        if (!hasKnownTax && hasKnownShipping) {
+          tax = roundMoney(tax + residual);
+        } else if (!hasKnownShipping && hasKnownTax) {
+          shipping = roundMoney(shipping + residual);
+        } else if (!hasKnownShipping && !hasKnownTax) {
+          tax = roundMoney(tax + residual);
+        } else {
+          tax = roundMoney(tax + residual);
+        }
+      } else if (residual < -fabricationThreshold) {
+        discount = roundMoney(discount + Math.abs(residual));
+      }
+    }
+
+    const finalTotal = statedTotal ?? roundMoney(subtotal + shipping + tax - discount);
+    const basis = sourceTotals.some((value) => value > 0)
+      ? sourceTotals
+      : items.map(() => 1);
+    const shippingAllocations = allocateByWeight(shipping, basis);
+    const taxAllocations = allocateByWeight(tax, basis);
+    const discountAllocations = allocateByWeight(discount, basis);
+    const allocatedItems = items.map((item, index) => {
+      const quantity = toNumber(item.quantity) || 1;
+      const sourceTotal = sourceTotals[index] || roundMoney(sourceItemUnitPrice(item) * quantity);
+      const sourceUnitPrice = roundMoney(sourceTotal / quantity) || sourceItemUnitPrice(item);
+      const allocatedShippingTotal = shippingAllocations[index] || 0;
+      const allocatedTaxTotal = taxAllocations[index] || 0;
+      const allocatedDiscountTotal = discountAllocations[index] || 0;
+      const allocatedShipping = roundMoney(allocatedShippingTotal / quantity);
+      const allocatedTax = roundMoney(allocatedTaxTotal / quantity);
+      const allocatedDiscount = roundMoney(allocatedDiscountTotal / quantity);
+      const unitPrice = Math.max(0, roundMoney(sourceUnitPrice + allocatedShipping + allocatedTax - allocatedDiscount));
+      const total = roundMoney(unitPrice * quantity);
+      return {
+        ...item,
+        sourceUnitPrice,
+        sourceTotal,
+        allocatedShipping,
+        allocatedTax,
+        allocatedDiscount,
+        allocatedShippingTotal,
+        allocatedTaxTotal,
+        allocatedDiscountTotal,
+        allocationGranularity: 'unit',
+        unitPrice,
+        total,
+      };
+    });
+
+    const allocatedRowTotal = sumItems(allocatedItems);
+    const residual = roundMoney(finalTotal - allocatedRowTotal);
+    if (Math.abs(residual) >= 0.01 && allocatedItems.length) {
+      const targetIndex = largestSourceTotalIndex(sourceTotals);
+      const target = allocatedItems[targetIndex];
+      const adjustedTotal = roundMoney(target.total + residual);
+      allocatedItems[targetIndex] = {
+        ...target,
+        total: adjustedTotal,
+        unitPrice: roundMoney(adjustedTotal / (toNumber(target.quantity) || 1)),
+      };
+    }
+
+    return {
+      ...invoice,
+      subtotal,
+      shipping: shipping || null,
+      tax: tax || null,
+      discount: discount || null,
+      total: finalTotal,
+      items: allocatedItems,
+      allocation: {
+        method: 'weighted_by_product_total',
+        sourceSubtotal: subtotal,
+        shipping,
+        tax,
+        discount,
+        finalTotal,
+      },
+    };
+  }
+
+  function sourceItemUnitPrice(item) {
+    const quantity = toNumber(item.quantity) || 1;
+    const explicitSourceUnit = toNullableNumber(item.sourceUnitPrice);
+    if (explicitSourceUnit !== null) return explicitSourceUnit;
+    const explicitSourceTotal = toNullableNumber(item.sourceTotal);
+    if (explicitSourceTotal !== null) return roundMoney(explicitSourceTotal / quantity);
+    return toNumber(item.unitPrice);
+  }
+
+  function sourceItemTotal(item) {
+    const explicitSourceTotal = toNullableNumber(item.sourceTotal);
+    if (explicitSourceTotal !== null) return explicitSourceTotal;
+    const quantity = toNumber(item.quantity) || 1;
+    const sourceUnit = sourceItemUnitPrice(item);
+    const calculatedTotal = roundMoney(sourceUnit * quantity);
+    return calculatedTotal || toNumber(item.total);
+  }
+
+  function positiveComponentAmount(value) {
+    const number = toNullableNumber(value);
+    return number === null ? 0 : Math.abs(number);
+  }
+
+  function allocateByWeight(amount, basisValues) {
+    const totalAmount = positiveComponentAmount(amount);
+    if (!totalAmount || !basisValues.length) return basisValues.map(() => 0);
+
+    const basisSum = basisValues.reduce((sum, value) => sum + Math.max(0, toNumber(value)), 0);
+    const weights = basisSum > 0
+      ? basisValues.map((value) => Math.max(0, toNumber(value)) / basisSum)
+      : basisValues.map(() => 1 / basisValues.length);
+    const allocations = weights.map((weight) => roundMoney(totalAmount * weight));
+    const residual = roundMoney(totalAmount - allocations.reduce((sum, value) => sum + value, 0));
+    if (Math.abs(residual) >= 0.01) {
+      allocations[largestSourceTotalIndex(basisValues)] = roundMoney(allocations[largestSourceTotalIndex(basisValues)] + residual);
+    }
+    return allocations;
+  }
+
+  function largestSourceTotalIndex(values) {
+    if (!values.length) return 0;
+    let bestIndex = 0;
+    let bestValue = Number.NEGATIVE_INFINITY;
+    values.forEach((value, index) => {
+      const number = toNumber(value);
+      if (number > bestValue) {
+        bestValue = number;
+        bestIndex = index;
+      }
+    });
+    return bestIndex;
+  }
+
   function buildCombinedBulkInvoice(orders) {
     const normalizedOrders = orders.map(normalizeBulkInvoice);
     const orderDates = normalizedOrders.map((order) => order.orderDate).filter(Boolean).sort();
@@ -1230,41 +1748,21 @@
       sourceOrderDate: order.orderDate || '',
       sourceOrderUrl: order.pageUrl || '',
     })));
-    const itemSubtotal = sumItems(items);
+    const itemSubtotal = roundMoney(items.reduce((sum, item) => sum + sourceItemTotal(item), 0));
     const knownShipping = sumKnownTotals(normalizedOrders, 'shipping');
     const knownTax = sumKnownTotals(normalizedOrders, 'tax');
     const knownDiscount = sumKnownDiscounts(normalizedOrders);
-    const orderGrandTotal = sumKnownTotals(normalizedOrders, 'total') || itemSubtotal;
-    const componentsTotal = roundMoney(itemSubtotal + knownShipping + knownTax - knownDiscount);
-    const adjustment = roundMoney(orderGrandTotal - componentsTotal);
+    const orderGrandTotal = sumKnownTotals(normalizedOrders, 'total') || sumItems(items) || itemSubtotal;
     const finalItems = [...items];
-
-    if (Math.abs(adjustment) >= 0.01) {
-      finalItems.push({
-        sku: 'AE-BULK-ADJ',
-        description: adjustment > 0
-          ? 'Ajuste consolidado AliExpress (shipping/tax/costos no detallados por orden)'
-          : 'Ajuste consolidado AliExpress (descuentos/cupones no detallados por orden)',
-        quantity: 1,
-        unitPrice: adjustment,
-        total: adjustment,
-        productUrl: '',
-        itemId: '',
-        imageUrl: '',
-      });
-    }
-
-    const combinedSubtotal = roundMoney(sumItems(finalItems));
-    const finalTotal = roundMoney(combinedSubtotal + knownShipping + knownTax - knownDiscount);
+    const combinedSubtotal = itemSubtotal;
+    const finalTotal = orderGrandTotal;
     const notes = [
       `Factura consolidada desde ${normalizedOrders.length} orden(es) AliExpress.`,
       orderNumbers.length ? `Pedidos: ${orderNumbers.join(', ')}.` : '',
+      'Shipping, tax y descuentos/coins fueron prorrateados por peso de cada producto dentro de su orden y convertidos a valores unitarios por cantidad.',
       exactInvoiceDate
         ? `Fecha de factura tomada del filtro Dia exacto: ${formatDateForStatus(exactInvoiceDate)}.`
         : `Rango: ${orderDates[0] || el.bulkFromDate.value || ''}${orderDates.length ? ` a ${orderDates[orderDates.length - 1]}` : ''}.`,
-      Math.abs(adjustment) >= 0.01
-        ? `Ajuste automatico: ${formatDecimalComma(adjustment)} para reconciliar lineas/componentes (${formatDecimalComma(componentsTotal)}) con total de ordenes (${formatDecimalComma(orderGrandTotal)}).`
-        : '',
     ].filter(Boolean).join('\n');
 
     return {
@@ -1303,10 +1801,9 @@
         knownShipping,
         knownTax,
         knownDiscount,
-        componentsTotal,
         orderGrandTotal,
         finalTotal,
-        adjustment,
+        allocatedRowTotal: sumItems(finalItems),
       },
     };
   }
@@ -1354,7 +1851,7 @@
   function normalizeBulkInvoice(order) {
     const items = Array.isArray(order && order.items) ? order.items.map(normalizeItem).filter((item) => item.description || item.sku) : [];
     const total = toNumber(order && order.total) || sumItems(items);
-    return {
+    return allocateInvoiceComponents({
       source: 'AliExpress',
       generatedAt: new Date().toISOString(),
       extractedAt: order && order.extractedAt || new Date().toISOString(),
@@ -1373,7 +1870,7 @@
       notes: order && order.notes || '',
       items,
       warnings: order && order.warnings || [],
-    };
+    });
   }
 
   function renderDebug(debug) {
@@ -1434,7 +1931,7 @@
   }
 
   function collectInvoice() {
-    return {
+    return allocateInvoiceComponents({
       source: 'AliExpress',
       generatedAt: new Date().toISOString(),
       extractedAt: state.extractedAt || '',
@@ -1453,7 +1950,7 @@
       notes: el.notes.value.trim(),
       items: state.items.map(normalizeItem).filter((item) => item.description || item.sku),
       warnings: state.warnings,
-    };
+    });
   }
 
   function validateInvoice(invoice) {
@@ -1605,6 +2102,36 @@
     const quantity = toNumber(item.quantity) || 1;
     const unitPrice = toNumber(item.unitPrice);
     const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
+    // If the addon already AI-cleaned this row, keep that exact name and
+    // don't run the heuristic cleaner over the original noisy title again.
+    if (item.aiCleaned && item.description) {
+      return {
+        sku: String(item.sku || '').trim(),
+        description: String(item.description).trim(),
+        originalDescription: String(item.originalDescription || '').trim(),
+        aiCleaned: true,
+        aiCategory: String(item.aiCategory || '').trim(),
+        aiBrand: String(item.aiBrand || '').trim(),
+        aiModel: String(item.aiModel || '').trim(),
+        aiComponent: String(item.aiComponent || '').trim(),
+        aiConfidence: typeof item.aiConfidence === 'number' ? item.aiConfidence : null,
+        quantity,
+        unitPrice,
+        total,
+        sourceUnitPrice: toNullableNumber(item.sourceUnitPrice),
+        sourceTotal: toNullableNumber(item.sourceTotal),
+        allocatedDiscount: toNullableNumber(item.allocatedDiscount),
+        allocatedDiscountTotal: toNullableNumber(item.allocatedDiscountTotal),
+        allocatedShipping: toNullableNumber(item.allocatedShipping),
+        allocatedShippingTotal: toNullableNumber(item.allocatedShippingTotal),
+        allocatedTax: toNullableNumber(item.allocatedTax),
+        allocatedTaxTotal: toNullableNumber(item.allocatedTaxTotal),
+        allocationGranularity: item.allocationGranularity || '',
+        productUrl: item.productUrl || '',
+        itemId: item.itemId || '',
+        imageUrl: item.imageUrl || '',
+      };
+    }
     const sourceDescription = String(item.originalDescription || item.description || '').trim();
     const cleanedDescription = smartProductName(sourceDescription, item);
     const currentDescription = cleanVisibleProductName(item.description);
@@ -1619,6 +2146,15 @@
       quantity,
       unitPrice,
       total,
+      sourceUnitPrice: toNullableNumber(item.sourceUnitPrice),
+      sourceTotal: toNullableNumber(item.sourceTotal),
+      allocatedDiscount: toNullableNumber(item.allocatedDiscount),
+      allocatedDiscountTotal: toNullableNumber(item.allocatedDiscountTotal),
+      allocatedShipping: toNullableNumber(item.allocatedShipping),
+      allocatedShippingTotal: toNullableNumber(item.allocatedShippingTotal),
+      allocatedTax: toNullableNumber(item.allocatedTax),
+      allocatedTaxTotal: toNullableNumber(item.allocatedTaxTotal),
+      allocationGranularity: item.allocationGranularity || '',
       productUrl: item.productUrl || '',
       itemId: item.itemId || '',
       imageUrl: item.imageUrl || '',

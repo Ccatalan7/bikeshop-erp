@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.3.41';
+  const CONTENT_VERSION = '0.4.0';
 
   function getPageMetrics() {
     return {
@@ -153,8 +153,213 @@
       await sleep(90);
     }
 
+    // [v0.3.51] Expand collapsed totals breakdown (Shipping / AliExpress Coupons / Tax) before extracting.
+    globalThis.__AE_EXPAND_DEBUG__ = null;
+    globalThis.__AE_TOTALS_CARD_TEXT__ = null;
+    try {
+      globalThis.__AE_EXPAND_DEBUG__ = await expandOrderTotalsBreakdown();
+    } catch (error) {
+      globalThis.__AE_EXPAND_DEBUG__ = { error: String((error && error.message) || error) };
+    }
+
     window.scrollTo(initialX, initialY);
     await sleep(70);
+  }
+
+  // [v0.3.51] AliExpress order detail pages render the totals card with Shipping/Coupons/Tax
+  // collapsed behind a chevron next to the Subtotal value. Until that chevron is clicked, the
+  // page text only contains "Subtotal $X / Total $Y" and the extractor cannot see the breakdown.
+  // This helper finds the totals card around any "Subtotal" label and aggressively clicks any
+  // chevron / toggle / arrow it can find inside or right next to it, using multiple event
+  // strategies (synthetic pointer + mouse + click) because some chevrons are SVGs without
+  // onclick handlers and only respond to dispatched mouse events.
+  async function expandOrderTotalsBreakdown() {
+    const debug = {
+      labelMatches: 0,
+      cardsConsidered: 0,
+      togglesTried: 0,
+      breakdownVisibleBefore: false,
+      breakdownVisibleAfter: false,
+      lastCardTextSample: '',
+    };
+
+    const labelNodes = findSubtotalLabelNodes();
+    debug.labelMatches = labelNodes.length;
+    if (labelNodes.length === 0) return debug;
+
+    // First pass: any totals card already showing the breakdown -> nothing to do.
+    const cards = [];
+    const seenCards = new Set();
+    for (const labelNode of labelNodes) {
+      const card = findTotalsCard(labelNode);
+      if (!card || seenCards.has(card)) continue;
+      seenCards.add(card);
+      cards.push(card);
+    }
+    debug.cardsConsidered = cards.length;
+    debug.breakdownVisibleBefore = cards.some((card) => totalsBreakdownVisible(card));
+    if (debug.breakdownVisibleBefore) {
+      debug.breakdownVisibleAfter = true;
+      debug.lastCardTextSample = (cards[0].innerText || '').slice(0, 400);
+      return debug;
+    }
+
+    // Second pass: aggressively click anything that looks like a chevron in or near each card.
+    for (const card of cards) {
+      const region = expandedRegionFor(card);
+      const toggles = collectExpandToggles(region);
+      for (const toggle of toggles) {
+        debug.togglesTried += 1;
+        try {
+          fireSyntheticClick(toggle);
+        } catch (_) { /* continue */ }
+        await sleep(160);
+        if (totalsBreakdownVisible(card)) break;
+      }
+      if (totalsBreakdownVisible(card)) break;
+    }
+
+    // Final wait + status capture.
+    await sleep(220);
+    debug.breakdownVisibleAfter = cards.some((card) => totalsBreakdownVisible(card));
+    // Capture the cleanest totals card text so extractTotals can use it as the authoritative
+    // source. The card is small and only contains real Subtotal/Shipping/Tax/Discount/Total
+    // rows -- it cannot be polluted by promo text like "$800 coupon if delayed".
+    let bestCard = null;
+    let bestLength = Infinity;
+    for (const card of cards) {
+      if (!totalsBreakdownVisible(card)) continue;
+      const text = (card.innerText || card.textContent || '');
+      if (text.length > 0 && text.length < bestLength) {
+        bestCard = card;
+        bestLength = text.length;
+      }
+    }
+    globalThis.__AE_TOTALS_CARD_TEXT__ = bestCard ? (bestCard.innerText || bestCard.textContent || '') : null;
+    debug.lastCardTextSample = (cards[0] && cards[0].innerText ? cards[0].innerText : '').slice(0, 400);
+    return debug;
+  }
+
+  function findSubtotalLabelNodes() {
+    const matches = [];
+    const candidates = document.querySelectorAll('div, span, p, td, th, li, dt, label, strong, b');
+    for (const element of candidates) {
+      const text = (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!text) continue;
+      if (text === 'subtotal' || text === 'subtotal:' || text.startsWith('subtotal productos')) {
+        matches.push(element);
+      } else if (text.length <= 24 && /^subtotal\b/.test(text)) {
+        matches.push(element);
+      }
+      if (matches.length >= 24) break;
+    }
+    return matches;
+  }
+
+  function findTotalsCard(labelNode) {
+    let node = labelNode;
+    let bestSmall = null;
+    for (let depth = 0; depth < 10 && node && node.parentElement; depth += 1) {
+      node = node.parentElement;
+      const text = (node.innerText || node.textContent || '').toLowerCase();
+      if (!text.includes('subtotal') || !text.includes('total')) continue;
+      // Prefer the smallest container that still has both Subtotal and Total.
+      if (!bestSmall || (text.length < (bestSmall.innerText || bestSmall.textContent || '').length)) {
+        bestSmall = node;
+      }
+      if (text.length <= 800) return node;
+    }
+    return bestSmall || labelNode;
+  }
+
+  // Sometimes the chevron lives in a sibling block right above/below the totals card.
+  // We expand the search region to include the parent chain that still looks compact.
+  function expandedRegionFor(card) {
+    let region = card;
+    let node = card.parentElement;
+    for (let depth = 0; depth < 3 && node; depth += 1) {
+      const text = (node.innerText || node.textContent || '').toLowerCase();
+      if (!text.includes('subtotal') || !text.includes('total')) break;
+      if (text.length > 1600) break;
+      region = node;
+      node = node.parentElement;
+    }
+    return region;
+  }
+
+  function totalsBreakdownVisible(card) {
+    const text = (card.innerText || card.textContent || '').toLowerCase();
+    return /\b(shipping|delivery|env[ií]o|flete|tax|iva|impuesto|coupon|cup[oó]n|coins?|monedas?|descuento|discount)\b/.test(text);
+  }
+
+  function collectExpandToggles(region) {
+    const toggles = [];
+    const seen = new Set();
+    const selectorList = [
+      '[role="button"]',
+      'button',
+      '[aria-expanded]',
+      '[class*="arrow" i]',
+      '[class*="chevron" i]',
+      '[class*="fold" i]',
+      '[class*="expand" i]',
+      '[class*="toggle" i]',
+      '[class*="caret" i]',
+      '[class*="detail" i]',
+      '[class*="more" i]',
+      'svg',
+      'i',
+      'a',
+    ];
+    for (const selector of selectorList) {
+      let found;
+      try { found = region.querySelectorAll(selector); } catch (_) { continue; }
+      for (const element of found) {
+        const target = resolveClickableAncestor(element) || element;
+        if (!target || seen.has(target)) continue;
+        // Skip oversized targets (entire panels) - we want small icon-sized toggles.
+        const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+        if (rect && (rect.width > 220 || rect.height > 80)) {
+          // Allow small chevrons even if their parent is a wide row.
+          if (target.tagName !== 'svg' && target.tagName !== 'I') continue;
+        }
+        seen.add(target);
+        toggles.push(target);
+      }
+    }
+    return toggles;
+  }
+
+  function resolveClickableAncestor(element) {
+    let node = element;
+    for (let depth = 0; depth < 5 && node; depth += 1) {
+      if (node.tagName === 'BUTTON' || node.tagName === 'A') return node;
+      const role = node.getAttribute && node.getAttribute('role');
+      if (role === 'button') return node;
+      const ariaExpanded = node.getAttribute && node.getAttribute('aria-expanded');
+      if (ariaExpanded !== null && ariaExpanded !== undefined) return node;
+      if (typeof node.onclick === 'function') return node;
+      const tabIndex = node.getAttribute && node.getAttribute('tabindex');
+      if (tabIndex && tabIndex !== '-1') return node;
+      node = node.parentElement;
+    }
+    return element;
+  }
+
+  // Some AliExpress chevrons are SVGs with React handlers attached only to mousedown/pointerdown,
+  // not the synthetic click event. Fire the full sequence to cover all bases.
+  function fireSyntheticClick(target) {
+    if (!target) return;
+    const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : null;
+    const x = rect ? rect.left + rect.width / 2 : 0;
+    const y = rect ? rect.top + rect.height / 2 : 0;
+    const eventInit = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0 };
+    try { target.dispatchEvent(new PointerEvent('pointerdown', { ...eventInit, pointerType: 'mouse' })); } catch (_) {}
+    try { target.dispatchEvent(new MouseEvent('mousedown', eventInit)); } catch (_) {}
+    try { target.dispatchEvent(new PointerEvent('pointerup', { ...eventInit, pointerType: 'mouse' })); } catch (_) {}
+    try { target.dispatchEvent(new MouseEvent('mouseup', eventInit)); } catch (_) {}
+    try { target.dispatchEvent(new MouseEvent('click', eventInit)); } catch (_) {}
+    try { if (typeof target.click === 'function') target.click(); } catch (_) {}
   }
 
   async function preloadOrdersListContent(filters = {}) {
@@ -325,6 +530,7 @@
       tax: totals.tax || null,
       discount: totals.discount || null,
       total: totals.total || sumItems(resolvedItems),
+      __authoritativeTotals: totals.__authoritative === true,
       items: resolvedItems,
       media: mediaItems.map((media) => ({
         sku: media.itemId ? `AE-${lastDigits(media.itemId, 8)}` : '',
@@ -336,6 +542,7 @@
       notes: buildDefaultNotes(orderNumber),
       warnings,
       rawTextPreview: orderScope.text.slice(0, 5000),
+      __expandDebug: globalThis.__AE_EXPAND_DEBUG__ || null,
     };
   }
 
@@ -898,32 +1105,42 @@
       total: null,
     };
 
-    const fields = [
-      { key: 'subtotal', pattern: /(subtotal|items\s*total|productos)/i },
-      { key: 'shipping', pattern: /(shipping|env.?o|entrega|flete)/i },
-      { key: 'tax', pattern: /(tax|iva|impuesto)/i },
-      { key: 'discount', pattern: /(discount|descuento|coupon|cupon)/i },
-      { key: 'total', pattern: /\b(order\s*total|grand\s*total|amount\s*paid|payment\s*total|total\s*paid|total\s*del\s*pedido|total)\b/i },
-    ];
+    // [v0.3.51] Authoritative source: the expanded totals card captured during preload.
+    // If that card balances (subtotal +/- shipping/tax/discount = total within tolerance),
+    // trust it and skip the residual-to-tax fallback so promo "$800 coupon" text in the
+    // page body cannot leak in as a fake discount or tax.
+    const cardText = typeof globalThis.__AE_TOTALS_CARD_TEXT__ === 'string'
+      ? globalThis.__AE_TOTALS_CARD_TEXT__
+      : '';
+    if (cardText) {
+      const cardTotals = extractTotalsFromTextBlob(cardText);
+      mergeTotalsSource(result, cardTotals);
+      if (cardTotalsBalance(cardTotals)) {
+        // Authoritative: do not let later sources or residual fallbacks invent values.
+        return finalizeAuthoritativeTotals(result);
+      }
+    }
+
+    mergeTotalsSource(result, extractTotalsFromTextBlob(lines.join('\n')));
+    mergeTotalsSource(result, extractTotalsFromDom());
+
+    const totalsTable = extractTotalsTable(lines);
+    mergeTotalsSource(result, totalsTable);
+
+    const fields = totalsLabelSpecs({ loose: true });
 
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
       for (const field of fields) {
+        if (field.key === 'shipping') continue;
         if (!field.pattern.test(line)) continue;
-        const money = parseBestMoney(line) || parseBestMoney(`${line} ${lines[index + 1] || ''}`);
+        if (result[field.key] !== null) continue;
+        const money = parseBestMoney(line) || parseBestMoney([line, ...lines.slice(index + 1, index + 4)].join(' '));
         if (!money) continue;
-        result[field.key] = money.amount;
+        recordTotalsField(result, field.key, money);
         result.currency = result.currency || money.currency;
       }
     }
-
-    const totalsTable = extractTotalsTable(lines);
-    Object.entries(totalsTable).forEach(([key, money]) => {
-      if (money) {
-        result[key] = money.amount;
-        result.currency = result.currency || money.currency;
-      }
-    });
 
     if (!result.total) {
       const tail = lines.slice(Math.max(0, lines.length - 80));
@@ -935,46 +1152,319 @@
       }
     }
 
-    if (!result.shipping && result.subtotal && result.total) {
-      const derivedShipping = roundMoney(result.total - result.subtotal - (result.tax || 0) + (result.discount || 0));
-      if (derivedShipping > 0) result.shipping = derivedShipping;
+    if (result.subtotal && result.total) {
+      const residual = roundMoney(result.total - result.subtotal - (result.shipping || 0) - (result.tax || 0) + Math.abs(result.discount || 0));
+      if (residual > 0.01 && !result.tax && result.shipping !== null) {
+        result.tax = residual;
+      } else if (residual > 0.01 && !result.shipping && result.tax !== null) {
+        result.shipping = residual;
+      } else if (residual > 0.01 && !result.shipping && !result.tax) {
+        result.tax = residual;
+      }
+    }
+
+    // [v0.3.51] Final authoritative gate: even if the card text wasn't captured, if the
+    // detail page's own totals balance arithmetically (subtotal + shipping + tax - discount = total),
+    // mark the result authoritative so the popup merge will not overwrite null components with
+    // noisy list-page values (which read item unit price as shipping).
+    if (!result.__authoritative && result.subtotal && result.total) {
+      const subtotalAmt = typeof result.subtotal === 'object' ? Math.abs(result.subtotal.amount || 0) : Math.abs(result.subtotal);
+      const totalAmt = typeof result.total === 'object' ? Math.abs(result.total.amount || 0) : Math.abs(result.total);
+      const shippingAmt = result.shipping ? (typeof result.shipping === 'object' ? Math.abs(result.shipping.amount || 0) : Math.abs(result.shipping)) : 0;
+      const taxAmt = result.tax ? (typeof result.tax === 'object' ? Math.abs(result.tax.amount || 0) : Math.abs(result.tax)) : 0;
+      const discountAmt = result.discount ? (typeof result.discount === 'object' ? Math.abs(result.discount.amount || 0) : Math.abs(result.discount)) : 0;
+      const calc = roundMoney(subtotalAmt + shippingAmt + taxAmt - discountAmt);
+      const tolerance = Math.max(2, totalAmt * 0.01);
+      if (Math.abs(roundMoney(totalAmt - calc)) <= tolerance) {
+        result.__authoritative = true;
+      }
     }
 
     return result;
   }
 
-  function extractTotalsTable(lines) {
-    const labelSpecs = [
-      { key: 'subtotal', pattern: /^(subtotal|items\s*total|productos)$/i },
-      { key: 'shipping', pattern: /^(shipping|env.?o|entrega|flete)$/i },
-      { key: 'tax', pattern: /^(tax|iva|impuesto)$/i },
-      { key: 'discount', pattern: /^(discount|descuento|coupon|cupon)$/i },
-      { key: 'total', pattern: /^(total|order\s*total|grand\s*total|amount\s*paid|payment\s*total|total\s*paid|total\s*del\s*pedido)$/i },
-    ];
+  function mergeTotalsSource(result, source) {
+    Object.entries(source || {}).forEach(([key, money]) => {
+      if (!money || result[key] !== null) return;
+      recordTotalsField(result, key, money);
+      result.currency = result.currency || money.currency;
+    });
+  }
 
-    const startIndex = lines.findIndex((line) => /^(subtotal|items\s*total|productos)$/i.test(line.trim()));
+  // [v0.3.51] True when an authoritative totals-card parse balances within ~1% tolerance.
+  // Tolerance accounts for AliExpress rounding cents that don't survive CLP truncation.
+  function cardTotalsBalance(totals) {
+    if (!totals || !totals.subtotal || !totals.total) return false;
+    const subtotal = Math.abs(totals.subtotal.amount || 0);
+    const total = Math.abs(totals.total.amount || 0);
+    const shipping = Math.abs(totals.shipping?.amount || 0);
+    const tax = Math.abs(totals.tax?.amount || 0);
+    const discount = Math.abs(totals.discount?.amount || 0);
+    const calc = roundMoney(subtotal + shipping + tax - discount);
+    const tolerance = Math.max(2, total * 0.01);
+    return Math.abs(roundMoney(total - calc)) <= tolerance;
+  }
+
+  function finalizeAuthoritativeTotals(result) {
+    return {
+      currency: result.currency || '',
+      subtotal: result.subtotal,
+      shipping: result.shipping,
+      tax: result.tax,
+      discount: result.discount,
+      total: result.total,
+      __authoritative: true,
+    };
+  }
+
+  function extractTotalsFromTextBlob(text) {
+    const normalized = normalizeText(text || '').replace(/\r/g, '\n');
+    const subtotalMatches = Array.from(normalized.matchAll(/(?:^|\n|\s)(subtotal|items\s*total|productos)(?:\s|:|：|$)/gi));
+    if (!subtotalMatches.length) return {};
+
+    const lastSubtotal = subtotalMatches[subtotalMatches.length - 1];
+    const segmentStart = Math.max(0, lastSubtotal.index - 320);
+    const segment = normalized.slice(segmentStart, lastSubtotal.index + 1600);
+    return extractTotalsFromSegment(segment);
+  }
+
+  function extractTotalsFromSegment(segment) {
+    const labelDefs = totalsTextLabelDefs();
+    const matches = [];
+    labelDefs.forEach((definition) => {
+      const pattern = new RegExp(definition.pattern.source, 'gi');
+      let match = pattern.exec(segment);
+      while (match) {
+        matches.push({ key: definition.key, index: match.index, end: pattern.lastIndex });
+        match = pattern.exec(segment);
+      }
+    });
+
+    matches.sort((a, b) => a.index - b.index || b.end - a.end);
+    const afterFirst = extractTotalsFromMatches(segment, matches, false);
+    const beforeFirst = extractTotalsFromMatches(segment, matches, true);
+    return scoreTotalsCandidate(beforeFirst) > scoreTotalsCandidate(afterFirst)
+      ? beforeFirst
+      : afterFirst;
+  }
+
+  function extractTotalsFromMatches(segment, matches, preferBefore) {
+    const result = {};
+    for (let index = 0; index < matches.length; index += 1) {
+      const current = matches[index];
+      if (current.key !== 'discount' && result[current.key]) continue;
+      const previous = [...matches].reverse().find((candidate) => candidate.end <= current.index && candidate.key !== current.key);
+      const next = matches.find((candidate) => candidate.index >= current.end && candidate.key !== current.key);
+      const afterEnd = next ? next.index : Math.min(segment.length, current.end + 180);
+      const beforeStart = previous ? previous.end : Math.max(0, current.index - 80);
+      const afterText = segment.slice(current.end, afterEnd).slice(0, 180);
+      const beforeText = segment.slice(beforeStart, current.index).slice(-120);
+
+      // [v0.3.51] "Free shipping" / "Envío gratis" must parse as shipping = 0 so the card
+      // can balance and become authoritative; otherwise we fall back to noisy list values.
+      if (current.key === 'shipping' && !result.shipping) {
+        const freePattern = /\b(?:free\s*shipping|env[ií]o\s*(?:gratis|gratuito)|shipping\s*free|gratis)\b/i;
+        if (freePattern.test(afterText) || freePattern.test(beforeText)) {
+          result.shipping = { amount: 0, currency: '', raw: 'free' };
+          continue;
+        }
+      }
+
+      const afterMoney = parseFirstMoney(afterText) || parseBestMoney(afterText);
+      const beforeMoney = nearestMoneyBeforeLabel(beforeText);
+      const money = preferBefore
+        ? (beforeMoney || afterMoney)
+        : (afterMoney || beforeMoney);
+      if (!money) continue;
+
+      if (current.key === 'discount') {
+        result.discount = {
+          ...money,
+          amount: roundMoney(Math.abs(result.discount?.amount || 0) + Math.abs(money.amount)),
+        };
+      } else {
+        result[current.key] = money;
+      }
+    }
+    return result;
+  }
+
+  function scoreTotalsCandidate(candidate) {
+    const values = Object.fromEntries(
+      Object.entries(candidate || {}).map(([key, money]) => [key, Math.abs(money?.amount || 0)]),
+    );
+    const fieldCount = ['subtotal', 'shipping', 'discount', 'tax', 'total']
+      .reduce((count, key) => count + (values[key] !== undefined ? 1 : 0), 0);
+    let score = fieldCount * 100;
+
+    if (values.subtotal && values.total) {
+      const calculatedTotal = roundMoney(values.subtotal + (values.shipping || 0) + (values.tax || 0) - (values.discount || 0));
+      const residual = Math.abs(roundMoney(values.total - calculatedTotal));
+      if (residual <= 1.01) score += 1000;
+      else if (residual <= 10.01) score += 600;
+      else if (residual <= 100.01) score += 150;
+      else score -= Math.min(800, residual / 10);
+    }
+
+    if (values.shipping && values.discount && Math.abs(values.shipping - values.discount) <= 0.01) {
+      score -= 250;
+    }
+    if (values.subtotal && values.shipping && values.shipping > values.subtotal * 0.35) {
+      score -= 250;
+    }
+    return score;
+  }
+
+  function extractTotalsFromDom() {
+    const labelSpecs = totalsLabelSpecs();
+    const result = {};
+    const elements = Array.from(document.querySelectorAll('span,div,p,li,dt,dd,td'));
+
+    elements.forEach((element) => {
+      if (!isVisibleElement(element)) return;
+      const text = normalizeText(element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text || text.length > 120) return;
+      const labelSpec = findTotalsLabelSpec(text, labelSpecs);
+      if (!labelSpec) return;
+      const money = findNearbyTotalsMoney(element, labelSpecs);
+      if (!money) return;
+
+      if (labelSpec.key === 'discount') {
+        result.discount = {
+          ...money,
+          amount: roundMoney(Math.abs(result.discount?.amount || 0) + Math.abs(money.amount)),
+        };
+      } else if (!result[labelSpec.key]) {
+        result[labelSpec.key] = money;
+      }
+    });
+
+    return result;
+  }
+
+  function findNearbyTotalsMoney(element, labelSpecs) {
+    const sameElementMoney = parseFirstMoney(element.innerText || element.textContent || '');
+    if (sameElementMoney) return sameElementMoney;
+
+    const siblings = Array.from(element.parentElement ? element.parentElement.children : []);
+    const siblingIndex = siblings.indexOf(element);
+    if (siblingIndex >= 0) {
+      const indexes = [];
+      for (let offset = 1; offset <= 4; offset += 1) {
+        indexes.push(siblingIndex + offset, siblingIndex - offset);
+      }
+      for (const index of indexes) {
+        if (index < 0 || index >= siblings.length) continue;
+        const siblingText = normalizeText(siblings[index].innerText || siblings[index].textContent || '').replace(/\s+/g, ' ').trim();
+        if (!siblingText) continue;
+        if (findTotalsLabelSpec(siblingText, labelSpecs)) continue;
+        const money = parseFirstMoney(siblingText);
+        if (money) return money;
+      }
+    }
+
+    let next = element.nextElementSibling;
+    for (let hops = 0; next && hops < 4; hops += 1, next = next.nextElementSibling) {
+      const text = normalizeText(next.innerText || next.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      if (findTotalsLabelSpec(text, labelSpecs)) break;
+      const money = parseFirstMoney(text);
+      if (money) return money;
+    }
+
+    return null;
+  }
+
+  function isVisibleElement(element) {
+    if (!element || !element.getBoundingClientRect) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    return !style || (style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.01);
+  }
+
+  function recordTotalsField(result, key, money) {
+    if (!money || !Number.isFinite(money.amount)) return;
+    if (key === 'discount') {
+      result.discount = roundMoney((result.discount || 0) + Math.abs(money.amount));
+      return;
+    }
+    result[key] = Math.abs(money.amount);
+  }
+
+  function extractTotalsTable(lines) {
+    const labelSpecs = totalsLabelSpecs();
+
+    const startIndex = lines.findIndex((line) => /^(subtotal|items\s*total|productos)$/i.test(normalizeTotalsLabel(line)));
     if (startIndex < 0) return {};
 
-    const tail = lines.slice(startIndex, Math.min(lines.length, startIndex + 24));
-    const labels = [];
-    const monies = [];
-
-    tail.forEach((line) => {
-      const trimmed = line.trim();
-      const labelSpec = labelSpecs.find((spec) => spec.pattern.test(trimmed));
-      if (labelSpec) labels.push(labelSpec.key);
-
-      const money = parseBestMoney(trimmed);
-      if (money) monies.push(money);
-    });
-
-    if (labels.length < 2 || monies.length < labels.length) return {};
-
+    const tail = lines.slice(startIndex, Math.min(lines.length, startIndex + 40));
     const result = {};
-    labels.forEach((label, index) => {
-      if (!result[label] && monies[index]) result[label] = monies[index];
-    });
+    for (let index = 0; index < tail.length; index += 1) {
+      const labelSpec = findTotalsLabelSpec(tail[index], labelSpecs);
+      if (!labelSpec) continue;
+      const money = findTotalsMoneyForLabel(tail, index, labelSpecs);
+      if (!money) continue;
+
+      const label = labelSpec.key;
+      if (label === 'discount') {
+        result.discount = {
+          ...money,
+          amount: roundMoney(Math.abs(result.discount?.amount || 0) + Math.abs(money.amount)),
+        };
+      } else if (!result[label]) {
+        result[label] = money;
+      }
+    }
     return result;
+  }
+
+  function totalsLabelSpecs({ loose = false } = {}) {
+    const start = loose ? '' : '^';
+    const end = loose ? '' : '$';
+    return [
+      { key: 'subtotal', pattern: new RegExp(`${start}(subtotal|items\\s*total|productos)${end}`, 'i') },
+      { key: 'shipping', pattern: new RegExp(`${start}(shipping(?:\\s*(?:fee|cost|total))?|delivery\\s*(?:fee|cost|total)|env.?o(?:\\s*(?:fee|cost|total|costo))?|entrega|flete)${end}`, 'i') },
+      { key: 'tax', pattern: new RegExp(`${start}(tax|iva|impuesto)${end}`, 'i') },
+      { key: 'discount', pattern: new RegExp(`${start}(discount|descuento|coupon|cupon|coins?|monedas?|ali\\s*express\\s*coupons?)${end}`, 'i') },
+      { key: 'total', pattern: new RegExp(`${start}(order\\s*total|grand\\s*total|amount\\s*paid|payment\\s*total|total\\s*paid|total\\s*del\\s*pedido|total)${end}`, 'i') },
+    ];
+  }
+
+  function totalsTextLabelDefs() {
+    return [
+      { key: 'subtotal', pattern: /\b(?:subtotal|items\s*total|productos)\b/i },
+      { key: 'shipping', pattern: /\b(?:shipping(?:\s*(?:fee|cost|total))?|delivery\s*(?:fee|cost|total)|env.?o(?:\s*(?:fee|cost|total|costo))?|entrega|flete)\b/i },
+      { key: 'tax', pattern: /\b(?:tax|iva|impuesto)\b/i },
+      { key: 'discount', pattern: /\b(?:discount|descuento|coupon|cupon|coins?|monedas?|ali\s*express\s*coupons?)\b/i },
+      { key: 'total', pattern: /\b(?:order\s*total|grand\s*total|amount\s*paid|payment\s*total|total\s*paid|total\s*del\s*pedido|total)\b/i },
+    ];
+  }
+
+  function findTotalsLabelSpec(line, labelSpecs) {
+    const label = normalizeTotalsLabel(line);
+    return labelSpecs.find((spec) => spec.pattern.test(label)) || null;
+  }
+
+  function findTotalsMoneyForLabel(lines, labelIndex, labelSpecs) {
+    const sameLineMoney = parseFirstMoney(lines[labelIndex]);
+    if (sameLineMoney) return sameLineMoney;
+
+    for (let index = labelIndex + 1; index < Math.min(lines.length, labelIndex + 5); index += 1) {
+      if (findTotalsLabelSpec(lines[index], labelSpecs)) break;
+      const money = parseFirstMoney(lines[index]);
+      if (money) return money;
+    }
+    return null;
+  }
+
+  function normalizeTotalsLabel(line) {
+    return String(line || '')
+      .replace(/-?\s*(?:US\s*\$|USD|CLP\s*\$?|EUR|GBP|€|£|\$)\s*-?[\d.,]+|-?[\d.,]+\s*(?:USD|CLP|EUR|GBP)/gi, ' ')
+      .replace(/[?:：]/g, ' ')
+      .replace(/[ⓘ©®™]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function extractItems(defaultCurrency, orderScope, mediaItems = collectOrderMedia(orderScope)) {
@@ -2702,11 +3192,21 @@
     return tokens.sort((a, b) => b.amount - a.amount)[0];
   }
 
+  function parseFirstMoney(text) {
+    const tokens = extractMoneyTokens(text);
+    return tokens.length ? tokens[0] : null;
+  }
+
+  function nearestMoneyBeforeLabel(text) {
+    const tokens = extractMoneyTokens(text);
+    return tokens.length ? tokens[tokens.length - 1] : null;
+  }
+
   function extractMoneyTokens(text) {
-    const matches = String(text || '').match(/(?:US\s*\$|USD|CLP\s*\$?|EUR|GBP|€|£|\$)\s*-?[\d.,]+|-?[\d.,]+\s*(?:USD|CLP|EUR|GBP)/gi) || [];
+    const matches = String(text || '').match(/-?\s*(?:US\s*\$|USD|CLP\s*\$?|EUR|GBP|€|£|\$)\s*-?[\d.,]+|-?[\d.,]+\s*(?:USD|CLP|EUR|GBP)/gi) || [];
     return matches
       .map((raw) => ({ raw, currency: inferCurrency(raw), amount: parseMoneyAmount(raw) }))
-      .filter((money) => Number.isFinite(money.amount) && money.amount >= 0);
+        .filter((money) => Number.isFinite(money.amount));
   }
 
   function inferCurrency(value) {

@@ -921,8 +921,10 @@ class InvoiceParserService {
     return _GeneratedAliExpressAmountRow(
       rowNumber: rowNumber,
       quantity: quantity,
-      unitPrice: amounts.isNotEmpty ? amounts.first : null,
-      total: amounts.length > 1 ? amounts[1] : null,
+      unitPrice: amounts.length >= 6
+          ? amounts[amounts.length - 2]
+          : (amounts.isNotEmpty ? amounts.first : null),
+      total: amounts.length > 1 ? amounts.last : null,
       rawText: rawRowBuffer.toString().trim(),
     );
   }

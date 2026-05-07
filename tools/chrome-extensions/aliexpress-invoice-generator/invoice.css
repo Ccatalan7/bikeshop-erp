@@ -193,24 +193,32 @@ th {
 
 .items-table th:nth-child(2),
 .items-table td:nth-child(2) {
-  width: 112px;
+  width: 98px;
 }
 
 .items-table th:nth-child(4),
 .items-table td:nth-child(4) {
-  width: 60px;
+  width: 48px;
 }
 
 .items-table th:nth-child(3),
 .items-table td:nth-child(3) {
-  min-width: 270px;
+  min-width: 170px;
 }
 
 .items-table th:nth-child(5),
 .items-table td:nth-child(5),
 .items-table th:nth-child(6),
-.items-table td:nth-child(6) {
-  width: 70px;
+.items-table td:nth-child(6),
+.items-table th:nth-child(7),
+.items-table td:nth-child(7),
+.items-table th:nth-child(8),
+.items-table td:nth-child(8),
+.items-table th:nth-child(9),
+.items-table td:nth-child(9),
+.items-table th:nth-child(10),
+.items-table td:nth-child(10) {
+  width: 54px;
 }
 
 .index-cell {
@@ -220,6 +228,16 @@ th {
 .numeric {
   text-align: right;
   white-space: nowrap;
+}
+
+.allocation-cell {
+  color: #374151;
+  font-size: 9px;
+}
+
+.calculated-cost-cell {
+  color: #111827;
+  font-weight: 700;
 }
 
 .muted {
@@ -232,16 +250,16 @@ th {
 }
 
 .item-image {
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
   object-fit: contain;
   display: inline-block;
   background: #fff;
 }
 
 .item-image-empty {
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
   display: inline-block;
 }
 
@@ -313,6 +331,13 @@ th {
   border-top: .3px solid #999;
   font-size: 12px;
   font-weight: 700;
+}
+
+.subtotal-row {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: .3px dashed #bbb;
+  font-weight: 600;
 }
 
 .paid-row {
