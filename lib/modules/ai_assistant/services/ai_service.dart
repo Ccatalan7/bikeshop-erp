@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -70,6 +71,24 @@ class AIProductImageAnalysis {
   final double confidence;
   final String? visualSummary;
   final bool textConflict;
+}
+
+class AIProductVisualComparison {
+  const AIProductVisualComparison({
+    required this.samePartScore,
+    required this.shapeScore,
+    required this.colorScore,
+    required this.componentTypeMatch,
+    required this.confidence,
+    this.reason,
+  });
+
+  final double samePartScore;
+  final double shapeScore;
+  final double colorScore;
+  final bool componentTypeMatch;
+  final double confidence;
+  final String? reason;
 }
 
 class _PreparedGeminiImage {
@@ -359,6 +378,136 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
     }
   }
 
+  final Map<String, AIProductVisualComparison> _visualComparisonCache = {};
+
+  Future<AIProductVisualComparison?> compareProductImagesForDuplicate({
+    required Uint8List probeImageBytes,
+    required Uint8List candidateImageBytes,
+    String? probeName,
+    String? candidateName,
+    String? candidateBrand,
+    String? candidateCategory,
+    String modelName = 'gemini-2.5-flash',
+  }) async {
+    if (probeImageBytes.isEmpty || candidateImageBytes.isEmpty) return null;
+
+    final cacheKey = [
+      _imageBytesCacheKey(probeImageBytes),
+      _imageBytesCacheKey(candidateImageBytes),
+      probeName?.trim().toLowerCase() ?? '',
+      candidateName?.trim().toLowerCase() ?? '',
+    ].join('|');
+    final cached = _visualComparisonCache[cacheKey];
+    if (cached != null) return cached;
+
+    final probeImage = _prepareImageForGemini(probeImageBytes);
+    final candidateImage = _prepareImageForGemini(candidateImageBytes);
+    final contextLines = <String>[
+      if (probeName != null && probeName.trim().isNotEmpty)
+        'producto_a_nombre: ${probeName.trim()}',
+      if (candidateName != null && candidateName.trim().isNotEmpty)
+        'producto_b_nombre: ${candidateName.trim()}',
+      if (candidateBrand != null && candidateBrand.trim().isNotEmpty)
+        'producto_b_marca: ${candidateBrand.trim()}',
+      if (candidateCategory != null && candidateCategory.trim().isNotEmpty)
+        'producto_b_categoria: ${candidateCategory.trim()}',
+    ];
+
+    final prompt = '''
+Compara dos fotos de productos de bicicleteria para detectar duplicados.
+Imagen A es el producto nuevo que estamos buscando. Imagen B es un producto
+existente del catalogo.
+
+Tu trabajo NO es comparar textos. Debes mirar las fotos y decidir si B parece
+ser el MISMO repuesto/modelo fisico que A, especialmente para postizas / hanger
+de cambio trasero.
+
+Evalua con criterio visual real:
+- silueta general, geometria, agujeros, ganchos, orejas, zonas de montaje
+- color/material visible cuando ayuda (negro vs plateado importa)
+- numero de piezas visibles (una pieza vs dos piezas no debe ser alta)
+- ignora posicion, escala, recorte, rotacion o espejo de la foto
+- no premies una pieza solo por ser "postiza"; si la forma no coincide, baja score
+- si A y B son la misma postiza/modelo con foto distinta, same_part_score debe ser 0.90+
+- si B es otra postiza/hanger de forma distinta, same_part_score normalmente 0.20-0.55
+- si B ni siquiera parece el mismo tipo exacto, same_part_score debe ser bajo
+
+Responde SOLO JSON valido con esta forma exacta:
+{
+  "same_part_score": 0.94,
+  "shape_score": 0.96,
+  "color_score": 0.88,
+  "component_type_match": true,
+  "confidence": 0.91,
+  "reason": "misma postiza plateada con mismos agujeros y contorno"
+}
+
+Reglas:
+- scores entre 0 y 1
+- reason en espanol, maximo 16 palabras
+- No escribas nada fuera del JSON.
+
+Contexto debil (usar solo si no contradice la foto):
+${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
+''';
+
+    try {
+      final response = await _geminiProxy.generateContent(
+        model: modelName,
+        contents: [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': prompt},
+              {'text': 'Imagen A - producto nuevo'},
+              {
+                'inlineData': {
+                  'mimeType': probeImage.mimeType,
+                  'data': base64Encode(probeImage.bytes),
+                },
+              },
+              {'text': 'Imagen B - candidato del catalogo'},
+              {
+                'inlineData': {
+                  'mimeType': candidateImage.mimeType,
+                  'data': base64Encode(candidateImage.bytes),
+                },
+              },
+            ],
+          },
+        ],
+      );
+
+      final rawText = response.text.trim();
+      if (rawText.isEmpty) return null;
+      final jsonBlock = _extractJsonObject(rawText);
+      if (jsonBlock == null) {
+        debugPrint('⚠️ [AI] Visual comparison returned non-JSON: $rawText');
+        return null;
+      }
+
+      final decoded = jsonDecode(jsonBlock);
+      if (decoded is! Map<String, dynamic>) return null;
+      final result = AIProductVisualComparison(
+        samePartScore: _coerceAnalysisConfidence(decoded['same_part_score']),
+        shapeScore: _coerceAnalysisConfidence(decoded['shape_score']),
+        colorScore: _coerceAnalysisConfidence(decoded['color_score']),
+        componentTypeMatch: decoded['component_type_match'] == true,
+        confidence: _coerceAnalysisConfidence(decoded['confidence']),
+        reason: _normalizeImageAnalysisTerm(
+          decoded['reason']?.toString(),
+          maxWords: 16,
+        ),
+      );
+
+      _visualComparisonCache[cacheKey] = result;
+      return result;
+    } catch (e) {
+      debugPrint('❌ [AI] Visual comparison error: $e');
+      return null;
+    }
+  }
+
   /// Cache for cleaned product names. Keyed by image hash + raw title so
   /// repeated rows in the same AliExpress invoice share one Gemini call.
   final Map<String, AICleanedProductName> _cleanedNameCache = {};
@@ -541,6 +690,15 @@ ${hintLines.join('\n')}
       debugPrint('❌ [AI] Image download error for $url: $e');
       return null;
     }
+  }
+
+  String _imageBytesCacheKey(Uint8List bytes) {
+    var hash = 0;
+    final stride = math.max(1, bytes.lengthInBytes ~/ 96);
+    for (var index = 0; index < bytes.lengthInBytes; index += stride) {
+      hash = (hash * 31 + bytes[index]) & 0x7fffffff;
+    }
+    return 'b:${bytes.lengthInBytes}:$hash';
   }
 
   Future<AIAssistantResponse> sendMessage(

@@ -6,7 +6,7 @@
   const BULK_WORKSPACE_STORAGE = 'aliexpressInvoiceBulkWorkspace';
   const SETTINGS_STORAGE = 'aliexpressInvoiceSettings';
   const AI_AUTO_CLEAN_STORAGE = 'aliexpressInvoiceAiAutoClean';
-  const AI_NAME_CACHE_STORAGE = 'aliexpressInvoiceAiNameCache';
+  const AI_NAME_CACHE_STORAGE = 'aliexpressInvoiceAiNameCache_v4';
   const AI_NAME_CACHE_LIMIT = 500;
   const DEFAULT_SETTINGS = {
     defaultDateMode: 'range',
@@ -396,7 +396,7 @@
       '- Si el producto es naturalmente plural (ej. "Pastillas de freno", "Pernos"), conserva esa forma sin numeros.',
       '- NO copies marketing como "for MTB Bike Bicycle Universal Steel Aluminum 2024 New".',
       '- NO inventes datos que no estan en titulo o imagen.',
-      '- category_name debe ser una categoria humana, simple, en plural, en espanol chileno de taller (ej. "Pastillas", "Cadenas", "Eslabones", "Postizas", "Pedales", "Puños", "Pernos", "Cassettes", "Rotores", "Camaras", "Herramientas"). Una sola palabra cuando sea posible.',
+      '- category_name debe ser una categoria humana, simple, en plural, en espanol chileno de taller. Usa preferentemente alguna de estas: "Pastillas", "Cadenas", "Missinglink", "Postiza", "Pedales", "Puños", "Pernos", "Cassette", "Rotores", "Cámaras", "Herramientas", "Asientos", "Válvula Tubeless", "Tubeless", "Porta Caramagiola", "Manillas", "Frenos", "Rodamientos", "Rayos", "Llantas", "Mazas", "Horquillas", "Cambios", "Shifters", "Manubrios", "Tija", "Dirección", "Luces", "Candados", "Cascos", "Guantes", "Cubre Cámara", "Líquido Frenos", "Líquido Tubeless", "Lubricantes", "Grasa", "Parches", "Espaciadores". Cuando el producto sea claramente uno de estos, usa exactamente ese nombre. Casos especiales: para eslabones rapidos / quick links / cierres de cadena usa SIEMPRE "Missinglink"; para sillines usa "Asientos"; para portacaramagiola/portabotella/portabidon usa "Porta Caramagiola"; para valvulas tubeless usa "Válvula Tubeless" no "Tubeless". Si no calza nada, inventa una categoria corta en plural.',
       '- Devuelve SOLO un objeto JSON valido con esta forma EXACTA, sin texto adicional:',
       '  {"cleaned_name": "Postiza ZTTO 001", "component_type": "postiza", "brand": "ZTTO", "model": "001", "category_name": "Postizas", "confidence": 0.0-1.0}',
       '',
@@ -1092,9 +1092,11 @@
       const domItem = hasUsableDomIdentity(rawDomItem) ? rawDomItem : {};
       const mediaItem = pickBestMediaForItem(index, matchIdx, domItem, domMedia, usedMedia, aiDescription);
 
-      const quantity = toNumber(item.quantity) || 1;
-      const unitPrice = toNumber(item.unitPrice);
-      const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
+      const quantity = toNumber(item.quantity) || toNumber(domItem.quantity) || 1;
+      const unitPrice = toNumber(item.unitPrice) || toNumber(domItem.unitPrice) || 0;
+      const total = toNumber(item.total)
+        || toNumber(domItem.total)
+        || roundMoney(quantity * unitPrice);
       const description = aiDescription || domItem.description || mediaItem.title || `AliExpress item ${index + 1}`;
 
       return normalizeItem({
@@ -2100,7 +2102,7 @@
 
   function normalizeItem(item) {
     const quantity = toNumber(item.quantity) || 1;
-    const unitPrice = toNumber(item.unitPrice);
+    const unitPrice = toNumber(item.unitPrice) || 0;
     const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
     // If the addon already AI-cleaned this row, keep that exact name and
     // don't run the heuristic cleaner over the original noisy title again.

@@ -478,6 +478,19 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (candidate.imageDebugSignals.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: candidate.imageDebugSignals
+                        .map((signal) => ProductDuplicateMetricChip(
+                              label: signal,
+                              tone: ProductDuplicateChipTone.neutral,
+                            ))
+                        .toList(growable: false),
+                  ),
+                ],
                 if (candidate.signals.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(

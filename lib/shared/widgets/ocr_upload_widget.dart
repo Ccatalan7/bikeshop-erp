@@ -2410,36 +2410,166 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       return unaccented.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
     }
 
-    // Fuzzy resolver: exact normalized match first, then bidirectional
-    // contains, then significant word overlap. Returns null when nothing is
-    // confidently close so we don't auto-pick obviously wrong rows.
+    // Chilean bike-shop synonym map. Both directions (suggested -> canonical
+    // and canonical -> suggested) are checked. Singular/plural variants are
+    // already handled by norm + substring, so list distinct concepts only.
+    const categorySynonyms = <String, List<String>>{
+      'asiento': ['sillin', 'sillines', 'asientos', 'sillon'],
+      'asientos': ['sillin', 'sillines', 'asiento', 'sillon'],
+      'porta caramagiola': [
+        'portacaramagiola',
+        'portacaramagiolas',
+        'portabotella',
+        'portabotellas',
+        'porta botella',
+        'porta botellas',
+        'portabidon',
+        'portabidones',
+      ],
+      'valvula tubeless': [
+        'valvulas tubeless',
+        'valvula',
+        'valvulas',
+        'valves tubeless',
+      ],
+      'cassette': ['cassettes', 'piñon', 'pinones', 'cassete'],
+      'rotores': ['rotor', 'discos freno', 'disco freno'],
+      'camaras': ['camara', 'tubos', 'tubo'],
+      'puños': ['punos', 'puno', 'grips', 'grip'],
+      'pastillas': ['pastilla', 'pastillas freno', 'pads freno'],
+      'cadenas': ['cadena'],
+      'missinglink': [
+        'missing link',
+        'missinglinks',
+        'missing links',
+        'eslabon rapido',
+        'eslabones rapidos',
+        'eslabon',
+        'eslabones',
+        'quick link',
+        'quick links',
+        'quicklink',
+        'quicklinks',
+        'cadena rapida',
+        'cierre cadena',
+        'cierres cadena',
+      ],
+      'postiza': ['postizas', 'postiza casette', 'postiza pinon'],
+      'pedales': ['pedal'],
+      'rayos': ['rayo', 'spokes'],
+      'manillas': ['manilla', 'palanca freno', 'palancas freno'],
+      'rodamientos': ['rodamiento', 'balines', 'balin', 'bearings'],
+    };
+
+    bool synonymMatch(String target, String candidateNorm) {
+      // Direct synonym lookup: candidate canonical -> includes target?
+      final candidateSynonyms = categorySynonyms[candidateNorm];
+      if (candidateSynonyms != null) {
+        for (final syn in candidateSynonyms) {
+          final synN = norm(syn);
+          if (synN == target ||
+              synN.contains(target) ||
+              target.contains(synN)) {
+            return true;
+          }
+        }
+      }
+      // Reverse: target maps to a list that includes the candidate
+      final targetSynonyms = categorySynonyms[target];
+      if (targetSynonyms != null) {
+        for (final syn in targetSynonyms) {
+          if (norm(syn) == candidateNorm) return true;
+        }
+      }
+      // Walk the map: any key whose synonym list contains target AND that
+      // key EXACTLY equals candidate (no substring). This is the critical
+      // anti-hijack rule: without exact equality, "sillin" (synonym of
+      // "asiento") would also match local "Cubre Asientos" because that
+      // string contains "asientos". We never want that.
+      for (final entry in categorySynonyms.entries) {
+        final keyN = norm(entry.key);
+        if (keyN != candidateNorm) continue;
+        final listHasTarget = entry.value.any((s) {
+          final sN = norm(s);
+          return sN == target || sN.contains(target) || target.contains(sN);
+        });
+        if (listHasTarget) return true;
+      }
+      return false;
+    }
+
+    // Fuzzy resolver: exact normalized match first (preferring the longest /
+    // most specific local name), then synonyms, then bidirectional contains,
+    // then significant word overlap, then compound-word matching. Returns
+    // null when nothing is confidently close.
     Category? resolveCategory(String? suggested) {
       if (suggested == null) return null;
       final target = norm(suggested);
       if (target.isEmpty) return null;
-      // Exact normalized match.
+      // 1. Exact normalized match — pick the most specific (longest name)
+      // when several locals normalize the same. So "Válvula Tubeless" wins
+      // over "Tubeless" when AI sends "valvula tubeless".
+      Category? exactBest;
       for (final c in _categories) {
-        if (norm(c.name) == target) return c;
+        if (norm(c.name) == target) {
+          if (exactBest == null || c.name.length > exactBest.name.length) {
+            exactBest = c;
+          }
+        }
       }
-      // Substring either way ("Pastillas" vs "Pastillas de freno").
+      if (exactBest != null) return exactBest;
+      // 2. Synonym map (chilean shop vocabulary).
+      Category? synonymBest;
       for (final c in _categories) {
         final cn = norm(c.name);
         if (cn.isEmpty) continue;
-        if (cn.contains(target) || target.contains(cn)) return c;
+        if (synonymMatch(target, cn)) {
+          if (synonymBest == null || c.name.length > synonymBest.name.length) {
+            synonymBest = c;
+          }
+        }
       }
-      // Word overlap (>=1 meaningful word, ignoring tiny stop tokens).
+      if (synonymBest != null) return synonymBest;
+      // 3. Substring either way; prefer longer (more specific) local name.
+      Category? substringBest;
+      for (final c in _categories) {
+        final cn = norm(c.name);
+        if (cn.isEmpty) continue;
+        if (cn.contains(target) || target.contains(cn)) {
+          if (substringBest == null ||
+              c.name.length > substringBest.name.length) {
+            substringBest = c;
+          }
+        }
+      }
+      if (substringBest != null) return substringBest;
+      // 4. Word overlap (>=1 meaningful word, ignoring tiny stop tokens).
       final stop = {'de', 'del', 'la', 'el', 'los', 'las', 'para', 'y'};
       final targetTokens = target
           .split(' ')
           .where((t) => t.length >= 4 && !stop.contains(t))
           .toSet();
-      if (targetTokens.isEmpty) return null;
       for (final c in _categories) {
         final cTokens = norm(c.name)
             .split(' ')
             .where((t) => t.length >= 4 && !stop.contains(t))
             .toSet();
         if (cTokens.intersection(targetTokens).isNotEmpty) return c;
+      }
+      // 5. Compound-word matching: handles "Portacaramagiola" vs
+      // "Porta Caramagiola". Strip spaces from both sides; if either is a
+      // substring of the other AND the shorter one is >=6 chars, accept.
+      final targetCompact = target.replaceAll(' ', '');
+      if (targetCompact.length >= 6) {
+        for (final c in _categories) {
+          final cnCompact = norm(c.name).replaceAll(' ', '');
+          if (cnCompact.length < 6) continue;
+          if (cnCompact == targetCompact ||
+              cnCompact.contains(targetCompact) ||
+              targetCompact.contains(cnCompact)) {
+            return c;
+          }
+        }
       }
       return null;
     }
@@ -2455,6 +2585,87 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         final bn = norm(b.name);
         if (bn.isEmpty) continue;
         if (bn.contains(target) || target.contains(bn)) return b;
+      }
+      return null;
+    }
+
+    // Last-resort fallback: scan the product NAME (cleaned name first, then
+    // original noisy title) for any local brand whose normalized form
+    // appears as a whole token. So "Pedal ENLEE CR-2 aluminio" will pick up
+    // local brand "ENLEE" even when the AI didn't fill the brand field.
+    ProductBrand? scanBrandInName(String? name) {
+      if (name == null) return null;
+      final hay = ' ${norm(name)} ';
+      if (hay.trim().isEmpty) return null;
+      ProductBrand? best;
+      for (final b in _brands) {
+        final bn = norm(b.name);
+        if (bn.length < 2) continue;
+        if (hay.contains(' $bn ')) {
+          if (best == null || bn.length > norm(best.name).length) best = b;
+        }
+      }
+      return best;
+    }
+
+    // Same idea for category: keyword map from product-name token -> local
+    // category name. Used only when the AI's suggested category didn't
+    // resolve to any local row. Conservative on purpose.
+    const nameToCategoryKeywords = <String, String>{
+      'cincel': 'Herramientas',
+      'martillo': 'Herramientas',
+      'destornillador': 'Herramientas',
+      'alicate': 'Herramientas',
+      'llave': 'Herramientas',
+      'sillin': 'Asientos',
+      'sillon': 'Asientos',
+      'asiento': 'Asientos',
+      'pedal': 'Pedales',
+      'pedales': 'Pedales',
+      'puno': 'Puños',
+      'punos': 'Puños',
+      'grip': 'Puños',
+      'cadena': 'Cadenas',
+      'rotor': 'Rotores',
+      'cassette': 'Cassette',
+      'cassete': 'Cassette',
+      'pinon': 'Cassette',
+      'eslabon': 'Missinglink',
+      'missinglink': 'Missinglink',
+      'pastilla': 'Pastillas',
+      'pastillas': 'Pastillas',
+      'rodamiento': 'Rodamientos',
+      'manilla': 'Manillas',
+      'manubrio': 'Manubrios',
+      'horquilla': 'Horquillas',
+      'maza': 'Mazas',
+      'rayo': 'Rayos',
+      'llanta': 'Llantas',
+      'camara': 'Cámaras',
+      'tubeless': 'Tubeless',
+      'valvula': 'Válvula Tubeless',
+      'portacaramagiola': 'Porta Caramagiola',
+      'portabotella': 'Porta Caramagiola',
+      'portabidon': 'Porta Caramagiola',
+      'tija': 'Tija',
+      'shifter': 'Shifters',
+      'casco': 'Cascos',
+      'guante': 'Guantes',
+      'luz': 'Luces',
+      'parche': 'Parches',
+      'lubricante': 'Lubricantes',
+      'grasa': 'Grasa',
+    };
+
+    Category? scanCategoryInName(String? name) {
+      if (name == null) return null;
+      final hay = ' ${norm(name)} ';
+      if (hay.trim().isEmpty) return null;
+      for (final entry in nameToCategoryKeywords.entries) {
+        if (hay.contains(' ${entry.key} ')) {
+          final hit = resolveCategory(entry.value);
+          if (hit != null) return hit;
+        }
       }
       return null;
     }
@@ -2491,6 +2702,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (entry.selectedCategory == null && addonCategory != null) {
         final match = resolveCategory(addonCategory);
         if (match != null) entry.selectedCategory = match;
+      }
+      // Name-scan fallbacks: if the AI didn't fill or we couldn't resolve,
+      // try to extract brand and category directly from the cleaned name.
+      if (entry.selectedBrand == null) {
+        final viaName = scanBrandInName(entry.nameController.text) ??
+            scanBrandInName(entry.originalNoisyTitle);
+        if (viaName != null) entry.selectedBrand = viaName;
+      }
+      if (entry.selectedCategory == null) {
+        final viaName = scanCategoryInName(entry.nameController.text) ??
+            scanCategoryInName(entry.originalNoisyTitle);
+        if (viaName != null) entry.selectedCategory = viaName;
       }
     }
 
@@ -2537,6 +2760,16 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           if (entry.selectedCategory == null && result.categoryName != null) {
             final match = resolveCategory(result.categoryName);
             if (match != null) entry.selectedCategory = match;
+          }
+          if (entry.selectedBrand == null) {
+            final viaName = scanBrandInName(entry.nameController.text) ??
+                scanBrandInName(entry.originalNoisyTitle);
+            if (viaName != null) entry.selectedBrand = viaName;
+          }
+          if (entry.selectedCategory == null) {
+            final viaName = scanCategoryInName(entry.nameController.text) ??
+                scanCategoryInName(entry.originalNoisyTitle);
+            if (viaName != null) entry.selectedCategory = viaName;
           }
         }
       } catch (e) {
@@ -3759,8 +3992,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           double.tryParse(text);
     }
 
-    final items =
-        (invoice['items'] as List? ?? const []).whereType<Map>().map((raw) {
+    final rawItems =
+        (invoice['items'] as List? ?? const []).whereType<Map>().toList();
+    var items = rawItems.map((raw) {
       final item = Map<String, dynamic>.from(raw);
       final description = item['description']?.toString().trim();
       return ParsedLineItem(
@@ -3793,6 +4027,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }).toList(growable: false);
 
+    items = _repairSingleMissingAliExpressLineCost(
+      items,
+      subtotal: parseNumber(invoice['subtotal']),
+      total: parseNumber(invoice['total']),
+    );
+
     final supplierName = invoice['supplierName']?.toString().trim();
     return ParsedInvoice(
       invoiceNumber: invoice['orderNumber']?.toString().trim(),
@@ -3804,6 +4044,56 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       lineItems: items,
       rawText: jsonEncode(invoice),
     );
+  }
+
+  List<ParsedLineItem> _repairSingleMissingAliExpressLineCost(
+    List<ParsedLineItem> items, {
+    double? subtotal,
+    double? total,
+  }) {
+    final missingIndexes = <int>[];
+    var knownTotal = 0.0;
+
+    for (var index = 0; index < items.length; index++) {
+      final item = items[index];
+      final lineTotal = item.total;
+      final unitPrice = item.unitPrice;
+      final quantity = item.quantity ?? 1;
+
+      if (lineTotal != null && lineTotal > 0) {
+        knownTotal += lineTotal;
+      } else if (unitPrice != null && unitPrice > 0 && quantity > 0) {
+        knownTotal += unitPrice * quantity;
+      } else {
+        missingIndexes.add(index);
+      }
+    }
+
+    if (missingIndexes.length != 1) return items;
+
+    final invoiceLineBasis = (subtotal != null && subtotal > knownTotal)
+        ? subtotal
+        : (total != null && total > knownTotal ? total : null);
+    if (invoiceLineBasis == null) return items;
+
+    final missingTotal = invoiceLineBasis - knownTotal;
+    if (missingTotal <= 0) return items;
+
+    final missingIndex = missingIndexes.single;
+    final item = items[missingIndex];
+    final quantity = (item.quantity ?? 1) > 0 ? item.quantity ?? 1 : 1.0;
+    final repaired = item.copyWith(
+      unitPrice: missingTotal / quantity,
+      total: missingTotal,
+      rawRowText: _mergeRawRowText(
+        item.rawRowText,
+        'REPAIRED_COST_FROM_INVOICE_RESIDUAL: ${missingTotal.toStringAsFixed(0)}',
+      ),
+    );
+
+    final updated = List<ParsedLineItem>.from(items);
+    updated[missingIndex] = repaired;
+    return updated;
   }
 
   ParsedInvoice _parseAliExpressInvoiceHtml(String html) {

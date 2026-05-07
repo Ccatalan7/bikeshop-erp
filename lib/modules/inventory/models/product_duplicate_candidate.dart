@@ -12,6 +12,7 @@ class ProductDuplicateCandidate {
     required this.metadataScore,
     required this.hasProductImage,
     required this.signals,
+    this.imageDebugSignals = const [],
   });
 
   final Product product;
@@ -24,6 +25,7 @@ class ProductDuplicateCandidate {
   final double metadataScore;
   final bool hasProductImage;
   final List<String> signals;
+  final List<String> imageDebugSignals;
 }
 
 class ProductDuplicateReviewRow {
