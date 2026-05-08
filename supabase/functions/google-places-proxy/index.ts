@@ -79,7 +79,7 @@ serve(async (req: Request): Promise<Response> => {
       // Place Details
       const params = new URLSearchParams({
         place_id: placeId,
-        fields: "formatted_address,address_components,geometry",
+        fields: "place_id,name,formatted_address,address_components,geometry,opening_hours,url",
         language: "es",
         sessiontoken: sessionToken || "",
         key: apiKey,

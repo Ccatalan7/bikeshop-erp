@@ -47,21 +47,50 @@ class _PublicPolicyView extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      color: _bg,
+      color: Colors.white,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1120),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 42, 24, 64),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _PolicyHero(meta: meta),
-                const SizedBox(height: 18),
-                _PolicyNav(currentSlug: slug),
-                const SizedBox(height: 24),
-                _PolicyContent(sections: sections),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 64),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 768;
+
+                if (!isDesktop) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _PolicyHero(meta: meta),
+                      const SizedBox(height: 32),
+                      _PolicyNav(currentSlug: slug, isDesktop: false),
+                      const SizedBox(height: 32),
+                      _PolicyContent(sections: sections),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 240,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _PolicyHero(meta: meta),
+                          const SizedBox(height: 32),
+                          _PolicyNav(currentSlug: slug, isDesktop: true),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 64),
+                    Expanded(
+                      child: _PolicyContent(sections: sections),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -187,101 +216,49 @@ class _PolicyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(28, 30, 28, 28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _PublicPolicyView._line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 720;
-          final title = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: meta.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(meta.icon, color: meta.color, size: 22),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                meta.title,
-                style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w800,
-                  height: 1.05,
-                  letterSpacing: 0,
-                  color: _PublicPolicyView._ink,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                meta.summary,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 1.45,
-                  color: _PublicPolicyView._muted,
-                ),
-              ),
-            ],
-          );
-
-          final chips = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final chip in meta.chips)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    border: Border.all(color: _PublicPolicyView._line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    chip,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _PublicPolicyView._ink,
-                    ),
-                  ),
-                ),
-            ],
-          );
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [title, const SizedBox(height: 18), chips],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(child: title),
-              const SizedBox(width: 24),
-              SizedBox(width: 300, child: chips),
-            ],
-          );
-        },
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: meta.color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(meta.icon, color: meta.color, size: 24),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          meta.title,
+          style: const TextStyle(
+            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
+            height: 1.1,
+            letterSpacing: -0.5,
+            color: _PublicPolicyView._ink,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          meta.summary,
+          style: const TextStyle(
+            fontSize: 16,
+            height: 1.5,
+            color: _PublicPolicyView._muted,
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _PolicyNav extends StatelessWidget {
   final String currentSlug;
+  final bool isDesktop;
 
-  const _PolicyNav({required this.currentSlug});
+  const _PolicyNav({required this.currentSlug, this.isDesktop = false});
 
   @override
   Widget build(BuildContext context) {
@@ -292,32 +269,118 @@ class _PolicyNav extends StatelessWidget {
       'terminos',
       'privacidad'
     ];
+
+    if (isDesktop) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final slug in slugs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _NavButton(
+                slug: slug,
+                isSelected: currentSlug == slug,
+                onTap: () =>
+                    PublicStoreLayout.navigateToHref(context, '/$slug'),
+              ),
+            ),
+        ],
+      );
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
           for (final slug in slugs)
             Padding(
-              padding: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
                 selected: currentSlug == slug,
                 label: Text(_PolicyMeta.forSlug(slug, slug).navLabel),
-                avatar: Icon(_PolicyMeta.forSlug(slug, slug).icon, size: 16),
+                avatar: Icon(
+                  _PolicyMeta.forSlug(slug, slug).icon,
+                  size: 16,
+                  color: currentSlug == slug
+                      ? _PublicPolicyView._ink
+                      : _PublicPolicyView._muted,
+                ),
                 onSelected: (_) =>
                     PublicStoreLayout.navigateToHref(context, '/$slug'),
-                selectedColor: const Color(0xFFEFF6FF),
+                selectedColor: const Color(0xFFF1F5F9),
                 backgroundColor: Colors.white,
-                side: const BorderSide(color: _PublicPolicyView._line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color: currentSlug == slug
+                      ? Colors.transparent
+                      : _PublicPolicyView._line,
                 ),
-                labelStyle: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                labelStyle: TextStyle(
+                  fontSize: 14,
+                  fontWeight:
+                      currentSlug == slug ? FontWeight.w700 : FontWeight.w500,
+                  color: currentSlug == slug
+                      ? _PublicPolicyView._ink
+                      : _PublicPolicyView._muted,
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final String slug;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavButton({
+    required this.slug,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = _PolicyMeta.forSlug(slug, slug);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: const Color(0xFFF8FAFC),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              meta.icon,
+              size: 18,
+              color: isSelected
+                  ? _PublicPolicyView._ink
+                  : _PublicPolicyView._muted,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                meta.navLabel,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? _PublicPolicyView._ink
+                      : _PublicPolicyView._muted,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -330,43 +393,39 @@ class _PolicyContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _PublicPolicyView._line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < sections.length; i++) ...[
-            if (i > 0) const SizedBox(height: 28),
-            Text(
-              sections[i].title,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _PublicPolicyView._ink,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < sections.length; i++) ...[
+          if (i > 0) const SizedBox(height: 48),
+          Text(
+            sections[i].title,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: _PublicPolicyView._ink,
             ),
-            const SizedBox(height: 12),
-            for (final paragraph in sections[i].paragraphs)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  paragraph,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.6,
-                    color: _PublicPolicyView._muted,
-                  ),
+          ),
+          const SizedBox(height: 16),
+          for (final paragraph in sections[i].paragraphs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                paragraph,
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.65,
+                  color: _PublicPolicyView._muted,
                 ),
               ),
-            if (sections[i].items.isNotEmpty)
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+            ),
+          if (sections[i].items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 16,
                 children: [
                   for (final item in sections[i].items)
                     ConstrainedBox(
@@ -376,9 +435,9 @@ class _PolicyContent extends StatelessWidget {
                     ),
                 ],
               ),
-          ],
+            ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -392,11 +451,10 @@ class _PolicyItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        border: Border.all(color: _PublicPolicyView._line),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,20 +463,20 @@ class _PolicyItemCard extends StatelessWidget {
             Text(
               item.title,
               style: const TextStyle(
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: _PublicPolicyView._ink,
               ),
             ),
           if (item.title.isNotEmpty && item.body.isNotEmpty)
-            const SizedBox(height: 7),
+            const SizedBox(height: 8),
           if (item.body.isNotEmpty)
             Text(
               item.body,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 15,
                 height: 1.5,
-                color: _PublicPolicyView._muted,
+                color: Color(0xFF475569),
               ),
             ),
         ],

@@ -586,6 +586,8 @@ class GoogleLocation {
   final double? lng;
   final String? addressLine; // Simplified
   final Map<String, dynamic>? hours;
+  final String? mapsUri;
+  final String? newReviewUri;
 
   GoogleLocation({
     required this.name,
@@ -595,6 +597,8 @@ class GoogleLocation {
     this.lng,
     this.addressLine,
     this.hours,
+    this.mapsUri,
+    this.newReviewUri,
   });
 
   factory GoogleLocation.fromJson(Map<String, dynamic> json,
@@ -619,6 +623,10 @@ class GoogleLocation {
       name = '$accountName/$name';
     }
 
+    final metadata = json['metadata'] is Map
+        ? Map<String, dynamic>.from(json['metadata'] as Map)
+        : const <String, dynamic>{};
+
     return GoogleLocation(
       name: name,
       title: json['title'] ?? 'Sin título',
@@ -629,6 +637,8 @@ class GoogleLocation {
       // Parsing address is complex (PostalAddress object).
       // We'll simplisticly store the raw JSON in hours/metadata for extraction later
       hours: json['regularHours'],
+      mapsUri: metadata['mapsUri']?.toString(),
+      newReviewUri: metadata['newReviewUri']?.toString(),
     );
   }
 }

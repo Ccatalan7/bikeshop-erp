@@ -1334,6 +1334,33 @@ update products
 
 # 🔧 COPILOT WORKFLOW CHECKLIST
 
+## 🧯 Recovery / Selective HEAD Restore Protocol
+
+When the workspace appears broadly corrupted and the user trusts the last commit, do **not** keep patching random symptoms indefinitely.
+
+Use a protected restore workflow:
+
+1. Verify what is dirty with `git status --short` and `git diff --name-only`.
+2. Identify the intentional uncommitted work that must survive. For website/public-store work, preserve at minimum:
+  - `.agent/workflows`
+  - `.firebase` / `firebase.json`
+  - `lib/modules/website`
+  - `lib/public_store`
+  - `lib/shared/routes/app_router.dart` when website routing changed
+  - `scripts`
+  - `supabase/functions/mercadopago-create-preference`
+  - `web`
+3. Stash or patch that intentional set before restoring anything else. Prefer a path-scoped stash, for example:
+  `git stash push -u -m "preserve website enhancements before HEAD restore" -- .agent/workflows .firebase firebase.json lib/modules/website lib/public_store lib/shared/routes/app_router.dart scripts supabase/functions/mercadopago-create-preference web`
+4. Restore tracked files back to the trusted commit with `git restore .` only after the protected work is safely stashed or patched.
+5. Quarantine untracked source-path leftovers outside the repo instead of committing or deleting them blindly. Move files from paths like `lib/`, `packages/`, `test/`, `tool/`, `scripts/`, `web/`, and `supabase/functions/` into a timestamped backup folder outside the workspace when they are not part of the intended change.
+6. Pop/apply the protected stash, resolve conflicts if any, then rerun analyzer/tests.
+7. Commit only the intentional change set. Do not commit `.copilot-backups`, `.agent/tmp`, `.tmp`, generated diagnostic probes, screenshots, or recovery artifacts.
+
+Important terminal gotcha: in zsh, do not use a shell variable named `path`; it can shadow the command lookup path and make commands like `git`, `mkdir`, or `dirname` appear missing. Use names such as `file_path` instead.
+
+This protocol is the preferred way to get back to a trusted app baseline while preserving known-good website work.
+
 **For ANY database-related task:**
 
 1. ✅ **READ** `supabase/sql/core_schema.sql` first - ENTIRE file if needed
@@ -1904,6 +1931,45 @@ The website has THREE layers of data that must stay in sync:
 ```bash
 curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_settings?tenant_id=eq.${TENANT_ID}&select=key,value"
 ```
+
+## Business Profile Data Truth (Google Maps / Google Business)
+
+Public storefront business facts must come from connected business data, not page-local placeholders.
+
+This applies to:
+- opening / working hours
+- address and map links
+- phone numbers and WhatsApp numbers
+- business name
+- review links / Google review metadata
+- any future storefront trust data that Google Business Profile or Google Places can provide
+
+**Source-of-truth rule:**
+1. Prefer synced Google Business Profile / Google Maps / Google Places data when available.
+2. Persist the synced result into `website_settings` so Flutter, SEO sync, and static `index.html` all read the same truth.
+3. Render public pages from `WebsiteService.getSetting(...)` / normalized `website_settings` values, not from hardcoded strings.
+4. If the data is missing, show an honest fallback such as a Google Maps CTA or an empty state. Never invent schedules, addresses, phone numbers, emails, or other business facts.
+
+**Canonical settings currently used:**
+- Business/Profile hours: `google_business_regular_hours`
+- Google Places hours fallback: `business_hours_json`
+- Google Maps place id: `google_maps_place_id`
+- Maps URLs: `seo_google_maps_url`, `business_google_maps_url`, `google_maps_url`
+- Review URL: `business_google_review_url`
+- Contact identity: `store_name`, `business_name`, `contact_address`, `contact_phone`, `business_phone`, `seo_phone`, `contact_email`, `whatsapp`
+
+**Implementation pattern:**
+- Google Business Profile sync lives in `lib/modules/website/services/google_business_service.dart` and the website editor sync UI in `lib/modules/website/widgets/website_editor_panel.dart`.
+- The `google-business-reviews` Edge Function already fetches Business Profile location data including `regularHours` and `metadata`.
+- The `google-places-proxy` Edge Function is the correct server-side path for Google Places details such as `opening_hours`, `place_id`, and canonical Maps URL. Do not expose or call the Places API key directly from public Flutter code.
+- Public renderers such as `lib/public_store/pages/contact_page.dart` should support both Google Business Profile `regularHours` and Google Places `opening_hours` payload shapes when displaying hours.
+
+**Before displaying or changing business facts:**
+1. Inspect production `website_settings` for the relevant tenant and keys.
+2. If synced data is missing, fix the sync/backfill path first instead of adding constants to a page.
+3. If Edge Function behavior changes, deploy it with `supabase functions deploy <function-name> --project-ref xzdvtzdqjeyqxnkqprtf`.
+4. If Flutter public-store rendering changes, deploy the storefront build so the live site uses the updated parser/UI.
+5. Re-check the live page after cache revalidation or hard refresh.
 
 ## SEO Settings Page
 

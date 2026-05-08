@@ -1151,13 +1151,35 @@ class _SyncTabState extends State<_SyncTab> {
                     style: const TextStyle(color: Colors.white)),
                 subtitle: Text(loc.addressLine ?? '',
                     style: const TextStyle(color: Colors.white70)),
-                onTap: () {
-                  websiteService.saveSetting('business_name', loc.title);
-                  websiteService.saveSetting('business_google_location_id',
-                      loc.name); // Save ID for reviews
+                onTap: () async {
+                  final settings = <String, String>{
+                    'business_name': loc.title,
+                    'business_google_location_id': loc.name,
+                  };
+
                   if (loc.phone != null) {
-                    websiteService.saveSetting('business_phone', loc.phone!);
+                    settings['business_phone'] = loc.phone!;
+                    settings['contact_phone'] = loc.phone!;
+                    settings['seo_phone'] = loc.phone!;
                   }
+
+                  if (loc.hours != null && loc.hours!.isNotEmpty) {
+                    settings['google_business_regular_hours'] =
+                        jsonEncode(loc.hours);
+                  }
+
+                  final mapsUrl = loc.mapsUri;
+                  if (mapsUrl != null && mapsUrl.trim().isNotEmpty) {
+                    settings['business_google_maps_url'] = mapsUrl.trim();
+                    settings['seo_google_maps_url'] = mapsUrl.trim();
+                  }
+
+                  final reviewUrl = loc.newReviewUri;
+                  if (reviewUrl != null && reviewUrl.trim().isNotEmpty) {
+                    settings['business_google_review_url'] = reviewUrl.trim();
+                  }
+
+                  await websiteService.saveSettings(settings);
 
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
