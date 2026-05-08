@@ -1,5 +1,4 @@
- 
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class GoogleReviewsCarousel extends StatelessWidget {
   final Map<String, dynamic> data;
