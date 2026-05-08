@@ -2811,6 +2811,26 @@ create index if not exists idx_products_hs_code on products(hs_code);
 create extension if not exists pg_trgm;
 create extension if not exists unaccent;
 
+-- Optional scheduler/network extensions for server-side public business data refreshes.
+-- Production uses pg_cron + pg_net to call the google-public-data-refresh Edge Function.
+do $$
+begin
+  create schema if not exists extensions;
+  execute 'create extension if not exists pg_net with schema extensions';
+exception
+  when others then
+    raise notice '⚠ pg_net extension is not available in this environment: %', sqlerrm;
+end $$;
+
+do $$
+begin
+  create schema if not exists extensions;
+  execute 'create extension if not exists pg_cron with schema extensions';
+exception
+  when others then
+    raise notice '⚠ pg_cron extension is not available in this environment: %', sqlerrm;
+end $$;
+
 create or replace function public.search_products(
   p_search_term text,
   p_tenant_id uuid,

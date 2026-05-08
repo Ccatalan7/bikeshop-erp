@@ -309,13 +309,16 @@ class WebsiteBlockRenderer {
           bodyFont: bodyFont,
         );
       case WebsiteBlockType.googleReviews:
-        // Inject synced reviews if block doesn't have custom ones
+        // Inject synced Google review truth when the block has no custom reviews.
         var effectiveData = data;
-        if ((data['reviews'] as List?)?.isEmpty ?? true) {
-          try {
-            // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
-            final service = Provider.of<WebsiteService>(context, listen: false);
-            final jsonStr = service.getSetting('google_reviews_data');
+        try {
+          // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
+          final service = Provider.of<WebsiteService>(context, listen: false);
+          final jsonStr = service.getSetting('google_reviews_data');
+          final syncedRating = service.getSetting('google_reviews_rating');
+          final syncedTotal = service.getSetting('google_reviews_total');
+
+          if ((data['reviews'] as List?)?.isEmpty ?? true) {
             if (jsonStr.isNotEmpty) {
               final list = jsonDecode(jsonStr) as List;
               final reviews =
@@ -325,9 +328,20 @@ class WebsiteBlockRenderer {
               effectiveData = Map<String, dynamic>.from(data);
               effectiveData['reviews'] = reviews;
             }
-          } catch (e) {
-            debugPrint('Error injecting reviews: $e');
           }
+
+          if (syncedRating.isNotEmpty || syncedTotal.isNotEmpty) {
+            effectiveData = Map<String, dynamic>.from(effectiveData);
+            if (syncedRating.isNotEmpty && effectiveData['rating'] == null) {
+              effectiveData['rating'] = syncedRating;
+            }
+            if (syncedTotal.isNotEmpty &&
+                effectiveData['totalReviews'] == null) {
+              effectiveData['totalReviews'] = syncedTotal;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error injecting reviews: $e');
         }
 
         return GoogleReviewsCarousel(

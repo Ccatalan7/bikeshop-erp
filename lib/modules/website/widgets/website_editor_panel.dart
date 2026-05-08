@@ -833,11 +833,26 @@ class _SyncTab extends StatefulWidget {
 }
 
 class _SyncTabState extends State<_SyncTab> {
+  bool _attemptedProviderTokenEnsure = false;
+
   @override
   Widget build(BuildContext context) {
     // Only verify context types, do not assume they are ready if generic
     final googleService = context.watch<GoogleBusinessService>();
     final websiteService = context.watch<WebsiteService>();
+    final hasProviderToken = googleService.hasProviderToken;
+    final hasSavedGoogleBusinessData =
+        _hasSavedGoogleBusinessData(websiteService);
+
+    if (!_attemptedProviderTokenEnsure &&
+        googleService.isLinked &&
+        !hasProviderToken) {
+      _attemptedProviderTokenEnsure = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        googleService.ensureProviderToken(timeout: const Duration(seconds: 3));
+      });
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -908,8 +923,7 @@ class _SyncTabState extends State<_SyncTab> {
                 ],
               ),
             ),
-          if (Supabase.instance.client.auth.currentSession?.providerToken !=
-              null)
+          if (hasProviderToken)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -948,6 +962,52 @@ class _SyncTabState extends State<_SyncTab> {
                     icon: const Icon(Icons.refresh,
                         color: Colors.white54, size: 18),
                     tooltip: 'Reconectar',
+                    onPressed: () => googleService.connect(),
+                  ),
+                ],
+              ),
+            )
+          else if (hasSavedGoogleBusinessData)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF00A09D).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle,
+                      color: Color(0xFF00A09D), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Google conectado',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                        Text(
+                          'Los datos del negocio siguen guardados. Para actualizar horarios, dirección o reseñas desde Google, renueva el permiso.',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 11,
+                              height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh,
+                        color: Colors.white54, size: 18),
+                    tooltip: 'Renovar acceso',
                     onPressed: () => googleService.connect(),
                   ),
                 ],
@@ -1045,10 +1105,18 @@ class _SyncTabState extends State<_SyncTab> {
           const SizedBox(height: 12),
           _ActionCard(
             title: 'Sincronizar Datos',
-            description: 'Importar dirección, horario y teléfono.',
+            description: hasProviderToken
+                ? 'Importar dirección, horario y teléfono.'
+                : 'Renovar permiso para actualizar desde Google.',
             icon: Icons.sync,
             onTap: () async {
               try {
+                final hasAccess = await _ensureGoogleApiAccess(
+                  context,
+                  googleService,
+                );
+                if (!hasAccess) return;
+
                 final locations = await googleService.fetchLocations();
                 if (!context.mounted) return;
 
@@ -1075,10 +1143,18 @@ class _SyncTabState extends State<_SyncTab> {
           const SizedBox(height: 12),
           _ActionCard(
             title: 'Sincronizar Reseñas',
-            description: 'Descargar últimas reseñas de Google.',
+            description: hasProviderToken
+                ? 'Descargar últimas reseñas de Google.'
+                : 'Renovar permiso para descargar reseñas.',
             icon: Icons.reviews,
             onTap: () async {
               try {
+                final hasAccess = await _ensureGoogleApiAccess(
+                  context,
+                  googleService,
+                );
+                if (!hasAccess) return;
+
                 // 1. Get location name from settings (saved in previous step)
                 final locationName =
                     websiteService.getSetting('business_google_location_id');
@@ -1131,6 +1207,47 @@ class _SyncTabState extends State<_SyncTab> {
     );
   }
 
+  bool _hasSavedGoogleBusinessData(WebsiteService websiteService) {
+    const keys = [
+      'business_google_location_id',
+      'google_maps_place_id',
+      'google_business_regular_hours',
+      'business_hours_json',
+      'business_google_maps_url',
+      'seo_google_maps_url',
+      'business_google_review_url',
+      'google_reviews_data',
+    ];
+
+    return keys.any((key) => websiteService.getSetting(key).trim().isNotEmpty);
+  }
+
+  Future<bool> _ensureGoogleApiAccess(
+    BuildContext context,
+    GoogleBusinessService googleService,
+  ) async {
+    if (googleService.hasProviderToken) return true;
+
+    if (googleService.isLinked) {
+      final restored = await googleService.ensureProviderToken(
+        timeout: const Duration(seconds: 3),
+      );
+      if (restored) return true;
+    }
+
+    if (!context.mounted) return false;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Los datos guardados siguen conectados. Para refrescarlos desde Google, renueva el permiso.',
+        ),
+      ),
+    );
+    await googleService.connect();
+    return false;
+  }
+
   void _showLocationSelectionDialog(BuildContext context,
       List<GoogleLocation> locations, WebsiteService websiteService) {
     showDialog(
@@ -1161,6 +1278,25 @@ class _SyncTabState extends State<_SyncTab> {
                     settings['business_phone'] = loc.phone!;
                     settings['contact_phone'] = loc.phone!;
                     settings['seo_phone'] = loc.phone!;
+                  }
+
+                  if (loc.addressLine != null) {
+                    settings['contact_address'] = loc.addressLine!;
+                  }
+                  if (loc.addressStreet != null) {
+                    settings['seo_address_street'] = loc.addressStreet!;
+                  }
+                  if (loc.addressCity != null) {
+                    settings['seo_address_city'] = loc.addressCity!;
+                  }
+                  if (loc.addressRegion != null) {
+                    settings['seo_address_region'] = loc.addressRegion!;
+                  }
+                  if (loc.addressPostalCode != null) {
+                    settings['seo_address_postal'] = loc.addressPostalCode!;
+                  }
+                  if (loc.addressCountry != null) {
+                    settings['seo_address_country'] = loc.addressCountry!;
                   }
 
                   if (loc.hours != null && loc.hours!.isNotEmpty) {

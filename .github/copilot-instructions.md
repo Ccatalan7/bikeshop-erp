@@ -1956,12 +1956,14 @@ This applies to:
 - Google Maps place id: `google_maps_place_id`
 - Maps URLs: `seo_google_maps_url`, `business_google_maps_url`, `google_maps_url`
 - Review URL: `business_google_review_url`
+- Google reviews: `google_reviews_data`, `google_reviews_rating`, `google_reviews_total`, `google_reviews_last_synced_at`, `google_reviews_auto_sync_status`, `google_reviews_auto_sync_error`, `google_reviews_source`
 - Contact identity: `store_name`, `business_name`, `contact_address`, `contact_phone`, `business_phone`, `seo_phone`, `contact_email`, `whatsapp`
 
 **Implementation pattern:**
 - Google Business Profile sync lives in `lib/modules/website/services/google_business_service.dart` and the website editor sync UI in `lib/modules/website/widgets/website_editor_panel.dart`.
 - The `google-business-reviews` Edge Function already fetches Business Profile location data including `regularHours` and `metadata`.
 - The `google-places-proxy` Edge Function is the correct server-side path for Google Places details such as `opening_hours`, `place_id`, and canonical Maps URL. Do not expose or call the Places API key directly from public Flutter code.
+- The `google-public-data-refresh` Edge Function is the automatic refresh path for public Google review/rating data. It reads saved `google_maps_place_id` + tenant `google_places_api_key`, writes normalized reviews/rating totals back to `website_settings`, and is scheduled in production through `pg_cron` + `pg_net` using a private `GOOGLE_PUBLIC_DATA_REFRESH_SECRET` header. Manual Business Profile review sync may still exist for editor workflows, but public storefront freshness should not depend on a browser session or temporary OAuth provider token.
 - Public renderers such as `lib/public_store/pages/contact_page.dart` should support both Google Business Profile `regularHours` and Google Places `opening_hours` payload shapes when displaying hours.
 
 **Before displaying or changing business facts:**

@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+ 
+ import 'package:flutter/material.dart';
 
 class GoogleReviewsCarousel extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -31,6 +32,12 @@ class GoogleReviewsCarousel extends StatelessWidget {
 
     // 2. Get Reviews (or Mocks)
     final reviews = _getReviews();
+    final displayedRating = _readDouble(data['rating']) ??
+        _readDouble(data['google_rating']) ??
+        _calculateAverageRating(reviews);
+    final totalReviews = _readInt(data['totalReviews']) ??
+        _readInt(data['user_ratings_total']) ??
+        _readInt(data['reviewsTotal']);
 
     return Container(
       width: double.infinity,
@@ -61,7 +68,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _calculateAverageRating(reviews).toStringAsFixed(1),
+                      displayedRating.toStringAsFixed(1),
                       style: TextStyle(
                         fontFamily: bodyFont,
                         fontSize: 18,
@@ -72,9 +79,8 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Row(
                       children: List.generate(5, (index) {
-                        final avgRating = _calculateAverageRating(reviews);
                         return Icon(
-                          index < avgRating.round()
+                          index < displayedRating.round()
                               ? Icons.star
                               : Icons.star_border,
                           color: const Color(0xFFFBBC04),
@@ -84,7 +90,9 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'en Google',
+                      totalReviews == null
+                          ? 'en Google'
+                          : 'en Google ($totalReviews reseñas)',
                       style: TextStyle(
                         fontFamily: bodyFont,
                         fontSize: 16,
@@ -213,6 +221,19 @@ class GoogleReviewsCarousel extends StatelessWidget {
       return null;
     }
   }
+
+  static double? _readDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim());
+    return null;
+  }
+
+  static int? _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
 }
 
 class _ReviewCard extends StatelessWidget {
@@ -286,7 +307,10 @@ class _ReviewCard extends StatelessWidget {
     }
 
     // Extract review text
-    final String reviewText = review['text'] ?? review['comment'] ?? '';
+    final String reviewText =
+        (review['text'] ?? review['comment'] ?? '').toString().trim().isNotEmpty
+            ? (review['text'] ?? review['comment']).toString().trim()
+            : 'Calificación publicada en Google.';
 
     return Container(
       width: 320,

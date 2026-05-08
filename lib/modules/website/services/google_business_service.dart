@@ -478,7 +478,7 @@ class GoogleBusinessService with ChangeNotifier {
           // On native, call Google API directly
           final locationsResp = await http.get(
             Uri.parse(
-                'https://mybusinessbusinessinformation.googleapis.com/v1/$accountName/locations?readMask=name,title,storeCode,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea'),
+                'https://mybusinessbusinessinformation.googleapis.com/v1/$accountName/locations?readMask=name,title,storeCode,storefrontAddress,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea'),
             headers: {'Authorization': 'Bearer $token'},
           );
           if (locationsResp.statusCode != 200) {
@@ -585,6 +585,11 @@ class GoogleLocation {
   final double? lat;
   final double? lng;
   final String? addressLine; // Simplified
+  final String? addressStreet;
+  final String? addressCity;
+  final String? addressRegion;
+  final String? addressPostalCode;
+  final String? addressCountry;
   final Map<String, dynamic>? hours;
   final String? mapsUri;
   final String? newReviewUri;
@@ -596,6 +601,11 @@ class GoogleLocation {
     this.lat,
     this.lng,
     this.addressLine,
+    this.addressStreet,
+    this.addressCity,
+    this.addressRegion,
+    this.addressPostalCode,
+    this.addressCountry,
     this.hours,
     this.mapsUri,
     this.newReviewUri,
@@ -626,6 +636,30 @@ class GoogleLocation {
     final metadata = json['metadata'] is Map
         ? Map<String, dynamic>.from(json['metadata'] as Map)
         : const <String, dynamic>{};
+    final storefrontAddress = json['storefrontAddress'] is Map
+        ? Map<String, dynamic>.from(json['storefrontAddress'] as Map)
+        : const <String, dynamic>{};
+    final addressLines = storefrontAddress['addressLines'] is List
+        ? (storefrontAddress['addressLines'] as List)
+            .map((line) => line?.toString().trim() ?? '')
+            .where((line) => line.isNotEmpty)
+            .toList()
+        : const <String>[];
+    final addressStreet = addressLines.join(', ').trim();
+    final addressCity = storefrontAddress['locality']?.toString().trim();
+    final addressRegion =
+        storefrontAddress['administrativeArea']?.toString().trim();
+    final addressPostalCode =
+        storefrontAddress['postalCode']?.toString().trim();
+    final addressCountry = _countryNameFromRegionCode(
+      storefrontAddress['regionCode']?.toString(),
+    );
+    final addressLine = [
+      addressStreet,
+      addressCity,
+      addressRegion,
+      addressCountry,
+    ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
 
     return GoogleLocation(
       name: name,
@@ -633,12 +667,29 @@ class GoogleLocation {
       phone: phone,
       lat: lat,
       lng: lng,
-      addressLine: json.toString(), // Store full debug/raw for now? Or parse?
-      // Parsing address is complex (PostalAddress object).
-      // We'll simplisticly store the raw JSON in hours/metadata for extraction later
+      addressLine: addressLine.isEmpty ? null : addressLine,
+      addressStreet: addressStreet.isEmpty ? null : addressStreet,
+      addressCity: _emptyToNull(addressCity),
+      addressRegion: _emptyToNull(addressRegion),
+      addressPostalCode: _emptyToNull(addressPostalCode),
+      addressCountry: _emptyToNull(addressCountry),
       hours: json['regularHours'],
       mapsUri: metadata['mapsUri']?.toString(),
       newReviewUri: metadata['newReviewUri']?.toString(),
     );
+  }
+
+  static String? _emptyToNull(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static String? _countryNameFromRegionCode(String? rawCode) {
+    final code = rawCode?.trim().toUpperCase() ?? '';
+    if (code.isEmpty) return null;
+    return switch (code) {
+      'CL' => 'Chile',
+      _ => code,
+    };
   }
 }

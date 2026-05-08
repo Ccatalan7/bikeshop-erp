@@ -54,7 +54,7 @@ serve(async (req: Request): Promise<Response> => {
                     );
                 }
                 // https://mybusinessbusinessinformation.googleapis.com/v1/{parent}/locations
-                const readMask = "name,title,storeCode,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea";
+                const readMask = "name,title,storeCode,storefrontAddress,latlng,phoneNumbers,regularHours,categories,metadata,languageCode,serviceArea";
                 url = `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=${encodeURIComponent(readMask)}`;
                 break;
 

@@ -35,10 +35,15 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
   void initState() {
     super.initState();
     _websiteService = WebsiteService();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _websiteService.loadSettings();
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _websiteService.dispose();
     super.dispose();
   }
 
@@ -60,7 +65,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         !googleBusinessService.hasProviderToken) {
       _attemptedProviderTokenEnsure = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        googleBusinessService.ensureProviderToken(timeout: const Duration(seconds: 3));
+        googleBusinessService.ensureProviderToken(
+            timeout: const Duration(seconds: 3));
       });
     }
 
@@ -136,6 +142,9 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
     final svc = context.watch<GoogleBusinessService>();
     final hasToken = svc.hasProviderToken;
     final isLinked = svc.isLinked;
+    final hasSavedGoogleBusinessData =
+        _hasSavedGoogleBusinessData(_websiteService);
+    final isConnected = hasToken || hasSavedGoogleBusinessData;
     final error = svc.error;
 
     return Card(
@@ -175,7 +184,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   ),
                 ),
                 // Status badge
-                if (hasToken)
+                if (isConnected)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -207,7 +216,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                        Icon(Icons.warning_amber,
+                            color: Colors.orange, size: 16),
                         SizedBox(width: 4),
                         Text('Autorizar',
                             style: TextStyle(
@@ -233,11 +243,13 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    const Icon(Icons.error_outline,
+                        color: Colors.red, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(error,
-                          style: const TextStyle(color: Colors.red, fontSize: 13)),
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 13)),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
@@ -252,7 +264,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
             ],
 
             // Connection status and actions
-            if (hasToken) ...[
+            if (isConnected) ...[
               // Connected - show sync actions
               Text('Acciones disponibles',
                   style: theme.textTheme.titleSmall
@@ -275,10 +287,19 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   TextButton.icon(
                     onPressed: () => svc.connect(),
                     icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Reconectar'),
+                    label: Text(hasToken ? 'Reconectar' : 'Renovar acceso'),
                   ),
                 ],
               ),
+              if (!hasToken) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Los datos del negocio siguen guardados. Para volver a consultar Google en vivo, renueva el permiso.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ] else ...[
               // Not connected - show connect button
               Container(
@@ -303,9 +324,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: svc.isLoading
-                            ? null
-                            : () => svc.connect(),
+                        onPressed: svc.isLoading ? null : () => svc.connect(),
                         icon: svc.isLoading
                             ? const SizedBox(
                                 width: 18,
@@ -373,7 +392,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
 
   Future<void> _syncBusinessData() async {
     try {
-      final locations = await context.read<GoogleBusinessService>().fetchLocations();
+      final googleService = context.read<GoogleBusinessService>();
+      final hasAccess = await _ensureGoogleApiAccess(googleService);
+      if (!hasAccess) return;
+
+      final locations = await googleService.fetchLocations();
       if (!mounted) return;
 
       if (locations.isEmpty) {
@@ -407,12 +430,49 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
       );
 
       if (selected != null && mounted) {
-        await _websiteService.saveSetting('business_name', selected.title);
-        await _websiteService.saveSetting(
-            'business_google_location_id', selected.name);
+        final settings = <String, String>{
+          'business_name': selected.title,
+          'business_google_location_id': selected.name,
+        };
         if (selected.phone != null) {
-          await _websiteService.saveSetting('business_phone', selected.phone!);
+          settings['business_phone'] = selected.phone!;
+          settings['contact_phone'] = selected.phone!;
+          settings['seo_phone'] = selected.phone!;
         }
+        if (selected.addressLine != null) {
+          settings['contact_address'] = selected.addressLine!;
+        }
+        if (selected.addressStreet != null) {
+          settings['seo_address_street'] = selected.addressStreet!;
+        }
+        if (selected.addressCity != null) {
+          settings['seo_address_city'] = selected.addressCity!;
+        }
+        if (selected.addressRegion != null) {
+          settings['seo_address_region'] = selected.addressRegion!;
+        }
+        if (selected.addressPostalCode != null) {
+          settings['seo_address_postal'] = selected.addressPostalCode!;
+        }
+        if (selected.addressCountry != null) {
+          settings['seo_address_country'] = selected.addressCountry!;
+        }
+        if (selected.hours != null && selected.hours!.isNotEmpty) {
+          settings['google_business_regular_hours'] =
+              jsonEncode(selected.hours);
+        }
+        final mapsUrl = selected.mapsUri;
+        if (mapsUrl != null && mapsUrl.trim().isNotEmpty) {
+          settings['business_google_maps_url'] = mapsUrl.trim();
+          settings['seo_google_maps_url'] = mapsUrl.trim();
+        }
+        final reviewUrl = selected.newReviewUri;
+        if (reviewUrl != null && reviewUrl.trim().isNotEmpty) {
+          settings['business_google_review_url'] = reviewUrl.trim();
+        }
+
+        await _websiteService.saveSettings(settings);
+        if (mounted) setState(() {});
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -433,6 +493,10 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
 
   Future<void> _syncReviews() async {
     try {
+      final googleService = context.read<GoogleBusinessService>();
+      final hasAccess = await _ensureGoogleApiAccess(googleService);
+      if (!hasAccess) return;
+
       final locationName =
           _websiteService.getSetting('business_google_location_id');
       if (locationName.isEmpty) {
@@ -444,9 +508,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         return;
       }
 
-        final reviews = await context
-          .read<GoogleBusinessService>()
-          .fetchReviews(locationName);
+      final reviews = await googleService.fetchReviews(locationName);
       if (!mounted) return;
 
       if (reviews.isNotEmpty) {
@@ -455,8 +517,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content:
-                  Text('Se descargaron ${reviews.length} reseñas correctamente!'),
+              content: Text(
+                  'Se descargaron ${reviews.length} reseñas correctamente!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -464,8 +526,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('No se encontraron reseñas para esta ubicación.')),
+              content: Text('No se encontraron reseñas para esta ubicación.')),
         );
       }
     } catch (e) {
@@ -475,6 +536,45 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         );
       }
     }
+  }
+
+  bool _hasSavedGoogleBusinessData(WebsiteService websiteService) {
+    const keys = [
+      'business_google_location_id',
+      'google_maps_place_id',
+      'google_business_regular_hours',
+      'business_hours_json',
+      'business_google_maps_url',
+      'seo_google_maps_url',
+      'business_google_review_url',
+      'google_reviews_data',
+    ];
+
+    return keys.any((key) => websiteService.getSetting(key).trim().isNotEmpty);
+  }
+
+  Future<bool> _ensureGoogleApiAccess(
+    GoogleBusinessService googleService,
+  ) async {
+    if (googleService.hasProviderToken) return true;
+
+    if (googleService.isLinked) {
+      final restored = await googleService.ensureProviderToken(
+        timeout: const Duration(seconds: 3),
+      );
+      if (restored) return true;
+    }
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Los datos guardados siguen conectados. Para refrescarlos desde Google, renueva el permiso.',
+        ),
+      ),
+    );
+    await googleService.connect();
+    return false;
   }
 
   // ==========================================================================
@@ -502,21 +602,23 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Google Merchant Center', 
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Google Merchant Center',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       Text('Feed de productos para Google Shopping',
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
               ],
             ),
             const Divider(height: 32),
-            
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -526,17 +628,19 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     children: [
                       Icon(Icons.check_circle, color: Colors.green, size: 16),
                       SizedBox(width: 6),
-                      Text('Feed Activo', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500)),
+                      Text('Feed Activo',
+                          style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 16),
                 Text('$_gmcProductCount productos en el feed',
-                  style: theme.textTheme.bodySmall),
+                    style: theme.textTheme.bodySmall),
               ],
             ),
             const SizedBox(height: 16),
-
             Text('URL del Feed:', style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
             Container(
@@ -550,7 +654,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   Expanded(
                     child: SelectableText(
                       _feedUrl,
-                      style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(fontFamily: 'monospace'),
                     ),
                   ),
                   IconButton(
@@ -558,7 +663,8 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: _feedUrl));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('URL copiada al portapapeles')),
+                        const SnackBar(
+                            content: Text('URL copiada al portapapeles')),
                       );
                     },
                     tooltip: 'Copiar URL',
@@ -572,7 +678,6 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
               ),
             ),
             const SizedBox(height: 16),
-
             ExpansionTile(
               title: const Text('Instrucciones de configuración'),
               tilePadding: EdgeInsets.zero,
@@ -587,10 +692,12 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                       _buildStep('3', 'Haz clic en "Agregar feed"'),
                       _buildStep('4', 'Selecciona "Fetch programado" o "URL"'),
                       _buildStep('5', 'Pega la URL del feed de arriba'),
-                      _buildStep('6', 'Configura la frecuencia de actualización'),
+                      _buildStep(
+                          '6', 'Configura la frecuencia de actualización'),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
-                        onPressed: () => launchUrl(Uri.parse('https://merchants.google.com')),
+                        onPressed: () => launchUrl(
+                            Uri.parse('https://merchants.google.com')),
                         icon: const Icon(Icons.open_in_new),
                         label: const Text('Ir a Google Merchant Center'),
                       ),
@@ -599,11 +706,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
             Text(
               'Para controlar qué productos aparecen en Google Shopping, activa el toggle "Google Merchant" en cada producto.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -633,17 +740,18 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Google Analytics', 
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Google Analytics',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       Text('Tracking de visitas y conversiones',
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
               ],
             ),
             const Divider(height: 32),
-            
             Text(
               'El código de seguimiento GA4 ya está instalado en tu tienda.',
               style: theme.textTheme.bodyMedium,
@@ -661,14 +769,16 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   const SizedBox(width: 12),
                   Text(
                     'Measurement ID: $_gaTrackingId',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontFamily: 'monospace'),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.parse('https://analytics.google.com')),
+              onPressed: () =>
+                  launchUrl(Uri.parse('https://analytics.google.com')),
               icon: const Icon(Icons.open_in_new),
               label: const Text('Ver Google Analytics'),
             ),
@@ -700,10 +810,12 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Próximamente', 
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Próximamente',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       Text('Más integraciones en desarrollo',
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -741,7 +853,11 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
               shape: BoxShape.circle,
             ),
             child: Center(
-              child: Text(number, style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
+              child: Text(number,
+                  style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12)),
             ),
           ),
           const SizedBox(width: 12),
