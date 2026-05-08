@@ -101,7 +101,6 @@ class TaskModel {
       case TaskStatus.cancelled:
         return 'cancelled';
       case TaskStatus.pending:
-      default:
         return 'pending';
     }
   }
@@ -130,7 +129,6 @@ class TaskModel {
       case TaskPriority.urgent:
         return 'urgent';
       case TaskPriority.normal:
-      default:
         return 'normal';
     }
   }

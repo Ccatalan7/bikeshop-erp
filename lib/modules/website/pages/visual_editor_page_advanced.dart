@@ -798,10 +798,10 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            _primaryColor
-                .withValues(alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.8),
-            _accentColor
-                .withValues(alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.6),
+            _primaryColor.withValues(
+                alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.8),
+            _accentColor.withValues(
+                alpha: _heroShowOverlay ? _heroOverlayOpacity : 0.6),
           ],
         ),
       ),
@@ -2204,7 +2204,6 @@ class _AdvancedVisualEditorPageState extends State<AdvancedVisualEditorPage> {
     required Color color,
     required Function(Color) onChanged,
   }) {
-    final isDark = theme.brightness == Brightness.dark;
     final colorBrightness = ThemeData.estimateBrightnessForColor(color);
     final isColorDark = colorBrightness == Brightness.dark;
 

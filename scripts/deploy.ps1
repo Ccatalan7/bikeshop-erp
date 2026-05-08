@@ -13,7 +13,7 @@ Write-Host "Building Store..."
 flutter build web --release --dart-define=STORE_PERF_LOGS=true -t lib/main_store.dart -o build/web_store
 
 Write-Host "Generating SEO snapshots..."
-dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl
+dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl --product-scope published
 
 Write-Host "Store bundle size:"
 Get-Item build/web_store/main.dart.js | Select-Object Name, @{N='Size(MB)';E={[math]::Round($_.Length/1MB,2)}}

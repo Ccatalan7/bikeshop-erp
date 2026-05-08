@@ -631,6 +631,7 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
+  // ignore: unused_element
   Future<void> _postAccountingEntry(PurchaseInvoice invoice) async {
     try {
       if (_accountingService == null) return;

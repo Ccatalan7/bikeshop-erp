@@ -2150,6 +2150,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
   }
 
+  // ignore: unused_element
   void _addEmptyPartLine() {
     // Add an empty line for the user to fill in
     setState(() {
@@ -2198,6 +2199,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     );
   }
 
+  // ignore: unused_element
   void _focusPartAutocomplete() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -2221,6 +2223,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   /// Get subtotal for current bike tab only (for display in chip)
+  // ignore: unused_element
   double get _currentBikeSubtotal {
     final tab = _currentBikeTab;
     if (tab != null) {
@@ -11613,6 +11616,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   // ============================================================
   // BIKE TAB BAR (Multi-bike support) - Browser-style elegant tabs
   // ============================================================
+  // ignore: unused_element
   Widget _buildBikeTabBar(ThemeData theme) {
     // Browser-style tabs that sit on top of the content area
     return Container(
@@ -13174,6 +13178,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
   }
 
+  // ignore: unused_element
   Widget _buildLaborSection() {
     final theme = Theme.of(context);
 

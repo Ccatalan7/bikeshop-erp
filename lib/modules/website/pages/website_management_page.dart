@@ -523,6 +523,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
   }
 
   /// Show Google Merchant Center feed URL dialog
+  // ignore: unused_element
   Future<void> _showGoogleMerchantDialog(BuildContext context) async {
     final theme = Theme.of(context);
 

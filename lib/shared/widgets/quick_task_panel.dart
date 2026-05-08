@@ -253,8 +253,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           }
                           if (a.dueDate != null) return -1;
                           if (b.dueDate != null) return 1;
-                          return (b.createdAt ?? DateTime(2000))
-                              .compareTo(a.createdAt ?? DateTime(2000));
+                          return b.createdAt.compareTo(a.createdAt);
                         });
                       }
 
@@ -352,7 +351,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                                           fontSize: 10,
                                           fontWeight: FontWeight.w600,
                                           color: isOverdue
-                                              ? Colors.red.withValues(alpha: 0.8)
+                                              ? Colors.red
+                                                  .withValues(alpha: 0.8)
                                               : theme.colorScheme.onSurface
                                                   .withValues(alpha: 0.4),
                                         ),
@@ -842,8 +842,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                       children: [
                         Icon(Icons.event_outlined,
                             size: 14,
-                            color:
-                                theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.5)),
                         const SizedBox(width: 6),
                         Text(
                           _editDueDate != null
@@ -853,7 +853,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                             fontSize: 12,
                             color: _editDueDate != null
                                 ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                                : theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.4),
                           ),
                         ),
                         const Spacer(),
@@ -987,7 +988,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           size: 14,
                           color: _dueDate != null
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5)),
                       const SizedBox(width: 3),
                       Text(
                         _dueDate != null
@@ -997,7 +999,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           fontSize: 11,
                           color: _dueDate != null
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                              : theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5),
                         ),
                       ),
                       if (_dueDate != null) ...[
@@ -1006,8 +1009,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
                           onTap: () => setState(() => _dueDate = null),
                           child: Icon(Icons.close,
                               size: 12,
-                              color:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.4)),
                         ),
                       ],
                     ],

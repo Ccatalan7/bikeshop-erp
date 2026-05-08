@@ -5635,6 +5635,7 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   final _metaDescriptionController = TextEditingController();
   bool _isLoading = true;
   bool _isDetecting = false; // Prevent concurrent detection
+  // ignore: unused_field
   WebsitePage? _currentPage;
   String _currentRoute = '';
   bool _isSpecialRoute = false;
@@ -8715,6 +8716,7 @@ class _ColorFieldState extends State<_ColorField> {
 // ============================================================================
 // CATEGORY GRID BLOCK CONTROLS
 // ============================================================================
+// ignore: unused_element
 class _CategoryGridBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;

@@ -19,13 +19,12 @@ class DeferredWebsiteEditorPanel extends StatefulWidget {
 
 class _DeferredWebsiteEditorPanelState
     extends State<DeferredWebsiteEditorPanel> {
-  late Future<void> _libraryFuture;
   bool _libraryLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _libraryFuture = editor.loadLibrary().then((_) {
+    editor.loadLibrary().then((_) {
       if (mounted) {
         setState(() {
           _libraryLoaded = true;

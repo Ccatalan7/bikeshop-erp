@@ -8,6 +8,7 @@ import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../theme/public_store_theme.dart';
 import '../widgets/public_store_layout.dart';
 
 /// Policy page renderer that uses WebsiteService for caching.
@@ -21,6 +22,515 @@ class StaticPolicyPage extends StatefulWidget {
 
   @override
   State<StaticPolicyPage> createState() => _StaticPolicyPageState();
+}
+
+class _PublicPolicyView extends StatelessWidget {
+  final String slug;
+  final String fallbackTitle;
+  final List<Map<String, dynamic>> blocks;
+
+  const _PublicPolicyView({
+    required this.slug,
+    required this.fallbackTitle,
+    required this.blocks,
+  });
+
+  static const _bg = Color(0xFFF8FAFC);
+  static const _ink = PublicStoreTheme.textPrimary;
+  static const _muted = PublicStoreTheme.textSecondary;
+  static const _line = PublicStoreTheme.divider;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = _PolicyMeta.forSlug(slug, fallbackTitle);
+    final sections = _extractSections(blocks, meta.fallbackBody);
+
+    return Container(
+      width: double.infinity,
+      color: _bg,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 42, 24, 64),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _PolicyHero(meta: meta),
+                const SizedBox(height: 18),
+                _PolicyNav(currentSlug: slug),
+                const SizedBox(height: 24),
+                _PolicyContent(sections: sections),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<_PolicySection> _extractSections(
+    List<Map<String, dynamic>> source,
+    String fallback,
+  ) {
+    final visible = source
+        .where((block) => block['is_visible'] != false)
+        .toList(growable: false);
+    visible.sort(
+        (a, b) => _toInt(a['order_index']).compareTo(_toInt(b['order_index'])));
+
+    final sections = <_PolicySection>[];
+    for (final block in visible) {
+      final type = (block['block_type'] ?? '').toString().toLowerCase();
+      final data = block['block_data'] is Map
+          ? Map<String, dynamic>.from(block['block_data'] as Map)
+          : <String, dynamic>{};
+
+      if (type == 'hero') continue;
+
+      final title = _clean(data['title']);
+      final subtitle = _clean(data['subtitle']);
+      final content = _clean(data['content']);
+
+      if (type == 'features') {
+        final items = <_PolicyItem>[];
+        final features = data['features'];
+        if (features is List) {
+          for (final feature in features) {
+            if (feature is! Map) continue;
+            final map = Map<String, dynamic>.from(feature);
+            final itemTitle = _clean(map['title']);
+            final itemBody = _clean(map['description']);
+            if (itemTitle.isEmpty && itemBody.isEmpty) continue;
+            items.add(_PolicyItem(itemTitle, itemBody));
+          }
+        }
+        if (items.isNotEmpty) {
+          sections.add(_PolicySection(
+            title.isEmpty ? 'Puntos importantes' : title,
+            const [],
+            items,
+          ));
+        }
+        continue;
+      }
+
+      if (type == 'faq') {
+        final items = <_PolicyItem>[];
+        final faqItems = data['items'];
+        if (faqItems is List) {
+          for (final item in faqItems) {
+            if (item is! Map) continue;
+            final map = Map<String, dynamic>.from(item);
+            final question = _clean(map['question']);
+            final answer = _clean(map['answer']);
+            if (question.isEmpty && answer.isEmpty) continue;
+            items.add(_PolicyItem(question, answer));
+          }
+        }
+        if (items.isNotEmpty) {
+          sections.add(_PolicySection(
+            title.isEmpty ? 'Preguntas frecuentes' : title,
+            const [],
+            items,
+          ));
+        }
+        continue;
+      }
+
+      final paragraphs = [
+        ..._paragraphs(subtitle),
+        ..._paragraphs(content),
+      ];
+      if (title.isNotEmpty || paragraphs.isNotEmpty) {
+        sections.add(_PolicySection(
+          title.isEmpty ? 'Detalle' : title,
+          paragraphs,
+          const [],
+        ));
+      }
+    }
+
+    if (sections.isNotEmpty) return sections;
+    return [_PolicySection('Información', _paragraphs(fallback), const [])];
+  }
+
+  static String _clean(dynamic value) {
+    return (value ?? '')
+        .toString()
+        .replaceAll('vinabikechile@gmail.com', 'contacto@vinabike.cl')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .trim();
+  }
+
+  static List<String> _paragraphs(String text) {
+    final clean = _clean(text);
+    if (clean.isEmpty) return const [];
+    return clean
+        .split(RegExp(r'\n\s*\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+}
+
+class _PolicyHero extends StatelessWidget {
+  final _PolicyMeta meta;
+
+  const _PolicyHero({required this.meta});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 30, 28, 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _PublicPolicyView._line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final title = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: meta.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(meta.icon, color: meta.color, size: 22),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                meta.title,
+                style: const TextStyle(
+                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontSize: 42,
+                  fontWeight: FontWeight.w800,
+                  height: 1.05,
+                  letterSpacing: 0,
+                  color: _PublicPolicyView._ink,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                meta.summary,
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.45,
+                  color: _PublicPolicyView._muted,
+                ),
+              ),
+            ],
+          );
+
+          final chips = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final chip in meta.chips)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    border: Border.all(color: _PublicPolicyView._line),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    chip,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _PublicPolicyView._ink,
+                    ),
+                  ),
+                ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [title, const SizedBox(height: 18), chips],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: 24),
+              SizedBox(width: 300, child: chips),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PolicyNav extends StatelessWidget {
+  final String currentSlug;
+
+  const _PolicyNav({required this.currentSlug});
+
+  @override
+  Widget build(BuildContext context) {
+    const slugs = [
+      'nosotros',
+      'envios',
+      'devoluciones',
+      'terminos',
+      'privacidad'
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final slug in slugs)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: ChoiceChip(
+                selected: currentSlug == slug,
+                label: Text(_PolicyMeta.forSlug(slug, slug).navLabel),
+                avatar: Icon(_PolicyMeta.forSlug(slug, slug).icon, size: 16),
+                onSelected: (_) =>
+                    PublicStoreLayout.navigateToHref(context, '/$slug'),
+                selectedColor: const Color(0xFFEFF6FF),
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: _PublicPolicyView._line),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PolicyContent extends StatelessWidget {
+  final List<_PolicySection> sections;
+
+  const _PolicyContent({required this.sections});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _PublicPolicyView._line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < sections.length; i++) ...[
+            if (i > 0) const SizedBox(height: 28),
+            Text(
+              sections[i].title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: _PublicPolicyView._ink,
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (final paragraph in sections[i].paragraphs)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  paragraph,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.6,
+                    color: _PublicPolicyView._muted,
+                  ),
+                ),
+              ),
+            if (sections[i].items.isNotEmpty)
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final item in sections[i].items)
+                    ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(minWidth: 260, maxWidth: 500),
+                      child: _PolicyItemCard(item: item),
+                    ),
+                ],
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PolicyItemCard extends StatelessWidget {
+  final _PolicyItem item;
+
+  const _PolicyItemCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: _PublicPolicyView._line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (item.title.isNotEmpty)
+            Text(
+              item.title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: _PublicPolicyView._ink,
+              ),
+            ),
+          if (item.title.isNotEmpty && item.body.isNotEmpty)
+            const SizedBox(height: 7),
+          if (item.body.isNotEmpty)
+            Text(
+              item.body,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: _PublicPolicyView._muted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PolicyMeta {
+  final String title;
+  final String navLabel;
+  final String summary;
+  final IconData icon;
+  final Color color;
+  final List<String> chips;
+  final String fallbackBody;
+
+  const _PolicyMeta({
+    required this.title,
+    required this.navLabel,
+    required this.summary,
+    required this.icon,
+    required this.color,
+    required this.chips,
+    required this.fallbackBody,
+  });
+
+  static _PolicyMeta forSlug(String slug, String fallbackTitle) {
+    switch (slug) {
+      case 'nosotros':
+        return const _PolicyMeta(
+          title: 'Sobre Viñabike',
+          navLabel: 'Nosotros',
+          summary:
+              'Tienda, taller y repuestos para bicicletas en Viña del Mar.',
+          icon: Icons.storefront_outlined,
+          color: PublicStoreTheme.primaryBlue,
+          chips: ['Viña del Mar', 'Tienda física', 'Taller'],
+          fallbackBody:
+              'Viñabike es una tienda y taller de bicicletas en Viña del Mar. Vendemos bicicletas, repuestos y accesorios, y realizamos mantenciones y reparaciones.',
+        );
+      case 'envios':
+        return const _PolicyMeta(
+          title: 'Envíos',
+          navLabel: 'Envíos',
+          summary: 'Retiro en tienda y despacho dentro de Chile según destino.',
+          icon: Icons.local_shipping_outlined,
+          color: Color(0xFF2E7D32),
+          chips: ['Chile', '3-12 días hábiles', 'Costo según pedido'],
+          fallbackBody:
+              'Despachamos a Chile continental y ofrecemos retiro en tienda en Álvarez 32, Local 17, Viña del Mar. Los costos de envío se calculan según destino, tamaño y peso del pedido durante el checkout.',
+        );
+      case 'devoluciones':
+        return const _PolicyMeta(
+          title: 'Devoluciones',
+          navLabel: 'Devoluciones',
+          summary: 'Condiciones claras para cambios, devoluciones y garantías.',
+          icon: Icons.assignment_return_outlined,
+          color: PublicStoreTheme.primaryBlue,
+          chips: ['10 días', 'Cambios disponibles', 'Soporte directo'],
+          fallbackBody:
+              'Puedes solicitar devolución dentro de 10 días desde la recepción del producto. Para iniciar el proceso, escribe a contacto@vinabike.cl con tu número de pedido.',
+        );
+      case 'terminos':
+        return const _PolicyMeta(
+          title: 'Términos y condiciones',
+          navLabel: 'Términos',
+          summary: 'Condiciones generales para comprar en la tienda online.',
+          icon: Icons.gavel_outlined,
+          color: Color(0xFFB45309),
+          chips: ['CLP', 'Stock sujeto a disponibilidad', 'Compra segura'],
+          fallbackBody:
+              'Los precios se publican en pesos chilenos (CLP). La disponibilidad de productos está sujeta a stock. Las compras se confirman una vez validado el pago y los datos del pedido.',
+        );
+      case 'privacidad':
+        return const _PolicyMeta(
+          title: 'Privacidad',
+          navLabel: 'Privacidad',
+          summary: 'Uso de datos personales para pedidos, soporte y atención.',
+          icon: Icons.shield_outlined,
+          color: PublicStoreTheme.primaryBlue,
+          chips: ['Pedidos', 'Soporte', 'Sin venta de datos'],
+          fallbackBody:
+              'Usamos los datos personales entregados por clientes para procesar pedidos, coordinar entregas, responder consultas y entregar soporte. No vendemos datos personales a terceros.',
+        );
+      default:
+        return _PolicyMeta(
+          title: fallbackTitle,
+          navLabel: fallbackTitle,
+          summary: 'Información de la tienda.',
+          icon: Icons.info_outline,
+          color: PublicStoreTheme.primaryBlue,
+          chips: const ['Viñabike'],
+          fallbackBody: 'Información de la tienda.',
+        );
+    }
+  }
+}
+
+class _PolicySection {
+  final String title;
+  final List<String> paragraphs;
+  final List<_PolicyItem> items;
+
+  const _PolicySection(this.title, this.paragraphs, this.items);
+}
+
+class _PolicyItem {
+  final String title;
+  final String body;
+
+  const _PolicyItem(this.title, this.body);
 }
 
 class _StaticPolicyPageState extends State<StaticPolicyPage>
@@ -164,6 +674,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       if (tenantId == null) {
         throw Exception('No tenant detected');
       }
+      if (!mounted) return;
 
       // Use WebsiteService for cached page loading
       final websiteService = context.read<WebsiteService>();
@@ -398,6 +909,14 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     }
 
     final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+
+    if (!editProvider.isInEditorContext && !isEditMode) {
+      return _PublicPolicyView(
+        slug: widget.slug,
+        fallbackTitle: widget.fallbackTitle,
+        blocks: blocksToRender,
+      );
+    }
 
     return SingleChildScrollView(
       child: Column(

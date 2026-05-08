@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../shared/utils/chilean_utils.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/public_store_layout.dart';
-import '../../shared/utils/chilean_utils.dart';
 
 class CustomerServiceHistoryPage extends StatefulWidget {
   final String? bikeId;
@@ -159,7 +159,7 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
                   ),
                 if ((service['diagnosis'] ?? '').toString().isNotEmpty)
                   _DetailLine(
-                    label: 'Diagnóstico',
+                    label: 'Diagnostico',
                     value: service['diagnosis'].toString(),
                   ),
                 if (service['arrival_date'] != null)
@@ -205,10 +205,12 @@ class _UnauthenticatedState extends StatelessWidget {
           children: [
             const Icon(Icons.build_outlined, size: 64),
             const SizedBox(height: 16),
-            const Text('Debes iniciar sesión para ver tu historial'),
+            const Text('Debes iniciar sesion para ver tu historial'),
             const SizedBox(height: 24),
             FilledButton(
-                onPressed: onLogin, child: const Text('Iniciar sesión')),
+              onPressed: onLogin,
+              child: const Text('Iniciar sesion'),
+            ),
           ],
         ),
       ),
@@ -360,8 +362,10 @@ class _EmptyServicesState extends StatelessWidget {
   final bool hasBikeFilter;
   final VoidCallback onContact;
 
-  const _EmptyServicesState(
-      {required this.hasBikeFilter, required this.onContact});
+  const _EmptyServicesState({
+    required this.hasBikeFilter,
+    required this.onContact,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -389,7 +393,7 @@ class _EmptyServicesState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Cuando lleves tu bicicleta a servicio técnico, los trabajos aparecerán aquí.',
+            'Cuando lleves tu bicicleta a servicio tecnico, los trabajos apareceran aqui.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Color(0xFF667085), height: 1.35),
           ),
@@ -687,14 +691,14 @@ _StatusConfig _statusConfig(String status) {
       );
     case 'DIAGNOSTICO':
       return _StatusConfig(
-        label: 'Diagnóstico',
+        label: 'Diagnostico',
         icon: Icons.search,
         backgroundColor: Colors.purple.shade50,
         textColor: Colors.purple.shade700,
       );
     case 'ESPERANDO_APROBACION':
       return _StatusConfig(
-        label: 'Aprobación',
+        label: 'Aprobacion',
         icon: Icons.pending_actions,
         backgroundColor: Colors.amber.shade50,
         textColor: Colors.amber.shade900,

@@ -105,8 +105,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final routePath = uri.path.trim().toLowerCase();
     final legacyCategoria = (qp['categoria'] ?? '').trim();
     var routeQuery = (qp['q'] ?? qp['search'] ?? '').trim();
-    final routeCategory =
-        (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '').trim();
+    final routeCategoryFromPath = _categoryValueFromPath(uri.path);
+    final routeCategory = (routeCategoryFromPath ??
+            qp['category'] ??
+            qp['category_id'] ??
+            qp['cat'] ??
+            '')
+        .trim();
     final routeType =
         (qp['type'] ?? qp['product_type'] ?? qp['tipo'] ?? '').trim();
 
@@ -193,10 +198,22 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   ProductType _defaultProductTypeForRoute(String path) {
     final normalized =
         path.startsWith('/tienda/') ? path.substring('/tienda'.length) : path;
-    if (normalized == '/servicios' || normalized == '/servicios/') {
+    if (normalized == '/servicios' ||
+        normalized == '/servicios/' ||
+        normalized.startsWith('/servicios/')) {
       return ProductType.service;
     }
     return ProductType.product;
+  }
+
+  String? _categoryValueFromPath(String path) {
+    final match =
+        RegExp(r'^/(?:productos|servicios)/categoria/([^/?#]+)').firstMatch(
+      path.trim(),
+    );
+    final raw = match?.group(1);
+    if (raw == null || raw.isEmpty) return null;
+    return Uri.decodeComponent(raw.replaceAll('-', ' '));
   }
 
   bool _looksLikeUuid(String value) {

@@ -2490,17 +2490,13 @@ class AppRouter {
             // Online Orders
             GoRoute(
               path: 'orders',
-              pageBuilder: (context, state) {
-                final initialOrderId = state.uri.queryParameters['order'];
-                return _buildDeferredPageWithNoTransition(
-                  context,
-                  state,
-                  erp.loadLibrary(),
-                  () => erp.OnlineOrdersPage(
-                    initialOrderId: initialOrderId,
-                  ),
-                );
-              },
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                erp.loadLibrary(),
+                () => erp.OnlineOrdersPage(),
+              ),
             ),
             // Website Settings
             GoRoute(

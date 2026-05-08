@@ -46,17 +46,21 @@ Generates static HTML files for canonical product URLs so `/productos/<uuid>` ca
 dart run scripts/generate_product_seo_snapshots.dart \
 	--build-dir build/web_store \
 	--tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
-	--store-url https://vinabike.cl
+	--store-url https://vinabike.cl \
+	--product-scope published
 ```
 
 **Quick sanity check:**
 ```powershell
 Get-ChildItem build/web_store/productos | Select-Object -First 5
+Get-Content build/web_store/robots.txt
+Select-String -Path build/web_store/sitemap.xml -Pattern "/productos/"
 ```
 
 Notes:
 - Firebase Hosting serves these snapshots as static files if present (SPA rewrite is only a fallback).
 - Hosting headers for `/productos/**` are configured in `firebase.json`.
+- `robots.txt` and `sitemap.xml` are generated in the same step so Google can discover the full public product catalog.
 
 ### 3. Build the ERP (Full)
 // turbo

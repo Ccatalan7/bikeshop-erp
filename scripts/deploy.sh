@@ -12,7 +12,7 @@ echo "Building Store..."
 flutter build web --release --pwa-strategy=none --dart-define=STORE_PERF_LOGS=true -t lib/main_store.dart -o build/web_store
 
 echo "Generating SEO snapshots..."
-dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl
+dart run scripts/generate_product_seo_snapshots.dart --build-dir build/web_store --tenant-id 5443b130-cc28-45af-a420-cd500b288890 --store-url https://vinabike.cl --product-scope published
 
 echo "Store bundle size:"
 ls -lh build/web_store/main.dart.js | awk '{print $5}'

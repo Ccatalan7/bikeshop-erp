@@ -1,5 +1,6 @@
 part of excel;
 
+// ignore: unused_element
 final List<String> _noCompression = <String>[
   'mimetype',
   'Thumbnails/thumbnail.png'

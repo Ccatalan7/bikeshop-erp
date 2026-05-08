@@ -248,6 +248,7 @@ double? _parseDouble(dynamic value) {
   return null;
 }
 
+// ignore: unused_element
 int _parseInt(dynamic value) {
   if (value is int) return value;
   if (value is num) return value.toInt();

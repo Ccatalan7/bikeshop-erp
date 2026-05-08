@@ -542,6 +542,26 @@ class PublicStoreRouter {
         // DETAIL PAGES
         // ====================================================================
 
+        // Product category landing pages (SEO-friendly filtered catalog)
+        GoRoute(
+          path: '/productos/categoria/:category',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ProductCatalogPage(),
+          ),
+        ),
+
+        // Service category landing pages (SEO-friendly filtered catalog)
+        GoRoute(
+          path: '/servicios/categoria/:category',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ProductCatalogPage(),
+          ),
+        ),
+
         // Product detail (canonical: /productos/:id)
         GoRoute(
           path: '/productos/:id',

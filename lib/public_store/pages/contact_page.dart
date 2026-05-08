@@ -100,7 +100,7 @@ class _ContactPageState extends State<ContactPage>
     // Get all contact info from website_settings (editable in admin)
     final storeName = websiteService.getSetting('store_name', 'Viñabike');
     final contactEmail =
-        websiteService.getSetting('contact_email', 'vinabikechile@gmail.com');
+        websiteService.getSetting('contact_email', 'contacto@vinabike.cl');
     final contactPhone =
         websiteService.getSetting('contact_phone', '+56 9 9835 7797');
     final contactAddress = websiteService.getSetting(
@@ -155,8 +155,8 @@ class _ContactPageState extends State<ContactPage>
                             // Contact Form
                             Expanded(
                               flex: 3,
-                              child:
-                                  _buildContactForm(contactEmail, primaryColor, modeKey),
+                              child: _buildContactForm(
+                                  contactEmail, primaryColor, modeKey),
                             ),
                             const SizedBox(width: 48),
                             // Info Panel
@@ -179,7 +179,8 @@ class _ContactPageState extends State<ContactPage>
 
                       return Column(
                         children: [
-                          _buildContactForm(contactEmail, primaryColor, modeKey),
+                          _buildContactForm(
+                              contactEmail, primaryColor, modeKey),
                           const SizedBox(height: 48),
                           _buildInfoPanel(
                             storeName: storeName,
@@ -207,51 +208,43 @@ class _ContactPageState extends State<ContactPage>
   Widget _buildHeroSection(Color primaryColor) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            primaryColor,
-            primaryColor.withValues(alpha: 0.85),
-          ],
-        ),
-      ),
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(24, 52, 24, 44),
       child: Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 800),
+          constraints: const BoxConstraints(maxWidth: 1120),
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
+                  color: primaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.mail_outline_rounded,
-                  size: 48,
-                  color: Colors.white,
+                  size: 30,
+                  color: primaryColor,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
               const Text(
                 'Contáctanos',
                 style: TextStyle(
+                  fontFamily: PublicStoreTheme.defaultHeadingFont,
                   fontSize: 42,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
+                  fontWeight: FontWeight.w800,
+                  color: PublicStoreTheme.textPrimary,
+                  letterSpacing: 0,
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
+              const Text(
                 'Estamos aquí para ayudarte. Escríbenos y te responderemos lo antes posible.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: PublicStoreTheme.textSecondary,
                   height: 1.5,
                 ),
               ),
@@ -327,15 +320,16 @@ class _ContactPageState extends State<ContactPage>
   }) {
     return Container(
       width: width,
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: PublicStoreTheme.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -345,7 +339,7 @@ class _ContactPageState extends State<ContactPage>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 32, color: primaryColor),
           ),
@@ -389,17 +383,19 @@ class _ContactPageState extends State<ContactPage>
     );
   }
 
-  Widget _buildContactForm(String contactEmail, Color primaryColor, String modeKey) {
+  Widget _buildContactForm(
+      String contactEmail, Color primaryColor, String modeKey) {
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: PublicStoreTheme.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),

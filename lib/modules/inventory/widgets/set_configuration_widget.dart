@@ -63,7 +63,9 @@ class _SetConfigurationWidgetState extends State<SetConfigurationWidget> {
   final Map<int, TextEditingController> _costControllers = {};
   final Map<int, TextEditingController> _priceControllers = {};
   // Track which field is currently being edited to avoid overwriting user input
+  // ignore: unused_field
   int? _editingCostIndex;
+  // ignore: unused_field
   int? _editingPriceIndex;
 
   @override

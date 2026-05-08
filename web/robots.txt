@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /cuenta/
+Disallow: /checkout
+Disallow: /carrito
+Disallow: /pedido/
+
+Sitemap: https://vinabike.cl/sitemap.xml
