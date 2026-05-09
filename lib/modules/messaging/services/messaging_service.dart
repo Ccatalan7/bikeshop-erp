@@ -358,6 +358,128 @@ class MessagingService {
     });
   }
 
+  /// Build a portable, audit-friendly snapshot of one conversation.
+  ///
+  /// This complements tenant-level database backups with a focused chat export
+  /// that staff can download directly from the conversation info panel.
+  Future<Map<String, dynamic>> getConversationArchiveSnapshot(
+    String conversationId,
+  ) async {
+    final conversation = await _client
+        .from('conversations')
+        .select()
+        .eq('id', conversationId)
+        .single();
+
+    final results = await Future.wait<dynamic>([
+      _client
+          .from('conversation_participants')
+          .select()
+          .eq('conversation_id', conversationId),
+      _client
+          .from('conversation_contexts')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('added_at', ascending: true),
+      _client
+          .from('messages')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: true),
+      _client
+          .from('whatsapp_conversation_bindings')
+          .select()
+          .eq('conversation_id', conversationId),
+    ]);
+
+    final participants = List<Map<String, dynamic>>.from(results[0] as List);
+    final contexts = List<Map<String, dynamic>>.from(results[1] as List);
+    final messages = List<Map<String, dynamic>>.from(results[2] as List);
+    final whatsappBindings =
+        List<Map<String, dynamic>>.from(results[3] as List);
+
+    final channelIds = whatsappBindings
+        .map((binding) => binding['channel_id']?.toString())
+        .whereType<String>()
+        .toSet()
+        .toList();
+
+    List<Map<String, dynamic>> whatsappChannels = [];
+    if (channelIds.isNotEmpty) {
+      final channels = await _client
+          .from('whatsapp_channels')
+          .select(
+            'id, tenant_id, phone_number_id, business_account_id, display_name, display_phone_number, is_active, created_at, updated_at',
+          )
+          .inFilter('id', channelIds);
+      whatsappChannels = List<Map<String, dynamic>>.from(channels as List);
+    }
+
+    final attachmentCount = messages.where((message) {
+      final type = message['type']?.toString();
+      final metadata = message['metadata'];
+      return type == 'image' ||
+          type == 'file' ||
+          (metadata is Map &&
+              ['url', 'media_url', 'documentUrl', 'document_url'].any(
+                (key) => metadata.containsKey(key),
+              ));
+    }).length;
+    final attachmentManifest = messages
+        .map((message) {
+          final metadata = message['metadata'];
+          if (metadata is! Map) return null;
+          final url = metadata['url'] ??
+              metadata['media_url'] ??
+              metadata['documentUrl'] ??
+              metadata['document_url'] ??
+              (message['type'] == 'image' || message['type'] == 'file'
+                  ? message['content']
+                  : null);
+          if (url == null || url.toString().trim().isEmpty) return null;
+          return <String, dynamic>{
+            'message_id': message['id'],
+            'created_at': message['created_at'],
+            'type': message['type'],
+            'url': url,
+            'filename': metadata['filename'] ??
+                metadata['documentFilename'] ??
+                metadata['document_filename'],
+            'content_type': metadata['contentType'] ?? metadata['content_type'],
+            'size_bytes': metadata['sizeBytes'] ?? metadata['size_bytes'],
+            'storage_bucket':
+                metadata['storageBucket'] ?? metadata['storage_bucket'],
+            'storage_path': metadata['storagePath'] ?? metadata['storage_path'],
+          };
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList();
+
+    final externalMessageCount = messages
+        .where((message) => message['external_provider'] != null)
+        .length;
+
+    return {
+      'archive_version': 1,
+      'exported_at': DateTime.now().toUtc().toIso8601String(),
+      'conversation_id': conversationId,
+      'summary': {
+        'message_count': messages.length,
+        'participant_count': participants.length,
+        'context_count': contexts.length,
+        'attachment_reference_count': attachmentCount,
+        'external_message_count': externalMessageCount,
+      },
+      'conversation': conversation,
+      'participants': participants,
+      'contexts': contexts,
+      'messages': messages,
+      'attachment_manifest': attachmentManifest,
+      'whatsapp_bindings': whatsappBindings,
+      'whatsapp_channels': whatsappChannels,
+    };
+  }
+
   /// Get messages stream for a specific conversation
   Stream<List<Message>> getMessagesStream(String conversationId) {
     return _client

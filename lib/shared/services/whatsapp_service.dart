@@ -53,6 +53,8 @@ class WhatsAppService {
 
   bool get lastErrorRequiresServerFix =>
       _lastErrorCode == _expiredAccessTokenErrorCode;
+  bool get lastErrorRequiresCustomerReply =>
+      _lastErrorCode == _reengagementErrorCode;
 
   /// Format Chilean phone number (remove spaces, dashes, +56 prefix)
   String _formatPhoneNumber(String phone) {
@@ -230,12 +232,13 @@ class WhatsAppService {
     required String phoneNumber,
     required String message,
     required Map<String, dynamic> cloudBody,
+    bool allowManualFallback = true,
   }) async {
     if (await _sendViaCloud(cloudBody)) {
       return true;
     }
 
-    if (_shouldSkipManualFallback()) {
+    if (!allowManualFallback || _shouldSkipManualFallback()) {
       _lastDeliveryMethod = WhatsAppDeliveryMethod.failed;
       return false;
     }
@@ -642,6 +645,69 @@ Viña Bike
     }
 
     return success;
+  }
+
+  Future<bool> sendAttachment({
+    required BuildContext context,
+    required String customerPhone,
+    required String mediaUrl,
+    required String filename,
+    required String messageType,
+    String? caption,
+    String? contactName,
+    String? conversationId,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+    String? clientMessageId,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final isImage = messageType == 'image';
+    final resolvedCaption = caption?.trim();
+    final contentType = metadata?['contentType']?.toString() ??
+        metadata?['content_type']?.toString();
+    final fallbackMessage = [
+      if (resolvedCaption != null && resolvedCaption.isNotEmpty)
+        resolvedCaption
+      else
+        'Te compartimos $filename:',
+      mediaUrl,
+    ].join('\n');
+
+    _resetLastAttemptState(resolvedMessageText: mediaUrl);
+
+    return _sendWithFallback(
+      context: context,
+      phoneNumber: customerPhone,
+      message: fallbackMessage,
+      allowManualFallback: false,
+      cloudBody: {
+        'conversationId': conversationId,
+        'customerId': customerId,
+        'phoneNumber': _formatPhoneNumber(customerPhone),
+        'contactName': contactName,
+        'contextType': contextType,
+        'contextId': contextId,
+        'type': isImage ? 'image' : 'document',
+        if (isImage) 'mediaUrl': mediaUrl,
+        if (!isImage) 'documentUrl': mediaUrl,
+        if (!isImage) 'documentFilename': filename,
+        if (contentType != null && contentType.isNotEmpty)
+          'contentType': contentType,
+        if (resolvedCaption != null && resolvedCaption.isNotEmpty)
+          'caption': resolvedCaption,
+        'metadata': {
+          'source': 'flutter_erp',
+          'url': mediaUrl,
+          if (isImage) 'media_url': mediaUrl,
+          if (!isImage) 'documentUrl': mediaUrl,
+          if (!isImage) 'document_url': mediaUrl,
+          'filename': filename,
+          if (clientMessageId != null) 'client_message_id': clientMessageId,
+          ...?metadata,
+        },
+      },
+    );
   }
 
   Future<bool> sendInteractiveAction({

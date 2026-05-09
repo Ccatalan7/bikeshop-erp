@@ -23,9 +23,11 @@ interface SendRequest {
   contextType?: string
   contextId?: string
   jobId?: string
-  type: 'text' | 'document' | 'template' | 'interactive'
+  type: 'text' | 'image' | 'document' | 'template' | 'interactive'
   text?: string
   caption?: string
+  mediaUrl?: string
+  contentType?: string
   documentUrl?: string
   documentFilename?: string
   templateName?: string
@@ -53,6 +55,109 @@ function jsonResponse(body: unknown, status = 200) {
 
 function normalizePhoneNumber(phone: string) {
   return phone.replace(/[^\d]/g, '')
+}
+
+function stringValue(value: unknown) {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function resolveMediaUrl(request: SendRequest) {
+  return request.type === 'image'
+    ? request.mediaUrl ?? request.documentUrl
+    : request.documentUrl ?? request.mediaUrl
+}
+
+function resolveMediaFilename(request: SendRequest) {
+  return request.documentFilename ??
+    stringValue(request.metadata?.filename) ??
+    (request.type === 'image' ? 'imagen.png' : 'documento')
+}
+
+function resolveMediaContentType(request: SendRequest, headerContentType: string | null) {
+  return stringValue(headerContentType?.split(';')[0]) ??
+    request.contentType ??
+    stringValue(request.metadata?.contentType) ??
+    stringValue(request.metadata?.content_type) ??
+    (request.type === 'image' ? 'image/png' : 'application/octet-stream')
+}
+
+async function uploadMediaToWhatsApp(
+  request: SendRequest,
+  phoneNumberId: string,
+) {
+  if (request.type !== 'image' && request.type !== 'document') {
+    return { metadata: {} as JsonRecord }
+  }
+
+  const mediaUrl = resolveMediaUrl(request)
+  if (!mediaUrl) {
+    return { metadata: {} as JsonRecord }
+  }
+
+  const mediaResponse = await fetch(mediaUrl)
+  if (!mediaResponse.ok) {
+    return {
+      error: jsonResponse({
+        error: 'Unable to fetch media before sending to WhatsApp',
+        details: {
+          status: mediaResponse.status,
+          statusText: mediaResponse.statusText,
+          mediaUrl,
+        },
+      }, 502),
+    }
+  }
+
+  const contentType = resolveMediaContentType(
+    request,
+    mediaResponse.headers.get('content-type'),
+  )
+  const bytes = await mediaResponse.arrayBuffer()
+  const filename = resolveMediaFilename(request)
+  const formData = new FormData()
+  formData.append('messaging_product', 'whatsapp')
+  formData.append('type', contentType)
+  formData.append('file', new Blob([bytes], { type: contentType }), filename)
+
+  const uploadResponse = await fetch(
+    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/media`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      },
+      body: formData,
+    },
+  )
+
+  const uploadResult = await uploadResponse.json().catch(() => ({}))
+  const mediaId = String((uploadResult as JsonRecord).id ?? '')
+  if (!uploadResponse.ok || !mediaId) {
+    console.error('❌ [WHATSAPP-SEND] Media upload failed', uploadResult)
+    return {
+      error: jsonResponse({
+        error: 'WhatsApp media upload failed',
+        details: uploadResult,
+        media_url: mediaUrl,
+      }, 502),
+    }
+  }
+
+  return {
+    mediaId,
+    metadata: {
+      whatsapp_media_id: mediaId,
+      whatsapp_media_upload_source_url: mediaUrl,
+      whatsapp_media_upload_content_type: contentType,
+      whatsapp_media_upload_size: bytes.byteLength,
+      whatsapp_media_upload_response: uploadResult,
+    } as JsonRecord,
+  }
 }
 
 function buildActionInteractivePayload(request: SendRequest) {
@@ -120,7 +225,7 @@ function buildActionInteractivePayload(request: SendRequest) {
   }
 }
 
-function buildGraphPayload(request: SendRequest, to: string) {
+function buildGraphPayload(request: SendRequest, to: string, mediaId?: string) {
   const payload: JsonRecord = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
@@ -141,11 +246,17 @@ function buildGraphPayload(request: SendRequest, to: string) {
   }
 
   if (request.type === 'document') {
-    payload.document = {
-      link: request.documentUrl,
-      filename: request.documentFilename,
-      caption: request.caption,
-    }
+    const document: JsonRecord = mediaId ? { id: mediaId } : { link: request.documentUrl }
+    if (request.documentFilename) document.filename = request.documentFilename
+    if (request.caption) document.caption = request.caption
+    payload.document = document
+    return payload
+  }
+
+  if (request.type === 'image') {
+    const image: JsonRecord = mediaId ? { id: mediaId } : { link: request.mediaUrl ?? request.documentUrl }
+    if (request.caption) image.caption = request.caption
+    payload.image = image
     return payload
   }
 
@@ -170,7 +281,11 @@ function getMessageContent(request: SendRequest) {
   }
 
   if (request.type === 'document') {
-    return request.caption ?? request.documentFilename ?? 'Documento enviado'
+    return request.documentUrl ?? request.caption ?? request.documentFilename ?? 'Documento enviado'
+  }
+
+  if (request.type === 'image') {
+    return request.mediaUrl ?? request.documentUrl ?? request.caption ?? 'Imagen enviada'
   }
 
   if (request.type === 'template') {
@@ -218,6 +333,10 @@ serve(async (req) => {
 
   if (requestBody.type === 'document' && !requestBody.documentUrl) {
     return jsonResponse({ error: 'documentUrl is required for document messages' }, 400)
+  }
+
+  if (requestBody.type === 'image' && !requestBody.mediaUrl && !requestBody.documentUrl) {
+    return jsonResponse({ error: 'mediaUrl is required for image messages' }, 400)
   }
 
   if (requestBody.type === 'template' && !requestBody.templateName) {
@@ -293,7 +412,19 @@ serve(async (req) => {
     return jsonResponse({ error: 'Unable to ensure WhatsApp conversation binding' }, 400)
   }
 
-  const graphPayload = buildGraphPayload(requestBody, normalizedPhone)
+  const mediaUpload = await uploadMediaToWhatsApp(
+    requestBody,
+    String(channel.phone_number_id),
+  )
+  if (mediaUpload.error) {
+    return mediaUpload.error
+  }
+
+  const graphPayload = buildGraphPayload(
+    requestBody,
+    normalizedPhone,
+    mediaUpload.mediaId,
+  )
   if (requestBody.type === 'interactive' && !graphPayload.interactive) {
     return jsonResponse({
       error: 'interactive payload is required, or provide actionType/actionTargetId',
@@ -325,11 +456,13 @@ serve(async (req) => {
     ((graphResult as JsonRecord).messages as JsonRecord[] | undefined)?.[0]?.id ?? '',
   )
 
-  const messageType = requestBody.type === 'document'
-    ? 'file'
-    : requestBody.actionType
-      ? 'action_request'
-      : 'text'
+  const messageType = requestBody.type === 'image'
+    ? 'image'
+    : requestBody.type === 'document'
+      ? 'file'
+      : requestBody.actionType
+        ? 'action_request'
+        : 'text'
 
   const messageMetadata: JsonRecord = {
     ...(requestBody.metadata ?? {}),
@@ -339,6 +472,15 @@ serve(async (req) => {
     display_phone_number: channel.display_phone_number,
     external_wa_id: normalizedPhone,
     outbound_type: requestBody.type,
+    ...(mediaUpload.metadata ?? {}),
+    ...(requestBody.mediaUrl ? { media_url: requestBody.mediaUrl } : {}),
+    ...(requestBody.documentUrl ? { document_url: requestBody.documentUrl } : {}),
+    ...(requestBody.documentFilename
+      ? {
+        document_filename: requestBody.documentFilename,
+        filename: requestBody.documentFilename,
+      }
+      : {}),
     graph_payload: graphPayload,
     graph_response: graphResult,
     action_type: requestBody.actionType ?? null,

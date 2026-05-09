@@ -224,9 +224,9 @@ class BackupService extends ChangeNotifier {
       final data = schedule.toJson();
       data['tenant_id'] = tenantId;
       data['updated_at'] = DateTime.now().toIso8601String();
+      data.remove('id');
 
       if (schedule.id.isEmpty) {
-        // Insert new schedule
         final response = await _client
             .from('backup_schedules')
             .insert(data)
@@ -234,12 +234,13 @@ class BackupService extends ChangeNotifier {
             .single();
         _schedule = BackupSchedule.fromJson(response);
       } else {
-        // Update existing schedule
-        await _client
+        final response = await _client
             .from('backup_schedules')
             .update(data)
-            .eq('id', schedule.id);
-        _schedule = schedule;
+            .eq('id', schedule.id)
+            .select()
+            .single();
+        _schedule = BackupSchedule.fromJson(response);
       }
 
       notifyListeners();

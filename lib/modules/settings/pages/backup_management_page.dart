@@ -187,7 +187,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     return Column(
       children: [
         _buildInfoRow(theme, 'Frecuencia', frequencyText),
-        _buildInfoRow(theme, 'Mantener últimos', '${schedule.keepLastNBackups} respaldos'),
+        _buildInfoRow(theme, 'Mantener últimos',
+            '${schedule.keepLastNBackups} respaldos'),
         if (schedule.lastRunAt != null)
           _buildInfoRow(
             theme,
@@ -235,6 +236,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
       0,
       (sum, b) => sum + (b.backupSizeBytes ?? 0),
     );
+    final chatCount = backups.fold<int>(
+        0, (sum, b) => sum + b.getSummaryCount('conversations'));
 
     return Card(
       child: Padding(
@@ -266,6 +269,15 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
                 Colors.blue,
                 '${(totalSize / 1024 / 1024).toStringAsFixed(1)} MB',
                 'Espacio Total',
+              ),
+            ),
+            Expanded(
+              child: _buildStatItem(
+                theme,
+                Icons.forum_outlined,
+                const Color(0xFF0F766E),
+                '$chatCount',
+                'Chats',
               ),
             ),
           ],
@@ -365,7 +377,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
   Widget _buildBackupTile(ThemeData theme, DatabaseBackup backup) {
     Color statusColor;
     IconData statusIcon;
-    
+
     switch (backup.status) {
       case 'completed':
         statusColor = Colors.green;
@@ -407,7 +419,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.storage, size: 14, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.storage,
+                  size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
                 backup.sizeMB,
@@ -416,10 +429,21 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
                 ),
               ),
               const SizedBox(width: 16),
-              Icon(Icons.inventory, size: 14, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.inventory,
+                  size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
                 '${backup.getSummaryCount('products')} productos',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Icon(Icons.forum_outlined,
+                  size: 14, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text(
+                '${backup.getSummaryCount('conversations')} chats',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -495,7 +519,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
 
   // Dialogs and actions
   void _showCreateBackupDialog() {
-    _backupNameController.text = 'Respaldo ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}';
+    _backupNameController.text =
+        'Respaldo ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}';
     _notesController.clear();
 
     showDialog(
@@ -555,7 +580,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     if (result.success) {
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Respaldo creado: ${result.sizeMB?.toStringAsFixed(2)} MB'),
+          content:
+              Text('Respaldo creado: ${result.sizeMB?.toStringAsFixed(2)} MB'),
           backgroundColor: Colors.green,
         ),
       );
@@ -605,23 +631,54 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              _buildDetailRow(theme, 'Productos', '${backup.getSummaryCount('products')}'),
-                  _buildDetailRow(theme, 'Categorías Productos', '${backup.getSummaryCount('product_categories')}'),
-                  _buildDetailRow(theme, 'Clientes', '${backup.getSummaryCount('customers')}'),
-                  _buildDetailRow(theme, 'Proveedores', '${backup.getSummaryCount('suppliers')}'),
-                  _buildDetailRow(theme, 'Facturas Venta', '${backup.getSummaryCount('sales_invoices')}'),
-                  _buildDetailRow(theme, 'Facturas Compra', '${backup.getSummaryCount('purchase_invoices')}'),
-                  _buildDetailRow(theme, 'Empleados', '${backup.getSummaryCount('employees')}'),
-                  _buildDetailRow(theme, 'Asientos Contables', '${backup.getSummaryCount('journal_entries')}'),
-                  _buildDetailRow(theme, 'Pegas (Trabajos)', '${backup.getSummaryCount('mechanic_jobs')}'),
-                  _buildDetailRow(theme, 'Bicicletas', '${backup.getSummaryCount('bikes')}'),
-                  _buildDetailRow(theme, 'Marcas Productos', '${backup.getSummaryCount('product_brands')}'),
-                  _buildDetailRow(theme, 'Marcas Bicicletas', '${backup.getSummaryCount('bike_brands')}'),
-                  _buildDetailRow(theme, 'Modelos Bicicletas', '${backup.getSummaryCount('bike_models')}'),
-                  const Divider(),
-                  Text('Tienda Online', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  _buildDetailRow(theme, 'Pedidos Online', '${backup.getSummaryCount('online_orders')}'),
-                  _buildDetailRow(theme, 'Banners Web', '${backup.getSummaryCount('website_banners')}'),
+              _buildDetailRow(
+                  theme, 'Productos', '${backup.getSummaryCount('products')}'),
+              _buildDetailRow(theme, 'Categorías Productos',
+                  '${backup.getSummaryCount('product_categories')}'),
+              _buildDetailRow(
+                  theme, 'Clientes', '${backup.getSummaryCount('customers')}'),
+              _buildDetailRow(theme, 'Proveedores',
+                  '${backup.getSummaryCount('suppliers')}'),
+              _buildDetailRow(theme, 'Facturas Venta',
+                  '${backup.getSummaryCount('sales_invoices')}'),
+              _buildDetailRow(theme, 'Facturas Compra',
+                  '${backup.getSummaryCount('purchase_invoices')}'),
+              _buildDetailRow(
+                  theme, 'Empleados', '${backup.getSummaryCount('employees')}'),
+              _buildDetailRow(theme, 'Asientos Contables',
+                  '${backup.getSummaryCount('journal_entries')}'),
+              _buildDetailRow(theme, 'Pegas (Trabajos)',
+                  '${backup.getSummaryCount('mechanic_jobs')}'),
+              _buildDetailRow(
+                  theme, 'Bicicletas', '${backup.getSummaryCount('bikes')}'),
+              _buildDetailRow(theme, 'Marcas Productos',
+                  '${backup.getSummaryCount('product_brands')}'),
+              _buildDetailRow(theme, 'Marcas Bicicletas',
+                  '${backup.getSummaryCount('bike_brands')}'),
+              _buildDetailRow(theme, 'Modelos Bicicletas',
+                  '${backup.getSummaryCount('bike_models')}'),
+              const Divider(),
+              Text('Mensajería',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              _buildDetailRow(theme, 'Conversaciones',
+                  '${backup.getSummaryCount('conversations')}'),
+              _buildDetailRow(
+                  theme, 'Mensajes', '${backup.getSummaryCount('messages')}'),
+              _buildDetailRow(theme, 'Archivos de Chat',
+                  '${backup.getSummaryCount('chat_attachments')}'),
+              _buildDetailRow(theme, 'Canales WhatsApp',
+                  '${backup.getSummaryCount('whatsapp_channels')}'),
+              _buildDetailRow(theme, 'Vínculos WhatsApp',
+                  '${backup.getSummaryCount('whatsapp_conversation_bindings')}'),
+              const Divider(),
+              Text('Tienda Online',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              _buildDetailRow(theme, 'Pedidos Online',
+                  '${backup.getSummaryCount('online_orders')}'),
+              _buildDetailRow(theme, 'Banners Web',
+                  '${backup.getSummaryCount('website_banners')}'),
             ],
           ),
         ),
@@ -679,21 +736,32 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
             ),
             const SizedBox(height: 16),
             Text('Respaldo: ${backup.backupName}'),
-            Text('Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt)}'),
+            Text(
+                'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt)}'),
             const SizedBox(height: 8),
             const Text('El sistema volverá a este estado:'),
             Text('• ${backup.getSummaryCount('products')} productos'),
-            Text('• ${backup.getSummaryCount('product_categories')} categorías de productos'),
+            Text(
+                '• ${backup.getSummaryCount('product_categories')} categorías de productos'),
             Text('• ${backup.getSummaryCount('customers')} clientes'),
-            Text('• ${backup.getSummaryCount('sales_invoices')} facturas de venta'),
-            Text('• ${backup.getSummaryCount('purchase_invoices')} facturas de compra'),
-            Text('• ${backup.getSummaryCount('mechanic_jobs')} pegas (trabajos mecánicos)'),
+            Text(
+                '• ${backup.getSummaryCount('sales_invoices')} facturas de venta'),
+            Text(
+                '• ${backup.getSummaryCount('purchase_invoices')} facturas de compra'),
+            Text(
+                '• ${backup.getSummaryCount('mechanic_jobs')} pegas (trabajos mecánicos)'),
             Text('• ${backup.getSummaryCount('bikes')} bicicletas registradas'),
-            Text('• ${backup.getSummaryCount('product_brands')} marcas de productos'),
-            Text('• ${backup.getSummaryCount('bike_brands')} marcas de bicicletas'),
-            Text('• ${backup.getSummaryCount('bike_models')} modelos de bicicletas'),
+            Text(
+                '• ${backup.getSummaryCount('product_brands')} marcas de productos'),
+            Text(
+                '• ${backup.getSummaryCount('bike_brands')} marcas de bicicletas'),
+            Text(
+                '• ${backup.getSummaryCount('bike_models')} modelos de bicicletas'),
+            Text('• ${backup.getSummaryCount('conversations')} conversaciones'),
+            Text('• ${backup.getSummaryCount('messages')} mensajes'),
             Text('• ${backup.getSummaryCount('online_orders')} pedidos online'),
-            Text('• ${backup.getSummaryCount('website_banners')} banners de la tienda web'),
+            Text(
+                '• ${backup.getSummaryCount('website_banners')} banners de la tienda web'),
           ],
         ),
         actions: [
@@ -778,7 +846,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     try {
       // Get backup data from service
       final backupData = await _backupService.getBackupData(backup.id);
-      
+
       if (backupData == null) {
         scaffoldMessenger.showSnackBar(
           const SnackBar(
@@ -791,7 +859,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
 
       // Convert to JSON string
       final jsonString = _backupService.backupToJsonString(backupData);
-      
+
       if (jsonString == null) {
         scaffoldMessenger.showSnackBar(
           const SnackBar(
@@ -803,7 +871,8 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
       }
 
       // Create download file name
-      final fileName = 'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(backup.createdAt)}.json';
+      final fileName =
+          'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(backup.createdAt)}.json';
 
       // Trigger download using cross-platform utility
       final bytes = utf8.encode(jsonString);
@@ -854,15 +923,267 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     final schedule = _backupService.schedule;
     if (schedule == null) return;
 
-    await _backupService.updateSchedule(
-      schedule.copyWith(enabled: enabled),
-    );
+    try {
+      await _backupService.updateSchedule(schedule.copyWith(enabled: enabled));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(enabled
+              ? 'Respaldos automáticos activados'
+              : 'Respaldos automáticos desactivados'),
+          backgroundColor: enabled ? Colors.green : null,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar la agenda: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _showScheduleSettingsDialog() {
-    // TODO: Implement schedule configuration dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Configuración de respaldos automáticos próximamente')),
+    final current = _backupService.schedule;
+    if (current == null) return;
+
+    var enabled = current.enabled;
+    var frequency = current.frequency;
+    var selectedTime = _parseBackupTime(current.timeOfDay) ??
+        const TimeOfDay(hour: 2, minute: 0);
+    var dayOfWeek = current.dayOfWeek ?? 0;
+    var dayOfMonth = current.dayOfMonth ?? 1;
+    var keepLastNBackups = current.keepLastNBackups;
+    var autoDeleteOld = current.autoDeleteOld;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Future<void> pickTime() async {
+            final picked = await showTimePicker(
+              context: dialogContext,
+              initialTime: selectedTime,
+            );
+            if (picked != null) {
+              setDialogState(() => selectedTime = picked);
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Respaldos automáticos'),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 430,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Activar agenda del servidor'),
+                      subtitle: const Text(
+                        'Crea respaldos completos aunque el ERP esté cerrado.',
+                      ),
+                      value: enabled,
+                      onChanged: (value) {
+                        setDialogState(() => enabled = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: frequency,
+                      decoration: const InputDecoration(
+                        labelText: 'Frecuencia',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'hourly',
+                          child: Text('Cada hora'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'daily',
+                          child: Text('Diario'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text('Semanal'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'monthly',
+                          child: Text('Mensual'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() => frequency = value);
+                      },
+                    ),
+                    if (frequency != 'hourly') ...[
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Hora'),
+                        subtitle: Text(selectedTime.format(dialogContext)),
+                        trailing: OutlinedButton(
+                          onPressed: pickTime,
+                          child: const Text('Cambiar'),
+                        ),
+                      ),
+                    ],
+                    if (frequency == 'weekly') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: dayOfWeek,
+                        decoration: const InputDecoration(
+                          labelText: 'Día de la semana',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('Domingo')),
+                          DropdownMenuItem(value: 1, child: Text('Lunes')),
+                          DropdownMenuItem(value: 2, child: Text('Martes')),
+                          DropdownMenuItem(value: 3, child: Text('Miércoles')),
+                          DropdownMenuItem(value: 4, child: Text('Jueves')),
+                          DropdownMenuItem(value: 5, child: Text('Viernes')),
+                          DropdownMenuItem(value: 6, child: Text('Sábado')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() => dayOfWeek = value);
+                        },
+                      ),
+                    ],
+                    if (frequency == 'monthly') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: dayOfMonth.clamp(1, 28).toInt(),
+                        decoration: const InputDecoration(
+                          labelText: 'Día del mes',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (var day = 1; day <= 28; day++)
+                            DropdownMenuItem(
+                              value: day,
+                              child: Text('$day'),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() => dayOfMonth = value);
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: keepLastNBackups,
+                      decoration: const InputDecoration(
+                        labelText: 'Mantener respaldos automáticos',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 3, child: Text('Últimos 3')),
+                        DropdownMenuItem(value: 7, child: Text('Últimos 7')),
+                        DropdownMenuItem(value: 14, child: Text('Últimos 14')),
+                        DropdownMenuItem(value: 30, child: Text('Últimos 30')),
+                        DropdownMenuItem(value: 60, child: Text('Últimos 60')),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() => keepLastNBackups = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title:
+                          const Text('Limpiar respaldos automáticos antiguos'),
+                      subtitle: const Text(
+                        'Nunca elimina los respaldos manuales que crees tú.',
+                      ),
+                      value: autoDeleteOld,
+                      onChanged: (value) {
+                        setDialogState(() => autoDeleteOld = value ?? true);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Incluye conversaciones, mensajes, estados de WhatsApp y referencias a archivos multimedia del chat.',
+                      style: Theme.of(dialogContext).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final updated = BackupSchedule(
+                    id: current.id,
+                    tenantId: current.tenantId,
+                    enabled: enabled,
+                    frequency: frequency,
+                    timeOfDay: frequency == 'hourly'
+                        ? null
+                        : _formatBackupTime(selectedTime),
+                    dayOfWeek: frequency == 'weekly' ? dayOfWeek : null,
+                    dayOfMonth: frequency == 'monthly' ? dayOfMonth : null,
+                    keepLastNBackups: keepLastNBackups,
+                    autoDeleteOld: autoDeleteOld,
+                    lastRunAt: current.lastRunAt,
+                  );
+
+                  try {
+                    await _backupService.updateSchedule(updated);
+                    if (!dialogContext.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Agenda de respaldos actualizada'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    if (!dialogContext.mounted) return;
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Guardar'),
+              ),
+            ],
+          );
+        },
+      ),
     );
+  }
+
+  TimeOfDay? _parseBackupTime(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final parts = value.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatBackupTime(TimeOfDay value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute:00';
   }
 }

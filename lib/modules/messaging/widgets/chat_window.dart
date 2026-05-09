@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -23,6 +24,7 @@ import 'assign_context_dialog.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
+import '../../../shared/utils/file_download.dart';
 
 class _EmojiGroup {
   final String label;
@@ -49,6 +51,24 @@ class _UnreadMessagesMarker {
   final int count;
 
   const _UnreadMessagesMarker(this.count);
+}
+
+enum _ChatInfoSection { info, media, workflow, backup }
+
+class _ChatAttachment {
+  final Message message;
+  final String url;
+  final String name;
+  final String extension;
+  final bool isImage;
+
+  const _ChatAttachment({
+    required this.message,
+    required this.url,
+    required this.name,
+    required this.extension,
+    required this.isImage,
+  });
 }
 
 class ChatWindow extends StatefulWidget {
@@ -228,6 +248,9 @@ class _ChatWindowState extends State<ChatWindow> {
   OverlayEntry? _composerMenuOverlayEntry;
   String? _activeComposerMenuName;
   bool _showAutomaticMessagesPanel = false;
+  bool _showChatInfoPanel = false;
+  bool _isExportingChatArchive = false;
+  _ChatInfoSection _selectedChatInfoSection = _ChatInfoSection.info;
   final GlobalKey _smartActionsButtonKey = GlobalKey();
   final GlobalKey _emojiButtonKey = GlobalKey();
   final GlobalKey _attachmentButtonKey = GlobalKey();
@@ -251,6 +274,8 @@ class _ChatWindowState extends State<ChatWindow> {
       _removeEmojiOverlay();
       _removeComposerMenuOverlay(notify: false);
       _showAutomaticMessagesPanel = false;
+      _showChatInfoPanel = false;
+      _selectedChatInfoSection = _ChatInfoSection.info;
       _captureOpeningUnreadCount();
       _loadMessages();
       _applyPendingDraft();
@@ -1283,25 +1308,16 @@ class _ChatWindowState extends State<ChatWindow> {
       );
 
       // Determine file type and MIME
-      final ext = fileName.split('.').last.toLowerCase();
+      final ext = _resolveFileExtension(fileName);
       final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext);
-      final isPdf = ext == 'pdf';
-
-      String contentType;
-      if (isImage) {
-        contentType = 'image/$ext';
-      } else if (isPdf) {
-        contentType = 'application/pdf';
-      } else if (['doc', 'docx'].contains(ext)) {
-        contentType = 'application/msword';
-      } else if (['xls', 'xlsx'].contains(ext)) {
-        contentType = 'application/vnd.ms-excel';
-      } else {
-        contentType = 'application/octet-stream';
-      }
+      final contentType = _contentTypeForExtension(ext);
+      final safeFileName = _safeStorageFileName(
+        fileName,
+        fallbackExtension: ext,
+      );
 
       final storagePath =
-          'chat/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+          'chat/${widget.conversation.id}/${DateTime.now().millisecondsSinceEpoch}_$safeFileName';
 
       // Upload to Supabase Storage (vinabike-assets bucket)
       final supabase = Supabase.instance.client;
@@ -1322,18 +1338,36 @@ class _ChatWindowState extends State<ChatWindow> {
 
       // Determine message type
       final msgType = isImage ? 'image' : 'file';
+      final metadata = {
+        'url': publicUrl,
+        'filename': fileName,
+        'originalFilename': fileName,
+        'storageFilename': safeFileName,
+        'extension': ext,
+        'contentType': contentType,
+        'content_type': contentType,
+        'sizeBytes': bytes.length,
+        'storageBucket': 'vinabike-assets',
+        'storagePath': storagePath,
+      };
+
+      if (_isWhatsAppConversation) {
+        _sendWhatsAppAttachment(
+          chatProvider: context.read<ChatProvider>(),
+          publicUrl: publicUrl,
+          fileName: fileName,
+          messageType: msgType,
+          metadata: metadata,
+        );
+        return;
+      }
 
       // Send as file message
-      context.read<ChatProvider>().sendMessage(
-        publicUrl,
-        type: msgType,
-        metadata: {
-          'url': publicUrl,
-          'filename': fileName,
-          'extension': ext,
-          'contentType': contentType,
-        },
-      );
+      await context.read<ChatProvider>().sendMessage(
+            publicUrl,
+            type: msgType,
+            metadata: metadata,
+          );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1342,6 +1376,209 @@ class _ChatWindowState extends State<ChatWindow> {
             content: Text('Error al subir archivo: $e'),
             backgroundColor: Colors.red),
       );
+    }
+  }
+
+  String _resolveFileExtension(String fileName) {
+    final normalizedName = fileName.trim().split(RegExp(r'[\\/]')).last;
+    final dotIndex = normalizedName.lastIndexOf('.');
+    if (dotIndex <= 0 || dotIndex == normalizedName.length - 1) {
+      return '';
+    }
+    return normalizedName.substring(dotIndex + 1).toLowerCase();
+  }
+
+  String _safeStorageFileName(
+    String fileName, {
+    String fallbackExtension = '',
+  }) {
+    final originalName = fileName.trim().split(RegExp(r'[\\/]')).last;
+    final candidate = originalName.isEmpty ? 'archivo' : originalName;
+    var cleaned = candidate
+        .replaceAll(RegExp(r'\s+'), '_')
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^[._-]+'), '')
+        .replaceAll(RegExp(r'[._-]+$'), '');
+
+    if (cleaned.isEmpty) {
+      cleaned = 'archivo';
+    }
+
+    final cleanedExtension = _resolveFileExtension(cleaned);
+    if (cleanedExtension.isEmpty && fallbackExtension.isNotEmpty) {
+      cleaned = '$cleaned.$fallbackExtension';
+    }
+
+    if (cleaned.length <= 96) {
+      return cleaned;
+    }
+
+    final extension = _resolveFileExtension(cleaned);
+    if (extension.isEmpty) {
+      return cleaned.substring(0, 96);
+    }
+
+    final suffix = '.$extension';
+    final baseLength = 96 - suffix.length;
+    final safeBaseLength = baseLength.clamp(1, cleaned.length).toInt();
+    return '${cleaned.substring(0, safeBaseLength)}$suffix';
+  }
+
+  String _contentTypeForExtension(String extension) {
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'txt':
+        return 'text/plain';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  void _sendWhatsAppAttachment({
+    required ChatProvider chatProvider,
+    required String publicUrl,
+    required String fileName,
+    required String messageType,
+    required Map<String, dynamic> metadata,
+  }) {
+    final optimisticMessageId =
+        'temp-wa-file-${DateTime.now().millisecondsSinceEpoch}';
+    final sendMetadata = {
+      ...metadata,
+      'channel': 'whatsapp',
+      'provider': 'whatsapp',
+      'client_message_id': optimisticMessageId,
+    };
+    final optimisticMetadata = {
+      ...sendMetadata,
+      'pending': true,
+    };
+
+    chatProvider.addOptimisticMessage(
+      Message(
+        id: optimisticMessageId,
+        conversationId: widget.conversation.id,
+        senderId: _messagingService.currentUserId,
+        content: publicUrl,
+        type: messageType,
+        metadata: optimisticMetadata,
+        createdAt: DateTime.now(),
+        isMe: true,
+      ),
+    );
+
+    unawaited(_dispatchWhatsAppAttachment(
+      chatProvider: chatProvider,
+      optimisticMessageId: optimisticMessageId,
+      publicUrl: publicUrl,
+      fileName: fileName,
+      messageType: messageType,
+      metadata: sendMetadata,
+    ));
+  }
+
+  Future<void> _dispatchWhatsAppAttachment({
+    required ChatProvider chatProvider,
+    required String optimisticMessageId,
+    required String publicUrl,
+    required String fileName,
+    required String messageType,
+    required Map<String, dynamic> metadata,
+  }) async {
+    final whatsappService = WhatsAppService();
+    try {
+      final contact = await _resolveConversationWhatsAppContact();
+      final phone = contact?['phone']?.toString();
+
+      if (phone == null || phone.isEmpty) {
+        chatProvider.removeMessageById(optimisticMessageId);
+        if (mounted) {
+          _showErrorSnackBar(
+            context,
+            'La conversación de WhatsApp no tiene un teléfono asociado.',
+          );
+        }
+        return;
+      }
+
+      if (!mounted) {
+        chatProvider.removeMessageById(optimisticMessageId);
+        return;
+      }
+
+      final success = await whatsappService.sendAttachment(
+        context: context,
+        customerPhone: phone,
+        mediaUrl: publicUrl,
+        filename: fileName,
+        messageType: messageType,
+        contactName: contact?['name']?.toString(),
+        conversationId: widget.conversation.id,
+        customerId: contact?['customer_id']?.toString(),
+        contextType: widget.conversation.contextType,
+        contextId: widget.conversation.contextId,
+        clientMessageId: optimisticMessageId,
+        metadata: metadata,
+      );
+
+      if (!success) {
+        chatProvider.removeMessageById(optimisticMessageId);
+        if (mounted) {
+          final errorMessage = whatsappService.lastErrorRequiresServerFix
+              ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
+              : whatsappService.lastErrorRequiresCustomerReply
+                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía una plantilla y espera respuesta del cliente antes de compartir la imagen.'
+                  : 'No se pudo enviar el archivo por WhatsApp';
+          _showErrorSnackBar(context, errorMessage);
+        }
+        return;
+      }
+
+      if (whatsappService.lastDeliveryMethod ==
+          WhatsAppDeliveryMethod.cloudApi) {
+        chatProvider.updateMessageById(
+          optimisticMessageId,
+          metadataUpdates: {
+            'pending': false,
+            'external_status': 'accepted',
+          },
+        );
+      } else if (whatsappService.lastDeliveryMethod ==
+          WhatsAppDeliveryMethod.manualFallback) {
+        chatProvider.removeMessageById(optimisticMessageId);
+        if (mounted) {
+          _showWhatsAppResultSnackbar(
+            context: context,
+            deliveryMethod: whatsappService.lastDeliveryMethod,
+            successMessage: 'Archivo enviado por WhatsApp Cloud API',
+            fallbackMessage: 'WhatsApp abierto con el archivo como enlace',
+          );
+        }
+      }
+    } catch (e) {
+      chatProvider.removeMessageById(optimisticMessageId);
+      if (mounted) {
+        _showErrorSnackBar(context, 'No se pudo enviar el archivo: $e');
+      }
     }
   }
 
@@ -1418,42 +1655,48 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ),
 
-        // Messages
-        Expanded(
-          child: Container(
-            color: Colors.grey[50], // Light background for chat area
-            child: isLoading && messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scrollController,
-                    reverse: true, // Start from bottom
-                    padding: const EdgeInsets.all(16),
-                    itemCount: timelineItems.length,
-                    itemBuilder: (context, index) {
-                      // Reverse index to show newest at bottom
-                      final item =
-                          timelineItems[timelineItems.length - 1 - index];
-                      if (item is _UnreadMessagesMarker) {
-                        return _buildUnreadMessagesMarker(item.count);
-                      }
+        if (_showChatInfoPanel)
+          Expanded(
+            child: _buildChatInfoPanel(context, chatProvider, messages),
+          )
+        else ...[
+          // Messages
+          Expanded(
+            child: Container(
+              color: Colors.grey[50], // Light background for chat area
+              child: isLoading && messages.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _scrollController,
+                      reverse: true, // Start from bottom
+                      padding: const EdgeInsets.all(16),
+                      itemCount: timelineItems.length,
+                      itemBuilder: (context, index) {
+                        // Reverse index to show newest at bottom
+                        final item =
+                            timelineItems[timelineItems.length - 1 - index];
+                        if (item is _UnreadMessagesMarker) {
+                          return _buildUnreadMessagesMarker(item.count);
+                        }
 
-                      final msg = item as Message;
-                      // Check continuity for bubble grouping (optional enhancement space)
-                      return _buildMessageBubble(context, msg);
-                    },
-                  ),
+                        final msg = item as Message;
+                        // Check continuity for bubble grouping (optional enhancement space)
+                        return _buildMessageBubble(context, msg);
+                      },
+                    ),
+            ),
           ),
-        ),
 
-        // Input
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          // Input
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: _buildComposer(context),
           ),
-          child: _buildComposer(context),
-        ),
+        ],
       ],
     );
   }
@@ -1473,46 +1716,72 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: conversation.type == 'support'
-                ? _accentBlue.withValues(alpha: 0.08)
-                : Colors.grey[200],
-            child: Icon(
-              conversation.isWhatsApp
-                  ? Icons.phone_in_talk_outlined
-                  : conversation.isWebsitePortal
-                      ? Icons.language_outlined
-                      : Icons.groups_outlined,
-              color: conversation.type == 'support'
-                  ? _accentBlue
-                  : Colors.grey[700],
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _toggleChatInfoPanel,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: conversation.type == 'support'
+                            ? _accentBlue.withValues(alpha: 0.08)
+                            : Colors.grey[200],
+                        child: Icon(
+                          conversation.isWhatsApp
+                              ? Icons.phone_in_talk_outlined
+                              : conversation.isWebsitePortal
+                                  ? Icons.language_outlined
+                                  : Icons.groups_outlined,
+                          color: conversation.type == 'support'
+                              ? _accentBlue
+                              : Colors.grey[700],
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _showChatInfoPanel
+                            ? Icons.keyboard_arrow_up
+                            : Icons.info_outline,
+                        size: 18,
+                        color: _showChatInfoPanel ? _accentBlue : Colors.grey,
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -1550,6 +1819,1253 @@ class _ChatWindowState extends State<ChatWindow> {
         ],
       ),
     );
+  }
+
+  void _toggleChatInfoPanel() {
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    setState(() {
+      _showChatInfoPanel = !_showChatInfoPanel;
+      if (!_showChatInfoPanel) {
+        _selectedChatInfoSection = _ChatInfoSection.info;
+      }
+    });
+  }
+
+  Widget _buildChatInfoPanel(
+    BuildContext context,
+    ChatProvider chatProvider,
+    List<Message> messages,
+  ) {
+    final theme = Theme.of(context);
+    final title = chatProvider.getChatTitle(widget.conversation);
+    final subtitle = _buildConversationSubtitle(widget.conversation);
+    final attachments = _collectChatAttachments(messages);
+    final mediaCount =
+        attachments.where((attachment) => attachment.isImage).length;
+    final fileCount = attachments.length - mediaCount;
+
+    Widget contentForSection() {
+      return switch (_selectedChatInfoSection) {
+        _ChatInfoSection.info => _buildChatInfoOverview(
+            theme: theme,
+            title: title,
+            subtitle: subtitle,
+            messages: messages,
+            attachments: attachments,
+          ),
+        _ChatInfoSection.media => _buildChatMediaSection(
+            theme: theme,
+            attachments: attachments,
+          ),
+        _ChatInfoSection.workflow => _buildChatWorkflowSection(theme),
+        _ChatInfoSection.backup => _buildChatBackupSection(
+            theme: theme,
+            messages: messages,
+            attachments: attachments,
+          ),
+      };
+    }
+
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          if (compact) {
+            return Column(
+              children: [
+                _buildChatInfoMobileHeader(theme, title, subtitle),
+                _buildChatInfoSectionBar(
+                  theme,
+                  mediaCount: mediaCount,
+                  fileCount: fileCount,
+                ),
+                Expanded(child: contentForSection()),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              SizedBox(
+                width: 238,
+                child: _buildChatInfoRail(
+                  theme,
+                  title: title,
+                  subtitle: subtitle,
+                  messageCount: messages.length,
+                  mediaCount: mediaCount,
+                  fileCount: fileCount,
+                ),
+              ),
+              VerticalDivider(width: 1, color: Colors.grey[200]),
+              Expanded(child: contentForSection()),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChatInfoMobileHeader(
+    ThemeData theme,
+    String title,
+    String subtitle,
+  ) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 10, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      ),
+      child: Row(
+        children: [
+          _buildChatInfoAvatar(size: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Cerrar',
+            icon: const Icon(Icons.close),
+            onPressed: _toggleChatInfoPanel,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatInfoRail(
+    ThemeData theme, {
+    required String title,
+    required String subtitle,
+    required int messageCount,
+    required int mediaCount,
+    required int fileCount,
+  }) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 20, 14, 18),
+            child: Column(
+              children: [
+                _buildChatInfoAvatar(size: 58),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey[200]),
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              children: [
+                _buildChatInfoNavItem(
+                  section: _ChatInfoSection.info,
+                  icon: Icons.info_outline,
+                  label: 'Info',
+                  badge: '$messageCount',
+                ),
+                _buildChatInfoNavItem(
+                  section: _ChatInfoSection.media,
+                  icon: Icons.perm_media_outlined,
+                  label: 'Multimedia y docs',
+                  badge: '${mediaCount + fileCount}',
+                ),
+                _buildChatInfoNavItem(
+                  section: _ChatInfoSection.workflow,
+                  icon: Icons.tune_outlined,
+                  label: 'Gestión',
+                ),
+                _buildChatInfoNavItem(
+                  section: _ChatInfoSection.backup,
+                  icon: Icons.verified_user_outlined,
+                  label: 'Respaldo',
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: OutlinedButton.icon(
+              onPressed: _toggleChatInfoPanel,
+              icon: const Icon(Icons.arrow_back, size: 18),
+              label: const Text('Volver al chat'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatInfoSectionBar(
+    ThemeData theme, {
+    required int mediaCount,
+    required int fileCount,
+  }) {
+    final items = [
+      (_ChatInfoSection.info, Icons.info_outline, 'Info', null),
+      (
+        _ChatInfoSection.media,
+        Icons.perm_media_outlined,
+        'Archivos',
+        '${mediaCount + fileCount}'
+      ),
+      (_ChatInfoSection.workflow, Icons.tune_outlined, 'Gestión', null),
+      (_ChatInfoSection.backup, Icons.verified_user_outlined, 'Respaldo', null),
+    ];
+
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      color: Colors.white,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final selected = _selectedChatInfoSection == item.$1;
+          return ChoiceChip(
+            selected: selected,
+            avatar: Icon(
+              item.$2,
+              size: 16,
+              color: selected ? _accentBlue : const Color(0xFF64748B),
+            ),
+            label: Text(
+              item.$4 == null ? item.$3 : '${item.$3} ${item.$4}',
+            ),
+            onSelected: (_) {
+              setState(() => _selectedChatInfoSection = item.$1);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChatInfoNavItem({
+    required _ChatInfoSection section,
+    required IconData icon,
+    required String label,
+    String? badge,
+  }) {
+    final selected = _selectedChatInfoSection == section;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: selected ? _accentBlue.withValues(alpha: 0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _selectedChatInfoSection = section),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected ? _accentBlue : const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? _accentBlue : const Color(0xFF334155),
+                    ),
+                  ),
+                ),
+                if (badge != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? _accentBlue.withValues(alpha: 0.12)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? _accentBlue : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatInfoAvatar({required double size}) {
+    final conversation = widget.conversation;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: conversation.type == 'support'
+            ? _accentBlue.withValues(alpha: 0.09)
+            : const Color(0xFFF1F5F9),
+        border: Border.all(
+          color: conversation.isWhatsApp
+              ? const Color(0xFF14B8A6).withValues(alpha: 0.42)
+              : Colors.white,
+          width: 1.5,
+        ),
+      ),
+      child: Icon(
+        conversation.isWhatsApp
+            ? Icons.phone_in_talk_outlined
+            : conversation.isWebsitePortal
+                ? Icons.language_outlined
+                : Icons.groups_outlined,
+        color: conversation.type == 'support'
+            ? _accentBlue
+            : const Color(0xFF64748B),
+        size: size * 0.42,
+      ),
+    );
+  }
+
+  Widget _buildChatInfoOverview({
+    required ThemeData theme,
+    required String title,
+    required String subtitle,
+    required List<Message> messages,
+    required List<_ChatAttachment> attachments,
+  }) {
+    final inboundCount = messages.where((message) => !message.isMe).length;
+    final outboundCount = messages.where((message) => message.isMe).length;
+    final lastMessageAt = messages.isEmpty ? null : messages.last.createdAt;
+
+    return _buildChatInfoContentShell(
+      theme: theme,
+      title: 'Info',
+      subtitle: title,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _buildChatMetric(
+              theme,
+              icon: Icons.forum_outlined,
+              label: 'Mensajes',
+              value: '${messages.length}',
+            ),
+            _buildChatMetric(
+              theme,
+              icon: Icons.call_received_outlined,
+              label: 'Entrantes',
+              value: '$inboundCount',
+            ),
+            _buildChatMetric(
+              theme,
+              icon: Icons.call_made_outlined,
+              label: 'Salientes',
+              value: '$outboundCount',
+            ),
+            _buildChatMetric(
+              theme,
+              icon: Icons.attach_file,
+              label: 'Archivos',
+              value: '${attachments.length}',
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _buildPanelBlock(
+          theme: theme,
+          children: [
+            _buildInfoRowTile(
+              icon: Icons.badge_outlined,
+              title: 'Nombre',
+              value: title,
+            ),
+            _buildInfoRowTile(
+              icon: Icons.route_outlined,
+              title: 'Canal',
+              value: widget.conversation.channelLabel,
+            ),
+            _buildInfoRowTile(
+              icon: Icons.flag_outlined,
+              title: 'Estado',
+              value: _statusLabel(widget.conversation.status),
+            ),
+            _buildInfoRowTile(
+              icon: _contextIcon(widget.conversation.contextType),
+              title: 'Contexto',
+              value: _contextLabel(widget.conversation.contextType) ??
+                  'Sin contexto',
+            ),
+            _buildInfoRowTile(
+              icon: Icons.schedule_outlined,
+              title: 'Último mensaje',
+              value: lastMessageAt == null
+                  ? 'Sin mensajes'
+                  : _formatPanelDate(lastMessageAt),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _buildInfoActionButton(
+              icon: Icons.attach_file,
+              label: 'Adjuntar',
+              onPressed: () => _pickAndSendFile('file'),
+            ),
+            _buildInfoActionButton(
+              icon: Icons.link,
+              label: 'Vincular',
+              onPressed: () => _showAssignContextDialog(context),
+            ),
+            if (_canStartWhatsAppFromConversation)
+              _buildInfoActionButton(
+                icon: Icons.phone_in_talk_outlined,
+                label: 'WhatsApp',
+                onPressed: () => _openWhatsAppConversationForCurrentContext(
+                  context,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFF64748B),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatMediaSection({
+    required ThemeData theme,
+    required List<_ChatAttachment> attachments,
+  }) {
+    final media = attachments.where((item) => item.isImage).toList();
+    final files = attachments.where((item) => !item.isImage).toList();
+
+    return _buildChatInfoContentShell(
+      theme: theme,
+      title: 'Multimedia y documentos',
+      subtitle: '${attachments.length} elementos guardados en el chat',
+      trailing: FilledButton.icon(
+        onPressed: () => _pickAndSendFile('file'),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('Agregar'),
+      ),
+      children: [
+        if (attachments.isEmpty)
+          _buildPanelEmptyState(
+            theme,
+            icon: Icons.perm_media_outlined,
+            title: 'Sin archivos todavía',
+            message: 'Las imágenes y documentos enviados aparecerán aquí.',
+          )
+        else ...[
+          if (media.isNotEmpty) ...[
+            _buildPanelSectionTitle(theme, 'Multimedia'),
+            const SizedBox(height: 10),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 150,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 1,
+              ),
+              itemCount: media.length,
+              itemBuilder: (context, index) => _buildMediaTile(media[index]),
+            ),
+            const SizedBox(height: 20),
+          ],
+          if (files.isNotEmpty) ...[
+            _buildPanelSectionTitle(theme, 'Documentos'),
+            const SizedBox(height: 10),
+            _buildPanelBlock(
+              theme: theme,
+              children: [
+                for (final file in files) _buildFileTile(theme, file),
+              ],
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChatWorkflowSection(ThemeData theme) {
+    final hasSupportedContextPanel =
+        widget.conversation.hasSupportedContextPanel;
+    final canResolve = widget.conversation.type == 'support' &&
+        widget.conversation.status == 'active';
+
+    return _buildChatInfoContentShell(
+      theme: theme,
+      title: 'Gestión',
+      subtitle: 'Estado, vínculo ERP y acciones operativas',
+      children: [
+        _buildPanelBlock(
+          theme: theme,
+          children: [
+            _buildManagementActionTile(
+              icon: Icons.link,
+              color: _accentBlue,
+              title: widget.conversation.hasLinkedContext
+                  ? 'Cambiar contexto'
+                  : 'Vincular contexto',
+              subtitle: _contextLabel(widget.conversation.contextType) ??
+                  'Conecta este chat con cliente, pega, factura o pedido',
+              onTap: () => _showAssignContextDialog(context),
+            ),
+            if (hasSupportedContextPanel && widget.onShowContextPanel != null)
+              _buildManagementActionTile(
+                icon: _contextIcon(widget.conversation.contextType),
+                color: const Color(0xFF2563EB),
+                title: 'Abrir detalles vinculados',
+                subtitle: 'Revisa el panel operativo del contexto actual',
+                onTap: widget.onShowContextPanel!,
+              ),
+            if (_canUseSmartActions)
+              _buildManagementActionTile(
+                icon: Icons.flash_on,
+                color: const Color(0xFFD97706),
+                title: 'Acciones rápidas',
+                subtitle: widget.conversation.isWhatsApp
+                    ? 'Aprobaciones, pagos, entregas y mensajes automáticos'
+                    : 'Mensajes automáticos y preparación de atención',
+                onTap: () => _showSmartActions(context),
+              ),
+            if (_canStartWhatsAppFromConversation)
+              _buildManagementActionTile(
+                icon: Icons.phone_in_talk_outlined,
+                color: const Color(0xFF059669),
+                title: 'Abrir WhatsApp',
+                subtitle: 'Crea o recupera el hilo WhatsApp de este cliente',
+                onTap: () => _openWhatsAppConversationForCurrentContext(
+                  context,
+                ),
+              ),
+            if (canResolve)
+              _buildManagementActionTile(
+                icon: Icons.check_circle_outline,
+                color: const Color(0xFF0F766E),
+                title: 'Marcar como resuelto',
+                subtitle: 'Cierra la conversación en la bandeja de clientes',
+                onTap: _resolveCurrentConversation,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatBackupSection({
+    required ThemeData theme,
+    required List<Message> messages,
+    required List<_ChatAttachment> attachments,
+  }) {
+    return _buildChatInfoContentShell(
+      theme: theme,
+      title: 'Respaldo',
+      subtitle: 'Exportación auditada de esta conversación',
+      children: [
+        _buildPanelBlock(
+          theme: theme,
+          children: [
+            _buildInfoRowTile(
+              icon: Icons.forum_outlined,
+              title: 'Mensajes en este chat',
+              value: '${messages.length}',
+            ),
+            _buildInfoRowTile(
+              icon: Icons.attach_file,
+              title: 'Archivos referenciados',
+              value: '${attachments.length}',
+            ),
+            _buildInfoRowTile(
+              icon: Icons.cloud_done_outlined,
+              title: 'Respaldo general',
+              value: 'Incluye chats y WhatsApp',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed:
+              _isExportingChatArchive ? null : _downloadCurrentChatArchive,
+          icon: _isExportingChatArchive
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_outlined),
+          label: Text(
+            _isExportingChatArchive
+                ? 'Preparando respaldo'
+                : 'Descargar respaldo del chat',
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'El archivo JSON conserva conversación, participantes, vínculos ERP, mensajes, metadatos externos, estados WhatsApp y referencias a archivos.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: const Color(0xFF64748B),
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatInfoContentShell({
+    required ThemeData theme,
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+    Widget? trailing,
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 920),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  trailing,
+                ],
+              ],
+            ),
+            const SizedBox(height: 18),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPanelBlock({
+    required ThemeData theme,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            if (index > 0) const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            children[index],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatMetric(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _accentBlue.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: _accentBlue, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRowTile({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF64748B)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF334155),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+    );
+  }
+
+  Widget _buildManagementActionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPanelSectionTitle(ThemeData theme, String title) {
+    return Text(
+      title.toUpperCase(),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: const Color(0xFF64748B),
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+
+  Widget _buildPanelEmptyState(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 42),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 42, color: const Color(0xFF94A3B8)),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaTile(_ChatAttachment attachment) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _showImagePreview(attachment.url),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              attachment.url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: const Color(0xFFE2E8F0),
+                child: const Icon(Icons.broken_image_outlined),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(7),
+                color: Colors.black.withValues(alpha: 0.48),
+                child: Text(
+                  _formatPanelDate(attachment.message.createdAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileTile(ThemeData theme, _ChatAttachment attachment) {
+    return InkWell(
+      onTap: () => _openAttachmentUrl(attachment.url, attachment.name),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _accentBlue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _getFileIcon(attachment.extension),
+                color: _accentBlue,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    attachment.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${attachment.extension.toUpperCase()} · ${_formatPanelDate(attachment.message.createdAt)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(Icons.open_in_new, size: 18, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_ChatAttachment> _collectChatAttachments(List<Message> messages) {
+    final attachments = <_ChatAttachment>[];
+    for (final message in messages) {
+      final attachment = _attachmentFromMessage(message);
+      if (attachment != null) attachments.add(attachment);
+    }
+    return attachments;
+  }
+
+  _ChatAttachment? _attachmentFromMessage(Message message) {
+    final url = _messageAttachmentUrl(message);
+    if (url == null) return null;
+
+    final metadata = message.metadata;
+    final contentType = metadata['contentType']?.toString() ??
+        metadata['content_type']?.toString() ??
+        '';
+    final extension = _messageAttachmentExtension(message, url, contentType);
+    final isImage = message.type == 'image' ||
+        contentType.toLowerCase().startsWith('image/') ||
+        ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
+    final hasAttachmentMetadata = [
+      'url',
+      'media_url',
+      'documentUrl',
+      'document_url',
+    ].any((key) => metadata.containsKey(key));
+
+    if (message.type != 'image' &&
+        message.type != 'file' &&
+        !hasAttachmentMetadata) {
+      return null;
+    }
+
+    return _ChatAttachment(
+      message: message,
+      url: url,
+      name: _messageAttachmentName(message, extension),
+      extension: extension,
+      isImage: isImage,
+    );
+  }
+
+  String? _messageAttachmentUrl(Message message) {
+    for (final key in ['url', 'media_url', 'documentUrl', 'document_url']) {
+      final value = message.metadata[key]?.toString().trim();
+      if (value != null && value.startsWith('http')) return value;
+    }
+
+    final content = message.content.trim();
+    if (content.startsWith('http')) return content;
+    return null;
+  }
+
+  String _messageAttachmentName(Message message, String extension) {
+    final metadata = message.metadata;
+    for (final key in ['filename', 'documentFilename', 'document_filename']) {
+      final value = metadata[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+
+    final label = message.type == 'image' ? 'Imagen' : 'Archivo';
+    final date = DateFormat('yyyyMMdd_HHmm').format(message.createdAt);
+    final suffix = extension.isEmpty ? '' : '.$extension';
+    return '${label}_$date$suffix';
+  }
+
+  String _messageAttachmentExtension(
+    Message message,
+    String url,
+    String contentType,
+  ) {
+    final metadata = message.metadata;
+    final explicit = metadata['extension']?.toString().trim().toLowerCase();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+
+    if (contentType.contains('/')) {
+      final fromType = contentType.split('/').last.split(';').first;
+      if (fromType.isNotEmpty) return fromType.toLowerCase();
+    }
+
+    final path = Uri.tryParse(url)?.path ?? url;
+    final fileName = path.split('/').last;
+    if (fileName.contains('.')) {
+      return fileName.split('.').last.toLowerCase();
+    }
+
+    return message.type == 'image' ? 'jpg' : 'file';
+  }
+
+  String _formatPanelDate(DateTime value) {
+    return DateFormat('dd/MM/yyyy HH:mm').format(value);
+  }
+
+  String _safeArchiveFilePart(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+    if (cleaned.isEmpty) return 'chat';
+    return cleaned.length > 48 ? cleaned.substring(0, 48) : cleaned;
+  }
+
+  void _showImagePreview(String url) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            InteractiveViewer(child: Image.network(url)),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                onPressed: () {
+                  Navigator.of(dialogContext).maybePop();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAttachmentUrl(String urlValue, String name) async {
+    final url = Uri.tryParse(urlValue);
+    if (url == null || !await canLaunchUrl(url)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir: $name')),
+      );
+      return;
+    }
+
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _downloadCurrentChatArchive() async {
+    if (_isExportingChatArchive) return;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final chatTitle =
+        context.read<ChatProvider>().getChatTitle(widget.conversation);
+
+    setState(() => _isExportingChatArchive = true);
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(content: Text('Preparando respaldo del chat...')),
+    );
+
+    try {
+      final snapshot = await _messagingService.getConversationArchiveSnapshot(
+        widget.conversation.id,
+      );
+      final jsonString = const JsonEncoder.withIndent('  ').convert(snapshot);
+      final fileName =
+          'chat_${_safeArchiveFilePart(chatTitle)}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json';
+
+      await downloadFile(
+        bytes: utf8.encode(jsonString),
+        fileName: fileName,
+        mimeType: 'application/json',
+      );
+
+      if (!mounted) return;
+      scaffoldMessenger.hideCurrentSnackBar();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Respaldo descargado: $fileName'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.hideCurrentSnackBar();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo descargar el respaldo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingChatArchive = false);
+    }
+  }
+
+  Future<void> _resolveCurrentConversation() async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    try {
+      await _messagingService.resolveChat(widget.conversation.id);
+      if (!mounted) return;
+      await context.read<ChatProvider>().loadConversations();
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Conversación marcada como resuelta'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar la conversación: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildUnreadMessagesMarker(int count) {
@@ -3432,29 +4948,7 @@ class _ChatWindowState extends State<ChatWindow> {
             if (msg.type == 'image') {
               contentWidget = GestureDetector(
                 onTap: () {
-                  // Show full-screen image preview
-                  showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      child: Stack(
-                        children: [
-                          InteractiveViewer(
-                            child: Image.network(msg.content),
-                          ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.white, size: 32),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+                  _showImagePreview(msg.content);
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
