@@ -11,6 +11,8 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.tools/
+reports/product_image_pipeline*/
 14: .firebase/
 
 # IntelliJ related

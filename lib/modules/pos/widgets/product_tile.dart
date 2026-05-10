@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import 'pos_product_image.dart';
 
 class ProductTile extends StatelessWidget {
   final Product product;
@@ -26,7 +26,7 @@ class ProductTile extends StatelessWidget {
     final isLowStock = requiresStock &&
         product.stockQuantity > 0 &&
         product.stockQuantity <= 5;
-    final hasNoImage = product.imageUrl == null || product.imageUrl!.isEmpty;
+    final imageUrl = _effectiveImageUrl;
 
     return Container(
       decoration: BoxDecoration(
@@ -77,7 +77,7 @@ class ProductTile extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.all(12),
                         child: _imageOrPlaceholder(
-                            theme, isService, hasNoImage, isOutOfStock),
+                            theme, imageUrl, isService, isOutOfStock),
                       ),
                       // Service badge
                       if (isService)
@@ -227,22 +227,36 @@ class ProductTile extends StatelessWidget {
     );
   }
 
+  String? get _effectiveImageUrl {
+    final raw = product.imageUrl?.trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+
+    final optimized = product.imageUrlOptimized?.trim();
+    if (optimized != null && optimized.isNotEmpty) return optimized;
+
+    return null;
+  }
+
   Widget _imageOrPlaceholder(
-      ThemeData theme, bool isService, bool hasNoImage, bool isOutOfStock) {
+      ThemeData theme, String? imageUrl, bool isService, bool isOutOfStock) {
     Widget img;
-    if (!hasNoImage) {
-      img = CachedNetworkImage(
-        imageUrl: product.imageUrl!,
-        fit: BoxFit.contain,
-        memCacheWidth: 300,
-        memCacheHeight: 300,
-        placeholder: (_, __) => Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 1.5,
-            color: theme.colorScheme.outlineVariant,
+    if (imageUrl != null) {
+      img = Center(
+        child: FractionallySizedBox(
+          widthFactor: isService ? 0.78 : 1,
+          heightFactor: isService ? 0.62 : 1,
+          child: PosProductImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
+            placeholder: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: theme.colorScheme.outlineVariant,
+              ),
+            ),
+            errorWidget: _placeholder(theme, isService),
           ),
         ),
-        errorWidget: (_, __, ___) => _placeholder(theme, isService),
       );
     } else {
       img = _placeholder(theme, isService);

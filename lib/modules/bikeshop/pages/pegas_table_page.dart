@@ -95,6 +95,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Scroll controller for synchronized horizontal scrolling
   final ScrollController _horizontalScrollController = ScrollController();
+  bool _isColumnResizing = false;
+  double? _lockedHorizontalScrollOffset;
 
   // Selected job for detail view
   MechanicJob? _selectedJob;
@@ -186,7 +188,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     _loadColumnOrder(); // Load saved column order
     _loadListPaneWidth();
     _restoreTableState(); // Restore filters, pagination, sort from service
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadData();
+    });
   }
 
   /// Restore table state from BikeshopService (persists across navigation)
@@ -742,6 +746,26 @@ class _PegasTablePageState extends State<PegasTablePage>
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedOrder = prefs.getStringList('pegas_column_order_v2');
+      final savedWidths = prefs.getStringList('pegas_column_widths_v2');
+      var appliedSavedWidths = false;
+
+      if (savedWidths != null && savedWidths.isNotEmpty) {
+        final widthsById = <String, double>{};
+        for (final entry in savedWidths) {
+          final separatorIndex = entry.lastIndexOf(':');
+          if (separatorIndex <= 0) continue;
+          final columnId = entry.substring(0, separatorIndex);
+          final width = double.tryParse(entry.substring(separatorIndex + 1));
+          if (width != null) widthsById[columnId] = width;
+        }
+
+        for (final col in _columns) {
+          final width = widthsById[col.id];
+          if (width == null || !col.resizable) continue;
+          col.width = width.clamp(col.minWidth, col.maxWidth ?? 500).toDouble();
+          appliedSavedWidths = true;
+        }
+      }
 
       if (savedOrder != null && savedOrder.isNotEmpty && mounted) {
         setState(() {
@@ -765,6 +789,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
           _columns = reorderedColumns;
         });
+      } else if (appliedSavedWidths && mounted) {
+        setState(() {});
       }
     } catch (e) {
       debugPrint('Error loading column order: $e');
@@ -778,6 +804,19 @@ class _PegasTablePageState extends State<PegasTablePage>
       await prefs.setStringList('pegas_column_order_v2', columnIds);
     } catch (e) {
       debugPrint('Error saving column order: $e');
+    }
+  }
+
+  Future<void> _saveColumnWidths() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final columnWidths = _columns
+          .where((col) => col.resizable)
+          .map((col) => '${col.id}:${col.width.toStringAsFixed(1)}')
+          .toList();
+      await prefs.setStringList('pegas_column_widths_v2', columnWidths);
+    } catch (e) {
+      debugPrint('Error saving column widths: $e');
     }
   }
 
@@ -2863,9 +2902,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         // Desktop View (Table)
         // Calculate total width of all visible columns
-        final totalColumnsWidth = _columns
-            .where((col) => col.visible)
-            .fold<double>(0, (sum, col) => sum + col.width);
+        final totalColumnsWidth =
+            _displayColumns.fold<double>(0, (sum, col) => sum + col.width);
 
         // Use the larger of constraints.maxWidth or totalColumnsWidth
         final tableWidth = totalColumnsWidth > constraints.maxWidth
@@ -2882,6 +2920,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               child: SingleChildScrollView(
                 controller: _horizontalScrollController,
                 scrollDirection: Axis.horizontal,
+                physics: _isColumnResizing
+                    ? const NeverScrollableScrollPhysics()
+                    : null,
                 child: SizedBox(
                   width: tableWidth,
                   child: Column(
@@ -3417,7 +3458,17 @@ class _PegasTablePageState extends State<PegasTablePage>
     // Always wrap content in padding container (interactive area)
     // This container is the visual representation of the column header
     Widget headerWidget = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.65),
+          ),
+        ),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: _tableCellHorizontalPadding(col),
+        vertical: 12,
+      ),
       child: content,
     );
 
@@ -3528,25 +3579,89 @@ class _PegasTablePageState extends State<PegasTablePage>
       },
     );
 
-    // Final layout container (Fixed width vs Expanded)
-    if (col.maxWidth != null && col.maxWidth == col.width) {
-      return SizedBox(
-        key: ValueKey(col.id),
-        width: col.width,
-        // No padding here - it's inside headerWidget
-        child: dropTarget,
-      );
-    } else {
-      return Expanded(
-        key: ValueKey(col.id),
-        flex: (col.width ~/ 10).clamp(1, 100),
-        child: Container(
-          constraints: BoxConstraints(minWidth: col.minWidth),
-          // No padding here - it's inside headerWidget
-          child: dropTarget,
-        ),
-      );
+    return SizedBox(
+      key: ValueKey(col.id),
+      width: col.width,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(child: dropTarget),
+          if (col.resizable)
+            Positioned(
+              top: 0,
+              right: -4,
+              bottom: 0,
+              width: 8,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (_) => _beginColumnResize(),
+                  onHorizontalDragUpdate: (details) =>
+                      _resizeColumn(col, details.delta.dx),
+                  onHorizontalDragEnd: (_) => _endColumnResize(),
+                  onHorizontalDragCancel: _endColumnResize,
+                  child: Center(
+                    child: Container(
+                      width: 2,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.0),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _beginColumnResize() {
+    _lockedHorizontalScrollOffset = _horizontalScrollController.hasClients
+        ? _horizontalScrollController.offset
+        : null;
+    if (!_isColumnResizing) {
+      setState(() => _isColumnResizing = true);
     }
+  }
+
+  void _resizeColumn(ColumnConfig col, double deltaX) {
+    final lockedOffset = _lockedHorizontalScrollOffset;
+    setState(() {
+      col.width = (col.width + deltaX)
+          .clamp(col.minWidth, col.maxWidth ?? 500)
+          .toDouble();
+    });
+    if (lockedOffset != null) {
+      _restoreHorizontalScrollOffset(lockedOffset);
+    }
+  }
+
+  void _endColumnResize() {
+    final lockedOffset = _lockedHorizontalScrollOffset;
+    _saveColumnWidths();
+    if (lockedOffset != null) {
+      _restoreHorizontalScrollOffset(lockedOffset);
+    }
+    if (_isColumnResizing || _lockedHorizontalScrollOffset != null) {
+      setState(() {
+        _isColumnResizing = false;
+        _lockedHorizontalScrollOffset = null;
+      });
+    }
+  }
+
+  void _restoreHorizontalScrollOffset(double offset) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_horizontalScrollController.hasClients) return;
+      final maxOffset = _horizontalScrollController.position.maxScrollExtent;
+      final targetOffset = offset.clamp(0.0, maxOffset).toDouble();
+      if ((_horizontalScrollController.offset - targetOffset).abs() > 0.5) {
+        _horizontalScrollController.jumpTo(targetOffset);
+      }
+    });
   }
 
   Widget _buildHeaderContent(ColumnConfig col) {
@@ -3577,29 +3692,6 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
         ),
-        if (col.resizable)
-          MouseRegion(
-            cursor: SystemMouseCursors.resizeColumn,
-            child: GestureDetector(
-              onHorizontalDragUpdate: (details) {
-                setState(() {
-                  col.width = (col.width + details.delta.dx)
-                      .clamp(col.minWidth, col.maxWidth ?? 500);
-                });
-              },
-              child: Container(
-                width: 8,
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 1,
-                    height: 20,
-                    color: Theme.of(context).dividerColor,
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -3825,25 +3917,27 @@ class _PegasTablePageState extends State<PegasTablePage>
       {MechanicJobBike? jobBike}) {
     final content = _getCellContent(col.id, job, customer, bike, jobBikes,
         jobBike: jobBike);
+    final horizontalPadding = _tableCellHorizontalPadding(col);
 
-    if (col.maxWidth != null && col.maxWidth == col.width) {
-      // Fixed width column
-      return Container(
-        width: col.width,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: content,
-      );
-    } else {
-      // Flexible column
-      return Expanded(
-        flex: (col.width ~/ 10).clamp(1, 100), // Use width as flex ratio
-        child: Container(
-          constraints: BoxConstraints(minWidth: col.minWidth),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: content,
+    return SizedBox(
+      width: col.width,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: 8,
         ),
-      );
-    }
+        child: content,
+      ),
+    );
+  }
+
+  double _tableCellHorizontalPadding(ColumnConfig col) {
+    return switch (col.id) {
+      'checkbox' || 'status' || 'attachments' => 4,
+      'actions' => 4,
+      'state' || 'kpi' || 'priority' || 'invoice' || 'total' => 8,
+      _ => 16,
+    };
   }
 
   Widget _getCellContent(String columnId, MechanicJob job, Customer? customer,
@@ -4377,42 +4471,56 @@ class _PegasTablePageState extends State<PegasTablePage>
           final statusColor =
               bikeStatus != null ? bikeStatus.colorValue : job.colorValue;
           final statusName = bikeStatus?.name ?? job.statusDisplayName;
-          return InkWell(
-            onTap: () => _showBikeStatusMenu(job, jobBike),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: statusColor.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final chipWidth = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : double.infinity;
+
+              return InkWell(
+                onTap: () => _showBikeStatusMenu(job, jobBike),
+                child: SizedBox(
+                  width: chipWidth,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     decoration: BoxDecoration(
-                      color: statusColor,
-                      shape: BoxShape.circle,
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            statusName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    statusName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         }
 
@@ -4420,58 +4528,74 @@ class _PegasTablePageState extends State<PegasTablePage>
         final statusColor = job.colorValue;
         final statusName = job.statusDisplayName;
         final statusUpdatedAt = job.statusUpdatedAt;
-        return InkWell(
-          onTap: () => _showStatusMenu(job),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: statusColor.withValues(alpha: 0.3),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      statusName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-                if (statusUpdatedAt != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _formatStatusTimestamp(statusUpdatedAt),
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: statusColor.withValues(alpha: 0.7),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final chipWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : double.infinity;
+
+            return InkWell(
+              onTap: () => _showStatusMenu(job),
+              child: SizedBox(
+                width: chipWidth,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.3),
+                      width: 1,
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              statusName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: statusColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (statusUpdatedAt != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatStatusTimestamp(statusUpdatedAt),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: statusColor.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
 
       case 'priority':
@@ -4486,6 +4610,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     : Icons.arrow_downward;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          constraints: const BoxConstraints(maxWidth: 96),
           decoration: BoxDecoration(
             color: priorityColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(6),
@@ -4495,16 +4620,19 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(priorityIcon, size: 14, color: priorityColor),
               const SizedBox(width: 4),
-              Text(
-                job.priority.displayName,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: priorityColor,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  job.priority.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: priorityColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

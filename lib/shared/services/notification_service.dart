@@ -43,6 +43,7 @@ class NotificationService {
   String? get fcmToken => _fcmToken;
 
   bool _isInitialized = false;
+  RealtimeChannel? _desktopMessagesChannel;
 
   // Cache for messaging style notifications to support grouping
   // Key: conversation_id (or sender_id if 1:1)
@@ -319,6 +320,14 @@ class NotificationService {
         debugPrint('👤 [NotificationService] User logged in, saving token...');
         _saveTokenToDatabase(_fcmToken!);
       }
+
+      if (_usesDesktopRealtimeNotifications) {
+        if (data.session != null) {
+          _setupDesktopMessageRealtime();
+        } else if (data.event == AuthChangeEvent.signedOut) {
+          unawaited(_teardownDesktopMessageRealtime());
+        }
+      }
     });
 
     if (kIsWeb ||
@@ -536,8 +545,26 @@ class NotificationService {
         );
 
     // 2. Listen to Realtime Messages
+    if (_supabase.auth.currentUser == null) {
+      debugPrint(
+          '🔔 Desktop message notifications waiting for authenticated session');
+      return;
+    }
+
+    _setupDesktopMessageRealtime();
+  }
+
+  bool get _usesDesktopRealtimeNotifications {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS;
+  }
+
+  void _setupDesktopMessageRealtime() {
+    if (_desktopMessagesChannel != null) return;
+
     debugPrint('🔔 Setting up Realtime subscription for public:messages...');
-    _supabase
+    _desktopMessagesChannel = _supabase
         .channel('public:messages')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -571,7 +598,19 @@ class NotificationService {
             }
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        debugPrint('❌ Desktop message notification realtime error: $error');
+      }
+    });
+  }
+
+  Future<void> _teardownDesktopMessageRealtime() async {
+    final channel = _desktopMessagesChannel;
+    _desktopMessagesChannel = null;
+    if (channel != null) {
+      await channel.unsubscribe();
+    }
   }
 
   /// Handles an incoming FCM message and decides how to show it

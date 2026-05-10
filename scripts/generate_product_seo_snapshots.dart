@@ -126,9 +126,17 @@ void main(List<String> args) async {
       productCategory: productCategory,
       storeName: storeName,
     );
-    final productDescription = _cleanText(productDescriptionRaw).isNotEmpty
+    final baseProductDescription = _cleanText(productDescriptionRaw).isNotEmpty
         ? _cleanText(productDescriptionRaw)
         : fallbackDescription;
+    final productSearchPhrase = _productLocalSearchPhrase(
+      productName: productName,
+      productCategory: productCategory,
+    );
+    final productDescription = _appendProductSearchPhrase(
+      description: baseProductDescription,
+      searchPhrase: productSearchPhrase,
+    );
 
     final priceNum = _toNum(product['price']);
     final currency = (product['price_currency'] ?? 'CLP').toString();
@@ -153,8 +161,13 @@ void main(List<String> args) async {
       'product_description': productDescription,
     };
 
-    final title =
+    final baseTitle =
         _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
+    final title = _buildProductSeoTitle(
+      baseTitle: baseTitle.isNotEmpty ? baseTitle : productName,
+      storeName: storeName,
+      searchPhrase: productSearchPhrase,
+    );
     final description = _truncate(
         _cleanText(_applyTemplate(descriptionTemplate, variables)), 320);
 
@@ -180,6 +193,20 @@ void main(List<String> args) async {
         productBrand: productBrand,
         productSku: productSku,
       ),
+      fallbackHtml: _buildProductFallbackHtml(
+        title: title.isNotEmpty ? title : productName,
+        description: description.isNotEmpty
+            ? description
+            : _truncate(productDescription, 320),
+        canonicalUrl: productUrl,
+        imageUrl: imageUrl,
+        productBrand: productBrand,
+        productCategory: productCategory,
+        productSku: productSku,
+        priceNum: priceNum,
+        currency: currency,
+        inStock: inStock,
+      ),
       isProduct: true,
     );
 
@@ -198,9 +225,14 @@ void main(List<String> args) async {
   for (final category in categories) {
     final categoryUrl =
         _joinUrl(storeUrl, '/productos/categoria/${category.slug}');
-    final title = '${category.name} para bicicletas | $storeName';
-    final description =
-        'Compra ${category.name} para bicicletas en $storeName. ${category.productCount} productos disponibles online con retiro en tienda y atención especializada en Viña del Mar.';
+    final title = _buildCategorySeoTitle(
+      category: category,
+      storeName: storeName,
+    );
+    final description = _buildCategorySeoDescription(
+      category: category,
+      storeName: storeName,
+    );
     final html = _buildCategoryHtml(
       baseHtml: baseHtml,
       title: _truncate(_cleanText(title), 120),
@@ -210,6 +242,11 @@ void main(List<String> args) async {
         category: category,
         categoryUrl: categoryUrl,
         storeName: storeName,
+      ),
+      fallbackHtml: _buildCategoryFallbackHtml(
+        title: _truncate(_cleanText(title), 120),
+        description: _truncate(_cleanText(description), 320),
+        category: category,
       ),
     );
     await File(pathJoin(categoryOutDir.path, category.slug))
@@ -251,6 +288,7 @@ String _buildProductHtml({
   required String canonicalUrl,
   required String ogImageUrl,
   required String jsonLdProduct,
+  required String fallbackHtml,
   required bool isProduct,
 }) {
   var html = baseHtml;
@@ -302,6 +340,10 @@ String _buildProductHtml({
     html = html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
   }
 
+  if (fallbackHtml.isNotEmpty) {
+    html = html.replaceFirst(RegExp(r'</body>'), '$fallbackHtml\n</body>');
+  }
+
   return html;
 }
 
@@ -311,6 +353,7 @@ String _buildCategoryHtml({
   required String description,
   required String canonicalUrl,
   required String jsonLd,
+  required String fallbackHtml,
 }) {
   var html = baseHtml;
 
@@ -338,7 +381,11 @@ String _buildCategoryHtml({
       '  $jsonLd\n'
       '  </script>\n';
 
-  return html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
+  html = html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
+  if (fallbackHtml.isNotEmpty) {
+    html = html.replaceFirst(RegExp(r'</body>'), '$fallbackHtml\n</body>');
+  }
+  return html;
 }
 
 Future<int> _writeStaticTrustPages({
@@ -888,8 +935,7 @@ String _buildProductJsonLd({
   final cleanDescription = _cleanText(description);
   final category = (product['category_name'] ?? '').toString().trim();
 
-  final data = <String, dynamic>{
-    '@context': 'https://schema.org',
+  final productData = <String, dynamic>{
     '@type': 'Product',
     'name': name,
     'description': cleanDescription,
@@ -919,6 +965,25 @@ String _buildProductJsonLd({
         'name': storeName,
       },
     },
+  };
+
+  final graph = <Map<String, dynamic>>[
+    productData,
+    _buildBreadcrumbListJsonLd(
+      storeUrl: storeUrl,
+      items: [
+        ('Inicio', '/'),
+        ('Productos', '/productos'),
+        if (category.isNotEmpty)
+          (category, '/productos/categoria/${_slugify(category)}'),
+        (name, productUrl),
+      ],
+    ),
+  ];
+
+  final data = <String, dynamic>{
+    '@context': 'https://schema.org',
+    '@graph': graph,
   };
 
   return jsonEncode(data);
@@ -978,6 +1043,14 @@ String _buildCategoryJsonLd({
         'description':
             'Productos de ${category.name} disponibles en $storeName.',
       },
+      _buildBreadcrumbListJsonLd(
+        storeUrl: categoryUrl,
+        items: [
+          ('Inicio', '/'),
+          ('Productos', '/productos'),
+          (category.name, categoryUrl),
+        ],
+      ),
       {
         '@type': 'ItemList',
         'name': '${category.name} en $storeName',
@@ -995,6 +1068,36 @@ String _buildCategoryJsonLd({
     ],
   };
   return jsonEncode(data);
+}
+
+Map<String, dynamic> _buildBreadcrumbListJsonLd({
+  required String storeUrl,
+  required List<(String, String)> items,
+}) {
+  final baseUrl = storeUrl.startsWith('http')
+      ? _urlOrigin(storeUrl)
+      : 'https://vinabike.cl';
+
+  return {
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      for (var i = 0; i < items.length; i++)
+        {
+          '@type': 'ListItem',
+          'position': i + 1,
+          'name': _cleanText(items[i].$1),
+          'item': items[i].$2.startsWith('http')
+              ? items[i].$2
+              : _joinUrl(baseUrl, items[i].$2),
+        },
+    ],
+  };
+}
+
+String _urlOrigin(String url) {
+  final uri = Uri.parse(url);
+  final port = uri.hasPort ? ':${uri.port}' : '';
+  return '${uri.scheme}://${uri.host}$port';
 }
 
 // -----------------------------------------------------------------------------
@@ -1182,7 +1285,12 @@ String _applyTemplate(String template, Map<String, String> variables) {
 String _truncate(String text, int maxLen) {
   final t = text.trim();
   if (t.length <= maxLen) return t;
-  return t.substring(0, maxLen).trim();
+  final cut = t.substring(0, maxLen).trim();
+  final lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > (maxLen * 0.75).floor()) {
+    return cut.substring(0, lastSpace).trim();
+  }
+  return cut;
 }
 
 String _firstNonEmpty(dynamic first, dynamic second) {
@@ -1231,6 +1339,294 @@ String _fallbackProductDescription({
     'Retiro en tienda y atención especializada para bicicletas en Viña del Mar.',
   ];
   return _cleanText(parts.join(' '));
+}
+
+String _productLocalSearchPhrase({
+  required String productName,
+  required String productCategory,
+}) {
+  final haystack = _normalizeSearchText('$productName $productCategory');
+  final kind = _productSearchKind(haystack, productCategory);
+  if (kind.isEmpty) return '';
+
+  final wheelSize = _extractWheelSize('$productName $productCategory');
+  if (wheelSize.isNotEmpty) {
+    return '$kind aro $wheelSize para bicicleta en Viña del Mar';
+  }
+  return '$kind para bicicleta en Viña del Mar';
+}
+
+String _productSearchKind(String normalizedHaystack, String productCategory) {
+  if (normalizedHaystack.contains('camara')) return 'cámara';
+  if (normalizedHaystack.contains('neumatico') ||
+      normalizedHaystack.contains('cubierta')) {
+    return 'neumático';
+  }
+  if (normalizedHaystack.contains('cadena')) return 'cadena';
+  if (normalizedHaystack.contains('cable')) return 'cable';
+  if (normalizedHaystack.contains('pastilla')) return 'pastillas de freno';
+  if (normalizedHaystack.contains('freno')) return 'freno';
+  if (normalizedHaystack.contains('bolso')) return 'bolso';
+  if (normalizedHaystack.contains('luz')) return 'luz';
+
+  final category = _cleanText(productCategory).trim();
+  if (category.isEmpty) return '';
+  return category.toLowerCase();
+}
+
+String _appendProductSearchPhrase({
+  required String description,
+  required String searchPhrase,
+}) {
+  final cleanDescription = _cleanText(description);
+  if (searchPhrase.isEmpty) return cleanDescription;
+
+  final normalizedDescription = _normalizeSearchText(cleanDescription);
+  final normalizedPhrase = _normalizeSearchText(searchPhrase);
+  if (normalizedDescription.contains(normalizedPhrase)) {
+    return cleanDescription;
+  }
+
+  return _cleanText(
+    '$cleanDescription Ideal si buscas $searchPhrase, con compra online, '
+    'retiro en tienda y asesoría especializada.',
+  );
+}
+
+String _buildProductSeoTitle({
+  required String baseTitle,
+  required String storeName,
+  required String searchPhrase,
+}) {
+  final cleanStoreName = _cleanText(storeName);
+  final storeSuffix =
+      cleanStoreName.isEmpty ? 'Viña del Mar' : '$cleanStoreName Viña del Mar';
+  var root = _cleanText(baseTitle);
+
+  if (cleanStoreName.isNotEmpty) {
+    root = root.replaceFirst(
+      RegExp(r'\s*\|\s*' + RegExp.escape(cleanStoreName) + r'\s*$',
+          caseSensitive: false),
+      '',
+    );
+  }
+
+  final normalizedRoot = _normalizeSearchText(root);
+  final shortPhrase = _shortProductSearchPhrase(searchPhrase);
+  final shouldPrefix = shortPhrase.isNotEmpty &&
+      !_titleAlreadyTargetsPhrase(normalizedRoot, searchPhrase);
+  final separatorLength = shouldPrefix ? ' -  | '.length : ' | '.length;
+  final availableRootLength =
+      120 - storeSuffix.length - separatorLength - shortPhrase.length;
+  final rootLimit = availableRootLength < 24 ? 24 : availableRootLength;
+  final fittedRoot = _truncate(root, rootLimit);
+  final rawTitle = shouldPrefix
+      ? '$shortPhrase - $fittedRoot | $storeSuffix'
+      : '$fittedRoot | $storeSuffix';
+
+  return _truncate(_cleanText(rawTitle), 120);
+}
+
+bool _titleAlreadyTargetsPhrase(String normalizedTitle, String searchPhrase) {
+  final wheelSize = _extractWheelSize(searchPhrase);
+  if (wheelSize.isNotEmpty) {
+    return normalizedTitle.contains('aro ${_normalizeWheelSize(wheelSize)}');
+  }
+
+  final normalizedPhrase = _normalizeSearchText(searchPhrase)
+      .replaceAll(' para bicicleta en vina del mar', '');
+  return normalizedPhrase.isNotEmpty &&
+      normalizedTitle.contains(normalizedPhrase);
+}
+
+String _shortProductSearchPhrase(String searchPhrase) {
+  if (searchPhrase.isEmpty) return '';
+  final shortened = _cleanText(searchPhrase)
+      .replaceAll(' para bicicleta en Viña del Mar', ' Viña del Mar');
+  if (shortened.isEmpty) return '';
+  return '${shortened[0].toUpperCase()}${shortened.substring(1)}';
+}
+
+String _buildProductFallbackHtml({
+  required String title,
+  required String description,
+  required String canonicalUrl,
+  required String imageUrl,
+  required String productBrand,
+  required String productCategory,
+  required String productSku,
+  required num? priceNum,
+  required String currency,
+  required bool inStock,
+}) {
+  final details = <String>[];
+  if (productBrand.isNotEmpty) details.add('Marca: $productBrand');
+  if (productCategory.isNotEmpty) details.add('Categoría: $productCategory');
+  if (productSku.isNotEmpty) details.add('SKU: $productSku');
+  if (priceNum != null) {
+    details.add('Precio: ${priceNum.toStringAsFixed(0)} $currency');
+  }
+  details.add(
+      inStock ? 'Disponibilidad: en stock' : 'Disponibilidad: consultar stock');
+
+  final imageHtml = imageUrl.isEmpty
+      ? ''
+      : '<img src="${_escapeHtml(imageUrl)}" alt="${_escapeHtml(title)}" '
+          'loading="lazy" style="max-width:240px;height:auto;">';
+
+  return '''
+  <noscript id="seo-product-fallback">
+    <main>
+      <article>
+        <h1>${_escapeHtml(title)}</h1>
+        <p>${_escapeHtml(description)}</p>
+        $imageHtml
+        <ul>
+          ${details.map((item) => '<li>${_escapeHtml(item)}</li>').join('\n          ')}
+        </ul>
+        <p>Retiro en tienda y atención especializada para bicicletas en Viña del Mar.</p>
+        <p><a href="${_escapeHtml(canonicalUrl)}">Ver producto en Viñabike</a></p>
+        <p><a href="/productos">Ver más productos de bicicleta</a></p>
+      </article>
+    </main>
+  </noscript>''';
+}
+
+String _buildCategorySeoTitle({
+  required _ProductCategorySeo category,
+  required String storeName,
+}) {
+  final sizeSummary = _categoryWheelSizeSummary(category);
+  final cleanStoreName = _cleanText(storeName);
+  final suffix =
+      cleanStoreName.isEmpty ? 'Viña del Mar' : '$cleanStoreName Viña del Mar';
+
+  if (sizeSummary.isNotEmpty && _isWheelProductCategory(category.name)) {
+    return '${category.name} para bicicletas aro $sizeSummary | $suffix';
+  }
+  return '${category.name} para bicicletas | $suffix';
+}
+
+String _buildCategorySeoDescription({
+  required _ProductCategorySeo category,
+  required String storeName,
+}) {
+  final sizeSummary = _categoryWheelSizeSummary(category);
+  final sizeText =
+      sizeSummary.isNotEmpty && _isWheelProductCategory(category.name)
+          ? ' aro $sizeSummary'
+          : '';
+  return _cleanText(
+    'Compra ${category.name} para bicicletas$sizeText en $storeName. '
+    '${category.productCount} productos disponibles online con retiro en tienda '
+    'y atención especializada en Viña del Mar.',
+  );
+}
+
+String _buildCategoryFallbackHtml({
+  required String title,
+  required String description,
+  required _ProductCategorySeo category,
+}) {
+  final items = category.products.take(24).map((product) {
+    return '<li><a href="${_escapeHtml(product.url)}">'
+        '${_escapeHtml(product.name)}</a></li>';
+  }).join('\n          ');
+
+  return '''
+  <noscript id="seo-category-fallback">
+    <main>
+      <h1>${_escapeHtml(title)}</h1>
+      <p>${_escapeHtml(description)}</p>
+      <ul>
+          $items
+      </ul>
+      <p><a href="/productos">Ver catálogo completo de Viñabike</a></p>
+    </main>
+  </noscript>''';
+}
+
+String _categoryWheelSizeSummary(_ProductCategorySeo category) {
+  final sizes = <String>{};
+  for (final product in category.products) {
+    final size = _extractWheelSize(product.name);
+    if (size.isNotEmpty) sizes.add(size);
+  }
+
+  final ordered = sizes.toList()
+    ..sort((a, b) => _wheelSizeOrder(a).compareTo(_wheelSizeOrder(b)));
+  if (ordered.isEmpty) return '';
+
+  final selected = ordered.take(5).toList(growable: false);
+  if (selected.length == 1) return selected.first;
+  if (selected.length == 2) return '${selected.first} y ${selected.last}';
+  return '${selected.take(selected.length - 1).join(', ')} y ${selected.last}';
+}
+
+bool _isWheelProductCategory(String categoryName) {
+  final normalized = _normalizeSearchText(categoryName);
+  return normalized.contains('camara') ||
+      normalized.contains('neumatico') ||
+      normalized.contains('cubierta') ||
+      normalized.contains('llanta') ||
+      normalized.contains('aro');
+}
+
+int _wheelSizeOrder(String size) {
+  const order = {
+    '12': 12,
+    '14': 14,
+    '16': 16,
+    '18': 18,
+    '20': 20,
+    '24': 24,
+    '26': 26,
+    '27.5': 275,
+    '28': 280,
+    '29': 290,
+    '700c': 700,
+  };
+  return order[_normalizeWheelSize(size)] ?? 999;
+}
+
+String _extractWheelSize(String text) {
+  final normalized = _normalizeSearchText(text);
+  final patterns = <RegExp>[
+    RegExp(r'\baro\s*(700c?|29|28|27[.,]?5|26|24|20|18|16|14|12)\b'),
+    RegExp(r'\b(700c?|29|28|27[.,]?5|26|24|20|18|16|14|12)\s*(?:x|×)\b'),
+  ];
+
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(normalized);
+    if (match == null) continue;
+    return _normalizeWheelSize(match.group(1) ?? '');
+  }
+  return '';
+}
+
+String _normalizeWheelSize(String size) {
+  final normalized = size.toLowerCase().replaceAll(',', '.').trim();
+  if (normalized == '700') return '700c';
+  if (normalized == '27.5') return '27.5';
+  return normalized.replaceAll(RegExp(r'[^0-9a-z.]'), '');
+}
+
+String _normalizeSearchText(String text) {
+  var normalized = text.toLowerCase();
+  const replacements = {
+    'á': 'a',
+    'é': 'e',
+    'í': 'i',
+    'ó': 'o',
+    'ú': 'u',
+    'ü': 'u',
+    'ñ': 'n',
+  };
+  replacements
+      .forEach((from, to) => normalized = normalized.replaceAll(from, to));
+  normalized = normalized.replaceAll('×', 'x');
+  normalized = normalized.replaceAll(RegExp(r'\s+'), ' ');
+  return normalized.trim();
 }
 
 List<_ProductCategorySeo> _buildProductCategories({
@@ -1309,6 +1705,17 @@ Future<void> _writeCrawlerFiles({
 }) async {
   final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
   final now = DateTime.now().toUtc();
+  const generatedStaticRoutes = <String>{
+    '/',
+    '/productos',
+    '/servicios',
+    '/contacto',
+    '/nosotros',
+    '/terminos',
+    '/privacidad',
+    '/devoluciones',
+    '/envios',
+  };
   final urls = <String, _SitemapUrl>{};
 
   void addUrl(
@@ -1343,6 +1750,7 @@ Future<void> _writeCrawlerFiles({
   for (final page in pages) {
     final route = _routeForWebsitePage(page);
     if (route == null) continue;
+    if (generatedStaticRoutes.contains(route)) continue;
     addUrl(
       route,
       lastmod: _parseDateTime(page['updated_at']),
@@ -1357,8 +1765,7 @@ Future<void> _writeCrawlerFiles({
     final productName = _cleanText((product['name'] ?? '').toString());
     addUrl(
       '/productos/$id',
-      lastmod: _parseDateTime(product['updated_at']) ??
-          _parseDateTime(product['created_at']),
+      lastmod: now,
       changefreq: 'weekly',
       priority: '0.8',
       images: _productImageUrls(product)
