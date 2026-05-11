@@ -4,6 +4,8 @@ import 'dart:io';
 const String _documentedServiceRoleKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo';
 
+const num _structuredDataMaxShippingRateClp = 30000;
+
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
 /// Why: Firebase Hosting is configured as an SPA (rewrite ** -> /index.html).
@@ -114,12 +116,14 @@ void main(List<String> args) async {
     final id = (product['id'] ?? '').toString();
     if (id.isEmpty) continue;
 
-    final productName = _cleanText((product['name'] ?? '').toString());
+    final productName =
+        _cleanText(_firstNonEmpty(product['website_name'], product['name']));
     final productSku = (product['sku'] ?? '').toString().trim();
     final productBrand = (product['brand'] ?? '').toString().trim();
     final productCategory = (product['category_name'] ?? '').toString().trim();
     final productDescriptionRaw =
         _firstNonEmpty(product['website_description'], product['description']);
+    final productSearchTerms = _stringList(product['website_search_terms']);
     final fallbackDescription = _fallbackProductDescription(
       productName: productName,
       productBrand: productBrand,
@@ -132,13 +136,15 @@ void main(List<String> args) async {
     final productSearchPhrase = _productLocalSearchPhrase(
       productName: productName,
       productCategory: productCategory,
+      searchTerms: productSearchTerms,
     );
     final productDescription = _appendProductSearchPhrase(
       description: baseProductDescription,
       searchPhrase: productSearchPhrase,
     );
 
-    final priceNum = _toNum(product['price']);
+    final priceNum =
+        _toNum(product['website_price']) ?? _toNum(product['price']);
     final currency = (product['price_currency'] ?? 'CLP').toString();
 
     final stockQty = _toInt(product['stock_quantity']) ??
@@ -161,15 +167,25 @@ void main(List<String> args) async {
       'product_description': productDescription,
     };
 
+    final seoTitleOverride =
+        _cleanText((product['website_seo_title'] ?? '').toString());
     final baseTitle =
         _truncate(_cleanText(_applyTemplate(titleTemplate, variables)), 120);
-    final title = _buildProductSeoTitle(
-      baseTitle: baseTitle.isNotEmpty ? baseTitle : productName,
-      storeName: storeName,
-      searchPhrase: productSearchPhrase,
-    );
+    final title = seoTitleOverride.isNotEmpty
+        ? _truncate(seoTitleOverride, 120)
+        : _buildProductSeoTitle(
+            baseTitle: baseTitle.isNotEmpty ? baseTitle : productName,
+            storeName: storeName,
+            searchPhrase: productSearchPhrase,
+          );
+    final seoDescriptionOverride =
+        _cleanText((product['website_seo_description'] ?? '').toString());
     final description = _truncate(
-        _cleanText(_applyTemplate(descriptionTemplate, variables)), 320);
+      seoDescriptionOverride.isNotEmpty
+          ? seoDescriptionOverride
+          : _cleanText(_applyTemplate(descriptionTemplate, variables)),
+      320,
+    );
 
     final html = _buildProductHtml(
       baseHtml: baseHtml,
@@ -930,10 +946,13 @@ String _buildProductJsonLd({
   required String productBrand,
   required String productSku,
 }) {
-  final name = _cleanText((product['name'] ?? '').toString());
+  final name =
+      _cleanText(_firstNonEmpty(product['website_name'], product['name']));
   final gtin = (product['gtin'] ?? product['barcode'] ?? '').toString().trim();
   final cleanDescription = _cleanText(description);
   final category = (product['category_name'] ?? '').toString().trim();
+  final structuredBrandName =
+      productBrand.isNotEmpty ? productBrand : (gtin.isEmpty ? 'Genérico' : '');
 
   final productData = <String, dynamic>{
     '@type': 'Product',
@@ -942,11 +961,12 @@ String _buildProductJsonLd({
     'url': productUrl,
     if (imageUrls.isNotEmpty) 'image': imageUrls,
     if (productSku.isNotEmpty) 'sku': productSku,
+    if (gtin.isEmpty && productSku.isNotEmpty) 'mpn': productSku,
     if (category.isNotEmpty) 'category': category,
-    if (productBrand.isNotEmpty)
+    if (structuredBrandName.isNotEmpty)
       'brand': {
         '@type': 'Brand',
-        'name': productBrand,
+        'name': structuredBrandName,
       },
     if (gtin.isNotEmpty) 'gtin': gtin,
     'offers': {
@@ -958,7 +978,7 @@ String _buildProductJsonLd({
           ? 'https://schema.org/InStock'
           : 'https://schema.org/OutOfStock',
       'itemCondition': 'https://schema.org/NewCondition',
-      'shippingDetails': _buildShippingDetailsJsonLd(),
+      'shippingDetails': _buildShippingDetailsJsonLd(currency),
       'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
       'seller': {
         '@type': 'Organization',
@@ -989,9 +1009,14 @@ String _buildProductJsonLd({
   return jsonEncode(data);
 }
 
-Map<String, dynamic> _buildShippingDetailsJsonLd() {
+Map<String, dynamic> _buildShippingDetailsJsonLd(String currency) {
   return {
     '@type': 'OfferShippingDetails',
+    'shippingRate': {
+      '@type': 'MonetaryAmount',
+      'maxValue': _structuredDataMaxShippingRateClp,
+      'currency': currency,
+    },
     'shippingDestination': {
       '@type': 'DefinedRegion',
       'addressCountry': 'CL',
@@ -1155,7 +1180,7 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
       '&is_published=eq.true'
       '&show_on_website=eq.true'
       '&product_type=eq.product'
-      '&select=id,name,description,website_description,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
+      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
       '&limit=$pageSize'
       '&offset=$offset',
     );
@@ -1308,15 +1333,19 @@ List<String> _productImageUrls(Map<String, dynamic> product) {
     urls.add(url);
   }
 
-  final optimized = (product['image_url_optimized'] ?? '').toString().trim();
-  add(optimized);
+  add(_firstNonEmpty(
+    product['website_image_url_optimized'],
+    product['image_url_optimized'],
+  ));
+  add(_firstNonEmpty(product['website_image_url'], product['image_url']));
 
-  final primary = (product['image_url'] ?? '').toString().trim();
-  add(primary);
-
-  final imageUrls = product['image_urls'];
-  if (imageUrls is List) {
-    for (final image in imageUrls) {
+  final websiteImageUrls = product['website_image_urls'];
+  final baseImageUrls = product['image_urls'];
+  final gallerySource = websiteImageUrls is List && websiteImageUrls.isNotEmpty
+      ? websiteImageUrls
+      : baseImageUrls;
+  if (gallerySource is List) {
+    for (final image in gallerySource) {
       add(image);
     }
   }
@@ -1324,6 +1353,14 @@ List<String> _productImageUrls(Map<String, dynamic> product) {
   // Google supports many images per URL, but keeping this capped prevents
   // oversized sitemap entries while still exposing useful product alternates.
   return urls.take(10).toList(growable: false);
+}
+
+List<String> _stringList(dynamic value) {
+  if (value is! List) return const [];
+  return value
+      .map((entry) => _cleanText((entry ?? '').toString()))
+      .where((entry) => entry.isNotEmpty)
+      .toList(growable: false);
 }
 
 String _fallbackProductDescription({
@@ -1344,7 +1381,12 @@ String _fallbackProductDescription({
 String _productLocalSearchPhrase({
   required String productName,
   required String productCategory,
+  required List<String> searchTerms,
 }) {
+  if (searchTerms.isNotEmpty) {
+    return _cleanText(searchTerms.first);
+  }
+
   final haystack = _normalizeSearchText('$productName $productCategory');
   final kind = _productSearchKind(haystack, productCategory);
   if (kind.isEmpty) return '';
@@ -1762,7 +1804,8 @@ Future<void> _writeCrawlerFiles({
   for (final product in products) {
     final id = (product['id'] ?? '').toString().trim();
     if (id.isEmpty) continue;
-    final productName = _cleanText((product['name'] ?? '').toString());
+    final productName =
+        _cleanText(_firstNonEmpty(product['website_name'], product['name']));
     addUrl(
       '/productos/$id',
       lastmod: now,

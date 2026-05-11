@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/models/stock_adjustment_origin.dart';
@@ -243,6 +244,17 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _supplierCodeController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _websiteDescriptionController = TextEditingController();
+  final _websiteNameController = TextEditingController();
+  final _websitePriceController = TextEditingController();
+  final _websiteSeoTitleController = TextEditingController();
+  final _websiteSeoDescriptionController = TextEditingController();
+  final _websiteSearchTermsController = TextEditingController();
+  final _websiteMerchantTitleController = TextEditingController();
+  final _websiteMerchantDescriptionController = TextEditingController();
+  final _websiteMerchantBrandController = TextEditingController();
+  final _websiteMerchantGtinController = TextEditingController();
+  final _websiteMerchantMpnController = TextEditingController();
+  final _websiteGoogleProductCategoryController = TextEditingController();
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
   final _priceController = TextEditingController();
@@ -271,12 +283,23 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   String? _imageUrl;
   String? _imageUrlOptimized; // Optimized WebP version for fast web loading
+  String? _websiteImageUrl;
+  String? _websiteImageUrlOptimized;
   // --- ARCHITECTURAL FIX ---
   // Do not store XFile in state. Store only pure, platform-agnostic data.
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
+  Uint8List? _selectedWebsiteImageBytes;
+  String? _selectedWebsiteImageName;
   final List<String> _additionalImages = [];
+  final List<String> _websiteAdditionalImages = [];
+  int _websiteSubTabIndex = 0;
   bool _isUploadingGalleryImage = false;
+  bool _isUploadingWebsiteGalleryImage = false;
+  bool _isLoadingGoogleDiagnostics = false;
+  Map<String, dynamic>? _googleDiagnostics;
+  String? _googleDiagnosticsError;
+  int _googleDiagnosticsRequestId = 0;
 
   bool _isLoading = false;
   bool _isSaving = false;
@@ -393,6 +416,17 @@ class _ProductFormPageState extends State<ProductFormPage>
     _supplierCodeController.dispose();
     _descriptionController.dispose();
     _websiteDescriptionController.dispose();
+    _websiteNameController.dispose();
+    _websitePriceController.dispose();
+    _websiteSeoTitleController.dispose();
+    _websiteSeoDescriptionController.dispose();
+    _websiteSearchTermsController.dispose();
+    _websiteMerchantTitleController.dispose();
+    _websiteMerchantDescriptionController.dispose();
+    _websiteMerchantBrandController.dispose();
+    _websiteMerchantGtinController.dispose();
+    _websiteMerchantMpnController.dispose();
+    _websiteGoogleProductCategoryController.dispose();
     _brandController.dispose();
     _modelController.dispose();
     _priceController
@@ -982,6 +1016,29 @@ class _ProductFormPageState extends State<ProductFormPage>
         _supplierCodeController.text = product.supplierCode ?? '';
         _descriptionController.text = product.description ?? '';
         _websiteDescriptionController.text = product.websiteDescription ?? '';
+        _websiteNameController.text = product.websiteName ?? '';
+        _websitePriceController.text =
+            product.websitePrice?.toStringAsFixed(0) ?? '';
+        _websiteSeoTitleController.text = product.websiteSeoTitle ?? '';
+        _websiteSeoDescriptionController.text =
+            product.websiteSeoDescription ?? '';
+        _websiteSearchTermsController.text =
+            product.websiteSearchTerms.join('\n');
+        _websiteMerchantTitleController.text =
+            product.websiteMerchantTitle ?? '';
+        _websiteMerchantDescriptionController.text =
+            product.websiteMerchantDescription ?? '';
+        _websiteMerchantBrandController.text =
+            product.websiteMerchantBrand ?? '';
+        _websiteMerchantGtinController.text = product.websiteMerchantGtin ?? '';
+        _websiteMerchantMpnController.text = product.websiteMerchantMpn ?? '';
+        _websiteGoogleProductCategoryController.text =
+            product.websiteGoogleProductCategory ?? '';
+        _websiteImageUrl = product.websiteImageUrl;
+        _websiteImageUrlOptimized = product.websiteImageUrlOptimized;
+        _websiteAdditionalImages
+          ..clear()
+          ..addAll(product.websiteImageUrls);
         _brandController.text = product.brand ?? '';
         _selectedBrandId = product.brandId;
         _modelController.text = product.model ?? '';
@@ -1032,6 +1089,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           ),
         );
         _syncTabControllerForCurrentMode();
+        unawaited(_refreshGoogleDiagnostics());
       }
     } catch (e) {
       if (!mounted) return;
@@ -2285,6 +2343,86 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   void _removeGalleryImage(String url) {
     setState(() => _additionalImages.remove(url));
+  }
+
+  Future<void> _selectWebsiteMainImage() async {
+    try {
+      final result = await ImageService.pickImage();
+      if (result == null) return;
+
+      setState(() {
+        _selectedWebsiteImageBytes = result.bytes;
+        _selectedWebsiteImageName = result.name;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Imagen web seleccionada correctamente'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error seleccionando imagen web: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _clearWebsiteMainImage() {
+    setState(() {
+      _selectedWebsiteImageBytes = null;
+      _selectedWebsiteImageName = null;
+      _websiteImageUrl = null;
+      _websiteImageUrlOptimized = null;
+    });
+  }
+
+  Future<void> _addWebsiteGalleryImage() async {
+    setState(() => _isUploadingWebsiteGalleryImage = true);
+    try {
+      final result = await ImageService.pickImage();
+      if (result == null) {
+        setState(() => _isUploadingWebsiteGalleryImage = false);
+        return;
+      }
+
+      final url = await ImageService.uploadBytes(
+        bytes: result.bytes,
+        fileName: result.name,
+        bucket: StorageConfig.defaultBucket,
+        folder: StorageFolders.productGallery,
+      );
+
+      if (url == null) {
+        throw Exception('No se pudo subir la imagen. Intenta nuevamente.');
+      }
+
+      if (mounted) {
+        setState(() {
+          _websiteAdditionalImages.add(url);
+          _isUploadingWebsiteGalleryImage = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingWebsiteGalleryImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error subiendo imagen web adicional: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removeWebsiteGalleryImage(String url) {
+    setState(() => _websiteAdditionalImages.remove(url));
   }
 
   Future<void> _generateSku({bool autoTriggered = false}) async {
@@ -3682,6 +3820,18 @@ class _ProductFormPageState extends State<ProductFormPage>
     return normalized.isEmpty ? null : normalized;
   }
 
+  List<String> _parseWebsiteSearchTerms(String value) {
+    final seen = <String>{};
+    final terms = <String>[];
+    for (final raw in value.split(RegExp(r'[\n,;]+'))) {
+      final term = raw.trim();
+      if (term.isEmpty) continue;
+      final key = term.toLowerCase();
+      if (seen.add(key)) terms.add(term);
+    }
+    return terms.take(20).toList(growable: false);
+  }
+
   bool _isBrakeServiceFamily(String? family) {
     return family == 'brake' || family == 'brakes';
   }
@@ -4383,6 +4533,8 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       String? finalImageUrl = _imageUrl;
       String? finalImageUrlOptimized = _imageUrlOptimized;
+      String? finalWebsiteImageUrl = _websiteImageUrl;
+      String? finalWebsiteImageUrlOptimized = _websiteImageUrlOptimized;
 
       // --- IMAGE UPLOAD WITH AUTO-OPTIMIZATION ---
       // Use the platform-agnostic bytes and name from the state.
@@ -4395,6 +4547,17 @@ class _ProductFormPageState extends State<ProductFormPage>
         );
         finalImageUrl = uploadResult.originalUrl;
         finalImageUrlOptimized = uploadResult.optimizedUrl;
+      }
+
+      if (_selectedWebsiteImageBytes != null &&
+          _selectedWebsiteImageName != null) {
+        final uploadResult =
+            await ImageService.uploadProductImageWithOptimization(
+          bytes: _selectedWebsiteImageBytes!,
+          fileName: _selectedWebsiteImageName!,
+        );
+        finalWebsiteImageUrl = uploadResult.originalUrl;
+        finalWebsiteImageUrlOptimized = uploadResult.optimizedUrl;
       }
 
       final imageFingerprintForSave = _selectedImageBytes != null
@@ -4411,11 +4574,33 @@ class _ProductFormPageState extends State<ProductFormPage>
       // Ensure only valid strings are passed to the model.
       final safeAdditionalImages =
           _additionalImages.whereType<String>().toList(growable: false);
+      final safeWebsiteAdditionalImages =
+          _websiteAdditionalImages.whereType<String>().toList(growable: false);
 
       final name = _nameController.text.trim();
       final sku = _skuController.text.trim();
       final rawDescription = _descriptionController.text.trim();
       final rawWebsiteDescription = _websiteDescriptionController.text.trim();
+      final rawWebsiteName = _websiteNameController.text.trim();
+      final rawWebsitePrice = _websitePriceController.text.trim();
+      final websiteSeoTitle =
+          _normalizeNullableText(_websiteSeoTitleController.text);
+      final websiteSeoDescription =
+          _normalizeNullableText(_websiteSeoDescriptionController.text);
+      final websiteSearchTerms =
+          _parseWebsiteSearchTerms(_websiteSearchTermsController.text);
+      final websiteMerchantTitle =
+          _normalizeNullableText(_websiteMerchantTitleController.text);
+      final websiteMerchantDescription =
+          _normalizeNullableText(_websiteMerchantDescriptionController.text);
+      final websiteMerchantBrand =
+          _normalizeNullableText(_websiteMerchantBrandController.text);
+      final websiteMerchantGtin =
+          _normalizeNullableText(_websiteMerchantGtinController.text);
+      final websiteMerchantMpn =
+          _normalizeNullableText(_websiteMerchantMpnController.text);
+      final websiteGoogleProductCategory =
+          _normalizeNullableText(_websiteGoogleProductCategoryController.text);
       final rawBrand = _brandController.text.trim();
       final rawModel = _modelController.text.trim();
       final potentialBrand = _selectedBrand ?? _matchBrandSelection();
@@ -4447,6 +4632,9 @@ class _ProductFormPageState extends State<ProductFormPage>
           : (rawModel.isEmpty ? null : rawModel);
       final price =
           double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+      final websitePrice = rawWebsitePrice.isEmpty
+          ? null
+          : double.tryParse(rawWebsitePrice.replaceAll(',', '.'));
       final cost =
           double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
       final tracksInventory = _tracksInventoryInForm;
@@ -4503,7 +4691,22 @@ class _ProductFormPageState extends State<ProductFormPage>
             name: name,
             sku: sku,
             description: rawDescription.isEmpty ? null : rawDescription,
-            websiteDescription: rawWebsiteDescription,
+            websiteDescription:
+                rawWebsiteDescription.isEmpty ? null : rawWebsiteDescription,
+            websiteName: rawWebsiteName.isEmpty ? null : rawWebsiteName,
+            websitePrice: websitePrice,
+            websiteImageUrl: finalWebsiteImageUrl,
+            websiteImageUrlOptimized: finalWebsiteImageUrlOptimized,
+            websiteImageUrls: safeWebsiteAdditionalImages,
+            websiteSeoTitle: websiteSeoTitle,
+            websiteSeoDescription: websiteSeoDescription,
+            websiteSearchTerms: websiteSearchTerms,
+            websiteMerchantTitle: websiteMerchantTitle,
+            websiteMerchantDescription: websiteMerchantDescription,
+            websiteMerchantBrand: websiteMerchantBrand,
+            websiteMerchantGtin: websiteMerchantGtin,
+            websiteMerchantMpn: websiteMerchantMpn,
+            websiteGoogleProductCategory: websiteGoogleProductCategory,
             categoryId: categoryIdForSave,
             categoryName: selectedCategoryName,
             supplierId: supplierIdForSave,
@@ -4532,7 +4735,35 @@ class _ProductFormPageState extends State<ProductFormPage>
         name: name,
         sku: sku,
         description: rawDescription.isEmpty ? null : rawDescription,
-        websiteDescription: rawWebsiteDescription,
+        websiteDescription:
+            rawWebsiteDescription.isEmpty ? null : rawWebsiteDescription,
+        websiteDescriptionHasValue: true,
+        websiteName: rawWebsiteName.isEmpty ? null : rawWebsiteName,
+        websiteNameHasValue: true,
+        websitePrice: websitePrice,
+        websitePriceHasValue: true,
+        websiteImageUrl: finalWebsiteImageUrl,
+        websiteImageUrlHasValue: true,
+        websiteImageUrlOptimized: finalWebsiteImageUrlOptimized,
+        websiteImageUrlOptimizedHasValue: true,
+        websiteImageUrls: safeWebsiteAdditionalImages,
+        websiteSeoTitle: websiteSeoTitle,
+        websiteSeoTitleHasValue: true,
+        websiteSeoDescription: websiteSeoDescription,
+        websiteSeoDescriptionHasValue: true,
+        websiteSearchTerms: websiteSearchTerms,
+        websiteMerchantTitle: websiteMerchantTitle,
+        websiteMerchantTitleHasValue: true,
+        websiteMerchantDescription: websiteMerchantDescription,
+        websiteMerchantDescriptionHasValue: true,
+        websiteMerchantBrand: websiteMerchantBrand,
+        websiteMerchantBrandHasValue: true,
+        websiteMerchantGtin: websiteMerchantGtin,
+        websiteMerchantGtinHasValue: true,
+        websiteMerchantMpn: websiteMerchantMpn,
+        websiteMerchantMpnHasValue: true,
+        websiteGoogleProductCategory: websiteGoogleProductCategory,
+        websiteGoogleProductCategoryHasValue: true,
         categoryId: categoryIdForSave,
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: supplierIdForSave,
@@ -7324,17 +7555,59 @@ class _ProductFormPageState extends State<ProductFormPage>
   }
 
   Widget _buildWebsiteTab(ThemeData theme, {Key? key}) {
+    final section = switch (_websiteSubTabIndex) {
+      1 => (
+          icon: Icons.travel_explore_outlined,
+          title: 'SEO',
+          children: _buildWebsiteSeoFields(theme),
+        ),
+      2 => (
+          icon: Icons.shopping_bag_outlined,
+          title: 'Google Merchant',
+          children: _buildWebsiteMerchantFields(theme),
+        ),
+      _ => (
+          icon: Icons.language,
+          title: 'Tienda Online',
+          children: _buildWebsiteGeneralFields(theme),
+        ),
+    };
+
     return SingleChildScrollView(
       key: key,
-      padding: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.only(top: 24, bottom: 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(
+                value: 0,
+                icon: Icon(Icons.tune_outlined),
+                label: Text('General'),
+              ),
+              ButtonSegment(
+                value: 1,
+                icon: Icon(Icons.travel_explore_outlined),
+                label: Text('SEO'),
+              ),
+              ButtonSegment(
+                value: 2,
+                icon: Icon(Icons.shopping_bag_outlined),
+                label: Text('Google Merchant'),
+              ),
+            ],
+            selected: {_websiteSubTabIndex},
+            onSelectionChanged: (selection) {
+              setState(() => _websiteSubTabIndex = selection.first);
+            },
+          ),
+          const SizedBox(height: 16),
           _buildSectionCard(
             theme,
-            icon: Icons.language,
-            title: 'Tienda Online',
-            children: _buildWebsiteFields(theme),
+            icon: section.icon,
+            title: section.title,
+            children: section.children,
           ),
         ],
       ),
@@ -8175,7 +8448,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     ];
   }
 
-  List<Widget> _buildWebsiteFields(ThemeData theme) {
+  List<Widget> _buildWebsiteGeneralFields(ThemeData theme) {
     return [
       Text(
         _isServiceForm
@@ -8222,56 +8495,7 @@ class _ProductFormPageState extends State<ProductFormPage>
               }
             : null,
       ),
-      if (!_isServiceForm) ...[
-        const SizedBox(height: 8),
-
-        // Toggle: Google Merchant Center (requires is_published)
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Row(
-            children: [
-              Text(
-                'Google Merchant Center',
-                style: TextStyle(
-                  color:
-                      (_isActive && _isPublished) ? null : theme.disabledColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Shopping',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          subtitle: Text(
-            !_isActive
-                ? 'Requiere que el producto esté activo.'
-                : !_isPublished
-                    ? 'Requiere que el producto esté publicado en la tienda.'
-                    : 'Incluye este producto en el feed de Google Shopping.',
-            style: TextStyle(
-              color: (_isActive && _isPublished) ? null : theme.disabledColor,
-            ),
-          ),
-          value: _isActive && _isPublished && _isGoogleMerchant,
-          onChanged: (_isActive && _isPublished)
-              ? (value) => setState(() => _isGoogleMerchant = value)
-              : null,
-        ),
-        const SizedBox(height: 16),
-      ] else ...[
+      if (_isServiceForm) ...[
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
@@ -8293,6 +8517,74 @@ class _ProductFormPageState extends State<ProductFormPage>
       ],
       const Divider(),
       const SizedBox(height: 16),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 680;
+          final fields = [
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteNameController,
+                decoration: InputDecoration(
+                  labelText: _isServiceForm
+                      ? 'Nombre web del servicio'
+                      : 'Nombre web del producto',
+                  hintText: _nameController.text.trim().isEmpty
+                      ? 'Usa el nombre comercial normal'
+                      : _nameController.text.trim(),
+                  helperText: 'Vacío = usa el nombre normal.',
+                ),
+              ),
+            ),
+            SizedBox(width: 16, height: isNarrow ? 16 : 0),
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websitePriceController,
+                decoration: InputDecoration(
+                  labelText: 'Precio web',
+                  hintText: _priceController.text.trim().isEmpty
+                      ? 'Usa el precio normal'
+                      : _priceController.text.trim(),
+                  helperText: 'Vacío = usa el precio normal.',
+                  prefixText: 'CLP ',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                ],
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.isEmpty) return null;
+                  final parsed = double.tryParse(text.replaceAll(',', '.'));
+                  if (parsed == null || parsed < 0) {
+                    return 'Ingresa un precio web válido';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ];
+
+          return isNarrow
+              ? Column(
+                  children: fields
+                      .map((widget) => widget is Expanded
+                          ? SizedBox(
+                              width: double.infinity,
+                              child: widget.child,
+                            )
+                          : widget)
+                      .toList(),
+                )
+              : Row(children: fields);
+        },
+      ),
+      const SizedBox(height: 16),
+      _buildWebsiteMediaFields(theme),
+      const SizedBox(height: 16),
       TextFormField(
         controller: _websiteDescriptionController,
         decoration: InputDecoration(
@@ -8309,6 +8601,1002 @@ class _ProductFormPageState extends State<ProductFormPage>
         maxLines: 6,
       ),
     ];
+  }
+
+  String _firstNonEmptyText(List<String?> values) {
+    for (final value in values) {
+      final text = value?.trim() ?? '';
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  String get _effectiveWebsiteName => _firstNonEmptyText([
+        _websiteNameController.text,
+        _nameController.text,
+        _existingProduct?.name,
+      ]);
+
+  String get _effectiveWebsiteDescription => _firstNonEmptyText([
+        _websiteDescriptionController.text,
+        _descriptionController.text,
+        _existingProduct?.description,
+      ]);
+
+  String get _effectiveSeoTitle => _firstNonEmptyText([
+        _websiteSeoTitleController.text,
+        '${_effectiveWebsiteName.isEmpty ? 'Producto' : _effectiveWebsiteName} | Vinabike Viña del Mar',
+      ]);
+
+  String get _effectiveSeoDescription {
+    final override = _websiteSeoDescriptionController.text.trim();
+    if (override.isNotEmpty) return override;
+    final base = _effectiveWebsiteDescription;
+    if (base.isNotEmpty) return base;
+    final name = _effectiveWebsiteName;
+    return name.isEmpty
+        ? 'Producto disponible en Vinabike, tienda de bicicletas en Viña del Mar.'
+        : '$name disponible en Vinabike, tienda de bicicletas en Viña del Mar. Compra online, retiro en tienda y asesoría especializada.';
+  }
+
+  double get _effectiveWebsitePrice {
+    final websitePrice =
+        double.tryParse(_websitePriceController.text.replaceAll(',', '.'));
+    final basePrice =
+        double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+    return websitePrice ?? basePrice;
+  }
+
+  String get _effectiveMerchantTitle => _firstNonEmptyText([
+        _websiteMerchantTitleController.text,
+        _websiteNameController.text,
+        _nameController.text,
+      ]);
+
+  String get _effectiveMerchantDescription => _firstNonEmptyText([
+        _websiteMerchantDescriptionController.text,
+        _websiteDescriptionController.text,
+        _descriptionController.text,
+      ]);
+
+  String get _effectiveMerchantBrand => _firstNonEmptyText([
+        _websiteMerchantBrandController.text,
+        _brandController.text,
+        _selectedBrand?.name,
+        _existingProduct?.brand,
+        'Vinabike',
+      ]);
+
+  String get _effectiveMerchantGtin => _firstNonEmptyText([
+        _websiteMerchantGtinController.text,
+        _existingProduct?.gtin,
+        _existingProduct?.barcode,
+      ]);
+
+  String get _effectiveMerchantMpn => _firstNonEmptyText([
+        _websiteMerchantMpnController.text,
+        _skuController.text,
+        _existingProduct?.sku,
+      ]);
+
+  String? get _activeProductUrl {
+    final id = _existingProduct?.id;
+    if (id == null || id.isEmpty) return null;
+    return 'https://vinabike.cl/productos/$id';
+  }
+
+  String? get _searchConsoleInspectionUrl {
+    final productUrl = _activeProductUrl;
+    if (productUrl == null) return null;
+    return 'https://search.google.com/search-console/inspect'
+        '?resource_id=sc-domain%3Avinabike.cl'
+        '&id=${Uri.encodeComponent(productUrl)}';
+  }
+
+  String get _merchantFeedUrl =>
+      'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?domain=vinabike.cl';
+
+  String get _merchantCenterProductsUrl =>
+      'https://merchants.google.com/mc/items?a=5635601285';
+
+  String get _websitePreviewImageUrl {
+    if (_selectedWebsiteImageBytes != null) return '';
+    return _firstNonEmptyText([
+      _websiteImageUrlOptimized,
+      _websiteImageUrl,
+      _imageUrlOptimized,
+      _imageUrl,
+      _websiteAdditionalImages.isNotEmpty
+          ? _websiteAdditionalImages.first
+          : null,
+      _additionalImages.isNotEmpty ? _additionalImages.first : null,
+    ]);
+  }
+
+  Future<void> _copyWebsiteText(String value, String label) async {
+    if (value.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copiado'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  Future<void> _openWebsiteUrl(String? value) async {
+    if (value == null || value.trim().isEmpty) return;
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _connectSearchConsoleOAuth() async {
+    setState(() {
+      _isLoadingGoogleDiagnostics = true;
+      _googleDiagnosticsError = null;
+    });
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'google-oauth-callback',
+        body: {'action': 'start'},
+      );
+      final data = response.data;
+      final authUrl = data is Map ? data['authUrl']?.toString() : null;
+      final uri = authUrl == null ? null : Uri.tryParse(authUrl);
+      if (uri == null) {
+        throw Exception('Google no devolvió una URL de autorización válida.');
+      }
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _googleDiagnosticsError = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingGoogleDiagnostics = false);
+      }
+    }
+  }
+
+  Future<void> _refreshGoogleDiagnostics() async {
+    final productUrl = _activeProductUrl;
+    if (_existingProduct?.id == null || productUrl == null) return;
+    if (_isLoadingGoogleDiagnostics) return;
+    final requestId = ++_googleDiagnosticsRequestId;
+    setState(() {
+      _isLoadingGoogleDiagnostics = true;
+      _googleDiagnosticsError = null;
+    });
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'google-product-diagnostics',
+        body: {
+          'productId': _existingProduct!.id,
+          'productUrl': productUrl,
+          'offerId': _existingProduct!.id,
+        },
+      );
+      final data = response.data;
+      if (!mounted || requestId != _googleDiagnosticsRequestId) return;
+      setState(() {
+        _googleDiagnostics = data is Map
+            ? Map<String, dynamic>.from(data)
+            : <String, dynamic>{'raw': data};
+      });
+    } catch (e) {
+      if (!mounted || requestId != _googleDiagnosticsRequestId) return;
+      setState(() => _googleDiagnosticsError = e.toString());
+    } finally {
+      if (mounted && requestId == _googleDiagnosticsRequestId) {
+        setState(() => _isLoadingGoogleDiagnostics = false);
+      }
+    }
+  }
+
+  List<Widget> _buildWebsiteSeoFields(ThemeData theme) {
+    final productUrl = _activeProductUrl;
+    final title = _effectiveSeoTitle;
+    final description = _effectiveSeoDescription;
+    final hasImage = _selectedWebsiteImageBytes != null ||
+        _websitePreviewImageUrl.trim().isNotEmpty;
+
+    return [
+      Text(
+        'Controla cómo debería entender Google este producto. Los campos vacíos usan nombre, descripción e imagen normal del producto.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+      const SizedBox(height: 16),
+      _buildReadinessPanel(
+        theme,
+        title: 'Preparación SEO',
+        checks: [
+          (
+            ok: _isActive && _isPublished,
+            label: 'Publicado',
+            detail: 'El producto debe estar activo y visible en la tienda.',
+          ),
+          (
+            ok: title.length >= 20 && title.length <= 120,
+            label: 'Título útil',
+            detail: 'Ideal: nombre + intención local, sin relleno.',
+          ),
+          (
+            ok: description.length >= 80,
+            label: 'Descripción suficiente',
+            detail: 'Debe explicar producto, uso y contexto local.',
+          ),
+          (
+            ok: hasImage,
+            label: 'Imagen disponible',
+            detail: 'Google necesita una imagen rastreable.',
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _websiteSeoTitleController,
+        decoration: InputDecoration(
+          labelText: 'Título SEO',
+          hintText: title,
+          helperText: 'Vacío = título generado automáticamente.',
+        ),
+        maxLength: 120,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _websiteSeoDescriptionController,
+        decoration: InputDecoration(
+          labelText: 'Meta descripción SEO',
+          hintText: description,
+          helperText: 'Vacío = descripción web/normal con refuerzo local.',
+        ),
+        maxLines: 4,
+        maxLength: 320,
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _websiteSearchTermsController,
+        decoration: const InputDecoration(
+          labelText: 'Búsquedas objetivo',
+          hintText: 'camara aro 26 Viña del Mar\ncamara bicicleta aro 26',
+          helperText:
+              'Una por línea o separadas por coma. Sirven como guía SEO, no se muestran como spam.',
+        ),
+        maxLines: 4,
+      ),
+      const SizedBox(height: 16),
+      _buildGoogleSearchPreview(theme, title, description, productUrl),
+      const SizedBox(height: 16),
+      _buildUrlToolRow(
+        theme,
+        title: 'URL pública',
+        value: productUrl ?? 'Guarda el producto para generar su URL pública.',
+        canOpen: productUrl != null,
+      ),
+      const SizedBox(height: 10),
+      _buildUrlToolRow(
+        theme,
+        title: 'Inspección en Search Console',
+        value: _searchConsoleInspectionUrl ??
+            'Guarda el producto para abrir la inspección directa.',
+        canOpen: _searchConsoleInspectionUrl != null,
+      ),
+      const SizedBox(height: 16),
+      _buildGoogleDiagnosticsPanel(theme, showMerchant: false),
+    ];
+  }
+
+  List<Widget> _buildWebsiteMerchantFields(ThemeData theme) {
+    if (_isServiceForm) {
+      return [
+        Text(
+          'Los servicios no se envían a Google Merchant. Para servicios, usa la pestaña SEO.',
+          style: theme.textTheme.bodyMedium,
+        ),
+      ];
+    }
+
+    final hasImage = _selectedWebsiteImageBytes != null ||
+        _websitePreviewImageUrl.trim().isNotEmpty;
+    final price = _effectiveWebsitePrice;
+    final gtin = _effectiveMerchantGtin;
+
+    return [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Row(
+          children: [
+            const Text('Incluir en Google Merchant Center'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Shopping',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          !_isActive
+              ? 'Requiere que el producto esté activo.'
+              : !_isPublished
+                  ? 'Requiere que el producto esté publicado.'
+                  : 'Lo añade al feed XML que lee Google Merchant.',
+          style: TextStyle(
+            color: (_isActive && _isPublished) ? null : theme.disabledColor,
+          ),
+        ),
+        value: _isActive && _isPublished && _isGoogleMerchant,
+        onChanged: (_isActive && _isPublished)
+            ? (value) => setState(() => _isGoogleMerchant = value)
+            : null,
+      ),
+      const SizedBox(height: 16),
+      _buildReadinessPanel(
+        theme,
+        title: 'Preparación Merchant',
+        checks: [
+          (
+            ok: _isActive && _isPublished && _isGoogleMerchant,
+            label: 'En feed',
+            detail: 'Debe estar publicado y marcado para Shopping.',
+          ),
+          (
+            ok: _effectiveMerchantTitle.length >= 10,
+            label: 'Título de producto',
+            detail: 'Usa marca/modelo/tipo cuando el nombre normal sea débil.',
+          ),
+          (
+            ok: price > 0,
+            label: 'Precio válido',
+            detail: 'Google necesita un precio final en CLP.',
+          ),
+          (
+            ok: hasImage,
+            label: 'Imagen de producto',
+            detail: 'Debe ser clara y accesible públicamente.',
+          ),
+          (
+            ok: gtin.isNotEmpty || _effectiveMerchantBrand.isNotEmpty,
+            label: 'Identificador o marca',
+            detail: 'GTIN es ideal; si no existe, marca + MPN ayuda.',
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 700;
+          final fields = [
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteMerchantTitleController,
+                decoration: InputDecoration(
+                  labelText: 'Título Merchant',
+                  hintText: _effectiveMerchantTitle,
+                  helperText: 'Vacío = nombre web/normal.',
+                ),
+              ),
+            ),
+            SizedBox(width: 16, height: isNarrow ? 16 : 0),
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteMerchantBrandController,
+                decoration: InputDecoration(
+                  labelText: 'Marca Merchant',
+                  hintText: _effectiveMerchantBrand,
+                  helperText: 'Vacío = marca normal o Vinabike.',
+                ),
+              ),
+            ),
+          ];
+          return isNarrow
+              ? Column(
+                  children: fields
+                      .map((widget) => widget is Expanded
+                          ? SizedBox(
+                              width: double.infinity,
+                              child: widget.child,
+                            )
+                          : widget)
+                      .toList(),
+                )
+              : Row(children: fields);
+        },
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _websiteMerchantDescriptionController,
+        decoration: InputDecoration(
+          labelText: 'Descripción Merchant',
+          hintText: _effectiveMerchantDescription,
+          helperText:
+              'Vacío = descripción web/normal, expandida en el feed si queda corta.',
+        ),
+        maxLines: 4,
+      ),
+      const SizedBox(height: 12),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 700;
+          final fields = [
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteMerchantGtinController,
+                decoration: InputDecoration(
+                  labelText: 'GTIN / EAN',
+                  hintText: _effectiveMerchantGtin.isEmpty
+                      ? 'Opcional si no existe'
+                      : _effectiveMerchantGtin,
+                  helperText: 'Mejor identificador para Google Shopping.',
+                ),
+              ),
+            ),
+            SizedBox(width: 16, height: isNarrow ? 16 : 0),
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteMerchantMpnController,
+                decoration: InputDecoration(
+                  labelText: 'MPN',
+                  hintText: _effectiveMerchantMpn,
+                  helperText: 'Vacío = SKU.',
+                ),
+              ),
+            ),
+            SizedBox(width: 16, height: isNarrow ? 16 : 0),
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _websiteGoogleProductCategoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Google product category',
+                  hintText: '3618',
+                  helperText: 'Vacío = cycling parts/accessories.',
+                ),
+              ),
+            ),
+          ];
+          return isNarrow
+              ? Column(
+                  children: fields
+                      .map((widget) => widget is Expanded
+                          ? SizedBox(
+                              width: double.infinity,
+                              child: widget.child,
+                            )
+                          : widget)
+                      .toList(),
+                )
+              : Row(children: fields);
+        },
+      ),
+      const SizedBox(height: 16),
+      _buildMerchantPreview(theme),
+      const SizedBox(height: 16),
+      _buildUrlToolRow(
+        theme,
+        title: 'Feed XML',
+        value: _merchantFeedUrl,
+        canOpen: true,
+      ),
+      const SizedBox(height: 10),
+      _buildUrlToolRow(
+        theme,
+        title: 'Productos en Merchant Center',
+        value: _merchantCenterProductsUrl,
+        canOpen: true,
+      ),
+      const SizedBox(height: 16),
+      _buildGoogleDiagnosticsPanel(theme, showMerchant: true),
+    ];
+  }
+
+  Widget _buildReadinessPanel(
+    ThemeData theme, {
+    required String title,
+    required List<({bool ok, String label, String detail})> checks,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: checks
+                .map(
+                  (check) => Tooltip(
+                    message: check.detail,
+                    child: Chip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        check.ok
+                            ? Icons.check_circle_outline
+                            : Icons.error_outline,
+                        size: 18,
+                      ),
+                      label: Text(check.label),
+                      backgroundColor: check.ok
+                          ? Colors.green.withValues(alpha: 0.12)
+                          : theme.colorScheme.errorContainer,
+                      labelStyle: TextStyle(
+                        color: check.ok
+                            ? Colors.green.shade800
+                            : theme.colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoogleSearchPreview(
+    ThemeData theme,
+    String title,
+    String description,
+    String? productUrl,
+  ) {
+    final shownUrl = productUrl ?? 'https://vinabike.cl/productos/...';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Vista previa en Google',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: const Color(0xff1a0dab),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            shownUrl,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xff006621),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMerchantPreview(ThemeData theme) {
+    final imageUrl = _websitePreviewImageUrl;
+    final price = ChileanUtils.formatCurrency(_effectiveWebsitePrice);
+    final inStock = !_tracksInventoryInForm ||
+        (int.tryParse(_inventoryQtyController.text) ?? 0) > 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: 92,
+              height: 92,
+              child: _selectedWebsiteImageBytes != null
+                  ? Image.memory(_selectedWebsiteImageBytes!, fit: BoxFit.cover)
+                  : ImageService.buildProductImage(
+                      imageUrl: imageUrl,
+                      size: 92,
+                      isListThumbnail: false,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vista previa Merchant',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _effectiveMerchantTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$price CLP',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${inStock ? 'En stock' : 'Agotado'} · $_effectiveMerchantBrand',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUrlToolRow(
+    ThemeData theme, {
+    required String title,
+    required String value,
+    required bool canOpen,
+  }) {
+    final canCopy = value.startsWith('http');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copiar',
+            onPressed: canCopy ? () => _copyWebsiteText(value, title) : null,
+            icon: const Icon(Icons.copy_outlined),
+          ),
+          IconButton(
+            tooltip: 'Abrir',
+            onPressed: canOpen ? () => _openWebsiteUrl(value) : null,
+            icon: const Icon(Icons.open_in_new_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoogleDiagnosticsPanel(
+    ThemeData theme, {
+    required bool showMerchant,
+  }) {
+    final productUrl = _activeProductUrl;
+    final diagnostics = _googleDiagnostics;
+    final searchConsole = diagnostics?['searchConsole'] is Map
+        ? Map<String, dynamic>.from(diagnostics!['searchConsole'] as Map)
+        : null;
+    final merchant = diagnostics?['merchant'] is Map
+        ? Map<String, dynamic>.from(diagnostics!['merchant'] as Map)
+        : null;
+    final searchConsoleNeedsConnection =
+        searchConsole?['connectRequired'] == true ||
+            (searchConsole?['configured'] == false);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.api_outlined, color: theme.colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Estado en Google APIs',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (searchConsoleNeedsConnection || diagnostics == null)
+                    TextButton.icon(
+                      onPressed: _isLoadingGoogleDiagnostics
+                          ? null
+                          : _connectSearchConsoleOAuth,
+                      icon: const Icon(Icons.link_outlined),
+                      label: const Text('Conectar'),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: productUrl == null || _isLoadingGoogleDiagnostics
+                        ? null
+                        : _refreshGoogleDiagnostics,
+                    icon: _isLoadingGoogleDiagnostics
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_outlined),
+                    label: const Text('Consultar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            productUrl == null
+                ? 'Guarda el producto para consultar estados reales.'
+                : 'Search Console se conecta con tu cuenta Google autorizada. Merchant usa la cuenta técnica de Google ya configurada.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+          if (_googleDiagnosticsError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _googleDiagnosticsError!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
+          if (_isLoadingGoogleDiagnostics && diagnostics == null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Consultando estados reales en Google...',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (diagnostics != null) ...[
+            const SizedBox(height: 12),
+            _buildDiagnosticsStatusLine(
+              theme,
+              'Search Console',
+              searchConsole,
+            ),
+            if (showMerchant)
+              _buildDiagnosticsStatusLine(
+                theme,
+                'Merchant',
+                merchant,
+              ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            'Search Console requiere conectar Google una vez. Merchant requiere GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY y GOOGLE_MERCHANT_ACCOUNT_ID.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticsStatusLine(
+    ThemeData theme,
+    String label,
+    Map<String, dynamic>? data,
+  ) {
+    final configured = data?['configured'] == true;
+    final ok = data?['ok'] == true;
+    final failed = data?['ok'] == false;
+    final feedEligibility = data?['feedEligibility'] is Map
+        ? Map<String, dynamic>.from(data!['feedEligibility'] as Map)
+        : null;
+    final feedReasons = feedEligibility?['reasons'] is List
+        ? (feedEligibility!['reasons'] as List)
+            .map((reason) => reason.toString().trim())
+            .where((reason) => reason.isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
+    final status = _firstNonEmptyText([
+      _diagnosticsStatusLabel(data?['status']),
+      data?['verdict']?.toString(),
+      data?['coverageState']?.toString(),
+      data?['status']?.toString(),
+      ok
+          ? 'Conectado'
+          : failed
+              ? 'Error'
+              : configured
+                  ? 'Conectado'
+                  : 'No conectado',
+    ]);
+    final error = _firstNonEmptyText([
+      data?['error']?.toString(),
+      data?['availableSitesError']?.toString(),
+      if (feedReasons.isNotEmpty) feedReasons.join(' '),
+    ]);
+    final availableSites = data?['availableSites'] is List
+        ? (data!['availableSites'] as List)
+            .whereType<Map>()
+            .map((site) => _firstNonEmptyText([
+                  site['siteUrl']?.toString(),
+                ]))
+            .where((siteUrl) => siteUrl.isNotEmpty)
+            .take(3)
+            .toList(growable: false)
+        : const <String>[];
+    final iconColor = ok
+        ? Colors.green.shade700
+        : failed
+            ? theme.colorScheme.error
+            : theme.colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                ok
+                    ? Icons.check_circle_outline
+                    : failed
+                        ? Icons.error_outline
+                        : Icons.info_outline,
+                size: 18,
+                color: iconColor,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$label: $status',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: failed ? theme.colorScheme.error : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (error.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(
+                error,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+          if (availableSites.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(
+                'Propiedades visibles: ${availableSites.join(', ')}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String? _diagnosticsStatusLabel(dynamic status) {
+    final value = status?.toString().trim();
+    if (value == null || value.isEmpty) return null;
+    switch (value) {
+      case 'not_in_feed':
+        return 'No se envia al feed';
+      case 'not_found_or_not_ready':
+        return 'No encontrado / procesando';
+      case 'merchant_access_denied':
+        return 'Sin acceso a Merchant Center';
+      case 'approved':
+        return 'Aprobado';
+      case 'disapproved':
+        return 'Rechazado';
+      case 'pending':
+        return 'Pendiente';
+      default:
+        return null;
+    }
   }
 
   List<Widget> _buildSetConfigurationFields(ThemeData theme) {
@@ -8379,6 +9667,267 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ],
     ];
+  }
+
+  Widget _buildWebsiteMediaFields(ThemeData theme) {
+    final hasWebsiteImage = _selectedWebsiteImageBytes != null ||
+        _websiteImageUrl != null ||
+        _websiteImageUrlOptimized != null;
+    final displayImageUrl = hasWebsiteImage
+        ? (_websiteImageUrlOptimized ?? _websiteImageUrl)
+        : (_imageUrlOptimized ?? _imageUrl);
+    final galleryPreview = _websiteAdditionalImages.isNotEmpty
+        ? _websiteAdditionalImages
+        : _additionalImages;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 720;
+          final preview = SizedBox(
+            width: isNarrow ? double.infinity : 220,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: _selectedWebsiteImageBytes != null
+                              ? Image.memory(
+                                  _selectedWebsiteImageBytes!,
+                                  fit: BoxFit.cover,
+                                )
+                              : ImageService.buildProductImage(
+                                  imageUrl: displayImageUrl,
+                                  size: double.infinity,
+                                  isListThumbnail: false,
+                                ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: hasWebsiteImage
+                                ? theme.colorScheme.primaryContainer
+                                : theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            hasWebsiteImage
+                                ? 'Imagen web'
+                                : 'Usa imagen normal',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: hasWebsiteImage
+                                  ? theme.colorScheme.onPrimaryContainer
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (hasWebsiteImage)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Material(
+                            color: theme.colorScheme.errorContainer,
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              onPressed: _clearWebsiteMainImage,
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: theme.colorScheme.error,
+                              ),
+                              tooltip: 'Usar imagen normal',
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _selectWebsiteMainImage,
+                  icon: const Icon(Icons.upload_outlined),
+                  label: Text(
+                    hasWebsiteImage
+                        ? 'Cambiar imagen web'
+                        : 'Definir imagen web',
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          final controlsContent = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.language_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Imágenes exclusivas para la tienda online',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Si no defines imágenes acá, la web usa la imagen y galería normal del producto.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Galería web',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    _websiteAdditionalImages.isEmpty
+                        ? 'Usando galería normal'
+                        : '${_websiteAdditionalImages.length} imágenes web',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (_isUploadingWebsiteGalleryImage)
+                    SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: Card(
+                        elevation: 0,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ...galleryPreview.map(
+                    (url) => Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Opacity(
+                          opacity: _websiteAdditionalImages.isEmpty ? 0.65 : 1,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              width: 68,
+                              height: 68,
+                              child: ImageService.buildProductImage(
+                                imageUrl: url,
+                                size: 68,
+                                isListThumbnail: true,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_websiteAdditionalImages.isNotEmpty)
+                          Positioned(
+                            top: -8,
+                            right: -8,
+                            child: Material(
+                              shape: const CircleBorder(),
+                              color: Colors.black.withValues(alpha: 0.6),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => _removeWebsiteGalleryImage(url),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _isUploadingWebsiteGalleryImage
+                        ? null
+                        : _addWebsiteGalleryImage,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: const Text('Agregar foto web'),
+                  ),
+                  if (_websiteAdditionalImages.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: () =>
+                          setState(() => _websiteAdditionalImages.clear()),
+                      icon: const Icon(Icons.restore_outlined),
+                      label: const Text('Usar galería normal'),
+                    ),
+                ],
+              ),
+            ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                preview,
+                const SizedBox(height: 18),
+                controlsContent,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              preview,
+              const SizedBox(width: 20),
+              Expanded(child: controlsContent),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   List<Widget> _buildMediaFields(ThemeData theme) {

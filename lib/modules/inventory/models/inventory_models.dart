@@ -7,6 +7,12 @@ class Product {
       'supplier_name,supplier_code,brand_id,brand,model,barcode,price,cost,'
       'inventory_qty,stock_quantity,min_stock_level,max_stock_level,'
       'image_url,image_url_optimized,image_fingerprint,image_urls,'
+      'website_name,website_price,website_image_url,'
+      'website_image_url_optimized,website_image_urls,'
+      'website_seo_title,website_seo_description,website_search_terms,'
+      'website_merchant_title,website_merchant_description,'
+      'website_merchant_brand,website_merchant_gtin,'
+      'website_merchant_mpn,website_google_product_category,'
       'warehouse_location,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
@@ -63,6 +69,20 @@ class Product {
   final bool isActive;
   final bool isPublished;
   final String? websiteDescription; // Defines the description for the website
+  final String? websiteName;
+  final double? websitePrice;
+  final String? websiteImageUrl;
+  final String? websiteImageUrlOptimized;
+  final List<String> websiteImageUrls;
+  final String? websiteSeoTitle;
+  final String? websiteSeoDescription;
+  final List<String> websiteSearchTerms;
+  final String? websiteMerchantTitle;
+  final String? websiteMerchantDescription;
+  final String? websiteMerchantBrand;
+  final String? websiteMerchantGtin;
+  final String? websiteMerchantMpn;
+  final String? websiteGoogleProductCategory;
   final bool isGoogleMerchant;
   final PurchaseTreatment purchaseTreatment;
   final ProductType productType;
@@ -128,6 +148,20 @@ class Product {
     this.isActive = true,
     this.isPublished = true,
     this.isGoogleMerchant = false,
+    this.websiteName,
+    this.websitePrice,
+    this.websiteImageUrl,
+    this.websiteImageUrlOptimized,
+    this.websiteImageUrls = const [],
+    this.websiteSeoTitle,
+    this.websiteSeoDescription,
+    this.websiteSearchTerms = const [],
+    this.websiteMerchantTitle,
+    this.websiteMerchantDescription,
+    this.websiteMerchantBrand,
+    this.websiteMerchantGtin,
+    this.websiteMerchantMpn,
+    this.websiteGoogleProductCategory,
     this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     this.isSet = false,
@@ -216,6 +250,26 @@ class Product {
           json['show_on_website'] ??
           json['published'] ??
           true,
+      websiteName: json['website_name'],
+      websitePrice: json['website_price'] is num
+          ? (json['website_price'] as num).toDouble()
+          : null,
+      websiteImageUrl: json['website_image_url'],
+      websiteImageUrlOptimized: json['website_image_url_optimized'],
+      websiteImageUrls: json['website_image_urls'] != null
+          ? List<String>.from(json['website_image_urls'])
+          : const [],
+      websiteSeoTitle: json['website_seo_title'],
+      websiteSeoDescription: json['website_seo_description'],
+      websiteSearchTerms: json['website_search_terms'] != null
+          ? List<String>.from(json['website_search_terms'])
+          : const [],
+      websiteMerchantTitle: json['website_merchant_title'],
+      websiteMerchantDescription: json['website_merchant_description'],
+      websiteMerchantBrand: json['website_merchant_brand'],
+      websiteMerchantGtin: json['website_merchant_gtin'],
+      websiteMerchantMpn: json['website_merchant_mpn'],
+      websiteGoogleProductCategory: json['website_google_product_category'],
       isGoogleMerchant: json['is_google_merchant'] ?? false,
       purchaseTreatment: parsePurchaseTreatment(
         json['purchase_treatment'],
@@ -303,6 +357,20 @@ class Product {
       'tax_rate': taxRate,
       'is_active': isActive,
       'is_published': isPublished,
+      'website_name': websiteName,
+      'website_price': websitePrice,
+      'website_image_url': websiteImageUrl,
+      'website_image_url_optimized': websiteImageUrlOptimized,
+      'website_image_urls': websiteImageUrls,
+      'website_seo_title': websiteSeoTitle,
+      'website_seo_description': websiteSeoDescription,
+      'website_search_terms': websiteSearchTerms,
+      'website_merchant_title': websiteMerchantTitle,
+      'website_merchant_description': websiteMerchantDescription,
+      'website_merchant_brand': websiteMerchantBrand,
+      'website_merchant_gtin': websiteMerchantGtin,
+      'website_merchant_mpn': websiteMerchantMpn,
+      'website_google_product_category': websiteGoogleProductCategory,
       'is_google_merchant': isGoogleMerchant,
       'show_on_website': isPublished,
       'purchase_treatment': purchaseTreatment.dbValue,
@@ -338,6 +406,7 @@ class Product {
     String? sku,
     String? description,
     String? websiteDescription,
+    bool websiteDescriptionHasValue = false,
     String? categoryId,
     String? categoryName,
     String? supplierId,
@@ -387,6 +456,32 @@ class Product {
     double? taxRate,
     bool? isActive,
     bool? isPublished,
+    String? websiteName,
+    bool websiteNameHasValue = false,
+    double? websitePrice,
+    bool websitePriceHasValue = false,
+    String? websiteImageUrl,
+    bool websiteImageUrlHasValue = false,
+    String? websiteImageUrlOptimized,
+    bool websiteImageUrlOptimizedHasValue = false,
+    List<String>? websiteImageUrls,
+    String? websiteSeoTitle,
+    bool websiteSeoTitleHasValue = false,
+    String? websiteSeoDescription,
+    bool websiteSeoDescriptionHasValue = false,
+    List<String>? websiteSearchTerms,
+    String? websiteMerchantTitle,
+    bool websiteMerchantTitleHasValue = false,
+    String? websiteMerchantDescription,
+    bool websiteMerchantDescriptionHasValue = false,
+    String? websiteMerchantBrand,
+    bool websiteMerchantBrandHasValue = false,
+    String? websiteMerchantGtin,
+    bool websiteMerchantGtinHasValue = false,
+    String? websiteMerchantMpn,
+    bool websiteMerchantMpnHasValue = false,
+    String? websiteGoogleProductCategory,
+    bool websiteGoogleProductCategoryHasValue = false,
     bool? isGoogleMerchant,
     PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
@@ -405,7 +500,10 @@ class Product {
       name: name ?? this.name,
       sku: sku ?? this.sku,
       description: description ?? this.description,
-      websiteDescription: websiteDescription ?? this.websiteDescription,
+      websiteDescription:
+          (websiteDescriptionHasValue || websiteDescription != null)
+              ? websiteDescription
+              : this.websiteDescription,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
       supplierId: supplierId ?? this.supplierId,
@@ -456,6 +554,52 @@ class Product {
       taxRate: taxRate ?? this.taxRate,
       isActive: isActive ?? this.isActive,
       isPublished: isPublished ?? this.isPublished,
+      websiteName: (websiteNameHasValue || websiteName != null)
+          ? websiteName
+          : this.websiteName,
+      websitePrice: (websitePriceHasValue || websitePrice != null)
+          ? websitePrice
+          : this.websitePrice,
+      websiteImageUrl: (websiteImageUrlHasValue || websiteImageUrl != null)
+          ? websiteImageUrl
+          : this.websiteImageUrl,
+      websiteImageUrlOptimized:
+          (websiteImageUrlOptimizedHasValue || websiteImageUrlOptimized != null)
+              ? websiteImageUrlOptimized
+              : this.websiteImageUrlOptimized,
+      websiteImageUrls: websiteImageUrls ?? this.websiteImageUrls,
+      websiteSeoTitle: (websiteSeoTitleHasValue || websiteSeoTitle != null)
+          ? websiteSeoTitle
+          : this.websiteSeoTitle,
+      websiteSeoDescription:
+          (websiteSeoDescriptionHasValue || websiteSeoDescription != null)
+              ? websiteSeoDescription
+              : this.websiteSeoDescription,
+      websiteSearchTerms: websiteSearchTerms ?? this.websiteSearchTerms,
+      websiteMerchantTitle:
+          (websiteMerchantTitleHasValue || websiteMerchantTitle != null)
+              ? websiteMerchantTitle
+              : this.websiteMerchantTitle,
+      websiteMerchantDescription: (websiteMerchantDescriptionHasValue ||
+              websiteMerchantDescription != null)
+          ? websiteMerchantDescription
+          : this.websiteMerchantDescription,
+      websiteMerchantBrand:
+          (websiteMerchantBrandHasValue || websiteMerchantBrand != null)
+              ? websiteMerchantBrand
+              : this.websiteMerchantBrand,
+      websiteMerchantGtin:
+          (websiteMerchantGtinHasValue || websiteMerchantGtin != null)
+              ? websiteMerchantGtin
+              : this.websiteMerchantGtin,
+      websiteMerchantMpn:
+          (websiteMerchantMpnHasValue || websiteMerchantMpn != null)
+              ? websiteMerchantMpn
+              : this.websiteMerchantMpn,
+      websiteGoogleProductCategory: (websiteGoogleProductCategoryHasValue ||
+              websiteGoogleProductCategory != null)
+          ? websiteGoogleProductCategory
+          : this.websiteGoogleProductCategory,
       isGoogleMerchant: isGoogleMerchant ?? this.isGoogleMerchant,
       purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
