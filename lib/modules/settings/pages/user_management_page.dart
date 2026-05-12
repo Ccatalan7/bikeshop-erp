@@ -335,7 +335,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         color: const Color(0xFF2563EB),
       ),
       _SummaryCardData(
-        label: 'Clientes con cuenta',
+        label: 'CRM + web',
         value: _number(_summary['linkedCustomerCount']),
         icon: Icons.public,
         color: const Color(0xFF0F766E),
@@ -347,6 +347,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         color: const Color(0xFF8B5CF6),
       ),
       _SummaryCardData(
+        label: 'Solo web sin ficha',
+        value: _number(_summary['orphanWebsiteAccountCount']),
+        icon: Icons.person_search_outlined,
+        color: const Color(0xFFB7791F),
+      ),
+      _SummaryCardData(
         label: 'Invitaciones',
         value: _number(_summary['pendingInvitationCount']),
         icon: Icons.mark_email_unread_outlined,
@@ -356,7 +362,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1000 ? 4 : 2;
+        final columns = constraints.maxWidth >= 1200 ? 5 : 2;
         const spacing = 12.0;
         final width =
             (constraints.maxWidth - (spacing * (columns - 1))) / columns;
@@ -473,7 +479,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ButtonSegment(
           value: _IdentityAudience.customers,
           icon: Icon(Icons.storefront_outlined, size: 18),
-          label: Text('Clientes web'),
+          label: Text('Clientes'),
         ),
         ButtonSegment(
           value: _IdentityAudience.invitations,
@@ -501,7 +507,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 icon: const Icon(Icons.close),
               ),
         hintText: _audience == _IdentityAudience.customers
-            ? 'Buscar cliente por nombre, email o teléfono'
+            ? 'Buscar cliente o cuenta web por nombre, email o teléfono'
             : 'Buscar email o nombre',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       ),
@@ -513,14 +519,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final theme = Theme.of(context);
     final title = switch (_audience) {
       _IdentityAudience.staff => 'Cuentas internas',
-      _IdentityAudience.customers => 'Cuentas del sitio web',
+      _IdentityAudience.customers => 'Clientes CRM y cuentas web',
       _IdentityAudience.invitations => 'Invitaciones pendientes',
     };
     final subtitle = switch (_audience) {
       _IdentityAudience.staff => 'Usuarios que pueden entrar al ERP.',
       _IdentityAudience.customers => _searchController.text.trim().isEmpty
-          ? 'Se muestran clientes que ya tienen cuenta web. Busca para encontrar clientes sin cuenta.'
-          : 'Resultados de clientes con y sin cuenta web.',
+          ? 'Se muestran clientes CRM con login web y cuentas web sin ficha CRM. Busca para incluir clientes CRM sin login.'
+          : 'Resultados de clientes CRM con login web, solo CRM y solo web sin ficha.',
       _IdentityAudience.invitations =>
         'Invitaciones de equipo todavía no aceptadas.',
     };
@@ -578,8 +584,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final isCustomer =
         item['kind'] == 'customer' || _audience == _IdentityAudience.customers;
     final isInvitation = _audience == _IdentityAudience.invitations;
+    final isWebsiteOnlyAuth = item['isWebsiteOnlyAuth'] == true;
     final accent = isCustomer
-        ? const Color(0xFF0F766E)
+        ? (isWebsiteOnlyAuth
+            ? const Color(0xFFB7791F)
+            : const Color(0xFF0F766E))
         : isInvitation
             ? const Color(0xFFB7791F)
             : const Color(0xFF2563EB);
@@ -591,7 +600,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final subtitle = isInvitation
         ? 'Rol: ${_roleLabel(item['role'])} · expira ${_formatDate(item['expires_at'])}'
         : item['email']?.toString() ?? 'Sin email';
-    final hasAuth = item['hasAuth'] != false && !isInvitation;
     final isActive = item['isActive'] != false;
 
     return Material(
@@ -626,9 +634,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 ),
                 child: Icon(
                   isCustomer
-                      ? (hasAuth
-                          ? Icons.storefront
-                          : Icons.person_add_disabled_outlined)
+                      ? _customerRelationshipIcon(item)
                       : isInvitation
                           ? Icons.mail_outline
                           : _roleIcon(item['role']?.toString()),
@@ -685,10 +691,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         if (isCustomer)
                           _miniChip(
                             context,
-                            hasAuth ? 'Cuenta web' : 'Sin cuenta',
-                            hasAuth
-                                ? const Color(0xFF0F766E)
-                                : Colors.grey.shade700,
+                            _customerRelationshipLabel(item),
+                            _customerRelationshipColor(item),
                           ),
                         if (!isCustomer && !isInvitation)
                           _miniChip(context, _roleLabel(item['role']), accent),
@@ -704,6 +708,26 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ),
       ),
     );
+  }
+
+  String _customerRelationshipLabel(Map<String, dynamic> item) {
+    if (item['isStaffAuthUser'] == true) return 'CRM + login ERP';
+    if (item['isWebsiteOnlyAuth'] == true) return 'Solo web, sin ficha CRM';
+    if (item['hasAuth'] == true) return 'CRM + cuenta web';
+    return 'Solo CRM';
+  }
+
+  Color _customerRelationshipColor(Map<String, dynamic> item) {
+    if (item['isWebsiteOnlyAuth'] == true) return const Color(0xFFB7791F);
+    if (item['hasAuth'] == true) return const Color(0xFF0F766E);
+    return Colors.grey.shade700;
+  }
+
+  IconData _customerRelationshipIcon(Map<String, dynamic> item) {
+    if (item['isWebsiteOnlyAuth'] == true) return Icons.person_search_outlined;
+    if (item['isStaffAuthUser'] == true) return Icons.badge_outlined;
+    if (item['hasAuth'] == true) return Icons.storefront;
+    return Icons.contact_page_outlined;
   }
 
   Widget _buildDetailPanel(BuildContext context) {
@@ -774,10 +798,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               OutlinedButton.icon(
                 onPressed: _isActionRunning || email.isEmpty
                     ? null
-                    : () => _runAction(
-                          'Email de recuperación enviado',
-                          () => _userService.sendPasswordReset(email),
-                        ),
+                    : () => _sendPasswordReset(email),
                 icon: const Icon(Icons.lock_reset, size: 18),
                 label: const Text('Reset contraseña'),
               ),
@@ -830,6 +851,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _customerDetail(BuildContext context, Map<String, dynamic> customer) {
     final hasAuth = customer['hasAuth'] == true;
+    final hasCustomerProfile = customer['hasCustomerProfile'] != false;
+    final isWebsiteOnlyAuth = customer['isWebsiteOnlyAuth'] == true;
+    final isSharedStaffAccount = customer['isStaffAuthUser'] == true;
     final isActive = customer['isActive'] != false;
     final email = customer['email']?.toString() ?? '';
     final customerId = customer['customerId']?.toString() ?? '';
@@ -842,20 +866,34 @@ class _UserManagementPageState extends State<UserManagementPage> {
         children: [
           _detailHeader(
             context,
-            icon: hasAuth ? Icons.storefront : Icons.person_add_alt_1,
-            color: const Color(0xFF0F766E),
+            icon: _customerRelationshipIcon(customer),
+            color: _customerRelationshipColor(customer),
             title: customer['displayName']?.toString() ?? email,
-            subtitle: hasAuth
-                ? 'Cliente con cuenta web'
-                : 'Cliente CRM sin cuenta web',
+            subtitle: isWebsiteOnlyAuth
+                ? 'Cuenta web sin ficha cliente CRM'
+                : isSharedStaffAccount
+                    ? 'Cliente CRM vinculado a un usuario interno ERP'
+                    : hasAuth
+                        ? 'Cliente CRM con cuenta web'
+                        : 'Cliente CRM sin cuenta web',
           ),
           const SizedBox(height: 18),
           _detailLine('Email', email.isEmpty ? 'Sin email' : email),
           _detailLine(
               'Teléfono', customer['phone']?.toString() ?? 'No registrado'),
+          _detailLine(
+              'Relación ERP/sitio', _customerRelationshipLabel(customer)),
+          _detailLine(
+              'Ficha cliente ERP/CRM', hasCustomerProfile ? 'Sí' : 'No'),
+          _detailLine('Cuenta sitio web', hasAuth ? 'Sí' : 'No'),
           _detailLine('Estado', isActive ? 'Activo' : 'Acceso restringido'),
-          _detailLine('Email verificado',
-              customer['emailConfirmed'] == true ? 'Sí' : 'No'),
+          _detailLine(
+              'Email verificado',
+              hasAuth
+                  ? (customer['emailConfirmed'] == true ? 'Sí' : 'No')
+                  : 'No aplica'),
+          if (isSharedStaffAccount)
+            _detailLine('Tipo de acceso', 'Login compartido con equipo ERP'),
           _detailLine('Último acceso', _formatDate(customer['lastSignInAt'])),
           const SizedBox(height: 18),
           Wrap(
@@ -863,16 +901,28 @@ class _UserManagementPageState extends State<UserManagementPage> {
             runSpacing: 10,
             children: [
               FilledButton.icon(
-                onPressed: _isActionRunning
+                onPressed: _isActionRunning || isSharedStaffAccount
                     ? null
                     : () => _showCustomerAccountDialog(customer: customer),
                 icon: Icon(
-                    hasAuth ? Icons.manage_accounts : Icons.person_add_alt_1,
+                    isWebsiteOnlyAuth
+                        ? Icons.add_link
+                        : hasAuth
+                            ? Icons.manage_accounts
+                            : Icons.person_add_alt_1,
                     size: 18),
-                label: Text(hasAuth ? 'Reparar vínculo' : 'Crear cuenta'),
+                label: Text(isWebsiteOnlyAuth
+                    ? 'Crear ficha CRM'
+                    : hasAuth
+                        ? 'Reparar vínculo'
+                        : 'Crear cuenta web'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning || !hasAuth || email.isEmpty
+                onPressed: _isActionRunning ||
+                        !hasAuth ||
+                        !hasCustomerProfile ||
+                        email.isEmpty ||
+                        isSharedStaffAccount
                     ? null
                     : () => _runAction(
                           'Verificación reenviada',
@@ -885,17 +935,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 label: const Text('Reenviar verificación'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning || email.isEmpty
-                    ? null
-                    : () => _runAction(
-                          'Email de recuperación enviado',
-                          () => _userService.sendPasswordReset(email),
-                        ),
+                onPressed:
+                    _isActionRunning || email.isEmpty || isSharedStaffAccount
+                        ? null
+                        : () => _sendPasswordReset(email),
                 icon: const Icon(Icons.lock_reset, size: 18),
                 label: const Text('Reset contraseña'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning
+                onPressed: _isActionRunning ||
+                        !hasCustomerProfile ||
+                        isSharedStaffAccount
                     ? null
                     : () => _runAction(
                           isActive ? 'Cliente restringido' : 'Cliente activado',
@@ -909,7 +959,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 label: Text(isActive ? 'Limitar acceso' : 'Restaurar acceso'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning || authUserId == null
+                onPressed: _isActionRunning ||
+                        authUserId == null ||
+                        isSharedStaffAccount
                     ? null
                     : () => _runAction(
                           'Email confirmado manualmente',
@@ -919,15 +971,21 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 label: const Text('Confirmar email'),
               ),
               OutlinedButton.icon(
-                onPressed: _isActionRunning || !hasAuth
+                onPressed: _isActionRunning || !hasAuth || authUserId == null
                     ? null
                     : () => _confirmDanger(
                           title: 'Eliminar cuenta web',
-                          message:
-                              'Esto elimina el usuario de acceso web, pero conserva el cliente CRM y su historial.',
+                          message: isWebsiteOnlyAuth
+                              ? 'Esto elimina el usuario de acceso web. No hay ficha CRM asociada a esta cuenta.'
+                              : isSharedStaffAccount
+                                  ? 'Esto solo desvincula este cliente del login interno ERP. No elimina ni restringe el usuario del equipo.'
+                                  : 'Esto elimina el usuario de acceso web, pero conserva el cliente CRM y su historial.',
                           confirmLabel: 'Eliminar cuenta web',
-                          action: () => _userService.deleteCustomerAccount(
-                              customerId: customerId),
+                          action: () => isWebsiteOnlyAuth
+                              ? _userService.deleteWebsiteAuthAccount(
+                                  authUserId: authUserId)
+                              : _userService.deleteCustomerAccount(
+                                  customerId: customerId),
                         ),
                 icon: const Icon(Icons.delete_outline, size: 18),
                 label: const Text('Eliminar cuenta'),
@@ -938,9 +996,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _noteBox(
             context,
             icon: Icons.info_outline,
-            text: hasAuth
-                ? 'Los clientes web no tienen permisos de ERP. Su acceso queda limitado al portal público, pedidos, bicicletas y soporte vinculado a su propio cliente.'
-                : 'Busca un cliente y crea su cuenta desde aquí cuando tenga problemas con el registro del sitio web.',
+            text: isSharedStaffAccount
+                ? 'Este cliente usa el mismo login que un usuario interno del ERP. Las acciones de contraseña, verificación y restricción se gestionan desde la pestaña Equipo para no bloquear accidentalmente el acceso del personal.'
+                : isWebsiteOnlyAuth
+                    ? 'Esta cuenta existe en Supabase Auth como cliente del sitio, pero no tiene ficha cliente CRM. Crea la ficha CRM para vincular historial, bicicletas, pedidos y soporte a ese login.'
+                    : hasAuth
+                        ? 'Los clientes web no tienen permisos de ERP. Su acceso queda limitado al portal público, pedidos, bicicletas y soporte vinculado a su propio cliente.'
+                        : 'Busca un cliente y crea su cuenta desde aquí cuando tenga problemas con el registro del sitio web.',
           ),
         ],
       ),
@@ -1516,6 +1578,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Future<void> _showCustomerAccountDialog(
       {Map<String, dynamic>? customer}) async {
+    final isWebsiteOnlyAuth = customer?['isWebsiteOnlyAuth'] == true;
+    final hasExistingAuth = customer?['hasAuth'] == true;
     final emailController =
         TextEditingController(text: customer?['email']?.toString() ?? '');
     final nameController =
@@ -1532,15 +1596,26 @@ class _UserManagementPageState extends State<UserManagementPage> {
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(customer == null
-                  ? 'Crear cuenta cliente web'
-                  : 'Crear o reparar cuenta web'),
+              title: Text(isWebsiteOnlyAuth
+                  ? 'Crear ficha CRM y vincular'
+                  : customer == null
+                      ? 'Crear cuenta cliente web'
+                      : 'Crear o reparar cuenta web'),
               content: SizedBox(
                 width: 560,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (isWebsiteOnlyAuth) ...[
+                        _noteBox(
+                          context,
+                          icon: Icons.link_outlined,
+                          text:
+                              'Esta cuenta web ya existe. Al guardar, se creará o reutilizará la ficha cliente CRM con este email y quedará vinculada al login del sitio.',
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       TextField(
                         controller: emailController,
                         decoration: const InputDecoration(
@@ -1570,13 +1645,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             setDialogState(() => mode = value.first),
                         segments: const [
                           ButtonSegment(
-                              value: 'invite',
-                              label: Text('Enviar invitación')),
+                              value: 'invite', label: Text('Enviar acceso')),
                           ButtonSegment(
                               value: 'temporary_password',
                               label: Text('Clave temporal')),
                         ],
                       ),
+                      if (mode == 'invite') ...[
+                        const SizedBox(height: 10),
+                        _noteBox(
+                          context,
+                          icon: hasExistingAuth
+                              ? Icons.link_outlined
+                              : Icons.outgoing_mail,
+                          text: hasExistingAuth
+                              ? 'Para cuentas existentes se genera un link directo de recuperación para copiarlo o enviarlo manualmente si el correo no llega.'
+                              : 'Para cuentas nuevas se enviará una invitación por email. Si el proveedor devuelve un link, también se mostrará para respaldo.',
+                        ),
+                      ],
                       if (mode == 'temporary_password') ...[
                         const SizedBox(height: 12),
                         TextField(
@@ -1610,26 +1696,52 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   onPressed: _isActionRunning
                       ? null
                       : () async {
+                          final pageContext = this.context;
                           Navigator.pop(dialogContext);
+                          setState(() => _isActionRunning = true);
                           Map<String, dynamic>? result;
-                          await _runAction(
-                            'Cuenta cliente actualizada',
-                            () async {
-                              result = await _userService.createCustomerAccount(
-                                customerId: customer?['customerId']?.toString(),
-                                email: emailController.text.trim(),
-                                name: nameController.text.trim(),
-                                phone: phoneController.text.trim().isEmpty
-                                    ? null
-                                    : phoneController.text.trim(),
-                                mode: mode,
-                                password: passwordController.text.trim().isEmpty
-                                    ? null
-                                    : passwordController.text.trim(),
-                                confirmEmail: confirmEmail,
-                              );
-                            },
-                          );
+                          try {
+                            final actionResult =
+                                await _userService.createCustomerAccount(
+                              customerId: customer?['customerId']?.toString(),
+                              email: emailController.text.trim(),
+                              name: nameController.text.trim(),
+                              phone: phoneController.text.trim().isEmpty
+                                  ? null
+                                  : phoneController.text.trim(),
+                              mode: mode,
+                              password: passwordController.text.trim().isEmpty
+                                  ? null
+                                  : passwordController.text.trim(),
+                              confirmEmail: confirmEmail,
+                            );
+                            result = actionResult;
+                            if (!pageContext.mounted) return;
+                            ScaffoldMessenger.of(pageContext).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  _customerAccountSuccessMessage(
+                                    actionResult,
+                                    mode,
+                                  ),
+                                ),
+                              ),
+                            );
+                            await _loadData(silent: true);
+                          } catch (error) {
+                            if (!pageContext.mounted) return;
+                            ScaffoldMessenger.of(pageContext).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $error'),
+                                backgroundColor:
+                                    Theme.of(pageContext).colorScheme.error,
+                              ),
+                            );
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isActionRunning = false);
+                            }
+                          }
                           final tempPassword =
                               result?['temporaryPassword']?.toString();
                           if (tempPassword != null &&
@@ -1638,9 +1750,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             _showCopyDialog(
                                 'Clave temporal del cliente', tempPassword);
                           }
+                          final accessLink = result?['accessLink']?.toString();
+                          if (accessLink != null &&
+                              accessLink.isNotEmpty &&
+                              mounted) {
+                            _showCopyDialog(
+                                'Link de recuperación del cliente', accessLink);
+                          }
                         },
                   icon: const Icon(Icons.person_add_alt_1, size: 18),
-                  label: const Text('Crear cuenta'),
+                  label: Text(
+                      isWebsiteOnlyAuth ? 'Vincular ficha' : 'Crear cuenta'),
                 ),
               ],
             );
@@ -1736,6 +1856,45 @@ class _UserManagementPageState extends State<UserManagementPage> {
     } finally {
       if (mounted) setState(() => _isActionRunning = false);
     }
+  }
+
+  Future<void> _sendPasswordReset(String email) async {
+    Map<String, dynamic>? result;
+    await _runAction(
+      'Link de recuperación generado',
+      () async {
+        result = await _userService.sendPasswordReset(email);
+      },
+    );
+
+    final accessLink = result?['accessLink']?.toString();
+    if (accessLink != null && accessLink.isNotEmpty && mounted) {
+      _showCopyDialog('Link de recuperación', accessLink);
+    }
+  }
+
+  String _customerAccountSuccessMessage(
+    Map<String, dynamic> result,
+    String mode,
+  ) {
+    if (result['temporaryPassword']?.toString().isNotEmpty == true) {
+      return 'Cuenta vinculada. Se asignó una clave temporal para el cliente.';
+    }
+    if (result['passwordResetLinkGenerated'] == true) {
+      return 'Cuenta vinculada. Se generó un link para recuperar o crear la contraseña.';
+    }
+    if (result['passwordResetSent'] == true) {
+      return 'Cuenta vinculada. Se envió un email para crear o recuperar la contraseña.';
+    }
+    if (result['inviteSent'] == true) {
+      return 'Cuenta creada. Se envió la invitación de acceso al cliente.';
+    }
+    if (result['sharedStaffAccount'] == true) {
+      return 'Este cliente ya usa un login interno ERP; no se cambió el acceso.';
+    }
+    return mode == 'temporary_password'
+        ? 'Cuenta cliente actualizada con clave temporal.'
+        : 'Cuenta cliente actualizada.';
   }
 
   Future<void> _showCopyDialog(String title, String value) async {

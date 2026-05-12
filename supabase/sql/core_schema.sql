@@ -17588,10 +17588,10 @@ create policy "website_navigation_delete" on website_navigation
   for delete to authenticated
   using (tenant_id = public.user_tenant_id());
 
--- Public access policy for navigation (anonymous users viewing website)
+-- Public access policy for navigation (anonymous visitors and logged-in website customers)
 drop policy if exists "website_navigation_select_public" on website_navigation;
 create policy "website_navigation_select_public" on website_navigation
-  for select to anon
+  for select to public
   using (is_visible = true);
 
 -- ============================================================================

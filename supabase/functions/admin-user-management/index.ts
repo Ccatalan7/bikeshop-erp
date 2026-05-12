@@ -144,9 +144,29 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     console.error('admin-user-management error', error)
-    return json({ error: error instanceof Error ? error.message : String(error) }, 500)
+    return json({ error: toErrorMessage(error) }, 500)
   }
 })
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    for (const key of ['message', 'error', 'details', 'msg']) {
+      const value = record[key]
+      if (typeof value === 'string' && value.trim().length > 0) return value
+      if (value && typeof value === 'object') return toErrorMessage(value)
+    }
+
+    try {
+      return JSON.stringify(error)
+    } catch (_) {
+      return String(error)
+    }
+  }
+  return String(error)
+}
 
 async function getCallerContext(
   userClient: SupabaseClient,
@@ -270,10 +290,13 @@ async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: stri
   if (error) throw error
 
   const rows = data ?? []
-  return await Promise.all(rows.map(async (customer) => {
+  const customerAccounts = await Promise.all(rows.map(async (customer) => {
     const authUser = customer.auth_user_id
       ? await getAuthUser(serviceClient, customer.auth_user_id)
       : null
+    const isStaffAuthUser = authUser
+      ? await isStaffUserInTenant(serviceClient, tenantId, authUser.id)
+      : false
 
     return {
       kind: 'customer',
@@ -284,6 +307,9 @@ async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: stri
       displayName: customer.name ?? getDisplayName(authUser) ?? customer.email ?? 'Cliente web',
       phone: customer.phone,
       hasAuth: Boolean(customer.auth_user_id),
+      hasCustomerProfile: true,
+      isWebsiteOnlyAuth: false,
+      isStaffAuthUser,
       isActive: customer.is_active !== false && !isBanned(authUser),
       customerActive: customer.is_active !== false,
       accessRestricted: customer.is_active === false || isBanned(authUser),
@@ -294,14 +320,84 @@ async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: stri
       bannedUntil: authUser?.banned_until ?? null,
     }
   }))
+
+  const orphanWebsiteAccounts = await getOrphanWebsiteAuthAccounts(
+    serviceClient,
+    tenantId,
+    search,
+  )
+
+  return [...orphanWebsiteAccounts, ...customerAccounts]
+}
+
+async function getOrphanWebsiteAuthAccounts(serviceClient: SupabaseClient, tenantId: string, search: string) {
+  const linkedAuthIds = await getLinkedCustomerAuthIds(serviceClient, tenantId)
+  const searchTerm = search.trim().toLowerCase()
+  const accounts = []
+  let page = 1
+
+  while (page <= 10) {
+    const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+
+    for (const user of data.users) {
+      if (!isPublicStoreCustomerForTenant(user, tenantId)) continue
+      if (linkedAuthIds.has(user.id)) continue
+
+      const displayName = getDisplayName(user) ?? user.email ?? 'Cliente web sin ficha CRM'
+      const phone = user.user_metadata?.phone ?? null
+      const haystack = `${displayName} ${user.email ?? ''} ${phone ?? ''}`.toLowerCase()
+      if (searchTerm && !haystack.includes(searchTerm)) continue
+
+      accounts.push({
+        kind: 'customer',
+        id: user.id,
+        customerId: null,
+        authUserId: user.id,
+        email: user.email ?? '',
+        displayName,
+        phone,
+        hasAuth: true,
+        hasCustomerProfile: false,
+        isWebsiteOnlyAuth: true,
+        isStaffAuthUser: false,
+        isActive: !isBanned(user),
+        customerActive: null,
+        accessRestricted: isBanned(user),
+        emailConfirmed: Boolean(user.email_confirmed_at),
+        lastSignInAt: user.last_sign_in_at ?? null,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at ?? user.created_at,
+        bannedUntil: user.banned_until ?? null,
+      })
+    }
+
+    if (data.users.length < 1000) break
+    page += 1
+  }
+
+  return accounts
+}
+
+async function getLinkedCustomerAuthIds(serviceClient: SupabaseClient, tenantId: string) {
+  const { data, error } = await serviceClient
+    .from('customers')
+    .select('auth_user_id')
+    .eq('tenant_id', tenantId)
+    .not('auth_user_id', 'is', null)
+    .limit(10000)
+
+  if (error) throw error
+  return new Set((data ?? []).map((row) => row.auth_user_id).filter(Boolean))
 }
 
 async function getSummary(serviceClient: SupabaseClient, tenantId: string) {
-  const [staffCount, invitationCount, customerCount, linkedCustomerCount] = await Promise.all([
+  const [staffCount, invitationCount, customerCount, linkedCustomerCount, orphanWebsiteAccountCount] = await Promise.all([
     countRows(serviceClient, 'user_profiles', tenantId),
     countRows(serviceClient, 'user_invitations', tenantId, { status: 'pending' }),
     countRows(serviceClient, 'customers', tenantId),
     countRows(serviceClient, 'customers', tenantId, { auth_user_id: 'not-null' }),
+    countOrphanWebsiteAuthAccounts(serviceClient, tenantId),
   ])
 
   return {
@@ -309,7 +405,12 @@ async function getSummary(serviceClient: SupabaseClient, tenantId: string) {
     pendingInvitationCount: invitationCount,
     customerCount,
     linkedCustomerCount,
+    orphanWebsiteAccountCount,
   }
+}
+
+async function countOrphanWebsiteAuthAccounts(serviceClient: SupabaseClient, tenantId: string) {
+  return (await getOrphanWebsiteAuthAccounts(serviceClient, tenantId, '')).length
 }
 
 async function createInternalInvitation(
@@ -481,6 +582,8 @@ async function createCustomerAccount(
     ? await getCustomer(serviceClient, caller.tenantId, body.customerId)
     : null
 
+  customer ??= await findCustomerByEmail(serviceClient, caller.tenantId, email)
+
   if (!customer) {
     const { data, error } = await serviceClient
       .from('customers')
@@ -501,6 +604,36 @@ async function createCustomerAccount(
   let authUser = customer.auth_user_id ? await getAuthUser(serviceClient, customer.auth_user_id) : null
   authUser ??= await findAuthUserByEmail(serviceClient, email)
 
+  if (authUser && await isStaffUserInTenant(serviceClient, caller.tenantId, authUser.id)) {
+    if (customer.auth_user_id === authUser.id) {
+      const { error: customerError } = await serviceClient
+        .from('customers')
+        .update({
+          name,
+          phone,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', customer.id)
+        .eq('tenant_id', caller.tenantId)
+
+      if (customerError) throw customerError
+
+      return {
+        success: true,
+        authUserId: authUser.id,
+        customerId: customer.id,
+        inviteSent: false,
+        temporaryPassword: null,
+        sharedStaffAccount: true,
+      }
+    }
+
+    throw new Error(
+      'Ese email ya pertenece a un usuario interno del ERP. Usa otro email para la cuenta web o mantén este login solo como usuario de equipo.',
+    )
+  }
+
   const metadata = {
     account_type: 'public_store_customer',
     customer_tenant_id: caller.tenantId,
@@ -512,6 +645,9 @@ async function createCustomerAccount(
 
   let temporaryPassword: string | null = null
   let inviteSent = false
+  let passwordResetSent = false
+  let passwordResetLinkGenerated = false
+  let accessLink: string | null = null
 
   if (!authUser) {
     if (mode === 'temporary_password') {
@@ -534,12 +670,30 @@ async function createCustomerAccount(
       inviteSent = true
     }
   } else {
-    await serviceClient.auth.admin.updateUserById(authUser.id, {
+    const updatePayload: Record<string, unknown> = {
       user_metadata: {
         ...(authUser.user_metadata ?? {}),
         ...metadata,
       },
-    })
+      ban_duration: 'none',
+    }
+
+    if (mode === 'temporary_password') {
+      temporaryPassword = body.password?.trim() || generatePassword()
+      updatePayload.password = temporaryPassword
+      if (body.confirmEmail === true) updatePayload.email_confirm = true
+    }
+
+    await serviceClient.auth.admin.updateUserById(authUser.id, updatePayload)
+
+    if (mode !== 'temporary_password') {
+      accessLink = await generateRecoveryLink(
+        serviceClient,
+        email,
+        `${await getStoreOrigin(serviceClient, caller.tenantId, req)}/cuenta/login`,
+      )
+      passwordResetLinkGenerated = true
+    }
   }
 
   const { error: customerError } = await serviceClient
@@ -568,6 +722,10 @@ async function createCustomerAccount(
     authUserId: authUser.id,
     customerId: customer.id,
     inviteSent,
+    passwordResetSent,
+    passwordResetLinkGenerated,
+    accessEmailSent: inviteSent || passwordResetSent,
+    accessLink,
     temporaryPassword,
   }
 }
@@ -576,7 +734,11 @@ async function setCustomerAccess(serviceClient: SupabaseClient, caller: CallerCo
   const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
   const isActive = body.isActive === true
 
-  if (customer.auth_user_id) {
+  const authUserIsStaff = customer.auth_user_id
+    ? await isStaffUserInTenant(serviceClient, caller.tenantId, customer.auth_user_id)
+    : false
+
+  if (customer.auth_user_id && !authUserIsStaff) {
     await serviceClient.auth.admin.updateUserById(customer.auth_user_id, {
       ban_duration: isActive ? 'none' : '876600h',
     })
@@ -593,11 +755,49 @@ async function setCustomerAccess(serviceClient: SupabaseClient, caller: CallerCo
 }
 
 async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
-  const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
+  if (!body.customerId && body.userId) {
+    return await deleteOrphanWebsiteAuthAccount(serviceClient, caller, required(body.userId, 'userId'))
+  }
 
-  if (customer.auth_user_id) {
-    const { error } = await serviceClient.auth.admin.deleteUser(customer.auth_user_id)
-    if (error) throw error
+  const customer = await getCustomer(serviceClient, caller.tenantId, required(body.customerId, 'customerId'))
+  const authUserId = customer.auth_user_id
+
+  if (!authUserId) {
+    if (body.deleteCustomerRecord === true) {
+      const { error } = await serviceClient
+        .from('customers')
+        .delete()
+        .eq('id', customer.id)
+        .eq('tenant_id', caller.tenantId)
+      if (error) throw error
+    }
+    return { success: true, authDeleted: false, authDetachedOnly: true }
+  }
+
+  const isStaffUser = await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)
+  if (!isStaffUser) {
+    await clearCustomerAuthReferencesForDelete(
+      serviceClient,
+      caller.tenantId,
+      authUserId,
+    )
+
+    const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
+    if (error) {
+      console.warn('Unable to hard-delete customer auth user', authUserId, error.message)
+      throw new Error(`No se pudo eliminar el usuario Auth del cliente: ${error.message}`)
+    }
+
+    if (body.deleteCustomerRecord === true) {
+      const { error: customerDeleteError } = await serviceClient
+        .from('customers')
+        .delete()
+        .eq('id', customer.id)
+        .eq('tenant_id', caller.tenantId)
+      if (customerDeleteError) throw customerDeleteError
+    }
+
+    return { success: true, authDeleted: true, authDetachedOnly: false }
   }
 
   if (body.deleteCustomerRecord === true) {
@@ -616,7 +816,73 @@ async function deleteCustomerAccount(serviceClient: SupabaseClient, caller: Call
     if (error) throw error
   }
 
-  return { success: true }
+  return { success: true, authDeleted: false, authDetachedOnly: true }
+}
+
+async function deleteOrphanWebsiteAuthAccount(serviceClient: SupabaseClient, caller: CallerContext, authUserId: string) {
+  const authUser = await getAuthUser(serviceClient, authUserId)
+  if (!authUser || !isPublicStoreCustomerForTenant(authUser, caller.tenantId)) {
+    throw new Error('Cuenta web no encontrada para este tenant')
+  }
+
+  if (await isStaffUserInTenant(serviceClient, caller.tenantId, authUserId)) {
+    throw new Error('Esta cuenta Auth también pertenece al equipo ERP. Elimínala desde la pestaña Equipo si corresponde.')
+  }
+
+  const { data: linkedCustomer, error: customerError } = await serviceClient
+    .from('customers')
+    .select('id')
+    .eq('tenant_id', caller.tenantId)
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+  if (customerError) throw customerError
+  if (linkedCustomer) {
+    throw new Error('Esta cuenta web ya tiene ficha CRM. Elimínala desde el cliente vinculado.')
+  }
+
+  await clearCustomerAuthReferencesForDelete(
+    serviceClient,
+    caller.tenantId,
+    authUserId,
+  )
+
+  const { error } = await serviceClient.auth.admin.deleteUser(authUserId)
+  if (error) throw new Error(`No se pudo eliminar el usuario Auth del cliente: ${error.message}`)
+  return { success: true, authDeleted: true, authDetachedOnly: false }
+}
+
+async function clearCustomerAuthReferencesForDelete(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  userId: string,
+) {
+  const operations = [
+    serviceClient
+      .from('conversations')
+      .update({ created_by: null })
+      .eq('tenant_id', tenantId)
+      .eq('created_by', userId),
+    serviceClient
+      .from('conversations')
+      .update({ accepted_by: null })
+      .eq('tenant_id', tenantId)
+      .eq('accepted_by', userId),
+    serviceClient
+      .from('conversation_contexts')
+      .update({ added_by: null })
+      .eq('tenant_id', tenantId)
+      .eq('added_by', userId),
+    serviceClient
+      .from('messages')
+      .update({ sender_id: null })
+      .eq('tenant_id', tenantId)
+      .eq('sender_id', userId),
+  ]
+
+  const results = await Promise.all(operations)
+  for (const result of results) {
+    if (result.error) throw result.error
+  }
 }
 
 async function resendCustomerVerification(serviceClient: SupabaseClient, caller: CallerContext, body: RequestBody) {
@@ -648,16 +914,27 @@ async function sendPasswordReset(serviceClient: SupabaseClient, caller: CallerCo
       .eq('tenant_id', caller.tenantId)
       .eq('auth_user_id', user.id)
       .maybeSingle()
-    if (customer) {
+    if (customer || isPublicStoreCustomerForTenant(user, caller.tenantId)) {
       redirectTo = `${await getStoreOrigin(serviceClient, caller.tenantId, req)}/cuenta/login`
     }
   }
 
-  const { error } = await serviceClient.auth.resetPasswordForEmail(email, {
-    redirectTo,
+  const accessLink = await generateRecoveryLink(serviceClient, email, redirectTo)
+  return { success: true, passwordResetLinkGenerated: true, accessLink }
+}
+
+async function generateRecoveryLink(serviceClient: SupabaseClient, email: string, redirectTo: string) {
+  const { data, error } = await serviceClient.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: { redirectTo },
   })
+
   if (error) throw error
-  return { success: true }
+  const properties = (data as any)?.properties ?? {}
+  const actionLink = properties.action_link ?? (data as any)?.action_link ?? null
+  if (!actionLink) throw new Error('No se pudo generar el link de recuperación')
+  return actionLink.toString()
 }
 
 async function assertStaffInTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
@@ -672,13 +949,30 @@ async function assertStaffInTenant(serviceClient: SupabaseClient, tenantId: stri
   if (!data) throw new Error('User does not belong to this tenant staff')
 }
 
+async function isStaffUserInTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
+  const { data, error } = await serviceClient
+    .from('user_profiles')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+  return Boolean(data)
+}
+
 async function assertUserBelongsToTenant(serviceClient: SupabaseClient, tenantId: string, userId: string) {
   const [{ data: staff }, { data: customer }] = await Promise.all([
     serviceClient.from('user_profiles').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
     serviceClient.from('customers').select('id').eq('tenant_id', tenantId).eq('auth_user_id', userId).maybeSingle(),
   ])
 
-  if (!staff && !customer) throw new Error('User does not belong to this tenant')
+  if (staff || customer) return
+
+  const authUser = await getAuthUser(serviceClient, userId)
+  if (isPublicStoreCustomerForTenant(authUser, tenantId)) return
+
+  throw new Error('User does not belong to this tenant')
 }
 
 async function getCustomer(serviceClient: SupabaseClient, tenantId: string, customerId: string) {
@@ -691,6 +985,19 @@ async function getCustomer(serviceClient: SupabaseClient, tenantId: string, cust
 
   if (error) throw error
   if (!data) throw new Error('Customer not found in this tenant')
+  return data
+}
+
+async function findCustomerByEmail(serviceClient: SupabaseClient, tenantId: string, email: string) {
+  const { data, error } = await serviceClient
+    .from('customers')
+    .select('id, name, email, phone, is_active, auth_user_id')
+    .eq('tenant_id', tenantId)
+    .ilike('email', email)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
   return data
 }
 
@@ -760,7 +1067,12 @@ function normalizeEmail(email: string | null | undefined) {
 }
 
 function getDisplayName(user: any) {
-  return user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? null
+  return user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? user?.user_metadata?.display_name ?? null
+}
+
+function isPublicStoreCustomerForTenant(user: any, tenantId: string) {
+  return user?.user_metadata?.account_type === 'public_store_customer' &&
+    user?.user_metadata?.customer_tenant_id === tenantId
 }
 
 function isBanned(user: any) {

@@ -90,6 +90,22 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
       final didPreloadFromCache =
           websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
 
+      // Old authenticated storefront sessions may have cached an empty
+      // navigation response from before the public RLS policy allowed them to
+      // read website_navigation. Do not let that stale cache render the
+      // fallback header; fetch the real nav once before first store paint.
+      if (!websiteService.headerNavigation.any((nav) => nav.isVisible)) {
+        try {
+          await websiteService.loadNavigationForTenant(
+            tenantId,
+            notify: false,
+            forceRefresh: true,
+          );
+        } catch (e) {
+          debugPrint('⚠️ [Bootstrap] Navigation preflight failed: $e');
+        }
+      }
+
       // Step 3: Allow the app to render immediately after tenant detection.
       setState(() {
         _isBootstrapping = false;

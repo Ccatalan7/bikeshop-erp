@@ -93,8 +93,6 @@ class CustomerAccountMenu extends StatelessWidget {
               'Mis pedidos', '/tienda/cuenta/pedidos'),
           _buildMobileMenuItem(context, Icons.location_on_outlined,
               'Mis direcciones', '/tienda/cuenta/direcciones'),
-          _buildMobileMenuItem(context, Icons.person_outline, 'Mi perfil',
-              '/tienda/cuenta/perfil'),
           _buildMobileMenuItem(context, Icons.chat_bubble_outline,
               'Ayuda y Soporte', '/tienda/cuenta/chats'),
           ListTile(

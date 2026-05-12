@@ -19,12 +19,15 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
 
   bool _isLogin = true;
+  bool _isRecoveryMode = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _showVerificationNotice = false;
+  bool _showAccountConfirmedNotice = false;
   String? _verificationEmail;
 
   // Keep this page alive in memory to prevent reloading on navigation
@@ -32,12 +35,47 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   bool get wantKeepAlive => true;
 
   @override
+  void initState() {
+    super.initState();
+    _isRecoveryMode = _isPasswordRecoveryUrl();
+    _showAccountConfirmedNotice =
+        Uri.base.queryParameters['confirmed'] == 'true';
+
+    if (_showAccountConfirmedNotice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final accountService = context.read<CustomerAccountService>();
+        if (accountService.isAuthenticated) {
+          await accountService.signOut();
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  bool _isPasswordRecoveryUrl() {
+    final uri = Uri.base;
+    if (uri.queryParameters['type'] == 'recovery') return true;
+
+    final fragment = uri.fragment;
+    if (fragment.isEmpty) return false;
+
+    final fragmentValue = fragment.startsWith('?')
+        ? fragment.substring(1)
+        : fragment.startsWith('#')
+            ? fragment.substring(1)
+            : fragment;
+    final params = Uri.splitQueryString(fragmentValue);
+    return params['type'] == 'recovery';
   }
 
   Future<void> _submit() async {
@@ -94,7 +132,6 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
 
       if (!mounted) return;
 
-      // Navigate to account page or back
       context.go('/cuenta');
     } catch (e) {
       if (!mounted) return;
@@ -112,6 +149,66 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _submitRecoveryPassword() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final accountService = context.read<CustomerAccountService>();
+      await accountService.updatePassword(_passwordController.text);
+      await accountService.signOut();
+
+      if (!mounted) return;
+      setState(() {
+        _isRecoveryMode = false;
+        _isLogin = true;
+        _passwordController.clear();
+        _confirmPasswordController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Contraseña actualizada. Inicia sesión con tu nueva clave.',
+          ),
+        ),
+      );
+      context.go('/cuenta/login');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_recoveryPasswordErrorMessage(error)),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _recoveryPasswordErrorMessage(Object error) {
+    final rawMessage = error.toString();
+    final normalized = rawMessage.toLowerCase();
+
+    if (normalized.contains('same_password')) {
+      return 'La nueva contraseña debe ser distinta a la contraseña actual.';
+    }
+    if (normalized.contains('otp_expired') ||
+        normalized.contains('invalid or has expired')) {
+      return 'El enlace de recuperación venció o ya fue usado. Genera un nuevo vínculo e inténtalo otra vez.';
+    }
+    if (normalized.contains('auth session missing') ||
+        normalized.contains('authsessionmissingexception')) {
+      return 'No pudimos confirmar la sesión de recuperación. Abre un vínculo nuevo en una pestaña privada.';
+    }
+
+    return 'No pudimos actualizar la contraseña. Inténtalo nuevamente con una contraseña nueva.';
   }
 
   Future<void> _signInWithGoogle() async {
@@ -136,6 +233,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
+    final accountService = context.watch<CustomerAccountService>();
+    final isRecoveryMode =
+        _isRecoveryMode || accountService.isPasswordRecoverySession;
+
     return Container(
       width: double.infinity,
       color: Colors.white,
@@ -167,15 +268,21 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: _buildIntroPanel(context)),
-                            Expanded(child: _buildFormPanel(context)),
+                            Expanded(
+                                child: _buildIntroPanel(context,
+                                    isRecoveryMode: isRecoveryMode)),
+                            Expanded(
+                                child: _buildFormPanel(context,
+                                    isRecoveryMode: isRecoveryMode)),
                           ],
                         )
                       : Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _buildIntroPanel(context, compact: true),
-                            _buildFormPanel(context),
+                            _buildIntroPanel(context,
+                                compact: true, isRecoveryMode: isRecoveryMode),
+                            _buildFormPanel(context,
+                                isRecoveryMode: isRecoveryMode),
                           ],
                         ),
                 ),
@@ -187,7 +294,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     );
   }
 
-  Widget _buildIntroPanel(BuildContext context, {bool compact = false}) {
+  Widget _buildIntroPanel(
+    BuildContext context, {
+    bool compact = false,
+    bool isRecoveryMode = false,
+  }) {
     final theme = Theme.of(context);
 
     return Container(
@@ -226,9 +337,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           ),
           const SizedBox(height: 14),
           Text(
-            _isLogin
-                ? 'Ingresa para revisar pedidos, bicicletas y soporte desde un solo lugar.'
-                : 'Crea tu cuenta para guardar tus datos, seguir tus pedidos y acceder a tu historial.',
+            isRecoveryMode
+                ? 'Crea una nueva contraseña para recuperar tu acceso.'
+                : _isLogin
+                    ? 'Ingresa para revisar pedidos, bicicletas y soporte desde un solo lugar.'
+                    : 'Crea tu cuenta para guardar tus datos, seguir tus pedidos y acceder a tu historial.',
             style: theme.textTheme.headlineMedium?.copyWith(
               fontSize: compact ? 28 : 32,
               height: 1.15,
@@ -237,9 +350,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           ),
           const SizedBox(height: 14),
           Text(
-            _isLogin
-                ? 'Una experiencia más ordenada, rápida y clara que el checkout improvisado de invitado.'
-                : 'Todo queda asociado a tu cuenta para futuras compras, seguimiento y atención postventa.',
+            isRecoveryMode
+                ? 'Este enlace seguro confirma tu identidad. Define una clave nueva y entrarás directo a tu cuenta.'
+                : _isLogin
+                    ? 'Una experiencia más ordenada, rápida y clara que el checkout improvisado de invitado.'
+                    : 'Todo queda asociado a tu cuenta para futuras compras, seguimiento y atención postventa.',
             style: theme.textTheme.bodyLarge?.copyWith(
               color: PublicStoreTheme.textSecondary,
             ),
@@ -339,7 +454,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     );
   }
 
-  Widget _buildFormPanel(BuildContext context) {
+  Widget _buildFormPanel(BuildContext context, {bool isRecoveryMode = false}) {
     final theme = Theme.of(context);
 
     return Padding(
@@ -351,317 +466,440 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              _isLogin ? 'Iniciar sesión' : 'Crear cuenta',
+              isRecoveryMode
+                  ? 'Nueva contraseña'
+                  : _isLogin
+                      ? 'Iniciar sesión'
+                      : 'Crear cuenta',
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: PublicStoreTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              _isLogin
-                  ? 'Usa tu correo y contraseña para continuar.'
-                  : 'Completa tus datos para guardar tus compras e historial.',
+              isRecoveryMode
+                  ? 'Ingresa una contraseña nueva para terminar la recuperación.'
+                  : _isLogin
+                      ? 'Usa tu correo y contraseña para continuar.'
+                      : 'Completa tus datos para guardar tus compras e historial.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: PublicStoreTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 24),
-            if (_showVerificationNotice && _verificationEmail != null) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: PublicStoreTheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: PublicStoreTheme.border.withValues(alpha: 0.85),
+            if (isRecoveryMode) ...[
+              _buildFieldLabel('Nueva contraseña'),
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(
+                  hintText: 'Mínimo 6 caracteres',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Confirma tu correo',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: PublicStoreTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y activa tu cuenta desde el enlace recibido.',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.45,
-                        color: PublicStoreTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    OutlinedButton.icon(
-                      onPressed: _isLoading
-                          ? null
-                          : () async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final accountService =
-                                  context.read<CustomerAccountService>();
-                              try {
-                                setState(() => _isLoading = true);
-                                await accountService.resendVerificationEmail();
-                                if (mounted) {
-                                  messenger.showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Hemos reenviado el correo de verificación.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } catch (error) {
-                                if (mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'No pudimos reenviar el correo: $error',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              } finally {
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                }
-                              }
-                            },
-                      icon: const Icon(Icons.mark_email_unread_outlined),
-                      label: const Text('Reenviar correo'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: PublicStoreTheme.textPrimary,
-                        side: BorderSide(
-                          color: PublicStoreTheme.border.withValues(alpha: 0.9),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (!_isLogin) ...[
-              _buildFieldLabel('Nombre completo'),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Tu nombre y apellido',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
+                obscureText: _obscurePassword,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'El nombre es requerido';
+                  if (value == null || value.isEmpty) {
+                    return 'La contraseña es requerida';
+                  }
+                  if (value.length < 6) {
+                    return 'Mínimo 6 caracteres';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
-            ],
-            _buildFieldLabel('Correo electrónico'),
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                hintText: 'nombre@correo.com',
-                prefixIcon: Icon(Icons.email_outlined),
-              ),
-              keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'El correo es requerido';
-                }
-                if (!value.contains('@')) {
-                  return 'Ingresa un correo válido';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            if (!_isLogin) ...[
-              _buildFieldLabel('Teléfono'),
+              _buildFieldLabel('Confirmar contraseña'),
               TextFormField(
-                controller: _phoneController,
+                controller: _confirmPasswordController,
                 decoration: const InputDecoration(
-                  hintText: '+56 9 1234 5678',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                  hintText: 'Repite la contraseña',
+                  prefixIcon: Icon(Icons.lock_reset_outlined),
                 ),
-                keyboardType: TextInputType.phone,
+                obscureText: _obscurePassword,
+                validator: (value) {
+                  if (value != _passwordController.text) {
+                    return 'Las contraseñas no coinciden';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: _isLoading ? null : _submitRecoveryPassword,
+                style: FilledButton.styleFrom(
+                  backgroundColor: PublicStoreTheme.textPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.15,
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('ACTUALIZAR CONTRASEÑA'),
+              ),
+              const SizedBox(height: 14),
+              TextButton(
+                onPressed: _isLoading
+                    ? null
+                    : () {
+                        setState(() {
+                          _isRecoveryMode = false;
+                          _passwordController.clear();
+                          _confirmPasswordController.clear();
+                        });
+                      },
+                child: const Text('Volver al inicio de sesión'),
+              ),
+            ] else ...[
+              if (_showAccountConfirmedNotice) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF8F2),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFB7E2C3)),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          color: Color(0xFF2E7D4F)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Tu cuenta ha sido confirmada. Ahora puedes iniciar sesión.',
+                          style: TextStyle(
+                            color: Color(0xFF1F5D3B),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_showVerificationNotice && _verificationEmail != null) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: PublicStoreTheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: PublicStoreTheme.border.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Confirma tu correo',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: PublicStoreTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y activa tu cuenta desde el enlace recibido.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color: PublicStoreTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final accountService =
+                                    context.read<CustomerAccountService>();
+                                try {
+                                  setState(() => _isLoading = true);
+                                  await accountService
+                                      .resendVerificationEmail();
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Hemos reenviado el correo de verificación.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } catch (error) {
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'No pudimos reenviar el correo: $error',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() => _isLoading = false);
+                                  }
+                                }
+                              },
+                        icon: const Icon(Icons.mark_email_unread_outlined),
+                        label: const Text('Reenviar correo'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: PublicStoreTheme.textPrimary,
+                          side: BorderSide(
+                            color:
+                                PublicStoreTheme.border.withValues(alpha: 0.9),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (!_isLogin) ...[
+                _buildFieldLabel('Nombre completo'),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    hintText: 'Tu nombre y apellido',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'El nombre es requerido';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+              _buildFieldLabel('Correo electrónico'),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  hintText: 'nombre@correo.com',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El correo es requerido';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Ingresa un correo válido';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
-            ],
-            _buildFieldLabel('Contraseña'),
-            TextFormField(
-              controller: _passwordController,
-              decoration: InputDecoration(
-                hintText: _isLogin ? 'Tu contraseña' : 'Mínimo 6 caracteres',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+              if (!_isLogin) ...[
+                _buildFieldLabel('Teléfono'),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(
+                    hintText: '+56 9 1234 5678',
+                    prefixIcon: Icon(Icons.phone_outlined),
                   ),
-                  onPressed: () {
-                    setState(() => _obscurePassword = !_obscurePassword);
-                  },
+                  keyboardType: TextInputType.phone,
                 ),
+                const SizedBox(height: 16),
+              ],
+              _buildFieldLabel('Contraseña'),
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(
+                  hintText: _isLogin ? 'Tu contraseña' : 'Mínimo 6 caracteres',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
+                  ),
+                ),
+                obscureText: _obscurePassword,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'La contraseña es requerida';
+                  }
+                  if (!_isLogin && value.length < 6) {
+                    return 'Mínimo 6 caracteres';
+                  }
+                  return null;
+                },
               ),
-              obscureText: _obscurePassword,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'La contraseña es requerida';
-                }
-                if (!_isLogin && value.length < 6) {
-                  return 'Mínimo 6 caracteres';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 22),
-            FilledButton(
-              onPressed: _isLoading ? null : _submit,
-              style: FilledButton.styleFrom(
-                backgroundColor: PublicStoreTheme.textPrimary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: _isLoading ? null : _submit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: PublicStoreTheme.textPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.15,
+                  ),
                 ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.15,
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(_isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA'),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text(
+                      'o continúa con',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: PublicStoreTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )
-                  : Text(_isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA'),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 1,
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      color: PublicStoreTheme.border.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _signInWithGoogle,
+                icon: const FaIcon(
+                  FontAwesomeIcons.google,
+                  size: 16,
+                  color: PublicStoreTheme.textPrimary,
+                ),
+                label: Text(
+                  _isLogin ? 'Continuar con Google' : 'Registrarse con Google',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: PublicStoreTheme.textPrimary,
+                  backgroundColor: Colors.white,
+                  side: BorderSide(
                     color: PublicStoreTheme.border.withValues(alpha: 0.9),
                   ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Text(
-                    'o continúa con',
-                    style: theme.textTheme.bodySmall?.copyWith(
+              ),
+              const SizedBox(height: 22),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    _isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?',
+                    style: const TextStyle(
                       color: PublicStoreTheme.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Container(
-                    height: 1,
-                    color: PublicStoreTheme.border.withValues(alpha: 0.9),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: _isLoading ? null : _signInWithGoogle,
-              icon: const FaIcon(
-                FontAwesomeIcons.google,
-                size: 16,
-                color: PublicStoreTheme.textPrimary,
-              ),
-              label: Text(
-                _isLogin ? 'Continuar con Google' : 'Registrarse con Google',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: PublicStoreTheme.textPrimary,
-                backgroundColor: Colors.white,
-                side: BorderSide(
-                  color: PublicStoreTheme.border.withValues(alpha: 0.9),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                Text(
-                  _isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?',
-                  style: const TextStyle(
-                    color: PublicStoreTheme.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _isLogin = !_isLogin;
-                      _formKey.currentState?.reset();
-                    });
-                  },
-                  style: TextButton.styleFrom(
-                    foregroundColor: PublicStoreTheme.textPrimary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    textStyle: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  child: Text(_isLogin ? 'Regístrate' : 'Inicia sesión'),
-                ),
-              ],
-            ),
-            if (_isLogin)
-              Align(
-                alignment: Alignment.center,
-                child: TextButton(
-                  onPressed: _showPasswordResetDialog,
-                  style: TextButton.styleFrom(
-                    foregroundColor: PublicStoreTheme.textSecondary,
-                    textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLogin = !_isLogin;
+                        _formKey.currentState?.reset();
+                      });
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: PublicStoreTheme.textPrimary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    child: Text(_isLogin ? 'Regístrate' : 'Inicia sesión'),
                   ),
-                  child: const Text('¿Olvidaste tu contraseña?'),
-                ),
+                ],
               ),
+              if (_isLogin)
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton(
+                    onPressed: _showPasswordResetDialog,
+                    style: TextButton.styleFrom(
+                      foregroundColor: PublicStoreTheme.textSecondary,
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text('¿Olvidaste tu contraseña?'),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

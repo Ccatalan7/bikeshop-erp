@@ -561,7 +561,7 @@ class WebsiteService extends ChangeNotifier {
           unawaited(
             loadNavigationForTenant(
               tenantId,
-              notify: false,
+              notify: true,
               forceRefresh: true,
             ),
           );
@@ -3228,10 +3228,26 @@ class WebsiteService extends ChangeNotifier {
       if (cachedJson == null) return false;
 
       final navData = jsonDecode(cachedJson) as List<dynamic>;
-      _navigation = navData
+      final cachedNavigation = navData
           .map((e) =>
               WebsiteNavigation.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
+
+      final hasVisibleHeaderNavigation = cachedNavigation.any(
+        (nav) =>
+            nav.menuLocation == MenuLocation.header &&
+            nav.isTopLevel &&
+            nav.isVisible,
+      );
+      if (!hasVisibleHeaderNavigation) {
+        debugPrint(
+          '⚠️ [WebsiteService] Ignoring stale navigation cache without visible header items',
+        );
+        unawaited(_prefs!.remove(cacheKey));
+        return false;
+      }
+
+      _navigation = cachedNavigation;
       _buildNavigationHierarchy();
 
       _hasLoadedNavigationForTenant = true;

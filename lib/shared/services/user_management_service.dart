@@ -64,6 +64,15 @@ class UserManagementService {
     });
   }
 
+  Future<void> deleteWebsiteAuthAccount({
+    required String authUserId,
+  }) {
+    return _invokeAdminVoid({
+      'action': 'delete_customer_account',
+      'userId': authUserId,
+    });
+  }
+
   Future<void> resendCustomerVerification({
     required String customerId,
     required String email,
@@ -186,8 +195,8 @@ class UserManagementService {
     });
   }
 
-  Future<void> sendPasswordReset(String email) {
-    return _invokeAdminVoid({
+  Future<Map<String, dynamic>> sendPasswordReset(String email) {
+    return _invokeAdmin<Map<String, dynamic>>({
       'action': 'send_password_reset',
       'email': email,
     });
@@ -211,10 +220,35 @@ class UserManagementService {
       final data = response.data;
       if (data is T) return data;
       return Map<String, dynamic>.from(data as Map) as T;
+    } on FunctionException catch (e) {
+      final message = _extractAdminError(e.details);
+      debugPrint('User admin operation failed: $message');
+      throw Exception(message);
     } catch (e) {
       debugPrint('User admin operation failed: $e');
       rethrow;
     }
+  }
+
+  String _extractAdminError(dynamic value) {
+    if (value == null) return 'Error en admin-user-management';
+    if (value is String) return value;
+    if (value is List) {
+      final messages = value.map(_extractAdminError).where((m) => m.isNotEmpty);
+      return messages.join(' · ');
+    }
+    if (value is Map) {
+      for (final key in const ['error', 'message', 'details', 'msg']) {
+        if (value.containsKey(key)) {
+          final message = _extractAdminError(value[key]);
+          if (message.isNotEmpty &&
+              message != 'Error en admin-user-management') {
+            return message;
+          }
+        }
+      }
+    }
+    return value.toString();
   }
 
   Future<void> _invokeAdminVoid(Map<String, dynamic> body) async {

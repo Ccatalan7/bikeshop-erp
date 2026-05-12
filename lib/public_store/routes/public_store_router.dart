@@ -469,7 +469,7 @@ class PublicStoreRouter {
           ),
         ),
 
-        // Account Dashboard
+        // Account dashboard
         GoRoute(
           path: '/cuenta',
           pageBuilder: (context, state) => _buildPage(
