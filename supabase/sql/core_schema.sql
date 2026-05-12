@@ -17588,10 +17588,10 @@ create policy "website_navigation_delete" on website_navigation
   for delete to authenticated
   using (tenant_id = public.user_tenant_id());
 
--- Public access policy for navigation (anonymous users viewing website)
+-- Public access policy for navigation (anonymous visitors and logged-in website customers)
 drop policy if exists "website_navigation_select_public" on website_navigation;
 create policy "website_navigation_select_public" on website_navigation
-  for select to anon
+  for select to public
   using (is_visible = true);
 
 -- ============================================================================
@@ -18599,10 +18599,49 @@ create trigger trg_online_order_erp_notification
 alter table public.products
   add column if not exists show_on_website boolean default true,
   add column if not exists website_description text, -- SEO-friendly description
+  add column if not exists website_name text,
+  add column if not exists website_price numeric(12,2),
+  add column if not exists website_image_url text,
+  add column if not exists website_image_url_optimized text,
+  add column if not exists website_image_urls text[] not null default array[]::text[],
+  add column if not exists website_seo_title text,
+  add column if not exists website_seo_description text,
+  add column if not exists website_search_terms text[] not null default array[]::text[],
+  add column if not exists website_merchant_title text,
+  add column if not exists website_merchant_description text,
+  add column if not exists website_merchant_brand text,
+  add column if not exists website_merchant_gtin text,
+  add column if not exists website_merchant_mpn text,
+  add column if not exists website_google_product_category text,
   add column if not exists website_featured boolean default false;
 
 create index if not exists idx_products_website on products(show_on_website) where show_on_website = true;
 create index if not exists idx_products_featured on products(website_featured) where website_featured = true;
+
+create table if not exists public.google_oauth_connections (
+  integration_key text primary key,
+  provider text not null default 'google',
+  account_email text,
+  access_token text not null,
+  refresh_token text,
+  token_type text,
+  scope text,
+  expires_at timestamptz,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.google_oauth_connections enable row level security;
+
+create table if not exists public.google_oauth_states (
+  state text primary key,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '15 minutes')
+);
+
+alter table public.google_oauth_states enable row level security;
 
 -- ============================================================================
 -- ROW LEVEL SECURITY FOR WEBSITE TABLES
@@ -22736,7 +22775,7 @@ as $$
       (
         a.term ~ '(^| )(servicio|servicios|mantencion|mantenciones|reparacion|reparaciones|ajuste|ajustes|instalacion|instalaciones|limpieza|lavado|engrase|sangrado|purga|centrado|enrayado|diagnostico|revision)( |$)'
       ) as service_intent,
-      trim(regexp_replace(unaccent(lower(coalesce(p.name, ''))), '[^a-z0-9]+', ' ', 'g')) as name_n,
+      trim(regexp_replace(unaccent(lower(concat_ws(' ', p.website_name, p.name))), '[^a-z0-9]+', ' ', 'g')) as name_n,
       trim(regexp_replace(unaccent(lower(coalesce(p.sku, ''))), '[^a-z0-9]+', ' ', 'g')) as sku_n,
       trim(regexp_replace(unaccent(lower(coalesce(p.barcode, ''))), '[^a-z0-9]+', ' ', 'g')) as barcode_n,
       trim(regexp_replace(unaccent(lower(coalesce(p.gtin, ''))), '[^a-z0-9]+', ' ', 'g')) as gtin_n,
@@ -22955,16 +22994,20 @@ as $$
   select
     p.id,
     p.tenant_id,
-    p.name,
+    coalesce(nullif(btrim(p.website_name), ''), p.name) as name,
     p.sku,
     p.barcode,
-    p.price,
+    coalesce(p.website_price, p.price) as price,
     0::numeric as cost,
     p.inventory_qty,
     p.stock_quantity,
-    p.image_url,
-    p.image_url_optimized,
-    p.image_urls,
+    coalesce(nullif(btrim(p.website_image_url), ''), p.image_url) as image_url,
+    coalesce(nullif(btrim(p.website_image_url_optimized), ''), p.image_url_optimized) as image_url_optimized,
+    case
+      when cardinality(coalesce(p.website_image_urls, array[]::text[])) > 0
+        then p.website_image_urls
+      else p.image_urls
+    end as image_urls,
     p.description,
     p.website_description,
     p.category,
@@ -22987,10 +23030,10 @@ as $$
   from counted p
   order by
     case when p.term <> '' then p.search_score end desc nulls last,
-    case when p.term = '' and p.sort_by = 'price_asc' then p.price end asc nulls last,
-    case when p.term = '' and p.sort_by = 'price_desc' then p.price end desc nulls last,
+    case when p.term = '' and p.sort_by = 'price_asc' then coalesce(p.website_price, p.price) end asc nulls last,
+    case when p.term = '' and p.sort_by = 'price_desc' then coalesce(p.website_price, p.price) end desc nulls last,
     case when p.term = '' and p.sort_by = 'newest' then p.created_at end desc nulls last,
-    p.name asc,
+    coalesce(nullif(btrim(p.website_name), ''), p.name) asc,
     p.id asc
   limit (select page_limit from args)
   offset (select page_offset from args);
@@ -23130,16 +23173,20 @@ as $$
   select
     p.id,
     p.tenant_id,
-    p.name,
+    coalesce(nullif(btrim(p.website_name), ''), p.name) as name,
     p.sku,
     p.barcode,
-    p.price,
+    coalesce(p.website_price, p.price) as price,
     0::numeric as cost,
     p.inventory_qty,
     p.stock_quantity,
-    p.image_url,
-    p.image_url_optimized,
-    p.image_urls,
+    coalesce(nullif(btrim(p.website_image_url), ''), p.image_url) as image_url,
+    coalesce(nullif(btrim(p.website_image_url_optimized), ''), p.image_url_optimized) as image_url_optimized,
+    case
+      when cardinality(coalesce(p.website_image_urls, array[]::text[])) > 0
+        then p.website_image_urls
+      else p.image_urls
+    end as image_urls,
     p.description,
     p.website_description,
     p.category,
@@ -23166,7 +23213,7 @@ as $$
     and p.is_active = true
     and coalesce(p.is_published, false) = true
     and coalesce(p.show_on_website, false) = true
-  order by fp.order_index asc, p.name asc
+  order by fp.order_index asc, coalesce(nullif(btrim(p.website_name), ''), p.name) asc
   limit greatest(coalesce(p_limit, 10), 0);
 $$;
 

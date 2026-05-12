@@ -15,7 +15,9 @@ import '../providers/public_store_tenant_provider.dart';
 /// 3. Show child when ready
 ///
 /// NO complex state management. NO multiple loading triggers.
-/// Progressive boot: detect tenant first, then render immediately.
+/// Progressive boot: detect tenant first, preload the public navigation, then
+/// reveal the storefront. Rendering the shell before navigation is ready leaks
+/// the hardcoded fallback menu for a frame.
 class PublicStoreBootstrap extends StatefulWidget {
   final Widget child;
 
@@ -41,7 +43,6 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Timer.run(() {
         if (!mounted) return;
-        _hideHtmlSplash();
         unawaited(_bootstrap());
       });
     });
@@ -83,6 +84,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
           _hasTenant = false;
           _error = tenantProvider.error ?? 'Tienda no encontrada';
         });
+        _hideHtmlSplashAfterFrame();
         return;
       }
 
@@ -90,66 +92,108 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
       final didPreloadFromCache =
           websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
 
+      // Start the heavier store-data load immediately. The shell only waits for
+      // navigation below, so settings/blocks are already in flight by the time
+      // the first visible Flutter frame is ready.
+      unawaited(_loadStoreDataInBackground(
+        websiteService,
+        tenantId,
+        didPreloadFromCache: didPreloadFromCache,
+      ));
+
+      // Old authenticated storefront sessions may have cached an empty
+      // navigation response from before the public RLS policy allowed them to
+      // read website_navigation. Do not let that stale cache render the
+      // fallback header; fetch the real nav once before first store paint.
+      if (!websiteService.hasVisibleHeaderNavigation) {
+        try {
+          await websiteService.loadNavigationForTenant(
+            tenantId,
+            notify: false,
+            forceRefresh: true,
+          );
+        } catch (e) {
+          debugPrint('⚠️ [Bootstrap] Navigation preflight failed: $e');
+        }
+      }
+
       // Step 3: Allow the app to render immediately after tenant detection.
       setState(() {
         _isBootstrapping = false;
         _hasTenant = true;
         _error = null;
       });
-
-      // Step 4: Load blocks/settings from network in the background.
-      // Pages can render progressively using defaults/cache until data arrives.
-      unawaited(() async {
-        try {
-          // Give the first frames a chance to render smoothly before doing
-          // DNS/TLS/JSON work on the UI isolate.
-          unawaited(websiteService.warmUpEdgeCacheHost());
-          await Future<void>.delayed(
-            didPreloadFromCache
-                ? const Duration(milliseconds: 450)
-                : const Duration(milliseconds: 150),
-          );
-
-          if (didPreloadFromCache) {
-            await websiteService.loadPublicStoreDataUnified(
-              tenantId,
-              forceRefresh: true,
-            );
-            return;
-          }
-
-          await websiteService.loadPublicStoreDataUnified(tenantId);
-
-          unawaited(() async {
-            try {
-              await Future<void>.delayed(const Duration(milliseconds: 250));
-              await websiteService.loadPublicStoreDataUnified(
-                tenantId,
-                forceRefresh: true,
-              );
-            } catch (e) {
-              debugPrint('⚠️ [Bootstrap] Origin revalidation failed: $e');
-            }
-          }());
-        } catch (e) {
-          debugPrint('⚠️ [Bootstrap] Network load failed: $e');
-        }
-      }());
+      _hideHtmlSplashAfterFrame();
     } catch (e) {
       setState(() {
         _isBootstrapping = false;
         _hasTenant = false;
         _error = e.toString();
       });
+      _hideHtmlSplashAfterFrame();
     }
+  }
+
+  Future<void> _loadStoreDataInBackground(
+    WebsiteService websiteService,
+    String tenantId, {
+    required bool didPreloadFromCache,
+  }) async {
+    try {
+      unawaited(websiteService.warmUpEdgeCacheHost());
+
+      if (didPreloadFromCache) {
+        await websiteService.loadPublicStoreDataUnified(
+          tenantId,
+          forceRefresh: true,
+        );
+        return;
+      }
+
+      await websiteService.loadPublicStoreDataUnified(tenantId);
+
+      // The fast path may use prefetch/edge cache. Keep the existing freshness
+      // contract by following it with an origin read after first paint.
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        await websiteService.loadPublicStoreDataUnified(
+          tenantId,
+          forceRefresh: true,
+        );
+      } catch (e) {
+        debugPrint('⚠️ [Bootstrap] Origin revalidation failed: $e');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Bootstrap] Network load failed: $e');
+    }
+  }
+
+  void _hideHtmlSplashAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _hideHtmlSplash();
+    });
+  }
+
+  Widget _buildStartupScaffold() {
+    return const ColoredBox(
+      color: Colors.white,
+      child: Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // While bootstrapping (tenant detection), render the app shell immediately.
-    // Pages can show their own progressive loading states.
+    // Keep the public shell hidden until tenant + navigation preflight finish.
+    // Otherwise the layout briefly paints fallback header/footer links.
     if (_isBootstrapping && !_hasTenant) {
-      return widget.child;
+      return _buildStartupScaffold();
     }
 
     // Error or no tenant

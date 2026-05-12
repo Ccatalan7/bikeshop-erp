@@ -100,7 +100,7 @@ String getRouteTitle(String path) {
     // Settings
     '/settings': 'Configuración',
     '/settings/appearance': 'Apariencia',
-    '/settings/users': 'Usuarios',
+    '/settings/users': 'Usuarios y roles',
     '/settings/payment-methods': 'Métodos de Pago',
     '/settings/bluetooth-scanner': 'Escáner Bluetooth',
     '/settings/keyboard-scanner': 'Escáner USB',

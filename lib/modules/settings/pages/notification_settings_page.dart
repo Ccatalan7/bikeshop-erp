@@ -12,6 +12,7 @@ class NotificationSettingsPage extends StatefulWidget {
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   String? _fcmToken;
+  bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
 
@@ -25,9 +26,18 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     final service = NotificationService();
     setState(() {
       _fcmToken = service.fcmToken;
+      _notificationsEnabled = service.notificationsEnabled;
       _soundEnabled = service.soundEnabled;
       _vibrationEnabled = service.vibrationEnabled;
     });
+  }
+
+  Future<void> _setNotificationsEnabled(bool value) async {
+    setState(() => _notificationsEnabled = value);
+    await NotificationService().setNotificationsEnabled(value);
+    if (value) {
+      await _reRequestPermission();
+    }
   }
 
   void _copyToken() {
@@ -39,6 +49,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 
   void _sendTestNotification() {
+    if (!_notificationsEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Activa las notificaciones antes de probarlas'),
+        ),
+      );
+      return;
+    }
+
     NotificationService().showLocalNotification(
       'Notificación de Prueba',
       '¡Si estás viendo esto, las notificaciones funcionan!',
@@ -72,8 +91,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             title: const Text('Habilitar Notificaciones'),
             subtitle: const Text('Recibir alertas de nuevos mensajes'),
             trailing: Switch(
-              value: true, // TODO: Persist preference
-              onChanged: (val) => _reRequestPermission(),
+              value: _notificationsEnabled,
+              onChanged: _setNotificationsEnabled,
             ),
           ),
           ListTile(
@@ -82,10 +101,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             subtitle: const Text('Reproducir sonido con cada mensaje'),
             trailing: Switch(
               value: _soundEnabled,
-              onChanged: (val) {
-                setState(() => _soundEnabled = val);
-                NotificationService().setSoundEnabled(val);
-              },
+              onChanged: _notificationsEnabled
+                  ? (val) {
+                      setState(() => _soundEnabled = val);
+                      NotificationService().setSoundEnabled(val);
+                    }
+                  : null,
             ),
           ),
           ListTile(
@@ -94,10 +115,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             subtitle: const Text('Vibrar con cada mensaje'),
             trailing: Switch(
               value: _vibrationEnabled,
-              onChanged: (val) {
-                setState(() => _vibrationEnabled = val);
-                NotificationService().setVibrationEnabled(val);
-              },
+              onChanged: _notificationsEnabled
+                  ? (val) {
+                      setState(() => _vibrationEnabled = val);
+                      NotificationService().setVibrationEnabled(val);
+                    }
+                  : null,
             ),
           ),
           const Divider(),
@@ -122,7 +145,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             subtitle:
                 const Text('Envía una alerta inmediata en este dispositivo'),
             trailing: OutlinedButton(
-              onPressed: _sendTestNotification,
+              onPressed: _notificationsEnabled ? _sendTestNotification : null,
               child: const Text('Probar'),
             ),
           ),
@@ -131,12 +154,16 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             title: const Text('Probar Sonido'),
             subtitle: const Text('Reproduce el sonido de alerta'),
             trailing: OutlinedButton(
-              onPressed: () {
-                NotificationService().playNotificationSound();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Reproduciendo sonido...')),
-                );
-              },
+              onPressed: _notificationsEnabled && _soundEnabled
+                  ? () {
+                      NotificationService().playNotificationSound();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Reproduciendo sonido...'),
+                        ),
+                      );
+                    }
+                  : null,
               child: const Text('Sonar'),
             ),
           ),

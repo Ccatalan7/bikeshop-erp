@@ -21,6 +21,41 @@ enum CustomerAuthResult {
 class CustomerAccountService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // Captured from the initial browser URL BEFORE Supabase.initialize() clears
+  // the fragment. This is the only reliable way to detect a recovery session
+  // because the passwordRecovery stream event fires during initialize() before
+  // any subscriber has attached.
+  static bool _wasInitiallyRecoveryUrl = false;
+  static String? _initialRecoveryRefreshToken;
+  static String? _initialRecoveryCode;
+
+  /// Call this from main() BEFORE Supabase.initialize(), passing the raw
+  /// browser URL (e.g. from getInitialBrowserUrl()).
+  static void captureInitialUrl(String? url) {
+    if (url == null) return;
+    try {
+      final parsedUrl = Uri.parse(url);
+      final fragment = parsedUrl.fragment;
+      final fragmentParams = fragment.isNotEmpty
+          ? Uri.splitQueryString(
+              fragment.startsWith('?')
+                  ? fragment.substring(1)
+                  : fragment.startsWith('#')
+                      ? fragment.substring(1)
+                      : fragment,
+            )
+          : const <String, String>{};
+      final queryParams = parsedUrl.queryParameters;
+      final isRecovery = fragmentParams['type'] == 'recovery' ||
+          queryParams['type'] == 'recovery';
+
+      _wasInitiallyRecoveryUrl = isRecovery;
+      _initialRecoveryRefreshToken =
+          isRecovery ? fragmentParams['refresh_token'] : null;
+      _initialRecoveryCode = isRecovery ? queryParams['code'] : null;
+    } catch (_) {}
+  }
+
   User? _currentUser;
   Map<String, dynamic>? _customerProfile;
   String? _tenantId; // CRITICAL: Required for multi-tenant customer creation
@@ -42,6 +77,16 @@ class CustomerAccountService extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   String? _pendingVerificationEmail;
+  bool _isPasswordRecoverySession = false;
+
+  /// Expose so the ERP or test code can clear the flag after use.
+  void clearPasswordRecoverySession() {
+    _isPasswordRecoverySession = false;
+    _wasInitiallyRecoveryUrl = false;
+    _initialRecoveryRefreshToken = null;
+    _initialRecoveryCode = null;
+    notifyListeners();
+  }
 
   User? get currentUser => _currentUser;
   Map<String, dynamic>? get customerProfile => _customerProfile;
@@ -54,21 +99,46 @@ class CustomerAccountService extends ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   bool get requiresEmailVerification => _pendingVerificationEmail != null;
   String? get pendingVerificationEmail => _pendingVerificationEmail;
+  bool get isPasswordRecoverySession => _isPasswordRecoverySession;
 
   CustomerAccountService() {
+    // Read the flag captured before Supabase.initialize() ran and consume it
+    // so that navigating back to login doesn't re-show the recovery form.
+    _isPasswordRecoverySession = _wasInitiallyRecoveryUrl;
+    _wasInitiallyRecoveryUrl = false;
+
     _currentUser = _supabase.auth.currentUser;
-    if (_currentUser != null) {
+    if (_currentUser != null && !_isPasswordRecoverySession) {
       _loadCustomerData();
+    } else if (_isPasswordRecoverySession) {
+      _restoreRecoverySessionFromInitialUrl();
     }
 
     // Listen to auth state changes
     _supabase.auth.onAuthStateChange.listen((data) {
       final event = data.event;
-      if (event == AuthChangeEvent.signedIn) {
+      if (event == AuthChangeEvent.passwordRecovery) {
+        _currentUser = data.session?.user;
+        _isPasswordRecoverySession = true;
+        _loadCustomerData();
+        notifyListeners();
+      } else if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.initialSession) {
+        // Don't override recovery mode if we just established it from the URL.
+        _currentUser = data.session?.user;
+        if (!_isPasswordRecoverySession) {
+          _loadCustomerData();
+        }
+        notifyListeners();
+      } else if (event == AuthChangeEvent.userUpdated) {
+        // Password was changed — clear recovery state and treat as normal sign-in.
+        _isPasswordRecoverySession = false;
         _currentUser = data.session?.user;
         _loadCustomerData();
+        notifyListeners();
       } else if (event == AuthChangeEvent.signedOut) {
         _currentUser = null;
+        _isPasswordRecoverySession = false;
         _customerProfile = null;
         _addresses = [];
         _orders = [];
@@ -77,6 +147,30 @@ class CustomerAccountService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  Future<void> _restoreRecoverySessionFromInitialUrl() async {
+    if (!_isPasswordRecoverySession) return;
+    if (_supabase.auth.currentSession != null) {
+      _currentUser = _supabase.auth.currentUser;
+      return;
+    }
+
+    final refreshToken = _initialRecoveryRefreshToken;
+    final recoveryCode = _initialRecoveryCode;
+
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await _supabase.auth.setSession(refreshToken);
+    } else if (recoveryCode != null && recoveryCode.isNotEmpty) {
+      await _supabase.auth.exchangeCodeForSession(recoveryCode);
+    } else {
+      return;
+    }
+
+    _currentUser = _supabase.auth.currentUser;
+    _initialRecoveryRefreshToken = null;
+    _initialRecoveryCode = null;
+    notifyListeners();
   }
 
   // ============================================================================
@@ -98,6 +192,8 @@ class CustomerAccountService extends ChangeNotifier {
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo:
+            kIsWeb ? '${Uri.base.origin}/cuenta/login?confirmed=true' : null,
         data: {
           'account_type': 'public_store_customer',
           'customer_tenant_id': _tenantId,
@@ -190,6 +286,8 @@ class CustomerAccountService extends ChangeNotifier {
       await _supabase.auth.resend(
         type: OtpType.signup,
         email: email,
+        emailRedirectTo:
+            kIsWeb ? '${Uri.base.origin}/cuenta/login?confirmed=true' : null,
       );
     } catch (e) {
       debugPrint('Error al reenviar verificación: $e');
@@ -230,6 +328,9 @@ class CustomerAccountService extends ChangeNotifier {
       _orders = [];
       _bikes = [];
       _serviceHistory = [];
+      _isPasswordRecoverySession = false;
+      _initialRecoveryRefreshToken = null;
+      _initialRecoveryCode = null;
       notifyListeners();
     } catch (e) {
       _error = 'Error al cerrar sesión: $e';
@@ -255,9 +356,17 @@ class CustomerAccountService extends ChangeNotifier {
   /// Update password for the currently signed-in customer.
   Future<void> updatePassword(String newPassword) async {
     try {
+      if (_supabase.auth.currentSession == null && _isPasswordRecoverySession) {
+        await _restoreRecoverySessionFromInitialUrl();
+      }
+
       await _supabase.auth.updateUser(
         UserAttributes(password: newPassword),
       );
+      _isPasswordRecoverySession = false;
+      _initialRecoveryRefreshToken = null;
+      _initialRecoveryCode = null;
+      notifyListeners();
     } catch (e) {
       _error = 'Error al actualizar contraseña: $e';
       debugPrint(_error);

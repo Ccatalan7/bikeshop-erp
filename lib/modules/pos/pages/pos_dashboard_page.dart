@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +21,7 @@ import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../services/pos_service.dart';
 import '../models/pos_cart_item.dart';
+import '../widgets/pos_product_image.dart';
 import '../widgets/product_tile.dart';
 import '../models/payment_method.dart' as old_pm; // Old enum-based model
 import '../models/pos_transaction.dart';
@@ -46,7 +46,7 @@ class _POSDashboardPageState extends State<POSDashboardPage> {
   StreamSubscription? _scanSubscription;
 
   // Cart panel width (resizable)
-  static const double _cartMinWidth = 280.0;
+  static const double _cartMinWidth = 360.0;
   static const double _cartMaxWidth = 600.0;
   static const double _cartDefaultWidth = 380.0;
   double _cartPanelWidth = _cartDefaultWidth;
@@ -2758,117 +2758,142 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Widget _buildCartItemRow(
       ThemeData theme, POSService posService, POSCartItem item) {
+    final unitPriceText =
+        '\$${item.unitPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} c/u';
+    final lineTotalText =
+        '\$${item.total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          _CartItemThumbnail(item: item),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.displayName,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (item.product?.sku.isNotEmpty == true)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      'SKU: ${item.product!.sku}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 54),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CartItemThumbnail(item: item),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 1, right: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.displayName,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.16,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '\$${item.unitPrice.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} c/u',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    if (item.product?.sku.isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'SKU: ${item.product!.sku}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            height: 1.1,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        unitPriceText,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          height: 1.1,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Quantity controls
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
-              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: () => posService.updateCartItemQuantity(
-                      item.id, item.quantity - 1),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    child: Icon(Icons.remove_rounded,
-                        size: 15, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 94,
+              height: 32,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.65),
                   ),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                Container(
-                  width: 32,
-                  height: 30,
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${item.quantity}',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+                child: Row(
+                  children: [
+                    _QuantityButton(
+                      icon: Icons.remove_rounded,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      onTap: () => posService.updateCartItemQuantity(
+                          item.id, item.quantity - 1),
                     ),
+                    Expanded(
+                      child: Text(
+                        '${item.quantity}',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _QuantityButton(
+                      icon: Icons.add_rounded,
+                      color: theme.colorScheme.primary,
+                      onTap: () => posService.updateCartItemQuantity(
+                          item.id, item.quantity + 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 72,
+              height: 32,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  lineTotalText,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => posService.updateCartItemQuantity(
-                      item.id, item.quantity + 1),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    child: Icon(Icons.add_rounded,
-                        size: 15, color: theme.colorScheme.primary),
+              ),
+            ),
+            const SizedBox(width: 4),
+            SizedBox(
+              width: 18,
+              height: 32,
+              child: Tooltip(
+                message: 'Quitar',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => posService.removeFromCart(item.id),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.65),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          // Line total
-          Text(
-            '\$${item.total.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(width: 6),
-          // Remove
-          GestureDetector(
-            onTap: () => posService.removeFromCart(item.id),
-            child: Icon(
-              Icons.close_rounded,
-              size: 16,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -4026,7 +4051,7 @@ class _CustomerSearchFieldState extends State<_CustomerSearchField> {
   }
 }
 
-class _SearchableSelectorField<T> extends StatelessWidget {
+class _SearchableSelectorField<T> extends StatefulWidget {
   final double width;
   final double height;
   final String hint;
@@ -4048,23 +4073,76 @@ class _SearchableSelectorField<T> extends StatelessWidget {
   });
 
   @override
+  State<_SearchableSelectorField<T>> createState() =>
+      _SearchableSelectorFieldState<T>();
+}
+
+class _SearchableSelectorFieldState<T>
+    extends State<_SearchableSelectorField<T>> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _isSearching = false;
+
+  String get _displayLabel => widget.value == null
+      ? widget.allLabel
+      : widget.labelBuilder(widget.value as T);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _displayLabel);
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchableSelectorField<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final valueChanged = oldWidget.value != widget.value;
+    final labelsChanged = oldWidget.allLabel != widget.allLabel ||
+        oldWidget.items.length != widget.items.length;
+
+    if (valueChanged || (labelsChanged && !_focusNode.hasFocus)) {
+      _controller.text = _displayLabel;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChanged() {
+    if (!mounted) return;
+    if (_focusNode.hasFocus) {
+      setState(() => _isSearching = true);
+      _controller.clear();
+    } else {
+      setState(() => _isSearching = false);
+      _controller.text = _displayLabel;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasValue = value != null;
-    final previewItems = items.take(4).map(labelBuilder).toList();
+    final hasValue = widget.value != null;
+    final previewItems = widget.items.take(4).map(widget.labelBuilder).toList();
     final previewText = previewItems.isEmpty
         ? 'Sin opciones disponibles'
-        : '${items.length} opciones • ${previewItems.join(', ')}';
+        : '${widget.items.length} opciones • ${previewItems.join(', ')}';
 
     return Container(
-      width: width,
-      height: height,
+      width: widget.width,
+      height: widget.height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: hasValue
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(height / 2),
+        borderRadius: BorderRadius.circular(widget.height / 2),
         border: Border.all(
           color:
               hasValue ? Colors.transparent : theme.colorScheme.outlineVariant,
@@ -4074,10 +4152,16 @@ class _SearchableSelectorField<T> extends StatelessWidget {
         message: previewText,
         waitDuration: const Duration(milliseconds: 400),
         child: DropdownMenu<T?>(
-          key: ValueKey('${hint}_${value.hashCode}_${items.length}'),
-          width: width,
-          initialSelection: value,
-          hintText: hint,
+          key: ValueKey(
+            '${widget.hint}_${widget.value.hashCode}_${widget.items.length}',
+          ),
+          controller: _controller,
+          focusNode: _focusNode,
+          width: widget.width,
+          initialSelection: widget.value,
+          hintText: _isSearching
+              ? 'Buscar ${widget.hint.toLowerCase()}'
+              : widget.hint,
           menuHeight: 300,
           enableFilter: true,
           requestFocusOnTap: true,
@@ -4093,7 +4177,7 @@ class _SearchableSelectorField<T> extends StatelessWidget {
             border: InputBorder.none,
             filled: true,
             fillColor: Colors.transparent,
-            constraints: BoxConstraints(maxHeight: height),
+            constraints: BoxConstraints(maxHeight: widget.height),
             hintStyle: theme.textTheme.bodySmall?.copyWith(
               color: hasValue
                   ? theme.colorScheme.primary
@@ -4118,7 +4202,7 @@ class _SearchableSelectorField<T> extends StatelessWidget {
           dropdownMenuEntries: [
             DropdownMenuEntry<T?>(
               value: null,
-              label: allLabel,
+              label: widget.allLabel,
               style: ButtonStyle(
                 textStyle: WidgetStateProperty.all(
                   theme.textTheme.bodySmall?.copyWith(
@@ -4127,18 +4211,51 @@ class _SearchableSelectorField<T> extends StatelessWidget {
                 ),
               ),
             ),
-            ...items.map(
+            ...widget.items.map(
               (item) => DropdownMenuEntry<T?>(
                 value: item,
-                label: labelBuilder(item),
+                label: widget.labelBuilder(item),
                 style: ButtonStyle(
                   textStyle: WidgetStateProperty.all(theme.textTheme.bodySmall),
                 ),
               ),
             ),
           ],
-          onSelected: onChanged,
+          onSelected: (selection) {
+            _controller.text = selection == null
+                ? widget.allLabel
+                : widget.labelBuilder(selection);
+            _controller.selection = TextSelection.collapsed(
+              offset: _controller.text.length,
+            );
+            widget.onChanged(selection);
+          },
         ),
+      ),
+    );
+  }
+}
+
+class _QuantityButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuantityButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 30,
+        height: 32,
+        child: Icon(icon, size: 15, color: color),
       ),
     );
   }
@@ -4153,24 +4270,28 @@ class _CartItemThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final product = item.product;
-    final imageUrl = product?.imageUrlOptimized?.trim().isNotEmpty == true
-        ? product!.imageUrlOptimized!.trim()
-        : product?.imageUrl?.trim();
     final isService = product?.productType == ProductType.service;
+    final rawImageUrl = product?.imageUrl?.trim();
+    final optimizedImageUrl = product?.imageUrlOptimized?.trim();
+    final imageUrl = rawImageUrl != null && rawImageUrl.isNotEmpty
+        ? rawImageUrl
+        : optimizedImageUrl != null && optimizedImageUrl.isNotEmpty
+            ? optimizedImageUrl
+            : null;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(7),
       child: Container(
-        width: 46,
-        height: 46,
+        width: 44,
+        height: 44,
         color: Colors.white,
         child: imageUrl != null && imageUrl.isNotEmpty
             ? Padding(
-                padding: const EdgeInsets.all(4),
-                child: CachedNetworkImage(
+                padding: EdgeInsets.all(isService ? 2 : 4),
+                child: PosProductImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (_, __) => Center(
+                  placeholder: Center(
                     child: SizedBox(
                       width: 16,
                       height: 16,
@@ -4180,7 +4301,7 @@ class _CartItemThumbnail extends StatelessWidget {
                       ),
                     ),
                   ),
-                  errorWidget: (_, __, ___) => Icon(
+                  errorWidget: Icon(
                     isService
                         ? Icons.design_services
                         : Icons.inventory_2_outlined,

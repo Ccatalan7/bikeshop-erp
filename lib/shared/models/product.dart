@@ -14,7 +14,13 @@ class Product {
   static const String storefrontPreviewSelect =
       'id,name,sku,barcode,price,inventory_qty,stock_quantity,'
       'image_url,image_url_optimized,image_urls,description,'
-      'website_description,category,category_id,category_name,brand_id,brand,'
+      'website_description,website_name,website_price,website_image_url,'
+      'website_image_url_optimized,website_image_urls,'
+      'website_seo_title,website_seo_description,website_search_terms,'
+      'website_merchant_title,website_merchant_description,'
+      'website_merchant_brand,website_merchant_gtin,'
+      'website_merchant_mpn,website_google_product_category,'
+      'category,category_id,category_name,brand_id,brand,'
       'model,manufacturer,manufacturer_sku,gtin,color,size,material,weight,'
       'specifications,product_type,track_stock,'
       'is_active,is_published,show_on_website,created_at,updated_at';
@@ -34,6 +40,20 @@ class Product {
   final List<String> imageUrls;
   final String? description;
   final String? websiteDescription;
+  final String? websiteName;
+  final double? websitePrice;
+  final String? websiteImageUrl;
+  final String? websiteImageUrlOptimized;
+  final List<String> websiteImageUrls;
+  final String? websiteSeoTitle;
+  final String? websiteSeoDescription;
+  final List<String> websiteSearchTerms;
+  final String? websiteMerchantTitle;
+  final String? websiteMerchantDescription;
+  final String? websiteMerchantBrand;
+  final String? websiteMerchantGtin;
+  final String? websiteMerchantMpn;
+  final String? websiteGoogleProductCategory;
   final ProductCategory category;
   final String? categoryId; // Custom category reference
   final String? categoryName; // Resolved category name (if available)
@@ -103,6 +123,20 @@ class Product {
     this.imageUrls = const [],
     this.description,
     this.websiteDescription,
+    this.websiteName,
+    this.websitePrice,
+    this.websiteImageUrl,
+    this.websiteImageUrlOptimized,
+    this.websiteImageUrls = const [],
+    this.websiteSeoTitle,
+    this.websiteSeoDescription,
+    this.websiteSearchTerms = const [],
+    this.websiteMerchantTitle,
+    this.websiteMerchantDescription,
+    this.websiteMerchantBrand,
+    this.websiteMerchantGtin,
+    this.websiteMerchantMpn,
+    this.websiteGoogleProductCategory,
     required this.category,
     this.categoryId,
     this.categoryName,
@@ -159,24 +193,51 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     final inventoryQty = json['inventory_qty'] as int?;
     final stockQty = json['stock_quantity'] as int?;
+    final websiteName = _emptyToNull(json['website_name']);
+    final websitePrice = (json['website_price'] as num?)?.toDouble();
+    final websiteImageUrl = _emptyToNull(json['website_image_url']);
+    final websiteImageUrlOptimized =
+        _emptyToNull(json['website_image_url_optimized']);
+    final websiteImageUrls =
+        (json['website_image_urls'] as List?)?.cast<String>() ?? const [];
+    final websiteSearchTerms =
+        (json['website_search_terms'] as List?)?.cast<String>() ?? const [];
+    final baseImageUrls = (json['image_urls'] as List?)?.cast<String>() ?? [];
 
     return Product(
       id: json['id'] as String,
-      name: json['name'] as String,
+      name: websiteName ?? json['name'] as String,
       sku: json['sku'] as String,
       barcode: json['barcode'] as String?,
-      price: (json['price'] as num).toDouble(),
+      price: websitePrice ?? (json['price'] as num).toDouble(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0,
       // Be resilient: some code paths historically updated only one column.
       // Treat stock as the max of both.
       stockQuantity: math.max(inventoryQty ?? 0, stockQty ?? 0),
       minStockLevel: json['min_stock_level'] as int? ?? 5,
       maxStockLevel: json['max_stock_level'] as int? ?? 100,
-      imageUrl: json['image_url'] as String?,
-      imageUrlOptimized: json['image_url_optimized'] as String?,
-      imageUrls: (json['image_urls'] as List?)?.cast<String>() ?? [],
+      imageUrl: websiteImageUrl ?? json['image_url'] as String?,
+      imageUrlOptimized:
+          websiteImageUrlOptimized ?? json['image_url_optimized'] as String?,
+      imageUrls: websiteImageUrls.isNotEmpty ? websiteImageUrls : baseImageUrls,
       description: json['description'] as String?,
       websiteDescription: json['website_description'] as String?,
+      websiteName: websiteName,
+      websitePrice: websitePrice,
+      websiteImageUrl: websiteImageUrl,
+      websiteImageUrlOptimized: websiteImageUrlOptimized,
+      websiteImageUrls: websiteImageUrls,
+      websiteSeoTitle: _emptyToNull(json['website_seo_title']),
+      websiteSeoDescription: _emptyToNull(json['website_seo_description']),
+      websiteSearchTerms: websiteSearchTerms,
+      websiteMerchantTitle: _emptyToNull(json['website_merchant_title']),
+      websiteMerchantDescription:
+          _emptyToNull(json['website_merchant_description']),
+      websiteMerchantBrand: _emptyToNull(json['website_merchant_brand']),
+      websiteMerchantGtin: _emptyToNull(json['website_merchant_gtin']),
+      websiteMerchantMpn: _emptyToNull(json['website_merchant_mpn']),
+      websiteGoogleProductCategory:
+          _emptyToNull(json['website_google_product_category']),
       category: ProductCategory.values.firstWhere(
         (c) => c.name == json['category'],
         orElse: () => ProductCategory.other,
@@ -286,6 +347,21 @@ class Product {
       'image_url_optimized': imageUrlOptimized,
       'image_urls': imageUrls,
       'description': description,
+      'website_description': websiteDescription,
+      'website_name': websiteName,
+      'website_price': websitePrice,
+      'website_image_url': websiteImageUrl,
+      'website_image_url_optimized': websiteImageUrlOptimized,
+      'website_image_urls': websiteImageUrls,
+      'website_seo_title': websiteSeoTitle,
+      'website_seo_description': websiteSeoDescription,
+      'website_search_terms': websiteSearchTerms,
+      'website_merchant_title': websiteMerchantTitle,
+      'website_merchant_description': websiteMerchantDescription,
+      'website_merchant_brand': websiteMerchantBrand,
+      'website_merchant_gtin': websiteMerchantGtin,
+      'website_merchant_mpn': websiteMerchantMpn,
+      'website_google_product_category': websiteGoogleProductCategory,
       'category': category.name,
       'category_id': categoryId,
       'category_name': categoryName,
@@ -358,6 +434,34 @@ class Product {
     String? imageUrlOptimized,
     List<String>? imageUrls,
     String? description,
+    String? websiteDescription,
+    bool websiteDescriptionHasValue = false,
+    String? websiteName,
+    bool websiteNameHasValue = false,
+    double? websitePrice,
+    bool websitePriceHasValue = false,
+    String? websiteImageUrl,
+    bool websiteImageUrlHasValue = false,
+    String? websiteImageUrlOptimized,
+    bool websiteImageUrlOptimizedHasValue = false,
+    List<String>? websiteImageUrls,
+    String? websiteSeoTitle,
+    bool websiteSeoTitleHasValue = false,
+    String? websiteSeoDescription,
+    bool websiteSeoDescriptionHasValue = false,
+    List<String>? websiteSearchTerms,
+    String? websiteMerchantTitle,
+    bool websiteMerchantTitleHasValue = false,
+    String? websiteMerchantDescription,
+    bool websiteMerchantDescriptionHasValue = false,
+    String? websiteMerchantBrand,
+    bool websiteMerchantBrandHasValue = false,
+    String? websiteMerchantGtin,
+    bool websiteMerchantGtinHasValue = false,
+    String? websiteMerchantMpn,
+    bool websiteMerchantMpnHasValue = false,
+    String? websiteGoogleProductCategory,
+    bool websiteGoogleProductCategoryHasValue = false,
     ProductCategory? category,
     String? categoryId,
     String? categoryName,
@@ -426,6 +530,56 @@ class Product {
       imageUrlOptimized: imageUrlOptimized ?? this.imageUrlOptimized,
       imageUrls: imageUrls ?? this.imageUrls,
       description: description ?? this.description,
+      websiteDescription:
+          (websiteDescriptionHasValue || websiteDescription != null)
+              ? websiteDescription
+              : this.websiteDescription,
+      websiteName: (websiteNameHasValue || websiteName != null)
+          ? websiteName
+          : this.websiteName,
+      websitePrice: (websitePriceHasValue || websitePrice != null)
+          ? websitePrice
+          : this.websitePrice,
+      websiteImageUrl: (websiteImageUrlHasValue || websiteImageUrl != null)
+          ? websiteImageUrl
+          : this.websiteImageUrl,
+      websiteImageUrlOptimized:
+          (websiteImageUrlOptimizedHasValue || websiteImageUrlOptimized != null)
+              ? websiteImageUrlOptimized
+              : this.websiteImageUrlOptimized,
+      websiteImageUrls: websiteImageUrls ?? this.websiteImageUrls,
+      websiteSeoTitle: (websiteSeoTitleHasValue || websiteSeoTitle != null)
+          ? websiteSeoTitle
+          : this.websiteSeoTitle,
+      websiteSeoDescription:
+          (websiteSeoDescriptionHasValue || websiteSeoDescription != null)
+              ? websiteSeoDescription
+              : this.websiteSeoDescription,
+      websiteSearchTerms: websiteSearchTerms ?? this.websiteSearchTerms,
+      websiteMerchantTitle:
+          (websiteMerchantTitleHasValue || websiteMerchantTitle != null)
+              ? websiteMerchantTitle
+              : this.websiteMerchantTitle,
+      websiteMerchantDescription: (websiteMerchantDescriptionHasValue ||
+              websiteMerchantDescription != null)
+          ? websiteMerchantDescription
+          : this.websiteMerchantDescription,
+      websiteMerchantBrand:
+          (websiteMerchantBrandHasValue || websiteMerchantBrand != null)
+              ? websiteMerchantBrand
+              : this.websiteMerchantBrand,
+      websiteMerchantGtin:
+          (websiteMerchantGtinHasValue || websiteMerchantGtin != null)
+              ? websiteMerchantGtin
+              : this.websiteMerchantGtin,
+      websiteMerchantMpn:
+          (websiteMerchantMpnHasValue || websiteMerchantMpn != null)
+              ? websiteMerchantMpn
+              : this.websiteMerchantMpn,
+      websiteGoogleProductCategory: (websiteGoogleProductCategoryHasValue ||
+              websiteGoogleProductCategory != null)
+          ? websiteGoogleProductCategory
+          : this.websiteGoogleProductCategory,
       category: category ?? this.category,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
@@ -838,4 +992,10 @@ DateTime _parseDate(dynamic value) {
     // Ignore conversion errors and fallback below.
   }
   return DateTime.now();
+}
+
+String? _emptyToNull(dynamic value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) return null;
+  return text;
 }

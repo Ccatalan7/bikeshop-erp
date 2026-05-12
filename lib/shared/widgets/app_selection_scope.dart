@@ -12,7 +12,7 @@ class AppSelectionScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
+    if (kIsWeb || Overlay.maybeOf(context) == null) {
       return child;
     }
 

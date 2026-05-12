@@ -52,6 +52,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
     'name': 250.0,
     'rut': 120.0,
     'email': 200.0,
+    'webAccount': 140.0,
     'phone': 150.0,
     'region': 180.0,
     'bikes': 180.0,
@@ -62,6 +63,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
     'name': true,
     'rut': true,
     'email': true,
+    'webAccount': true,
     'phone': true,
     'region': true,
     'bikes': true,
@@ -223,6 +225,10 @@ class _CustomerListPageState extends State<CustomerListPage> {
         case 'email':
           comparison = (a.email ?? '').compareTo(b.email ?? '');
           break;
+        case 'webAccount':
+          comparison = (a.authUserId != null ? 1 : 0)
+              .compareTo(b.authUserId != null ? 1 : 0);
+          break;
         case 'phone':
           comparison = (a.phone ?? '').compareTo(b.phone ?? '');
           break;
@@ -250,6 +256,20 @@ class _CustomerListPageState extends State<CustomerListPage> {
       }
       _applyFiltersAndSort();
     });
+  }
+
+  String _columnLabel(String column) {
+    return switch (column) {
+      'name' => 'Cliente',
+      'rut' => 'RUT',
+      'email' => 'Email',
+      'webAccount' => 'Cuenta web',
+      'phone' => 'Teléfono',
+      'region' => 'Región',
+      'bikes' => 'Bicicletas',
+      'status' => 'Estado',
+      _ => column,
+    };
   }
 
   Future<void> _confirmDelete(Customer customer) async {
@@ -565,21 +585,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                           return CheckedPopupMenuItem<String>(
                             value: column,
                             checked: _visibleColumns[column] ?? false,
-                            child: Text(column == 'name'
-                                ? 'Cliente'
-                                : column == 'rut'
-                                    ? 'RUT'
-                                    : column == 'email'
-                                        ? 'Email'
-                                        : column == 'phone'
-                                            ? 'Teléfono'
-                                            : column == 'region'
-                                                ? 'Región'
-                                                : column == 'bikes'
-                                                    ? 'Bicicletas'
-                                                    : column == 'status'
-                                                        ? 'Estado'
-                                                        : column),
+                            child: Text(_columnLabel(column)),
                           );
                         }).toList();
                       },
@@ -758,6 +764,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     _buildColumnHeaderCell('rut', 'RUT'),
                   if (_visibleColumns['email'] == true)
                     _buildColumnHeaderCell('email', 'EMAIL'),
+                  if (_visibleColumns['webAccount'] == true)
+                    _buildColumnHeaderCell('webAccount', 'CUENTA WEB'),
                   if (_visibleColumns['phone'] == true)
                     _buildColumnHeaderCell('phone', 'TELÉFONO'),
                   if (_visibleColumns['region'] == true)
@@ -954,6 +962,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
                     overflow: TextOverflow.ellipsis,
                   )),
 
+            if (_visibleColumns['webAccount'] == true)
+              _buildDataCell(
+                'webAccount',
+                _buildWebAccountBadge(customer),
+              ),
+
             if (_visibleColumns['phone'] == true)
               _buildDataCell(
                   'phone',
@@ -1080,6 +1094,51 @@ class _CustomerListPageState extends State<CustomerListPage> {
     );
   }
 
+  Widget _buildWebAccountBadge(Customer customer) {
+    final hasWebAccount = customer.authUserId != null;
+    final color = hasWebAccount ? Colors.teal[700]! : Colors.grey[700]!;
+    final background = hasWebAccount ? Colors.teal[50]! : Colors.grey[100]!;
+    final label = hasWebAccount ? 'CREADA' : 'SIN CUENTA';
+
+    return Tooltip(
+      message: hasWebAccount
+          ? 'Este cliente tiene login creado en el sitio web.'
+          : 'Este cliente existe en CRM, pero no tiene login del sitio web.',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasWebAccount ? Icons.storefront : Icons.storefront_outlined,
+              size: 12,
+              color: color,
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCustomerCard(Customer customer) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1157,6 +1216,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    _buildWebAccountBadge(customer),
                     if (customer.phone != null) ...[
                       const SizedBox(height: 2),
                       Text(

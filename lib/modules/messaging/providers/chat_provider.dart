@@ -38,6 +38,9 @@ class ChatProvider extends ChangeNotifier {
   RealtimeChannel? _conversationsSubscription;
   StreamSubscription? _notificationSubscription;
   Timer? _conversationsRefreshTimer;
+  Timer? _messagesRetryTimer;
+  int _messagesRetryAttempt = 0;
+  static const int _maxMessageStreamRetryAttempts = 4;
 
   // Getters
   List<Conversation> get conversations => _conversations;
@@ -289,28 +292,74 @@ class ChatProvider extends ChangeNotifier {
     });
 
     // 1. Unsubscribe from old message stream
+    _messagesRetryTimer?.cancel();
+    _messagesRetryAttempt = 0;
     _messagesSubscription?.cancel();
 
     // 2. Subscribe to new message stream
+    _subscribeToActiveMessages(conversationId);
+  }
+
+  void _subscribeToActiveMessages(String conversationId) {
+    if (_activeConversationId != conversationId) return;
+
+    _messagesRetryTimer?.cancel();
+    _messagesSubscription?.cancel();
+
     try {
       _messagesSubscription = _service.getMessagesStream(conversationId).listen(
         (messages) {
+          _messagesRetryTimer?.cancel();
+          _messagesRetryAttempt = 0;
           _pruneConfirmedOptimisticMessages(messages);
           _activeMessages = messages;
           _isLoading = false;
           notifyListeners();
         },
         onError: (error) {
-          debugPrint('❌ Error stream messages: $error');
-          _isLoading = false;
-          notifyListeners();
+          _handleMessageStreamError(conversationId, error);
         },
       );
-    } catch (e) {
-      debugPrint('❌ Error setting up message stream: $e');
+    } catch (error) {
+      _handleMessageStreamError(conversationId, error);
+    }
+  }
+
+  void _handleMessageStreamError(String conversationId, Object error) {
+    if (_activeConversationId != conversationId) return;
+
+    if (_messagesRetryAttempt >= _maxMessageStreamRetryAttempts) {
+      debugPrint('❌ Error stream messages after retries: $error');
       _isLoading = false;
       notifyListeners();
+      return;
     }
+
+    _messagesRetryAttempt += 1;
+    final delay = _messageStreamRetryDelay(_messagesRetryAttempt);
+    debugPrint(
+      '⚠️ Message stream interrupted; retrying in ${delay.inSeconds}s '
+      '($_messagesRetryAttempt/$_maxMessageStreamRetryAttempts): $error',
+    );
+
+    _isLoading = _activeMessages.isEmpty;
+    notifyListeners();
+
+    _messagesRetryTimer?.cancel();
+    _messagesRetryTimer = Timer(delay, () {
+      if (_activeConversationId == conversationId) {
+        _subscribeToActiveMessages(conversationId);
+      }
+    });
+  }
+
+  Duration _messageStreamRetryDelay(int attempt) {
+    return switch (attempt) {
+      1 => const Duration(seconds: 1),
+      2 => const Duration(seconds: 2),
+      3 => const Duration(seconds: 5),
+      _ => const Duration(seconds: 10),
+    };
   }
 
   /// Create a new internal chat
@@ -612,6 +661,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       // If deleting the active conversation, clear it first
       if (_activeConversationId == conversationId) {
+        _messagesRetryTimer?.cancel();
         _messagesSubscription?.cancel();
         _activeConversationId = null;
         _activeMessages = [];
@@ -635,6 +685,7 @@ class ChatProvider extends ChangeNotifier {
   @override
   void dispose() {
     _conversationsRefreshTimer?.cancel();
+    _messagesRetryTimer?.cancel();
     _messagesSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
     _notificationSubscription?.cancel();

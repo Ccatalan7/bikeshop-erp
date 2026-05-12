@@ -2286,7 +2286,9 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.RemoteScannerPage(),
+            () => MainLayout(
+              child: erp.RemoteScannerPage(),
+            ),
           ),
         ),
         GoRoute(
@@ -2313,7 +2315,9 @@ class AppRouter {
             context,
             state,
             erp.loadLibrary(),
-            () => erp.NotificationSettingsPage(),
+            () => MainLayout(
+              child: erp.NotificationSettingsPage(),
+            ),
           ),
         ),
 

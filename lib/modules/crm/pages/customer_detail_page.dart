@@ -167,6 +167,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                                 ),
                               ),
                             ),
+                            _buildHeaderWebAccountBadge(),
+                            const SizedBox(width: 8),
                             if (!_customer!.isActive)
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -226,12 +228,23 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     _buildInfoRow(Icons.phone, 'Teléfono', _customer!.phone!),
                   if (_customer!.email != null)
                     _buildInfoRow(Icons.email, 'Email', _customer!.email!),
+                  _buildInfoRow(
+                    Icons.storefront_outlined,
+                    'Cuenta web',
+                    _hasWebsiteAccount
+                        ? 'Creada y vinculada a este cliente'
+                        : 'Sin cuenta web creada',
+                  ),
                   if (_customer!.address != null)
                     _buildInfoRow(Icons.home, 'Dirección', _customer!.address!),
                   if (_customer!.region != null)
                     _buildInfoRow(
                         Icons.location_on, 'Región', _customer!.region!),
                 ]),
+
+                const SizedBox(height: 24),
+
+                _buildWebsiteAccountSection(),
 
                 const SizedBox(height: 24),
 
@@ -253,6 +266,152 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  bool get _hasWebsiteAccount => _customer?.authUserId != null;
+
+  Widget _buildHeaderWebAccountBadge() {
+    final color = _hasWebsiteAccount ? Colors.teal[700]! : Colors.white;
+    final background = _hasWebsiteAccount
+        ? Colors.white.withValues(alpha: 0.9)
+        : Colors.white.withValues(alpha: 0.16);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _hasWebsiteAccount ? Icons.storefront : Icons.storefront_outlined,
+            size: 13,
+            color: color,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            _hasWebsiteAccount ? 'Cuenta web' : 'Sin web',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebsiteAccountSection() {
+    final color = _hasWebsiteAccount ? Colors.teal[700]! : Colors.orange[800]!;
+    final background =
+        _hasWebsiteAccount ? Colors.teal[50]! : Colors.orange[50]!;
+    final title =
+        _hasWebsiteAccount ? 'Cuenta web creada' : 'Cliente sin cuenta web';
+    final description = _hasWebsiteAccount
+        ? 'Este cliente puede iniciar sesión en el sitio web. Sus pedidos, bicicletas y soporte quedan vinculados a esta ficha CRM.'
+        : 'Este cliente existe en el ERP/CRM, pero todavía no tiene login para el sitio web. Puedes crearlo desde Usuarios y roles cuando necesite acceso.';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Acceso sitio web',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _hasWebsiteAccount
+                        ? Icons.storefront
+                        : Icons.storefront_outlined,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _websiteStatePill(),
+                          AppButton(
+                            text: 'Gestionar acceso web',
+                            icon: Icons.manage_accounts_outlined,
+                            type: ButtonType.outline,
+                            onPressed: () => context.push('/settings/users'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _websiteStatePill() {
+    final color = _hasWebsiteAccount ? Colors.teal[700]! : Colors.grey[700]!;
+    final background =
+        _hasWebsiteAccount ? Colors.teal[50]! : Colors.grey[100]!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        _hasWebsiteAccount ? 'CRM + cuenta web' : 'Solo CRM',
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
@@ -337,8 +496,8 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color:
-                            _getLoyaltyColor(_loyalty!.tier).withValues(alpha: 0.1),
+                        color: _getLoyaltyColor(_loyalty!.tier)
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Icon(

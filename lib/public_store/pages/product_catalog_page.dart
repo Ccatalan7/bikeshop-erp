@@ -304,8 +304,33 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
 
     try {
-      // Load visible categories (show_on_website = true)
-      await _loadVisibleCategories(tenantId);
+      // Load visible categories (show_on_website = true). Start it early so
+      // the first product/service page can overlap with filter metadata work.
+      final categoriesFuture = _loadVisibleCategories(tenantId);
+
+      Future<void>? categoryCountsFuture;
+      Future<PublicProductPage>? productPageFuture;
+      final canStartPageBeforeCategories = !editProvider.isInEditorContext &&
+          _pendingRouteCategoryValue == null &&
+          _selectedCategoryId == null;
+      if (canStartPageBeforeCategories) {
+        categoryCountsFuture = _loadCategoryCounts(
+          tenantId: tenantId,
+          service: publicInventoryService,
+          token: token,
+        );
+        productPageFuture = publicInventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
+          productType: _selectedProductType,
+          onlyInStock: true,
+          sortBy: _sortBy,
+          limit: _itemsPerPage,
+          offset: (_currentPage - 1) * _itemsPerPage,
+        );
+      }
+
+      await categoriesFuture;
       if (!mounted || token != _loadToken) return;
 
       // If the URL carried a category filter we couldn't resolve earlier (e.g.
@@ -358,25 +383,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         return;
       }
 
-      await _loadCategoryCounts(
+      categoryCountsFuture ??= _loadCategoryCounts(
         tenantId: tenantId,
         service: publicInventoryService,
+        token: token,
       );
-      if (!mounted || token != _loadToken) return;
 
-      final selectedCategoryIds = _selectedCategoryId == null
-          ? null
-          : _getCategoryAndDescendantIds(_selectedCategoryId!).toList();
-      final page = await publicInventoryService.getProductPageForTenant(
-        tenantId: tenantId,
-        categoryIds: selectedCategoryIds,
-        searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
-        productType: _selectedProductType,
-        onlyInStock: true,
-        sortBy: _sortBy,
-        limit: _itemsPerPage,
-        offset: (_currentPage - 1) * _itemsPerPage,
-      );
+      if (productPageFuture == null) {
+        final selectedCategoryIds = _selectedCategoryId == null
+            ? null
+            : _getCategoryAndDescendantIds(_selectedCategoryId!).toList();
+        productPageFuture = publicInventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          categoryIds: selectedCategoryIds,
+          searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
+          productType: _selectedProductType,
+          onlyInStock: true,
+          sortBy: _sortBy,
+          limit: _itemsPerPage,
+          offset: (_currentPage - 1) * _itemsPerPage,
+        );
+      }
+
+      final page = await productPageFuture;
       if (!mounted || token != _loadToken) return;
 
       setState(() {
@@ -388,6 +417,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
       debugPrint(
           '[ProductCatalogPage] Loaded page ${page.products.length}/${page.totalCount} products');
+
+      // Counts are secondary UI; let them finish without holding the product
+      // grid spinner on first load.
+      unawaited(categoryCountsFuture);
     } catch (e) {
       debugPrint('[ProductCatalogPage] Error loading products: $e');
     } finally {
@@ -403,6 +436,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Future<void> _loadCategoryCounts({
     required String tenantId,
     required PublicInventoryService service,
+    required int token,
   }) async {
     final signature = '$tenantId|${_selectedProductType?.name ?? 'all'}';
     if (signature == _lastCategoryCountsSignature) return;
@@ -413,7 +447,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       onlyInStock: true,
     );
 
-    if (!mounted) return;
+    if (!mounted || token != _loadToken) return;
     setState(() {
       _directCategoryProductCounts = snapshot.directCountsByCategoryId;
       _categoryTotalCount = snapshot.totalCount;

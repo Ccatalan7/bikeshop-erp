@@ -103,13 +103,25 @@ serve(async (req) => {
       .select(`
         id,
         name,
+        website_name,
         sku,
         description,
+        website_description,
+        website_merchant_title,
+        website_merchant_description,
+        website_merchant_brand,
+        website_merchant_gtin,
+        website_merchant_mpn,
+        website_google_product_category,
         price,
+        website_price,
         price_currency,
         stock_quantity,
         image_url,
+        website_image_url,
+        website_image_url_optimized,
         image_urls,
+        website_image_urls,
         brand,
         brand_id,
         category_id,
@@ -161,8 +173,11 @@ serve(async (req) => {
     }
 
     // Step 6: Filter products that have at least an image
-    const validProducts = (products || []).filter(p => 
-      p.image_url || (p.image_urls && p.image_urls.length > 0)
+    const validProducts = (products || []).filter(p =>
+      firstNonEmpty(p.website_image_url, p.image_url) ||
+      firstNonEmpty(p.website_image_url_optimized, null) ||
+      ((p.website_image_urls?.length || 0) > 0) ||
+      ((p.image_urls?.length || 0) > 0)
     )
 
     // Step 7: Generate XML feed
@@ -205,26 +220,44 @@ function generateProductItem(
   // Product URL - uses /productos/ path (Spanish)
   const productUrl = `${storeUrl}/productos/${product.id}`
   
-  // Image - prefer image_url, fallback to first in array
-  const imageUrl = product.image_url || (product.image_urls?.[0]) || ''
+  const gallery = product.website_image_urls?.length
+    ? product.website_image_urls
+    : (product.image_urls || [])
+
+  // Image - website override first, then optimized/base product imagery.
+  const imageUrl = firstNonEmpty(
+    product.website_image_url,
+    product.website_image_url_optimized,
+    product.image_url,
+    gallery?.[0],
+  )
   
   // Additional images (skip first if it's the same as main)
-  const additionalImages = (product.image_urls || [])
+  const additionalImages = (gallery || [])
     .filter((img: string) => img !== imageUrl)
     .slice(0, 9) // Google allows max 10 images total
   
   // Title - fix excessive caps (convert ALL CAPS to Title Case)
-  const rawTitle = product.name || ''
+  const rawTitle = firstNonEmpty(
+    product.website_merchant_title,
+    product.website_name,
+    product.name,
+  )
   const title = fixExcessiveCaps(rawTitle)
   
   // Description - must be at least 150 characters for Google
   // If too short, expand with brand, category, and store info
-  let description = product.description || ''
+  let description = firstNonEmpty(
+    product.website_merchant_description,
+    product.website_description,
+    product.description,
+  )
   if (description.length < 150) {
     // Build a proper description
-    const brand = product.brand_id && brandsMap.has(product.brand_id) 
+    const brand = firstNonEmpty(product.website_merchant_brand) ||
+      (product.brand_id && brandsMap.has(product.brand_id)
       ? brandsMap.get(product.brand_id)! 
-      : (product.brand || storeName)
+      : (product.brand || storeName))
     const category = product.category_id && categoriesMap.has(product.category_id)
       ? categoriesMap.get(product.category_id)!
       : (product.category_name || 'Ciclismo')
@@ -238,17 +271,19 @@ function generateProductItem(
   
   // Price with currency (default CLP)
   const currency = product.price_currency || 'CLP'
-  const price = `${Math.round(product.price)} ${currency}`
+  const price = `${Math.round(product.website_price || product.price)} ${currency}`
   
   // Availability based on stock
   const availability = product.stock_quantity > 0 ? 'in_stock' : 'out_of_stock'
   
   // Brand resolution: brand_id → brands table → product.brand → store name
-  let brand = storeName
-  if (product.brand_id && brandsMap.has(product.brand_id)) {
+  let brand = firstNonEmpty(product.website_merchant_brand)
+  if (!brand && product.brand_id && brandsMap.has(product.brand_id)) {
     brand = brandsMap.get(product.brand_id)!
-  } else if (product.brand) {
+  } else if (!brand && product.brand) {
     brand = product.brand
+  } else if (!brand) {
+    brand = storeName
   }
   
   // Category path from categories table
@@ -260,10 +295,14 @@ function generateProductItem(
   }
   
   // GTIN: prefer gtin field, fallback to barcode
-  const gtin = product.gtin || product.barcode || ''
+  const gtin = firstNonEmpty(
+    product.website_merchant_gtin,
+    product.gtin,
+    product.barcode,
+  )
   
   // MPN: use SKU
-  const mpn = product.sku || ''
+  const mpn = firstNonEmpty(product.website_merchant_mpn, product.sku)
 
   // Build item XML
   let itemXml = `    <item>
@@ -307,7 +346,7 @@ function generateProductItem(
   // 1085 = Sporting Goods > Outdoor Recreation > Cycling > Bicycles
   // For general cycling products, use the parent category ID
   // See: https://www.google.com/basepages/producttype/taxonomy-with-ids.en-US.txt
-  itemXml += `\n      <g:google_product_category>3618</g:google_product_category>`
+  itemXml += `\n      <g:google_product_category>${escapeXml(firstNonEmpty(product.website_google_product_category, '3618'))}</g:google_product_category>`
   
   itemXml += `\n    </item>`
   
@@ -353,4 +392,12 @@ function escapeXml(unsafe: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    const text = String(value ?? '').trim()
+    if (text.length > 0) return text
+  }
+  return ''
 }
