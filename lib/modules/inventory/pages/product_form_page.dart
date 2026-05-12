@@ -4792,9 +4792,11 @@ class _ProductFormPageState extends State<ProductFormPage>
         barcode: _barcodeController.text.trim().isEmpty
             ? null
             : _barcodeController.text.trim(),
+        barcodeHasValue: true,
         gtin: _gtinController.text.trim().isEmpty
             ? null
             : _gtinController.text.trim(),
+        gtinHasValue: true,
         price: price,
         cost: cost,
         inventoryQty: inventoryQty,
@@ -7947,7 +7949,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         validator: (value) {
           if (value == null || value.trim().isEmpty) return null;
           final trimmed = value.trim();
-          if (!RegExp(r'^[0-9]{8,14}\$').hasMatch(trimmed)) {
+          if (!RegExp(r'^[0-9]{8,14}$').hasMatch(trimmed)) {
             return 'GTIN debe ser entre 8 y 14 dígitos';
           }
           return null;
