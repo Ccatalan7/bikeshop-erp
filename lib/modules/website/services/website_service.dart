@@ -408,15 +408,23 @@ class WebsiteService extends ChangeNotifier {
     if (!forceRefresh && _hasFreshPublicStoreCache(tenantId)) {
       // Ensure navigation is available too (sync cache first, then background refresh).
       _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
-      // Fire-and-forget refresh: navigation changes are rare, but we still want
-      // the header/footer to be correct even when settings+blocks are fresh.
-      unawaited(
-        loadNavigationForTenant(
+      if (hasVisibleHeaderNavigation) {
+        // Fire-and-forget refresh: navigation changes are rare, but we still
+        // want the header/footer to be correct when settings+blocks are fresh.
+        unawaited(
+          loadNavigationForTenant(
+            tenantId,
+            notify: true,
+            forceRefresh: true,
+          ),
+        );
+      } else {
+        await loadNavigationForTenant(
           tenantId,
           notify: true,
           forceRefresh: true,
-        ),
-      );
+        );
+      }
 
       _hasLoadedForTenant = true;
       if (_perfLogsEnabled) {
@@ -556,15 +564,24 @@ class WebsiteService extends ChangeNotifier {
 
         if (isSameAsCache) {
           // Even if settings/blocks haven't changed, we still need navigation.
-          // Load from cache instantly and refresh in background.
+          // Load from cache instantly and refresh in background when we already
+          // have usable header navigation; otherwise wait for one real fetch.
           _loadNavigationFromSynchronousCacheInternal(tenantId, notify: false);
-          unawaited(
-            loadNavigationForTenant(
+          if (hasVisibleHeaderNavigation) {
+            unawaited(
+              loadNavigationForTenant(
+                tenantId,
+                notify: true,
+                forceRefresh: true,
+              ),
+            );
+          } else {
+            await loadNavigationForTenant(
               tenantId,
               notify: true,
               forceRefresh: true,
-            ),
-          );
+            );
+          }
 
           await _persistPublicStoreLastRefresh(tenantId);
           _hasLoadedForTenant = true;
@@ -596,12 +613,23 @@ class WebsiteService extends ChangeNotifier {
         await _persistPublicStoreLastRefresh(tenantId);
 
         // Navigation is NOT included in get_public_store_data yet, so load it
-        // separately (public read is allowed by RLS policy when is_visible=true).
-        await loadNavigationForTenant(
-          tenantId,
-          notify: false,
-          forceRefresh: true,
-        );
+        // separately. Do not block settings/blocks completion if a usable
+        // header is already present from cache or bootstrap preflight.
+        if (hasVisibleHeaderNavigation) {
+          unawaited(
+            loadNavigationForTenant(
+              tenantId,
+              notify: true,
+              forceRefresh: true,
+            ),
+          );
+        } else {
+          await loadNavigationForTenant(
+            tenantId,
+            notify: false,
+            forceRefresh: true,
+          );
+        }
 
         debugPrint('✅ [WebsiteService] Load complete ($source): '
             '${_settings.length} settings, ${_blocks.length} blocks');
@@ -3233,13 +3261,7 @@ class WebsiteService extends ChangeNotifier {
               WebsiteNavigation.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
 
-      final hasVisibleHeaderNavigation = cachedNavigation.any(
-        (nav) =>
-            nav.menuLocation == MenuLocation.header &&
-            nav.isTopLevel &&
-            nav.isVisible,
-      );
-      if (!hasVisibleHeaderNavigation) {
+      if (!_containsVisibleHeaderNavigation(cachedNavigation)) {
         debugPrint(
           '⚠️ [WebsiteService] Ignoring stale navigation cache without visible header items',
         );
@@ -3455,6 +3477,18 @@ class WebsiteService extends ChangeNotifier {
         .toList()
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
   }
+
+  bool _containsVisibleHeaderNavigation(List<WebsiteNavigation> navigation) {
+    return navigation.any(
+      (nav) =>
+          nav.menuLocation == MenuLocation.header &&
+          nav.isTopLevel &&
+          nav.isVisible,
+    );
+  }
+
+  bool get hasVisibleHeaderNavigation =>
+      _containsVisibleHeaderNavigation(_navigation);
 
   /// Get navigation items for header menu
   List<WebsiteNavigation> get headerNavigation =>
