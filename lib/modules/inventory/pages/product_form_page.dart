@@ -241,6 +241,8 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
   final _supplierCodeController = TextEditingController();
+  final _barcodeController = TextEditingController();
+  final _gtinController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _websiteDescriptionController = TextEditingController();
   final _brandController = TextEditingController();
@@ -391,6 +393,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     _nameController.dispose();
     _skuController.dispose();
     _supplierCodeController.dispose();
+    _barcodeController.dispose();
+    _gtinController.dispose();
     _descriptionController.dispose();
     _websiteDescriptionController.dispose();
     _brandController.dispose();
@@ -520,11 +524,14 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   void _handleBarcodeScan(String barcode) {
     setState(() {
-      _skuController.text = barcode;
+      if (_skuController.text.trim().isEmpty) {
+        _skuController.text = barcode;
+      }
+      _barcodeController.text = barcode;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✅ SKU escaneado: $barcode'),
+        content: Text('✅ Código escaneado: $barcode'),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 1),
       ),
@@ -980,6 +987,8 @@ class _ProductFormPageState extends State<ProductFormPage>
         _nameController.text = product.name;
         _skuController.text = product.sku;
         _supplierCodeController.text = product.supplierCode ?? '';
+        _barcodeController.text = product.barcode ?? '';
+        _gtinController.text = product.gtin ?? '';
         _descriptionController.text = product.description ?? '';
         _websiteDescriptionController.text = product.websiteDescription ?? '';
         _brandController.text = product.brand ?? '';
@@ -4512,6 +4521,12 @@ class _ProductFormPageState extends State<ProductFormPage>
             brandId: normalizedBrandId,
             brand: normalizedBrandName,
             model: normalizedModel,
+            barcode: _barcodeController.text.trim().isEmpty
+                ? null
+                : _barcodeController.text.trim(),
+            gtin: _gtinController.text.trim().isEmpty
+                ? null
+                : _gtinController.text.trim(),
             price: price,
             cost: cost,
             inventoryQty: inventoryQty,
@@ -4543,6 +4558,12 @@ class _ProductFormPageState extends State<ProductFormPage>
         brand: normalizedBrandName,
         brandHasValue: true,
         model: normalizedModel,
+        barcode: _barcodeController.text.trim().isEmpty
+            ? null
+            : _barcodeController.text.trim(),
+        gtin: _gtinController.text.trim().isEmpty
+            ? null
+            : _gtinController.text.trim(),
         price: price,
         cost: cost,
         inventoryQty: inventoryQty,
@@ -7629,6 +7650,35 @@ class _ProductFormPageState extends State<ProductFormPage>
           labelText: 'Código Proveedor',
           hintText: 'Ej. KMC-2025-001',
         ),
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _barcodeController,
+        decoration: const InputDecoration(
+          labelText: 'Código de barras',
+          hintText: 'Ej. 1234567890123',
+          helperText:
+              'UPC/EAN o código de inventario del producto (se puede usar para Google Merchant).',
+        ),
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _gtinController,
+        decoration: const InputDecoration(
+          labelText: 'GTIN',
+          hintText: 'Ej. 1234567890123',
+          helperText:
+              'UPC/EAN correcto para Google Merchant. Si está vacío, el feed puede usar el código de barras cuando sea válido.',
+        ),
+        keyboardType: TextInputType.number,
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) return null;
+          final trimmed = value.trim();
+          if (!RegExp(r'^[0-9]{8,14}\$').hasMatch(trimmed)) {
+            return 'GTIN debe ser entre 8 y 14 dígitos';
+          }
+          return null;
+        },
       ),
       const SizedBox(height: 16),
       // Searchable Category Selector
