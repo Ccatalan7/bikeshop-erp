@@ -71,23 +71,15 @@ class WhatsAppService {
     return '56$cleaned';
   }
 
-  String _resolveCurrentAgentName() {
-    final user = _client.auth.currentUser;
-    final metadata = user?.userMetadata;
-
-    final fullName = metadata?['full_name']?.toString().trim();
-    if (fullName != null && fullName.isNotEmpty) {
-      return fullName;
-    }
-
-    final name = metadata?['name']?.toString().trim();
-    if (name != null && name.isNotEmpty) {
-      return name;
-    }
-
-    final email = user?.email?.trim();
-    if (email != null && email.isNotEmpty) {
-      return email.split('@').first;
+  Future<String> _resolveBusinessName() async {
+    try {
+      final tenant = await TenantService().getCurrentTenant();
+      final shopName = tenant?['shop_name']?.toString().trim();
+      if (shopName != null && shopName.isNotEmpty) {
+        return shopName;
+      }
+    } catch (error) {
+      debugPrint('⚠️ [WhatsAppService] Could not resolve tenant name: $error');
     }
 
     return 'Viñabike';
@@ -95,9 +87,9 @@ class WhatsAppService {
 
   String _buildFirstContactTemplateText({
     required String customerName,
-    required String agentName,
+    required String businessName,
   }) {
-    return 'Hola $customerName, buen día. Soy $agentName de Viñabike y te escribo por el servicio de tu bicicleta.';
+    return 'Hola $customerName, buen día. Soy parte del equipo de $businessName y te escribo por el servicio de tu bicicleta.';
   }
 
   void _resetLastAttemptState({String? resolvedMessageText}) {
@@ -594,12 +586,14 @@ Viña Bike
     String? clientMessageId,
   }) async {
     final templateSettings = await _loadFirstContactTemplateSettings();
-    final resolvedAgentName = (agentName != null && agentName.trim().isNotEmpty)
-        ? agentName.trim()
-        : _resolveCurrentAgentName();
+    final businessName = await _resolveBusinessName();
+    final resolvedSenderLabel =
+        (agentName != null && agentName.trim().isNotEmpty)
+            ? agentName.trim()
+            : 'parte del equipo';
     final renderedMessage = _buildFirstContactTemplateText(
       customerName: customerName,
-      agentName: resolvedAgentName,
+      businessName: businessName,
     );
 
     _resetLastAttemptState(resolvedMessageText: renderedMessage);
@@ -624,7 +618,7 @@ Viña Bike
             },
             {
               'type': 'text',
-              'text': resolvedAgentName,
+              'text': resolvedSenderLabel,
             },
           ],
         },

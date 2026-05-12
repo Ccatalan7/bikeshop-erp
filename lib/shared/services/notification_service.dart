@@ -56,9 +56,11 @@ class NotificationService {
   String? _lastHandledNotificationId;
 
   // User Settings
+  bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
 
+  bool get notificationsEnabled => _notificationsEnabled;
   bool get soundEnabled => _soundEnabled;
   bool get vibrationEnabled => _vibrationEnabled;
 
@@ -88,8 +90,15 @@ class NotificationService {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
     _soundEnabled = prefs.getBool('notification_sound') ?? true;
     _vibrationEnabled = prefs.getBool('notification_vibration') ?? true;
+  }
+
+  Future<void> setNotificationsEnabled(bool value) async {
+    _notificationsEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled', value);
   }
 
   Future<void> setSoundEnabled(bool value) async {
@@ -418,11 +427,13 @@ class NotificationService {
           // Notify in-app listeners (Snackbar)
           _messageStreamController.add(message);
 
-          // Play sound and vibrate
-          playNotificationSound();
-          _triggerVibration();
+          if (_notificationsEnabled) {
+            // Play sound and vibrate
+            playNotificationSound();
+            _triggerVibration();
 
-          handleIncomingMessage(message);
+            handleIncomingMessage(message);
+          }
         }
       });
 
@@ -590,11 +601,13 @@ class NotificationService {
                 data: newMessage,
               ));
 
-              // Play sound and vibrate
-              playNotificationSound();
-              _triggerVibration();
+              if (_notificationsEnabled) {
+                // Play sound and vibrate
+                playNotificationSound();
+                _triggerVibration();
 
-              showLocalNotification('New Message', content);
+                showLocalNotification('New Message', content);
+              }
             }
           },
         )
@@ -616,6 +629,8 @@ class NotificationService {
   /// Handles an incoming FCM message and decides how to show it
   // Made public to be accessible from top-level background handler
   Future<void> handleIncomingMessage(RemoteMessage message) async {
+    if (!_notificationsEnabled) return;
+
     final data = message.data;
     final notification = message.notification;
 
@@ -719,6 +734,8 @@ class NotificationService {
     String? conversationTitle,
     required List<Message> messages,
   }) async {
+    if (!_notificationsEnabled) return;
+
     // Generate a consistent ID based on conversationId hash
     // This allows updating the *same* notification slot instead of creating new ones
     final int notificationId = conversationId.hashCode;
@@ -774,6 +791,7 @@ class NotificationService {
   // Legacy method kept for simple alerts or errors
   Future<void> showLocalNotification(String title, String body,
       {int? notificationId}) async {
+    if (!_notificationsEnabled) return;
     if (kIsWeb) return;
     try {
       const notificationDetails = NotificationDetails(
