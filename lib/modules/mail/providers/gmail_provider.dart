@@ -1,35 +1,28 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
 
 /// Gmail implementation of EmailProvider
 class GmailProvider extends EmailProvider {
   static const String _providerId = 'gmail';
-  static const String _tokenKey = 'gmail_tokens';
   static const String _scopes =
       'https://www.googleapis.com/auth/gmail.readonly '
       'https://www.googleapis.com/auth/gmail.send '
       'https://www.googleapis.com/auth/gmail.modify';
 
-  // OAuth URLs
-  static const String _authUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
   static const String _apiBase = 'https://www.googleapis.com/gmail/v1/users/me';
 
-  // Client ID (safe to embed, secret is server-side only)
-  static const String _clientId =
-      '599064625399-09i16kv6n8tlp07rb1bug08kgp6d4gmj.apps.googleusercontent.com';
-
-  String? _accessToken;
-  String? _refreshToken;
-  DateTime? _tokenExpiry;
   String? _email;
 
   List<Email> _emails = [];
   Email? _selectedEmail;
   bool _isLoading = false;
   String? _error;
+  String? _nextPageToken;
+  String? _lastSearchQuery;
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -46,7 +39,7 @@ class GmailProvider extends EmailProvider {
   String? get accountEmail => _email;
 
   @override
-  bool get isAuthenticated => _accessToken != null && _email != null;
+  bool get isAuthenticated => _email != null;
 
   @override
   bool get isLoading => _isLoading;
@@ -61,39 +54,56 @@ class GmailProvider extends EmailProvider {
   Email? get selectedEmail => _selectedEmail;
 
   @override
+  bool get canLoadMore => _nextPageToken != null;
+
+  @override
   Future<void> initialize() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tokenData = prefs.getString(_tokenKey);
+      await _clearLegacyLocalTokens();
+      final response = await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {'action': 'status'},
+      );
 
-      if (tokenData != null) {
-        final data = jsonDecode(tokenData);
-        _accessToken = data['access_token'];
-        _refreshToken = data['refresh_token'];
-        _email = data['email'];
-        if (data['expiry'] != null) {
-          _tokenExpiry = DateTime.parse(data['expiry']);
-        }
-        debugPrint('🔐 [Gmail] Loaded tokens for $_email');
+      if (response.status == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final account = data['account'] as Map<String, dynamic>?;
+        _email = data['connected'] == true && account != null
+            ? account['account_email'] as String?
+            : null;
+        debugPrint('🔐 [Gmail] Server connection loaded for $_email');
       }
     } catch (e) {
-      debugPrint('🔐 [Gmail] Error loading tokens: $e');
+      debugPrint('🔐 [Gmail] Error loading server connection: $e');
     }
     notifyListeners();
   }
 
   @override
-  String getAuthorizationUrl({required String redirectUri, String? state}) {
-    final params = {
-      'client_id': _clientId,
-      'redirect_uri': redirectUri,
-      'response_type': 'code',
-      'scope': _scopes,
-      'access_type': 'offline',
-      'prompt': 'consent', // Force consent to get refresh token
-      if (state != null) 'state': state,
-    };
-    return '$_authUrl?${Uri(queryParameters: params).query}';
+  Future<String> getAuthorizationUrl({
+    required String redirectUri,
+    String? state,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'gmail-oauth',
+      body: {
+        'action': 'authorization_url',
+        'redirect_uri': redirectUri,
+        'scope': _scopes,
+        if (state != null) 'state': state,
+      },
+    );
+
+    if (response.status != 200) {
+      throw Exception('Could not create Gmail authorization URL');
+    }
+
+    final data = response.data as Map<String, dynamic>;
+    final authorizationUrl = data['authorization_url']?.toString();
+    if (authorizationUrl == null || authorizationUrl.isEmpty) {
+      throw Exception('Gmail authorization URL was empty');
+    }
+    return authorizationUrl;
   }
 
   @override
@@ -127,24 +137,14 @@ class GmailProvider extends EmailProvider {
         throw Exception(data['error']);
       }
 
-      _accessToken = data['access_token'];
-      _refreshToken = data['refresh_token'];
-      _tokenExpiry = DateTime.now().add(
-        Duration(seconds: data['expires_in'] ?? 3600),
-      );
-
-      // Get email from user_info
-      if (data['user_info'] != null) {
-        _email = data['user_info']['emailAddress'];
-      }
-
-      await _saveTokens();
+      final account = data['account'] as Map<String, dynamic>?;
+      _email = account?['account_email'] as String?;
       debugPrint('🔐 [Gmail] Token exchange successful for $_email');
 
       return true;
     } catch (e) {
       debugPrint('🔐 [Gmail] Token exchange error: $e');
-      _error = e.toString();
+      _error = _friendlyGmailConnectionError(e);
       return false;
     } finally {
       _isLoading = false;
@@ -154,15 +154,19 @@ class GmailProvider extends EmailProvider {
 
   @override
   Future<void> disconnect() async {
-    _accessToken = null;
-    _refreshToken = null;
-    _tokenExpiry = null;
+    try {
+      await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {'action': 'disconnect'},
+      );
+    } catch (e) {
+      debugPrint('🔐 [Gmail] Server disconnect error: $e');
+    }
+
+    await _clearLegacyLocalTokens();
     _email = null;
     _emails = [];
     _selectedEmail = null;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
 
     debugPrint('🔐 [Gmail] Disconnected');
     notifyListeners();
@@ -170,16 +174,15 @@ class GmailProvider extends EmailProvider {
 
   @override
   Future<String?> refreshAccessToken() async {
-    if (_refreshToken == null) return null;
+    if (!isAuthenticated) return null;
 
     try {
-      debugPrint('🔐 [Gmail] Refreshing access token...');
+      debugPrint('🔐 [Gmail] Refreshing server-managed access token...');
 
       final response = await _supabase.functions.invoke(
         'gmail-oauth',
         body: {
-          'grant_type': 'refresh_token',
-          'refresh_token': _refreshToken,
+          'action': 'refresh',
         },
       );
 
@@ -188,13 +191,9 @@ class GmailProvider extends EmailProvider {
       }
 
       final data = response.data as Map<String, dynamic>;
-      _accessToken = data['access_token'];
-      _tokenExpiry = DateTime.now().add(
-        Duration(seconds: data['expires_in'] ?? 3600),
-      );
-
-      await _saveTokens();
-      return _accessToken;
+      final account = data['account'] as Map<String, dynamic>?;
+      _email = account?['account_email'] as String? ?? _email;
+      return 'server-managed';
     } catch (e) {
       debugPrint('🔐 [Gmail] Refresh error: $e');
       return null;
@@ -203,28 +202,12 @@ class GmailProvider extends EmailProvider {
 
   @override
   Future<String?> getValidAccessToken() async {
-    if (_accessToken == null) return null;
-
-    if (_tokenExpiry != null &&
-        DateTime.now()
-            .isAfter(_tokenExpiry!.subtract(const Duration(minutes: 5)))) {
-      return await refreshAccessToken();
-    }
-
-    return _accessToken;
+    return isAuthenticated ? 'server-managed' : null;
   }
 
-  Future<void> _saveTokens() async {
+  Future<void> _clearLegacyLocalTokens() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _tokenKey,
-      jsonEncode({
-        'access_token': _accessToken,
-        'refresh_token': _refreshToken,
-        'email': _email,
-        'expiry': _tokenExpiry?.toIso8601String(),
-      }),
-    );
+    await prefs.remove('gmail_tokens');
   }
 
   /// Set up push notifications for new emails via Google Cloud Pub/Sub.
@@ -322,15 +305,13 @@ class GmailProvider extends EmailProvider {
     required String url,
     Map<String, dynamic>? body,
   }) async {
-    final token = await getValidAccessToken();
-    if (token == null) throw Exception('No valid access token');
+    if (!isAuthenticated) throw Exception('Gmail account is not connected');
 
     final response = await _supabase.functions.invoke(
       'gmail-oauth',
       body: {
         'proxy_url': url,
         'method': method,
-        'gmail_token': token,
         'body': body,
       },
     );
@@ -343,37 +324,72 @@ class GmailProvider extends EmailProvider {
   }
 
   @override
-  Future<List<Email>> getInbox({int limit = 30, int start = 0}) async {
+  Future<List<Email>> getInbox({
+    int limit = 50,
+    int start = 0,
+    String? pageToken,
+    String? searchQuery,
+    List<Email> knownEmails = const [],
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      debugPrint('📧 [Gmail] Fetching inbox (limit: $limit)...');
-      // List messages
-      final listUrl = '$_apiBase/messages?maxResults=$limit&labelIds=INBOX';
-      final listData = await _proxyRequest(method: 'GET', url: listUrl);
+      final knownById = {
+        for (final email
+            in knownEmails.where((e) => e.providerId == _providerId))
+          email.id: email,
+      };
 
-      final messages = listData['messages'] as List? ?? [];
-
-      // Fetch each message's metadata
-      _emails = [];
-      for (final msg in messages) {
-        try {
-          final msgUrl =
-              '$_apiBase/messages/${msg['id']}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date';
-          final msgData = await _proxyRequest(method: 'GET', url: msgUrl);
-          _emails.add(_parseGmailMessage(msgData));
-        } catch (e) {
-          debugPrint('Error fetching message ${msg['id']}: $e');
-        }
+      final normalizedSearch = searchQuery?.trim();
+      final effectiveSearch =
+          normalizedSearch?.isEmpty ?? true ? null : normalizedSearch;
+      if (start == 0 || effectiveSearch != _lastSearchQuery) {
+        _nextPageToken = null;
       }
+      _lastSearchQuery = effectiveSearch;
+
+      debugPrint(
+        '📧 [Gmail] Fetching inbox (limit: $limit, start: $start, search: ${effectiveSearch ?? "none"}, known: ${knownById.length})...',
+      );
+      final effectivePageToken =
+          pageToken ?? (start > 0 ? _nextPageToken : null);
+      final response = await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {
+          'action': 'list_inbox',
+          'limit': limit,
+          'start': start,
+          if (effectiveSearch != null) 'search_query': effectiveSearch,
+          if (effectivePageToken != null && effectivePageToken.isNotEmpty)
+            'page_token': effectivePageToken,
+          if (knownById.isNotEmpty) 'known_ids': knownById.keys.toList(),
+        },
+      );
+
+      if (response.status != 200) {
+        throw Exception('Gmail API error: ${response.data}');
+      }
+
+      final data = response.data as Map<String, dynamic>? ?? {};
+      _nextPageToken = data['nextPageToken']?.toString();
+      if (_nextPageToken?.isEmpty ?? false) _nextPageToken = null;
+      final messages = data['messages'] as List? ?? [];
+      _emails = messages.whereType<Map>().map((message) {
+        final typedMessage = Map<String, dynamic>.from(message);
+        final id = typedMessage['id']?.toString() ?? '';
+        if (typedMessage['known'] == true && knownById.containsKey(id)) {
+          return knownById[id]!;
+        }
+        return _parseGmailMessage(typedMessage);
+      }).toList();
 
       return _emails;
     } catch (e) {
       debugPrint('getInbox error: $e');
-      _error = e.toString();
-      rethrow;
+      _error = _friendlyGmailError(e);
+      throw Exception(_error);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -430,12 +446,9 @@ class GmailProvider extends EmailProvider {
         // 1. Extract HTML body
         content = _extractBody(payload);
 
-        // 2. Resolve inline images (CIDs)
-        // We need to look for parts with 'Content-Disposition: inline' and 'Content-ID'
-        // Then download the data and replace "cid:..." in the HTML
-        if (content.contains('cid:')) {
-          content = await _resolveInlineImages(content, payload, email.id);
-        }
+        // Inline CID images are hydrated after first paint by MailAccountManager.
+        // Blocking on every image here makes rich emails feel much slower than
+        // native mail clients.
       }
 
       _selectedEmail = email.copyWith(content: content);
@@ -450,64 +463,113 @@ class GmailProvider extends EmailProvider {
     }
   }
 
-  /// Recursively find all inline parts and replace them in the content
-  Future<String> _resolveInlineImages(String htmlContent,
-      Map<String, dynamic> payload, String messageId) async {
+  Future<Email> hydrateInlineImages(Email email) async {
+    final content = email.content;
+    if (content == null || !content.contains('cid:')) return email;
+
+    final url = '$_apiBase/messages/${email.id}?format=full';
+    final data = await _proxyRequest(method: 'GET', url: url);
+    final payload = data['payload'];
+    if (payload is! Map<String, dynamic>) return email;
+
+    final resolvedContent = await _resolveInlineImages(
+      content,
+      payload,
+      email.id,
+    );
+    if (resolvedContent == content) return email;
+
+    return email.copyWith(content: resolvedContent);
+  }
+
+  Future<String> _resolveInlineImages(
+    String htmlContent,
+    Map<String, dynamic> payload,
+    String messageId,
+  ) async {
     final inlineParts = <Map<String, dynamic>>[];
     _collectInlineParts(payload, inlineParts);
 
     if (inlineParts.isEmpty) return htmlContent;
+    debugPrint('📧 [Gmail] Hydrating ${inlineParts.length} inline images...');
 
-    String resolvedContent = htmlContent;
+    final replacements = await _mapWithConcurrency<Map<String, dynamic>,
+        _InlineImageReplacement?>(
+      inlineParts,
+      6,
+      (part) async {
+        final headers = part['headers'] as List?;
+        final contentIdHeader = headers?.firstWhere(
+          (h) => h['name']?.toString().toLowerCase() == 'content-id',
+          orElse: () => null,
+        );
 
-    for (final part in inlineParts) {
-      final headers = part['headers'] as List?;
-      final contentIdHeader = headers?.firstWhere(
-        (h) => h['name']?.toString().toLowerCase() == 'content-id',
-        orElse: () => null,
-      );
+        if (contentIdHeader == null) return null;
 
-      if (contentIdHeader != null) {
-        // Content-ID usually comes like "<image001.png@...>"
-        // We need to strip the angle brackets
-        String contentId = contentIdHeader['value'].toString();
+        var contentId = contentIdHeader['value'].toString();
         contentId = contentId.replaceAll('<', '').replaceAll('>', '');
 
-        // Check if this CID is actually used in the HTML
-        if (resolvedContent.contains('cid:$contentId')) {
-          try {
-            // Get the attachment data
-            final body = part['body'];
-            String? base64Data;
+        if (!htmlContent.contains('cid:$contentId')) return null;
 
-            if (body['data'] != null) {
-              // Already inside the part (small attachments)
-              base64Data = body['data'];
-            } else if (body['attachmentId'] != null) {
-              // Fetch large attachment
-              debugPrint(
-                  '📧 [Gmail] Fetching inline attachment: ${body['attachmentId']}');
-              base64Data =
-                  await _fetchAttachment(messageId, body['attachmentId']);
-            }
+        try {
+          final body = part['body'];
+          String? base64Data;
 
-            if (base64Data != null) {
-              final normalized =
-                  base64Data.replaceAll('-', '+').replaceAll('_', '/');
-              final mimeType = part['mimeType'] ?? 'image/jpeg';
-
-              // Replace cid with data URI
-              final dataUri = 'data:$mimeType;base64,$normalized';
-              resolvedContent =
-                  resolvedContent.replaceAll('cid:$contentId', dataUri);
-            }
-          } catch (e) {
-            debugPrint('Error resolving CID $contentId: $e');
+          if (body['data'] != null) {
+            base64Data = body['data'];
+          } else if (body['attachmentId'] != null) {
+            base64Data = await _fetchAttachment(
+              messageId,
+              body['attachmentId'],
+            );
           }
+
+          if (base64Data == null) return null;
+
+          final normalized =
+              base64Data.replaceAll('-', '+').replaceAll('_', '/');
+          final mimeType = part['mimeType'] ?? 'image/jpeg';
+          return _InlineImageReplacement(
+            contentId,
+            'data:$mimeType;base64,$normalized',
+          );
+        } catch (e) {
+          debugPrint('Error resolving CID $contentId: $e');
+          return null;
         }
-      }
+      },
+    );
+
+    var resolvedContent = htmlContent;
+    for (final replacement
+        in replacements.whereType<_InlineImageReplacement>()) {
+      resolvedContent = resolvedContent.replaceAll(
+        'cid:${replacement.contentId}',
+        replacement.dataUri,
+      );
     }
     return resolvedContent;
+  }
+
+  Future<List<R?>> _mapWithConcurrency<T, R>(
+    List<T> items,
+    int concurrency,
+    Future<R?> Function(T item) mapper,
+  ) async {
+    final results = List<R?>.filled(items.length, null);
+    var nextIndex = 0;
+
+    Future<void> worker() async {
+      while (nextIndex < items.length) {
+        final currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    }
+
+    final workerCount = items.length < concurrency ? items.length : concurrency;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    return results;
   }
 
   Future<String?> _fetchAttachment(
@@ -515,7 +577,7 @@ class GmailProvider extends EmailProvider {
     try {
       final url = '$_apiBase/messages/$messageId/attachments/$attachmentId';
       final data = await _proxyRequest(method: 'GET', url: url);
-      return data['data']; // Returns base64url encoded string
+      return data['data'];
     } catch (e) {
       debugPrint('Error fetching attachment: $e');
       return null;
@@ -523,71 +585,104 @@ class GmailProvider extends EmailProvider {
   }
 
   void _collectInlineParts(
-      Map<String, dynamic> part, List<Map<String, dynamic>> collected) {
-    // Check if current part is inline
-    // logic: headers has Content-ID
+    Map<String, dynamic> part,
+    List<Map<String, dynamic>> collected,
+  ) {
     final headers = part['headers'] as List?;
     if (headers != null) {
-      final hasCid = headers
-          .any((h) => h['name']?.toString().toLowerCase() == 'content-id');
-      if (hasCid) {
-        collected.add(part);
-      }
+      final hasContentId = headers.any(
+        (h) => h['name']?.toString().toLowerCase() == 'content-id',
+      );
+      if (hasContentId) collected.add(part);
     }
 
-    // Recurse
     if (part['parts'] != null) {
-      for (final p in part['parts']) {
-        _collectInlineParts(p, collected);
+      for (final nestedPart in part['parts']) {
+        _collectInlineParts(nestedPart, collected);
       }
     }
   }
 
   String _extractBody(Map<String, dynamic> payload) {
-    // Check for direct body
-    final body = payload['body'];
-    if (body != null && body['data'] != null) {
-      return _decodeBase64Url(body['data']);
+    final htmlBody = _extractMimeBody(payload, 'text/html');
+    if (htmlBody != null && htmlBody.trim().isNotEmpty) return htmlBody;
+
+    final plainBody = _extractMimeBody(payload, 'text/plain');
+    if (plainBody != null && plainBody.trim().isNotEmpty) {
+      return _plainTextToHtml(plainBody);
     }
 
-    // Check parts for multipart messages
-    final parts = payload['parts'] as List?;
-    if (parts != null) {
-      // Prefer HTML
-      for (final part in parts) {
-        if (part['mimeType'] == 'text/html') {
-          final partBody = part['body'];
-          if (partBody != null && partBody['data'] != null) {
-            return _decodeBase64Url(partBody['data']);
-          }
-        }
-      }
-      // Fallback to plain text
-      for (final part in parts) {
-        if (part['mimeType'] == 'text/plain') {
-          final partBody = part['body'];
-          if (partBody != null && partBody['data'] != null) {
-            return '<pre>${_decodeBase64Url(partBody['data'])}</pre>';
-          }
-        }
-      }
-      // Recursive check for nested parts (e.g. multipart/alternative inside multipart/mixed)
-      for (final part in parts) {
-        if (part['parts'] != null) {
-          final nested = _extractBody(part);
-          if (nested.isNotEmpty) return nested;
-        }
-      }
+    final body = payload['body'];
+    if (body is Map && body['data'] is String) {
+      final decoded = _decodeBase64Url(body['data'] as String);
+      if (_looksLikeHtml(decoded)) return decoded;
+      return _plainTextToHtml(decoded);
     }
 
     return '';
   }
 
+  String? _extractMimeBody(Map<String, dynamic> part, String targetMimeType) {
+    if (_isAttachmentPart(part)) return null;
+
+    final mimeType = part['mimeType']?.toString().toLowerCase();
+    final body = part['body'];
+    if (mimeType == targetMimeType && body is Map && body['data'] is String) {
+      return _decodeBase64Url(body['data'] as String);
+    }
+
+    final nestedParts = part['parts'];
+    if (nestedParts is List) {
+      for (final nestedPart in nestedParts) {
+        if (nestedPart is Map<String, dynamic>) {
+          final nestedBody = _extractMimeBody(nestedPart, targetMimeType);
+          if (nestedBody != null && nestedBody.trim().isNotEmpty) {
+            return nestedBody;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  bool _isAttachmentPart(Map<String, dynamic> part) {
+    final filename = part['filename']?.toString().trim();
+    if (filename != null && filename.isNotEmpty) return true;
+
+    final headers = part['headers'];
+    if (headers is List) {
+      return headers.any((header) {
+        if (header is! Map) return false;
+        final name = header['name']?.toString().toLowerCase();
+        final value = header['value']?.toString().toLowerCase() ?? '';
+        return name == 'content-disposition' && value.contains('attachment');
+      });
+    }
+
+    return false;
+  }
+
+  String _plainTextToHtml(String text) {
+    final escaped = const HtmlEscape().convert(text);
+    return '<pre style="margin:0;white-space:pre-wrap;word-wrap:break-word;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;line-height:1.45">$escaped</pre>';
+  }
+
+  bool _looksLikeHtml(String value) {
+    return RegExp(r'<(html|body|table|div|p|span|br|style|img)\b',
+            caseSensitive: false)
+        .hasMatch(value);
+  }
+
   String _decodeBase64Url(String data) {
     try {
       // Gmail uses URL-safe base64
-      final normalized = data.replaceAll('-', '+').replaceAll('_', '/');
-      return utf8.decode(base64.decode(normalized));
+      var normalized = data.replaceAll('-', '+').replaceAll('_', '/');
+      final padding = normalized.length % 4;
+      if (padding > 0) {
+        normalized = normalized.padRight(normalized.length + 4 - padding, '=');
+      }
+      return utf8.decode(base64.decode(normalized), allowMalformed: true);
     } catch (e) {
       return data;
     }
@@ -687,9 +782,43 @@ class GmailProvider extends EmailProvider {
     notifyListeners();
   }
 
+  String _friendlyGmailError(Object error) {
+    final raw = error.toString();
+    if (raw.contains('status: 400') ||
+        raw.contains('Bad Request') ||
+        raw.contains('INVALID_ARGUMENT')) {
+      return 'Gmail rechazó la solicitud de actualización. Intenta actualizar nuevamente.';
+    }
+    if (raw.contains('status: 401') || raw.contains('Unauthorized')) {
+      return 'La conexión con Gmail venció. Vuelve a conectar la cuenta.';
+    }
+    if (raw.contains('status: 403') || raw.contains('insufficient')) {
+      return 'Gmail no autorizó esta operación. Revisa los permisos de la cuenta.';
+    }
+    return 'No se pudo actualizar Gmail en este momento.';
+  }
+
+  String _friendlyGmailConnectionError(Object error) {
+    final raw = error.toString();
+    if (raw.contains('status: 400') || raw.contains('Bad Request')) {
+      return 'El código de conexión de Gmail ya venció. Inicia la conexión nuevamente.';
+    }
+    if (raw.contains('status: 401') || raw.contains('Unauthorized')) {
+      return 'No se pudo autorizar Gmail. Vuelve a conectar la cuenta.';
+    }
+    return 'No se pudo conectar Gmail en este momento.';
+  }
+
   @override
   void clearSelectedEmail() {
     _selectedEmail = null;
     notifyListeners();
   }
+}
+
+class _InlineImageReplacement {
+  final String contentId;
+  final String dataUri;
+
+  const _InlineImageReplacement(this.contentId, this.dataUri);
 }

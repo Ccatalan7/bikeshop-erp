@@ -701,6 +701,34 @@ These credentials are documented here because agents repeatedly needed them for 
 - prefer environment variables in terminal commands instead of repeating raw secrets
 - never guess replacements or rotate them silently
 
+## 🔐 No Local App Secrets / OAuth Credential Rule
+
+Flutter clients must never store, ship, or hardcode provider secrets or OAuth credentials.
+
+This applies to all apps and platforms, including Windows, macOS, Android, iOS, and Web.
+
+Do **not** put any of these in Dart code, app assets, local preferences, SQLite, local files, build defines, public config, or checked-in environment files:
+
+- API keys intended to be private
+- OAuth client secrets
+- OAuth client IDs for provider authorization flows when the provider can be initiated server-side
+- access tokens
+- refresh tokens
+- provider mailbox tokens
+- third-party service credentials
+- webhook secrets
+
+Correct pattern:
+
+1. Store provider credentials in Supabase Edge Function secrets using `supabase secrets set --project-ref xzdvtzdqjeyqxnkqprtf ...`.
+2. Generate OAuth authorization URLs server-side when possible, using an Edge Function action such as `authorization_url`.
+3. Exchange OAuth codes server-side in Edge Functions.
+4. Store provider access/refresh tokens only in database-side vault tables such as `email_accounts`, protected from `anon` and `authenticated` direct access.
+5. Route provider API calls through Edge Functions that refresh tokens server-side and proxy only the allowed provider endpoints.
+6. Keep Flutter local storage limited to non-secret UI/cache state. Cached email bodies or metadata are allowed, but provider tokens and secrets are not.
+
+If a package, SDK, or provider flow seems to require a local secret, stop and build a Supabase Edge Function wrapper instead. Rotating credentials must require only updating Supabase secrets and redeploying the relevant Edge Function, not rebuilding the app.
+
 ---
 
 # 🚨 CRITICAL: MULTI-TENANT ARCHITECTURE

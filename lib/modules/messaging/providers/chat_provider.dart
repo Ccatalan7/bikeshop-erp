@@ -96,6 +96,93 @@ class ChatProvider extends ChangeNotifier {
     });
   }
 
+  bool _isWhatsAppStatusMessage(Message message) {
+    final metadata = message.metadata;
+    final provider = metadata['external_provider']?.toString() ??
+        metadata['provider']?.toString();
+    final channel = metadata['channel']?.toString();
+    final externalMessageId = metadata['external_message_id']?.toString();
+
+    return provider == 'whatsapp' ||
+        channel == 'whatsapp' ||
+        (externalMessageId != null && externalMessageId.startsWith('wamid.'));
+  }
+
+  String? _whatsAppStatusForDebug(Message message) {
+    if (message.metadata['pending'] == true) {
+      return 'pending';
+    }
+
+    return message.metadata['external_status']?.toString() ??
+        message.metadata['whatsapp_status']?.toString();
+  }
+
+  String _shortDebugId(String? value) {
+    if (value == null || value.isEmpty) return '-';
+    if (value.length <= 18) return value;
+    return '${value.substring(0, 8)}...${value.substring(value.length - 6)}';
+  }
+
+  String _debugPreview(String content) {
+    final compact = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.length <= 48) return compact;
+    return '${compact.substring(0, 48)}...';
+  }
+
+  void _debugLogWhatsAppStatusChanges(List<Message> nextMessages) {
+    final previousMessages = <Message>[
+      ..._activeMessages,
+      ..._optimisticMessages.values,
+    ];
+    final previousById = <String, Message>{
+      for (final message in previousMessages) message.id: message,
+    };
+    final previousByExternalId = <String, Message>{};
+    final previousByClientId = <String, Message>{};
+
+    for (final message in previousMessages) {
+      final externalMessageId =
+          message.metadata['external_message_id']?.toString();
+      if (externalMessageId != null && externalMessageId.isNotEmpty) {
+        previousByExternalId[externalMessageId] = message;
+      }
+
+      final clientMessageId = message.metadata['client_message_id']?.toString();
+      if (clientMessageId != null && clientMessageId.isNotEmpty) {
+        previousByClientId[clientMessageId] = message;
+      }
+    }
+
+    final candidates = nextMessages.where(_isWhatsAppStatusMessage).toList();
+    final visibleCandidates = candidates.length > 30
+        ? candidates.skip(candidates.length - 30)
+        : candidates;
+
+    for (final message in visibleCandidates) {
+      final nextStatus = _whatsAppStatusForDebug(message);
+      if (nextStatus == null || nextStatus.isEmpty) continue;
+
+      final externalMessageId =
+          message.metadata['external_message_id']?.toString();
+      final clientMessageId = message.metadata['client_message_id']?.toString();
+      final previous = previousById[message.id] ??
+          (externalMessageId != null
+              ? previousByExternalId[externalMessageId]
+              : null) ??
+          (clientMessageId != null
+              ? previousByClientId[clientMessageId]
+              : null);
+      final previousStatus =
+          previous == null ? null : _whatsAppStatusForDebug(previous);
+
+      if (previousStatus == nextStatus) continue;
+
+      debugPrint(
+        '🔎 [WhatsAppStatus] message=${_shortDebugId(message.id)} external=${_shortDebugId(externalMessageId)} client=${_shortDebugId(clientMessageId)} status=${previousStatus ?? 'none'}->$nextStatus created=${message.createdAt.toIso8601String()} text="${_debugPreview(message.content)}"',
+      );
+    }
+  }
+
   void _pruneConfirmedOptimisticMessages(List<Message> serverMessages) {
     _optimisticMessages.removeWhere(
       (_, optimistic) => _hasMatchingServerMessage(optimistic, serverMessages),
@@ -311,6 +398,7 @@ class ChatProvider extends ChangeNotifier {
         (messages) {
           _messagesRetryTimer?.cancel();
           _messagesRetryAttempt = 0;
+          _debugLogWhatsAppStatusChanges(messages);
           _pruneConfirmedOptimisticMessages(messages);
           _activeMessages = messages;
           _isLoading = false;

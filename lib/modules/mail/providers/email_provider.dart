@@ -113,6 +113,9 @@ abstract class EmailProvider with ChangeNotifier {
   /// List of emails in the current folder
   List<Email> get emails;
 
+  /// Whether the provider has another inbox page available.
+  bool get canLoadMore => false;
+
   /// Currently selected email with full content
   Email? get selectedEmail;
 
@@ -120,7 +123,10 @@ abstract class EmailProvider with ChangeNotifier {
   Future<void> initialize();
 
   /// Get the OAuth authorization URL (state is passed for mobile deep link handling)
-  String getAuthorizationUrl({required String redirectUri, String? state});
+  Future<String> getAuthorizationUrl({
+    required String redirectUri,
+    String? state,
+  });
 
   /// Exchange auth code for tokens
   Future<bool> exchangeCodeForTokens({
@@ -138,7 +144,13 @@ abstract class EmailProvider with ChangeNotifier {
   Future<String?> getValidAccessToken();
 
   /// Fetch inbox emails
-  Future<List<Email>> getInbox({int limit = 30, int start = 0});
+  Future<List<Email>> getInbox({
+    int limit = 50,
+    int start = 0,
+    String? pageToken,
+    String? searchQuery,
+    List<Email> knownEmails = const [],
+  });
 
   /// Get full email content
   Future<Email> getEmailContent(Email email);

@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/web_url.dart';
+import '../../../shared/services/deep_link_handler.dart';
+import '../providers/email_provider.dart';
 import '../providers/mail_account_manager.dart';
 import '../widgets/email_list_item_unified.dart';
 import '../widgets/email_detail_view_unified.dart';
 import '../widgets/compose_email_dialog.dart';
+
+enum _InboxQuickFilter { all, unread, attachments }
 
 /// Unified Mail Inbox Page - Shows merged emails from all connected providers
 class MailInboxPage extends StatefulWidget {
@@ -18,6 +24,12 @@ class MailInboxPage extends StatefulWidget {
 
 class _MailInboxPageState extends State<MailInboxPage> {
   late final MailAccountManager _manager;
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _listScrollController = ScrollController();
+  Timer? _searchDebounceTimer;
+  bool _isProcessingOAuthCallback = false;
+  String _searchQuery = '';
+  _InboxQuickFilter _quickFilter = _InboxQuickFilter.all;
 
   @override
   void initState() {
@@ -25,11 +37,43 @@ class _MailInboxPageState extends State<MailInboxPage> {
     // Use singleton - preserves state across navigation
     _manager = MailAccountManager.instance;
     _manager.addListener(_onManagerChange);
+    _searchController.addListener(_onSearchChanged);
+    _listScrollController.addListener(_onListScrolled);
+    DeepLinkHandler.instance.addListener(_onDeepLinkChange);
     _initialize();
   }
 
   void _onManagerChange() {
     if (mounted) setState(() {});
+  }
+
+  void _onDeepLinkChange() {
+    if (!mounted || !_manager.isInitialized) return;
+    if (!DeepLinkHandler.instance.hasPendingOAuthCallback) return;
+    Future.microtask(_handleOAuthCallbacks);
+  }
+
+  void _onSearchChanged() {
+    final value = _searchController.text.trim();
+    if (value == _searchQuery) return;
+    setState(() => _searchQuery = value);
+
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      if (value.isEmpty) {
+        _manager.clearSearch();
+      } else {
+        _manager.searchInbox(value);
+      }
+    });
+  }
+
+  void _onListScrolled() {
+    if (!_listScrollController.hasClients) return;
+    if (_listScrollController.position.extentAfter > 520) return;
+    if (!_manager.canLoadMore || _manager.isLoadingMore) return;
+    _manager.loadMore();
   }
 
   Future<void> _initialize() async {
@@ -50,44 +94,98 @@ class _MailInboxPageState extends State<MailInboxPage> {
   @override
   void dispose() {
     _manager.removeListener(_onManagerChange);
+    _searchDebounceTimer?.cancel();
+    _searchController.removeListener(_onSearchChanged);
+    _listScrollController.removeListener(_onListScrolled);
+    _searchController.dispose();
+    _listScrollController.dispose();
+    DeepLinkHandler.instance.removeListener(_onDeepLinkChange);
     // Don't call _manager.dispose() - it's a singleton
     super.dispose();
   }
 
   Future<void> _handleOAuthCallbacks() async {
-    if (!kIsWeb) return;
+    if (_isProcessingOAuthCallback) return;
+    _isProcessingOAuthCallback = true;
 
-    // Check for Zoho callback
-    String? zohoCode = getAndClearZohoOAuthCode();
-    zohoCode ??= Uri.base.queryParameters['zoho_code'];
+    try {
+      if (kIsWeb) {
+        String? zohoCode = getAndClearZohoOAuthCode();
+        zohoCode ??= Uri.base.queryParameters['zoho_code'];
 
-    if (zohoCode != null) {
-      debugPrint('🔐 [Mail] Found Zoho auth code, exchanging...');
-      await _manager.exchangeCodeForTokens(
-        'zoho',
-        code: zohoCode,
-        redirectUri:
-            'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/zoho-oauth',
+        if (zohoCode != null) {
+          await _processOAuthCode('zoho', zohoCode);
+          _cleanUrl();
+        }
+
+        String? gmailCode = getAndClearGmailOAuthCode();
+        gmailCode ??= Uri.base.queryParameters['gmail_code'];
+
+        if (gmailCode != null) {
+          await _processOAuthCode('gmail', gmailCode);
+          _cleanUrl();
+        }
+      }
+
+      final deepLinks = DeepLinkHandler.instance;
+      final pendingProvider = deepLinks.pendingOAuthProvider;
+      final pendingCode = deepLinks.pendingOAuthCode;
+      if (pendingProvider != null && pendingCode != null) {
+        deepLinks.clearPendingOAuth();
+        await _processOAuthCode(pendingProvider, pendingCode);
+      }
+    } finally {
+      _isProcessingOAuthCallback = false;
+    }
+  }
+
+  Future<void> _processOAuthCode(String providerId, String code) async {
+    final provider = _manager.getProvider(providerId);
+    if (provider?.isAuthenticated ?? false) {
+      debugPrint(
+        '🔐 [Mail] Ignoring stale $providerId auth code; account is already connected.',
       );
-      _cleanUrl();
-      debugPrint('🔐 [Mail] Zoho token exchange complete');
+      return;
     }
 
-    // Check for Gmail callback
-    String? gmailCode = getAndClearGmailOAuthCode();
-    gmailCode ??= Uri.base.queryParameters['gmail_code'];
+    await _exchangeOAuthCode(providerId, code);
+  }
 
-    if (gmailCode != null) {
-      debugPrint('🔐 [Mail] Found Gmail auth code, exchanging...');
-      await _manager.exchangeCodeForTokens(
-        'gmail',
-        code: gmailCode,
-        redirectUri:
-            'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth',
-      );
-      _cleanUrl();
-      debugPrint('🔐 [Mail] Gmail token exchange complete');
+  Future<void> _exchangeOAuthCode(String providerId, String code) async {
+    debugPrint('🔐 [Mail] Found $providerId auth code, exchanging...');
+    final success = await _manager.exchangeCodeForTokens(
+      providerId,
+      code: code,
+      redirectUri: _redirectUriForProvider(providerId),
+    );
+
+    if (!success) {
+      final provider = _manager.getProvider(providerId);
+      final message = provider?.error ??
+          _manager.error ??
+          'No se pudo conectar la cuenta de correo.';
+      debugPrint('🔐 [Mail] $providerId token exchange failed: $message');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    debugPrint('🔐 [Mail] $providerId token exchange complete');
+    if (mounted) {
+      final providerName = providerId == 'gmail' ? 'Gmail' : 'Zoho';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$providerName conectado')),
+      );
+    }
+  }
+
+  String _redirectUriForProvider(String providerId) {
+    return providerId == 'zoho'
+        ? 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/zoho-oauth'
+        : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth';
   }
 
   void _cleanUrl() {
@@ -95,34 +193,42 @@ class _MailInboxPageState extends State<MailInboxPage> {
   }
 
   void _connectProvider(String providerId) async {
-    final redirectUri = providerId == 'zoho'
-        ? 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/zoho-oauth'
-        : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth';
+    try {
+      final redirectUri = _redirectUriForProvider(providerId);
 
-    // On mobile, pass state=mobile so edge function redirects to deep link
-    const state = kIsWeb ? null : 'mobile';
-    final authUrl = _manager.getAuthorizationUrl(
-      providerId,
-      redirectUri: redirectUri,
-      state: state,
-    );
+      // On mobile, pass state=mobile so edge function redirects to deep link
+      const state = kIsWeb ? null : 'mobile';
+      final authUrl = await _manager.getAuthorizationUrl(
+        providerId,
+        redirectUri: redirectUri,
+        state: state,
+      );
 
-    if (kIsWeb) {
-      // Web: direct navigation
-      navigateToUrl(authUrl);
-    } else {
-      // Mobile: open in external browser, deep link will bring user back
-      final uri = Uri.parse(authUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (kIsWeb) {
+        // Web: direct navigation
+        navigateToUrl(authUrl);
       } else {
-        if (mounted) {
+        // Mobile: open in external browser, deep link will bring user back
+        final uri = Uri.parse(authUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('No se pudo abrir el navegador'),
             ),
           );
         }
+      }
+    } catch (e) {
+      debugPrint('🔐 [Mail] Could not start $providerId OAuth: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo iniciar la conexión con $providerId.'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -243,7 +349,7 @@ ${email.content ?? email.summary ?? ''}
     return Row(
       children: [
         SizedBox(
-          width: 380,
+          width: 420,
           child: Column(
             children: [
               _buildListHeader(),
@@ -257,9 +363,13 @@ ${email.content ?? email.summary ?? ''}
               ? EmailDetailViewUnified(
                   email: _manager.selectedEmail!,
                   provider: _manager.selectedProvider,
-                  isLoading: _manager.isLoading,
-                  error: _manager.error,
+                  isLoading: _manager.isLoadingSelectedEmail,
+                  error: _manager.selectedEmailError,
                   onRetry: () => _manager.selectEmail(_manager.selectedEmail!),
+                  onToggleRead: () => _manager.markAsRead(
+                    _manager.selectedEmail!,
+                    read: !_manager.selectedEmail!.isRead,
+                  ),
                   onReply: () => _replyToEmail(false),
                   onReplyAll: () => _replyToEmail(true),
                   onDelete: () async {
@@ -277,10 +387,14 @@ ${email.content ?? email.summary ?? ''}
       return EmailDetailViewUnified(
         email: _manager.selectedEmail!,
         provider: _manager.selectedProvider,
-        isLoading: _manager.isLoading,
-        error: _manager.error,
+        isLoading: _manager.isLoadingSelectedEmail,
+        error: _manager.selectedEmailError,
         onClose: () => _manager.clearSelection(),
         onRetry: () => _manager.selectEmail(_manager.selectedEmail!),
+        onToggleRead: () => _manager.markAsRead(
+          _manager.selectedEmail!,
+          read: !_manager.selectedEmail!.isRead,
+        ),
         onReply: () => _replyToEmail(false),
         onReplyAll: () => _replyToEmail(true),
         onDelete: () async {
@@ -300,9 +414,10 @@ ${email.content ?? email.summary ?? ''}
   Widget _buildListHeader() {
     final theme = Theme.of(context);
     final connectedProviders = _manager.connectedProviders;
+    final visibleCount = _visibleEmails.length;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
@@ -311,29 +426,39 @@ ${email.content ?? email.summary ?? ''}
         children: [
           Row(
             children: [
-              Text(
-                'Bandeja Unificada',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              if (_manager.lastFetch != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text(
-                    '• ${_formatTime(_manager.lastFetch!)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Bandeja Unificada',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
+                    if (_manager.lastFetch != null) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          '• ${_formatTime(_manager.lastFetch!)}',
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              const Spacer(),
-              // Compose button
-              IconButton(
+              ),
+              const SizedBox(width: 8),
+              _buildHeaderIconButton(
                 onPressed: () => _showComposeDialog(),
                 icon: const Icon(Icons.edit, size: 20),
                 tooltip: 'Redactar',
               ),
-              IconButton(
+              _buildHeaderIconButton(
                 onPressed:
                     _manager.isLoading ? null : () => _manager.refreshInbox(),
                 icon: _manager.isLoading
@@ -345,50 +470,216 @@ ${email.content ?? email.summary ?? ''}
                     : const Icon(Icons.refresh, size: 20),
                 tooltip: 'Actualizar',
               ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.add, size: 20),
-                tooltip: 'Agregar cuenta',
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                      value: 'zoho', child: Text('Conectar Zoho')),
-                  const PopupMenuItem(
-                      value: 'gmail', child: Text('Conectar Gmail')),
-                ],
-                onSelected: _connectProvider,
-              ),
+              _buildAddAccountMenu(),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 36,
+            child: TextField(
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Buscar correo',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: _searchController.clear,
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Limpiar búsqueda',
+                      ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
-          // Provider filter chips
-          Wrap(
-            spacing: 8,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildProviderChip(
+                  label: 'Todos',
+                  selected: _manager.providerFilter == null,
+                  onSelected: () => _manager.setProviderFilter(null),
+                ),
+                const SizedBox(width: 8),
+                ...connectedProviders.map((provider) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildProviderChip(
+                        label: provider.displayName,
+                        icon: _providerIcon(provider.providerId),
+                        selected:
+                            _manager.providerFilter == provider.providerId,
+                        onSelected: () => _manager.setProviderFilter(
+                          _manager.providerFilter == provider.providerId
+                              ? null
+                              : provider.providerId,
+                        ),
+                      ),
+                    )),
+                const SizedBox(width: 8),
+                _buildQuickFilterChip(
+                  label: 'No leídos',
+                  icon: Icons.markunread_outlined,
+                  filter: _InboxQuickFilter.unread,
+                ),
+                const SizedBox(width: 8),
+                _buildQuickFilterChip(
+                  label: 'Adjuntos',
+                  icon: Icons.attach_file,
+                  filter: _InboxQuickFilter.attachments,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              FilterChip(
-                label: const Text('Todos'),
-                selected: _manager.providerFilter == null,
-                onSelected: (_) => _manager.setProviderFilter(null),
+              Expanded(
+                child: Text(
+                  _manager.isSearchActive
+                      ? (_manager.isSearching
+                          ? 'Buscando...'
+                          : '$visibleCount resultados')
+                      : '$visibleCount visibles de ${_manager.loadedCount} cargados',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-              ...connectedProviders.map((p) => FilterChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _providerIcon(p.providerId),
-                        const SizedBox(width: 4),
-                        Text(p.displayName),
-                      ],
-                    ),
-                    selected: _manager.providerFilter == p.providerId,
-                    onSelected: (_) => _manager.setProviderFilter(
-                      _manager.providerFilter == p.providerId
-                          ? null
-                          : p.providerId,
-                    ),
-                  )),
+              if (!_manager.isSearchActive && _manager.canLoadMore)
+                TextButton.icon(
+                  onPressed:
+                      _manager.isLoadingMore ? null : () => _manager.loadMore(),
+                  icon: _manager.isLoadingMore
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.keyboard_arrow_down, size: 18),
+                  label: const Text('Más'),
+                ),
             ],
           ),
+          if (_manager.error != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _manager.error!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildHeaderIconButton({
+    required Widget icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: icon,
+      tooltip: tooltip,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+    );
+  }
+
+  Widget _buildAddAccountMenu() {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: PopupMenuButton<String>(
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        icon: const Icon(Icons.add),
+        tooltip: 'Agregar cuenta',
+        itemBuilder: (context) => [
+          const PopupMenuItem(value: 'zoho', child: Text('Conectar Zoho')),
+          const PopupMenuItem(value: 'gmail', child: Text('Conectar Gmail')),
+        ],
+        onSelected: _connectProvider,
+      ),
+    );
+  }
+
+  Widget _buildProviderChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+    Widget? icon,
+  }) {
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            icon,
+            const SizedBox(width: 5),
+          ],
+          Text(label),
+        ],
+      ),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+    );
+  }
+
+  Widget _buildQuickFilterChip({
+    required String label,
+    required IconData icon,
+    required _InboxQuickFilter filter,
+  }) {
+    final selected = _quickFilter == filter;
+    return FilterChip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) {
+        setState(() {
+          _quickFilter = selected ? _InboxQuickFilter.all : filter;
+        });
+      },
+    );
+  }
+
+  List<Email> get _visibleEmails {
+    final query = _searchQuery.toLowerCase();
+    return _manager.emails.where((email) {
+      if (_quickFilter == _InboxQuickFilter.unread && email.isRead) {
+        return false;
+      }
+      if (_quickFilter == _InboxQuickFilter.attachments &&
+          !email.hasAttachment) {
+        return false;
+      }
+      if (_manager.isSearchActive) return true;
+      if (query.isEmpty) return true;
+
+      final searchable = [
+        email.subject,
+        email.senderName,
+        email.senderEmail,
+        email.fromAddress,
+        email.toAddress,
+        email.summary ?? '',
+      ].join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList(growable: false);
   }
 
   String _formatTime(DateTime time) {
@@ -412,7 +703,15 @@ ${email.content ?? email.summary ?? ''}
   }
 
   Widget _buildEmailList() {
+    final emails = _visibleEmails;
+    final showLoadMoreFooter =
+        !_manager.isSearchActive && _manager.canLoadMore && emails.isNotEmpty;
+
     if (_manager.isLoading && _manager.emails.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_manager.isSearching && emails.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -427,11 +726,28 @@ ${email.content ?? email.summary ?? ''}
       );
     }
 
+    if (emails.isEmpty) {
+      return Center(
+        child: Text(
+          _manager.isSearchActive
+              ? 'No se encontraron correos'
+              : 'No hay correos para estos filtros',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+
     return ListView.builder(
-      itemCount: _manager.emails.length,
+      controller: _listScrollController,
+      itemCount: emails.length + (showLoadMoreFooter ? 1 : 0),
       itemBuilder: (context, index) {
-        final email = _manager.emails[index];
-        final isSelected = _manager.selectedEmail?.id == email.id;
+        if (index == emails.length) return _buildLoadMoreFooter();
+
+        final email = emails[index];
+        final isSelected = _manager.selectedEmail?.id == email.id &&
+            _manager.selectedEmail?.providerId == email.providerId;
 
         return EmailListItemUnified(
           email: email,
@@ -439,6 +755,23 @@ ${email.content ?? email.summary ?? ''}
           onTap: () => _manager.selectEmail(email),
         );
       },
+    );
+  }
+
+  Widget _buildLoadMoreFooter() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: OutlinedButton.icon(
+        onPressed: _manager.isLoadingMore ? null : () => _manager.loadMore(),
+        icon: _manager.isLoadingMore
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.expand_more),
+        label: Text(_manager.isLoadingMore ? 'Cargando...' : 'Cargar más'),
+      ),
     );
   }
 

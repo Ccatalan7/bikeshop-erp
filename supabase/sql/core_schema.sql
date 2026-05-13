@@ -18686,6 +18686,46 @@ alter table online_order_items enable row level security;
 -- EMAIL PUSH NOTIFICATIONS (Gmail/Zoho instant notifications)
 -- ============================================================================
 
+-- Server-side mail account connections.
+-- Tokens in this table must never be read or written directly by Flutter;
+-- authenticated clients go through provider Edge Functions instead.
+create table if not exists public.email_accounts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  provider text not null check (provider in ('gmail', 'zoho')),
+  account_email text not null,
+  provider_account_id text,
+  access_token text,
+  refresh_token text not null,
+  token_type text,
+  scope text,
+  token_expires_at timestamp with time zone,
+  provider_metadata jsonb not null default '{}'::jsonb,
+  is_active boolean not null default true,
+  last_connected_at timestamp with time zone not null default now(),
+  last_token_refresh_at timestamp with time zone,
+  last_error text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(user_id, provider)
+);
+
+create index if not exists idx_email_accounts_tenant on public.email_accounts(tenant_id);
+create index if not exists idx_email_accounts_user on public.email_accounts(user_id);
+create index if not exists idx_email_accounts_provider_email on public.email_accounts(provider, account_email);
+
+alter table public.email_accounts enable row level security;
+
+-- Intentionally no authenticated RLS policies: tokens are server-only secrets.
+revoke all on table public.email_accounts from anon, authenticated;
+grant all on table public.email_accounts to service_role;
+
+drop trigger if exists trg_email_accounts_updated_at on public.email_accounts;
+create trigger trg_email_accounts_updated_at
+  before update on public.email_accounts
+  for each row execute function public.set_updated_at();
+
 -- Store push subscription state for instant email notifications
 create table if not exists email_push_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -26291,6 +26331,76 @@ begin
 end;
 $$;
 
+create or replace function public.replay_whatsapp_message_status(
+  p_external_message_id text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event record;
+  v_message record;
+begin
+  select
+    lower(coalesce(payload->>'status', split_part(event_key, ':', 3))) as status,
+    payload
+  into v_event
+  from public.whatsapp_webhook_events
+  where event_type = 'status'
+    and left(event_key, length('status:' || p_external_message_id || ':')) =
+      'status:' || p_external_message_id || ':'
+  order by
+    case lower(coalesce(payload->>'status', split_part(event_key, ':', 3)))
+      when 'failed' then 50
+      when 'read' then 40
+      when 'delivered' then 30
+      when 'sent' then 20
+      else 10
+    end desc,
+    coalesce(nullif(payload->>'timestamp', '')::bigint, extract(epoch from created_at)::bigint) desc,
+    created_at desc
+  limit 1;
+
+  if not found or v_event.status is null or v_event.status = '' then
+    return jsonb_build_object(
+      'applied', false,
+      'reason', 'no_status_event',
+      'external_message_id', p_external_message_id
+    );
+  end if;
+
+  update public.messages
+  set external_status = v_event.status,
+      metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
+        'whatsapp_status', v_event.status,
+        'whatsapp_status_payload', v_event.payload,
+        'whatsapp_status_updated_at', now()
+      )
+  where external_provider = 'whatsapp'
+    and external_message_id = p_external_message_id
+  returning id, conversation_id into v_message;
+
+  if v_message.id is null then
+    return jsonb_build_object(
+      'applied', false,
+      'reason', 'message_not_found',
+      'external_message_id', p_external_message_id,
+      'status', v_event.status
+    );
+  end if;
+
+  return jsonb_build_object(
+    'applied', true,
+    'message_id', v_message.id,
+    'conversation_id', v_message.conversation_id,
+    'external_message_id', p_external_message_id,
+    'status', v_event.status
+  );
+end;
+$$;
+
 create or replace function public.record_whatsapp_message_status(
   p_phone_number_id text,
   p_external_message_id text,
@@ -26304,10 +26414,12 @@ set search_path = public
 as $$
 declare
   v_channel record;
-  v_message record;
   v_event_key text;
   v_row_count integer;
   v_job_id uuid;
+  v_replay_result jsonb;
+  v_message_id uuid;
+  v_conversation_id uuid;
 begin
   select * into v_channel
   from public.whatsapp_channels
@@ -26339,29 +26451,14 @@ begin
 
   get diagnostics v_row_count = row_count;
 
-  if v_row_count = 0 then
-    return jsonb_build_object(
-      'duplicate', true,
-      'event_key', v_event_key,
-      'external_message_id', p_external_message_id
-    );
-  end if;
+  v_replay_result := public.replay_whatsapp_message_status(p_external_message_id);
+  v_message_id := nullif(v_replay_result->>'message_id', '')::uuid;
+  v_conversation_id := nullif(v_replay_result->>'conversation_id', '')::uuid;
 
-  update public.messages
-  set external_status = lower(p_status),
-      metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
-        'whatsapp_status', lower(p_status),
-        'whatsapp_status_payload', p_payload,
-        'whatsapp_status_updated_at', now()
-      )
-  where external_provider = 'whatsapp'
-    and external_message_id = p_external_message_id
-  returning id, conversation_id into v_message;
-
-  if v_message.conversation_id is not null and lower(p_status) = 'read' then
+  if v_conversation_id is not null and lower(p_status) = 'read' then
     select cc.context_id into v_job_id
     from public.conversation_contexts cc
-    where cc.conversation_id = v_message.conversation_id
+    where cc.conversation_id = v_conversation_id
       and cc.context_type = 'job'
     order by cc.is_primary desc, cc.added_at asc
     limit 1;
@@ -26378,10 +26475,13 @@ begin
   end if;
 
   return jsonb_build_object(
-    'duplicate', false,
-    'message_id', v_message.id,
-    'conversation_id', v_message.conversation_id,
-    'status', lower(p_status)
+    'duplicate', v_row_count = 0,
+    'event_key', v_event_key,
+    'message_id', v_message_id,
+    'conversation_id', v_conversation_id,
+    'status', v_replay_result->>'status',
+    'status_applied', coalesce((v_replay_result->>'applied')::boolean, false),
+    'external_message_id', p_external_message_id
   );
 end;
 $$;
@@ -26392,6 +26492,7 @@ grant execute on function public.mark_whatsapp_job_quote_sent(uuid, text, jsonb)
 grant execute on function public.apply_whatsapp_job_action(uuid, text, text, jsonb) to authenticated;
 grant execute on function public.apply_whatsapp_job_action(uuid, text, text, jsonb) to service_role;
 grant execute on function public.ingest_whatsapp_inbound_message(text, text, text, text, text, text, text, jsonb, text, uuid) to service_role;
+grant execute on function public.replay_whatsapp_message_status(text) to service_role;
 grant execute on function public.record_whatsapp_message_status(text, text, text, jsonb) to service_role;
 
 -- ============================================================================

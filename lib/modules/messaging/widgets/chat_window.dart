@@ -93,6 +93,9 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
+  static const Duration _whatsAppMinimumClockDwell =
+      Duration(milliseconds: 240);
+  static const Duration _whatsAppInferredReadWindow = Duration(hours: 24);
   static const String _googleMapsReviewUrl =
       'https://g.page/r/CYVszP1uXQfgEBM/review';
   static final List<_EmojiGroup> _emojiGroups = [
@@ -254,6 +257,10 @@ class _ChatWindowState extends State<ChatWindow> {
   final GlobalKey _smartActionsButtonKey = GlobalKey();
   final GlobalKey _emojiButtonKey = GlobalKey();
   final GlobalKey _attachmentButtonKey = GlobalKey();
+  final GlobalKey _templateButtonKey = GlobalKey();
+  Timer? _serviceWindowTicker;
+  Future<Map<String, dynamic>?>? _whatsAppContactFuture;
+  String? _whatsAppContactFutureConversationId;
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
@@ -266,16 +273,104 @@ class _ChatWindowState extends State<ChatWindow> {
   bool get _canStartWhatsAppFromConversation =>
       widget.conversation.isSupport && widget.conversation.isWebsitePortal;
 
+  void _clearWhatsAppContactCache() {
+    _whatsAppContactFuture = null;
+    _whatsAppContactFutureConversationId = null;
+  }
+
+  Future<Map<String, dynamic>?> _getWhatsAppContactFuture() {
+    if (_whatsAppContactFutureConversationId != widget.conversation.id) {
+      _whatsAppContactFutureConversationId = widget.conversation.id;
+      _whatsAppContactFuture = _resolveConversationWhatsAppContact();
+    }
+
+    return _whatsAppContactFuture ??= _resolveConversationWhatsAppContact();
+  }
+
+  void _debugLogWhatsAppSend(
+    String clientMessageId,
+    String phase,
+    DateTime startedAt, [
+    Map<String, Object?> details = const {},
+  ]) {
+    final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+    final suffix = details.entries
+        .where((entry) => entry.value != null)
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(' ');
+    debugPrint(
+      '⏱️ [WhatsAppSend] client=$clientMessageId phase=$phase elapsed=${elapsedMs}ms${suffix.isEmpty ? '' : ' $suffix'}',
+    );
+  }
+
+  Future<void> _markWhatsAppOptimisticAcceptedAfterClock({
+    required ChatProvider chatProvider,
+    required String optimisticMessageId,
+    required DateTime sendStartedAt,
+    required String source,
+    required bool Function() shouldMarkAccepted,
+  }) async {
+    final elapsed = DateTime.now().difference(sendStartedAt);
+    final remaining = _whatsAppMinimumClockDwell - elapsed;
+    if (remaining > Duration.zero) {
+      await Future.delayed(remaining);
+    }
+
+    if (!shouldMarkAccepted()) {
+      _debugLogWhatsAppSend(
+        optimisticMessageId,
+        'optimistic_status_accepted_skipped',
+        sendStartedAt,
+        {
+          'source': source,
+        },
+      );
+      return;
+    }
+
+    chatProvider.updateMessageMetadataById(
+      optimisticMessageId,
+      {
+        'pending': false,
+        'external_status': 'accepted',
+        'server_ack_optimistic': true,
+      },
+    );
+    _debugLogWhatsAppSend(
+      optimisticMessageId,
+      'optimistic_status_accepted',
+      sendStartedAt,
+      {
+        'source': source,
+      },
+    );
+  }
+
+  void _syncServiceWindowTicker() {
+    _serviceWindowTicker?.cancel();
+    _serviceWindowTicker = null;
+
+    if (!_isWhatsAppConversation) return;
+
+    unawaited(_getWhatsAppContactFuture());
+
+    _serviceWindowTicker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
       _senderInfoFutureCache.clear();
+      _clearWhatsAppContactCache();
       _removeEmojiOverlay();
       _removeComposerMenuOverlay(notify: false);
       _showAutomaticMessagesPanel = false;
       _showChatInfoPanel = false;
       _selectedChatInfoSection = _ChatInfoSection.info;
+      _syncServiceWindowTicker();
       _captureOpeningUnreadCount();
       _loadMessages();
       _applyPendingDraft();
@@ -288,6 +383,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _captureOpeningUnreadCount();
     _loadMessages();
     _applyPendingDraft();
+    _syncServiceWindowTicker();
     _messageController.addListener(_onTextChanged);
   }
 
@@ -296,6 +392,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
     _removeOverlay();
+    _serviceWindowTicker?.cancel();
     _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
@@ -903,6 +1000,25 @@ class _ChatWindowState extends State<ChatWindow> {
     final chatProvider = context.read<ChatProvider>();
     final pendingText = text;
 
+    if (_isWhatsAppConversation) {
+      // Snappy precheck: derive the 24h window state from messages we already
+      // have in memory instead of awaiting the contact DB query. The contact
+      // lookup is still kicked off in the background (and surfaced via the
+      // gauge / dispatch); if the cached window check is wrong we'll get the
+      // re-engagement code from Graph and fall back to a template anyway.
+      final lastInboundAt = _resolveLastInboundAt(
+        null,
+        chatProvider.activeMessages,
+      );
+      if (!_isWhatsAppServiceWindowOpen(lastInboundAt)) {
+        _showWhatsAppTemplatePicker(pendingText: pendingText);
+        return;
+      }
+      // Warm the contact future so _dispatchWhatsAppSend below doesn't pay
+      // the lookup cost serially.
+      unawaited(_getWhatsAppContactFuture());
+    }
+
     _messageController.clear();
     _restoreComposerFocus();
     setState(() {
@@ -919,8 +1035,9 @@ class _ChatWindowState extends State<ChatWindow> {
         return;
       }
 
+      final sendStartedAt = DateTime.now();
       final optimisticMessageId =
-          'temp-wa-${DateTime.now().millisecondsSinceEpoch}';
+          'temp-wa-${sendStartedAt.millisecondsSinceEpoch}';
       chatProvider.addOptimisticMessage(
         Message(
           id: optimisticMessageId,
@@ -938,6 +1055,14 @@ class _ChatWindowState extends State<ChatWindow> {
           isMe: true,
         ),
       );
+      _debugLogWhatsAppSend(
+        optimisticMessageId,
+        'optimistic_clock_rendered',
+        sendStartedAt,
+        {
+          'conversation': widget.conversation.id,
+        },
+      );
 
       // Bubble is in. Release the composer immediately so the user can keep
       // typing/sending while the contact lookup + Cloud API round trip
@@ -949,6 +1074,7 @@ class _ChatWindowState extends State<ChatWindow> {
         chatProvider: chatProvider,
         optimisticMessageId: optimisticMessageId,
         pendingText: pendingText,
+        sendStartedAt: sendStartedAt,
       ));
       return;
     } catch (e) {
@@ -974,10 +1100,22 @@ class _ChatWindowState extends State<ChatWindow> {
     required ChatProvider chatProvider,
     required String optimisticMessageId,
     required String pendingText,
+    required DateTime sendStartedAt,
   }) async {
     final whatsappService = WhatsAppService();
     try {
-      final contact = await _resolveConversationWhatsAppContact();
+      final contactWaitStartedAt = DateTime.now();
+      final contact = await _getWhatsAppContactFuture();
+      _debugLogWhatsAppSend(
+        optimisticMessageId,
+        'contact_ready',
+        sendStartedAt,
+        {
+          'waitMs':
+              DateTime.now().difference(contactWaitStartedAt).inMilliseconds,
+          'hasPhone': contact?['phone'] != null,
+        },
+      );
       final phone = contact?['phone']?.toString();
       final lastInboundAt = _resolveLastInboundAt(
         contact,
@@ -985,6 +1123,11 @@ class _ChatWindowState extends State<ChatWindow> {
       );
 
       if (phone == null || phone.isEmpty) {
+        _debugLogWhatsAppSend(
+          optimisticMessageId,
+          'failed_no_phone',
+          sendStartedAt,
+        );
         chatProvider.removeMessageById(optimisticMessageId);
         if (mounted) {
           _showErrorSnackBar(
@@ -995,7 +1138,19 @@ class _ChatWindowState extends State<ChatWindow> {
         return;
       }
 
-      final success = await whatsappService.sendMessage(
+      _debugLogWhatsAppSend(
+        optimisticMessageId,
+        'cloud_request_start',
+        sendStartedAt,
+        {
+          'windowOpen': _isWhatsAppServiceWindowOpen(lastInboundAt),
+        },
+      );
+
+      var sendCompleted = false;
+      bool? sendResult;
+      final sendFuture = whatsappService
+          .sendMessage(
         context: context,
         customerPhone: phone,
         message: pendingText,
@@ -1005,10 +1160,68 @@ class _ChatWindowState extends State<ChatWindow> {
         contextId: widget.conversation.contextId,
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
+      )
+          .then(
+        (value) {
+          sendCompleted = true;
+          sendResult = value;
+          return value;
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          sendCompleted = true;
+          Error.throwWithStackTrace(error, stackTrace);
+        },
+      );
+
+      await _markWhatsAppOptimisticAcceptedAfterClock(
+        chatProvider: chatProvider,
+        optimisticMessageId: optimisticMessageId,
+        sendStartedAt: sendStartedAt,
+        source: 'cloud_request_started_after_clock',
+        shouldMarkAccepted: () => !sendCompleted || sendResult == true,
+      );
+
+      final success =
+          sendCompleted && sendResult != null ? sendResult! : await sendFuture;
+      _debugLogWhatsAppSend(
+        optimisticMessageId,
+        'cloud_request_done',
+        sendStartedAt,
+        {
+          'success': success,
+          'delivery': whatsappService.lastDeliveryMethod.name,
+          'external': whatsappService.lastExternalMessageId,
+          'error': whatsappService.lastErrorCode,
+        },
       );
 
       if (!success) {
-        chatProvider.removeMessageById(optimisticMessageId);
+        _debugLogWhatsAppSend(
+          optimisticMessageId,
+          'failed_cloud_or_fallback',
+          sendStartedAt,
+          {
+            'delivery': whatsappService.lastDeliveryMethod.name,
+            'error': whatsappService.lastErrorCode,
+          },
+        );
+        chatProvider.updateMessageMetadataById(
+          optimisticMessageId,
+          {
+            'pending': false,
+            'external_status': 'failed',
+            'server_ack_optimistic': false,
+            'whatsapp_status_payload': {
+              'errors': [
+                {
+                  'message': whatsappService.lastErrorRequiresServerFix
+                      ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
+                      : 'No se pudo enviar el mensaje por WhatsApp',
+                },
+              ],
+            },
+          },
+        );
         if (mounted) {
           if (_messageController.text.trim().isEmpty) {
             _messageController.text = pendingText;
@@ -1043,8 +1256,20 @@ class _ChatWindowState extends State<ChatWindow> {
           metadataUpdates: {
             'pending': false,
             'external_status': 'accepted',
+            'server_ack_optimistic': false,
+            if (whatsappService.lastExternalMessageId != null)
+              'external_message_id': whatsappService.lastExternalMessageId,
             if (whatsappService.lastUsedFirstContactTemplate)
               'template_used': true,
+          },
+        );
+        _debugLogWhatsAppSend(
+          optimisticMessageId,
+          'cloud_ack_confirmed',
+          sendStartedAt,
+          {
+            'external': whatsappService.lastExternalMessageId,
+            'template': whatsappService.lastUsedFirstContactTemplate,
           },
         );
 
@@ -1506,7 +1731,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }) async {
     final whatsappService = WhatsAppService();
     try {
-      final contact = await _resolveConversationWhatsAppContact();
+      final contact = await _getWhatsAppContactFuture();
       final phone = contact?['phone']?.toString();
 
       if (phone == null || phone.isEmpty) {
@@ -1560,6 +1785,8 @@ class _ChatWindowState extends State<ChatWindow> {
           metadataUpdates: {
             'pending': false,
             'external_status': 'accepted',
+            if (whatsappService.lastExternalMessageId != null)
+              'external_message_id': whatsappService.lastExternalMessageId,
           },
         );
       } else if (whatsappService.lastDeliveryMethod ==
@@ -1681,7 +1908,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
                         final msg = item as Message;
                         // Check continuity for bubble grouping (optional enhancement space)
-                        return _buildMessageBubble(context, msg);
+                        return _buildMessageBubble(context, msg, messages);
                       },
                     ),
             ),
@@ -4482,6 +4709,289 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  bool _isWhatsAppServiceWindowOpen(DateTime? lastInboundAt) {
+    if (lastInboundAt == null) return false;
+    return DateTime.now().toUtc().difference(lastInboundAt.toUtc()) <
+        const Duration(hours: 24);
+  }
+
+  Duration _whatsAppWindowRemaining(DateTime? lastInboundAt) {
+    if (lastInboundAt == null) return Duration.zero;
+    final elapsed = DateTime.now().toUtc().difference(lastInboundAt.toUtc());
+    final remaining = const Duration(hours: 24) - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  Widget _buildWhatsAppServiceWindowGauge(BuildContext context) {
+    final messages = context.watch<ChatProvider>().activeMessages;
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _getWhatsAppContactFuture(),
+      builder: (context, snapshot) {
+        final contact = snapshot.data;
+        final lastInboundAt = _resolveLastInboundAt(contact, messages);
+        final remaining = _whatsAppWindowRemaining(lastInboundAt);
+        final isOpen = remaining > Duration.zero;
+        final progress =
+            (remaining.inSeconds / const Duration(hours: 24).inSeconds)
+                .clamp(0.0, 1.0)
+                .toDouble();
+        final label = lastInboundAt == null
+            ? 'WhatsApp: ventana cerrada'
+            : isOpen
+                ? 'WhatsApp: ${_formatWindowDuration(remaining)} disponibles'
+                : 'WhatsApp: requiere plantilla';
+        final color = isOpen ? const Color(0xFF16A34A) : Colors.amber[800]!;
+
+        return Tooltip(
+          message: lastInboundAt == null
+              ? 'El cliente no ha respondido en esta conversación. Para escribir por Cloud API necesitas una plantilla aprobada.'
+              : isOpen
+                  ? 'La ventana de 24 horas empezó con la última respuesta del cliente.'
+                  : 'La ventana de 24 horas expiró. El próximo envío debe ser una plantilla aprobada.',
+          child: Row(
+            children: [
+              Icon(
+                isOpen ? Icons.schedule_outlined : Icons.lock_clock_outlined,
+                size: 14,
+                color: color,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    minHeight: 3,
+                    value: isOpen ? progress : 1,
+                    backgroundColor: Colors.grey[200],
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatWindowDuration(Duration duration) {
+    if (duration.inHours >= 1) {
+      final minutes = duration.inMinutes.remainder(60);
+      return minutes == 0
+          ? '${duration.inHours}h'
+          : '${duration.inHours}h ${minutes}m';
+    }
+    return '${duration.inMinutes.clamp(0, 59)}m';
+  }
+
+  void _showWhatsAppTemplatePicker({String? pendingText}) {
+    _toggleComposerMenu(
+      name: 'whatsapp_templates',
+      anchorKey: _templateButtonKey,
+      width: 420,
+      estimatedHeight: 390,
+      panelBuilder: (overlayContext) => _buildWhatsAppTemplatePanel(
+        overlayContext,
+        pendingText: pendingText?.trim(),
+      ),
+    );
+  }
+
+  Widget _buildWhatsAppTemplatePanel(
+    BuildContext overlayContext, {
+    String? pendingText,
+  }) {
+    final theme = Theme.of(overlayContext);
+    const options = WhatsAppService.templateOptions;
+    final hasPendingText = pendingText != null && pendingText.isNotEmpty;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.dynamic_form_outlined, color: _accentBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Plantillas WhatsApp',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          hasPendingText
+                              ? 'El texto escrito queda como borrador hasta que el cliente responda.'
+                              : 'Elige la plantilla aprobada para esta ocasión.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => _removeComposerMenuOverlay(
+                      restoreComposerFocus: true,
+                    ),
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ...options.map(
+              (option) => InkWell(
+                onTap: () => _sendSelectedWhatsAppTemplate(
+                  option,
+                  pendingText: pendingText,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: _accentBlue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(option.icon, color: _accentBlue, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              option.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              option.description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendSelectedWhatsAppTemplate(
+    WhatsAppTemplateOption option, {
+    String? pendingText,
+  }) async {
+    if (_isSendingMessage) return;
+
+    _removeComposerMenuOverlay(notify: true);
+    final chatProvider = context.read<ChatProvider>();
+    final whatsappService = WhatsAppService();
+    setState(() => _isSendingMessage = true);
+
+    try {
+      final contact = await _getWhatsAppContactFuture();
+      final phone = contact?['phone']?.toString();
+      final customerName = contact?['name']?.toString().trim();
+
+      if (phone == null || phone.isEmpty) {
+        throw Exception('La conversación no tiene teléfono asociado.');
+      }
+
+      final success = await whatsappService.sendTemplateMessage(
+        option: option,
+        customerPhone: phone,
+        customerName: customerName == null || customerName.isEmpty
+            ? 'cliente'
+            : customerName,
+        conversationId: widget.conversation.id,
+        contextType: widget.conversation.contextType,
+        contextId: widget.conversation.contextId,
+      );
+
+      if (!success) {
+        throw Exception('Meta rechazó la plantilla seleccionada.');
+      }
+
+      final pending = pendingText?.trim();
+      if (pending != null && pending.isNotEmpty) {
+        chatProvider.setConversationDraft(
+          widget.conversation.id,
+          pending,
+          title: 'Mensaje pendiente de ventana WhatsApp',
+          subtitle:
+              'Se envió "${option.label}". Cuando el cliente responda, puedes enviar este texto.',
+        );
+      }
+
+      if (_messageController.text.trim() == pending) {
+        _messageController.clear();
+      }
+
+      if (!mounted) return;
+      _showWhatsAppResultSnackbar(
+        context: context,
+        deliveryMethod: whatsappService.lastDeliveryMethod,
+        successMessage: 'Plantilla enviada: ${option.label}',
+        fallbackMessage: 'WhatsApp abierto con la plantilla prellenada',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showErrorSnackBar(context, 'No se pudo enviar la plantilla: $e');
+    } finally {
+      if (mounted) setState(() => _isSendingMessage = false);
+    }
+  }
+
   Widget _buildComposer(BuildContext context) {
     return _buildTextComposer(
       context,
@@ -4496,6 +5006,10 @@ class _ChatWindowState extends State<ChatWindow> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_isWhatsAppConversation) ...[
+          _buildWhatsAppServiceWindowGauge(context),
+          const SizedBox(height: 8),
+        ],
         Row(
           children: [
             if (showSmartActions)
@@ -4527,6 +5041,17 @@ class _ChatWindowState extends State<ChatWindow> {
                 onPressed: _showAttachmentOptions,
               ),
             ),
+            if (_isWhatsAppConversation)
+              KeyedSubtree(
+                key: _templateButtonKey,
+                child: IconButton(
+                  icon: const Icon(Icons.dynamic_form_outlined),
+                  tooltip: 'Plantillas WhatsApp',
+                  onPressed: () => _showWhatsAppTemplatePicker(
+                    pendingText: _messageController.text.trim(),
+                  ),
+                ),
+              ),
             Expanded(
               child: CompositedTransformTarget(
                 link: _layerLink,
@@ -4927,7 +5452,11 @@ class _ChatWindowState extends State<ChatWindow> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
-  Widget _buildMessageBubble(BuildContext context, Message msg) {
+  Widget _buildMessageBubble(
+    BuildContext context,
+    Message msg,
+    List<Message> messages,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMe = msg.isMe;
@@ -5179,7 +5708,11 @@ class _ChatWindowState extends State<ChatWindow> {
                             Positioned(
                               bottom: 0,
                               right: 0,
-                              child: _buildOutgoingMessageFooter(msg, timeStr),
+                              child: _buildOutgoingMessageFooter(
+                                msg,
+                                timeStr,
+                                messages,
+                              ),
                             ),
                           ],
                         ),
@@ -5274,8 +5807,12 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  Widget _buildOutgoingMessageFooter(Message msg, String timeStr) {
-    final statusIcon = _buildWhatsAppStatusIcon(msg);
+  Widget _buildOutgoingMessageFooter(
+    Message msg,
+    String timeStr,
+    List<Message> messages,
+  ) {
+    final statusIcon = _buildWhatsAppStatusIcon(msg, messages);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -5295,10 +5832,120 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget? _buildWhatsAppStatusIcon(Message msg) {
+  int _whatsAppStatusRank(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'failed':
+        return 50;
+      case 'read':
+        return 40;
+      case 'delivered':
+        return 30;
+      case 'sent':
+        return 20;
+      case 'accepted':
+        return 10;
+      default:
+        return 0;
+    }
+  }
+
+  String? _strongestWhatsAppStatus(Map<String, dynamic> metadata) {
+    final statuses = [
+      metadata['external_status']?.toString().toLowerCase(),
+      metadata['whatsapp_status']?.toString().toLowerCase(),
+    ].whereType<String>().where((status) => status.isNotEmpty);
+
+    String? strongest;
+    for (final status in statuses) {
+      if (_whatsAppStatusRank(status) > _whatsAppStatusRank(strongest)) {
+        strongest = status;
+      }
+    }
+    return strongest;
+  }
+
+  bool _isWhatsAppMessage(Message msg) {
     final metadata = msg.metadata;
-    final isWhatsAppMessage =
-        metadata['provider'] == 'whatsapp' || metadata['channel'] == 'whatsapp';
+    return metadata['provider'] == 'whatsapp' ||
+        metadata['channel'] == 'whatsapp' ||
+        metadata['external_provider'] == 'whatsapp' ||
+        metadata['external_message_id']?.toString().startsWith('wamid.') ==
+            true;
+  }
+
+  bool _isInboundWhatsAppMessage(Message msg) {
+    if (!_isWhatsAppMessage(msg)) {
+      return false;
+    }
+
+    final direction =
+        msg.metadata['message_direction']?.toString().toLowerCase();
+    if (direction == 'inbound') {
+      return true;
+    }
+    if (direction == 'outbound') {
+      return false;
+    }
+
+    return !msg.isMe;
+  }
+
+  bool _isOutboundWhatsAppMessage(Message msg) {
+    if (!_isWhatsAppMessage(msg)) {
+      return false;
+    }
+
+    final direction =
+        msg.metadata['message_direction']?.toString().toLowerCase();
+    if (direction == 'outbound') {
+      return true;
+    }
+    if (direction == 'inbound') {
+      return false;
+    }
+
+    return msg.isMe;
+  }
+
+  bool _hasLaterInboundWhatsAppReplyInTurn(
+    Message msg,
+    List<Message> messages,
+  ) {
+    if (!_isOutboundWhatsAppMessage(msg)) {
+      return false;
+    }
+
+    final laterInboundMessages = messages
+        .where((candidate) =>
+            candidate.conversationId == msg.conversationId &&
+            _isInboundWhatsAppMessage(candidate) &&
+            candidate.createdAt.isAfter(msg.createdAt) &&
+            candidate.createdAt.difference(msg.createdAt) <=
+                _whatsAppInferredReadWindow)
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    return laterInboundMessages.isNotEmpty;
+  }
+
+  String? _effectiveWhatsAppStatus(Message msg, List<Message> messages) {
+    final externalStatus = _strongestWhatsAppStatus(msg.metadata);
+    if (externalStatus == 'failed' || externalStatus == 'read') {
+      return externalStatus;
+    }
+
+    if (_whatsAppStatusRank(externalStatus) >=
+            _whatsAppStatusRank('accepted') &&
+        _hasLaterInboundWhatsAppReplyInTurn(msg, messages)) {
+      return 'read';
+    }
+
+    return externalStatus;
+  }
+
+  Widget? _buildWhatsAppStatusIcon(Message msg, List<Message> messages) {
+    final metadata = msg.metadata;
+    final isWhatsAppMessage = _isWhatsAppMessage(msg);
 
     if (!isWhatsAppMessage) {
       return null;
@@ -5312,8 +5959,7 @@ class _ChatWindowState extends State<ChatWindow> {
       );
     }
 
-    final externalStatus =
-        metadata['external_status']?.toString().toLowerCase();
+    final externalStatus = _effectiveWhatsAppStatus(msg, messages);
 
     switch (externalStatus) {
       case 'accepted':

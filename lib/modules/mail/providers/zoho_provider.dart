@@ -1,26 +1,13 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
 
 /// Zoho Mail implementation of EmailProvider
 class ZohoProvider extends EmailProvider {
   static const String _providerId = 'zoho';
-  static const String _tokenKey = 'zoho_tokens';
-  static const String _clientId = '1000.23SML89U5VKEOKXT0GW12J0SAPQYRQ';
-  static const String _scopes = 'ZohoMail.messages.READ,'
-      'ZohoMail.messages.CREATE,'
-      'ZohoMail.messages.UPDATE,'
-      'ZohoMail.accounts.READ,'
-      'ZohoMail.folders.READ';
-
-  static const String _authUrl = 'https://accounts.zoho.com/oauth/v2/auth';
   static const String _apiBase = 'https://mail.zoho.com/api';
 
-  String? _accessToken;
-  String? _refreshToken;
-  DateTime? _tokenExpiry;
   String? _email;
   String? _accountId;
   String? _inboxFolderId;
@@ -29,6 +16,7 @@ class ZohoProvider extends EmailProvider {
   Email? _selectedEmail;
   bool _isLoading = false;
   String? _error;
+  bool _canLoadMore = false;
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -45,7 +33,7 @@ class ZohoProvider extends EmailProvider {
   String? get accountEmail => _email;
 
   @override
-  bool get isAuthenticated => _accessToken != null && _accountId != null;
+  bool get isAuthenticated => _email != null && _accountId != null;
 
   @override
   bool get isLoading => _isLoading;
@@ -59,43 +47,62 @@ class ZohoProvider extends EmailProvider {
   @override
   Email? get selectedEmail => _selectedEmail;
 
+  @override
+  bool get canLoadMore => _canLoadMore;
+
   String get _accountUrl => '$_apiBase/accounts/$_accountId';
 
   @override
   Future<void> initialize() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tokenData = prefs.getString(_tokenKey);
+      await _clearLegacyLocalTokens();
+      final response = await _supabase.functions.invoke(
+        'zoho-oauth',
+        body: {'action': 'status'},
+      );
 
-      if (tokenData != null) {
-        final data = jsonDecode(tokenData);
-        _accessToken = data['access_token'];
-        _refreshToken = data['refresh_token'];
-        _email = data['email'];
-        _accountId = data['account_id'];
-        if (data['expiry'] != null) {
-          _tokenExpiry = DateTime.parse(data['expiry']);
+      if (response.status == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final account = data['account'] as Map<String, dynamic>?;
+        if (data['connected'] == true && account != null) {
+          _email = account['account_email'] as String?;
+          _accountId = account['provider_account_id']?.toString();
+        } else {
+          _email = null;
+          _accountId = null;
         }
-        debugPrint('🔐 [Zoho] Loaded tokens for $_email');
+        debugPrint('🔐 [Zoho] Server connection loaded for $_email');
       }
     } catch (e) {
-      debugPrint('🔐 [Zoho] Error loading tokens: $e');
+      debugPrint('🔐 [Zoho] Error loading server connection: $e');
     }
     notifyListeners();
   }
 
   @override
-  String getAuthorizationUrl({required String redirectUri, String? state}) {
-    final params = {
-      'client_id': _clientId,
-      'redirect_uri': redirectUri,
-      'response_type': 'code',
-      'scope': _scopes,
-      'access_type': 'offline',
-      'prompt': 'consent',
-      if (state != null) 'state': state,
-    };
-    return '$_authUrl?${Uri(queryParameters: params).query}';
+  Future<String> getAuthorizationUrl({
+    required String redirectUri,
+    String? state,
+  }) async {
+    final response = await _supabase.functions.invoke(
+      'zoho-oauth',
+      body: {
+        'action': 'authorization_url',
+        'redirect_uri': redirectUri,
+        if (state != null) 'state': state,
+      },
+    );
+
+    if (response.status != 200) {
+      throw Exception('Could not create Zoho authorization URL');
+    }
+
+    final data = response.data as Map<String, dynamic>;
+    final authorizationUrl = data['authorization_url']?.toString();
+    if (authorizationUrl == null || authorizationUrl.isEmpty) {
+      throw Exception('Zoho authorization URL was empty');
+    }
+    return authorizationUrl;
   }
 
   @override
@@ -130,48 +137,17 @@ class ZohoProvider extends EmailProvider {
         throw Exception(data['error']);
       }
 
-      _accessToken = data['access_token'];
-      _refreshToken = data['refresh_token'];
-      _tokenExpiry = DateTime.now().add(
-        Duration(seconds: data['expires_in'] ?? 3600),
-      );
-
-      // Get account info - Zoho returns accountId directly
-      final accountInfo = data['account_info'];
-      debugPrint('🔐 [Zoho] Account info: $accountInfo');
-
-      if (accountInfo != null) {
-        // Try different possible field names
-        _accountId = (accountInfo['accountId'] ??
-                accountInfo['account_id'] ??
-                accountInfo['ACCOUNT_ID'])
-            ?.toString();
-
-        // Email might be in different formats
-        final emailAddresses = accountInfo['emailAddress'];
-        if (emailAddresses is List && emailAddresses.isNotEmpty) {
-          final firstEmail = emailAddresses[0];
-          if (firstEmail is Map) {
-            _email = firstEmail['mailId'] ?? firstEmail['email'];
-          } else if (firstEmail is String) {
-            _email = firstEmail;
-          }
-        } else if (accountInfo['mailId'] != null) {
-          _email = accountInfo['mailId'];
-        } else if (accountInfo['primaryEmailAddress'] != null) {
-          _email = accountInfo['primaryEmailAddress'];
-        }
-      }
+      final account = data['account'] as Map<String, dynamic>?;
+      _email = account?['account_email'] as String?;
+      _accountId = account?['provider_account_id']?.toString();
 
       debugPrint('🔐 [Zoho] Extracted accountId: $_accountId, email: $_email');
-
-      await _saveTokens();
       debugPrint('🔐 [Zoho] Token exchange successful for $_email');
 
       return true;
     } catch (e) {
       debugPrint('🔐 [Zoho] Token exchange error: $e');
-      _error = e.toString();
+      _error = _friendlyZohoConnectionError(e);
       return false;
     } finally {
       _isLoading = false;
@@ -181,16 +157,20 @@ class ZohoProvider extends EmailProvider {
 
   @override
   Future<void> disconnect() async {
-    _accessToken = null;
-    _refreshToken = null;
-    _tokenExpiry = null;
+    try {
+      await _supabase.functions.invoke(
+        'zoho-oauth',
+        body: {'action': 'disconnect'},
+      );
+    } catch (e) {
+      debugPrint('🔐 [Zoho] Server disconnect error: $e');
+    }
+
+    await _clearLegacyLocalTokens();
     _email = null;
     _accountId = null;
     _emails = [];
     _selectedEmail = null;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
 
     debugPrint('🔐 [Zoho] Disconnected');
     notifyListeners();
@@ -198,16 +178,15 @@ class ZohoProvider extends EmailProvider {
 
   @override
   Future<String?> refreshAccessToken() async {
-    if (_refreshToken == null) return null;
+    if (!isAuthenticated) return null;
 
     try {
-      debugPrint('🔐 [Zoho] Refreshing access token...');
+      debugPrint('🔐 [Zoho] Refreshing server-managed access token...');
 
       final response = await _supabase.functions.invoke(
         'zoho-oauth',
         body: {
-          'grant_type': 'refresh_token',
-          'refresh_token': _refreshToken,
+          'action': 'refresh',
         },
       );
 
@@ -216,13 +195,10 @@ class ZohoProvider extends EmailProvider {
       }
 
       final data = response.data as Map<String, dynamic>;
-      _accessToken = data['access_token'];
-      _tokenExpiry = DateTime.now().add(
-        Duration(seconds: data['expires_in'] ?? 3600),
-      );
-
-      await _saveTokens();
-      return _accessToken;
+      final account = data['account'] as Map<String, dynamic>?;
+      _email = account?['account_email'] as String? ?? _email;
+      _accountId = account?['provider_account_id']?.toString() ?? _accountId;
+      return 'server-managed';
     } catch (e) {
       debugPrint('🔐 [Zoho] Refresh error: $e');
       return null;
@@ -231,29 +207,12 @@ class ZohoProvider extends EmailProvider {
 
   @override
   Future<String?> getValidAccessToken() async {
-    if (_accessToken == null) return null;
-
-    if (_tokenExpiry != null &&
-        DateTime.now()
-            .isAfter(_tokenExpiry!.subtract(const Duration(minutes: 5)))) {
-      return await refreshAccessToken();
-    }
-
-    return _accessToken;
+    return isAuthenticated ? 'server-managed' : null;
   }
 
-  Future<void> _saveTokens() async {
+  Future<void> _clearLegacyLocalTokens() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _tokenKey,
-      jsonEncode({
-        'access_token': _accessToken,
-        'refresh_token': _refreshToken,
-        'email': _email,
-        'account_id': _accountId,
-        'expiry': _tokenExpiry?.toIso8601String(),
-      }),
-    );
+    await prefs.remove('zoho_tokens');
   }
 
   Future<dynamic> _proxyRequest({
@@ -261,15 +220,13 @@ class ZohoProvider extends EmailProvider {
     required String url,
     Map<String, dynamic>? body,
   }) async {
-    final token = await getValidAccessToken();
-    if (token == null) throw Exception('No valid access token');
+    if (!isAuthenticated) throw Exception('Zoho account is not connected');
 
     final response = await _supabase.functions.invoke(
       'zoho-oauth',
       body: {
         'proxy_url': url,
         'method': method,
-        'zoho_token': token,
         'body': body,
       },
     );
@@ -282,7 +239,13 @@ class ZohoProvider extends EmailProvider {
   }
 
   @override
-  Future<List<Email>> getInbox({int limit = 30, int start = 0}) async {
+  Future<List<Email>> getInbox({
+    int limit = 50,
+    int start = 0,
+    String? pageToken,
+    String? searchQuery,
+    List<Email> knownEmails = const [],
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -306,14 +269,24 @@ class ZohoProvider extends EmailProvider {
 
       if (_inboxFolderId == null) throw Exception('Inbox folder not found');
 
-      // Note: Zoho uses folderId as query param, not path
-      final url =
-          '$_accountUrl/messages/view?folderId=$_inboxFolderId&limit=$limit&start=$start';
-      debugPrint('📬 [Zoho] Fetching messages from: $url');
-      final data = await _proxyRequest(method: 'GET', url: url);
-      final messages = data['data'] as List? ?? [];
+      final normalizedSearch = searchQuery?.trim();
+      final effectiveSearch =
+          normalizedSearch?.isEmpty ?? true ? null : normalizedSearch;
+      final page = await _fetchZohoMessagePage(
+        limit: limit,
+        start: start,
+        searchQuery: effectiveSearch,
+      );
+      final messages = page.messages;
+      _canLoadMore = messages.length >= limit;
 
-      _emails = messages.map((m) => _parseZohoMessage(m)).toList();
+      _emails = messages
+          .whereType<Map>()
+          .map((m) => _parseZohoMessage(Map<String, dynamic>.from(m)))
+          .where((email) =>
+              effectiveSearch == null ||
+              _matchesLocalSearch(email, effectiveSearch))
+          .toList();
       return _emails;
     } catch (e) {
       debugPrint('getInbox error: $e');
@@ -323,6 +296,72 @@ class ZohoProvider extends EmailProvider {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<({List<dynamic> messages, bool usedProviderSearch})>
+      _fetchZohoMessagePage({
+    required int limit,
+    required int start,
+    String? searchQuery,
+  }) async {
+    // Note: Zoho uses folderId as query param, not path.
+    final inboxUrl =
+        '$_accountUrl/messages/view?folderId=$_inboxFolderId&limit=$limit&start=$start';
+
+    if (searchQuery == null) {
+      debugPrint('📬 [Zoho] Fetching messages from: $inboxUrl');
+      final data = await _proxyRequest(method: 'GET', url: inboxUrl);
+      return (messages: _extractZohoMessages(data), usedProviderSearch: true);
+    }
+
+    final encodedSearch = Uri.encodeQueryComponent(searchQuery);
+    final searchUrls = [
+      '$_accountUrl/messages/search?folderId=$_inboxFolderId&searchKey=$encodedSearch&limit=$limit&start=$start',
+      '$inboxUrl&searchKey=$encodedSearch',
+    ];
+
+    for (final url in searchUrls) {
+      try {
+        debugPrint('📬 [Zoho] Searching messages from: $url');
+        final data = await _proxyRequest(method: 'GET', url: url);
+        return (
+          messages: _extractZohoMessages(data),
+          usedProviderSearch: true,
+        );
+      } catch (e) {
+        debugPrint('📬 [Zoho] Search URL failed, trying fallback: $e');
+      }
+    }
+
+    debugPrint('📬 [Zoho] Falling back to local filtering for search page.');
+    final data = await _proxyRequest(method: 'GET', url: inboxUrl);
+    return (messages: _extractZohoMessages(data), usedProviderSearch: false);
+  }
+
+  List<dynamic> _extractZohoMessages(dynamic data) {
+    if (data is! Map) return const [];
+    final root = data['data'];
+    if (root is List) return root;
+    if (root is Map) {
+      for (final key in ['messages', 'messageList', 'searchResults']) {
+        final value = root[key];
+        if (value is List) return value;
+      }
+    }
+    return const [];
+  }
+
+  bool _matchesLocalSearch(Email email, String query) {
+    final loweredQuery = query.toLowerCase();
+    final searchable = [
+      email.subject,
+      email.senderName,
+      email.senderEmail,
+      email.fromAddress,
+      email.toAddress,
+      email.summary ?? '',
+    ].join(' ').toLowerCase();
+    return searchable.contains(loweredQuery);
   }
 
   Email _parseZohoMessage(Map<String, dynamic> json) {
@@ -464,6 +503,17 @@ class ZohoProvider extends EmailProvider {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  String _friendlyZohoConnectionError(Object error) {
+    final raw = error.toString();
+    if (raw.contains('status: 400') || raw.contains('Bad Request')) {
+      return 'El código de conexión de Zoho ya venció. Inicia la conexión nuevamente.';
+    }
+    if (raw.contains('status: 401') || raw.contains('Unauthorized')) {
+      return 'No se pudo autorizar Zoho. Vuelve a conectar la cuenta.';
+    }
+    return 'No se pudo conectar Zoho en este momento.';
   }
 
   @override

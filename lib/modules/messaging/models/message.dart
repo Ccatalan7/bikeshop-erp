@@ -47,7 +47,7 @@ class Message {
       content: json['content'] ?? '',
       type: json['type'] ?? 'text',
       metadata: metadata,
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: DateTime.parse(json['created_at']).toLocal(),
       isMe: currentUserId != null && json['sender_id'] == currentUserId,
     );
   }

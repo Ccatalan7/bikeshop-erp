@@ -224,6 +224,19 @@ serve(async (req) => {
             throw error
           }
 
+          console.log(
+            '🔎 [WHATSAPP-WEBHOOK] status_callback',
+            JSON.stringify({
+              status: statusValue,
+              external_message_id: externalMessageId,
+              phone_number_id: phoneNumberId,
+              applied: (data as JsonRecord | null)?.applied,
+              applied_status: (data as JsonRecord | null)?.status,
+              message_id: (data as JsonRecord | null)?.message_id,
+              conversation_id: (data as JsonRecord | null)?.conversation_id,
+            }),
+          )
+
           processedStatuses.push(data)
         } catch (error) {
           console.error('❌ [WHATSAPP-WEBHOOK] Status processing error', error)

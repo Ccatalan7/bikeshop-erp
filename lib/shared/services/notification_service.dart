@@ -318,6 +318,20 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(chatChannel);
+
+        const mailChannel = AndroidNotificationChannel(
+        'mail_messages',
+        'Correos',
+        description: 'Notificaciones de correos entrantes',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+        );
+
+        await _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(mailChannel);
     }
 
     // Load user settings
@@ -467,6 +481,13 @@ class NotificationService {
       return;
     }
     _lastHandledNotificationId = messageId;
+
+    final route = message.data['route']?.toString();
+    if (route != null && route.isNotEmpty) {
+      debugPrint('🔔 Navigating to notification route: $route');
+      _navigationStreamController.add(route);
+      return;
+    }
 
     final conversationId = message.data['conversation_id'];
     if (conversationId != null && conversationId.toString().isNotEmpty) {
@@ -633,6 +654,21 @@ class NotificationService {
 
     final data = message.data;
     final notification = message.notification;
+
+    final isMailNotification = data['type'] == 'mail' ||
+        data['notification_type'] == 'mail' ||
+        data['route'] == '/mail';
+
+    if (isMailNotification) {
+      await showLocalNotification(
+        data['title'] ?? notification?.title ?? 'Nuevo correo',
+        data['body'] ?? notification?.body ?? 'Correo entrante',
+        notificationId: (data['history_id'] ?? data['email_address'] ?? 'mail')
+            .toString()
+            .hashCode,
+      );
+      return;
+    }
 
     // Data-only messages have no notification field, so don't return early
     // if (notification == null) return;

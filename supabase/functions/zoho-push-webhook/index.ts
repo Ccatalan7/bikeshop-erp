@@ -64,6 +64,20 @@ serve(async (req) => {
             if (subs && subs.length > 0) {
                 userId = subs[0].user_id
             }
+
+            if (!userId) {
+                const { data: accounts } = await supabase
+                    .from('email_accounts')
+                    .select('user_id')
+                    .eq('provider', 'zoho')
+                    .eq('account_email', emailAddress)
+                    .eq('is_active', true)
+                    .limit(1)
+
+                if (accounts && accounts.length > 0) {
+                    userId = accounts[0].user_id
+                }
+            }
         }
 
         if (!userId) {

@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
-import '../../modules/mail/providers/mail_account_manager.dart';
 
 /// Handles deep links for OAuth callbacks and other app-specific URLs.
 /// Listens for `vinabike://` scheme links and processes them accordingly.
-class DeepLinkHandler {
+class DeepLinkHandler extends ChangeNotifier {
   static DeepLinkHandler? _instance;
   static DeepLinkHandler get instance {
     _instance ??= DeepLinkHandler._internal();
@@ -53,10 +52,13 @@ class DeepLinkHandler {
     );
   }
 
+  bool get hasPendingOAuthCallback =>
+      _pendingOAuthProvider != null && _pendingOAuthCode != null;
+
   /// Process incoming deep link
   void _handleDeepLink(Uri uri) {
-    // Expected format: vinabike://mail/oauth?provider=zoho&code=...
-    // or: vinabike://mail/oauth?provider=gmail&code=...
+    // Expected format: vinabike://mail/oauth?provider=zoho&oauth_code=...
+    // or: vinabike://mail/oauth?provider=gmail&oauth_code=...
 
     if (uri.scheme != 'vinabike') {
       debugPrint('🔗 [DeepLink] Ignoring non-vinabike scheme: ${uri.scheme}');
@@ -65,7 +67,8 @@ class DeepLinkHandler {
 
     if (uri.host == 'mail' && uri.path.contains('oauth')) {
       final provider = uri.queryParameters['provider'];
-      final code = uri.queryParameters['code'];
+      final code = uri.queryParameters['oauth_code'] ??
+          uri.queryParameters['code']; // Legacy callback compatibility.
       final error = uri.queryParameters['error'];
 
       if (error != null) {
@@ -80,51 +83,29 @@ class DeepLinkHandler {
     }
   }
 
-  /// Handle OAuth callback by exchanging code for tokens
-  Future<void> _handleOAuthCallback(String provider, String code) async {
-    // Store for processing by mail page if it's not yet initialized
+  /// Store OAuth callback data so the mail page can exchange it after
+  /// providers are initialized.
+  void _handleOAuthCallback(String provider, String code) {
     _pendingOAuthCode = code;
     _pendingOAuthProvider = provider;
-
-    // Try to process immediately if mail manager is ready
-    final manager = MailAccountManager.instance;
-
-    // Determine redirect URI based on provider
-    final redirectUri = provider == 'zoho'
-        ? 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/zoho-oauth'
-        : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/gmail-oauth';
-
-    try {
-      debugPrint('🔗 [DeepLink] Exchanging OAuth code for tokens...');
-      final success = await manager.exchangeCodeForTokens(
-        provider,
-        code: code,
-        redirectUri: redirectUri,
-      );
-
-      if (success) {
-        debugPrint('🔗 [DeepLink] OAuth tokens exchanged successfully!');
-        _pendingOAuthCode = null;
-        _pendingOAuthProvider = null;
-      } else {
-        debugPrint('🔗 [DeepLink] OAuth token exchange failed');
-      }
-    } catch (e) {
-      debugPrint('🔗 [DeepLink] Error exchanging OAuth tokens: $e');
-    }
+    debugPrint('🔗 [DeepLink] Stored pending OAuth callback for $provider');
+    notifyListeners();
   }
 
   /// Clear pending OAuth data (called after mail page processes it)
   void clearPendingOAuth() {
     _pendingOAuthCode = null;
     _pendingOAuthProvider = null;
+    notifyListeners();
   }
 
   /// Dispose of resources
+  @override
   void dispose() {
     _subscription?.cancel();
     _subscription = null;
     _isInitialized = false;
     _instance = null;
+    super.dispose();
   }
 }

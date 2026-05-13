@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,8 @@ import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/mail/providers/email_provider.dart';
+import '../../modules/mail/providers/mail_account_manager.dart';
 import 'expandable_menu_item.dart';
 
 const List<MenuSubItem> _accountingMenuItems = [
@@ -697,9 +700,11 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   Timer? _notificationTimer;
   Timer? _onlineOrdersRefreshTimer;
   StreamSubscription? _pushNotificationSubscription;
+  StreamSubscription<Email>? _mailNotificationSubscription;
   RealtimeChannel? _onlineOrdersChannel;
   String? _lastNotifiedOnlineOrderId;
   String? _lastSeenOnlineOrderNotificationId;
+  DateTime? _lastMailAlertAt;
   bool _isRefreshingOnlineOrderAlerts = false;
 
   @override
@@ -710,6 +715,20 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     _pushNotificationSubscription =
         NotificationService().messageStream.listen((message) {
       if (!mounted) return;
+
+      final data = message.data;
+      final isMailNotification = data['type'] == 'mail' ||
+          data['notification_type'] == 'mail' ||
+          data['route'] == '/mail';
+
+      if (isMailNotification) {
+        _showMailNotification(
+          data['body']?.toString() ?? 'Correo entrante',
+          title: data['title']?.toString() ?? 'Nuevo correo',
+          route: data['route']?.toString() ?? '/mail',
+        );
+        return;
+      }
 
       // FORCE ChatProvider refresh to ensure badge updates immediately
       // This covers cases where ChatProvider's internal listener might have missed it
@@ -723,6 +742,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     });
 
     _setupOnlineOrderNotifications();
+    _setupMailNotifications();
   }
 
   @override
@@ -730,6 +750,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     _notificationTimer?.cancel();
     _currentNotificationOverlay?.remove();
     _pushNotificationSubscription?.cancel();
+    _mailNotificationSubscription?.cancel();
     _onlineOrdersRefreshTimer?.cancel();
     _onlineOrdersChannel?.unsubscribe();
     WidgetsBinding.instance.removeObserver(this);
@@ -740,6 +761,34 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshOnlineOrderAlerts(showTopNotification: true);
+      MailAccountManager.instance.backgroundRefresh();
+    }
+  }
+
+  Future<void> _setupMailNotifications() async {
+    final manager = MailAccountManager.instance;
+    _mailNotificationSubscription?.cancel();
+    _mailNotificationSubscription = manager.newEmailStream.listen((email) {
+      if (!mounted) return;
+      final sender = email.senderName.trim().isEmpty
+          ? email.senderEmail
+          : email.senderName;
+      final subject = email.subject.trim().isEmpty
+          ? '(sin asunto)'
+          : email.subject.trim();
+      final body = sender.trim().isEmpty ? subject : '$sender - $subject';
+
+      _showMailNotification(
+        body,
+        notificationId: email.id.hashCode,
+        showSystemNotification: _usesDesktopLocalMailNotifications,
+      );
+    });
+
+    try {
+      await manager.initialize();
+    } catch (e) {
+      debugPrint('📧 [MainLayout] Mail notification setup failed: $e');
     }
   }
 
@@ -845,6 +894,51 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       return GoRouterState.of(context).uri.path.startsWith('/website/orders');
     } catch (_) {
       return false;
+    }
+  }
+
+  bool _isMailLocation() {
+    try {
+      return GoRouterState.of(context).uri.path.startsWith('/mail');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool get _usesDesktopLocalMailNotifications {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS;
+  }
+
+  void _showMailNotification(
+    String body, {
+    String title = 'Nuevo correo',
+    String route = '/mail',
+    int? notificationId,
+    bool showSystemNotification = false,
+  }) {
+    final now = DateTime.now();
+    final wasShownRecently = _lastMailAlertAt != null &&
+        now.difference(_lastMailAlertAt!) < const Duration(seconds: 4);
+    _lastMailAlertAt = now;
+
+    if (!wasShownRecently && !_isMailLocation()) {
+      _showTopNotification(
+        title,
+        body,
+        icon: Icons.email_outlined,
+        route: route,
+      );
+    }
+
+    if (showSystemNotification && !wasShownRecently && !_isMailLocation()) {
+      NotificationService().playNotificationSound();
+      NotificationService().showLocalNotification(
+        title,
+        body,
+        notificationId: notificationId,
+      );
     }
   }
 
@@ -1658,15 +1752,21 @@ class _AppSidebarState extends State<AppSidebar> {
                       },
                     ),
 
-                    // Correo (Zoho Mail)
-                    _buildSidebarItem(
-                      context,
-                      icon: Icons.email_outlined,
-                      activeIcon: Icons.email,
-                      title: 'Correo',
-                      route: '/mail',
-                      currentLocation: currentLocation,
-                      enabled: true,
+                    // Correo
+                    AnimatedBuilder(
+                      animation: MailAccountManager.instance,
+                      builder: (context, _) {
+                        return _buildSidebarItem(
+                          context,
+                          icon: Icons.email_outlined,
+                          activeIcon: Icons.email,
+                          title: 'Correo',
+                          route: '/mail',
+                          currentLocation: currentLocation,
+                          enabled: true,
+                          badgeCount: MailAccountManager.instance.unreadCount,
+                        );
+                      },
                     ),
 
                     // Additional Modules (Disabled for now)
@@ -2531,20 +2631,27 @@ class _AppDrawerState extends State<AppDrawer> {
             },
           ),
 
-          // Correo (Mail) module - ADDED for mobile access
-          ExpandableMenuItem(
-            icon: Icons.email_outlined,
-            activeIcon: Icons.email,
-            title: 'Correo',
-            subItems: const [
-              MenuSubItem(icon: Icons.email, title: 'Correo', route: '/mail')
-            ],
-            currentLocation: currentLocation,
-            isSingleItem: true,
-            enabled: true,
-            onNavigate: (route) {
-              Navigator.pop(context);
-              _handleMobileNavigation(context, route, 'Correo');
+          // Correo
+          AnimatedBuilder(
+            animation: MailAccountManager.instance,
+            builder: (context, _) {
+              return ExpandableMenuItem(
+                icon: Icons.email_outlined,
+                activeIcon: Icons.email,
+                title: 'Correo',
+                subItems: const [
+                  MenuSubItem(
+                      icon: Icons.email, title: 'Correo', route: '/mail')
+                ],
+                currentLocation: currentLocation,
+                isSingleItem: true,
+                enabled: true,
+                badgeCount: MailAccountManager.instance.unreadCount,
+                onNavigate: (route) {
+                  Navigator.pop(context);
+                  _handleMobileNavigation(context, route, 'Correo');
+                },
+              );
             },
           ),
 

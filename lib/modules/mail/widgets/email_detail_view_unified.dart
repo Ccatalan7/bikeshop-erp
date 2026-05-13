@@ -12,6 +12,7 @@ class EmailDetailViewUnified extends StatelessWidget {
   final String? error;
   final VoidCallback? onClose;
   final VoidCallback onRetry;
+  final VoidCallback? onToggleRead;
   final VoidCallback? onReply;
   final VoidCallback? onReplyAll;
   final VoidCallback? onDelete;
@@ -24,6 +25,7 @@ class EmailDetailViewUnified extends StatelessWidget {
     this.error,
     this.onClose,
     required this.onRetry,
+    this.onToggleRead,
     this.onReply,
     this.onReplyAll,
     this.onDelete,
@@ -33,40 +35,6 @@ class EmailDetailViewUnified extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    // Show error state
-    if (error != null && !isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: colorScheme.error),
-            const SizedBox(height: 16),
-            Text('Error al cargar el contenido',
-                style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              error!.contains('404')
-                  ? 'No se pudo encontrar el contenido del mensaje.'
-                  : error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colorScheme.error),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Loading content
-    if (isLoading && email.content == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
 
     // Mobile: Outlook-style architecture
     // 1. Native AppBar with subject
@@ -89,11 +57,17 @@ class EmailDetailViewUnified extends StatelessWidget {
         ),
         body: Column(
           children: [
+            _SubjectHeader(email: email),
             // Native sender header - like Outlook
             _SenderHeader(email: email),
             // WebView with email body only
             Expanded(
-              child: _EmailBodyWebView(email: email),
+              child: _EmailBodyPane(
+                email: email,
+                isLoading: isLoading,
+                error: error,
+                onRetry: onRetry,
+              ),
             ),
           ],
         ),
@@ -119,9 +93,15 @@ class EmailDetailViewUnified extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
+                _SubjectHeader(email: email),
                 _SenderHeader(email: email),
                 Expanded(
-                  child: _EmailBodyWebView(email: email),
+                  child: _EmailBodyPane(
+                    email: email,
+                    isLoading: isLoading,
+                    error: error,
+                    onRetry: onRetry,
+                  ),
                 ),
               ],
             ),
@@ -133,6 +113,16 @@ class EmailDetailViewUnified extends StatelessWidget {
 
   List<Widget> _buildActions(BuildContext context) {
     return [
+      if (onToggleRead != null)
+        IconButton(
+          icon: Icon(
+            email.isRead
+                ? Icons.mark_email_unread_outlined
+                : Icons.mark_email_read_outlined,
+          ),
+          onPressed: onToggleRead,
+          tooltip: email.isRead ? 'Marcar como no leído' : 'Marcar como leído',
+        ),
       if (onReply != null)
         IconButton(
           icon: const Icon(Icons.reply),
@@ -233,6 +223,32 @@ class _ProviderBadge extends StatelessWidget {
   }
 }
 
+class _SubjectHeader extends StatelessWidget {
+  final Email email;
+
+  const _SubjectHeader({required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      color: theme.colorScheme.surface,
+      child: Text(
+        email.subject.isEmpty ? '(sin asunto)' : email.subject,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+}
+
 /// Native sender header widget - like Outlook/Gmail
 class _SenderHeader extends StatelessWidget {
   final Email email;
@@ -252,11 +268,11 @@ class _SenderHeader extends StatelessWidget {
         '${date.day} ${_monthName(date.month)}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(color: theme.dividerColor),
+          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
         ),
       ),
       child: Row(
@@ -264,7 +280,7 @@ class _SenderHeader extends StatelessWidget {
         children: [
           // Avatar
           CircleAvatar(
-            radius: 20,
+            radius: 19,
             backgroundColor: avatarColor,
             child: Text(
               senderInitial,
@@ -276,21 +292,36 @@ class _SenderHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Sender info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  email.senderName,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        email.senderName,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        email.senderEmail,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
-                  'para ${email.toAddress}',
+                  'Para: ${email.toAddress}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -299,7 +330,7 @@ class _SenderHeader extends StatelessWidget {
               ],
             ),
           ),
-          // Date
+          const SizedBox(width: 16),
           Text(
             dateStr,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -330,6 +361,109 @@ class _SenderHeader extends StatelessWidget {
   }
 }
 
+class _EmailBodyPane extends StatelessWidget {
+  final Email email;
+  final bool isLoading;
+  final String? error;
+  final VoidCallback onRetry;
+
+  const _EmailBodyPane({
+    required this.email,
+    required this.isLoading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  bool get _hasContent => email.content?.trim().isNotEmpty ?? false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    if (error != null && !_hasContent) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 40, color: colorScheme.error),
+              const SizedBox(height: 14),
+              Text(
+                'No se pudo cargar el mensaje',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error!.contains('404')
+                    ? 'No se pudo encontrar el contenido del mensaje.'
+                    : error!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (isLoading && !_hasContent) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Cargando mensaje...',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_hasContent) {
+      return Center(
+        child: Text(
+          'Este mensaje no tiene contenido.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        _EmailBodyWebView(email: email),
+        if (isLoading)
+          const Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+      ],
+    );
+  }
+}
+
 /// WebView that renders ONLY the email body HTML (no sender info)
 class _EmailBodyWebView extends StatefulWidget {
   final Email email;
@@ -341,23 +475,34 @@ class _EmailBodyWebView extends StatefulWidget {
 }
 
 class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isReady = false;
   String _lastLoadedContent = '';
+  int _loadGeneration = 0;
+
+  bool get _useNativeWebView =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb) {
+    if (_useNativeWebView) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.white)
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageFinished: (_) {
               if (mounted) setState(() => _isReady = true);
             },
             onNavigationRequest: (request) {
+              // Allow initial about:blank / data loads; block external link navigation
+              if (request.url.startsWith('about:') ||
+                  request.url.startsWith('data:')) {
+                return NavigationDecision.navigate;
+              }
               return NavigationDecision.prevent;
             },
           ),
@@ -376,13 +521,25 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   }
 
   void _loadContent() {
+    final generation = ++_loadGeneration;
     _lastLoadedContent = widget.email.content ?? '';
-    _controller.loadHtmlString(_buildBodyHtml());
+    if (_isReady) setState(() => _isReady = false);
+    _controller?.loadHtmlString(_buildBodyHtml());
+
+    // macOS WKWebView doesn't reliably fire onPageFinished for loadHtmlString.
+    // Keep a white surface briefly so the native view doesn't flash dark before
+    // the email document paints, then reveal the already-loaded content.
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      Future<void>.delayed(const Duration(milliseconds: 140), () {
+        if (mounted && generation == _loadGeneration) {
+          setState(() => _isReady = true);
+        }
+      });
+    }
   }
 
   String _buildBodyHtml() {
-    final rawContent =
-        widget.email.content ?? widget.email.summary ?? 'Sin contenido.';
+    final rawContent = widget.email.content ?? 'Sin contenido.';
 
     // Check if the email already has proper HTML structure
     final hasHtmlTag = rawContent.toLowerCase().contains('<html');
@@ -392,10 +549,9 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
       // Email has its own HTML structure with viewport - use as-is
       // Inject CSS to fix common issues
       const injectedCss = '''<style>
-html{margin:0!important;min-height:0!important;height:auto!important}
-body{margin:0!important;padding:16px!important;min-height:0!important;height:auto!important}
-img{max-width:100%!important;height:auto!important}
-table[height="100%"],div[style*="height:100%"],td[height="100%"]{height:auto!important;min-height:0!important}
+    html{background:#ffffff!important;-webkit-text-size-adjust:100%}
+    body{background:#ffffff!important;-webkit-text-size-adjust:100%}
+    img{max-width:100%!important;height:auto!important}
 </style>''';
 
       return rawContent.replaceFirstMapped(
@@ -413,11 +569,36 @@ table[height="100%"],div[style*="height:100%"],td[height="100%"]{height:auto!imp
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 8px; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #242424;
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    #mail-reader {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 100vh;
+      padding: 24px 32px;
+      background: #ffffff;
+    }
+    #mail-content {
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+    }
     img { max-width: 100% !important; height: auto !important; }
+    table { max-width: 100%; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
   </style>
 </head>
-<body>$content</body>
+<body><div id="mail-reader"><div id="mail-content">$content</div></div></body>
 </html>
 ''';
   }
@@ -442,24 +623,18 @@ table[height="100%"],div[style*="height:100%"],td[height="100%"]{height:auto!imp
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
+    if (!_useNativeWebView) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: HtmlWidget(widget.email.content ?? widget.email.summary ?? ''),
+        child: HtmlWidget(widget.email.content ?? ''),
       );
     }
-
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        WebViewWidget(controller: _controller),
-        if (!_isReady)
-          Container(
-            color: colorScheme.surface,
-            child: const Center(child: CircularProgressIndicator()),
-          ),
+        WebViewWidget(controller: _controller!),
+        if (!_isReady) const ColoredBox(color: Colors.white),
       ],
     );
   }

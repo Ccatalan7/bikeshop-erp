@@ -1267,9 +1267,6 @@ class MessagingService {
         return secondDate.toUtc().isAfter(firstDate.toUtc()) ? second : first;
       }
 
-      final lastFirstContactTemplateAt = await loadLastFirstContactTemplateAt();
-      final lastInboundMessageAt = await loadLastInboundMessageAt();
-
       final binding = await _client
           .from('whatsapp_conversation_bindings')
           .select(
@@ -1282,11 +1279,25 @@ class MessagingService {
       String? customerId = binding?['customer_id']?.toString();
       String? contactName = binding?['contact_name']?.toString();
       String? phoneNumber = binding?['external_phone_number']?.toString();
-      final lastInboundAt = latestTimestamp(
-        binding?['last_inbound_at']?.toString(),
+      var lastInboundAt = binding?['last_inbound_at']?.toString();
+      final lastOutboundAt = binding?['last_outbound_at']?.toString();
+
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        return {
+          'customer_id': customerId,
+          'name': contactName,
+          'phone': phoneNumber,
+          'last_inbound_at': lastInboundAt,
+          'last_outbound_at': lastOutboundAt,
+        };
+      }
+
+      final lastFirstContactTemplateAt = await loadLastFirstContactTemplateAt();
+      final lastInboundMessageAt = await loadLastInboundMessageAt();
+      lastInboundAt = latestTimestamp(
+        lastInboundAt,
         lastInboundMessageAt,
       );
-      final lastOutboundAt = binding?['last_outbound_at']?.toString();
 
       if (customerId != null && customerId.isNotEmpty) {
         final customerContact = await loadCustomerById(customerId);

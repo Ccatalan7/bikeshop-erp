@@ -370,6 +370,19 @@ allow_dynamic_registration = false
 # Google redirects the browser back here without a Supabase Authorization header.
 verify_jwt = false
 
+[functions.gmail-oauth]
+# Gmail redirects the browser back here without a Supabase Authorization header.
+verify_jwt = false
+
+[functions.zoho-oauth]
+# Zoho redirects the browser back here without a Supabase Authorization header.
+verify_jwt = false
+
+[functions.whatsapp-send]
+# The send function decodes the Supabase JWT after gateway verification to avoid
+# an extra Auth API round trip on every message send.
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

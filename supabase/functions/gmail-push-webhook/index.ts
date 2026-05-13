@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { JWT } from 'npm:google-auth-library'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -98,22 +99,23 @@ serve(async (req) => {
 
         if (!subs || subs.length === 0) {
             console.log('📧 [GMAIL-PUSH] No user found for email:', emailAddress)
-            // Try fallback to zoho_tokens just in case (legacy)
-            const { data: tokens } = await supabase
-                .from('zoho_tokens')
+            // Fallback to server-side mail account records.
+            const { data: accounts } = await supabase
+                .from('email_accounts')
                 .select('user_id')
                 .eq('provider', 'gmail')
-                .eq('email', emailAddress)
+                .eq('account_email', emailAddress)
+                .eq('is_active', true)
                 .limit(1)
 
-            if (!tokens || tokens.length === 0) {
+            if (!accounts || accounts.length === 0) {
                 return new Response(JSON.stringify({ status: 'ok', warning: 'User not found' }), {
                     status: 200,
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 })
             }
-            console.log('📧 [GMAIL-PUSH] Found user via legacy tokens:', tokens[0].user_id)
-            var userId = tokens[0].user_id
+            console.log('📧 [GMAIL-PUSH] Found user via email_accounts:', accounts[0].user_id)
+            var userId = accounts[0].user_id
         } else {
             var userId = subs[0].user_id
         }
@@ -135,6 +137,8 @@ serve(async (req) => {
             console.log('📧 [GMAIL-PUSH] ✅ Notification sent to app!')
         }
 
+        await sendEmailPushNotification(supabase, userId, emailAddress, historyId)
+
         console.log('📧 [GMAIL-PUSH] ========== COMPLETE ==========')
         return new Response(JSON.stringify({ status: 'ok' }), {
             status: 200,
@@ -150,3 +154,117 @@ serve(async (req) => {
         })
     }
 })
+
+async function sendEmailPushNotification(
+    supabase: ReturnType<typeof createClient>,
+    userId: string,
+    emailAddress: string,
+    historyId: string,
+) {
+    try {
+        const { data: tokens, error } = await supabase
+            .from('user_fcm_tokens')
+            .select('fcm_token')
+            .eq('user_id', userId)
+
+        if (error) {
+            console.error('📧 [GMAIL-PUSH] FCM token lookup error:', error)
+            return
+        }
+
+        if (!tokens || tokens.length === 0) {
+            console.log('📧 [GMAIL-PUSH] No FCM tokens for user:', userId)
+            return
+        }
+
+        const accessToken = await getFirebaseAccessToken()
+        const projectId = Deno.env.get('FIREBASE_PROJECT_ID')
+        if (!projectId) {
+            console.log('📧 [GMAIL-PUSH] FIREBASE_PROJECT_ID missing; skipping FCM')
+            return
+        }
+
+        const title = 'Nuevo correo'
+        const body = `Gmail · ${emailAddress}`
+
+        await Promise.all(tokens.map(async ({ fcm_token }) => {
+            try {
+                const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({
+                        message: {
+                            token: fcm_token,
+                            data: {
+                                type: 'mail',
+                                notification_type: 'mail',
+                                provider: 'gmail',
+                                route: '/mail',
+                                email_address: emailAddress,
+                                history_id: String(historyId ?? ''),
+                                title,
+                                body,
+                                click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                            },
+                            android: {
+                                priority: 'high',
+                                notification: {
+                                    title,
+                                    body,
+                                    channel_id: 'mail_messages',
+                                    tag: `gmail-${emailAddress}`,
+                                },
+                            },
+                            apns: {
+                                payload: {
+                                    aps: {
+                                        contentAvailable: true,
+                                        alert: { title, body },
+                                        threadId: `gmail-${emailAddress}`,
+                                    },
+                                },
+                            },
+                            webpush: {
+                                headers: { Urgency: 'high' },
+                                notification: {
+                                    title,
+                                    body,
+                                    icon: '/icons/Icon-192.png',
+                                    badge: '/icons/Icon-192.png',
+                                    tag: `gmail-${emailAddress}`,
+                                    renotify: true,
+                                },
+                                fcm_options: { link: '/mail' },
+                            },
+                        },
+                    }),
+                })
+                const json = await response.json()
+                console.log('📧 [GMAIL-PUSH] FCM response:', json)
+            } catch (tokenError) {
+                console.error('📧 [GMAIL-PUSH] FCM send error:', tokenError)
+            }
+        }))
+    } catch (error) {
+        console.error('📧 [GMAIL-PUSH] Push notification error:', error)
+    }
+}
+
+async function getFirebaseAccessToken() {
+    const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') || '{}')
+    if (!serviceAccount.private_key) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT secret is missing or invalid')
+    }
+
+    const client = new JWT({
+        email: serviceAccount.client_email,
+        key: serviceAccount.private_key,
+        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    })
+
+    const result = await client.authorize()
+    return result.access_token
+}

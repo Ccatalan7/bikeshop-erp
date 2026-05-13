@@ -110,7 +110,7 @@ class EmailCacheService {
       where: where,
       whereArgs: whereArgs,
       orderBy: 'received_time DESC',
-      limit: 200, // Limit for performance
+      limit: 500, // Keep enough local history for real inbox navigation.
     );
 
     return rows.map((row) {

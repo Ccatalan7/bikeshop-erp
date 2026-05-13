@@ -14,6 +14,37 @@ enum WhatsAppDeliveryMethod {
   failed,
 }
 
+enum WhatsAppTemplatePurpose {
+  firstContact,
+  jobUpdate,
+  readyForPickup,
+  quoteFollowUp,
+}
+
+class WhatsAppTemplateOption {
+  final WhatsAppTemplatePurpose purpose;
+  final String key;
+  final String label;
+  final String description;
+  final String defaultTemplateName;
+  final String defaultLanguage;
+  final String templateNameSettingKey;
+  final String templateLanguageSettingKey;
+  final IconData icon;
+
+  const WhatsAppTemplateOption({
+    required this.purpose,
+    required this.key,
+    required this.label,
+    required this.description,
+    required this.defaultTemplateName,
+    required this.defaultLanguage,
+    required this.templateNameSettingKey,
+    required this.templateLanguageSettingKey,
+    required this.icon,
+  });
+}
+
 /// WhatsApp messaging service for customer communication
 /// Sends through WhatsApp Cloud API and falls back to manual WhatsApp Web if needed.
 class WhatsAppService {
@@ -25,6 +56,52 @@ class WhatsAppService {
       'whatsapp_first_contact_template_name';
   static const String firstContactTemplateLanguageSettingKey =
       'whatsapp_first_contact_template_language';
+  static const List<WhatsAppTemplateOption> templateOptions = [
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.firstContact,
+      key: 'first_contact',
+      label: 'Primer contacto',
+      description: 'Abre una conversación nueva con el cliente.',
+      defaultTemplateName: firstContactTemplateName,
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: firstContactTemplateNameSettingKey,
+      templateLanguageSettingKey: firstContactTemplateLanguageSettingKey,
+      icon: Icons.waving_hand_outlined,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.jobUpdate,
+      key: 'job_update',
+      label: 'Actualización de taller',
+      description: 'Reabre una conversación por una actualización del trabajo.',
+      defaultTemplateName: 'actualizacion_servicio_bicicleta',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_job_update_template_name',
+      templateLanguageSettingKey: 'whatsapp_job_update_template_language',
+      icon: Icons.build_outlined,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.readyForPickup,
+      key: 'ready_for_pickup',
+      label: 'Lista para retiro',
+      description: 'Avisa que la bicicleta está lista o requiere coordinación.',
+      defaultTemplateName: 'bicicleta_lista_retiro',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_ready_pickup_template_name',
+      templateLanguageSettingKey: 'whatsapp_ready_pickup_template_language',
+      icon: Icons.task_alt_outlined,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.quoteFollowUp,
+      key: 'quote_follow_up',
+      label: 'Presupuesto / aprobación',
+      description: 'Pide respuesta sobre presupuesto, aprobación o pendiente.',
+      defaultTemplateName: 'seguimiento_presupuesto_bicicleta',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_quote_follow_up_template_name',
+      templateLanguageSettingKey: 'whatsapp_quote_follow_up_template_language',
+      icon: Icons.request_quote_outlined,
+    ),
+  ];
   static const int _reengagementErrorCode = 131047;
   static const int _expiredAccessTokenErrorCode = 190;
 
@@ -45,11 +122,13 @@ class WhatsAppService {
   int? _lastErrorCode;
   bool _lastUsedFirstContactTemplate = false;
   String? _lastResolvedMessageText;
+  String? _lastExternalMessageId;
 
   WhatsAppDeliveryMethod get lastDeliveryMethod => _lastDeliveryMethod;
   int? get lastErrorCode => _lastErrorCode;
   bool get lastUsedFirstContactTemplate => _lastUsedFirstContactTemplate;
   String? get lastResolvedMessageText => _lastResolvedMessageText;
+  String? get lastExternalMessageId => _lastExternalMessageId;
 
   bool get lastErrorRequiresServerFix =>
       _lastErrorCode == _expiredAccessTokenErrorCode;
@@ -92,10 +171,57 @@ class WhatsAppService {
     return 'Hola $customerName, buen día. Soy parte del equipo de $businessName y te escribo por el servicio de tu bicicleta.';
   }
 
+  String buildTemplatePreviewText({
+    required WhatsAppTemplateOption option,
+    required String customerName,
+    required String businessName,
+  }) {
+    return switch (option.purpose) {
+      WhatsAppTemplatePurpose.firstContact => _buildFirstContactTemplateText(
+          customerName: customerName,
+          businessName: businessName,
+        ),
+      WhatsAppTemplatePurpose.jobUpdate =>
+        'Hola $customerName, tenemos una actualización sobre tu bicicleta en $businessName. Responde este mensaje para continuar la conversación.',
+      WhatsAppTemplatePurpose.readyForPickup =>
+        'Hola $customerName, tu bicicleta está lista para retiro en $businessName. Responde este mensaje si necesitas coordinar algo.',
+      WhatsAppTemplatePurpose.quoteFollowUp =>
+        'Hola $customerName, necesitamos tu respuesta sobre un presupuesto o aprobación pendiente en $businessName. Responde este mensaje para continuar.',
+    };
+  }
+
   void _resetLastAttemptState({String? resolvedMessageText}) {
     _lastErrorCode = null;
     _lastUsedFirstContactTemplate = false;
     _lastResolvedMessageText = resolvedMessageText;
+    _lastExternalMessageId = null;
+  }
+
+  String? _extractExternalMessageId(dynamic data) {
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final directId = data['external_message_id']?.toString().trim();
+    if (directId != null && directId.isNotEmpty) {
+      return directId;
+    }
+
+    final graphResult = data['graph_result'];
+    if (graphResult is Map<String, dynamic>) {
+      final messages = graphResult['messages'];
+      if (messages is List && messages.isNotEmpty) {
+        final firstMessage = messages.first;
+        if (firstMessage is Map<String, dynamic>) {
+          final id = firstMessage['id']?.toString().trim();
+          if (id != null && id.isNotEmpty) {
+            return id;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   int? _extractErrorCode(dynamic data) {
@@ -141,12 +267,17 @@ class WhatsAppService {
 
   Future<({String templateName, String templateLanguage})>
       _loadFirstContactTemplateSettings() async {
+    return _loadTemplateSettings(templateOptions.first);
+  }
+
+  Future<({String templateName, String templateLanguage})>
+      _loadTemplateSettings(WhatsAppTemplateOption option) async {
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null || tenantId.isEmpty) {
         return (
-          templateName: firstContactTemplateName,
-          templateLanguage: firstContactTemplateLanguage,
+          templateName: option.defaultTemplateName,
+          templateLanguage: option.defaultLanguage,
         );
       }
 
@@ -155,12 +286,12 @@ class WhatsAppService {
           .select('key, value')
           .eq('tenant_id', tenantId)
           .inFilter('key', [
-        firstContactTemplateNameSettingKey,
-        firstContactTemplateLanguageSettingKey,
+        option.templateNameSettingKey,
+        option.templateLanguageSettingKey,
       ]);
 
-      String templateName = firstContactTemplateName;
-      String templateLanguage = firstContactTemplateLanguage;
+      String templateName = option.defaultTemplateName;
+      String templateLanguage = option.defaultLanguage;
 
       for (final row in rows) {
         final key = row['key']?.toString();
@@ -169,9 +300,9 @@ class WhatsAppService {
           continue;
         }
 
-        if (key == firstContactTemplateNameSettingKey) {
+        if (key == option.templateNameSettingKey) {
           templateName = value;
-        } else if (key == firstContactTemplateLanguageSettingKey) {
+        } else if (key == option.templateLanguageSettingKey) {
           templateLanguage = value;
         }
       }
@@ -182,38 +313,53 @@ class WhatsAppService {
       );
     } catch (error) {
       debugPrint(
-        '⚠️ [WhatsAppService] Falling back to default first-contact template settings: $error',
+        '⚠️ [WhatsAppService] Falling back to default WhatsApp template settings: $error',
       );
       return (
-        templateName: firstContactTemplateName,
-        templateLanguage: firstContactTemplateLanguage,
+        templateName: option.defaultTemplateName,
+        templateLanguage: option.defaultLanguage,
       );
     }
   }
 
   Future<bool> _sendViaCloud(Map<String, dynamic> body) async {
+    final stopwatch = Stopwatch()..start();
+    final metadata = body['metadata'];
+    final clientMessageId =
+        metadata is Map ? metadata['client_message_id']?.toString() : null;
+    debugPrint(
+      '⏱️ [WhatsAppService] cloud_invoke_start type=${body['type']} conversation=${body['conversationId']} client=$clientMessageId',
+    );
+
     try {
       final response = await _client.functions.invoke(
         'whatsapp-send',
         body: body,
       );
+      stopwatch.stop();
 
       final status = response.status;
       if (status >= 200 && status < 300) {
         _lastErrorCode = null;
         _lastDeliveryMethod = WhatsAppDeliveryMethod.cloudApi;
-        debugPrint('✅ [WhatsAppService] Message sent via Cloud API');
+        _lastExternalMessageId = _extractExternalMessageId(response.data);
+        debugPrint(
+          '✅ [WhatsAppService] cloud_invoke_done status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId external=$_lastExternalMessageId',
+        );
         return true;
       }
 
       _lastErrorCode = _extractErrorCode(response.data);
 
       debugPrint(
-        '❌ [WhatsAppService] Cloud API failed: status=$status data=${response.data}',
+        '❌ [WhatsAppService] cloud_invoke_failed status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$_lastErrorCode data=${response.data}',
       );
     } catch (error) {
+      stopwatch.stop();
       _lastErrorCode = null;
-      debugPrint('❌ [WhatsAppService] Cloud API error: $error');
+      debugPrint(
+        '❌ [WhatsAppService] cloud_invoke_error elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId error=$error',
+      );
     }
 
     return false;
@@ -585,16 +731,46 @@ Viña Bike
     String? contextId,
     String? clientMessageId,
   }) async {
-    final templateSettings = await _loadFirstContactTemplateSettings();
+    return sendTemplateMessage(
+      option: templateOptions.first,
+      customerPhone: customerPhone,
+      customerName: customerName,
+      agentName: agentName,
+      conversationId: conversationId,
+      contextType: contextType,
+      contextId: contextId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  Future<bool> sendTemplateMessage({
+    required WhatsAppTemplateOption option,
+    required String customerPhone,
+    required String customerName,
+    String? agentName,
+    String? conversationId,
+    String? contextType,
+    String? contextId,
+    String? clientMessageId,
+  }) async {
+    final templateSettings =
+        option.purpose == WhatsAppTemplatePurpose.firstContact
+            ? await _loadFirstContactTemplateSettings()
+            : await _loadTemplateSettings(option);
     final businessName = await _resolveBusinessName();
     final resolvedSenderLabel =
         (agentName != null && agentName.trim().isNotEmpty)
             ? agentName.trim()
             : 'parte del equipo';
-    final renderedMessage = _buildFirstContactTemplateText(
+    final renderedMessage = buildTemplatePreviewText(
+      option: option,
       customerName: customerName,
       businessName: businessName,
     );
+    final secondParameter =
+        option.purpose == WhatsAppTemplatePurpose.firstContact
+            ? resolvedSenderLabel
+            : businessName;
 
     _resetLastAttemptState(resolvedMessageText: renderedMessage);
 
@@ -618,7 +794,7 @@ Viña Bike
             },
             {
               'type': 'text',
-              'text': resolvedSenderLabel,
+              'text': secondParameter,
             },
           ],
         },
@@ -626,7 +802,7 @@ Viña Bike
       'metadata': {
         'source': 'flutter_erp',
         if (clientMessageId != null) 'client_message_id': clientMessageId,
-        'template_purpose': 'first_contact',
+        'template_purpose': option.key,
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,
       },

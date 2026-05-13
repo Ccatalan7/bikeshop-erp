@@ -7,12 +7,28 @@ const corsHeaders = {
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const WHATSAPP_ACCESS_TOKEN = Deno.env.get('WHATSAPP_ACCESS_TOKEN') ?? ''
 const WHATSAPP_API_VERSION = Deno.env.get('WHATSAPP_API_VERSION') ?? 'v23.0'
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 type JsonRecord = Record<string, unknown>
+
+interface CacheEntry<T> {
+  value: T
+  expiresAt: number
+}
+
+interface WhatsAppChannelRecord {
+  id: string
+  phone_number_id: string
+  display_name?: string | null
+  display_phone_number?: string | null
+  is_active: boolean
+}
+
+const tenantIdByUserId = new Map<string, CacheEntry<string>>()
+const activeChannelByTenantKey = new Map<string, CacheEntry<WhatsAppChannelRecord>>()
 
 interface SendRequest {
   conversationId?: string
@@ -51,6 +67,111 @@ function jsonResponse(body: unknown, status = 200) {
       'Content-Type': 'application/json',
     },
   })
+}
+
+function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string) {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (entry.expiresAt <= Date.now()) {
+    cache.delete(key)
+    return null
+  }
+  return entry.value
+}
+
+function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T) {
+  cache.set(key, {
+    value,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  })
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    '=',
+  )
+  return atob(padded)
+}
+
+function resolveUserIdFromAuthorization(authHeader: string) {
+  const [scheme, token] = authHeader.split(/\s+/)
+  if (scheme?.toLowerCase() !== 'bearer' || !token) {
+    return null
+  }
+
+  const payloadPart = token.split('.')[1]
+  if (!payloadPart) {
+    return null
+  }
+
+  try {
+    const payload = JSON.parse(decodeBase64Url(payloadPart)) as JsonRecord
+    const subject = stringValue(payload.sub)
+    return subject ?? null
+  } catch (error) {
+    console.error('❌ [WHATSAPP-SEND] Unable to decode JWT payload', error)
+    return null
+  }
+}
+
+async function resolveTenantIdForUser(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+) {
+  const cachedTenantId = getCached(tenantIdByUserId, userId)
+  if (cachedTenantId) {
+    return cachedTenantId
+  }
+
+  const { data: profile, error: profileError } = await adminClient
+    .from('user_profiles')
+    .select('tenant_id')
+    .eq('user_id', userId)
+    .single()
+
+  if (profileError || !profile?.tenant_id) {
+    console.error('❌ [WHATSAPP-SEND] Failed to resolve tenant', profileError)
+    return null
+  }
+
+  const tenantId = String(profile.tenant_id)
+  setCached(tenantIdByUserId, userId, tenantId)
+  return tenantId
+}
+
+async function resolveActiveChannel(
+  adminClient: ReturnType<typeof createClient>,
+  tenantId: string,
+  phoneNumberId?: string,
+) {
+  const cacheKey = `${tenantId}:${phoneNumberId ?? 'default'}`
+  const cachedChannel = getCached(activeChannelByTenantKey, cacheKey)
+  if (cachedChannel) {
+    return cachedChannel
+  }
+
+  let channelQuery = adminClient
+    .from('whatsapp_channels')
+    .select('id, phone_number_id, display_name, display_phone_number, is_active')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+
+  if (phoneNumberId) {
+    channelQuery = channelQuery.eq('phone_number_id', phoneNumberId)
+  }
+
+  const { data: channel, error: channelError } = await channelQuery.limit(1).maybeSingle()
+
+  if (channelError || !channel) {
+    console.error('❌ [WHATSAPP-SEND] Failed to resolve active channel', channelError)
+    return null
+  }
+
+  const resolvedChannel = channel as WhatsAppChannelRecord
+  setCached(activeChannelByTenantKey, cacheKey, resolvedChannel)
+  return resolvedChannel
 }
 
 function normalizePhoneNumber(phone: string) {
@@ -295,6 +416,23 @@ function getMessageContent(request: SendRequest) {
   return request.text ?? request.caption ?? 'Solicitud enviada por WhatsApp'
 }
 
+async function replayStoredWhatsAppStatus(
+  adminClient: ReturnType<typeof createClient>,
+  externalMessageId: string,
+) {
+  if (!externalMessageId) {
+    return
+  }
+
+  const { error } = await adminClient.rpc('replay_whatsapp_message_status', {
+    p_external_message_id: externalMessageId,
+  })
+
+  if (error) {
+    console.error('❌ [WHATSAPP-SEND] Failed to replay stored status events', error)
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -304,7 +442,7 @@ serve(async (req) => {
     return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
-  if (!SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY || !WHATSAPP_ACCESS_TOKEN) {
+  if (!SUPABASE_SERVICE_ROLE_KEY || !WHATSAPP_ACCESS_TOKEN) {
     return jsonResponse({
       error: 'Missing required environment variables',
     }, 500)
@@ -327,6 +465,24 @@ serve(async (req) => {
     return jsonResponse({ error: 'phoneNumber and type are required' }, 400)
   }
 
+  const startedAt = Date.now()
+  const clientMessageId = requestBody.metadata?.client_message_id ?? null
+  const logTiming = (phase: string, details: JsonRecord = {}) => {
+    console.log(
+      '⏱️ [WHATSAPP-SEND] timing',
+      JSON.stringify({
+        phase,
+        elapsed_ms: Date.now() - startedAt,
+        type: requestBody.type,
+        conversation_id: requestBody.conversationId ?? null,
+        client_message_id: clientMessageId,
+        ...details,
+      }),
+    )
+  }
+
+  logTiming('request_validated')
+
   if (requestBody.type === 'text' && !requestBody.text) {
     return jsonResponse({ error: 'text is required for text messages' }, 400)
   }
@@ -343,56 +499,46 @@ serve(async (req) => {
     return jsonResponse({ error: 'templateName is required for template messages' }, 400)
   }
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: {
-      headers: { Authorization: authHeader },
-    },
-  })
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser()
-
-  if (userError || !user) {
+  const userId = resolveUserIdFromAuthorization(authHeader)
+  if (!userId) {
     return jsonResponse({ error: 'Unauthorized' }, 401)
   }
 
-  const { data: profile, error: profileError } = await adminClient
-    .from('user_profiles')
-    .select('tenant_id')
-    .eq('user_id', user.id)
-    .single()
+  logTiming('auth_resolved')
 
-  if (profileError || !profile?.tenant_id) {
-    console.error('❌ [WHATSAPP-SEND] Failed to resolve tenant', profileError)
+  const tenantId = await resolveTenantIdForUser(adminClient, userId)
+  if (!tenantId) {
     return jsonResponse({ error: 'Unable to resolve tenant' }, 400)
   }
 
-  const tenantId = String(profile.tenant_id)
-  let channelQuery = adminClient
-    .from('whatsapp_channels')
-    .select('id, phone_number_id, display_name, display_phone_number, is_active')
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
+  logTiming('tenant_resolved')
 
-  if (requestBody.phoneNumberId) {
-    channelQuery = channelQuery.eq('phone_number_id', requestBody.phoneNumberId)
-  }
+  const channel = await resolveActiveChannel(
+    adminClient,
+    tenantId,
+    requestBody.phoneNumberId,
+  )
 
-  const { data: channel, error: channelError } = await channelQuery.limit(1).maybeSingle()
-
-  if (channelError || !channel) {
-    console.error('❌ [WHATSAPP-SEND] Failed to resolve active channel', channelError)
+  if (!channel) {
     return jsonResponse({ error: 'No active WhatsApp channel found for tenant' }, 400)
   }
+
+  logTiming('channel_resolved', {
+    channel_id: channel.id,
+    phone_number_id: channel.phone_number_id,
+  })
 
   const normalizedPhone = normalizePhoneNumber(requestBody.phoneNumber)
   const bindingContextType = requestBody.contextType ?? (requestBody.jobId ? 'job' : null)
   const bindingContextId = requestBody.contextId ?? requestBody.jobId ?? null
 
-  const { data: bindingResult, error: bindingError } = await adminClient.rpc(
+  // Kick off binding lookup in parallel with media upload + Graph send. The
+  // binding row is only needed to know which conversation to insert the
+  // persisted message into, which we do AFTER Graph success — so we don't
+  // need to block the actual send on it.
+  const bindingPromise = adminClient.rpc(
     'ensure_whatsapp_conversation_binding',
     {
       p_tenant_id: tenantId,
@@ -407,55 +553,6 @@ serve(async (req) => {
     },
   )
 
-  if (bindingError || !bindingResult) {
-    console.error('❌ [WHATSAPP-SEND] Failed to ensure conversation binding', bindingError)
-    return jsonResponse({ error: 'Unable to ensure WhatsApp conversation binding' }, 400)
-  }
-
-  const mediaUpload = await uploadMediaToWhatsApp(
-    requestBody,
-    String(channel.phone_number_id),
-  )
-  if (mediaUpload.error) {
-    return mediaUpload.error
-  }
-
-  const graphPayload = buildGraphPayload(
-    requestBody,
-    normalizedPhone,
-    mediaUpload.mediaId,
-  )
-  if (requestBody.type === 'interactive' && !graphPayload.interactive) {
-    return jsonResponse({
-      error: 'interactive payload is required, or provide actionType/actionTargetId',
-    }, 400)
-  }
-
-  const graphResponse = await fetch(
-    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${channel.phone_number_id}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(graphPayload),
-    },
-  )
-
-  const graphResult = await graphResponse.json().catch(() => ({}))
-  if (!graphResponse.ok) {
-    console.error('❌ [WHATSAPP-SEND] Graph API error', graphResult)
-    return jsonResponse({
-      error: 'Graph API request failed',
-      details: graphResult,
-    }, 502)
-  }
-
-  const externalMessageId = String(
-    ((graphResult as JsonRecord).messages as JsonRecord[] | undefined)?.[0]?.id ?? '',
-  )
-
   const messageType = requestBody.type === 'image'
     ? 'image'
     : requestBody.type === 'document'
@@ -464,7 +561,7 @@ serve(async (req) => {
         ? 'action_request'
         : 'text'
 
-  const messageMetadata: JsonRecord = {
+  const buildMessageMetadata = (extra: JsonRecord = {}) => ({
     ...(requestBody.metadata ?? {}),
     channel: 'whatsapp',
     provider: 'whatsapp',
@@ -472,7 +569,6 @@ serve(async (req) => {
     display_phone_number: channel.display_phone_number,
     external_wa_id: normalizedPhone,
     outbound_type: requestBody.type,
-    ...(mediaUpload.metadata ?? {}),
     ...(requestBody.mediaUrl ? { media_url: requestBody.mediaUrl } : {}),
     ...(requestBody.documentUrl ? { document_url: requestBody.documentUrl } : {}),
     ...(requestBody.documentFilename
@@ -481,63 +577,217 @@ serve(async (req) => {
         filename: requestBody.documentFilename,
       }
       : {}),
-    graph_payload: graphPayload,
-    graph_response: graphResult,
     action_type: requestBody.actionType ?? null,
     target_id: requestBody.actionTargetId ?? requestBody.jobId ?? null,
     amount: requestBody.amount ?? null,
     status: 'pending',
-  }
+    ...extra,
+  })
 
-  const { data: insertedMessage, error: insertError } = await adminClient
-    .from('messages')
-    .insert({
-      conversation_id: (bindingResult as JsonRecord).conversation_id,
-      sender_id: user.id,
-      tenant_id: tenantId,
-      content: getMessageContent(requestBody),
-      type: messageType,
-      metadata: messageMetadata,
-      external_provider: 'whatsapp',
-      external_message_id: externalMessageId || null,
-      message_direction: 'outbound',
-      external_status: 'accepted',
-    })
-    .select('id, conversation_id, content, type, metadata, created_at')
-    .single()
-
-  if (insertError) {
-    console.error('❌ [WHATSAPP-SEND] Failed to persist outbound message', insertError)
-    return jsonResponse({
-      error: 'WhatsApp message sent but persistence failed',
-      details: insertError.message,
-      graph_result: graphResult,
-    }, 500)
-  }
-
-  await adminClient
-    .from('whatsapp_conversation_bindings')
-    .update({ last_outbound_at: new Date().toISOString() })
-    .eq('id', (bindingResult as JsonRecord).binding_id)
-
-  if (requestBody.markQuoteSent && requestBody.jobId) {
-    const { error } = await adminClient.rpc('mark_whatsapp_job_quote_sent', {
-      p_job_id: requestBody.jobId,
-      p_external_message_id: externalMessageId || null,
-      p_payload: graphResult,
-    })
-
-    if (error) {
-      console.error('❌ [WHATSAPP-SEND] Failed to mark quote as sent', error)
+  const persistOutboundMessage = async ({
+    externalMessageId,
+    externalStatus,
+    metadata,
+    graphResult,
+  }: {
+    externalMessageId?: string
+    externalStatus: 'accepted' | 'failed'
+    metadata: JsonRecord
+    graphResult?: unknown
+  }) => {
+    const persistStartedAt = Date.now()
+    const { data: bindingResult, error: bindingError } = await bindingPromise
+    if (bindingError || !bindingResult) {
+      console.error('❌ [WHATSAPP-SEND] Failed to ensure conversation binding', bindingError)
+      return
     }
+
+    logTiming('persist_binding_ready', {
+      persist_elapsed_ms: Date.now() - persistStartedAt,
+      conversation_id: (bindingResult as JsonRecord).conversation_id,
+    })
+
+    const { error: insertError } = await adminClient
+      .from('messages')
+      .insert({
+        conversation_id: (bindingResult as JsonRecord).conversation_id,
+          sender_id: userId,
+        tenant_id: tenantId,
+        content: getMessageContent(requestBody),
+        type: messageType,
+          metadata,
+        external_provider: 'whatsapp',
+        external_message_id: externalMessageId || null,
+        message_direction: 'outbound',
+          external_status: externalStatus,
+      })
+
+    if (insertError) {
+      console.error('❌ [WHATSAPP-SEND] Failed to persist outbound message', insertError)
+    } else if (externalMessageId) {
+      logTiming('persist_message_inserted', {
+        persist_elapsed_ms: Date.now() - persistStartedAt,
+      })
+      await replayStoredWhatsAppStatus(adminClient, externalMessageId)
+      logTiming('persist_status_replayed', {
+        persist_elapsed_ms: Date.now() - persistStartedAt,
+      })
+    }
+
+    await adminClient
+      .from('whatsapp_conversation_bindings')
+      .update({ last_outbound_at: new Date().toISOString() })
+      .eq('id', (bindingResult as JsonRecord).binding_id)
+
+    if (externalStatus === 'accepted' && requestBody.markQuoteSent && requestBody.jobId) {
+      const { error } = await adminClient.rpc('mark_whatsapp_job_quote_sent', {
+        p_job_id: requestBody.jobId,
+        p_external_message_id: externalMessageId || null,
+        p_payload: graphResult ?? {},
+      })
+
+      if (error) {
+        console.error('❌ [WHATSAPP-SEND] Failed to mark quote as sent', error)
+      }
+    }
+
+    logTiming('persist_done', {
+      persist_elapsed_ms: Date.now() - persistStartedAt,
+    })
   }
+
+  // The HTTP response is now the Vinabike server ACK: the request is valid,
+  // authenticated, tied to a tenant/channel, and accepted for delivery. The
+  // actual Meta Graph send continues in the background and reconciles the
+  // optimistic UI row through realtime using `client_message_id`.
+  const sendPromise = (async () => {
+    try {
+      logTiming('media_upload_start')
+      const mediaUpload = await uploadMediaToWhatsApp(
+        requestBody,
+        String(channel.phone_number_id),
+      )
+      if (mediaUpload.error) {
+        logTiming('media_upload_failed')
+        let failurePayload: unknown = { error: 'WhatsApp media upload failed' }
+        try {
+          failurePayload = await mediaUpload.error.clone().json()
+        } catch (_error) {
+          // Keep the generic payload above.
+        }
+        await persistOutboundMessage({
+          externalStatus: 'failed',
+          metadata: buildMessageMetadata({
+            status: 'failed',
+            whatsapp_status: 'failed',
+            whatsapp_status_payload: failurePayload,
+          }),
+        })
+        return
+      }
+      logTiming('media_upload_done', {
+        uploaded: Boolean(mediaUpload.mediaId),
+      })
+
+      const graphPayload = buildGraphPayload(
+        requestBody,
+        normalizedPhone,
+        mediaUpload.mediaId,
+      )
+      if (requestBody.type === 'interactive' && !graphPayload.interactive) {
+        await persistOutboundMessage({
+          externalStatus: 'failed',
+          metadata: buildMessageMetadata({
+            status: 'failed',
+            whatsapp_status: 'failed',
+            whatsapp_status_payload: {
+              error: 'interactive payload is required, or provide actionType/actionTargetId',
+            },
+          }),
+        })
+        return
+      }
+
+      logTiming('graph_request_start')
+      const graphResponse = await fetch(
+        `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${channel.phone_number_id}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(graphPayload),
+        },
+      )
+
+      logTiming('graph_response_headers', { status: graphResponse.status })
+      const graphResult = await graphResponse.json().catch(() => ({}))
+      if (!graphResponse.ok) {
+        logTiming('graph_request_failed', { status: graphResponse.status })
+        console.error('❌ [WHATSAPP-SEND] Graph API error', graphResult)
+        await persistOutboundMessage({
+          externalStatus: 'failed',
+          metadata: buildMessageMetadata({
+            graph_payload: graphPayload,
+            graph_response: graphResult,
+            status: 'failed',
+            whatsapp_status: 'failed',
+            whatsapp_status_payload: graphResult,
+          }),
+        })
+        return
+      }
+
+      const externalMessageId = String(
+        ((graphResult as JsonRecord).messages as JsonRecord[] | undefined)?.[0]?.id ?? '',
+      )
+      logTiming('graph_request_done', {
+        status: graphResponse.status,
+        external_message_id: externalMessageId || null,
+      })
+
+      await persistOutboundMessage({
+        externalMessageId,
+        externalStatus: 'accepted',
+        graphResult,
+        metadata: buildMessageMetadata({
+          ...(mediaUpload.metadata ?? {}),
+          graph_payload: graphPayload,
+          graph_response: graphResult,
+        }),
+      })
+    } catch (error) {
+      logTiming('background_send_failed')
+      console.error('❌ [WHATSAPP-SEND] Background send failed', error)
+      await persistOutboundMessage({
+        externalStatus: 'failed',
+        metadata: buildMessageMetadata({
+          status: 'failed',
+          whatsapp_status: 'failed',
+          whatsapp_status_payload: { error: String(error) },
+        }),
+      })
+    }
+  })()
+
+  // EdgeRuntime.waitUntil keeps the worker alive until the background task
+  // finishes, without blocking the HTTP response.
+  // deno-lint-ignore no-explicit-any
+  const edgeRuntime = (globalThis as any).EdgeRuntime
+  if (edgeRuntime && typeof edgeRuntime.waitUntil === 'function') {
+    edgeRuntime.waitUntil(sendPromise)
+  } else {
+    // Local dev / non-edge runtime fallback: don't drop the promise on the floor.
+    sendPromise.catch((err) =>
+      console.error('❌ [WHATSAPP-SEND] Background send failed', err),
+    )
+  }
+
+  logTiming('response_returning', { queued: true })
 
   return jsonResponse({
     ok: true,
-    conversation_id: (bindingResult as JsonRecord).conversation_id,
-    binding_id: (bindingResult as JsonRecord).binding_id,
-    external_message_id: externalMessageId,
-    message: insertedMessage,
-    graph_result: graphResult,
+    queued: true,
   })
 })

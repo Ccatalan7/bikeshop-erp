@@ -9,6 +9,10 @@ import '../services/email_cache_service.dart';
 /// Singleton manager for multiple email providers with unified inbox view.
 /// Persists across navigation to avoid refetching emails.
 class MailAccountManager extends ChangeNotifier {
+  static const int inboxPageSize = 50;
+  static const int _searchWarmPageLimit = 5;
+  static const int _searchWarmTargetResults = 25;
+
   // Singleton pattern
   static MailAccountManager? _instance;
   static MailAccountManager get instance {
@@ -23,15 +27,25 @@ class MailAccountManager extends ChangeNotifier {
 
   final List<EmailProvider> _providers = [];
   List<Email> _unifiedEmails = [];
+  List<Email> _searchResults = [];
   Email? _selectedEmail;
   EmailProvider? _selectedProvider;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _isSearching = false;
+  bool _isLoadingSelectedEmail = false;
   bool _isInitialized = false;
   String? _error;
+  String? _selectedEmailError;
+  String _searchQuery = '';
+  int _searchRequestId = 0;
+  int _selectionRequestId = 0;
   DateTime? _lastFetch;
   Timer? _pollingTimer;
   Timer? _refreshDebounceTimer;
   final EmailCacheService _cache = EmailCacheService();
+  final StreamController<Email> _newEmailController =
+      StreamController<Email>.broadcast();
 
   // Push notification subscription
   RealtimeChannel? _pushChannel;
@@ -45,24 +59,36 @@ class MailAccountManager extends ChangeNotifier {
       _providers.where((p) => p.isAuthenticated).toList();
 
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get isSearching => _isSearching;
+  bool get isSearchActive => _searchQuery.isNotEmpty;
+  bool get isLoadingSelectedEmail => _isLoadingSelectedEmail;
   bool get isInitialized => _isInitialized;
   String? get error => _error;
+  String? get selectedEmailError => _selectedEmailError;
   Email? get selectedEmail => _selectedEmail;
   EmailProvider? get selectedProvider => _selectedProvider;
   String? get providerFilter => _providerFilter;
   DateTime? get lastFetch => _lastFetch;
+  int get unreadCount => _unifiedEmails.where((email) => !email.isRead).length;
+  int get loadedCount => emails.length;
+  bool get canLoadMore {
+    final providersToCheck = _providersForActiveFilter();
+    return providersToCheck.any((provider) => provider.canLoadMore);
+  }
+
+  Stream<Email> get newEmailStream => _newEmailController.stream;
 
   /// Check if we have cached emails
   bool get hasCachedEmails => _unifiedEmails.isNotEmpty;
 
   /// Get unified email list (merged from all providers, sorted by date)
   List<Email> get emails {
+    final source = isSearchActive ? _searchResults : _unifiedEmails;
     if (_providerFilter != null) {
-      return _unifiedEmails
-          .where((e) => e.providerId == _providerFilter)
-          .toList();
+      return source.where((e) => e.providerId == _providerFilter).toList();
     }
-    return _unifiedEmails;
+    return source;
   }
 
   /// Initialize manager and all providers
@@ -137,8 +163,11 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   /// Start OAuth flow for a provider
-  String getAuthorizationUrl(String providerId,
-      {required String redirectUri, String? state}) {
+  Future<String> getAuthorizationUrl(
+    String providerId, {
+    required String redirectUri,
+    String? state,
+  }) {
     final provider = getProvider(providerId);
     if (provider == null) throw Exception('Provider not found: $providerId');
     return provider.getAuthorizationUrl(redirectUri: redirectUri, state: state);
@@ -178,6 +207,9 @@ class MailAccountManager extends ChangeNotifier {
   /// Refresh inbox from all connected providers
   /// If background is true, don't show loading state (for background refresh)
   Future<void> refreshInbox({bool background = false}) async {
+    final previousKeys = _unifiedEmails.map(_emailKey).toSet();
+    final shouldNotifyNewMail = background && previousKeys.isNotEmpty;
+
     if (!background) {
       _isLoading = true;
       notifyListeners();
@@ -186,24 +218,48 @@ class MailAccountManager extends ChangeNotifier {
 
     try {
       final allEmails = <Email>[];
+      final failedProviders = <String>[];
 
       for (final provider in connectedProviders) {
         try {
-          final emails = await provider.getInbox();
-          allEmails.addAll(emails);
+          final knownEmails = _unifiedEmails
+              .where((email) => email.providerId == provider.providerId)
+              .toList(growable: false);
+          final emails = await provider.getInbox(
+            limit: inboxPageSize,
+            start: 0,
+            knownEmails: knownEmails,
+          );
+          allEmails.addAll(_mergeProviderEmails(provider.providerId, emails));
         } catch (e) {
           debugPrint('Error fetching ${provider.providerId} inbox: $e');
-          // Continue with other providers
+          failedProviders.add(provider.providerId);
+          allEmails.addAll(
+            _unifiedEmails
+                .where((email) => email.providerId == provider.providerId),
+          );
         }
       }
 
-      // Sort by date (newest first)
-      allEmails.sort((a, b) => b.receivedTime.compareTo(a.receivedTime));
-      _unifiedEmails = allEmails;
+      if (allEmails.isEmpty && _unifiedEmails.isNotEmpty) {
+        allEmails.addAll(_unifiedEmails);
+      }
+
+      _unifiedEmails = _dedupeAndSort(allEmails);
       _lastFetch = DateTime.now();
 
+      if (shouldNotifyNewMail) {
+        _emitNewEmailNotifications(_unifiedEmails, previousKeys);
+      }
+
+      if (failedProviders.isNotEmpty) {
+        _error = failedProviders.length == 1
+            ? 'No se pudo actualizar ${failedProviders.first}. Mostrando correos guardados.'
+            : 'No se pudieron actualizar algunas cuentas. Mostrando correos guardados.';
+      }
+
       // Save to SQLite cache for next app launch
-      await _cache.cacheEmails(allEmails);
+      await _cache.cacheEmails(_unifiedEmails);
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -223,38 +279,292 @@ class MailAccountManager extends ChangeNotifier {
     await refreshInbox(background: true);
   }
 
+  /// Load the next page from the active provider filter, or all providers.
+  Future<void> loadMore() async {
+    if (_isLoadingMore || connectedProviders.isEmpty) return;
+
+    final providersToLoad = _providersForActiveFilter()
+        .where((provider) => provider.canLoadMore)
+        .toList(growable: false);
+
+    if (providersToLoad.isEmpty) return;
+
+    _isLoadingMore = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final fetched = <Email>[];
+
+      for (final provider in providersToLoad) {
+        final source = isSearchActive ? _searchResults : _unifiedEmails;
+        final knownEmails = source
+            .where((email) => email.providerId == provider.providerId)
+            .toList(growable: false);
+        final page = await provider.getInbox(
+          limit: inboxPageSize,
+          start: knownEmails.length,
+          searchQuery: isSearchActive ? _searchQuery : null,
+          knownEmails: knownEmails,
+        );
+        fetched.addAll(page);
+      }
+
+      if (fetched.isNotEmpty) {
+        if (isSearchActive) {
+          _searchResults = _dedupeAndSort([..._searchResults, ...fetched]);
+        } else {
+          _unifiedEmails = _dedupeAndSort([..._unifiedEmails, ...fetched]);
+          await _cache.cacheEmails(_unifiedEmails);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading more mail: $e');
+      _error = 'No se pudieron cargar más correos.';
+    } finally {
+      _isLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> searchInbox(String query) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) {
+      clearSearch();
+      return;
+    }
+
+    final requestId = ++_searchRequestId;
+    _searchQuery = normalizedQuery;
+    _isSearching = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final results = <Email>[];
+      final failedProviders = <String>[];
+
+      for (final provider in _providersForActiveFilter()) {
+        try {
+          final providerResults = <Email>[];
+          for (var pageIndex = 0;
+              pageIndex < _searchWarmPageLimit;
+              pageIndex++) {
+            final emails = await provider.getInbox(
+              limit: inboxPageSize,
+              start: providerResults.length,
+              searchQuery: normalizedQuery,
+              knownEmails: providerResults,
+            );
+            providerResults.addAll(emails);
+            if (!provider.canLoadMore ||
+                providerResults.length >= _searchWarmTargetResults) {
+              break;
+            }
+          }
+          results.addAll(providerResults);
+        } catch (e) {
+          debugPrint('Error searching ${provider.providerId} inbox: $e');
+          failedProviders.add(provider.providerId);
+        }
+      }
+
+      if (requestId != _searchRequestId) return;
+
+      _searchResults = _dedupeAndSort(results);
+
+      if (failedProviders.isNotEmpty) {
+        _error = failedProviders.length == 1
+            ? 'No se pudo buscar en ${failedProviders.first}.'
+            : 'No se pudo buscar en algunas cuentas.';
+      }
+    } catch (e) {
+      if (requestId != _searchRequestId) return;
+      _error = 'No se pudo buscar correos.';
+    } finally {
+      if (requestId == _searchRequestId) {
+        _isSearching = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void clearSearch() {
+    if (_searchQuery.isEmpty && _searchResults.isEmpty && !_isSearching) {
+      return;
+    }
+    _searchRequestId++;
+    _searchQuery = '';
+    _searchResults = [];
+    _isSearching = false;
+    notifyListeners();
+  }
+
+  List<EmailProvider> _providersForActiveFilter() {
+    if (_providerFilter == null) return connectedProviders;
+    return connectedProviders
+        .where((provider) => provider.providerId == _providerFilter)
+        .toList(growable: false);
+  }
+
+  List<Email> _mergeProviderEmails(String providerId, List<Email> fetched) {
+    final existing = _unifiedEmails.where(
+      (email) => email.providerId == providerId,
+    );
+    return _dedupeAndSort([...existing, ...fetched]);
+  }
+
+  List<Email> _dedupeAndSort(Iterable<Email> emails) {
+    final byKey = <String, Email>{};
+    for (final email in emails) {
+      final key = _emailKey(email);
+      final existing = byKey[key];
+      byKey[key] = existing == null ? email : _mergeEmail(existing, email);
+    }
+
+    final sorted = byKey.values.toList()
+      ..sort((a, b) => b.receivedTime.compareTo(a.receivedTime));
+    return sorted;
+  }
+
+  Email _mergeEmail(Email existing, Email incoming) {
+    return incoming.copyWith(content: incoming.content ?? existing.content);
+  }
+
+  String _emailKey(Email email) => '${email.providerId}:${email.id}';
+
   /// Select an email and load its content
   Future<void> selectEmail(Email email) async {
     final provider = getProvider(email.providerId);
     if (provider == null) return;
 
+    final requestId = ++_selectionRequestId;
+
     _selectedProvider = provider;
     _selectedEmail = email;
+    _selectedEmailError = null;
+    _isLoadingSelectedEmail = email.content == null;
     notifyListeners();
 
     try {
-      _selectedEmail = await provider.getEmailContent(email);
+      final cachedContent = await _cache.getCachedContent(email.id);
+      if (!_isCurrentSelection(requestId, email.id)) return;
+
+      final hasRenderableCachedContent = cachedContent != null &&
+          cachedContent.trim().isNotEmpty &&
+          !(provider is GmailProvider && _isPlainTextFallback(cachedContent));
+
+      if (hasRenderableCachedContent) {
+        _selectedEmail = email.copyWith(content: cachedContent);
+        _isLoadingSelectedEmail = false;
+        notifyListeners();
+      }
+
+      final loadedEmail = await provider.getEmailContent(email);
+      if (!_isCurrentSelection(requestId, email.id)) return;
+
+      _selectedEmail = loadedEmail;
+      _isLoadingSelectedEmail = false;
+
+      final loadedContent = loadedEmail.content;
+      if (loadedContent != null && loadedContent.trim().isNotEmpty) {
+        await _cache.cacheContent(loadedEmail.id, loadedContent);
+      }
+
+      if (provider is GmailProvider &&
+          loadedContent?.contains('cid:') == true) {
+        _isLoadingSelectedEmail = true;
+        notifyListeners();
+        unawaited(_hydrateSelectedGmailInlineImages(
+          provider: provider,
+          email: loadedEmail,
+          requestId: requestId,
+        ));
+      }
 
       // Mark as read
       if (!email.isRead) {
         await provider.markAsRead(email.id);
+        await _cache.updateReadStatus(email.id, true);
         // Update the email in the list
-        final index = _unifiedEmails.indexWhere((e) => e.id == email.id);
+        final index = _unifiedEmails.indexWhere(
+          (e) => e.id == email.id && e.providerId == email.providerId,
+        );
         if (index != -1) {
           _unifiedEmails[index] = _unifiedEmails[index].copyWith(isRead: true);
         }
       }
     } catch (e) {
-      _error = e.toString();
+      if (!_isCurrentSelection(requestId, email.id)) return;
+      debugPrint('Error loading email content: $e');
+      _isLoadingSelectedEmail = false;
+      final hasLoadedBody = _selectedEmail?.content?.trim().isNotEmpty ?? false;
+      if (!hasLoadedBody) {
+        _selectedEmailError = 'No se pudo cargar el contenido del mensaje.';
+      }
     }
 
     notifyListeners();
+  }
+
+  Future<void> _hydrateSelectedGmailInlineImages({
+    required GmailProvider provider,
+    required Email email,
+    required int requestId,
+  }) async {
+    try {
+      final hydratedEmail = await provider.hydrateInlineImages(email);
+      if (!_isCurrentSelection(requestId, email.id)) return;
+
+      _selectedEmail = hydratedEmail;
+      _isLoadingSelectedEmail = false;
+
+      final hydratedContent = hydratedEmail.content;
+      if (hydratedContent != null && hydratedContent.trim().isNotEmpty) {
+        await _cache.cacheContent(hydratedEmail.id, hydratedContent);
+      }
+    } catch (e) {
+      debugPrint('Error hydrating Gmail inline images: $e');
+      if (!_isCurrentSelection(requestId, email.id)) return;
+      _isLoadingSelectedEmail = false;
+    }
+
+    notifyListeners();
+  }
+
+  bool _isCurrentSelection(int requestId, String emailId) {
+    return requestId == _selectionRequestId && _selectedEmail?.id == emailId;
+  }
+
+  bool _isPlainTextFallback(String content) {
+    final trimmed = content.trimLeft().toLowerCase();
+    if (!trimmed.startsWith('<pre')) return false;
+    return !RegExp(r'<(html|body|table|div|style|img)\b', caseSensitive: false)
+        .hasMatch(content);
+  }
+
+  void _emitNewEmailNotifications(
+      List<Email> emails, Set<String> previousKeys) {
+    final newUnreadEmails = emails
+        .where((email) =>
+            !email.isRead && !previousKeys.contains(_emailKey(email)))
+        .toList(growable: false);
+
+    if (newUnreadEmails.isEmpty) return;
+
+    newUnreadEmails.sort((a, b) => b.receivedTime.compareTo(a.receivedTime));
+    for (final email in newUnreadEmails.take(3)) {
+      _newEmailController.add(email);
+    }
   }
 
   /// Clear selected email
   void clearSelection() {
     _selectedEmail = null;
     _selectedProvider = null;
+    _selectedEmailError = null;
+    _isLoadingSelectedEmail = false;
+    _selectionRequestId++;
     notifyListeners();
   }
 
@@ -262,6 +572,9 @@ class MailAccountManager extends ChangeNotifier {
   void setProviderFilter(String? providerId) {
     _providerFilter = providerId;
     notifyListeners();
+    if (_searchQuery.isNotEmpty) {
+      unawaited(searchInbox(_searchQuery));
+    }
   }
 
   /// Send email from a specific provider
@@ -376,7 +689,11 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
 
     final success = await _selectedProvider!.moveToTrash(_selectedEmail!.id);
     if (success) {
-      _unifiedEmails.removeWhere((e) => e.id == _selectedEmail!.id);
+      _unifiedEmails.removeWhere(
+        (e) =>
+            e.id == _selectedEmail!.id &&
+            e.providerId == _selectedEmail!.providerId,
+      );
       _selectedEmail = null;
       _selectedProvider = null;
       notifyListeners();
@@ -391,7 +708,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
 
     final success = await provider.markAsRead(email.id, read: read);
     if (success) {
-      final index = _unifiedEmails.indexWhere((e) => e.id == email.id);
+      final index = _unifiedEmails.indexWhere(
+        (e) => e.id == email.id && e.providerId == email.providerId,
+      );
       if (index != -1) {
         _unifiedEmails[index] = _unifiedEmails[index].copyWith(isRead: read);
         notifyListeners();
@@ -417,6 +736,10 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     }
     _providers.clear();
     _unifiedEmails.clear();
+    _searchResults.clear();
+    _searchQuery = '';
+    _isSearching = false;
+    _searchRequestId++;
     _selectedEmail = null;
     _selectedProvider = null;
     _isInitialized = false;
@@ -424,6 +747,7 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     _pushChannel?.unsubscribe();
     _pushChannel = null;
     _isPushEnabled = false;
+    _newEmailController.close();
     _instance = null;
   }
 

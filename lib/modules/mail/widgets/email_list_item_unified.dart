@@ -23,136 +23,158 @@ class EmailListItemUnified extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: IntrinsicHeight(
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                : (isUnread ? colorScheme.surface : null),
-            border: Border(
-              bottom: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
-              // Left border for unread
-              left: isUnread
-                  ? const BorderSide(color: Color(0xFF0078D4), width: 4)
-                  : BorderSide.none,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+              : colorScheme.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+            ),
+            left: BorderSide(
+              color: isUnread
+                  ? colorScheme.primary
+                  : (isSelected ? colorScheme.primary : Colors.transparent),
+              width: isUnread || isSelected ? 3 : 0,
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Provider badge + Avatar
-                Stack(
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isUnread
+                        ? _getProviderColor(email.providerId)
+                        : colorScheme.surfaceContainerHighest,
+                    child: Text(
+                      email.senderName.isNotEmpty
+                          ? email.senderName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: isUnread
+                            ? Colors.white
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -3,
+                    bottom: -3,
+                    child: Container(
+                      width: 17,
+                      height: 17,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.surface,
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: _getProviderLogo(email.providerId),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: isUnread
-                          ? _getProviderColor(email.providerId)
-                          : colorScheme.surfaceContainerHighest,
-                      child: Text(
-                        email.senderName.isNotEmpty
-                            ? email.senderName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          color: isUnread
-                              ? Colors.white
-                              : colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    // Provider badge
-                    // Provider badge
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 1,
-                          ),
-                          // No shadow for cleaner look
-                        ),
-                        child: Center(
-                          child: _getProviderLogo(email.providerId),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              email.senderName,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: isUnread
-                                    ? FontWeight.w700
-                                    : FontWeight.normal,
-                                color: isUnread ? Colors.black : null,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            email.senderName,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight:
+                                  isUnread ? FontWeight.w700 : FontWeight.w500,
+                              color: colorScheme.onSurface,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            _formatDate(email.receivedTime),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: isUnread
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
-                              fontWeight: isUnread ? FontWeight.w600 : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        email.subject,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight:
-                              isUnread ? FontWeight.w600 : FontWeight.normal,
-                          color: isUnread ? const Color(0xFF0078D4) : null,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (email.summary != null) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(width: 8),
                         Text(
-                          email.summary!,
+                          _formatDate(email.receivedTime),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                            color: isUnread
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                            fontWeight:
+                                isUnread ? FontWeight.w700 : FontWeight.w500,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            email.subject.isEmpty
+                                ? '(sin asunto)'
+                                : email.subject,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight:
+                                  isUnread ? FontWeight.w600 : FontWeight.w500,
+                              color: colorScheme.onSurface,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (email.hasAttachment) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.attach_file,
+                            size: 15,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (email.summary != null &&
+                        email.summary!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        email.summary!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
+                  ],
+                ),
+              ),
+              if (isUnread)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 5),
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-                if (email.hasAttachment)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Icon(Icons.attach_file,
-                        size: 16, color: colorScheme.onSurfaceVariant),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
