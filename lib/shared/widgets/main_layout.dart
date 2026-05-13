@@ -773,9 +773,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       final sender = email.senderName.trim().isEmpty
           ? email.senderEmail
           : email.senderName;
-      final subject = email.subject.trim().isEmpty
-          ? '(sin asunto)'
-          : email.subject.trim();
+      final subject =
+          email.subject.trim().isEmpty ? '(sin asunto)' : email.subject.trim();
       final body = sender.trim().isEmpty ? subject : '$sender - $subject';
 
       _showMailNotification(

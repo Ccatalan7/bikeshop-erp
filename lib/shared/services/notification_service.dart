@@ -319,18 +319,18 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(chatChannel);
 
-        const mailChannel = AndroidNotificationChannel(
+      const mailChannel = AndroidNotificationChannel(
         'mail_messages',
         'Correos',
         description: 'Notificaciones de correos entrantes',
         importance: Importance.high,
         enableVibration: true,
         playSound: true,
-        );
+      );
 
-        await _localNotifications
+      await _localNotifications
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+              AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(mailChannel);
     }
 
