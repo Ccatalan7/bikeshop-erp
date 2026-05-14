@@ -50,16 +50,16 @@ class Invoice {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Pega-specific fields
+  // ✅ UNIFIED ARCHITECTURE (Nov 18, 2025): Trabajo-specific fields
   final String invoiceType; // 'sale', 'pega', 'service'
-  final String? bikeId; // For pegas: the bike being serviced
-  final String? mechanicId; // For pegas: assigned mechanic
-  final String? jobNumber; // For pegas: PG-00001 style number
-  final DateTime? entryDate; // For pegas: when bike arrived
-  final DateTime? deliveryDate; // For pegas: when bike was delivered
-  final bool requiresApproval; // For pegas: needs customer OK
-  final bool isWarranty; // For pegas: warranty work
-  final String? workDescription; // For pegas: work performed
+  final String? bikeId; // For trabajos: the bike being serviced
+  final String? mechanicId; // For trabajos: assigned mechanic
+  final String? jobNumber; // For trabajos: PG-00001 style number
+  final DateTime? entryDate; // For trabajos: when bike arrived
+  final DateTime? deliveryDate; // For trabajos: when bike was delivered
+  final bool requiresApproval; // For trabajos: needs customer OK
+  final bool isWarranty; // For trabajos: warranty work
+  final String? workDescription; // For trabajos: work performed
   final String? notes; // Internal notes
   final String? source; // 'pos', 'manual_sale', 'ecommerce', 'mechanic_job'
 

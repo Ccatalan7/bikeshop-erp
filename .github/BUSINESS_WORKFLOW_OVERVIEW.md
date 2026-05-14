@@ -1,6 +1,6 @@
 # 🚴 Bikeshop Business Workflow Overview
 
-**Date**: November 7, 2025  
+**Date**: November 7, 2025
 **Context**: Migration from Notion + Zoho Books → Flutter ERP App
 
 ---
@@ -12,7 +12,7 @@
 - **Zoho Books** → Invoicing, inventory, accounting
 
 ### **Future System (Flutter App)**
-- **Pegas Module** → Replaces Notion (mechanic jobs, client data, bike history, status tracking)
+- **Trabajos** → Replaces Notion (mechanic jobs, client data, bike history, status tracking)
 - **Inventory + Accounting Module** → Replaces Zoho Books (products, invoicing, payments, journal entries)
 - **POS Module** → Fast checkout for quick sales/services
 
@@ -21,8 +21,8 @@
 ## 🏪 4 Business Scenarios
 
 ### **Scenario 1: Quick Product Sale**
-**Type**: Walk-in customer buying a product  
-**Duration**: ~2 minutes  
+**Type**: Walk-in customer buying a product
+**Duration**: ~2 minutes
 **Flow**:
 1. Client enters store
 2. Selects product
@@ -42,8 +42,8 @@
 ---
 
 ### **Scenario 2: Emergency Service + Products (Hybrid)**
-**Type**: Urgent repair with parts/accessories  
-**Duration**: ≤1 hour  
+**Type**: Urgent repair with parts/accessories
+**Duration**: ≤1 hour
 **Flow**:
 1. Client arrives with urgent problem
 2. Mechanic diagnoses and fixes immediately
@@ -54,17 +54,17 @@
 
 **Modules Used**:
 - **Option A**: **POS Module** (for speed) → Quick checkout with parts + labor + accessories
-- **Option B**: Quick **Pegas Job** (for tracking) → Minimal data entry → Generate invoice
+- **Option B**: Quick **Trabajo** (for tracking) → Minimal data entry → Generate invoice
 
 **Decision Point**: Speed vs. History Tracking
 - Use POS if client wants to leave immediately
-- Use Pegas if you want bike service history recorded
+- Use Trabajos if you want bike service history recorded
 
 ---
 
 ### **Scenario 3: Rush Service Only**
-**Type**: Urgent service without parts  
-**Duration**: ≤1 hour  
+**Type**: Urgent service without parts
+**Duration**: ≤1 hour
 **Flow**:
 1. Client needs quick service (e.g., brake adjustment, tire inflation)
 2. Service completed on the spot
@@ -82,8 +82,8 @@
 ---
 
 ### **Scenario 4: Long-Term/Complex Service (MAJORITY)**
-**Type**: Full mechanic job with diagnosis, parts ordering, multi-day work  
-**Duration**: Days to weeks  
+**Type**: Full mechanic job with diagnosis, parts ordering, multi-day work
+**Duration**: Days to weeks
 **Flow**:
 
 #### **Phase 1: Job Intake**
@@ -91,8 +91,8 @@
 - Appointment scheduled if bike not available immediately
 - Client explains problem → Initial assessment
 
-#### **Phase 2: Diagnosis (Pegas Module)**
-- Client data saved in **Pegas Module**:
+#### **Phase 2: Diagnosis (Trabajos)**
+- Client data saved in **Trabajos**:
   - Name, phone number
   - Bike details: brand, model, color
   - Problem description
@@ -169,7 +169,7 @@ Else (no_tax):
 
 **Use Cases**:
 - Retail sales (POS)
-- Service invoices (Pegas Module)
+- Service invoices (Trabajos module)
 - Customer-facing transactions
 
 ---
@@ -232,13 +232,13 @@ Else (no_tax):
 
 ## 🔗 Module Integration Points
 
-### **Pegas Module → Inventory Module**
+### **Trabajos → Inventory Module**
 - Check parts availability before starting job
 - Reserve stock for ongoing jobs
 - Deduct inventory when parts are used
 - Trigger restocking if parts unavailable
 
-### **Pegas Module → Accounting Module**
+### **Trabajos → Accounting Module**
 - Manual invoice generation from job details
 - Link invoice back to job (`mechanic_jobs.invoice_id`)
 - Record payments against job
@@ -258,7 +258,7 @@ Else (no_tax):
 
 ## 💡 Key Business Rules
 
-### **Invoice Timing (Pegas Jobs)**
+### **Invoice Timing (Trabajos)**
 - Invoices are **NOT auto-generated** when job is created
 - Mechanic/manager creates invoice **manually when ready**:
   - After diagnosis
@@ -303,10 +303,10 @@ Client arrives
     |
     ├─ Needs urgent service (<1 hour)?
     │  └─ YES → **POS Module** OR Quick **Sales Invoice**
-    |      └─ Wants history tracked? → Quick **Pegas Job**
+    |      └─ Wants history tracked? → Quick **Trabajo**
     |
     └─ Needs complex service/diagnosis?
-       └─ YES → **Pegas Module** (full workflow)
+       └─ YES → **Trabajos** (full workflow)
            └─ Creates invoice manually when ready
 ```
 
@@ -321,13 +321,13 @@ Client → POS → Payment → Stock Deduction → Journal Entry → Done
 
 ### **Rush Service**
 ```
-Client → POS/Invoice → Payment → (Optional) Pegas Job → Done
+Client → POS/Invoice → Payment → (Optional) Trabajo → Done
 ```
 
-### **Complex Service (Pegas Workflow)**
+### **Complex Service (Trabajo Workflow)**
 ```
-Client → Pegas Job Created → Diagnosis → Manual Invoice Created → 
-Client Approval → Payment → Parts Ordered → Job Execution → 
+Client → Trabajo creado → Diagnosis → Manual Invoice Created →
+Client Approval → Payment → Parts Ordered → Job Execution →
 Testing → Delivery → Status: Entregada
 ```
 
@@ -356,8 +356,8 @@ Testing → Delivery → Status: Entregada
 
 ## 📝 Important Notes
 
-1. **Pegas Module is for tracking**, not for quick transactions
-2. **Invoice creation is manual and flexible** in Pegas workflow
+1. **Trabajos are for tracking**, not for quick transactions
+2. **Invoice creation is manual and flexible** in Trabajos workflow
 3. **POS Module is the fast lane** for quick sales/services
 4. **Payment methods matter** for tax compliance
 5. **Status updates are critical** for team coordination

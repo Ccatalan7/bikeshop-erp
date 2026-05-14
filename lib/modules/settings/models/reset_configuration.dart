@@ -51,11 +51,11 @@ class ResetConfiguration {
       deleteEmployees: json['delete_employees'] as bool? ?? false,
       deleteMechanic: json['delete_mechanic'] as bool? ?? false,
       deleteEcommerce: json['delete_ecommerce'] as bool? ?? false,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at'] as String) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
           : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String) 
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
           : null,
     );
   }
@@ -127,7 +127,7 @@ class ResetConfiguration {
     if (deleteCustomers) categories.add('Clientes');
     if (deleteSuppliers) categories.add('Proveedores');
     if (deleteAccounting) categories.add('Asientos contables');
-    if (deleteEmployees) categories.add('Empleados y contratos');
+    if (deleteEmployees) categories.add('Trabajadores y contratos');
     if (deleteMechanic) categories.add('Órdenes de mantención');
     if (deleteEcommerce) categories.add('Tienda online');
     return categories;

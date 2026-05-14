@@ -19,7 +19,7 @@ import '../../../shared/models/product_compatibility.dart';
 /// - Visual completion states (green/orange/grey)
 /// - Collapsible parent items (products/services)
 /// - Progress badges and percentage
-/// - Three-way sync: Tasks ↔ Pega Items ↔ Invoice
+/// - Three-way sync: Tasks ↔ Trabajo Items ↔ Invoice
 class TasksTabView extends StatefulWidget {
   final String jobId;
   final bool readOnly;

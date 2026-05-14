@@ -501,7 +501,7 @@ LayoutBuilder(
    - Customers list + profile view
    - Suppliers list + profile view
 
-5. **Bikeshop (Pegas) Module**
+5. **Bikeshop (Trabajos) Module**
    - Jobs list + detail/timeline
    - Client logbook + bike history
 

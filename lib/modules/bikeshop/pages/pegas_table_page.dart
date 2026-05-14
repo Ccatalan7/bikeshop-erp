@@ -34,7 +34,7 @@ import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import 'bike_form_dialog.dart';
 
-/// Modern, professional Pegas management with advanced data table
+/// Modern, professional Trabajos management with advanced data table
 class PegasTablePage extends StatefulWidget {
   const PegasTablePage({super.key});
 
@@ -45,6 +45,8 @@ class PegasTablePage extends StatefulWidget {
 class _PegasTablePageState extends State<PegasTablePage>
     with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   static const String _debugTestCustomerName = 'Test Taller';
+  static const Color _workshopCommandColor = Color(0xFF12324A);
+  static const Color _workshopSettledColor = Color(0xFF1F6F78);
 
   // Keep this page alive to preserve state when navigating away
   @override
@@ -140,7 +142,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   /// Get columns in display order (with live preview during drag)
   List<ColumnConfig> get _displayColumns {
-    final visibleColumns = _columns.where((col) => col.visible).toList();
+    final visibleColumns =
+        _columns.where((col) => col.visible && col.id != 'status').toList();
     if (_draggingColumnId != null && _dragTargetIndex != null) {
       final sourceIndex =
           visibleColumns.indexWhere((c) => c.id == _draggingColumnId);
@@ -217,42 +220,150 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
-  List<ButtonSegment<String>> _buildStatusSegments({
-    required bool compact,
-  }) {
-    final textStyle = compact ? null : const TextStyle(fontSize: 13);
+  List<String> _statusFilterOptions() => [
+        'active',
+        if (kDebugMode) 'test',
+        'completed',
+        'delivered',
+        'warranty_completed',
+        'unpaid',
+        'all',
+      ];
 
-    return [
-      ButtonSegment(
-        value: 'active',
-        label: Text('Activos', style: textStyle),
-      ),
-      if (kDebugMode)
-        ButtonSegment(
-          value: 'test',
-          label: Text('Tests', style: textStyle),
+  String _statusFilterLabel(String value) {
+    switch (value) {
+      case 'active':
+        return 'Activos';
+      case 'test':
+        return 'Tests';
+      case 'completed':
+        return 'Completados';
+      case 'delivered':
+        return 'Entregados';
+      case 'warranty_completed':
+        return 'Garantías';
+      case 'unpaid':
+        return 'Sin pagar';
+      case 'all':
+        return 'Todos';
+      default:
+        return 'Activos';
+    }
+  }
+
+  Color _statusFilterColor(String value) {
+    switch (value) {
+      case 'active':
+        return const Color(0xFF2563EB);
+      case 'test':
+        return const Color(0xFF7C3AED);
+      case 'completed':
+        return const Color(0xFF0F766E);
+      case 'delivered':
+        return const Color(0xFF0891B2);
+      case 'warranty_completed':
+        return const Color(0xFF9333EA);
+      case 'unpaid':
+        return const Color(0xFFEA580C);
+      case 'all':
+        return const Color(0xFF64748B);
+      default:
+        return _workshopCommandColor;
+    }
+  }
+
+  String _statusFilterGlyph(String value) {
+    switch (value) {
+      case 'active':
+        return '⚡';
+      case 'test':
+        return '🧪';
+      case 'completed':
+        return '✅';
+      case 'delivered':
+        return '📦';
+      case 'warranty_completed':
+        return '🛡️';
+      case 'unpaid':
+        return '💵';
+      case 'all':
+        return '🗃️';
+      default:
+        return '⚡';
+    }
+  }
+
+  String _viewModeLabel(String value) {
+    switch (value) {
+      case 'table':
+        return 'Tabla';
+      case 'board':
+        return 'Tablero';
+      case 'calendar':
+        return 'Calendario';
+      case 'gantt':
+        return 'Gantt';
+      case 'tasks':
+        return 'Tareas';
+      default:
+        return 'Tabla';
+    }
+  }
+
+  Color _viewModeColor(String value) {
+    switch (value) {
+      case 'table':
+        return const Color(0xFF2563EB);
+      case 'board':
+        return const Color(0xFF4F46E5);
+      case 'calendar':
+        return const Color(0xFFB45309);
+      case 'gantt':
+        return const Color(0xFF7C3AED);
+      case 'tasks':
+        return const Color(0xFF0F766E);
+      default:
+        return _workshopCommandColor;
+    }
+  }
+
+  String _viewModeGlyph(String value) {
+    switch (value) {
+      case 'table':
+        return '📋';
+      case 'board':
+        return '🗂️';
+      case 'calendar':
+        return '📅';
+      case 'gantt':
+        return '📊';
+      case 'tasks':
+        return '✅';
+      default:
+        return '📋';
+    }
+  }
+
+  Widget _buildDropdownGlyph(String glyph) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Center(
+        child: Text(
+          glyph,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 17,
+            height: 1,
+            fontFamilyFallback: [
+              'Apple Color Emoji',
+              'Noto Color Emoji',
+              'Segoe UI Emoji',
+            ],
+          ),
         ),
-      ButtonSegment(
-        value: 'completed',
-        label: Text('Completados', style: textStyle),
       ),
-      ButtonSegment(
-        value: 'delivered',
-        label: Text('Entregados', style: textStyle),
-      ),
-      ButtonSegment(
-        value: 'warranty_completed',
-        label: Text('Garantías', style: textStyle),
-      ),
-      ButtonSegment(
-        value: 'unpaid',
-        label: Text('Sin Pagar', style: textStyle),
-      ),
-      ButtonSegment(
-        value: 'all',
-        label: Text('Todos', style: textStyle),
-      ),
-    ];
+    );
   }
 
   /// Save table state to BikeshopService for persistence
@@ -399,17 +510,6 @@ class _PegasTablePageState extends State<PegasTablePage>
         reorderable: false,
       ),
       ColumnConfig(
-        id: 'status',
-        label: '',
-        width: 40,
-        minWidth: 40,
-        maxWidth: 40,
-        visible: true,
-        sortable: false,
-        resizable: false,
-        reorderable: false,
-      ),
-      ColumnConfig(
         id: 'job_number',
         label: 'N° Trabajo',
         width: 120,
@@ -537,7 +637,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Check if data was modified (signaled by pop result)
       route?.popped.then((result) {
         if (result == true && mounted) {
-          debugPrint('🔄 Data changed signal received, reloading pegas...');
+          debugPrint('🔄 Data changed signal received, reloading trabajos...');
           _loadData();
         }
       });
@@ -1383,8 +1483,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+            color: isSelected
+                ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color:
                   isSelected ? theme.colorScheme.primary : theme.dividerColor,
@@ -1395,8 +1497,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             style: TextStyle(
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color:
-                  isSelected ? Colors.white : theme.textTheme.bodyMedium?.color,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.textTheme.bodyMedium?.color,
             ),
           ),
         ),
@@ -1772,13 +1875,17 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildModernHeader() {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final theme = Theme.of(context);
+    final topBarColor = theme.brightness == Brightness.dark
+        ? theme.colorScheme.surfaceContainerHighest
+        : const Color(0xFFF3F4F6);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: topBarColor,
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
+          bottom: BorderSide(color: theme.dividerColor),
         ),
       ),
       child: Row(
@@ -1894,7 +2001,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FilledButton.tonalIcon(
+            FilledButton.icon(
               onPressed: () {
                 _markNeedsRefresh();
                 context.push('/taller/pegas/nueva');
@@ -1902,6 +2009,8 @@ class _PegasTablePageState extends State<PegasTablePage>
               icon: const Icon(Icons.add, size: 20),
               label: const Text('Nuevo Trabajo'),
               style: FilledButton.styleFrom(
+                backgroundColor: _workshopCommandColor,
+                foregroundColor: Colors.white,
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(8),
@@ -1910,10 +2019,12 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ),
             ),
-            FilledButton.tonal(
+            FilledButton(
               onPressed: () =>
                   controller.isOpen ? controller.close() : controller.open(),
               style: FilledButton.styleFrom(
+                backgroundColor: _workshopCommandColor,
+                foregroundColor: Colors.white,
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.only(
                     topRight: Radius.circular(8),
@@ -1981,10 +2092,17 @@ class _PegasTablePageState extends State<PegasTablePage>
       );
     }
 
-    return FilledButton.tonalIcon(
+    return OutlinedButton.icon(
       onPressed: _isCreatingDebugJob ? null : _launchDebugQuickJobBuilder,
       icon: icon,
       label: const Text('Prueba rápida'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _workshopCommandColor,
+        side: BorderSide(
+          color: _workshopCommandColor.withValues(alpha: 0.35),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
@@ -2412,6 +2530,165 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
   }
 
+  Widget _buildToolbarDropdown({
+    required String prefix,
+    required String value,
+    required List<String> options,
+    required String Function(String value) labelFor,
+    required Color Function(String value) colorFor,
+    required String Function(String value) glyphFor,
+    required ValueChanged<String> onSelected,
+    required double minWidth,
+    bool compact = false,
+  }) {
+    final theme = Theme.of(context);
+    final selectedLabel = labelFor(value);
+
+    return MenuAnchor(
+      menuChildren: [
+        for (final option in options)
+          Builder(builder: (context) {
+            final optionColor = colorFor(option);
+            return MenuItemButton(
+              leadingIcon: _buildDropdownGlyph(glyphFor(option)),
+              trailingIcon: option == value
+                  ? Icon(Icons.check, size: 18, color: optionColor)
+                  : null,
+              onPressed: () => onSelected(option),
+              child: Text(labelFor(option)),
+            );
+          }),
+      ],
+      builder: (context, controller, child) {
+        return ConstrainedBox(
+          constraints: BoxConstraints(minWidth: minWidth),
+          child: OutlinedButton(
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.onSurface,
+              backgroundColor: theme.colorScheme.surface,
+              side: BorderSide(color: theme.dividerColor),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 12,
+                vertical: 11,
+              ),
+              minimumSize: Size(minWidth, 40),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDropdownGlyph(glyphFor(value)),
+                SizedBox(width: compact ? 6 : 8),
+                Flexible(
+                  child: Text(
+                    compact ? selectedLabel : '$prefix: $selectedLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 12 : 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusFilterDropdown({required bool compact}) {
+    return _buildToolbarDropdown(
+      prefix: 'Trabajos',
+      value: _statusFilter,
+      options: _statusFilterOptions(),
+      labelFor: _statusFilterLabel,
+      colorFor: _statusFilterColor,
+      glyphFor: _statusFilterGlyph,
+      minWidth: compact ? 0 : 188,
+      compact: compact,
+      onSelected: (selected) {
+        if (selected == _statusFilter) return;
+        setState(() => _statusFilter = selected);
+        _applyFiltersAndSort();
+      },
+    );
+  }
+
+  Widget _buildViewModeDropdown({required bool compact}) {
+    const options = ['table', 'board', 'calendar', 'gantt', 'tasks'];
+    return _buildToolbarDropdown(
+      prefix: 'Vista',
+      value: _viewMode,
+      options: options,
+      labelFor: _viewModeLabel,
+      colorFor: _viewModeColor,
+      glyphFor: _viewModeGlyph,
+      minWidth: compact ? 0 : 168,
+      compact: compact,
+      onSelected: (selected) {
+        if (selected == _viewMode) return;
+        setState(() => _viewMode = selected);
+        _saveTableState();
+      },
+    );
+  }
+
+  Widget _buildAppliedFilterToken({
+    required String label,
+    required Color color,
+    required VoidCallback onDeleted,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.only(left: 10, right: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 2),
+          IconButton(
+            onPressed: onDeleted,
+            icon: const Icon(Icons.close, size: 14),
+            tooltip: 'Quitar filtro',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildToolbar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -2458,63 +2735,16 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                   const SizedBox(height: 12),
 
-                  // Scrollable filters
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        SegmentedButton<String>(
-                          segments: _buildStatusSegments(compact: true),
-                          selected: <String>{_statusFilter},
-                          onSelectionChanged: (selected) {
-                            if (selected.isNotEmpty) {
-                              setState(() => _statusFilter = selected.first);
-                              _applyFiltersAndSort();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // View toggles
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        SegmentedButton<String>(
-                          segments: const [
-                            ButtonSegment(
-                                value: 'table',
-                                icon: Icon(Icons.table_rows, size: 16),
-                                label: Text('Tabla')),
-                            ButtonSegment(
-                                value: 'board',
-                                icon: Icon(Icons.view_column, size: 16),
-                                label: Text('Tablero')),
-                            ButtonSegment(
-                                value: 'calendar',
-                                icon: Icon(Icons.calendar_month, size: 16),
-                                label: Text('Calendario')),
-                            ButtonSegment(
-                                value: 'gantt',
-                                icon: Icon(Icons.view_timeline, size: 16),
-                                label: Text('Gantt')),
-                            ButtonSegment(
-                                value: 'tasks',
-                                icon: Icon(Icons.task_alt, size: 16),
-                                label: Text('Tareas')),
-                          ],
-                          selected: <String>{_viewMode},
-                          onSelectionChanged: (selected) {
-                            if (selected.isNotEmpty) {
-                              setState(() => _viewMode = selected.first);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatusFilterDropdown(compact: true),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildViewModeDropdown(compact: true),
+                      ),
+                    ],
                   ),
                 ],
               );
@@ -2525,55 +2755,10 @@ class _PegasTablePageState extends State<PegasTablePage>
               children: [
                 Row(
                   children: [
-                    SegmentedButton<String>(
-                      segments: _buildStatusSegments(compact: false),
-                      selected: <String>{_statusFilter},
-                      onSelectionChanged: (selected) {
-                        if (selected.isNotEmpty) {
-                          setState(() => _statusFilter = selected.first);
-                          _applyFiltersAndSort();
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(
-                          value: 'table',
-                          icon: Icon(Icons.table_rows, size: 16),
-                          label: Text('Tabla', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'board',
-                          icon: Icon(Icons.view_column, size: 16),
-                          label:
-                              Text('Tablero', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'calendar',
-                          icon: Icon(Icons.calendar_month, size: 16),
-                          label: Text('Calendario',
-                              style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'gantt',
-                          icon: Icon(Icons.view_timeline, size: 16),
-                          label: Text('Gantt', style: TextStyle(fontSize: 13)),
-                        ),
-                        ButtonSegment(
-                          value: 'tasks',
-                          icon: Icon(Icons.task_alt, size: 16),
-                          label: Text('Tareas', style: TextStyle(fontSize: 13)),
-                        ),
-                      ],
-                      selected: <String>{_viewMode},
-                      onSelectionChanged: (selected) {
-                        if (selected.isNotEmpty) {
-                          setState(() => _viewMode = selected.first);
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 16),
+                    _buildStatusFilterDropdown(compact: false),
+                    const SizedBox(width: 12),
+                    _buildViewModeDropdown(compact: false),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: SizedBox(
                         height: 40,
@@ -2619,28 +2804,22 @@ class _PegasTablePageState extends State<PegasTablePage>
                   spacing: 8,
                   children: [
                     if (_showOnlyOverdue)
-                      Chip(
-                        label: const Text('Vencidos',
-                            style: TextStyle(fontSize: 12)),
-                        deleteIcon: const Icon(Icons.close, size: 16),
+                      _buildAppliedFilterToken(
+                        label: 'Vencidos',
+                        color: Colors.red.shade700,
                         onDeleted: () {
                           setState(() => _showOnlyOverdue = false);
                           _applyFiltersAndSort();
                         },
-                        backgroundColor: Colors.red.shade50,
-                        side: BorderSide(color: Colors.red.shade200),
                       ),
                     if (_showOnlyUnpaid)
-                      Chip(
-                        label: const Text('Sin Pagar',
-                            style: TextStyle(fontSize: 12)),
-                        deleteIcon: const Icon(Icons.close, size: 16),
+                      _buildAppliedFilterToken(
+                        label: 'Sin pagar',
+                        color: Colors.orange.shade700,
                         onDeleted: () {
                           setState(() => _showOnlyUnpaid = false);
                           _applyFiltersAndSort();
                         },
-                        backgroundColor: Colors.orange.shade50,
-                        side: BorderSide(color: Colors.orange.shade200),
                       ),
                   ],
                 ),
@@ -2738,7 +2917,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.green.shade700,
+                                    color: _workshopSettledColor,
                                   ),
                         ),
                         Padding(
@@ -2754,7 +2933,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                                     fontWeight: FontWeight.w600,
                                     color: outstandingSum > 0
                                         ? Colors.orange.shade700
-                                        : Colors.green.shade700,
+                                        : _workshopSettledColor,
                                   ),
                         ),
                       ],
@@ -2912,6 +3091,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
         // Check if horizontal scrolling is needed
         final needsHorizontalScroll = totalColumnsWidth > constraints.maxWidth;
+        final tableBodyColor = Theme.of(context).colorScheme.surface;
 
         return Column(
           children: [
@@ -2931,10 +3111,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                       _buildTableHeader(tableWidth),
                       // Table body
                       Expanded(
-                        child: ListView.builder(
-                          itemCount: paginatedJobs.length,
-                          itemBuilder: (context, index) =>
-                              _buildTableRow(paginatedJobs[index], tableWidth),
+                        child: Container(
+                          color: tableBodyColor,
+                          child: ListView.builder(
+                            itemCount: paginatedJobs.length,
+                            itemBuilder: (context, index) => _buildTableRow(
+                                paginatedJobs[index], tableWidth),
+                          ),
                         ),
                       ),
                     ],
@@ -3128,49 +3311,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildCompactStatusBadge(JobStatus status) {
-    Color color;
-    switch (status) {
-      case JobStatus.pendiente:
-        color = Colors.grey;
-        break;
-      case JobStatus.diagnostico:
-        color = Colors.blue;
-        break;
-      case JobStatus.esperandoAprobacion:
-        color = Colors.amber;
-        break;
-      case JobStatus.esperandoRepuestos:
-        color = Colors.orange;
-        break;
-      case JobStatus.enCurso:
-        color = Colors.green;
-        break;
-      case JobStatus.finalizado:
-        color = Colors.teal;
-        break;
-      case JobStatus.entregado:
-        color = Colors.purple;
-        break;
-      case JobStatus.cancelado:
-        color = Colors.red;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        status.displayName,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
-      ),
+    return _buildStatusBadge(
+      label: status.displayName,
+      accentColor: _getStatusColor(status),
+      maxWidth: 124,
+      compact: true,
     );
   }
 
@@ -3241,21 +3386,11 @@ class _PegasTablePageState extends State<PegasTablePage>
       label = job.status.name.toUpperCase();
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+    return _buildStatusBadge(
+      label: label,
+      accentColor: color,
+      maxWidth: 132,
+      compact: true,
     );
   }
 
@@ -3322,6 +3457,178 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  ({Color background, Color border, Color foreground, Color meta, Color dot})
+      _statusBadgePalette(Color accentColor, ThemeData theme) {
+    final hsl = HSLColor.fromColor(accentColor);
+    final isNeutral = hsl.saturation < 0.12;
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (isNeutral) {
+      return (
+        background: isDark
+            ? theme.colorScheme.surfaceContainerHigh
+            : const Color(0xFFF8FAFC),
+        border: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        foreground: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+        meta: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        dot: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
+      );
+    }
+
+    final surface =
+        isDark ? theme.colorScheme.surfaceContainerHigh : Colors.white;
+    final borderBase =
+        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final foreground = hsl
+        .withSaturation((hsl.saturation * 0.82).clamp(0.42, 0.78).toDouble())
+        .withLightness(
+          (hsl.lightness * (isDark ? 1.12 : 0.68))
+              .clamp(isDark ? 0.62 : 0.34, isDark ? 0.78 : 0.46)
+              .toDouble(),
+        )
+        .toColor();
+
+    return (
+      background: Color.alphaBlend(
+        accentColor.withValues(alpha: isDark ? 0.16 : 0.07),
+        surface,
+      ),
+      border: Color.alphaBlend(
+        accentColor.withValues(alpha: isDark ? 0.38 : 0.2),
+        borderBase,
+      ),
+      foreground: foreground,
+      meta: foreground.withValues(alpha: isDark ? 0.78 : 0.68),
+      dot: accentColor,
+    );
+  }
+
+  Widget _buildStatusBadge({
+    required String label,
+    required Color accentColor,
+    DateTime? timestamp,
+    VoidCallback? onTap,
+    double maxWidth = 132,
+    bool compact = false,
+  }) {
+    final theme = Theme.of(context);
+    final palette = _statusBadgePalette(accentColor, theme);
+    final constrainedMaxWidth = maxWidth.isFinite ? maxWidth : 132.0;
+    final minWidthTarget = compact ? 84.0 : 108.0;
+    final minWidth = constrainedMaxWidth < minWidthTarget
+        ? constrainedMaxWidth
+        : minWidthTarget;
+    final radius = BorderRadius.circular(7);
+    final normalizedLabel =
+        label.trim().isEmpty ? 'SIN ESTADO' : label.trim().toUpperCase();
+
+    final badge = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      width: constrainedMaxWidth,
+      constraints: BoxConstraints(
+        minWidth: minWidth,
+        maxWidth: constrainedMaxWidth,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: timestamp == null ? 6 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: palette.background,
+        borderRadius: radius,
+        border: Border.all(color: palette.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.18 : 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: compact ? 5 : 6,
+                height: compact ? 5 : 6,
+                decoration: BoxDecoration(
+                  color: palette.dot,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.dot.withValues(alpha: 0.22),
+                      blurRadius: 4,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  normalizedLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 10.5 : 11.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.05,
+                    letterSpacing: 0,
+                    color: palette.foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (timestamp != null) ...[
+            const SizedBox(height: 3),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: compact ? 9 : 10,
+                  color: palette.meta,
+                ),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    _formatStatusTimestamp(timestamp),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 9 : 9.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.05,
+                      color: palette.meta,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap == null) return badge;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: badge,
       ),
     );
   }
@@ -3397,18 +3704,16 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildTableHeader(double tableWidth) {
     final displayColumns = _displayColumns;
+    final theme = Theme.of(context);
 
     return Container(
       width: tableWidth,
       height: 48,
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withValues(alpha: 0.3),
+        color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).dividerColor,
+            color: theme.dividerColor,
           ),
         ),
       ),
@@ -3860,6 +4165,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildTableRow(MechanicJob job, double tableWidth) {
+    final theme = Theme.of(context);
     final isSelected = _selectedJob?.id == job.id;
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
@@ -3883,14 +4189,14 @@ class _PegasTablePageState extends State<PegasTablePage>
             height: 60,
             decoration: BoxDecoration(
               color: isSelected
-                  ? Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.3)
-                  : null,
+                  ? Color.alphaBlend(
+                      theme.colorScheme.primary.withValues(alpha: 0.08),
+                      theme.colorScheme.surface,
+                    )
+                  : theme.colorScheme.surface,
               border: Border(
                 bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+                  color: theme.dividerColor.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -3933,7 +4239,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   double _tableCellHorizontalPadding(ColumnConfig col) {
     return switch (col.id) {
-      'checkbox' || 'status' || 'attachments' => 4,
+      'checkbox' || 'attachments' => 4,
       'actions' => 4,
       'state' || 'kpi' || 'priority' || 'invoice' || 'total' => 8,
       _ => 16,
@@ -3966,26 +4272,6 @@ class _PegasTablePageState extends State<PegasTablePage>
               }
             });
           },
-        );
-
-      case 'status':
-        // Clickable status indicator with color - uses custom status color
-        final statusColor = job.colorValue;
-        return InkWell(
-          onTap: () => _showStatusMenu(job),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: statusColor,
-              border: Border.all(
-                color: statusColor.withValues(alpha: 0.5),
-                width: 2,
-              ),
-            ),
-          ),
         );
 
       case 'kpi':
@@ -4372,7 +4658,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         final bikeImageUrl = bike?.imageUrl;
 
         return InkWell(
-          onTap: () => _showBikeSelectorDialog(job, customer),
+          onTap: () => _showBikeProfileDialog(job, customer),
           child: Row(
             children: [
               Image.asset(
@@ -4473,51 +4759,17 @@ class _PegasTablePageState extends State<PegasTablePage>
           final statusName = bikeStatus?.name ?? job.statusDisplayName;
           return LayoutBuilder(
             builder: (context, constraints) {
-              final chipWidth = constraints.maxWidth.isFinite
-                  ? constraints.maxWidth
-                  : double.infinity;
+              final chipWidth =
+                  constraints.maxWidth.isFinite ? constraints.maxWidth : 132.0;
 
-              return InkWell(
-                onTap: () => _showBikeStatusMenu(job, jobBike),
-                child: SizedBox(
-                  width: chipWidth,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: statusColor.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: statusColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            statusName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: _buildStatusBadge(
+                  label: statusName,
+                  accentColor: statusColor,
+                  timestamp: jobBike.updatedAt,
+                  onTap: () => _showBikeStatusMenu(job, jobBike),
+                  maxWidth: chipWidth,
                 ),
               );
             },
@@ -4530,69 +4782,17 @@ class _PegasTablePageState extends State<PegasTablePage>
         final statusUpdatedAt = job.statusUpdatedAt;
         return LayoutBuilder(
           builder: (context, constraints) {
-            final chipWidth = constraints.maxWidth.isFinite
-                ? constraints.maxWidth
-                : double.infinity;
+            final chipWidth =
+                constraints.maxWidth.isFinite ? constraints.maxWidth : 132.0;
 
-            return InkWell(
-              onTap: () => _showStatusMenu(job),
-              child: SizedBox(
-                width: chipWidth,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: statusColor.withValues(alpha: 0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              statusName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: statusColor,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (statusUpdatedAt != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          _formatStatusTimestamp(statusUpdatedAt),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: statusColor.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: _buildStatusBadge(
+                label: statusName,
+                accentColor: statusColor,
+                timestamp: statusUpdatedAt,
+                onTap: () => _showStatusMenu(job),
+                maxWidth: chipWidth,
               ),
             );
           },
@@ -4612,10 +4812,10 @@ class _PegasTablePageState extends State<PegasTablePage>
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           constraints: const BoxConstraints(maxWidth: 96),
           decoration: BoxDecoration(
-            color: priorityColor.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: priorityColor.withValues(alpha: 0.3),
+              color: Theme.of(context).dividerColor,
               width: 1,
             ),
           ),
@@ -4630,7 +4830,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: priorityColor,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -5302,6 +5502,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     required int total,
     required double tableWidth,
   }) {
+    final theme = Theme.of(context);
     // Get the bike for this job-bike entry
     final bike = jb.bike ?? _bikes[jb.bikeId];
     final isSelected = _selectedJob?.id == job.id;
@@ -5318,16 +5519,15 @@ class _PegasTablePageState extends State<PegasTablePage>
         width: tableWidth,
         height: 60,
         decoration: BoxDecoration(
-          // Slightly different background for expanded sub-rows
           color: isSelected
-              ? Theme.of(context)
-                  .colorScheme
-                  .primaryContainer
-                  .withValues(alpha: 0.3)
-              : Theme.of(context).colorScheme.surfaceContainerLow,
+              ? Color.alphaBlend(
+                  theme.colorScheme.primary.withValues(alpha: 0.08),
+                  theme.colorScheme.surface,
+                )
+              : theme.colorScheme.surface,
           border: Border(
             bottom: BorderSide(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+              color: theme.dividerColor.withValues(alpha: 0.5),
             ),
           ),
         ),
@@ -6381,7 +6581,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  void _showBikeSelectorDialog(MechanicJob job, Customer? customer) async {
+  void _showBikeProfileDialog(MechanicJob job, Customer? customer) async {
     if (customer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cliente no encontrado')),
@@ -6389,277 +6589,157 @@ class _PegasTablePageState extends State<PegasTablePage>
       return;
     }
 
+    final customerId = customer.id;
+    if (customerId == null || customerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cliente sin identificador')),
+      );
+      return;
+    }
+
     if (!mounted) return;
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Re-fetch bikes to ensure we have latest data after edits
-            final bikes = _bikes.values
-                .where((b) => b.customerId == customer.id)
-                .toList();
-
-            return AlertDialog(
-              title: const Text('Seleccionar Bicicleta'),
-              content: SizedBox(
-                width: 400,
-                child: bikes.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.pedal_bike_outlined,
-                                size: 48, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text(
-                              'Este cliente no tiene bicicletas registradas',
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    : SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: bikes.map((bike) {
-                            final isSelected = bike.id == job.bikeId;
-                            final bikeName =
-                                '${bike.brand ?? ''} ${bike.model ?? ''}'
-                                    .trim();
-                            return ListTile(
-                              leading: bike.imageUrl != null
-                                  ? Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(4),
-                                        image: DecorationImage(
-                                          image: NetworkImage(bike.imageUrl!),
-                                          fit: BoxFit.cover,
-                                        ),
-                                        border: Border.all(
-                                          color: Theme.of(context).dividerColor,
-                                        ),
-                                      ),
-                                    )
-                                  : const Icon(Icons.pedal_bike, size: 40),
-                              title: Text(
-                                bikeName.isNotEmpty ? bikeName : 'Sin nombre',
-                                style: TextStyle(
-                                  fontWeight:
-                                      isSelected ? FontWeight.bold : null,
-                                ),
-                              ),
-                              subtitle: bike.serialNumber != null
-                                  ? Text('N° Serie: ${bike.serialNumber}')
-                                  : null,
-                              trailing: isSelected
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit,
-                                              size: 20, color: Colors.blue),
-                                          tooltip: 'Editar detalles',
-                                          onPressed: () async {
-                                            // Edit bike
-                                            final updatedBike =
-                                                await showDialog<Bike>(
-                                              context: context,
-                                              builder: (context) =>
-                                                  BikeFormDialog(
-                                                customerId: customer.id!,
-                                                bike: bike,
-                                              ),
-                                            );
-
-                                            if (updatedBike != null &&
-                                                mounted) {
-                                              // Update local state
-                                              setState(() {
-                                                if (updatedBike.id != null) {
-                                                  _bikes[updatedBike.id!] =
-                                                      updatedBike;
-                                                }
-                                                // If this was the selected bike, force table refresh
-                                                if (isSelected) {
-                                                  _applyFiltersAndSort();
-                                                }
-                                              });
-                                              // Refresh dialog state
-                                              setDialogState(() {});
-                                            }
-                                          },
-                                        ),
-                                        Icon(Icons.check_circle,
-                                            color: Colors.green.shade700),
-                                      ],
-                                    )
-                                  : null,
-                              selected: isSelected,
-                              onTap: isSelected
-                                  ? () async {
-                                      // Allow editing by tapping the row too (UX convenience)
-                                      final updatedBike =
-                                          await showDialog<Bike>(
-                                        context: context,
-                                        builder: (context) => BikeFormDialog(
-                                          customerId: customer.id!,
-                                          bike: bike,
-                                        ),
-                                      );
-
-                                      if (updatedBike != null && mounted) {
-                                        setState(() {
-                                          if (updatedBike.id != null) {
-                                            _bikes[updatedBike.id!] =
-                                                updatedBike;
-                                          }
-                                          _applyFiltersAndSort();
-                                        });
-                                        setDialogState(() {});
-                                      }
-                                    }
-                                  : () async {
-                                      Navigator.pop(context);
-                                      try {
-                                        final updatedJob = MechanicJob(
-                                          id: job.id,
-                                          tenantId: job.tenantId,
-                                          jobNumber: job.jobNumber,
-                                          customerId: job.customerId,
-                                          bikeId: bike.id!,
-                                          arrivalDate: job.arrivalDate,
-                                          diagnosticDeadline:
-                                              job.diagnosticDeadline,
-                                          deliveryDeadline:
-                                              job.deliveryDeadline,
-                                          diagnosticSentAt:
-                                              job.diagnosticSentAt,
-                                          status: job.status,
-                                          priority: job.priority,
-                                          clientRequest: job.clientRequest,
-                                          diagnosis: job.diagnosis,
-                                          workPerformed: job.workPerformed,
-                                          notes: job.notes,
-                                          estimatedCost: job.estimatedCost,
-                                          finalCost: job.finalCost,
-                                          partsCost: job.partsCost,
-                                          laborCost: job.laborCost,
-                                          totalCost: job.totalCost,
-                                          invoiceId: job.invoiceId,
-                                          createdAt: job.createdAt,
-                                          updatedAt: DateTime.now(),
-                                          // Keep other fields
-                                          assignedTo: job.assignedTo,
-                                          assignedTechnicianName:
-                                              job.assignedTechnicianName,
-                                          servicePackageId:
-                                              job.servicePackageId,
-                                          taxAmount: job.taxAmount,
-                                          discountAmount: job.discountAmount,
-                                          taxTreatment: job.taxTreatment,
-                                          isInvoiced: job.isInvoiced,
-                                          isPaid: job.isPaid,
-                                          isWarrantyJob: job.isWarrantyJob,
-                                          warrantyNotes: job.warrantyNotes,
-                                          requiresApproval:
-                                              job.requiresApproval,
-                                          approvedByCustomer:
-                                              job.approvedByCustomer,
-                                          approvedAt: job.approvedAt,
-                                          imageUrls: job.imageUrls,
-                                          deletedAt: job.deletedAt,
-                                          deletedBy: job.deletedBy,
-                                        );
-
-                                        // Optimistic update
-                                        _startLocalOperation();
-                                        setState(() {
-                                          final index = _jobs.indexWhere(
-                                              (j) => j.id == job.id);
-                                          if (index != -1) {
-                                            _jobs[index] = updatedJob;
-                                          }
-                                          _bikes[bike.id!] = bike;
-                                          _applyFiltersAndSort();
-                                        });
-
-                                        // Save in background
-                                        try {
-                                          await _bikeshopService
-                                              .updateJob(updatedJob);
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                    'Bicicleta cambiada a: $bikeName'),
-                                                duration:
-                                                    const Duration(seconds: 1),
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          // Revert on error
-                                          if (mounted) {
-                                            await _loadData();
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text('Error: $e'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        } finally {
-                                          _endLocalOperation();
-                                        }
-                                      } catch (e) {
-                                        debugPrint('Error changing bike: $e');
-                                      }
-                                    },
-                            );
-                          }).toList(),
-                        ),
-                      ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton.icon(
-                  onPressed: () async {
-                    // Create new bike
-                    final newBike = await showDialog<Bike>(
-                      context: context,
-                      builder: (context) => BikeFormDialog(
-                        customerId: customer.id!,
-                      ),
-                    );
-
-                    if (newBike != null && mounted) {
-                      setState(() {
-                        if (newBike.id != null) {
-                          _bikes[newBike.id!] = newBike;
-                        }
-                      });
-                      setDialogState(() {});
-                    }
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Nueva Bici'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    var activeJob = _jobs.firstWhere(
+      (j) => j.id == job.id,
+      orElse: () => job,
     );
+    var activeBike =
+        activeJob.bikeId == null ? null : _bikes[activeJob.bikeId!];
+
+    if (activeBike == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bicicleta no encontrada')),
+      );
+      return;
+    }
+
+    while (mounted && activeBike != null) {
+      final pickerOptions = _customerBikesForPicker(customerId, activeBike);
+      final openedBikeId = activeBike.id;
+
+      final result = await showDialog<Bike>(
+        context: context,
+        builder: (context) => BikeFormDialog(
+          customerId: customerId,
+          bike: activeBike,
+          bikePickerOptions: pickerOptions,
+          onBikePickerSelected: (selectedBike) async {
+            final updatedJob = await _changeBikeForJob(activeJob, selectedBike);
+            if (updatedJob == null) return false;
+            activeJob = updatedJob;
+            return true;
+          },
+        ),
+      );
+
+      if (!mounted || result == null) break;
+
+      if (result.id != null) {
+        setState(() {
+          _bikes[result.id!] = result;
+          _applyFiltersAndSort();
+        });
+      }
+
+      if (result.id != null &&
+          result.id != openedBikeId &&
+          result.customerId == customerId) {
+        activeBike = _bikes[result.id!] ?? result;
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  List<Bike> _customerBikesForPicker(String customerId, Bike activeBike) {
+    final bikesById = <String, Bike>{};
+    if (activeBike.id != null && activeBike.id!.isNotEmpty) {
+      bikesById[activeBike.id!] = activeBike;
+    }
+    for (final bike in _bikes.values) {
+      if (bike.customerId != customerId || bike.id == null) continue;
+      bikesById[bike.id!] = bike;
+    }
+    return bikesById.values.toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+  }
+
+  Future<MechanicJob?> _changeBikeForJob(
+    MechanicJob job,
+    Bike selectedBike,
+  ) async {
+    final jobId = job.id;
+    final selectedBikeId = selectedBike.id;
+    if (jobId == null || jobId.isEmpty || selectedBikeId == null) {
+      return null;
+    }
+    if (job.bikeId == selectedBikeId) return job;
+
+    final updatedJob = job.copyWith(
+      bikeId: selectedBikeId,
+      updatedAt: DateTime.now(),
+    );
+    final existingJobBikes = _jobBikesMap[jobId];
+    final updatedJobBike = existingJobBikes?.length == 1
+        ? existingJobBikes!.first.copyWith(
+            bikeId: selectedBikeId,
+            bike: selectedBike,
+          )
+        : null;
+
+    _startLocalOperation();
+    setState(() {
+      final index = _jobs.indexWhere((j) => j.id == jobId);
+      if (index != -1) {
+        _jobs[index] = updatedJob;
+      }
+      _bikes[selectedBikeId] = selectedBike;
+      if (updatedJobBike != null) {
+        _jobBikesMap[jobId] = [updatedJobBike];
+      }
+      _applyFiltersAndSort();
+    });
+
+    try {
+      final savedJob = await _bikeshopService.updateJob(
+        updatedJob,
+        syncBikeMemory: updatedJobBike == null,
+      );
+      if (updatedJobBike != null) {
+        await _bikeshopService.updateJobBike(updatedJobBike);
+      }
+      if (mounted) {
+        setState(() {
+          final index = _jobs.indexWhere((j) => j.id == jobId);
+          if (index != -1) {
+            _jobs[index] = savedJob;
+          }
+          _applyFiltersAndSort();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bicicleta cambiada a: ${selectedBike.displayName}'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+      return savedJob;
+    } catch (e) {
+      if (mounted) {
+        await _loadData();
+        if (!mounted) return null;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cambiar bicicleta: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return null;
+    } finally {
+      _endLocalOperation();
+    }
   }
 
   void _showBikeImageModal(String imageUrl) {

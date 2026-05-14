@@ -374,7 +374,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
       orElse: () => Employee(
         tenantId: '', // Display-only fallback
         employeeNumber: 'Unknown',
-        firstName: 'Empleado',
+        firstName: 'Trabajador',
         lastName: 'Desconocido',
         jobTitle: 'N/A',
       ),
@@ -786,7 +786,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
             Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'No hay empleados registrados',
+              'No hay trabajadores registrados',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           ],
@@ -904,7 +904,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
   String _getGridHeaderLabel() {
     switch (_currentView) {
       case TimeView.day:
-        return 'Empleados';
+        return 'Trabajadores';
       case TimeView.week:
         return 'Días';
       case TimeView.month:
@@ -963,7 +963,10 @@ class _AttendancesPageState extends State<AttendancesPage> {
               fontSize: 11,
               color: isToday
                   ? Theme.of(context).primaryColor
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 4),
@@ -1169,9 +1172,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
           }
 
           // Time range (this goes INSIDE parentheses)
-            final checkIn =
-              _formatTime(attendance.checkIn, withSeconds: false);
-            final checkInWithSeconds =
+          final checkIn = _formatTime(attendance.checkIn, withSeconds: false);
+          final checkInWithSeconds =
               _formatTime(attendance.checkIn, withSeconds: true);
           final checkOut = attendance.checkOut != null
               ? _formatTime(attendance.checkOut!, withSeconds: false)
@@ -1517,7 +1519,7 @@ class _AttendanceDetailDialogState extends State<_AttendanceDetailDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Empleado',
+                                'Trabajador',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,

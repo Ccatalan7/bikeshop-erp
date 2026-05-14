@@ -389,7 +389,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                             if (_linkedJobNumber != null)
                               Chip(
                                 avatar: const Icon(Icons.build, size: 16),
-                                label: Text('Pega #$_linkedJobNumber'),
+                                label: Text('Trabajo #$_linkedJobNumber'),
                                 backgroundColor:
                                     Colors.blue.withValues(alpha: 0.1),
                                 deleteIcon: const Icon(Icons.close, size: 16),

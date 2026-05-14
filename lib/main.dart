@@ -810,6 +810,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     with AutomaticKeepAliveClientMixin {
   late GoRouter _router;
   StreamSubscription<String>? _notificationTapSubscription;
+  String? _lastRouterLocation;
 
   @override
   bool get wantKeepAlive => true;
@@ -831,6 +832,16 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     // Save the router reference to the workspace object so external UI
     // (like global floating buttons) can trigger navigation on the active tab
     widget.workspace.router = _router;
+    _lastRouterLocation = _currentRouterLocation();
+    _router.routerDelegate.addListener(_handleRouterLocationChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<WorkspaceManager>().handleWorkspaceRouteChange(
+            widget.workspace.id,
+            _currentRouterLocation(),
+          );
+    });
 
     // Listen for notification taps to navigate to specific chats
     // Only handle if this is the active workspace
@@ -858,11 +869,37 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   void dispose() {
     _notificationTapSubscription?.cancel();
+    _router.routerDelegate.removeListener(_handleRouterLocationChanged);
     _router.dispose();
     super.dispose();
   }
 
   final _toolbarKey = GlobalKey();
+
+  String _currentRouterLocation() {
+    return _router.routerDelegate.currentConfiguration.uri.toString();
+  }
+
+  void _handleRouterLocationChanged() {
+    if (!mounted) return;
+
+    final route = _currentRouterLocation();
+    if (route == _lastRouterLocation) return;
+    _lastRouterLocation = route;
+
+    final workspaceManager = context.read<WorkspaceManager>();
+    final fallbackRoute =
+        workspaceManager.handleWorkspaceRouteChange(widget.workspace.id, route);
+
+    if (fallbackRoute != null && fallbackRoute != route) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_currentRouterLocation() != fallbackRoute) {
+          _router.go(fallbackRoute);
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -871,7 +908,12 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     try {
       return Row(
         children: [
-          Expanded(child: Router.withConfig(config: _router)),
+          Expanded(
+            child: Provider<Workspace>.value(
+              value: widget.workspace,
+              child: Router.withConfig(config: _router),
+            ),
+          ),
           RightToolbar(key: _toolbarKey),
         ],
       );
@@ -890,7 +932,17 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
                 onPressed: () {
                   // Try to recreate router
                   setState(() {
-                    _router = AppRouter.createRouter(widget.authService);
+                    _router.routerDelegate
+                        .removeListener(_handleRouterLocationChanged);
+                    _router.dispose();
+                    _router = AppRouter.createRouter(
+                      widget.authService,
+                      initialLocationOverride: widget.workspace.currentRoute,
+                    );
+                    widget.workspace.router = _router;
+                    _lastRouterLocation = _currentRouterLocation();
+                    _router.routerDelegate
+                        .addListener(_handleRouterLocationChanged);
                   });
                 },
                 child: const Text('Retry'),

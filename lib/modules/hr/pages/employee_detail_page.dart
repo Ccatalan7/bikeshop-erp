@@ -144,7 +144,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
       final employee = employees.firstWhere(
         (e) => e.id == widget.employeeId,
-        orElse: () => throw Exception('Empleado no encontrado'),
+        orElse: () => throw Exception('Trabajador no encontrado'),
       );
 
       _populateFields(employee, departments);
@@ -475,7 +475,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     final theme = Theme.of(context);
 
     return MainLayout(
-      title: 'Perfil de Empleado',
+      title: 'Perfil de Trabajador',
       body: _isLoading
           ? const Center(child: BrandedLoading())
           : _error != null
@@ -524,7 +524,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Perfil de Empleado',
+                  'Perfil de Trabajador',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -682,8 +682,8 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           decoration: BoxDecoration(
             color: _getStatusColor(_status).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
-            border:
-                Border.all(color: _getStatusColor(_status).withValues(alpha: 0.5)),
+            border: Border.all(
+                color: _getStatusColor(_status).withValues(alpha: 0.5)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -854,8 +854,8 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                       _jobTitleController, 'Cargo / Puesto', Icons.work)),
               const SizedBox(width: 16),
               Expanded(
-                  child: _buildTextField(
-                      _employeeNumberController, 'No. Empleado', Icons.numbers,
+                  child: _buildTextField(_employeeNumberController,
+                      'No. Trabajador', Icons.numbers,
                       enabled: false)),
             ],
           ),
@@ -1371,8 +1371,8 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color:
-                  Colors.grey.withValues(alpha: 0.05), // Very light grey background
+              color: Colors.grey
+                  .withValues(alpha: 0.05), // Very light grey background
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: theme.dividerColor),
             ),

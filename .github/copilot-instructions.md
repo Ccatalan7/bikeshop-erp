@@ -6,6 +6,14 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# Product Language
+
+- User-facing workshop copy must call mechanic jobs `trabajo` / `trabajos`, not `pega` / `pegas`.
+- User-facing HR copy must call staff `trabajador` / `trabajadores`, not `empleado` / `empleados`.
+- Legacy route names, database enum values, table/function names, and historical file names may still contain `pegas`, `pega`, or `employee` for compatibility. Do not surface those legacy terms in labels, headings, empty states, toasts, PDFs, AI responses, or new documentation unless explicitly explaining the legacy internal identifier.
+
+---
+
 # 🚴 CRITICAL: BIKE WORKSHOP MASTER SCHEMA (ALWAYS UPDATE)
 
 **Canonical living document:** `BIKE_WORKSHOP_MASTER_SCHEMA.md`
@@ -4593,7 +4601,7 @@ The app supports **3 types of barcode scanners**:
   - CREDIT: Cuentas por Cobrar/Pagar
 - Updates invoice `paid_amount` and `status`
 
-## Mechanic Job (Pega) → Invoice Flow
+## Mechanic Job (Trabajo) → Invoice Flow
 
 **Location:** `lib/modules/bikeshop/services/bikeshop_service.dart`
 
@@ -4608,8 +4616,8 @@ The app supports **3 types of barcode scanners**:
 5. Invoice posting triggers accounting entries (see above)
 
 **Bidirectional Cascade Delete:**
-- Deleting pega → deletes invoice (trigger: `cascade_delete_pega_invoice`)
-- Deleting invoice → deletes pega (same trigger)
+- Deleting trabajo → deletes invoice (trigger: `cascade_delete_pega_invoice`)
+- Deleting invoice → deletes trabajo (same trigger)
 - Prevents orphaned records
 
 ---
@@ -4651,7 +4659,7 @@ double get _total => _subtotal;  // Total stays the same (what customer sees)
 
 **Use Cases:**
 - POS sales (retail)
-- Service invoices (Pegas Module)
+- Service invoices (Trabajos module)
 - Customer-facing transactions
 - E-commerce product prices
 

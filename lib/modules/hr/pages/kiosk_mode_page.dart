@@ -334,7 +334,7 @@ class _KioskModePageState extends State<KioskModePage> {
       child: TextField(
         style: TextStyle(color: isDark ? Colors.white : Colors.black87),
         decoration: InputDecoration(
-          hintText: 'Buscar empleado...',
+          hintText: 'Buscar trabajador...',
           hintStyle:
               TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
           prefixIcon: Icon(
@@ -368,7 +368,7 @@ class _KioskModePageState extends State<KioskModePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No hay empleados disponibles',
+            'No hay trabajadores disponibles',
             style: TextStyle(
               fontSize: 18,
               color: Colors.grey[600],

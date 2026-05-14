@@ -323,7 +323,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
                               fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         Text(
-                          '${voucher.employeeCount} empleados • ${voucher.totalHours.toStringAsFixed(1)} hrs',
+                          '${voucher.employeeCount} trabajadores • ${voucher.totalHours.toStringAsFixed(1)} hrs',
                           style:
                               TextStyle(color: Colors.grey[600], fontSize: 12),
                         ),
@@ -428,7 +428,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
               children: [
                 Expanded(
                     flex: 3,
-                    child: Text('Empleado',
+                    child: Text('Trabajador',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12))),
                 Expanded(

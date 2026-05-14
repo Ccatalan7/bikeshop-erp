@@ -750,7 +750,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
           final jobNumber = jobData['job_number'] as String?;
           if (jobNumber != null) {
-            _referenceController.text = 'Pega $jobNumber';
+            _referenceController.text = 'Trabajo $jobNumber';
           }
         }
       }

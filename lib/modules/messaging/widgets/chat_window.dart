@@ -77,6 +77,7 @@ class ChatWindow extends StatefulWidget {
   final bool isContextPanelClosed;
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
+  final bool compact;
 
   const ChatWindow({
     super.key,
@@ -85,6 +86,7 @@ class ChatWindow extends StatefulWidget {
     this.isContextPanelClosed = false,
     this.onShowContextPanel,
     this.headerActions = const [],
+    this.compact = false,
   });
 
   @override
@@ -1827,60 +1829,7 @@ class _ChatWindowState extends State<ChatWindow> {
         // Pending Chat Request Banner (for employees reviewing customer requests)
         if (widget.conversation.type == 'support' &&
             widget.conversation.status == 'pending')
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              border: Border(
-                bottom: BorderSide(color: Colors.orange[200]!),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.pending_actions, color: Colors.orange[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Solicitud de chat pendiente',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange[900],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'El cliente espera respuesta. Acepta para comenzar a chatear.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange[800],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () => _showRejectDialog(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red[700],
-                  ),
-                  child: const Text('Rechazar'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () => _acceptChatRequest(context),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Aceptar'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildPendingRequestBanner(context),
 
         if (_showChatInfoPanel)
           Expanded(
@@ -1928,6 +1877,93 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  Widget _buildPendingRequestBanner(BuildContext context) {
+    final textBlock = Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Solicitud de chat pendiente',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.orange[900],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'El cliente espera respuesta. Acepta para comenzar a chatear.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.orange[800],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final actions = [
+      OutlinedButton(
+        onPressed: () => _showRejectDialog(context),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.red[700],
+        ),
+        child: const Text('Rechazar'),
+      ),
+      FilledButton.icon(
+        onPressed: () => _acceptChatRequest(context),
+        icon: const Icon(Icons.check, size: 18),
+        label: const Text('Aceptar'),
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.green[600],
+        ),
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.compact ? 12 : 16,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        border: Border(
+          bottom: BorderSide(color: Colors.orange[200]!),
+        ),
+      ),
+      child: widget.compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.pending_actions, color: Colors.orange[700]),
+                    const SizedBox(width: 10),
+                    textBlock,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: actions,
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Icon(Icons.pending_actions, color: Colors.orange[700]),
+                const SizedBox(width: 12),
+                textBlock,
+                const SizedBox(width: 12),
+                actions[0],
+                const SizedBox(width: 8),
+                actions[1],
+              ],
+            ),
+    );
+  }
+
   Widget _buildHeader(BuildContext context, ChatProvider chatProvider) {
     final conversation = widget.conversation;
     final hasContext = conversation.hasLinkedContext;
@@ -1936,7 +1972,10 @@ class _ChatWindowState extends State<ChatWindow> {
     final subtitle = _buildConversationSubtitle(conversation);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.compact ? 10 : 16,
+        vertical: widget.compact ? 8 : 12,
+      ),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
         color: Colors.white,
@@ -1955,7 +1994,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: 20,
+                        radius: widget.compact ? 17 : 20,
                         backgroundColor: conversation.type == 'support'
                             ? _accentBlue.withValues(alpha: 0.08)
                             : Colors.grey[200],
@@ -1971,7 +2010,7 @@ class _ChatWindowState extends State<ChatWindow> {
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: widget.compact ? 9 : 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1997,7 +2036,7 @@ class _ChatWindowState extends State<ChatWindow> {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: widget.compact ? 4 : 8),
                       Icon(
                         _showChatInfoPanel
                             ? Icons.keyboard_arrow_up
@@ -2605,7 +2644,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   ? 'Cambiar contexto'
                   : 'Vincular contexto',
               subtitle: _contextLabel(widget.conversation.contextType) ??
-                  'Conecta este chat con cliente, pega, factura o pedido',
+                  'Conecta este chat con cliente, trabajo, factura o pedido',
               onTap: () => _showAssignContextDialog(context),
             ),
             if (hasSupportedContextPanel && widget.onShowContextPanel != null)
@@ -4310,7 +4349,7 @@ class _ChatWindowState extends State<ChatWindow> {
     if (actionType == 'confirm_delivery' && jobId == null) {
       _showErrorSnackBar(
         context,
-        'La confirmación de entrega por WhatsApp requiere una pega asociada.',
+        'La confirmación de entrega por WhatsApp requiere un trabajo asociado.',
       );
       return;
     }
@@ -4449,7 +4488,7 @@ class _ChatWindowState extends State<ChatWindow> {
     } else {
       _showErrorSnackBar(
         context,
-        'El envío de presupuesto por WhatsApp requiere una factura o pega asociada.',
+        'El envío de presupuesto por WhatsApp requiere una factura o trabajo asociado.',
       );
       return;
     }

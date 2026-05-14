@@ -22,7 +22,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
   void initState() {
     super.initState();
     _selectedRole = widget.user['role'] as String? ?? 'cashier';
-    
+
     // Parse permissions from user data
     final permsData = widget.user['permissions'];
     if (permsData is Map) {
@@ -91,7 +91,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
 
     try {
       final userService = context.read<UserManagementService>();
-      
+
       await userService.updateUserRole(
         userId: widget.user['id'],
         newRole: _selectedRole,
@@ -147,22 +147,22 @@ class _UserEditDialogState extends State<UserEditDialog> {
                 ),
                 enabled: false,
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Employee link (if any)
               if (employeeName != null) ...[
                 TextField(
                   controller: TextEditingController(text: employeeName),
                   decoration: const InputDecoration(
-                    labelText: 'Empleado Vinculado',
+                    labelText: 'Trabajador Vinculado',
                     prefixIcon: Icon(Icons.person),
                   ),
                   enabled: false,
                 ),
                 const SizedBox(height: 16),
               ],
-              
+
               // Role selector
               DropdownButtonFormField<String>(
                 initialValue: _selectedRole,
@@ -171,11 +171,13 @@ class _UserEditDialogState extends State<UserEditDialog> {
                   prefixIcon: Icon(Icons.badge),
                 ),
                 items: const [
-                  DropdownMenuItem(value: 'admin', child: Text('Administrador')),
+                  DropdownMenuItem(
+                      value: 'admin', child: Text('Administrador')),
                   DropdownMenuItem(value: 'manager', child: Text('Gerente')),
                   DropdownMenuItem(value: 'cashier', child: Text('Cajero')),
                   DropdownMenuItem(value: 'mechanic', child: Text('Mecánico')),
-                  DropdownMenuItem(value: 'accountant', child: Text('Contador')),
+                  DropdownMenuItem(
+                      value: 'accountant', child: Text('Contador')),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -184,14 +186,14 @@ class _UserEditDialogState extends State<UserEditDialog> {
                   }
                 },
               ),
-              
+
               const SizedBox(height: 24),
               const Text(
                 'Permisos',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const Divider(),
-              
+
               // Permissions section
               _buildSection(
                 'Ventas & POS',
@@ -218,9 +220,9 @@ class _UserEditDialogState extends State<UserEditDialog> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               _buildSection(
                 'Administración',
                 [

@@ -198,6 +198,8 @@ class BikeFormDialog extends StatefulWidget {
   final bool isEmbedded;
   final ValueChanged<Bike>? onSaved;
   final VoidCallback? onCanceled;
+  final List<Bike> bikePickerOptions;
+  final Future<bool> Function(Bike bike)? onBikePickerSelected;
 
   const BikeFormDialog({
     super.key,
@@ -206,6 +208,8 @@ class BikeFormDialog extends StatefulWidget {
     this.isEmbedded = false,
     this.onSaved,
     this.onCanceled,
+    this.bikePickerOptions = const [],
+    this.onBikePickerSelected,
   });
 
   @override
@@ -258,6 +262,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   List<BikeCatalogEntry> _catalogMatches = [];
   bool _isLoadingProfile = false;
   bool _isLoadingCatalogMatches = false;
+  bool _isChangingJobBike = false;
 
   String? _suspensionLayout;
   String? _brakeType;
@@ -2901,6 +2906,202 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     return isEditing ? 'Editar bicicleta' : 'Nueva bicicleta';
   }
 
+  List<Bike> _bikePickerOptions() {
+    final unique = <String, Bike>{};
+    final currentBike = widget.bike;
+    if (currentBike?.id != null && currentBike!.id!.isNotEmpty) {
+      unique[currentBike.id!] = currentBike;
+    }
+
+    for (final bike in widget.bikePickerOptions) {
+      final id = bike.id;
+      if (id == null || id.isEmpty) continue;
+      unique[id] = bike;
+    }
+
+    final options = unique.values.toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    if (currentBike?.id != null && currentBike!.id!.isNotEmpty) {
+      final currentIndex =
+          options.indexWhere((bike) => bike.id == currentBike.id);
+      if (currentIndex > 0) {
+        final current = options.removeAt(currentIndex);
+        options.insert(0, current);
+      }
+    }
+    return options;
+  }
+
+  String _bikePickerSubtitle(Bike bike) {
+    final details = <String>[];
+    if (bike.serialNumber != null && bike.serialNumber!.trim().isNotEmpty) {
+      details.add('Serie ${bike.serialNumber!.trim()}');
+    }
+    if (bike.color != null && bike.color!.trim().isNotEmpty) {
+      details.add(bike.color!.trim());
+    }
+    if (bike.year != null) {
+      details.add(bike.year.toString());
+    }
+    return details.join(' · ');
+  }
+
+  Future<void> _handleBikePickerChanged(String? bikeId) async {
+    final onBikePickerSelected = widget.onBikePickerSelected;
+    final currentBikeId = widget.bike?.id;
+    if (bikeId == null ||
+        bikeId.isEmpty ||
+        bikeId == currentBikeId ||
+        onBikePickerSelected == null) {
+      return;
+    }
+
+    Bike? selectedBike;
+    for (final bike in _bikePickerOptions()) {
+      if (bike.id == bikeId) {
+        selectedBike = bike;
+        break;
+      }
+    }
+    if (selectedBike == null) return;
+    final confirmedBike = selectedBike;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Deseas cambiar la bicicleta para este trabajo?'),
+        content: Text(
+          'El trabajo quedará vinculado a ${confirmedBike.displayName}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cambiar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isChangingJobBike = true);
+    try {
+      final changed = await onBikePickerSelected(confirmedBike);
+      if (!mounted) return;
+      if (changed) {
+        Navigator.of(context).pop(confirmedBike);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cambiar bicicleta: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isChangingJobBike = false);
+      }
+    }
+  }
+
+  Widget _buildBikePreviewTitleControl(
+    ThemeData theme, {
+    required bool isEditing,
+  }) {
+    final pickerOptions = _bikePickerOptions();
+    final canPickBike = widget.onBikePickerSelected != null &&
+        widget.bike?.id != null &&
+        pickerOptions.length > 1;
+
+    final titleStyle = theme.textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0,
+      height: 1.05,
+    );
+
+    if (!canPickBike) {
+      return Text(
+        _bikePreviewTitle(isEditing),
+        style: titleStyle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: widget.bike!.id,
+        isExpanded: true,
+        borderRadius: BorderRadius.circular(12),
+        icon: _isChangingJobBike
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+        selectedItemBuilder: (context) => pickerOptions
+            .map(
+              (bike) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  bike.displayName,
+                  style: titleStyle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+            .toList(),
+        items: pickerOptions.map((bike) {
+          final subtitle = _bikePickerSubtitle(bike);
+          return DropdownMenuItem<String>(
+            value: bike.id,
+            child: Row(
+              children: [
+                const Icon(Icons.pedal_bike, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bike.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+        onChanged: _isChangingJobBike ? null : _handleBikePickerChanged,
+      ),
+    );
+  }
+
   String _bikePreviewSubtitle({required bool showTechnicalControls}) {
     if (showTechnicalControls) {
       final activeSpec =
@@ -3039,13 +3240,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _bikePreviewTitle(isEditing),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              height: 1.05,
-            ),
+          _buildBikePreviewTitleControl(
+            theme,
+            isEditing: isEditing,
           ),
           const SizedBox(height: 8),
           Text(
@@ -4326,13 +4523,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             Padding(
                               padding:
                                   const EdgeInsets.fromLTRB(20, 24, 48, 16),
-                              child: Text(
-                                isEditing
-                                    ? 'Editar bicicleta'
-                                    : 'Nueva bicicleta',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                              child: _buildBikePreviewTitleControl(
+                                theme,
+                                isEditing: isEditing,
                               ),
                             ),
                             buildStepTabs(desktop: false),

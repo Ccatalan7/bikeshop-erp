@@ -50,12 +50,13 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Buscar por empleado o diagnóstico...',
+                      hintText: 'Buscar por trabajador o diagnóstico...',
                       prefixIcon: const Icon(Icons.search),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear),
@@ -105,10 +106,14 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
 
                     // Apply filters
                     if (_filterStatus != null) {
-                      leaves = leaves.where((l) => l.status == _filterStatus).toList();
+                      leaves = leaves
+                          .where((l) => l.status == _filterStatus)
+                          .toList();
                     }
                     if (_filterEmployeeId != null) {
-                      leaves = leaves.where((l) => l.employeeId == _filterEmployeeId).toList();
+                      leaves = leaves
+                          .where((l) => l.employeeId == _filterEmployeeId)
+                          .toList();
                     }
                     if (_searchController.text.isNotEmpty) {
                       final query = _searchController.text.toLowerCase();
@@ -117,7 +122,9 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                           (e) => e.id == l.employeeId,
                           orElse: () => employees.first,
                         );
-                        return employee.fullName.toLowerCase().contains(query) ||
+                        return employee.fullName
+                                .toLowerCase()
+                                .contains(query) ||
                             l.diagnosis?.toLowerCase().contains(query) == true;
                       }).toList();
                     }
@@ -127,7 +134,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.medical_services_outlined, size: 64, color: Colors.grey[400]),
+                            Icon(Icons.medical_services_outlined,
+                                size: 64, color: Colors.grey[400]),
                             const SizedBox(height: 16),
                             Text(
                               'No hay licencias médicas registradas',
@@ -154,13 +162,15 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                           (e) => e.id == leave.employeeId,
                           orElse: () => employees.first,
                         );
-                        
+
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: leave.statusColor.withValues(alpha: 0.2),
-                              child: Icon(Icons.medical_services, color: leave.statusColor),
+                              backgroundColor:
+                                  leave.statusColor.withValues(alpha: 0.2),
+                              child: Icon(Icons.medical_services,
+                                  color: leave.statusColor),
                             ),
                             title: Text(employee.fullName),
                             subtitle: Column(
@@ -174,7 +184,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                                 if (leave.diagnosis != null)
                                   Text(
                                     leave.diagnosis!,
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600]),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -182,10 +193,12 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                             ),
                             trailing: Chip(
                               label: Text(leave.statusLabel),
-                              backgroundColor: leave.statusColor.withValues(alpha: 0.2),
+                              backgroundColor:
+                                  leave.statusColor.withValues(alpha: 0.2),
                               labelStyle: TextStyle(color: leave.statusColor),
                             ),
-                            onTap: () => _showLeaveDialog(context, leave: leave),
+                            onTap: () =>
+                                _showLeaveDialog(context, leave: leave),
                           ),
                         );
                       },
@@ -265,30 +278,39 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
     final hrService = context.read<HRService>();
     final isEdit = leave != null;
 
-    final employeeController = TextEditingController(text: leave?.employeeId ?? '');
+    final employeeController =
+        TextEditingController(text: leave?.employeeId ?? '');
     final startDateController = TextEditingController(
-      text: leave != null ? DateFormat('dd/MM/yyyy').format(leave.startDate) : '',
+      text:
+          leave != null ? DateFormat('dd/MM/yyyy').format(leave.startDate) : '',
     );
     final endDateController = TextEditingController(
       text: leave != null ? DateFormat('dd/MM/yyyy').format(leave.endDate) : '',
     );
-    final certificateController = TextEditingController(text: leave?.certificateNumber ?? '');
-    final doctorNameController = TextEditingController(text: leave?.doctorName ?? '');
-    final doctorRutController = TextEditingController(text: leave?.doctorRut ?? '');
-    final institutionController = TextEditingController(text: leave?.issuingInstitution ?? '');
-    final diagnosisController = TextEditingController(text: leave?.diagnosis ?? '');
+    final certificateController =
+        TextEditingController(text: leave?.certificateNumber ?? '');
+    final doctorNameController =
+        TextEditingController(text: leave?.doctorName ?? '');
+    final doctorRutController =
+        TextEditingController(text: leave?.doctorRut ?? '');
+    final institutionController =
+        TextEditingController(text: leave?.issuingInstitution ?? '');
+    final diagnosisController =
+        TextEditingController(text: leave?.diagnosis ?? '');
     final notesController = TextEditingController(text: leave?.notes ?? '');
 
     LeaveType selectedType = leave?.leaveType ?? LeaveType.enfermedadComun;
     LeaveStatus selectedStatus = leave?.status ?? LeaveStatus.pending;
     DateTime startDate = leave?.startDate ?? DateTime.now();
-    DateTime endDate = leave?.endDate ?? DateTime.now().add(const Duration(days: 7));
+    DateTime endDate =
+        leave?.endDate ?? DateTime.now().add(const Duration(days: 7));
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(isEdit ? 'Editar Licencia Médica' : 'Nueva Licencia Médica'),
+          title:
+              Text(isEdit ? 'Editar Licencia Médica' : 'Nueva Licencia Médica'),
           content: SingleChildScrollView(
             child: SizedBox(
               width: 500,
@@ -303,8 +325,11 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                         return const CircularProgressIndicator();
                       }
                       return DropdownButtonFormField<String>(
-                        initialValue: employeeController.text.isEmpty ? null : employeeController.text,
-                        decoration: const InputDecoration(labelText: 'Empleado *'),
+                        initialValue: employeeController.text.isEmpty
+                            ? null
+                            : employeeController.text,
+                        decoration:
+                            const InputDecoration(labelText: 'Trabajador *'),
                         items: snapshot.data!.map((employee) {
                           return DropdownMenuItem(
                             value: employee.id,
@@ -318,11 +343,12 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Leave type
                   DropdownButtonFormField<LeaveType>(
                     initialValue: selectedType,
-                    decoration: const InputDecoration(labelText: 'Tipo de Licencia *'),
+                    decoration:
+                        const InputDecoration(labelText: 'Tipo de Licencia *'),
                     items: LeaveType.values.map((type) {
                       return DropdownMenuItem(
                         value: type,
@@ -336,14 +362,15 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Dates
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
                           controller: startDateController,
-                          decoration: const InputDecoration(labelText: 'Fecha Inicio *'),
+                          decoration: const InputDecoration(
+                              labelText: 'Fecha Inicio *'),
                           readOnly: true,
                           onTap: () async {
                             final date = await showDatePicker(
@@ -355,7 +382,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                             if (date != null) {
                               setState(() {
                                 startDate = date;
-                                startDateController.text = DateFormat('dd/MM/yyyy').format(date);
+                                startDateController.text =
+                                    DateFormat('dd/MM/yyyy').format(date);
                               });
                             }
                           },
@@ -365,7 +393,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                       Expanded(
                         child: TextFormField(
                           controller: endDateController,
-                          decoration: const InputDecoration(labelText: 'Fecha Fin *'),
+                          decoration:
+                              const InputDecoration(labelText: 'Fecha Fin *'),
                           readOnly: true,
                           onTap: () async {
                             final date = await showDatePicker(
@@ -377,7 +406,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                             if (date != null) {
                               setState(() {
                                 endDate = date;
-                                endDateController.text = DateFormat('dd/MM/yyyy').format(date);
+                                endDateController.text =
+                                    DateFormat('dd/MM/yyyy').format(date);
                               });
                             }
                           },
@@ -386,16 +416,18 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Certificate details
                   TextFormField(
                     controller: certificateController,
-                    decoration: const InputDecoration(labelText: 'Folio Licencia'),
+                    decoration:
+                        const InputDecoration(labelText: 'Folio Licencia'),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: doctorNameController,
-                    decoration: const InputDecoration(labelText: 'Nombre Médico'),
+                    decoration:
+                        const InputDecoration(labelText: 'Nombre Médico'),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -405,10 +437,11 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: institutionController,
-                    decoration: const InputDecoration(labelText: 'Institución (COMPIN/IST/Mutual)'),
+                    decoration: const InputDecoration(
+                        labelText: 'Institución (COMPIN/IST/Mutual)'),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Status
                   DropdownButtonFormField<LeaveStatus>(
                     initialValue: selectedStatus,
@@ -426,7 +459,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Diagnosis
                   TextFormField(
                     controller: diagnosisController,
@@ -434,7 +467,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     maxLines: 2,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Notes
                   TextFormField(
                     controller: notesController,
@@ -453,7 +486,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Confirmar Eliminación'),
-                      content: const Text('¿Está seguro de eliminar esta licencia médica?'),
+                      content: const Text(
+                          '¿Está seguro de eliminar esta licencia médica?'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
@@ -461,13 +495,14 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                         ),
                         ElevatedButton(
                           onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red),
                           child: const Text('Eliminar'),
                         ),
                       ],
                     ),
                   );
-                  
+
                   if (confirm == true && leave.id != null) {
                     await hrService.deleteMedicalLeave(leave.id!);
                     if (context.mounted) {
@@ -478,7 +513,8 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                     }
                   }
                 },
-                child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                child:
+                    const Text('Eliminar', style: TextStyle(color: Colors.red)),
               ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -488,7 +524,7 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
               onPressed: () async {
                 if (employeeController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Seleccione un empleado')),
+                    const SnackBar(content: Text('Seleccione un trabajador')),
                   );
                   return;
                 }
@@ -500,13 +536,25 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                   leaveType: selectedType,
                   startDate: startDate,
                   endDate: endDate,
-                  certificateNumber: certificateController.text.isEmpty ? null : certificateController.text,
-                  doctorName: doctorNameController.text.isEmpty ? null : doctorNameController.text,
-                  doctorRut: doctorRutController.text.isEmpty ? null : doctorRutController.text,
-                  issuingInstitution: institutionController.text.isEmpty ? null : institutionController.text,
+                  certificateNumber: certificateController.text.isEmpty
+                      ? null
+                      : certificateController.text,
+                  doctorName: doctorNameController.text.isEmpty
+                      ? null
+                      : doctorNameController.text,
+                  doctorRut: doctorRutController.text.isEmpty
+                      ? null
+                      : doctorRutController.text,
+                  issuingInstitution: institutionController.text.isEmpty
+                      ? null
+                      : institutionController.text,
                   status: selectedStatus,
-                  diagnosis: diagnosisController.text.isEmpty ? null : diagnosisController.text,
-                  notes: notesController.text.isEmpty ? null : notesController.text,
+                  diagnosis: diagnosisController.text.isEmpty
+                      ? null
+                      : diagnosisController.text,
+                  notes: notesController.text.isEmpty
+                      ? null
+                      : notesController.text,
                 );
 
                 if (isEdit) {
@@ -518,7 +566,10 @@ class _MedicalLeavesPageState extends State<MedicalLeavesPage> {
                 if (context.mounted) {
                   Navigator.pop(dialogContext);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(isEdit ? 'Licencia actualizada' : 'Licencia creada')),
+                    SnackBar(
+                        content: Text(isEdit
+                            ? 'Licencia actualizada'
+                            : 'Licencia creada')),
                   );
                 }
               },

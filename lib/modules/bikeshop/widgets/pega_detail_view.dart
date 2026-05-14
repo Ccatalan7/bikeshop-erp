@@ -295,7 +295,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
                 child: ElevatedButton.icon(
                   onPressed: widget.onEdit,
                   icon: const Icon(Icons.edit),
-                  label: const Text('Editar Pega'),
+                  label: const Text('Editar Trabajo'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),

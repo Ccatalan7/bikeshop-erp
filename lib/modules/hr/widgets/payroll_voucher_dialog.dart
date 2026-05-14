@@ -561,8 +561,9 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color:
-                        _isCurrentPeriod ? Colors.green.withValues(alpha: 0.1) : null,
+                    color: _isCurrentPeriod
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : null,
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
                         color: _isCurrentPeriod
@@ -663,7 +664,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                           child: Text(line.employeeName,
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16))),
-                        Text(currency.format(_effectiveLineTotal(line)),
+                      Text(currency.format(_effectiveLineTotal(line)),
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 18,
@@ -729,7 +730,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
                   child: Icon(Icons.check_circle_outline, size: 16)),
               Padding(
                   padding: EdgeInsets.all(8),
-                  child: Text('Empleado',
+                  child: Text('Trabajador',
                       style: TextStyle(fontWeight: FontWeight.bold))),
               Padding(
                   padding: EdgeInsets.all(8),
@@ -840,7 +841,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('${_draftVoucher!.employeeCount} empleados'),
+                  Text('${_draftVoucher!.employeeCount} trabajadores'),
                   Text('${_formatHoursHHMM(_draftVoucher!.totalHours)} hrs'),
                 ],
               ),
@@ -874,7 +875,7 @@ class _PayrollVoucherDialogState extends State<PayrollVoucherDialog> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Empleados: ${_draftVoucher!.employeeCount}'),
+              Text('Trabajadores: ${_draftVoucher!.employeeCount}'),
               Text(
                   'Total Horas: ${_formatHoursHHMM(_draftVoucher!.totalHours)}'),
               Text(

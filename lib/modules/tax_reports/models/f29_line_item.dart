@@ -123,7 +123,7 @@ class F29LineCodes {
         ivaNeto: 'IVA Neto a Pagar',
         ppmVentasNetas: 'PPM - Ventas Netas',
         ppmMonto: 'PPM - Monto a Pagar',
-        retencionSegunda: 'Retención 2da Categoría (Empleados)',
+        retencionSegunda: 'Retención 2da Categoría (Trabajadores)',
         retencionHonorarios: 'Retención Honorarios (10%)',
         retencionArrendamiento: 'Retención Arrendamiento',
       };

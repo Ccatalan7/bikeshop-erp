@@ -634,7 +634,7 @@ class HRService extends ChangeNotifier {
       // Verify no ongoing attendance exists
       final current = await getCurrentAttendance(employeeId);
       if (current != null) {
-        throw Exception('El empleado ya tiene una asistencia activa');
+        throw Exception('El trabajador ya tiene una asistencia activa');
       }
 
       final tenantId = await _tenantService.getTenantId();

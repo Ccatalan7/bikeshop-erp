@@ -3,11 +3,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/mechanic_job_task.dart';
 
 /// Service for managing mechanic job tasks (smart to-do list)
-/// Tasks are automatically created when parts/services are added to pegas
-/// and sync with pega status changes
+/// Tasks are automatically created when parts/services are added to trabajos
+/// and sync with trabajo status changes
 class MechanicJobTaskService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
-  
+
   List<MechanicJobTask> _tasks = [];
   TaskSummary? _currentSummary;
   bool _isLoading = false;
@@ -28,7 +28,7 @@ class MechanicJobTaskService extends ChangeNotifier {
   /// Load all tasks for a specific mechanic job
   Future<void> loadTasksForJob(String jobId) async {
     if (_isDisposed) return; // Don't load if disposed
-    
+
     _isLoading = true;
     _error = null;
     _safeNotify();
@@ -115,7 +115,10 @@ class MechanicJobTaskService extends ChangeNotifier {
         'is_auto_generated': false,
         'display_order': _tasks.isEmpty
             ? 0
-            : _tasks.map((t) => t.displayOrder).reduce((a, b) => a > b ? a : b) + 1,
+            : _tasks
+                    .map((t) => t.displayOrder)
+                    .reduce((a, b) => a > b ? a : b) +
+                1,
       };
 
       final response = await _supabase
@@ -125,7 +128,7 @@ class MechanicJobTaskService extends ChangeNotifier {
           .single();
 
       final newTask = MechanicJobTask.fromJson(response);
-      
+
       // Add to local list
       _tasks.add(newTask);
       _safeNotify();
@@ -173,11 +176,11 @@ class MechanicJobTaskService extends ChangeNotifier {
         final task = _tasks[index];
         _tasks[index] = task.copyWith(
           status: newStatus,
-          startedAt: newStatus == TaskStatus.inProgress 
-              ? DateTime.now() 
+          startedAt: newStatus == TaskStatus.inProgress
+              ? DateTime.now()
               : task.startedAt,
-          completedAt: newStatus == TaskStatus.completed 
-              ? DateTime.now() 
+          completedAt: newStatus == TaskStatus.completed
+              ? DateTime.now()
               : task.completedAt,
           completedByName: completedByName ?? task.completedByName,
           updatedAt: DateTime.now(),
@@ -196,15 +199,13 @@ class MechanicJobTaskService extends ChangeNotifier {
   }
 
   /// Update task priority
-  Future<bool> updateTaskPriority(String taskId, TaskPriority newPriority) async {
+  Future<bool> updateTaskPriority(
+      String taskId, TaskPriority newPriority) async {
     try {
-      await _supabase
-          .from('mechanic_job_tasks')
-          .update({
-            'priority': newPriority.value,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', taskId);
+      await _supabase.from('mechanic_job_tasks').update({
+        'priority': newPriority.value,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', taskId);
 
       // Update local list
       final index = _tasks.indexWhere((t) => t.id == taskId);
@@ -216,7 +217,8 @@ class MechanicJobTaskService extends ChangeNotifier {
         _safeNotify();
       }
 
-      debugPrint('✅ Task priority updated: $taskId → ${newPriority.displayName}');
+      debugPrint(
+          '✅ Task priority updated: $taskId → ${newPriority.displayName}');
       return true;
     } catch (e) {
       _error = 'Error al actualizar prioridad: ${e.toString()}';
@@ -233,21 +235,19 @@ class MechanicJobTaskService extends ChangeNotifier {
     String? technicianName,
   }) async {
     try {
-      await _supabase
-          .from('mechanic_job_tasks')
-          .update({
-            if (assignedTo != null) 'assigned_to': assignedTo,
-            if (technicianName != null) 'assigned_technician_name': technicianName,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', taskId);
+      await _supabase.from('mechanic_job_tasks').update({
+        if (assignedTo != null) 'assigned_to': assignedTo,
+        if (technicianName != null) 'assigned_technician_name': technicianName,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', taskId);
 
       // Update local list
       final index = _tasks.indexWhere((t) => t.id == taskId);
       if (index != -1) {
         _tasks[index] = _tasks[index].copyWith(
           assignedTo: assignedTo ?? _tasks[index].assignedTo,
-          assignedTechnicianName: technicianName ?? _tasks[index].assignedTechnicianName,
+          assignedTechnicianName:
+              technicianName ?? _tasks[index].assignedTechnicianName,
           updatedAt: DateTime.now(),
         );
         _safeNotify();
@@ -266,13 +266,10 @@ class MechanicJobTaskService extends ChangeNotifier {
   /// Update task notes
   Future<bool> updateTaskNotes(String taskId, String notes) async {
     try {
-      await _supabase
-          .from('mechanic_job_tasks')
-          .update({
-            'notes': notes,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', taskId);
+      await _supabase.from('mechanic_job_tasks').update({
+        'notes': notes,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', taskId);
 
       // Update local list
       final index = _tasks.indexWhere((t) => t.id == taskId);
@@ -319,8 +316,7 @@ class MechanicJobTaskService extends ChangeNotifier {
       for (int i = 0; i < reorderedTasks.length; i++) {
         await _supabase
             .from('mechanic_job_tasks')
-            .update({'display_order': i})
-            .eq('id', reorderedTasks[i].id);
+            .update({'display_order': i}).eq('id', reorderedTasks[i].id);
       }
 
       // Update local list

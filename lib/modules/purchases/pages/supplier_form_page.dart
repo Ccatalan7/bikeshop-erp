@@ -996,7 +996,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
           controller: _purchaseInstructionsController,
           decoration: const InputDecoration(
             labelText:
-                'Instrucciones para generar compra (Para nuevos empleados)',
+                'Instrucciones para generar compra (Para nuevos trabajadores)',
             hintText:
                 'Ej: Hacer pedido por la web. Luego enviar comprobante por whatsapp a Roberto...',
             alignLabelWithHint: true,

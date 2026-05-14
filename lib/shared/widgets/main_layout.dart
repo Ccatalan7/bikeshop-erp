@@ -358,6 +358,14 @@ String _resolveWebsiteMenuRoute(String route) {
   return NotificationService().latestOnlineOrderAlertRoute ?? route;
 }
 
+Workspace? _maybeWorkspaceOf(BuildContext context) {
+  try {
+    return Provider.of<Workspace>(context, listen: false);
+  } catch (_) {
+    return null;
+  }
+}
+
 extension StringExtension on String {
   String capitalize() {
     if (isEmpty) return this;
@@ -466,6 +474,53 @@ const List<MenuSubItem> _toolsMenuItems = [
 
 const String _toolsSectionKey = 'tools';
 
+ThemeData _sidebarPaletteTheme(
+  ThemeData baseTheme,
+  SidebarPaletteOption palette,
+) {
+  final textTheme = baseTheme.textTheme.apply(
+    bodyColor: palette.foreground,
+    displayColor: palette.foreground,
+  );
+
+  return baseTheme.copyWith(
+    primaryColor: palette.accent,
+    dividerColor: palette.border,
+    iconTheme: baseTheme.iconTheme.copyWith(color: palette.mutedForeground),
+    textTheme: textTheme,
+    listTileTheme: baseTheme.listTileTheme.copyWith(
+      iconColor: palette.mutedForeground,
+      textColor: palette.foreground,
+    ),
+    colorScheme: baseTheme.colorScheme.copyWith(
+      primary: palette.accent,
+      onPrimary: palette.onAccent,
+      secondary: palette.accent,
+      surface: palette.background,
+      onSurface: palette.foreground,
+      onSurfaceVariant: palette.mutedForeground,
+      outline: palette.border,
+      outlineVariant: palette.border,
+    ),
+  );
+}
+
+BoxDecoration _sidebarPaletteDecoration(SidebarPaletteOption palette) {
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        palette.background,
+        Color.alphaBlend(
+          palette.accent.withValues(alpha: 0.08),
+          palette.backgroundAlt,
+        ),
+      ],
+    ),
+  );
+}
+
 // ─── Debug (Bug Tracking) module ─────────────────────────────────
 const List<MenuSubItem> _debugMenuItems = [
   MenuSubItem(
@@ -536,7 +591,7 @@ class _SidebarOptionsPanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           color: theme.colorScheme.surface,
           child: Container(
-            width: 220,
+            width: 308,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
@@ -563,6 +618,17 @@ class _SidebarOptionsPanel extends StatelessWidget {
                     appearanceService.setThemeMode(newMode);
                   },
                 ),
+                Divider(
+                    height: 1,
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.3)),
+                _SidebarPalettePicker(
+                  appearanceService: appearanceService,
+                ),
+                Divider(
+                    height: 1,
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.3)),
                 // Zoom controls
                 Padding(
                   padding:
@@ -672,6 +738,189 @@ class _OptionTile extends StatelessWidget {
             Text(label, style: theme.textTheme.bodyMedium),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SidebarPalettePicker extends StatelessWidget {
+  final AppearanceService appearanceService;
+
+  const _SidebarPalettePicker({
+    required this.appearanceService,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectedCode = appearanceService.sidebarPaletteCode;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.palette_outlined,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Paleta del panel',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: AppearanceService.sidebarPalettes.map((palette) {
+              return _SidebarPaletteSwatch(
+                palette: palette,
+                selected: palette.code == selectedCode,
+                onTap: () => appearanceService.setSidebarPalette(palette.code),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarPaletteSwatch extends StatelessWidget {
+  final SidebarPaletteOption palette;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SidebarPaletteSwatch({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 134,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: selected
+                ? palette.accent.withValues(alpha: 0.12)
+                : theme.colorScheme.onSurface.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected
+                  ? palette.accent
+                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              _SidebarPalettePreview(palette: palette),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  palette.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color:
+                        selected ? palette.accent : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.check, size: 14, color: palette.accent),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarPalettePreview extends StatelessWidget {
+  final SidebarPaletteOption palette;
+
+  const _SidebarPalettePreview({
+    required this.palette,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final outlineColor = Color.alphaBlend(
+      palette.foreground.withValues(alpha: 0.18),
+      palette.border,
+    );
+
+    return Container(
+      width: 38,
+      height: 30,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: outlineColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: palette.background),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.46,
+              heightFactor: 1,
+              child: ColoredBox(color: palette.backgroundAlt),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              widthFactor: 1,
+              heightFactor: 0.24,
+              child: ColoredBox(color: palette.accent),
+            ),
+          ),
+          Positioned(
+            left: 6,
+            top: 6,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: palette.foreground,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: palette.background.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1042,6 +1291,18 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     final screenWidth = MediaQuery.of(context).size.width;
     final showSidebar = screenWidth > 768; // Show sidebar on larger screens
     final navigationService = Provider.of<NavigationService>(context);
+    final workspaceManager = Provider.of<WorkspaceManager>(context);
+    final scopedWorkspace = _maybeWorkspaceOf(context);
+    final workspaceState = scopedWorkspace == null
+        ? null
+        : workspaceManager.workspaceById(scopedWorkspace.id);
+    final isPinnedWorkspace = workspaceState?.isPinned ?? false;
+    final isDrawerVisible = !isPinnedWorkspace &&
+        (workspaceState?.isDrawerVisible ?? navigationService.isDrawerVisible);
+    final drawerWidth =
+        workspaceState?.drawerWidth ?? navigationService.drawerWidth;
+    final isResizingDrawer =
+        workspaceState?.isResizingDrawer ?? navigationService.isResizing;
 
     if (showSidebar) {
       // Desktop layout with collapsible sidebar
@@ -1052,19 +1313,26 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
             // No animation during resize for instant tracking
             // Animation only for collapse/expand
             AnimatedContainer(
-              duration: navigationService.isResizing
+              duration: isResizingDrawer
                   ? Duration.zero
                   : const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              width: navigationService.isDrawerVisible
-                  ? navigationService.drawerWidth
-                  : 0,
-              child: navigationService.isDrawerVisible
-                  ? Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                      ),
-                      child: const AppSidebar(),
+              width: isDrawerVisible ? drawerWidth : 0,
+              child: isDrawerVisible
+                  ? Consumer<AppearanceService>(
+                      builder: (context, appearanceService, _) {
+                        final palette = appearanceService.sidebarPalette;
+                        final sidebarTheme =
+                            _sidebarPaletteTheme(Theme.of(context), palette);
+
+                        return Theme(
+                          data: sidebarTheme,
+                          child: Container(
+                            decoration: _sidebarPaletteDecoration(palette),
+                            child: const AppSidebar(),
+                          ),
+                        );
+                      },
                     )
                   : const SizedBox.shrink(),
             ),
@@ -1076,7 +1344,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                       children: [
                         // Main content with border (no app bar)
                         Container(
-                          decoration: navigationService.isDrawerVisible
+                          decoration: isDrawerVisible
                               ? BoxDecoration(
                                   border: Border(
                                     left: BorderSide(
@@ -1089,7 +1357,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                           child: widget.body ?? widget.child,
                         ),
                         // Invisible resize handle on left edge (12px wide)
-                        if (navigationService.isDrawerVisible)
+                        if (isDrawerVisible)
                           Positioned(
                             left: 0,
                             top: 0,
@@ -1100,16 +1368,34 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                               child: GestureDetector(
                                 behavior: HitTestBehavior.translucent,
                                 onHorizontalDragStart: (details) {
-                                  navigationService.startResizing();
+                                  if (workspaceState != null) {
+                                    workspaceManager.startWorkspaceDrawerResize(
+                                        workspaceState.id);
+                                  } else {
+                                    navigationService.startResizing();
+                                  }
                                 },
                                 onHorizontalDragUpdate: (details) {
-                                  navigationService.updateDrawerWidth(
-                                    navigationService.drawerWidth +
-                                        details.delta.dx,
-                                  );
+                                  if (workspaceState != null) {
+                                    workspaceManager.updateWorkspaceDrawerWidth(
+                                      workspaceState.id,
+                                      workspaceState.drawerWidth +
+                                          details.delta.dx,
+                                    );
+                                  } else {
+                                    navigationService.updateDrawerWidth(
+                                      navigationService.drawerWidth +
+                                          details.delta.dx,
+                                    );
+                                  }
                                 },
                                 onHorizontalDragEnd: (details) {
-                                  navigationService.stopResizing();
+                                  if (workspaceState != null) {
+                                    workspaceManager.stopWorkspaceDrawerResize(
+                                        workspaceState.id);
+                                  } else {
+                                    navigationService.stopResizing();
+                                  }
                                 },
                                 child: Container(
                                   color: Colors.transparent,
@@ -1118,7 +1404,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                             ),
                           ),
                         // Small toggle button (bottom-left, only when drawer is hidden)
-                        if (!navigationService.isDrawerVisible)
+                        if (!isDrawerVisible && !isPinnedWorkspace)
                           Positioned(
                             left: 8,
                             bottom: 8,
@@ -1126,7 +1412,14 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                               elevation: 4,
                               borderRadius: BorderRadius.circular(20),
                               child: InkWell(
-                                onTap: () => navigationService.showDrawer(),
+                                onTap: () {
+                                  if (workspaceState != null) {
+                                    workspaceManager
+                                        .showWorkspaceDrawer(workspaceState.id);
+                                  } else {
+                                    navigationService.showDrawer();
+                                  }
+                                },
                                 borderRadius: BorderRadius.circular(20),
                                 child: Container(
                                   width: 40,
@@ -1156,19 +1449,22 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       // Mobile layout with drawer
       return Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           leading: widget.onBackPressed != null
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
                   onPressed: widget.onBackPressed,
                   color: Theme.of(context).colorScheme.onSurface,
                 )
-              : Builder(
-                  builder: (context) => IconButton(
-                    icon: const Icon(Icons.menu),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
+              : isPinnedWorkspace
+                  ? null
+                  : Builder(
+                      builder: (context) => IconButton(
+                        icon: const Icon(Icons.menu),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
           title: Text(
             widget.title ?? 'Vinabike ERP',
             style: TextStyle(
@@ -1210,7 +1506,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
             ),
           ],
         ),
-        drawer: const AppDrawer(),
+        drawer: isPinnedWorkspace ? null : const AppDrawer(),
         body: widget.body ?? widget.child,
       );
     }
@@ -1432,15 +1728,30 @@ class _AppSidebarState extends State<AppSidebar> {
         }
 
         final routerState = GoRouterState.of(context);
-        final currentLocation = routerState.uri.path;
-        if (currentLocation != _lastLocation) {
-          _lastLocation = currentLocation;
+        final currentRoute = routerState.uri.toString();
+        final currentPath = routerState.uri.path;
+        if (currentRoute != _lastLocation) {
+          _lastLocation = currentRoute;
 
           // Update workspace tab title based on current route
           final workspaceManager = context.read<WorkspaceManager>();
-          workspaceManager.updateActiveWorkspaceRoute(currentLocation);
+          final scopedWorkspace = _maybeWorkspaceOf(context);
+          if (scopedWorkspace != null) {
+            final fallbackRoute = workspaceManager.handleWorkspaceRouteChange(
+              scopedWorkspace.id,
+              currentRoute,
+            );
+            if (fallbackRoute != null && fallbackRoute != currentRoute) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                router.go(fallbackRoute);
+              });
+            }
+          } else {
+            workspaceManager.updateActiveWorkspaceRoute(currentRoute);
+          }
 
-          final matchingSection = _resolveSectionForPath(currentLocation);
+          final matchingSection = _resolveSectionForPath(currentPath);
           final navService = context.read<NavigationService>();
 
           if (matchingSection != navService.expandedSection && mounted) {
@@ -1527,7 +1838,7 @@ class _AppSidebarState extends State<AppSidebar> {
     final theme = Theme.of(context);
 
     return Container(
-      color: theme.colorScheme.surface,
+      color: Colors.transparent,
       child: Column(
         children: [
           // Company Header
@@ -1897,7 +2208,15 @@ class _AppSidebarState extends State<AppSidebar> {
                             ),
                             tooltip: 'Ocultar menú',
                             onPressed: () {
-                              navigationService.hideDrawer();
+                              final scopedWorkspace =
+                                  _maybeWorkspaceOf(context);
+                              if (scopedWorkspace != null) {
+                                context
+                                    .read<WorkspaceManager>()
+                                    .hideWorkspaceDrawer(scopedWorkspace.id);
+                              } else {
+                                navigationService.hideDrawer();
+                              }
                             },
                             style: IconButton.styleFrom(
                               backgroundColor: theme.colorScheme.surface,

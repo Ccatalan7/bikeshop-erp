@@ -1385,7 +1385,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Text('Pega #${job.jobNumber ?? ""}',
+                      pw.Text('Trabajo #${job.jobNumber ?? ""}',
                           style: pw.TextStyle(
                               fontSize: 14, fontWeight: pw.FontWeight.bold)),
                       pw.Text('Ingreso: ${dateFormat.format(job.arrivalDate)}',
@@ -1548,7 +1548,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
       html.writeln(
           '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">');
       html.writeln(
-          '<head><meta charset="UTF-8"><title>Pega ${job.jobNumber ?? ""}</title>');
+          '<head><meta charset="UTF-8"><title>Trabajo ${job.jobNumber ?? ""}</title>');
       html.writeln('<style>');
       html.writeln(
           'body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; }');
@@ -1609,7 +1609,8 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
         html.writeln('<div class="divider"></div>');
       }
 
-      html.writeln('<h1>ORDEN DE TRABAJO - Pega #${job.jobNumber ?? ""}</h1>');
+      html.writeln(
+          '<h1>ORDEN DE TRABAJO - Trabajo #${job.jobNumber ?? ""}</h1>');
       html.writeln(
           '<div class="info-row"><span class="label">Fecha de ingreso:</span> ${dateFormat.format(job.arrivalDate)}</div>');
       html.writeln(
@@ -1836,7 +1837,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Esta pega no tiene factura asociada',
+                            'Este trabajo no tiene factura asociada',
                             style: TextStyle(
                               fontSize: 12,
                               color:

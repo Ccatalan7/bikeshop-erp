@@ -188,7 +188,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
       builder: (context) => AlertDialog(
         title: const Text('Confirmar eliminación'),
         content: Text(
-          '¿Está seguro de eliminar al empleado ${employee.fullName}? Esta acción no se puede deshacer.',
+          '¿Está seguro de eliminar al trabajador ${employee.fullName}? Esta acción no se puede deshacer.',
         ),
         actions: [
           TextButton(
@@ -216,7 +216,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Empleado ${employee.fullName} eliminado'),
+            content: Text('✅ Trabajador ${employee.fullName} eliminado'),
             backgroundColor: Colors.green,
           ),
         );
@@ -238,7 +238,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      title: 'Empleados',
+      title: 'Trabajadores',
       child: Column(
         children: [
           // Toolbar
@@ -337,7 +337,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                       SizedBox(
                         width: double.infinity,
                         child: AppButton(
-                          text: 'Nuevo Empleado',
+                          text: 'Nuevo Trabajador',
                           onPressed: () => _showEmployeeForm(),
                           icon: Icons.add,
                           type: ButtonType.primary,
@@ -425,7 +425,7 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                     ),
                     const SizedBox(width: 16),
                     AppButton(
-                      text: 'Nuevo Empleado',
+                      text: 'Nuevo Trabajador',
                       onPressed: () => _showEmployeeForm(),
                       icon: Icons.add,
                       type: ButtonType.primary,
@@ -452,8 +452,8 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
                             const SizedBox(height: 16),
                             Text(
                               _searchQuery.isEmpty
-                                  ? 'No hay empleados registrados'
-                                  : 'No se encontraron empleados',
+                                  ? 'No hay trabajadores registrados'
+                                  : 'No se encontraron trabajadores',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.grey[600],
@@ -874,7 +874,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Empleado creado e invitación generada. Revisa los logs para el enlace.',
+                  'Trabajador creado e invitación generada. Revisa los logs para el enlace.',
                 ),
                 backgroundColor: Colors.orange,
                 duration: Duration(seconds: 5),
@@ -888,7 +888,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Empleado creado pero falló la invitación: $inviteError',
+                'Trabajador creado pero falló la invitación: $inviteError',
               ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 5),
@@ -943,8 +943,8 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                   const SizedBox(width: 12),
                   Text(
                     widget.employee == null
-                        ? 'Nuevo Empleado'
-                        : 'Editar Empleado',
+                        ? 'Nuevo Trabajador'
+                        : 'Editar Trabajador',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -1004,7 +1004,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                             child: TextFormField(
                               controller: _employeeNumberController,
                               decoration: const InputDecoration(
-                                labelText: 'Número de Empleado *',
+                                labelText: 'Número de Trabajador *',
                                 border: OutlineInputBorder(),
                               ),
                               validator: (value) => value?.isEmpty ?? true
@@ -1069,7 +1069,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                             decoration: const InputDecoration(
                               labelText: 'Rol del Sistema',
                               helperText:
-                                  'Opcional: vincula al empleado con permisos predefinidos',
+                                  'Opcional: vincula al trabajador con permisos predefinidos',
                               border: OutlineInputBorder(),
                             ),
                             items: [

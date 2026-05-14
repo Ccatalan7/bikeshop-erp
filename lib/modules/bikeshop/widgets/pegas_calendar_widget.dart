@@ -200,7 +200,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar pegas: $e')),
+          SnackBar(content: Text('Error al cargar trabajos: $e')),
         );
       }
     }
@@ -709,7 +709,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   });
                 },
                 tooltip: _showingBikeDetails
-                    ? 'Volver a la pega'
+                    ? 'Volver a el trabajo'
                     : 'Volver a la lista',
               ),
             Expanded(
@@ -717,7 +717,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 _showingBikeDetails
                     ? 'Detalles de la Bicicleta'
                     : _selectedJob != null
-                        ? 'Detalles de la Pega'
+                        ? 'Detalles del Trabajo'
                         : dateFormat.format(_selectedDate),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -762,7 +762,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No hay pegas programadas',
+                    'No hay trabajos programados',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Theme.of(context)
                               .colorScheme

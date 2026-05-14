@@ -64,8 +64,8 @@ enum TaskPriority {
   }
 }
 
-/// Model representing a task in a mechanic job (pega)
-/// Tasks are linked to specific parts/services and sync with pega status
+/// Model representing a task in a mechanic job (trabajo)
+/// Tasks are linked to specific parts/services and sync with trabajo status
 @immutable
 class MechanicJobTask {
   final String id;

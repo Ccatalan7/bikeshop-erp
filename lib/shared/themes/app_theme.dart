@@ -6,7 +6,7 @@ class AppTheme {
   static const Color primaryRed = Color(0xFFD32F2F);
   static const Color primaryWhite = Color(0xFFFFFFFF);
 
-  static const Color accentGreen = Color(0xFF388E3C);
+  static const Color secondarySteel = Color(0xFF40566B);
   static const Color accentOrange = Color(0xFFFF9800);
 
   static const Color backgroundLight = Color(0xFFF5F5F5);
@@ -27,7 +27,7 @@ class AppTheme {
     scaffoldBackgroundColor: backgroundLight,
     colorScheme: const ColorScheme.light(
       primary: primaryBlue,
-      secondary: accentGreen,
+      secondary: secondarySteel,
       surface: primaryWhite,
       error: primaryRed,
       onPrimary: primaryWhite,
@@ -120,7 +120,7 @@ class AppTheme {
     scaffoldBackgroundColor: backgroundDark,
     colorScheme: const ColorScheme.dark(
       primary: primaryBlue,
-      secondary: accentGreen,
+      secondary: secondarySteel,
       surface: surfaceDark,
       error: primaryRed,
       onPrimary: primaryWhite,

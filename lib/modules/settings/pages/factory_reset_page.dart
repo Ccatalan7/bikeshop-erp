@@ -18,7 +18,7 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
   bool _isLoading = false;
   bool _confirmationChecked = false;
   final TextEditingController _confirmController = TextEditingController();
-  
+
   // Checkboxes for what to delete
   bool _deleteSales = true;
   bool _deletePurchases = true;
@@ -36,7 +36,7 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
     _confirmController.dispose();
     super.dispose();
   }
-  
+
   bool get _hasSelections =>
       _deleteSales ||
       _deletePurchases ||
@@ -54,7 +54,7 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
       _showError('Debes seleccionar al menos una categoría para eliminar');
       return;
     }
-    
+
     if (!_confirmationChecked) {
       _showError('Debes marcar la casilla de confirmación');
       return;
@@ -136,14 +136,15 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
     if (_deleteSales) selectedItems.add('Facturas de venta y pagos');
     if (_deletePurchases) selectedItems.add('Facturas de compra y pagos');
     if (_deleteInventory) selectedItems.add('Productos e inventario');
-    if (_deleteStockMovements) selectedItems.add('Movimientos de stock (ajustes y registros)');
+    if (_deleteStockMovements)
+      selectedItems.add('Movimientos de stock (ajustes y registros)');
     if (_deleteCustomers) selectedItems.add('Clientes');
     if (_deleteSuppliers) selectedItems.add('Proveedores');
     if (_deleteAccounting) selectedItems.add('Asientos contables');
-    if (_deleteEmployees) selectedItems.add('Empleados y contratos');
+    if (_deleteEmployees) selectedItems.add('Trabajadores y contratos');
     if (_deleteMechanic) selectedItems.add('Órdenes de mantención');
     if (_deleteEcommerce) selectedItems.add('Tienda online');
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -170,9 +171,9 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
             const Text('Se eliminarán los siguientes datos:'),
             const SizedBox(height: 8),
             ...selectedItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('• $item'),
-            )),
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('• $item'),
+                )),
             const SizedBox(height: 16),
             const Text(
               'No hay forma de recuperar estos datos.',
@@ -368,47 +369,54 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
                     Icons.shopping_cart,
                     'Facturas de compra y pagos',
                     _deletePurchases,
-                    (value) => setState(() => _deletePurchases = value ?? false),
+                    (value) =>
+                        setState(() => _deletePurchases = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.inventory,
                     'Productos e inventario',
                     _deleteInventory,
-                    (value) => setState(() => _deleteInventory = value ?? false),
+                    (value) =>
+                        setState(() => _deleteInventory = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.swap_horiz,
                     'Movimientos de stock (ajustes y registros)',
                     _deleteStockMovements,
-                    (value) => setState(() => _deleteStockMovements = value ?? false),
+                    (value) =>
+                        setState(() => _deleteStockMovements = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.people,
                     'Clientes',
                     _deleteCustomers,
-                    (value) => setState(() => _deleteCustomers = value ?? false),
+                    (value) =>
+                        setState(() => _deleteCustomers = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.business,
                     'Proveedores',
                     _deleteSuppliers,
-                    (value) => setState(() => _deleteSuppliers = value ?? false),
+                    (value) =>
+                        setState(() => _deleteSuppliers = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.account_balance,
                     'Asientos contables',
                     _deleteAccounting,
-                    (value) => setState(() => _deleteAccounting = value ?? false),
+                    (value) =>
+                        setState(() => _deleteAccounting = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.badge,
-                    'Empleados y contratos',
+                    'Trabajadores y contratos',
                     _deleteEmployees,
-                    (value) => setState(() => _deleteEmployees = value ?? false),
+                    (value) =>
+                        setState(() => _deleteEmployees = value ?? false),
                   ),
                   _buildCheckboxItem(
                     Icons.build,
-                    'Órdenes de mantención (Pegas)',
+                    'Órdenes de mantención (Trabajos)',
                     _deleteMechanic,
                     (value) => setState(() => _deleteMechanic = value ?? false),
                   ),
@@ -416,7 +424,8 @@ class _FactoryResetPageState extends State<FactoryResetPage> {
                     Icons.storefront,
                     'Tienda online y pedidos web',
                     _deleteEcommerce,
-                    (value) => setState(() => _deleteEcommerce = value ?? false),
+                    (value) =>
+                        setState(() => _deleteEcommerce = value ?? false),
                   ),
                   const SizedBox(height: 8),
                   Container(

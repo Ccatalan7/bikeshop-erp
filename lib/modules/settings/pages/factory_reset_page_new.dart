@@ -20,12 +20,12 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
   bool _isLoading = false;
   bool _confirmationChecked = false;
   final TextEditingController _confirmController = TextEditingController();
-  
+
   // Saved configurations
   List<ResetConfiguration> _savedConfigs = [];
   ResetConfiguration? _selectedConfig;
   bool _isLoadingConfigs = true;
-  
+
   // Current selection (either from saved config or manual)
   bool _deleteSales = false;
   bool _deletePurchases = false;
@@ -65,7 +65,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
     _confirmController.dispose();
     super.dispose();
   }
-  
+
   bool get _hasSelections =>
       _deleteSales ||
       _deletePurchases ||
@@ -155,8 +155,8 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
     try {
       final config = ResetConfiguration(
         name: name,
-        description: descController.text.trim().isEmpty 
-            ? null 
+        description: descController.text.trim().isEmpty
+            ? null
             : descController.text.trim(),
         deleteSales: _deleteSales,
         deletePurchases: _deletePurchases,
@@ -213,7 +213,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
     try {
       await _resetService.deleteConfiguration(config.id!);
       await _loadConfigurations();
-      
+
       if (_selectedConfig?.id == config.id) {
         setState(() => _selectedConfig = null);
       }
@@ -238,7 +238,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
       _showError('Debes seleccionar al menos una categoría para eliminar');
       return;
     }
-    
+
     if (!_confirmationChecked) {
       _showError('Debes marcar la casilla de confirmación');
       return;
@@ -318,14 +318,15 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
     if (_deleteSales) selectedItems.add('Facturas de venta y pagos');
     if (_deletePurchases) selectedItems.add('Facturas de compra y pagos');
     if (_deleteInventory) selectedItems.add('Productos e inventario');
-    if (_deleteStockMovements) selectedItems.add('Movimientos de stock (ajustes y registros)');
+    if (_deleteStockMovements)
+      selectedItems.add('Movimientos de stock (ajustes y registros)');
     if (_deleteCustomers) selectedItems.add('Clientes');
     if (_deleteSuppliers) selectedItems.add('Proveedores');
     if (_deleteAccounting) selectedItems.add('Asientos contables');
-    if (_deleteEmployees) selectedItems.add('Empleados y contratos');
+    if (_deleteEmployees) selectedItems.add('Trabajadores y contratos');
     if (_deleteMechanic) selectedItems.add('Órdenes de mantención');
     if (_deleteEcommerce) selectedItems.add('Tienda online');
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -352,9 +353,9 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
             const Text('Se eliminarán los siguientes datos:'),
             const SizedBox(height: 8),
             ...selectedItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('• $item'),
-            )),
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('• $item'),
+                )),
             const SizedBox(height: 16),
             const Text(
               'No hay forma de recuperar estos datos.',
@@ -525,51 +526,53 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                     )
                   else
                     ..._savedConfigs.map((config) => Card(
-                      elevation: 0,
-                      color: _selectedConfig?.id == config.id 
-                          ? Colors.blue[50] 
-                          : Colors.grey[50],
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.bookmark,
-                          color: _selectedConfig?.id == config.id 
-                              ? Colors.blue 
-                              : Colors.grey,
-                        ),
-                        title: Text(
-                          config.name,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (config.description != null) ...[
-                              const SizedBox(height: 4),
-                              Text(config.description!),
-                            ],
-                            const SizedBox(height: 4),
-                            Text(
-                              '${config.getSelectedCategories().length} categorías',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
+                          elevation: 0,
+                          color: _selectedConfig?.id == config.id
+                              ? Colors.blue[50]
+                              : Colors.grey[50],
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.bookmark,
+                              color: _selectedConfig?.id == config.id
+                                  ? Colors.blue
+                                  : Colors.grey,
                             ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, size: 20),
-                              onPressed: () => _deleteConfiguration(config),
-                              tooltip: 'Eliminar configuración',
+                            title: Text(
+                              config.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w500),
                             ),
-                          ],
-                        ),
-                        onTap: () => _applyConfiguration(config),
-                      ),
-                    )),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (config.description != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(config.description!),
+                                ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${config.getSelectedCategories().length} categorías',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline,
+                                      size: 20),
+                                  onPressed: () => _deleteConfiguration(config),
+                                  tooltip: 'Eliminar configuración',
+                                ),
+                              ],
+                            ),
+                            onTap: () => _applyConfiguration(config),
+                          ),
+                        )),
                 ],
               ),
             ),
@@ -723,7 +726,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                   ),
                   _buildCheckboxItem(
                     Icons.badge,
-                    'Empleados y contratos',
+                    'Trabajadores y contratos',
                     _deleteEmployees,
                     (value) {
                       setState(() {
@@ -734,7 +737,7 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                   ),
                   _buildCheckboxItem(
                     Icons.build,
-                    'Órdenes de mantención (Pegas)',
+                    'Órdenes de mantención (Trabajos)',
                     _deleteMechanic,
                     (value) {
                       setState(() {
@@ -757,7 +760,8 @@ class _FactoryResetPageNewState extends State<FactoryResetPageNew> {
                   const SizedBox(height: 16),
                   // Save configuration button
                   OutlinedButton.icon(
-                    onPressed: _hasSelections ? _saveCurrentAsConfiguration : null,
+                    onPressed:
+                        _hasSelections ? _saveCurrentAsConfiguration : null,
                     icon: const Icon(Icons.bookmark_add, size: 20),
                     label: const Text('Guardar esta configuración'),
                     style: OutlinedButton.styleFrom(

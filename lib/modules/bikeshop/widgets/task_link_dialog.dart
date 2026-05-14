@@ -148,7 +148,7 @@ class _TaskLinkDialogState extends State<TaskLinkDialog>
               tabs: [
                 Tab(
                   icon: const Icon(Icons.build),
-                  text: 'Pegas (${_jobs.length})',
+                  text: 'Trabajos (${_jobs.length})',
                 ),
                 Tab(
                   icon: const Icon(Icons.point_of_sale),
@@ -181,7 +181,8 @@ class _TaskLinkDialogState extends State<TaskLinkDialog>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  color:
+                      theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
                 ),
                 child: Row(
                   children: [
@@ -248,7 +249,7 @@ class _TaskLinkDialogState extends State<TaskLinkDialog>
     if (filtered.isEmpty) {
       return Center(
         child: Text(
-          query.isEmpty ? 'No hay pegas recientes' : 'Sin resultados',
+          query.isEmpty ? 'No hay trabajos recientes' : 'Sin resultados',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.outline,
               ),
@@ -277,7 +278,7 @@ class _TaskLinkDialogState extends State<TaskLinkDialog>
                   : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          title: Text('Pega #$jobNumber'),
+          title: Text('Trabajo #$jobNumber'),
           subtitle: Text('ID del Trabajo: ${job.id?.substring(0, 8) ?? ""}'),
           trailing: isSelected
               ? Icon(Icons.check_circle,

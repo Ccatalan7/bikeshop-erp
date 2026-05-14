@@ -27,7 +27,7 @@ Add a new entry in the navigation pane named **Bikeshop**, containing two submen
 ```
 Bikeshop
  ├── Clientes
- └── Pegas (Trabajos en curso)
+ └── Trabajos (en curso)
 ```
 
 ---
@@ -63,7 +63,7 @@ It lists all customers and provides access to their bicycles, service history, a
 
 ---
 
-## 🔧 Submenu 2: Pegas (Trabajos en curso)
+## 🔧 Submenu 2: Trabajos (en curso)
 
 A database-like view similar to Notion’s “Table” mode — for active workshop jobs.
 
@@ -83,7 +83,7 @@ A database-like view similar to Notion’s “Table” mode — for active works
 | Monto estimado | Numeric field (optional) |
 
 ### 💡 Behavior
-- New jobs can be added via “+ Nueva Pega”.
+- New jobs can be added via “+ Nuevo Trabajo”.
 - Selecting a **Client** automatically fills related fields:
   - Client ID  
   - Bicycle list  
@@ -175,7 +175,7 @@ Add:
 - ✅ Add files:
   - `clients_list_page.dart`
   - `client_logbook_page.dart`
-  - `pegas_list_page.dart`
+  - `trabajos_list_page.dart`
   - `mechanic_job_form.dart`
 - ✅ Add models: `Bike`, `MechanicJob`, `MechanicJobItem`
 - ✅ Add service: `BikeshopService` (CRUD + storage upload)
@@ -187,9 +187,9 @@ Add:
 ---
 
 ## 💾 Workflow Example
-1. Client leaves a bike → mechanic creates a new “pega”.
+1. Client leaves a bike → mechanic creates a new “trabajo”.
 2. Mechanic adds notes, expected deadline, and attaches photos.
-3. Job appears in “Pegas” view, status “DIAGNÓSTICO”.
+3. Job appears in “Trabajos” view, status “DIAGNÓSTICO”.
 4. When invoiced → auto-linked to Accounting + Inventory.
 5. Once marked “FINALIZADO” → moves to hidden completed jobs list.
 6. Client’s logbook updates automatically with full history.

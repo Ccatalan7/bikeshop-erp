@@ -1010,7 +1010,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         debugPrint('❌ Job not found: ${widget.jobId}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pega no encontrada')),
+            const SnackBar(content: Text('Trabajo no encontrado')),
           );
           context.pop();
         }
@@ -1471,7 +1471,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       debugPrint('❌ Error loading job: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar pega: $e')),
+          SnackBar(content: Text('Error al cargar trabajo: $e')),
         );
       }
     }
@@ -2895,8 +2895,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.jobId != null
-                ? 'Pega actualizada correctamente'
-                : 'Pega creada correctamente'),
+                ? 'Trabajo actualizado correctamente'
+                : 'Trabajo creado correctamente'),
             backgroundColor: Colors.green,
           ),
         );
@@ -2913,7 +2913,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     } catch (e) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar pega: $e')),
+          SnackBar(content: Text('Error al guardar trabajo: $e')),
         );
       }
     } finally {
@@ -2988,7 +2988,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       debugPrint('✅ Invoice tax treatment updated successfully');
     } catch (e) {
       debugPrint('❌ Error updating invoice tax treatment: $e');
-      // Don't rethrow - this shouldn't block saving the pega
+      // Don't rethrow - this shouldn't block saving the trabajo
     }
   }
 
@@ -6002,7 +6002,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         questionOverrides['brake_type'] = ServiceWizardQuestionOverride(
           label: 'Familia de freno de llanta',
           helperText:
-              'La plataforma ya viene confirmada desde la ficha de la bici. Aquí solo falta precisar la familia exacta y, al guardar la pega, esa confirmación sube a la ficha técnica upstream.',
+              'La plataforma ya viene confirmada desde la ficha de la bici. Aquí solo falta precisar la familia exacta y, al guardar el trabajo, esa confirmación sube a la ficha técnica upstream.',
           lockedSelection: const ServiceWizardLockedSelection(
             label: 'Tipo de freno (desde la bicicleta)',
             valueLabel: 'Llanta (rim)',
@@ -6275,7 +6275,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
       helperText = hasKnownFamily && familyLabel != null
           ? 'La ficha técnica upstream ya confirma pedalier / BB $familyLabel. El wizard reutiliza esa verdad y solo deja visibles las medidas o la interfaz del eje que sigan sin confirmar.'
-          : 'Si confirmas aquí la familia, el ancho de caja, el diámetro shell y/o la interfaz del eje, esas respuestas se promoverán a la ficha técnica upstream al guardar la pega.';
+          : 'Si confirmas aquí la familia, el ancho de caja, el diámetro shell y/o la interfaz del eje, esas respuestas se promoverán a la ficha técnica upstream al guardar el trabajo.';
     }
 
     return _ServiceWizardDialogConfig(
@@ -6318,11 +6318,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   String? _bikeProfilePromotionFeedback(ServiceWizardProfile? profile) {
     if (_isBrakeServiceFamily(profile?.serviceFamily)) {
-      return 'La familia de freno de llanta quedará confirmada en la ficha técnica al guardar la pega.';
+      return 'La familia de freno de llanta quedará confirmada en la ficha técnica al guardar el trabajo.';
     }
 
     if (_isBottomBracketServiceFamily(profile?.serviceFamily)) {
-      return 'La familia, las medidas de caja y la interfaz del eje del pedalier / BB quedarán confirmadas en la ficha técnica al guardar la pega cuando se resuelvan en el wizard.';
+      return 'La familia, las medidas de caja y la interfaz del eje del pedalier / BB quedarán confirmadas en la ficha técnica al guardar el trabajo cuando se resuelvan en el wizard.';
     }
 
     return null;
@@ -11928,7 +11928,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Esta pega de servicio técnico fue generada a partir de una Garantía No Cubierta.',
+                    'Este trabajo de servicio técnico fue generada a partir de una Garantía No Cubierta.',
                     style: TextStyle(color: Colors.orange.shade900),
                   ),
                 ),
@@ -13910,7 +13910,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
           const SizedBox(height: 8),
           Text(
-            'Estado: Factura creada automáticamente con los repuestos y servicios de esta pega',
+            'Estado: Factura creada automáticamente con los repuestos y servicios de este trabajo',
             style: TextStyle(fontSize: 12, color: Colors.grey[700]),
           ),
           const SizedBox(height: 12),

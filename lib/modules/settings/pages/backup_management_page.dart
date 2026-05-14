@@ -643,11 +643,11 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
                   '${backup.getSummaryCount('sales_invoices')}'),
               _buildDetailRow(theme, 'Facturas Compra',
                   '${backup.getSummaryCount('purchase_invoices')}'),
-              _buildDetailRow(
-                  theme, 'Empleados', '${backup.getSummaryCount('employees')}'),
+              _buildDetailRow(theme, 'Trabajadores',
+                  '${backup.getSummaryCount('employees')}'),
               _buildDetailRow(theme, 'Asientos Contables',
                   '${backup.getSummaryCount('journal_entries')}'),
-              _buildDetailRow(theme, 'Pegas (Trabajos)',
+              _buildDetailRow(theme, 'Trabajos (Trabajos)',
                   '${backup.getSummaryCount('mechanic_jobs')}'),
               _buildDetailRow(
                   theme, 'Bicicletas', '${backup.getSummaryCount('bikes')}'),
@@ -749,7 +749,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
             Text(
                 '• ${backup.getSummaryCount('purchase_invoices')} facturas de compra'),
             Text(
-                '• ${backup.getSummaryCount('mechanic_jobs')} pegas (trabajos mecánicos)'),
+                '• ${backup.getSummaryCount('mechanic_jobs')} trabajos mecánicos'),
             Text('• ${backup.getSummaryCount('bikes')} bicicletas registradas'),
             Text(
                 '• ${backup.getSummaryCount('product_brands')} marcas de productos'),

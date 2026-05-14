@@ -225,7 +225,7 @@ class SalesService extends ChangeNotifier {
       );
       _upsertInvoice(savedInvoice);
 
-      // EXPLICIT SYNC: If this invoice is linked to a pega, sync items back to mechanic_job_items.
+      // EXPLICIT SYNC: If this invoice is linked to a trabajo, sync items back to mechanic_job_items.
       // This is a reliable fallback in addition to the DB trigger (trg_sales_invoices_change).
       // The RPC ignores the flag guards since it runs outside the trigger transaction.
       if (savedInvoice.id != null) {
@@ -237,7 +237,7 @@ class SalesService extends ChangeNotifier {
           debugPrint(
               '🔁 [SalesService] sync_invoice_items_to_job called for ${savedInvoice.id}');
         } catch (e) {
-          // Non-fatal: invoice was saved correctly, only pega sync failed
+          // Non-fatal: invoice was saved correctly, only trabajo sync failed
           debugPrint(
               '⚠️ [SalesService] sync_invoice_items_to_job failed (non-fatal): $e');
         }

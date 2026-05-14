@@ -565,7 +565,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                   if (task.linkedJobNumber != null)
                     _buildLinkBadge(
                       icon: Icons.build,
-                      label: 'Pega #${task.linkedJobNumber}',
+                      label: 'Trabajo #${task.linkedJobNumber}',
                       color: Colors.blue,
                       onTap: () => context.go('/taller/pegas'),
                     ),

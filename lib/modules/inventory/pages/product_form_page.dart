@@ -4392,7 +4392,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         answers,
       );
       if (targets.isEmpty) {
-        return 'Sin target cerrado todavía. En la pega el wizard usará “Aplica a” para decidir si escribe en la ficha del freno delantero, trasero o ambas.';
+        return 'Sin target cerrado todavía. En el trabajo el wizard usará “Aplica a” para decidir si escribe en la ficha del freno delantero, trasero o ambas.';
       }
       if (targets.length == 2) {
         return 'Escribe sobre las fichas de diagnóstico front_brake y rear_brake.';
@@ -5906,7 +5906,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     return [
       Text(
-        'Este tester no guarda nada. Simula cómo abrirá el wizard dentro de una pega usando el perfil estructurado del servicio y, si eliges una bici, la verdad upstream de esa bicicleta.',
+        'Este tester no guarda nada. Simula cómo abrirá el wizard dentro de un trabajo usando el perfil estructurado del servicio y, si eliges una bici, la verdad upstream de esa bicicleta.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
           height: 1.4,
@@ -6212,7 +6212,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     return [
       Text(
-        'La vista usa el mismo perfil del taller y aplica la misma lógica upstream que luego consumirá la pega: contexto de bici, preguntas ocultas, bloqueos y prefills.',
+        'La vista usa el mismo perfil del taller y aplica la misma lógica upstream que luego consumirá el trabajo: contexto de bici, preguntas ocultas, bloqueos y prefills.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
           height: 1.4,
@@ -6887,7 +6887,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     return [
       Text(
-        'En la pega real, el mechanic_job_item abre este wizard, guarda un resumen en el ítem y luego sincroniza parte de las respuestas con diagnosis_sheet_data. Esta pestaña explica esa ruta sin tocar datos reales.',
+        'En el trabajo real, el mechanic_job_item abre este wizard, guarda un resumen en el ítem y luego sincroniza parte de las respuestas con diagnosis_sheet_data. Esta pestaña explica esa ruta sin tocar datos reales.',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
           height: 1.4,
@@ -6897,7 +6897,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       _buildServiceFlowNode(
         theme,
         icon: Icons.playlist_add_check_outlined,
-        title: '1. Servicio dentro de la pega',
+        title: '1. Servicio dentro de el trabajo',
         body:
             'El ítem del taller resuelve su perfil y abre el wizard con contexto de bici, target y respuestas iniciales.',
       ),

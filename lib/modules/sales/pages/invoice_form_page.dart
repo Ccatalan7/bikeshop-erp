@@ -719,7 +719,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           // Set reference to job number
           final jobNumber = jobData['job_number'] as String?;
           if (jobNumber != null) {
-            _referenceController.text = 'Pega $jobNumber';
+            _referenceController.text = 'Trabajo $jobNumber';
           }
           await _loadJobBikes(jobId);
         }
@@ -1513,7 +1513,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Check if we should return to a specific page (e.g., from pegas table)
+    // Check if we should return to a specific page (e.g., from trabajos table)
     final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
 
     return MainLayout(
@@ -2185,7 +2185,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Acceso rápido a la pega relacionada con esta factura.',
+            'Acceso rápido al trabajo relacionado con esta factura.',
             style: TextStyle(fontSize: 12, color: Colors.grey[700]),
           ),
           const SizedBox(height: 12),

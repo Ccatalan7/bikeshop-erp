@@ -11,6 +11,7 @@ class AppearanceService extends ChangeNotifier {
   static const String _homeIconKey = 'home_icon';
   static const String _companyLogoKey = 'company_logo';
   static const String _themeModeKey = 'theme_mode';
+  static const String _sidebarPaletteKey = 'sidebar_palette';
 
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
@@ -20,6 +21,7 @@ class AppearanceService extends ChangeNotifier {
       false; // True only if settings were loaded with valid tenant
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
   ThemeMode _themeMode = ThemeMode.light;
+  String _sidebarPaletteCode = 'vinabike';
   StreamSubscription<AuthState>? _authSubscription;
 
   final _supabase = Supabase.instance.client;
@@ -63,6 +65,86 @@ class AppearanceService extends ChangeNotifier {
   bool get hasCustomLogo =>
       _companyLogoUrl != null && _companyLogoUrl!.isNotEmpty;
   ThemeMode get themeMode => _themeMode;
+  String get sidebarPaletteCode => _sidebarPaletteCode;
+  SidebarPaletteOption get sidebarPalette => sidebarPalettes.firstWhere(
+        (palette) => palette.code == _sidebarPaletteCode,
+        orElse: () => sidebarPalettes.first,
+      );
+
+  static const List<SidebarPaletteOption> sidebarPalettes = [
+    SidebarPaletteOption(
+      code: 'vinabike',
+      name: 'Vinabike',
+      description: 'Limpia y luminosa',
+      background: Color(0xFFFFFFFF),
+      backgroundAlt: Color(0xFFF7FAFC),
+      foreground: Color(0xFF111827),
+      mutedForeground: Color(0xFF64748B),
+      accent: Color(0xFF1976D2),
+      onAccent: Color(0xFFFFFFFF),
+      border: Color(0xFFE2E8F0),
+    ),
+    SidebarPaletteOption(
+      code: 'midnight',
+      name: 'Midnight',
+      description: 'Azul negro ejecutivo',
+      background: Color(0xFF0E1726),
+      backgroundAlt: Color(0xFF14243A),
+      foreground: Color(0xFFF8FAFC),
+      mutedForeground: Color(0xFFA8B3C7),
+      accent: Color(0xFF7DD3FC),
+      onAccent: Color(0xFF082F49),
+      border: Color(0xFF25344D),
+    ),
+    SidebarPaletteOption(
+      code: 'aubergine',
+      name: 'Aubergine',
+      description: 'Morado Slack premium',
+      background: Color(0xFF2B1836),
+      backgroundAlt: Color(0xFF432453),
+      foreground: Color(0xFFFDF7FF),
+      mutedForeground: Color(0xFFD6BFE5),
+      accent: Color(0xFFF0ABFC),
+      onAccent: Color(0xFF3B0A45),
+      border: Color(0xFF573166),
+    ),
+    SidebarPaletteOption(
+      code: 'graphite_copper',
+      name: 'Graphite',
+      description: 'Grafito y cobre',
+      background: Color(0xFF1C1917),
+      backgroundAlt: Color(0xFF2E241E),
+      foreground: Color(0xFFFFF7ED),
+      mutedForeground: Color(0xFFD6B69F),
+      accent: Color(0xFFF59E0B),
+      onAccent: Color(0xFF271703),
+      border: Color(0xFF4A372A),
+    ),
+    SidebarPaletteOption(
+      code: 'evergreen',
+      name: 'Evergreen',
+      description: 'Bosque técnico',
+      background: Color(0xFF0D241C),
+      backgroundAlt: Color(0xFF12382D),
+      foreground: Color(0xFFECFDF5),
+      mutedForeground: Color(0xFFA7D8C5),
+      accent: Color(0xFF5EEAD4),
+      onAccent: Color(0xFF042F2E),
+      border: Color(0xFF205344),
+    ),
+    SidebarPaletteOption(
+      code: 'pacific',
+      name: 'Pacific',
+      description: 'Océano profundo',
+      background: Color(0xFF0B2233),
+      backgroundAlt: Color(0xFF123A54),
+      foreground: Color(0xFFF0F9FF),
+      mutedForeground: Color(0xFF9CCBE0),
+      accent: Color(0xFF38BDF8),
+      onAccent: Color(0xFF082F49),
+      border: Color(0xFF1F536E),
+    ),
+  ];
 
   // Available home icons for selection
   static const List<HomeIconOption> availableIcons = [
@@ -117,6 +199,12 @@ class AppearanceService extends ChangeNotifier {
           (mode) => mode.name == themeModeString,
           orElse: () => ThemeMode.light,
         );
+      }
+      final sidebarPaletteString = prefs.getString(_sidebarPaletteKey);
+      if (sidebarPaletteString != null &&
+          sidebarPalettes
+              .any((palette) => palette.code == sidebarPaletteString)) {
+        _sidebarPaletteCode = sidebarPaletteString;
       }
 
       // Get tenant_id for loading settings
@@ -349,6 +437,46 @@ class AppearanceService extends ChangeNotifier {
       rethrow;
     }
   }
+
+  Future<void> setSidebarPalette(String paletteCode) async {
+    if (!sidebarPalettes.any((palette) => palette.code == paletteCode)) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_sidebarPaletteKey, paletteCode);
+      _sidebarPaletteCode = paletteCode;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AppearanceService] Error saving sidebar palette: $e');
+      rethrow;
+    }
+  }
+}
+
+class SidebarPaletteOption {
+  final String code;
+  final String name;
+  final String description;
+  final Color background;
+  final Color backgroundAlt;
+  final Color foreground;
+  final Color mutedForeground;
+  final Color accent;
+  final Color onAccent;
+  final Color border;
+
+  const SidebarPaletteOption({
+    required this.code,
+    required this.name,
+    required this.description,
+    required this.background,
+    required this.backgroundAlt,
+    required this.foreground,
+    required this.mutedForeground,
+    required this.accent,
+    required this.onAccent,
+    required this.border,
+  });
 }
 
 class HomeIconOption {

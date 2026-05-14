@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../../modules/messaging/providers/chat_provider.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
@@ -9,6 +10,7 @@ import 'calculator_panel.dart';
 import 'query_performance_gauge.dart';
 import 'quick_bike_finder_panel.dart';
 import 'quick_access_expense_rail.dart';
+import 'quick_messages_panel.dart';
 import 'quick_purchase_panel.dart';
 import 'quick_sale_panel.dart';
 import 'quick_task_panel.dart';
@@ -70,9 +72,11 @@ class _RightToolbarState extends State<RightToolbar> {
   String _toolTitle(ToolbarTool tool) {
     switch (tool) {
       case ToolbarTool.newJob:
-        return 'Nueva Pega';
+        return 'Nuevo Trabajo';
       case ToolbarTool.bikeFinder:
         return 'Buscador de Bicicletas';
+      case ToolbarTool.messages:
+        return 'Mensajería';
       case ToolbarTool.kiosk:
         return 'Kiosko RRHH';
       case ToolbarTool.quickSale:
@@ -96,6 +100,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.build_circle_outlined;
       case ToolbarTool.bikeFinder:
         return Icons.pedal_bike_outlined;
+      case ToolbarTool.messages:
+        return Icons.chat_bubble_outline;
       case ToolbarTool.kiosk:
         return Icons.badge_outlined;
       case ToolbarTool.quickSale:
@@ -119,6 +125,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return const SizedBox.shrink();
       case ToolbarTool.bikeFinder:
         return const QuickBikeFinderPanel();
+      case ToolbarTool.messages:
+        return const QuickMessagesPanel();
       case ToolbarTool.kiosk:
         return const KioskModePage(
           embedded: true,
@@ -139,6 +147,63 @@ class _RightToolbarState extends State<RightToolbar> {
     }
   }
 
+  int _toolBadgeCount(ToolbarTool tool, ChatProvider chatProvider) {
+    if (tool == ToolbarTool.messages) {
+      return chatProvider.totalUnreadCount;
+    }
+    return 0;
+  }
+
+  Widget _buildToolIcon(
+    ThemeData theme,
+    ToolbarTool tool,
+    ChatProvider chatProvider, {
+    required double iconSize,
+    required Color iconColor,
+  }) {
+    final badgeCount = _toolBadgeCount(tool, chatProvider);
+    final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
+
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Icon(
+          _toolIcon(tool),
+          size: iconSize,
+          color: iconColor,
+        ),
+        if (badgeCount > 0)
+          Positioned(
+            right: -5,
+            top: -5,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.error,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: theme.colorScheme.surface,
+                  width: 1.5,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                badgeLabel,
+                style: TextStyle(
+                  color: theme.colorScheme.onError,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   List<ToolbarTool> _visibleTools(RightToolbarService toolbarService) {
     return ToolbarTool.values.where((tool) {
       if (tool == ToolbarTool.performance) {
@@ -154,6 +219,7 @@ class _RightToolbarState extends State<RightToolbar> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final toolbarService = context.watch<RightToolbarService>();
+    final chatProvider = context.watch<ChatProvider>();
     final activeTool = toolbarService.activeTool;
     final visibleTools = _visibleTools(toolbarService);
 
@@ -181,8 +247,19 @@ class _RightToolbarState extends State<RightToolbar> {
             ),
           ),
           child: isExpanded
-              ? _buildExpanded(theme, isDark, activeTool, visibleTools)
-              : _buildCollapsed(theme, activeBg, visibleTools),
+              ? _buildExpanded(
+                  theme,
+                  isDark,
+                  activeTool,
+                  visibleTools,
+                  chatProvider,
+                )
+              : _buildCollapsed(
+                  theme,
+                  activeBg,
+                  visibleTools,
+                  chatProvider,
+                ),
         ),
         // Resize handle (left edge, only when expanded)
         if (isExpanded)
@@ -220,6 +297,7 @@ class _RightToolbarState extends State<RightToolbar> {
     ThemeData theme,
     Color activeBg,
     List<ToolbarTool> visibleTools,
+    ChatProvider chatProvider,
   ) {
     return Column(
       children: [
@@ -243,10 +321,13 @@ class _RightToolbarState extends State<RightToolbar> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    _toolIcon(tool),
-                    size: 22,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  child: _buildToolIcon(
+                    theme,
+                    tool,
+                    chatProvider,
+                    iconSize: 22,
+                    iconColor:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
               ),
@@ -262,6 +343,7 @@ class _RightToolbarState extends State<RightToolbar> {
     bool isDark,
     ToolbarTool tool,
     List<ToolbarTool> visibleTools,
+    ChatProvider chatProvider,
   ) {
     final railBg = isDark ? const Color(0xFF161616) : const Color(0xFFE8EAED);
     final railBorder =
@@ -288,8 +370,13 @@ class _RightToolbarState extends State<RightToolbar> {
                 ),
                 child: Row(
                   children: [
-                    Icon(_toolIcon(tool),
-                        size: 18, color: theme.colorScheme.primary),
+                    _buildToolIcon(
+                      theme,
+                      tool,
+                      chatProvider,
+                      iconSize: 18,
+                      iconColor: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       _toolTitle(tool),
@@ -375,10 +462,12 @@ class _RightToolbarState extends State<RightToolbar> {
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          _toolIcon(t),
-                          size: 20,
-                          color: t == tool
+                        child: _buildToolIcon(
+                          theme,
+                          t,
+                          chatProvider,
+                          iconSize: 20,
+                          iconColor: t == tool
                               ? theme.colorScheme.primary
                               : theme.colorScheme.onSurface
                                   .withValues(alpha: 0.55),

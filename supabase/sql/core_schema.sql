@@ -9,8 +9,8 @@ declare
 begin
   -- Drop ALL triggers on mechanic_job_tasks first (prevent any misattached triggers)
   for r in (
-    select trigger_name 
-    from information_schema.triggers 
+    select trigger_name
+    from information_schema.triggers
     where event_object_table = 'mechanic_job_tasks'
   ) loop
     execute format('drop trigger if exists %I on mechanic_job_tasks cascade', r.trigger_name);
@@ -19,19 +19,19 @@ begin
 
   -- Drop ALL triggers on mechanic_job_items that might cause conflicts
   for r in (
-    select trigger_name 
-    from information_schema.triggers 
+    select trigger_name
+    from information_schema.triggers
     where event_object_table = 'mechanic_job_items'
       and trigger_name like '%task%'
   ) loop
     execute format('drop trigger if exists %I on mechanic_job_items cascade', r.trigger_name);
     raise notice 'Dropped trigger: %', r.trigger_name;
   end loop;
-  
+
   -- Drop ALL triggers on mechanic_jobs related to tasks
   for r in (
-    select trigger_name 
-    from information_schema.triggers 
+    select trigger_name
+    from information_schema.triggers
     where event_object_table = 'mechanic_jobs'
       and trigger_name like '%task%'
   ) loop
@@ -115,10 +115,10 @@ do $$
 begin
   -- Rename title → task_name (if old column exists)
   if exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'title'
   ) and not exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'task_name'
   ) then
     alter table mechanic_job_tasks rename column title to task_name;
@@ -127,10 +127,10 @@ begin
 
   -- Rename job_item_id → parent_item_id
   if exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'job_item_id'
   ) and not exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'parent_item_id'
   ) then
     alter table mechanic_job_tasks rename column job_item_id to parent_item_id;
@@ -139,10 +139,10 @@ begin
 
   -- Rename job_labor_id → parent_labor_id
   if exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'job_labor_id'
   ) and not exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'parent_labor_id'
   ) then
     alter table mechanic_job_tasks rename column job_labor_id to parent_labor_id;
@@ -151,15 +151,15 @@ begin
 
   -- Migrate status → is_completed (if old column exists)
   if exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'status'
   ) and not exists (
-    select 1 from information_schema.columns 
+    select 1 from information_schema.columns
     where table_name = 'mechanic_job_tasks' and column_name = 'is_completed'
   ) then
     alter table mechanic_job_tasks add column is_completed boolean;
-    update mechanic_job_tasks 
-      set is_completed = (status = 'completed') 
+    update mechanic_job_tasks
+      set is_completed = (status = 'completed')
       where is_completed is null;
     alter table mechanic_job_tasks alter column is_completed set not null;
     alter table mechanic_job_tasks alter column is_completed set default false;
@@ -190,15 +190,15 @@ end $$;
 --------------------------------------------------------------------------------
 -- ⚙️ REQUIRED SUPABASE DASHBOARD CONFIGURATION (After deploying this schema)
 --------------------------------------------------------------------------------
--- 
+--
 -- 1. PASSWORD RESET CONFIGURATION:
 --    Navigate to: Authentication → URL Configuration in Supabase Dashboard
---    
+--
 --    Add these Redirect URLs:
 --    - For Web (Production): https://your-domain.com/#/reset-password
 --    - For Web (Localhost): http://localhost:8080/#/reset-password
 --    - For Mobile (Deep Link): io.supabase.vinabikeerp://reset-password/
---    
+--
 --    These URLs allow users to reset their password via email link.
 --    The Flutter app handles the /reset-password route automatically.
 --
@@ -251,7 +251,7 @@ end $$;
 
 -- Add constraint: subdomain must be URL-safe (lowercase alphanumeric and hyphens)
 do $$ begin
-  alter table tenants add constraint subdomain_format 
+  alter table tenants add constraint subdomain_format
     check (subdomain ~ '^[a-z0-9][a-z0-9-]*[a-z0-9]$');
 exception
   when duplicate_object then null;
@@ -462,16 +462,16 @@ do $$
 begin
   -- Drop all triggers
   drop trigger if exists trg_purchase_payments_change on purchase_payments cascade;
-  
+
   -- Drop all functions (all possible signatures)
   drop function if exists handle_purchase_payment_change() cascade;
   drop function if exists create_purchase_payment_journal_entry(uuid) cascade;
   drop function if exists create_purchase_payment_journal_entry(purchase_payments) cascade;
   drop function if exists delete_purchase_payment_journal_entry(uuid) cascade;
-  
+
   -- Drop OLD trigger version of recalculate function (the one causing the error!)
   drop function if exists recalculate_purchase_invoice_payments() cascade;
-  
+
   -- Drop old columns if they exist
   if exists (
     select 1 from information_schema.columns
@@ -479,21 +479,21 @@ begin
   ) then
     alter table purchase_payments drop column payment_date cascade;
   end if;
-  
+
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'purchase_payments' and column_name = 'bank_account_id'
   ) then
     alter table purchase_payments drop column bank_account_id cascade;
   end if;
-  
+
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'purchase_payments' and column_name = 'purchase_invoice_id'
   ) then
     alter table purchase_payments drop column purchase_invoice_id cascade;
   end if;
-  
+
   raise notice 'Nuclear cleanup complete for purchase_payments';
 exception
   when others then
@@ -643,31 +643,31 @@ drop policy if exists "public_customer_addresses_update_own" on customer_address
 drop policy if exists "public_customer_addresses_delete_own" on customer_addresses;
 
 -- ERP POLICIES (for tenant users via user_tenant_id())
-create policy "customer_addresses_select" on customer_addresses 
-  for select 
+create policy "customer_addresses_select" on customer_addresses
+  for select
   to authenticated
   using (tenant_id = public.user_tenant_id());
 
-create policy "customer_addresses_insert" on customer_addresses 
-  for insert 
+create policy "customer_addresses_insert" on customer_addresses
+  for insert
   to authenticated
   with check (tenant_id = public.user_tenant_id());
 
-create policy "customer_addresses_update" on customer_addresses 
-  for update 
+create policy "customer_addresses_update" on customer_addresses
+  for update
   to authenticated
   using (tenant_id = public.user_tenant_id());
 
-create policy "customer_addresses_delete" on customer_addresses 
-  for delete 
+create policy "customer_addresses_delete" on customer_addresses
+  for delete
   to authenticated
   using (tenant_id = public.user_tenant_id());
 
 -- PUBLIC STORE POLICIES (for website customers via auth_user_id)
 -- Website customers don't have user_profiles, so user_tenant_id() returns NULL
 -- They can only access their OWN addresses linked to their customer record
-create policy "public_customer_addresses_select_own" on customer_addresses 
-  for select 
+create policy "public_customer_addresses_select_own" on customer_addresses
+  for select
   to authenticated
   using (
     customer_id IN (
@@ -675,8 +675,8 @@ create policy "public_customer_addresses_select_own" on customer_addresses
     )
   );
 
-create policy "public_customer_addresses_insert_own" on customer_addresses 
-  for insert 
+create policy "public_customer_addresses_insert_own" on customer_addresses
+  for insert
   to authenticated
   with check (
     customer_id IN (
@@ -685,8 +685,8 @@ create policy "public_customer_addresses_insert_own" on customer_addresses
     AND tenant_id IS NOT NULL
   );
 
-create policy "public_customer_addresses_update_own" on customer_addresses 
-  for update 
+create policy "public_customer_addresses_update_own" on customer_addresses
+  for update
   to authenticated
   using (
     customer_id IN (
@@ -694,8 +694,8 @@ create policy "public_customer_addresses_update_own" on customer_addresses
     )
   );
 
-create policy "public_customer_addresses_delete_own" on customer_addresses 
-  for delete 
+create policy "public_customer_addresses_delete_own" on customer_addresses
+  for delete
   to authenticated
   using (
     customer_id IN (
@@ -766,17 +766,17 @@ exception
 end $$;
 
 -- Migration: Drop old single-tenant constraint, ensure multi-tenant constraint exists
-do $$ 
+do $$
 begin
   -- Drop old global unique constraint on 'key' alone (wrong for multi-tenant)
   if exists (
-    select 1 from pg_constraint 
+    select 1 from pg_constraint
     where conname = 'company_settings_key_key'
   ) then
     alter table company_settings drop constraint company_settings_key_key;
     raise notice '✓ Dropped old global unique constraint on key';
   end if;
-  
+
   -- Ensure correct per-tenant unique constraint exists
   if not exists (
     select 1 from pg_constraint c
@@ -810,25 +810,25 @@ create table if not exists database_backups (
   backup_name text not null, -- e.g., "Before Year-End Closing", "Auto Backup"
   backup_type text not null check (backup_type in ('manual', 'automatic', 'scheduled')),
   status text not null default 'in_progress' check (status in ('in_progress', 'completed', 'failed', 'restored')),
-  
+
   -- Backup metadata
   backup_data jsonb not null, -- Stores the actual data snapshot
-  
+
   -- Summary statistics (for preview before restore)
   summary jsonb, -- { "products": 1440, "customers": 350, "invoices": 1200, ... }
-  
+
   -- Metadata
   created_by uuid references auth.users(id),
   created_at timestamp with time zone not null default now(),
   restored_at timestamp with time zone, -- When this backup was restored
   restored_by uuid references auth.users(id), -- Who restored it
-  
+
   -- Size tracking
   backup_size_bytes bigint, -- Size of backup data in bytes
-  
+
   -- Notes
   notes text, -- User-provided description
-  
+
   -- Error tracking
   error_message text -- If backup failed
 );
@@ -866,22 +866,22 @@ create policy "backups_delete" on database_backups
 create table if not exists backup_schedules (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null unique,
-  
+
   -- Schedule settings
   enabled boolean not null default false,
   frequency text not null default 'daily' check (frequency in ('hourly', 'daily', 'weekly', 'monthly')),
   time_of_day time, -- When to run daily/weekly backups (e.g., 02:00:00)
   day_of_week int, -- 0-6 for weekly backups (0 = Sunday)
   day_of_month int, -- 1-31 for monthly backups
-  
+
   -- Retention policy
   keep_last_n_backups int not null default 7, -- Keep last 7 backups
   auto_delete_old boolean not null default true,
-  
+
   -- Last run tracking
   last_run_at timestamp with time zone,
   next_run_at timestamp with time zone,
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
@@ -1304,18 +1304,18 @@ end $$;
 
 create table if not exists bike_catalog (
   id uuid primary key default gen_random_uuid(),
-  
+
   -- Identity
   brand text not null,
   model_name text not null,
   model_year integer not null,
   bike_type text, -- road, mountain, hybrid, gravel, bmx, city
-  
+
   -- Frame & Geometry
   frame_material text, -- aluminum, carbon, steel, titanium
   frame_size_range text[], -- ['S', 'M', 'L'] or ['48cm', '52cm']
   wheel_size text, -- 700c, 29", 27.5", 26", 650b, 20"
-  
+
   -- Drivetrain
   drivetrain_speeds integer, -- 8, 9, 10, 11, 12
   drivetrain_config text, -- '1x11', '2x10', '3x8'
@@ -1325,13 +1325,13 @@ create table if not exists bike_catalog (
   crankset_model text,
   rear_derailleur_model text,
   front_derailleur_model text,
-  
+
   -- Braking
   brake_type text, -- rim, mechanical_disc, hydraulic_disc
   brake_model text,
   brake_rotor_size_front_mm integer,
   brake_rotor_size_rear_mm integer,
-  
+
   -- Wheels & Hubs
   front_hub_model text,
   rear_hub_model text,
@@ -1341,35 +1341,35 @@ create table if not exists bike_catalog (
   rear_axle_type text, -- QR, thru_12mm
   freehub_type text, -- shimano_hg, sram_xd, microspline
   spoke_count integer, -- 24, 28, 32, 36
-  
+
   -- Tires
   tire_size_front text, -- '700x25c', '29x2.2'
   tire_size_rear text,
   max_tire_width_mm numeric(5,1),
-  
+
   -- Cockpit
   handlebar_type text, -- drop, flat, riser
   stem_length_mm integer,
   seatpost_diameter_mm numeric(4,1), -- 27.2, 30.9, 31.6
-  
+
   -- Additional Info
   weight_kg numeric(5,2),
   msrp_usd numeric(10,2),
   manufacturer_url text,
   image_url text,
-  
+
   -- Full specs storage (raw JSON from API)
   full_specs_json jsonb,
-  
+
   -- Data Quality
   data_source text not null, -- 'bikebook', 'bike_index', 'manual'
   data_confidence numeric(3,2) default 0.5, -- 0.0 to 1.0
   external_id text, -- ID from source API
   last_verified_at timestamp with time zone,
-  
+
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
-  
+
   unique(brand, model_name, model_year)
 );
 
@@ -1437,33 +1437,33 @@ create table if not exists wheel_hubs (
   tenant_id uuid references tenants(id) on delete cascade not null,
   -- FK to products is added later (products table is defined after wheel tables).
   product_id uuid,
-  
+
   -- Basic Info
   name text not null,
   manufacturer text,
   model text,
   hub_type text check (hub_type in ('front', 'rear')) not null,
-  
+
   -- Critical Measurements (in mm)
   old_mm numeric(5,1) not null, -- Over Locknut Dimension (130, 135, 142, 148, etc.)
   spoke_holes integer not null check (spoke_holes in (24, 28, 32, 36, 40)),
-  
+
   -- Flange Measurements (for spoke length calculation)
   left_flange_diameter_mm numeric(5,2) not null,
   right_flange_diameter_mm numeric(5,2) not null,
   center_to_left_flange_mm numeric(5,2) not null,
   center_to_right_flange_mm numeric(5,2) not null,
-  
+
   -- Compatibility
   brake_type text check (brake_type in ('rim', 'disc_6bolt', 'disc_centerlock')) not null,
   driver_type text check (driver_type in ('freewheel', 'cassette', 'fixed', 'none')) not null,
   axle_type text check (axle_type in ('quick_release', 'thru_axle_12mm', 'thru_axle_15mm', 'thru_axle_20mm', 'bolt_on')) not null,
-  
+
   -- Additional Specs
   weight_grams integer,
   material text, -- 'aluminum', 'steel', 'carbon'
   bearing_type text, -- 'loose_ball', 'sealed_cartridge'
-  
+
   -- Metadata
   notes text,
   image_url text,
@@ -1501,30 +1501,30 @@ create table if not exists wheel_rims (
   tenant_id uuid references tenants(id) on delete cascade not null,
   -- FK to products is added later (products table is defined after wheel tables).
   product_id uuid,
-  
+
   -- Basic Info
   name text not null,
   manufacturer text,
   model text,
-  
+
   -- Critical Measurements (in mm)
   erd_mm numeric(5,2) not null, -- Effective Rim Diameter (critical for spoke calc)
   spoke_holes integer not null check (spoke_holes in (24, 28, 32, 36, 40)),
   internal_width_mm numeric(4,1) not null,
   external_width_mm numeric(4,1),
   rim_depth_mm numeric(4,1),
-  
+
   -- Specifications
   wheel_size text not null, -- '26"', '27.5"', '29"', '700c', '650b'
   brake_type text check (brake_type in ('rim', 'disc')) not null,
   rim_type text check (rim_type in ('clincher', 'tubular', 'tubeless_ready', 'hookless')) not null,
   material text, -- 'aluminum', 'carbon', 'steel'
-  
+
   -- Technical Details
   max_pressure_psi integer,
   weight_grams integer,
   spoke_hole_drilling text, -- 'straight_pull', 'j_bend'
-  
+
   -- Metadata
   notes text,
   image_url text,
@@ -1562,27 +1562,27 @@ create table if not exists wheel_spokes (
   tenant_id uuid references tenants(id) on delete cascade not null,
   -- FK to products is added later (products table is defined after wheel tables).
   product_id uuid,
-  
+
   -- Basic Info
   name text not null,
   manufacturer text,
   model text,
-  
+
   -- Critical Specs
   length_mm integer not null, -- Spoke length (290, 292, 294, etc.)
   gauge numeric(3,2) not null, -- Wire thickness (2.0, 1.8, 2.0-1.8 for butted)
   is_butted boolean not null default false,
-  
+
   -- Specifications
   material text not null default 'stainless_steel', -- 'stainless_steel', 'brass', 'titanium'
   finish text, -- 'silver', 'black', 'brass'
   head_type text check (head_type in ('j_bend', 'straight_pull')) not null default 'j_bend',
   thread_type text, -- 'standard', 'lock'
-  
+
   -- Technical Details
   tensile_strength_n integer, -- Newtons
   weight_grams numeric(4,2),
-  
+
   -- Metadata
   notes text,
   image_url text,
@@ -1617,38 +1617,38 @@ create policy "wheel_spokes_delete" on wheel_spokes for delete to authenticated
 create table if not exists wheel_builds (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  
+
   -- References (FKs added later; bikes/mechanic_jobs tables are defined later)
   bike_id uuid,
   mechanic_job_id uuid,
-  
+
   -- Build Info
   build_name text not null,
   wheel_position text check (wheel_position in ('front', 'rear')) not null,
   build_date date default current_date,
-  
+
   -- Components
   hub_id uuid references wheel_hubs(id) on delete set null,
   rim_id uuid references wheel_rims(id) on delete set null,
   spoke_id uuid references wheel_spokes(id) on delete set null,
-  
+
   -- Build Specifications
   spoke_count integer not null,
   lacing_pattern text not null, -- 'radial', '1-cross', '2-cross', '3-cross', '4-cross'
-  
+
   -- Calculated Spoke Lengths (in mm)
   left_spoke_length_mm numeric(5,2),
   right_spoke_length_mm numeric(5,2),
-  
+
   -- Actual Spoke Products Used (for inventory)
   -- FK to products is added later (products table is defined after wheel tables).
   left_spoke_product_id uuid,
   right_spoke_product_id uuid,
-  
+
   -- Additional Components
   nipple_type text, -- 'brass', 'aluminum', 'brass_lock'
   rim_tape_width_mm integer,
-  
+
   -- Metadata
   notes text,
   mechanic_notes text,
@@ -1709,19 +1709,19 @@ begin
   if p_erd_mm is null or p_erd_mm <= 0 then
     raise exception 'Invalid ERD: %', p_erd_mm;
   end if;
-  
+
   if p_spoke_holes not in (24, 28, 32, 36, 40) then
     raise exception 'Invalid spoke hole count: %. Must be 24, 28, 32, 36, or 40', p_spoke_holes;
   end if;
-  
+
   if p_cross_pattern < 0 or p_cross_pattern > 4 then
     raise exception 'Invalid cross pattern: %. Must be 0-4', p_cross_pattern;
   end if;
-  
+
   -- Calculate radii
   v_rim_radius := p_erd_mm / 2.0;
   v_flange_radius := p_flange_diameter_mm / 2.0;
-  
+
   -- Calculate spoke angle based on lacing pattern
   -- Radial (0-cross): angle = 0
   -- Cross patterns: angle depends on number of crossings
@@ -1731,7 +1731,7 @@ begin
     -- Angle between spoke holes in radians
     v_spoke_angle_rad := (2 * v_pi * p_cross_pattern) / p_spoke_holes;
   end if;
-  
+
   -- ProWheelBuilder Formula:
   -- L = √(R² + H² + D² - 2*R*H*cos(α))
   v_spoke_length := sqrt(
@@ -1740,7 +1740,7 @@ begin
     power(p_center_to_flange_mm, 2) -
     (2 * v_rim_radius * v_flange_radius * cos(v_spoke_angle_rad))
   );
-  
+
   -- Return length rounded to 0.1mm precision
   return round(v_spoke_length, 1);
 end;
@@ -1772,11 +1772,11 @@ begin
   into v_rim_spoke_holes, v_rim_brake_type
   from wheel_rims r
   where r.id = p_rim_id and r.tenant_id = p_tenant_id;
-  
+
   if not found then
     raise exception 'Rim not found: %', p_rim_id;
   end if;
-  
+
   -- Find matching hubs
   return query
   select
@@ -1848,17 +1848,17 @@ begin
     create trigger trg_wheel_hubs_updated_at before update on wheel_hubs
       for each row execute procedure public.set_updated_at();
   end if;
-  
+
   if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_rims_updated_at') then
     create trigger trg_wheel_rims_updated_at before update on wheel_rims
       for each row execute procedure public.set_updated_at();
   end if;
-  
+
   if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_spokes_updated_at') then
     create trigger trg_wheel_spokes_updated_at before update on wheel_spokes
       for each row execute procedure public.set_updated_at();
   end if;
-  
+
   if not exists (select 1 from pg_trigger where tgname = 'trg_wheel_builds_updated_at') then
     create trigger trg_wheel_builds_updated_at before update on wheel_builds
       for each row execute procedure public.set_updated_at();
@@ -3156,76 +3156,76 @@ grant execute on function public.search_products(text, uuid, int) to authenticat
 do $$
 begin
   -- is_set: True if this product is a parent set product
-  if not exists (select 1 from information_schema.columns 
+  if not exists (select 1 from information_schema.columns
     where table_name = 'products' and column_name = 'is_set') then
     alter table products add column is_set boolean not null default false;
   end if;
 
   -- set_type: Type of set for UI hints ('pair', 'front_rear', 'left_right', 'custom')
-  if not exists (select 1 from information_schema.columns 
+  if not exists (select 1 from information_schema.columns
     where table_name = 'products' and column_name = 'set_type') then
     alter table products add column set_type text;
   end if;
 
   -- parent_set_id: If this is a component, references the parent set
-  if not exists (select 1 from information_schema.columns 
+  if not exists (select 1 from information_schema.columns
     where table_name = 'products' and column_name = 'parent_set_id') then
     alter table products add column parent_set_id uuid references products(id) on delete set null;
   end if;
 
   -- component_label: For components, stores the label like "Delantero", "Trasero"
-  if not exists (select 1 from information_schema.columns 
+  if not exists (select 1 from information_schema.columns
     where table_name = 'products' and column_name = 'component_label') then
     alter table products add column component_label text;
   end if;
 
   -- component_position: For ordering components in the set (1, 2, 3...)
-  if not exists (select 1 from information_schema.columns 
+  if not exists (select 1 from information_schema.columns
     where table_name = 'products' and column_name = 'component_position') then
     alter table products add column component_position integer;
   end if;
 end $$;
 
 -- Indexes for fast lookups
-create index if not exists idx_products_parent_set 
+create index if not exists idx_products_parent_set
   on products(parent_set_id) where parent_set_id is not null;
-create index if not exists idx_products_is_set 
+create index if not exists idx_products_is_set
   on products(is_set) where is_set = true;
 
 -- Product Set Components Table: Links parent sets to their child products
 create table if not exists product_set_components (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  
+
   -- Parent set product
   set_product_id uuid references products(id) on delete cascade not null,
-  
+
   -- Child component product
   component_product_id uuid references products(id) on delete cascade not null,
-  
+
   -- Component metadata
   component_label text not null,        -- "Delantero", "Trasero", "Izquierdo", "Derecho"
   component_position integer not null,  -- Order: 1, 2, 3...
   quantity_in_set integer not null default 1,  -- Usually 1, could be 2 for "par de pedales"
-  
+
   -- Pricing ratios (for calculating component prices from set price)
   cost_ratio numeric(5,4),   -- 0.4 = 40% of set cost goes to this component
   price_ratio numeric(5,4),  -- 0.6 = 60% of set price goes to this component
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  
+
   -- Constraints
   unique(set_product_id, component_product_id),
   unique(set_product_id, component_position)
 );
 
 -- Indexes for product_set_components
-create index if not exists idx_product_set_components_tenant 
+create index if not exists idx_product_set_components_tenant
   on product_set_components(tenant_id);
-create index if not exists idx_product_set_components_set 
+create index if not exists idx_product_set_components_set
   on product_set_components(set_product_id);
-create index if not exists idx_product_set_components_component 
+create index if not exists idx_product_set_components_component
   on product_set_components(component_product_id);
 
 -- Enable RLS on product_set_components
@@ -3257,7 +3257,7 @@ create policy "product_set_components_delete" on product_set_components
 do $$
 begin
   if not exists (select 1 from pg_trigger where tgname = 'trg_product_set_components_updated_at') then
-    create trigger trg_product_set_components_updated_at 
+    create trigger trg_product_set_components_updated_at
       before update on product_set_components
       for each row execute function public.set_updated_at();
   end if;
@@ -3278,7 +3278,7 @@ language plpgsql
 as $$
 begin
   return query
-  select 
+  select
     psc.component_product_id as component_id,
     p.name as component_name,
     psc.component_label,
@@ -3307,7 +3307,7 @@ begin
   from product_set_components psc
   join products p on p.id = psc.component_product_id
   where psc.set_product_id = p_set_product_id;
-  
+
   return coalesce(v_min_sets, 0);
 end;
 $$;
@@ -3328,7 +3328,7 @@ begin
     where psc.set_product_id = p_set_product_id
       and coalesce(p.stock_quantity, p.inventory_qty, 0) >= psc.quantity_in_set
   ) into v_has_stock;
-  
+
   -- Check if at least one component is missing stock
   select exists (
     select 1 from product_set_components psc
@@ -3336,7 +3336,7 @@ begin
     where psc.set_product_id = p_set_product_id
       and coalesce(p.stock_quantity, p.inventory_qty, 0) < psc.quantity_in_set
   ) into v_missing_stock;
-  
+
   -- Partial = some have stock AND some don't
   return v_has_stock and v_missing_stock;
 end;
@@ -3346,7 +3346,7 @@ $$;
 drop view if exists public.products_with_sets cascade;
 
 create or replace view public.products_with_sets as
-select 
+select
   p.*,
   -- For sets: aggregate component info
   case when p.is_set then
@@ -3421,10 +3421,10 @@ exception
 end $$;
 
 -- Migration: Update constraint to include 'import' type
-do $$ 
+do $$
 begin
   alter table stock_adjustments drop constraint if exists stock_adjustments_adjustment_type_check;
-  alter table stock_adjustments add constraint stock_adjustments_adjustment_type_check 
+  alter table stock_adjustments add constraint stock_adjustments_adjustment_type_check
     check (adjustment_type in ('manual', 'correction', 'initial', 'damage', 'loss', 'found', 'import', 'purchase', 'count_gain', 'count_loss', 'theft', 'internal_use'));
 exception
   when others then null;
@@ -3564,7 +3564,7 @@ begin
     if v_adjustment_qty = 0 then
       return NEW;
     end if;
-    
+
     v_context := current_setting('app.stock_adjustment_context', true);
 
     -- Determine adjustment type based on context
@@ -3572,10 +3572,10 @@ begin
       v_adjustment_type := 'import';
       v_reason := coalesce(current_setting('app.import_reason', true), 'Stock updated via import');
       v_reference := current_setting('app.import_reference', true);
-    
+
     elsif v_context = 'purchase' then
       -- ✅ NEW: Handle purchase context
-      v_adjustment_type := 'purchase'; 
+      v_adjustment_type := 'purchase';
       v_reason := 'Compra recibida (Invoice ' || coalesce(current_setting('app.stock_adjustment_reference', true), 'Unknown') || ')';
       v_reference := current_setting('app.stock_adjustment_reference', true);
 
@@ -3611,7 +3611,7 @@ begin
   elsif (TG_OP = 'INSERT' and NEW.stock_quantity > 0) then
     -- Track initial stock logic
     v_context := current_setting('app.stock_adjustment_context', true);
-    
+
     if v_context = 'import' then
       v_adjustment_type := 'import';
       v_reason := coalesce(current_setting('app.import_reason', true), 'Initial stock via import');
@@ -3672,7 +3672,7 @@ begin
   else
     NEW.category_name := null;
   end if;
-  
+
   -- Update supplier_name from suppliers table
   if NEW.supplier_id is not null then
     select name into NEW.supplier_name
@@ -3681,7 +3681,7 @@ begin
   else
     NEW.supplier_name := null;
   end if;
-  
+
   return NEW;
 end;
 $$ language plpgsql;
@@ -3704,7 +3704,7 @@ begin
     set category_name = NEW.name
     where category_id = NEW.id;
   end if;
-  
+
   return NEW;
 end;
 $$ language plpgsql;
@@ -3733,7 +3733,7 @@ begin
     set supplier_name = NEW.name
     where supplier_id = NEW.id;
   end if;
-  
+
   return NEW;
 end;
 $$ language plpgsql;
@@ -3810,55 +3810,55 @@ begin
 
   if old_table_exists then
     raise notice 'Found old categories table, migrating data...';
-    
+
     -- Check which columns exist in old table
     select exists (
-      select 1 from information_schema.columns 
-      where table_schema = 'public' 
-      and table_name = 'categories' 
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+      and table_name = 'categories'
       and column_name = 'sort_order'
     ) into has_sort_order;
-    
+
     select exists (
-      select 1 from information_schema.columns 
-      where table_schema = 'public' 
-      and table_name = 'categories' 
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+      and table_name = 'categories'
       and column_name = 'description'
     ) into has_description;
-    
+
     select exists (
-      select 1 from information_schema.columns 
-      where table_schema = 'public' 
-      and table_name = 'categories' 
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+      and table_name = 'categories'
       and column_name = 'image_url'
     ) into has_image_url;
-    
+
     -- Build dynamic SQL based on available columns
     migration_sql := 'insert into product_categories (id, name, full_path, parent_id, level, description, image_url, is_active, sort_order, created_at, updated_at) ' ||
                      'select id, name, name as full_path, null as parent_id, 0 as level, ';
-    
+
     if has_description then
       migration_sql := migration_sql || 'description, ';
     else
       migration_sql := migration_sql || 'null as description, ';
     end if;
-    
+
     if has_image_url then
       migration_sql := migration_sql || 'image_url, ';
     else
       migration_sql := migration_sql || 'null as image_url, ';
     end if;
-    
+
     migration_sql := migration_sql || 'coalesce(is_active, true) as is_active, ';
-    
+
     if has_sort_order then
       migration_sql := migration_sql || 'coalesce(sort_order, 0) as sort_order, ';
     else
       migration_sql := migration_sql || '0 as sort_order, ';
     end if;
-    
+
     migration_sql := migration_sql || 'created_at, updated_at from categories on conflict (id) do nothing';
-    
+
     -- Execute migration
     execute migration_sql;
 
@@ -3903,7 +3903,7 @@ begin
 end $$;
 
 create index if not exists idx_products_category_id on products(category_id);
- 
+
 create table if not exists suppliers (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
@@ -4136,7 +4136,7 @@ begin
   if NEW.stock_quantity != NEW.inventory_qty then
     NEW.inventory_qty := NEW.stock_quantity;
   end if;
-  
+
   -- Use whichever column is set (prefer stock_quantity as source of truth)
   v_current_stock := coalesce(NEW.stock_quantity, NEW.inventory_qty, 0);
 
@@ -4151,24 +4151,24 @@ begin
       and status in ('pending', 'ordered');
     return NEW;
   end if;
-  
+
   -- AUTO-REMOVAL: If stock is now ABOVE minimum level, remove from pending list
   if v_current_stock > NEW.min_stock_level then
     delete from smart_purchase_list
     where product_id = NEW.id
     and status = 'pending'
     and tenant_id = NEW.tenant_id;
-    
+
     if found then
       raise notice '🗑️ Auto-removed product % (%) from purchase list - stock restored to %', NEW.name, NEW.sku, v_current_stock;
     end if;
-    
+
     return NEW;
   end if;
-  
+
   -- AUTO-ADD: Trigger when stock is at or below minimum level
   if v_current_stock <= NEW.min_stock_level then
-    
+
     -- Check if product is already in the purchase list with pending/ordered status
     if exists (
       select 1 from smart_purchase_list
@@ -4183,10 +4183,10 @@ begin
       where product_id = NEW.id
       and status in ('pending', 'ordered')
       and tenant_id = NEW.tenant_id;
-      
+
       return NEW;
     end if;
-    
+
     -- Get supplier info (use default supplier if product has one)
     select s.id, s.name into v_supplier_id, v_supplier_name
     from suppliers s
@@ -4194,10 +4194,10 @@ begin
     and s.is_active = true
     order by s.created_at asc
     limit 1;
-    
+
     -- Calculate rotation KPI (sales per day over last 30 days)
     -- Use JSONB items array since we don't have a separate line items table
-    select 
+    select
       coalesce(
         (select count(*)::numeric / 30.0
          from sales_invoices si,
@@ -4207,50 +4207,50 @@ begin
          and si.date >= now() - interval '30 days'),
         0
       ) into v_rotation_kpi;
-    
+
     -- Average daily consumption
     v_avg_daily_consumption := greatest(v_rotation_kpi, 0.1);
-    
+
     -- Days since last purchase
     -- Use JSONB items array since we don't have a separate line items table
-    select 
+    select
       extract(day from now() - max(pi.date))::integer into v_days_since_last_purchase
     from purchase_invoices pi,
     jsonb_array_elements(pi.items) as item
     where item->>'product_id' = NEW.id::text
     and pi.tenant_id = NEW.tenant_id;
-    
+
     v_days_since_last_purchase := coalesce(v_days_since_last_purchase, 999);
-    
+
     -- Suggested quantity: enough to reach max stock or at least cover 30 days
     v_suggested_qty := greatest(
       NEW.max_stock_level - v_current_stock,
       ceil(v_avg_daily_consumption * 30)::integer,
       1
     );
-    
+
     -- Lead time (default 7 days, could be supplier-specific in the future)
     v_lead_time_days := 7;
-    
+
     -- Estimated stockout date
     if v_avg_daily_consumption > 0 then
       v_estimated_stockout_date := now() + (v_current_stock / v_avg_daily_consumption || ' days')::interval;
     else
       v_estimated_stockout_date := null;
     end if;
-    
+
     -- Calculate priority (0-100 scale)
     -- Formula: rotation * 0.6 + urgency * 0.3 + days_since_purchase * 0.1
     v_priority := least(100, greatest(0,
       (v_rotation_kpi * 10 * 0.6) + -- rotation scaled to 0-100
-      (case 
-        when v_current_stock = 0 then 100 
+      (case
+        when v_current_stock = 0 then 100
         when coalesce(NEW.min_stock_level, 0) = 0 then 50 -- Default urgency when min_stock_level is 0 or null
-        else (1 - (v_current_stock::numeric / NEW.min_stock_level)) * 100 
+        else (1 - (v_current_stock::numeric / NEW.min_stock_level)) * 100
       end * 0.3) + -- urgency
       (least(v_days_since_last_purchase, 100) * 0.1) -- days since last purchase capped at 100
     ));
-    
+
     -- Insert into smart purchase list
     insert into smart_purchase_list (
       tenant_id,
@@ -4291,10 +4291,10 @@ begin
       'Auto-added: stock at or below minimum level',
       now()
     );
-    
+
     raise notice '✅ Auto-added product % (%) to purchase list with priority %', NEW.name, NEW.sku, v_priority;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -4323,10 +4323,10 @@ begin
     for v_item in select * from jsonb_array_elements(NEW.items)
     loop
       v_product_id := (v_item->>'product_id')::uuid;
-      
+
       if v_product_id is not null then
         update smart_purchase_list spl
-        set 
+        set
           status = 'ordered',
           linked_purchase_invoice_id = NEW.id,
           ordered_date = coalesce(ordered_date, now()),
@@ -4339,18 +4339,18 @@ begin
       end if;
     end loop;
   end if;
-  
+
   -- When invoice is received or paid, UPDATE status to 'received' (keep history!)
   if NEW.status in ('received', 'paid') and OLD.status not in ('received', 'paid') then
     -- Loop through items in the JSONB array
     for v_item in select * from jsonb_array_elements(NEW.items)
     loop
       v_product_id := (v_item->>'product_id')::uuid;
-      
+
       if v_product_id is not null then
         -- Update status to 'received' and record the date + final stock
         update smart_purchase_list
-        set 
+        set
           status = 'received',
           received_date = now(),
           stock_at_receipt = (select stock_quantity from products where id = v_product_id),
@@ -4359,12 +4359,12 @@ begin
           and tenant_id = NEW.tenant_id
           and status in ('pending', 'ordered')
           and (linked_purchase_invoice_id is null or linked_purchase_invoice_id = NEW.id);
-        
+
         raise notice '✅ Marked product % as received in purchase list (invoice % received)', v_product_id, NEW.id;
       end if;
     end loop;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -4396,8 +4396,8 @@ declare
   v_invoice_item jsonb;
 begin
   -- Loop through all received items that don't have stock_at_receipt yet
-  for v_item in 
-    select 
+  for v_item in
+    select
       spl.id,
       spl.product_id,
       spl.stock_at_order,
@@ -4410,20 +4410,20 @@ begin
       and spl.stock_at_order is not null
   loop
     -- Get the purchased quantity from the invoice
-    select 
+    select
       sum((item->>'quantity')::integer) into v_purchased_qty
     from purchase_invoices pi,
          jsonb_array_elements(pi.items) as item
     where pi.id = v_item.linked_purchase_invoice_id
       and nullif(item->>'product_id', '')::uuid = v_item.product_id;
-    
+
     if v_purchased_qty is not null then
       -- Calculate stock_at_receipt = stock_at_order + purchased_quantity
       update smart_purchase_list
       set stock_at_receipt = v_item.stock_at_order + v_purchased_qty
       where id = v_item.id;
-      
-      raise notice '✅ Backfilled stock_at_receipt for product % (was %, purchased %, now %)', 
+
+      raise notice '✅ Backfilled stock_at_receipt for product % (was %, purchased %, now %)',
         v_item.product_id, v_item.stock_at_order, v_purchased_qty, v_item.stock_at_order + v_purchased_qty;
     end if;
   end loop;
@@ -4485,7 +4485,7 @@ begin
   perform pg_catalog.set_config('app.stock_adjustment_context', 'import', true);
   perform pg_catalog.set_config('app.import_reference', p_import_reference, true);
   perform pg_catalog.set_config('app.import_reason', p_import_reason, true);
-  
+
   -- Update the product (trigger will see the import context)
   update products
   set
@@ -4503,21 +4503,21 @@ begin
     updated_at = now()
   where tenant_id = p_tenant_id
     and sku = p_sku;
-  
+
   get diagnostics v_updated_count = row_count;
-  
+
   -- Clear import context
   perform pg_catalog.set_config('app.stock_adjustment_context', '', true);
   perform pg_catalog.set_config('app.import_reference', '', true);
   perform pg_catalog.set_config('app.import_reason', '', true);
-  
+
   -- Return result
   v_result = jsonb_build_object(
     'success', v_updated_count > 0,
     'updated_count', v_updated_count,
     'sku', p_sku
   );
-  
+
   return v_result;
 end;
 $$;
@@ -4538,20 +4538,20 @@ grant execute on function public.import_product_with_context(uuid, text, jsonb, 
 do $$
 begin
   -- Fix IVA Débito Fiscal (sales tax collected - we owe to government = liability)
-  update accounts 
+  update accounts
   set type = 'liability', category = 'currentLiability'
   where code = '2150' and type = 'tax';
-  
+
   -- Fix IVA Crédito Fiscal (purchase tax paid - government owes us = asset)
-  update accounts 
+  update accounts
   set type = 'asset', category = 'currentAsset'
   where code = '2120' and type = 'tax';
-  
+
   -- Fix any other tax accounts to liability by default
-  update accounts 
+  update accounts
   set type = 'liability', category = 'currentLiability'
   where type = 'tax';
-  
+
   raise notice '✅ Migrated tax-type accounts to proper liability/asset types';
 exception
   when undefined_table then null;
@@ -4659,7 +4659,7 @@ do $$
 begin
   -- Drop old constraint if it includes 'tax'
   alter table public.accounts drop constraint if exists accounts_type_check;
-  
+
   -- Add new constraint without 'tax' type
   alter table public.accounts
     add constraint accounts_type_check
@@ -4991,7 +4991,7 @@ begin
     if v_tenant_id is null then
       raise exception 'Cannot create account without tenant_id. User must be authenticated.';
     end if;
-    
+
     -- Multi-tenant structure: use (tenant_id, code) unique constraint
     insert into public.accounts (tenant_id, code, name, type, category, description, parent_id)
     values (v_tenant_id, p_code, p_name, p_type, p_category, p_description, v_parent_id)
@@ -5104,7 +5104,7 @@ create table if not exists sales_invoices (
 );
 
 -- Add flexible tax columns to sales_invoices
-alter table sales_invoices 
+alter table sales_invoices
   add column if not exists tax_treatment text not null default 'no_tax' check (tax_treatment in ('no_tax', 'tax_included')),
   add column if not exists net_amount numeric(12,2) not null default 0;
 
@@ -5119,23 +5119,23 @@ do $$
 begin
   -- CRITICAL: Disable triggers during migration to avoid journal entry creation without user context
   alter table sales_invoices disable trigger trg_sales_invoices_change;
-  
+
   -- Set net_amount based on existing iva_amount
   update sales_invoices
   set net_amount = total - iva_amount
   where net_amount = 0 and total > 0;
-  
+
   -- Set tax_treatment based on whether IVA was applied
   update sales_invoices
-  set tax_treatment = case 
+  set tax_treatment = case
     when iva_amount > 0 then 'tax_included'
     else 'no_tax'
   end
   where tax_treatment = 'no_tax' and total > 0;
-  
+
   -- Re-enable trigger
   alter table sales_invoices enable trigger trg_sales_invoices_change;
-  
+
   raise notice 'Migrated % sales invoices with tax data', (select count(*) from sales_invoices where total > 0);
 exception
   when undefined_table then
@@ -5146,9 +5146,9 @@ exception
     update sales_invoices
     set net_amount = total - iva_amount
     where net_amount = 0 and total > 0;
-    
+
     update sales_invoices
-    set tax_treatment = case 
+    set tax_treatment = case
       when iva_amount > 0 then 'tax_included'
       else 'no_tax'
     end
@@ -5280,7 +5280,7 @@ create index if not exists idx_payment_methods_account_id on payment_methods(acc
 -- ============================================================================
 -- JOB STATUSES TABLE (Dynamic, UI-Configurable - Notion-style)
 -- ============================================================================
--- Custom statuses for mechanic jobs (pegas), fully customizable per tenant.
+-- Custom statuses for mechanic jobs (trabajos), fully customizable per tenant.
 -- Users can create, edit, delete, reorder statuses with custom names and colors.
 -- Grouped by phase: todo (not started), in_progress, complete
 
@@ -5366,7 +5366,7 @@ end $$;
 -- 🏗️ MULTI-TENANT ONBOARDING SYSTEM - FOUNDATION DATA SEEDING
 -- ============================================================================
 -- This section contains ALL functions for automatic tenant initialization.
--- 
+--
 -- ARCHITECTURE OVERVIEW:
 -- ----------------------
 -- 1. User signs up → auth.users INSERT
@@ -5417,7 +5417,7 @@ declare
 begin
   -- Disable RLS temporarily for this function
   perform set_config('request.jwt.claim.sub', p_tenant_id::text, true);
-  
+
   -- Find or create cash account (1101 - Caja)
   select id into v_cash_account_id
   from accounts
@@ -5453,7 +5453,7 @@ begin
   -- Insert default payment methods (only if they don't exist)
   -- CRITICAL: Use lowercase codes to match Flutter POS expectations
   v_count := 0;
-  
+
   if not exists (select 1 from payment_methods where tenant_id = p_tenant_id and code = 'cash') then
     insert into payment_methods (tenant_id, code, name, account_id, requires_reference, default_tax_treatment, icon, sort_order, is_active)
     values (p_tenant_id, 'cash', 'Efectivo', v_cash_account_id, false, 'no_tax', 'cash', 1, true);
@@ -5644,48 +5644,48 @@ declare
   v_count int := 0;
 begin
   raise notice 'Seeding chart of accounts for tenant %', p_tenant_id;
-  
+
   -- Insert standard accounts for Chilean bikeshop operations
   -- Only insert if they don't already exist (idempotent)
-  
+
   -- ASSETS
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
-  select p_tenant_id, '1101', 'Caja General', 'asset', 'currentAsset', 
+  select p_tenant_id, '1101', 'Caja General', 'asset', 'currentAsset',
     'Efectivo disponible en caja y fondos inmediatos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1101');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '1110', 'Bancos - Cuenta Corriente', 'asset', 'currentAsset',
     'Saldos disponibles en cuentas corrientes bancarias', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1110');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset',
     'Saldos pendientes de cobro a clientes por ventas a crédito', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1130');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '1105', 'Inventario de Productos', 'asset', 'currentAsset',
     'Valor de productos y repuestos en stock', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1105');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '1190', 'Otros Activos Corrientes', 'asset', 'currentAsset',
     'Activos circulantes no clasificados en otra cuenta específica', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '1190');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- LIABILITIES
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '2101', 'Cuentas por Pagar Comerciales', 'liability', 'currentLiability',
     'Saldos pendientes de pago a proveedores', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2101');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- TAX ACCOUNTS (Critical for Chilean IVA)
   -- IVA Débito = LIABILITY (tax we owe to government from sales)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
@@ -5693,59 +5693,59 @@ begin
     'IVA recaudado en ventas (19%)', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2150');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- IVA Crédito = ASSET (tax refund we're owed from purchases)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '2120', 'IVA Crédito Fiscal', 'asset', 'currentAsset',
     'IVA pagado en compras (19%)', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2120');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '2105', 'Cuentas por Pagar - Gastos', 'liability', 'currentLiability',
     'Obligaciones por gastos operacionales', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2105');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- SUELDOS POR PAGAR (Salaries Payable - for payroll)
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '2106', 'Sueldos por Pagar', 'liability', 'currentLiability',
     'Obligaciones pendientes de pago por remuneraciones al personal', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '2106');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EQUITY
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '3101', 'Capital Social', 'equity', 'capital',
     'Aporte inicial de los socios', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '3101');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '3201', 'Utilidades Retenidas', 'equity', 'retainedEarnings',
     'Ganancias acumuladas de periodos anteriores', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '3201');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- INCOME
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '4100', 'Ventas de Productos', 'income', 'operatingIncome',
     'Ingresos por venta de bicicletas, repuestos y accesorios', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4100');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '4102', 'Servicios de Mantenimiento', 'income', 'operatingIncome',
     'Ingresos por servicios de reparación y mantención', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4102');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '4201', 'Otros Ingresos', 'income', 'nonOperatingIncome',
     'Ingresos no operacionales', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '4201');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EXPENSES - Cost of Goods Sold
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '5100', 'Costo de Ventas', 'expense', 'costOfGoodsSold',
@@ -5758,107 +5758,107 @@ begin
     'Materiales y consumibles de uso rápido aplicados directamente en el taller', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '5101');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EXPENSES - Personnel
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6101', 'Sueldos y Salarios', 'expense', 'operatingExpense',
     'Remuneraciones del personal y pagos de nómina', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6101');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6102', 'Cotizaciones Previsionales', 'expense', 'operatingExpense',
     'Aportes previsionales, salud y seguros del personal', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6102');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6103', 'Honorarios Profesionales', 'expense', 'operatingExpense',
     'Servicios profesionales externos y consultorías', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6103');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EXPENSES - Facilities
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6201', 'Arriendo de Locales', 'expense', 'operatingExpense',
     'Pagos de arriendo de oficinas, locales y bodegas', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6201');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6202', 'Servicios Básicos', 'expense', 'operatingExpense',
     'Electricidad, agua, gas y otros servicios básicos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6202');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6203', 'Telefonía e Internet', 'expense', 'operatingExpense',
     'Planes de telefonía fija, móvil y servicios de internet', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6203');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6204', 'Mantención y Reparaciones', 'expense', 'operatingExpense',
     'Mantenimiento de infraestructura y equipos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6204');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6205', 'Suministros de Oficina', 'expense', 'operatingExpense',
     'Materiales de oficina, papelería e insumos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6205');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EXPENSES - Marketing
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6301', 'Marketing y Publicidad', 'expense', 'operatingExpense',
     'Campañas de marketing, publicidad y promoción', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6301');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6302', 'Comisiones de Venta', 'expense', 'operatingExpense',
     'Comisiones pagadas a vendedores', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6302');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   -- EXPENSES - Other
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6401', 'Gastos de Viaje', 'expense', 'operatingExpense',
     'Traslados, alojamiento y viáticos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6401');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6501', 'Seguros', 'expense', 'operatingExpense',
     'Primas de seguros patrimoniales y de responsabilidad', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6501');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6502', 'Patentes y Contribuciones', 'expense', 'taxExpense',
     'Patentes municipales y contribuciones', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6502');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6601', 'Gastos Financieros', 'expense', 'financialExpense',
     'Intereses de créditos y comisiones bancarias', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6601');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6701', 'Depreciación', 'expense', 'operatingExpense',
     'Depreciación de activos fijos', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6701');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6801', 'Gastos Varios', 'expense', 'operatingExpense',
     'Gastos menores no clasificados', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6801');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   raise notice '✓ Created % accounts for tenant %', v_count, p_tenant_id;
   return format('✓ Created %s accounts for tenant %s', v_count, p_tenant_id);
 end;
@@ -5884,52 +5884,52 @@ declare
   v_count int := 0;
 begin
   raise notice 'Seeding company settings for tenant %', p_tenant_id;
-  
+
   -- Get tenant info
   select shop_name, owner_email into v_shop_name, v_owner_email
   from tenants where id = p_tenant_id;
-  
+
   -- Insert default settings (only if they don't exist)
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'tax_rate_iva', '19'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'tax_rate_iva');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'business_name', coalesce(v_shop_name, 'Mi Tienda de Bicicletas')
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'business_name');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'contact_email', coalesce(v_owner_email, '')
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'contact_email');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'currency', 'CLP'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'currency');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'fiscal_year_start_month', '1'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'fiscal_year_start_month');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'invoice_prefix', 'FV-'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'invoice_prefix');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'purchase_prefix', 'FC-'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'purchase_prefix');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into company_settings (tenant_id, key, value)
   select p_tenant_id, 'enable_inventory', 'true'
   where not exists (select 1 from company_settings where tenant_id = p_tenant_id and key = 'enable_inventory');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   raise notice '✓ Created % company settings for tenant %', v_count, p_tenant_id;
   return format('✓ Created %s company settings for tenant %s', v_count, p_tenant_id);
 end;
@@ -5956,47 +5956,47 @@ declare
   v_count int := 0;
 begin
   raise notice 'Seeding website settings for tenant %', p_tenant_id;
-  
+
   -- Get tenant info
   select shop_name, owner_email, subdomain into v_shop_name, v_owner_email, v_subdomain
   from tenants where id = p_tenant_id;
-  
+
   -- Insert default website settings
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'site_title', coalesce(v_shop_name, 'Mi Tienda'), 'Título del sitio web'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'site_title');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'site_description', 'Venta y reparación de bicicletas', 'Descripción del sitio'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'site_description');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'contact_email', coalesce(v_owner_email, ''), 'Email de contacto'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'contact_email');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'enable_ecommerce', 'true', 'Habilitar tienda online'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'enable_ecommerce');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'currency', 'CLP', 'Moneda de la tienda'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'currency');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'shipping_enabled', 'false', 'Habilitar envíos'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'shipping_enabled');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'theme', 'light', 'Tema visual del sitio'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'theme');
   v_count := v_count + (case when found then 1 else 0 end);
-  
+
   raise notice '✓ Created % website settings for tenant %', v_count, p_tenant_id;
   return format('✓ Created %s website settings for tenant %s', v_count, p_tenant_id);
 end;
@@ -6015,31 +6015,31 @@ security definer
 as $$
 begin
   raise notice '🏗️ Initializing new tenant: % (ID: %)', NEW.shop_name, NEW.id;
-  
+
   -- Seed chart of accounts (CRITICAL - must come first, needed by payment methods)
   perform public.seed_chart_of_accounts(NEW.id);
   raise notice '  ✓ Chart of accounts created';
-  
+
   -- Seed payment methods (uses accounts created above)
   perform public.seed_payment_methods_for_tenant(NEW.id);
   raise notice '  ✓ Payment methods configured';
-  
-  -- Seed job statuses (Notion-style custom statuses for pegas)
+
+  -- Seed job statuses (Notion-style custom statuses for trabajos)
   perform public.seed_job_statuses_for_tenant(NEW.id);
   raise notice '  ✓ Job statuses configured';
-  
+
   -- Seed company settings
   perform public.seed_company_settings(NEW.id);
   raise notice '  ✓ Company settings initialized';
-  
+
   -- Seed website settings
   perform public.seed_website_settings(NEW.id);
   raise notice '  ✓ Website settings initialized';
-  
+
   -- Seed website pages and navigation (multi-page support)
   perform public.seed_website_pages(NEW.id);
   raise notice '  ✓ Website pages and navigation created';
-  
+
   -- Seed job roles (employee-user linking system)
   perform public.seed_job_roles_for_tenant(NEW.id);
   raise notice '  ✓ Job roles catalog created';
@@ -6047,7 +6047,7 @@ begin
   -- Seed job subjects (component/item catalog for non-bike jobs)
   perform public.seed_job_subjects_for_tenant(NEW.id);
   raise notice '  ✓ Job subjects catalog created';
-  
+
   raise notice '✅ Tenant % fully initialized and ready for use!', NEW.shop_name;
   return NEW;
 end;
@@ -6134,17 +6134,17 @@ begin
 
   if v_has_method_column and not v_has_payment_method_id then
     raise notice 'Migrating sales_payments from method column to payment_method_id...';
-    
+
     -- Get cash payment method ID as default
     select id into v_cash_method_id from payment_methods where code = 'cash' limit 1;
-    
+
     if v_cash_method_id is null then
       raise exception 'Cash payment method not found! Ensure payment_methods table is populated.';
     end if;
-    
+
     -- Add new column (nullable first)
     alter table sales_payments add column payment_method_id uuid;
-    
+
     -- Migrate data: map old method values to payment_method_id
     update sales_payments sp
     set payment_method_id = pm.id
@@ -6157,25 +6157,25 @@ begin
         (sp.method = 'check' and pm.code = 'check') or
         (sp.method = 'other' and pm.code = 'cash')  -- Default 'other' to cash
       );
-    
+
     -- Set default for any remaining nulls
     update sales_payments
     set payment_method_id = v_cash_method_id
     where payment_method_id is null;
-    
+
     -- Add composite foreign key constraint (tenant-scoped)
-    alter table sales_payments 
-      add constraint sales_payments_payment_method_id_fkey 
-      foreign key (tenant_id, payment_method_id) 
+    alter table sales_payments
+      add constraint sales_payments_payment_method_id_fkey
+      foreign key (tenant_id, payment_method_id)
       references payment_methods(tenant_id, id);
-    
+
     -- Drop old method column and constraint
     alter table sales_payments drop constraint if exists sales_payments_method_check;
     alter table sales_payments drop column if exists method;
-    
+
     -- Make payment_method_id NOT NULL
     alter table sales_payments alter column payment_method_id set not null;
-    
+
     raise notice 'Migration complete!';
   elsif not v_has_payment_method_id then
     raise notice 'No existing sales_payments data, payment_method_id will be added by CREATE TABLE';
@@ -6375,7 +6375,7 @@ begin
     null
   );
 
-  v_description := format('Pago factura %s - %s', 
+  v_description := format('Pago factura %s - %s',
     coalesce(v_invoice.invoice_number, v_invoice.id::text),
     v_payment_method.name
   );
@@ -6518,19 +6518,19 @@ begin
   -- Status transition logic based on prepayment model
   -- Standard model: Draft→Sent→Confirmed→Received→Paid
   -- Prepayment model: Draft→Sent→Confirmed→Paid→Received
-  
+
   if v_invoice.status = 'cancelled' then
     -- Cancelled invoices stay cancelled regardless of payments
     v_new_status := 'cancelled';
-    
+
   elsif v_invoice.status IN ('draft', 'sent') then
     -- Pre-confirmation statuses: stay as-is regardless of payments
     v_new_status := v_invoice.status;
-    
+
   elsif v_total >= coalesce(v_invoice.total, 0) then
     -- Fully paid
     v_new_status := 'paid';
-    
+
   elsif v_total > 0 then
     -- Partially paid
     if v_invoice.prepayment_model then
@@ -6548,7 +6548,7 @@ begin
         v_new_status := 'confirmed';
       end if;
     end if;
-    
+
   else
     -- No payments (v_total = 0): revert to previous status in workflow
     if v_invoice.prepayment_model then
@@ -6671,7 +6671,7 @@ begin
     null
   );
 
-  v_description := format('Pago factura compra %s - %s', 
+  v_description := format('Pago factura compra %s - %s',
     coalesce(v_invoice.invoice_number, v_invoice.id::text),
     v_payment_method.name
   );
@@ -6840,7 +6840,7 @@ begin
   end if;
 
   v_status := lower(coalesce(p_invoice.status, 'draft'));
-  
+
   -- Only process if status is posted
   if v_status = any (array['draft','borrador','cancelled','cancelado','cancelada','anulado','anulada']) then
     return;
@@ -6863,7 +6863,7 @@ begin
 
   -- Process each item
   for v_item in
-    select 
+    select
       nullif(item->>'product_id', '')::uuid as product_id,
       (item->>'product_sku')::text as product_sku,
       coalesce(nullif(item->>'purchase_treatment', ''), 'inventory')::text as purchase_treatment,
@@ -6905,14 +6905,14 @@ begin
     if v_is_set then
        -- Iterate over components
        for v_component in
-         select 
+         select
            component_product_id,
            quantity_in_set
          from public.product_set_components
          where set_product_id = v_resolved_product_id
        loop
           v_qty_to_deduct := v_quantity_int * v_component.quantity_in_set;
-          
+
           -- Deduct Component Stock
           update public.products
              set inventory_qty = coalesce(inventory_qty, 0) - v_qty_to_deduct,
@@ -6934,8 +6934,8 @@ begin
               'sales_invoice_component',
               -v_qty_to_deduct,
               v_reference,
-              format('Salida por venta de Set "%s" (Factura %s)', 
-                     v_set_name, 
+              format('Salida por venta de Set "%s" (Factura %s)',
+                     v_set_name,
                      coalesce(nullif(p_invoice.invoice_number, ''), p_invoice.id::text)
               ),
               coalesce(p_invoice.date, now()),
@@ -7209,7 +7209,7 @@ begin
     raise notice 'create_sales_invoice_journal_entry: Entry already exists for invoice %, skipping', p_invoice.invoice_number;
     return;
   end if;
-  
+
   raise notice 'create_sales_invoice_journal_entry: Creating entry for invoice % (status: %)', p_invoice.invoice_number, p_invoice.status;
 
   -- ✅ CRITICAL: Use net_amount (tax-adjusted) if available, fallback to subtotal
@@ -7541,7 +7541,7 @@ begin
   raise notice 'handle_sales_invoice_change: TG_OP=%', TG_OP;
 
   -- 🔄 CIRCULAR SYNC GUARD: Skip if already syncing in either direction
-  if current_setting('app.syncing_job_to_invoice', true) = 'true' or 
+  if current_setting('app.syncing_job_to_invoice', true) = 'true' or
      current_setting('app.syncing_invoice_to_job', true) = 'true' then
     raise notice 'handle_sales_invoice_change: skipping due to active sync';
     if TG_OP = 'DELETE' then return OLD; end if;
@@ -7561,7 +7561,7 @@ begin
   if TG_OP = 'INSERT' then
     v_new_status := lower(coalesce(NEW.status, 'draft'));
     raise notice 'handle_sales_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
-    
+
     -- Only process if status is "confirmed" or "paid" (NOT "draft" or "sent")
     if not (v_new_status = any (v_non_posted)) then
       raise notice 'handle_sales_invoice_change: INSERT with posted status, consuming inventory';
@@ -7570,9 +7570,9 @@ begin
     else
       raise notice 'handle_sales_invoice_change: INSERT with non-posted status (%), skipping', v_new_status;
     end if;
-    
+
     perform public.recalculate_sales_invoice_payments(NEW.id);
-    -- SYNC: Update linked pega with invoice data
+    -- SYNC: Update linked trabajo with invoice data
     perform public.sync_invoice_items_to_job(NEW.id);
     perform public.sync_invoice_status_to_job(NEW.id);
     return NEW;
@@ -7580,7 +7580,7 @@ begin
   elsif TG_OP = 'UPDATE' then
     v_old_status := lower(coalesce(OLD.status, 'draft'));
     v_new_status := lower(coalesce(NEW.status, 'draft'));
-    
+
     raise notice 'handle_sales_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
 
     v_old_posted := not (v_old_status = any (v_non_posted));
@@ -7611,19 +7611,19 @@ begin
       delete from public.journal_entries
       where source_module = 'sales_invoices'
         and source_reference = OLD.invoice_number;
-        
+
       -- Soft-delete associated payments
       raise notice 'handle_sales_invoice_change: reverting to non-posted, soft-deleting payments';
-      update public.sales_payments 
-      set deleted_at = now() 
+      update public.sales_payments
+      set deleted_at = now()
       where invoice_id = OLD.id
         and deleted_at is null;
-        
+
     elsif not v_old_posted and v_new_posted then
       -- Draft/Sent → Confirmed: CREATE journal entry
       raise notice 'handle_sales_invoice_change: changing to posted, creating journal entry';
       perform public.create_sales_invoice_journal_entry(NEW);
-      
+
     elsif v_old_posted and v_new_posted then
       -- Both posted: delete old, create new (amounts might have changed)
       raise notice 'handle_sales_invoice_change: both posted, recreating journal entry';
@@ -7635,9 +7635,9 @@ begin
       -- Both non-posted: no journal entry action
       raise notice 'handle_sales_invoice_change: both non-posted, no journal entry action';
     end if;
-    
+
     perform public.recalculate_sales_invoice_payments(NEW.id);
-    -- SYNC: Update linked pega with invoice changes
+    -- SYNC: Update linked trabajo with invoice changes
     perform public.sync_invoice_items_to_job(NEW.id);
     perform public.sync_invoice_status_to_job(NEW.id);
     return NEW;
@@ -7645,17 +7645,17 @@ begin
   elsif TG_OP = 'DELETE' then
     v_old_status := lower(coalesce(OLD.status, 'draft'));
     raise notice '🔵 handle_sales_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
-    
+
     -- If was posted, restore inventory
     if not (v_old_status = any (v_non_posted)) then
       perform public.restore_sales_invoice_inventory(OLD);
     end if;
-    
+
     -- DELETE invoice journal entry (using invoice_number as reference)
     delete from public.journal_entries
     where source_module = 'sales_invoices'
       and source_reference = OLD.invoice_number;
-    
+
     -- DELETE all payment journal entries for this invoice
     delete from public.journal_entries
     where source_module = 'sales_payments'
@@ -7664,7 +7664,7 @@ begin
           from public.sales_payments sp
          where sp.invoice_id = OLD.id
       );
-    
+
     raise notice '🔵 handle_sales_invoice_change: DELETE completed, now cascade trigger should fire';
     return OLD;
   end if;
@@ -7677,11 +7677,11 @@ do $$
 begin
   -- Drop and recreate trigger to ensure it uses latest function
   drop trigger if exists trg_sales_invoices_change on public.sales_invoices;
-  
+
   create trigger trg_sales_invoices_change
     after insert or update or delete on public.sales_invoices
     for each row execute procedure public.handle_sales_invoice_change();
-    
+
   raise notice 'Trigger trg_sales_invoices_change created successfully';
 exception
   when others then
@@ -7855,24 +7855,24 @@ do $$
 begin
   -- CRITICAL: Disable triggers during migration to avoid journal entry creation without user context
   alter table purchase_invoices disable trigger trg_purchase_invoices_change;
-  
+
   -- Calculate net_amount from existing tax column
-  update purchase_invoices 
-  set net_amount = total - tax 
+  update purchase_invoices
+  set net_amount = total - tax
   where net_amount = 0 and total > 0;
-  
+
   -- Set tax_treatment based on existing tax column
   -- If tax > 0, assume it was a purchase with IVA included
-  update purchase_invoices 
-  set tax_treatment = case 
-    when tax > 0 then 'tax_included' 
-    else 'no_tax' 
-  end 
+  update purchase_invoices
+  set tax_treatment = case
+    when tax > 0 then 'tax_included'
+    else 'no_tax'
+  end
   where tax_treatment = 'no_tax' and total > 0;
-  
+
   -- Re-enable trigger
   alter table purchase_invoices enable trigger trg_purchase_invoices_change;
-  
+
   raise notice 'Migrated % purchase invoices with tax data', (select count(*) from purchase_invoices where total > 0);
 exception
   when undefined_table then
@@ -7880,15 +7880,15 @@ exception
   when undefined_object then
     raise notice 'trg_purchase_invoices_change trigger does not exist yet, running migration without disabling triggers';
     -- Try migration anyway (table exists but trigger doesn't)
-    update purchase_invoices 
-    set net_amount = total - tax 
+    update purchase_invoices
+    set net_amount = total - tax
     where net_amount = 0 and total > 0;
-    
-    update purchase_invoices 
-    set tax_treatment = case 
-      when tax > 0 then 'tax_included' 
-      else 'no_tax' 
-    end 
+
+    update purchase_invoices
+    set tax_treatment = case
+      when tax > 0 then 'tax_included'
+      else 'no_tax'
+    end
     where tax_treatment = 'no_tax' and total > 0;
 end $$;
 
@@ -7996,8 +7996,8 @@ begin
   ) then
     raise notice 'Found old payment_date column, migrating to date...';
     -- Copy data if date is default and payment_date has real data
-    update purchase_payments 
-    set date = payment_date 
+    update purchase_payments
+    set date = payment_date
     where payment_date != date;
     -- Drop old column
     alter table purchase_payments drop column payment_date;
@@ -8040,17 +8040,17 @@ begin
   -- Migrate payment method column
   if v_has_old_method and not v_has_payment_method_id then
     raise notice 'Migrating purchase_payments payment method to payment_method_id...';
-    
+
     -- Get cash payment method ID as default
     select id into v_cash_method_id from payment_methods where code = 'cash' limit 1;
-    
+
     if v_cash_method_id is null then
       raise exception 'Cash payment method not found! Ensure payment_methods table is populated.';
     end if;
-    
+
     -- Add new column (nullable first)
     alter table purchase_payments add column payment_method_id uuid;
-    
+
     -- Try to migrate from 'method' column
     if exists (
       select 1 from information_schema.columns
@@ -8090,21 +8090,21 @@ begin
         );
       alter table purchase_payments drop column payment_method;
     end if;
-    
+
     -- Set default for any remaining nulls
     update purchase_payments
     set payment_method_id = v_cash_method_id
     where payment_method_id is null;
-    
+
     -- Add composite foreign key constraint (tenant-scoped)
-    alter table purchase_payments 
-      add constraint purchase_payments_payment_method_id_fkey 
-      foreign key (tenant_id, payment_method_id) 
+    alter table purchase_payments
+      add constraint purchase_payments_payment_method_id_fkey
+      foreign key (tenant_id, payment_method_id)
       references payment_methods(tenant_id, id);
-    
+
     -- Make payment_method_id NOT NULL
     alter table purchase_payments alter column payment_method_id set not null;
-    
+
     raise notice 'Migration complete for purchase_payments!';
   elsif not v_has_payment_method_id then
     raise notice 'Adding payment_method_id to purchase_payments...';
@@ -8405,12 +8405,12 @@ do $$ begin
   alter table expenses drop constraint if exists expenses_liability_account_id_fkey;
   alter table expenses add constraint expenses_liability_account_id_fkey
     foreign key (tenant_id, liability_account_id) references accounts(tenant_id, id) on delete restrict;
-  
+
   -- payment_account_id -> accounts
   alter table expenses drop constraint if exists expenses_payment_account_id_fkey;
   alter table expenses add constraint expenses_payment_account_id_fkey
     foreign key (tenant_id, payment_account_id) references accounts(tenant_id, id) on delete restrict;
-  
+
   -- payment_method_id -> payment_methods
   alter table expenses drop constraint if exists expenses_payment_method_id_fkey;
   alter table expenses add constraint expenses_payment_method_id_fkey
@@ -8650,7 +8650,7 @@ do $$ begin
   alter table expense_payments drop constraint if exists expense_payments_payment_method_id_fkey;
   alter table expense_payments add constraint expense_payments_payment_method_id_fkey
     foreign key (tenant_id, payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
-  
+
   -- payment_account_id -> accounts
   alter table expense_payments drop constraint if exists expense_payments_payment_account_id_fkey;
   alter table expense_payments add constraint expense_payments_payment_account_id_fkey
@@ -8976,9 +8976,9 @@ begin
 
   -- If already marked as paid with payment_method_id set (immediate payment on creation)
   -- and no separate payment records exist, respect that status
-  if v_prev_payment = 'paid' 
-     and v_expense.payment_method_id is not null 
-     and v_paid = 0 
+  if v_prev_payment = 'paid'
+     and v_expense.payment_method_id is not null
+     and v_paid = 0
      and v_total > 0 then
     v_new_payment := 'paid';
     v_paid := v_total; -- Use total as paid amount
@@ -9925,7 +9925,7 @@ begin
 end $$;
 
 -- ============================================================================
--- STOCK MOVEMENTS LOGIC (View, Triggers) 
+-- STOCK MOVEMENTS LOGIC (View, Triggers)
 -- Added to support unified stock history and purchase corrections.
 -- ============================================================================
 
@@ -9972,11 +9972,11 @@ with movement_documents as (
     sm.type,
     sm.movement_type as raw_movement_type,
     sm.reference,
-    case 
+    case
       when sm.type = 'OUT' then -abs(sm.quantity)
       when sm.type = 'IN' then abs(sm.quantity)
-      else sm.quantity 
-    end as quantity, 
+      else sm.quantity
+    end as quantity,
     sm.notes,
     null::uuid as created_by,
     sm.created_at,
@@ -10069,15 +10069,15 @@ movements_with_resolution as (
    and coalesce(md.raw_movement_type, '') = sa.adjustment_type
 ),
 movements_with_running_stock as (
-  select 
+  select
     m.*,
     greatest(coalesce(p.stock_quantity, 0), coalesce(p.inventory_qty, 0)) as current_stock,
     greatest(coalesce(p.stock_quantity, 0), coalesce(p.inventory_qty, 0)) - coalesce(
       sum(m.quantity) over (
-        partition by m.product_id, m.tenant_id 
+        partition by m.product_id, m.tenant_id
         order by m.transaction_date desc nulls last, m.created_at desc, m.id desc
         rows between unbounded preceding and 1 preceding
-      ), 
+      ),
       0
     )::integer as calculated_stock_after
   from movements_with_resolution m
@@ -10085,7 +10085,7 @@ movements_with_running_stock as (
     on nullif(m.product_id::text, '')::uuid = p.id
    and m.tenant_id = p.tenant_id
 )
-select 
+select
   id,
   product_id,
   product_name,
@@ -10112,21 +10112,21 @@ create or replace function sync_stock_adjustment_to_movement()
 returns trigger as $$
 begin
   insert into stock_movements (
-    tenant_id, 
-    product_id, 
-    date, 
-    type, 
-    movement_type, 
-    reference, 
-    quantity, 
-    notes, 
+    tenant_id,
+    product_id,
+    date,
+    type,
+    movement_type,
+    reference,
+    quantity,
+    notes,
     created_at
   ) values (
-    NEW.tenant_id, 
-    NEW.product_id, 
+    NEW.tenant_id,
+    NEW.product_id,
     coalesce(NEW.adjustment_date, NEW.created_at), -- transaction date
     case when NEW.quantity >= 0 then 'IN' else 'OUT' end,
-    NEW.adjustment_type, 
+    NEW.adjustment_type,
     NEW.reference,
     abs(NEW.quantity),
     NEW.reason,
@@ -10720,7 +10720,7 @@ declare
 begin
   -- Only proceed if the invoice was effectively adding stock
   if OLD.status in ('received', 'paid') then
-    
+
     -- Iterate over the deleted invoice items
     for v_item in select * from jsonb_array_elements(OLD.items)
     loop
@@ -10743,7 +10743,7 @@ begin
             product_id,
             adjustment_type,
             quantity,
-            stock_before, 
+            stock_before,
             stock_after,
             reason,
             reference,
@@ -10761,7 +10761,7 @@ begin
             auth.uid()
         from products p
         where p.id = v_product_id;
-        
+
       end if;
     end loop;
   end if;
@@ -11224,7 +11224,7 @@ declare
   v_quantity_numeric numeric;
   v_quantity_int integer;
   v_net_quantity integer;
-  
+
   -- Set handling variables
   v_is_set boolean;
   v_child record;
@@ -11232,7 +11232,7 @@ declare
 begin
   -- CRITICAL: Set flag to skip stock_adjustment trigger for automatic changes
   perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
-  
+
   if p_invoice.id is null then
     raise notice 'consume_purchase_invoice_inventory: invoice ID is null, returning';
     return;
@@ -11285,27 +11285,27 @@ begin
 
     -- CHECK IF PRODUCT IS A SET
     select is_set into v_is_set from products where id = v_resolved_product_id;
-    
+
     if v_is_set then
         -- LOGIC FOR SETS: Explode into components
         raise notice 'consume_purchase_invoice_inventory: exploding set % into components', v_resolved_product_id;
-        
+
         for v_child in
-            select 
-                component_product_id, 
+            select
+                component_product_id,
                 quantity_in_set
             from product_set_components
             where set_product_id = v_resolved_product_id
         loop
             v_child_qty := v_quantity_int * v_child.quantity_in_set;
-            
+
             -- Update Component Inventory
             update public.products
-            set 
+            set
               inventory_qty = inventory_qty + v_child_qty,
               stock_quantity = stock_quantity + v_child_qty
             where id = v_child.component_product_id;
-            
+
             -- Record Stock Movement for Component
             insert into public.stock_movements (
               tenant_id,
@@ -11331,11 +11331,11 @@ begin
               now()
             );
         end loop;
-        
+
     else
         -- STANDARD LOGIC: Update product inventory directly
         update public.products
-        set 
+        set
           inventory_qty = inventory_qty + v_quantity_int,
           stock_quantity = stock_quantity + v_quantity_int
         where id = v_resolved_product_id;
@@ -11385,7 +11385,7 @@ declare
   v_resolved_product_id uuid;
   v_quantity_numeric numeric;
   v_quantity_int integer;
-  
+
   -- Set variables
   v_is_set boolean;
   v_child record;
@@ -11418,7 +11418,7 @@ begin
     end if;
 
     update public.products
-    set 
+    set
       inventory_qty = greatest(inventory_qty - v_quantity_int, 0),
       stock_quantity = greatest(stock_quantity - v_quantity_int, 0)
     where id = v_item.product_id;
@@ -11451,7 +11451,7 @@ begin
     );
 
   end loop;
-  
+
   raise notice 'restore_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
 end;
 $$;
@@ -11479,12 +11479,12 @@ declare
   v_subtotal_delta numeric(12,2) := 0;
 begin
   raise notice '🔵 START create_purchase_invoice_journal_entry for invoice %', p_invoice.id;
-  
+
   if p_invoice.id is null then
     raise notice '❌ Invoice ID is null, returning';
     return;
   end if;
-  
+
   raise notice '✅ Invoice ID: %, tenant_id: %', p_invoice.id, p_invoice.tenant_id;
 
   -- Check if journal entry already exists
@@ -11499,12 +11499,12 @@ begin
     raise notice '⚠️ Entry already exists for invoice %, skipping', p_invoice.id;
     return;
   end if;
-  
+
   raise notice '✅ No existing entry found, proceeding...';
 
   -- Ensure accounts exist
   raise notice '🔵 Ensuring accounts exist...';
-  
+
   v_inventory_account_id := public.ensure_account(
     p_invoice.tenant_id,
     '1105',
@@ -11549,8 +11549,8 @@ begin
   );
   raise notice '✅ Payable account: %', v_payable_account_id;
 
-  v_description := format('Factura compra %s - %s', 
-    p_invoice.invoice_number, 
+  v_description := format('Factura compra %s - %s',
+    p_invoice.invoice_number,
     coalesce(p_invoice.supplier_name, 'Proveedor')
   );
 
@@ -11608,7 +11608,7 @@ begin
       end if;
     end if;
   end if;
-  
+
   raise notice '🔵 Creating journal entry header...';
 
   -- Create journal entry header
@@ -11753,7 +11753,7 @@ begin
     now(),
     now()
   );
-  
+
   raise notice '✅ Journal entry created successfully for invoice %', p_invoice.id;
   raise notice '🎉 DONE - Entry ID: %, Total: %', v_entry_id, p_invoice.total;
 end;
@@ -11823,26 +11823,26 @@ begin
   if TG_OP = 'INSERT' then
     v_new_status := NEW.status;
     raise notice 'handle_purchase_invoice_change: INSERT invoice %, status %', NEW.id, v_new_status;
-    
+
     -- Inventory: ONLY if inserted directly as 'received' (rare case)
     if v_new_status = 'received' then
       raise notice 'handle_purchase_invoice_change: INSERT at received, consuming inventory';
       perform public.consume_purchase_invoice_inventory(NEW);
     end if;
-    
+
     -- Journal: If inserted at 'confirmed' or later
     if v_new_status IN ('confirmed', 'received', 'paid') then
       raise notice 'handle_purchase_invoice_change: INSERT at confirmed/received/paid, creating journal entry';
       perform public.create_purchase_invoice_journal_entry(NEW);
     end if;
-    
+
     perform public.recalculate_purchase_invoice_payments(NEW.id);
     return NEW;
 
   elsif TG_OP = 'UPDATE' then
     v_old_status := OLD.status;
     v_new_status := NEW.status;
-    
+
     raise notice 'handle_purchase_invoice_change: UPDATE invoice %, old status %, new status %', NEW.id, v_old_status, v_new_status;
 
     -- INVENTORY HANDLING: ONLY at 'received' status
@@ -11855,39 +11855,39 @@ begin
     -- PREPAYMENT MODEL: Draft→Confirmed→Paid→RECEIVED
     --   Inventory added at 'received' (after payment)
     --   So: received<->paid transitions DO change inventory
-    
+
     if NEW.prepayment_model then
       -- PREPAYMENT MODEL: Inventory changes whenever entering/leaving 'received'
       if v_old_status != 'received' AND v_new_status = 'received' then
         -- Transitioning TO received (from any status): add inventory
         raise notice 'handle_purchase_invoice_change: [PREPAYMENT] transitioning TO received from %, consuming inventory', v_old_status;
         perform public.consume_purchase_invoice_inventory(NEW);
-        
+
       elsif v_old_status = 'received' AND v_new_status != 'received' then
         -- Transitioning FROM received (to any status): remove inventory
         raise notice 'handle_purchase_invoice_change: [PREPAYMENT] transitioning FROM received to %, restoring inventory', v_new_status;
         perform public.restore_purchase_invoice_inventory(OLD);
-        
+
       elsif v_old_status = 'received' AND v_new_status = 'received' then
         -- Staying at received but invoice data changed: update inventory
         raise notice 'handle_purchase_invoice_change: [PREPAYMENT] staying at received, updating inventory';
         perform public.restore_purchase_invoice_inventory(OLD);
         perform public.consume_purchase_invoice_inventory(NEW);
       end if;
-      
+
     else
       -- STANDARD MODEL: Inventory changes only when entering/leaving 'received' from/to non-paid statuses
       if v_old_status NOT IN ('received', 'paid') AND v_new_status = 'received' then
         -- Transitioning TO received from confirmed/sent/draft: add inventory
         raise notice 'handle_purchase_invoice_change: [STANDARD] transitioning TO received from %, consuming inventory', v_old_status;
         perform public.consume_purchase_invoice_inventory(NEW);
-        
+
       elsif v_old_status = 'received' AND v_new_status NOT IN ('received', 'paid') then
         -- Transitioning FROM received to confirmed/sent/draft: remove inventory
         -- Note: received→paid does NOT remove (goods stay in standard flow)
         raise notice 'handle_purchase_invoice_change: [STANDARD] transitioning FROM received to %, restoring inventory', v_new_status;
         perform public.restore_purchase_invoice_inventory(OLD);
-        
+
       elsif v_old_status = 'received' AND v_new_status = 'received' then
         -- Staying at received but invoice data changed: update inventory
         raise notice 'handle_purchase_invoice_change: [STANDARD] staying at received, updating inventory';
@@ -11900,22 +11900,22 @@ begin
     -- The journal entry represents the purchase transaction (Dr Inventory / Cr Accounts Payable)
     -- It should NOT be recreated when moving between confirmed→received→paid
     -- It should ONLY be recreated if staying at same status but amounts changed
-    
+
     if v_old_status IN ('draft', 'sent', 'cancelled') AND v_new_status IN ('confirmed', 'received', 'paid') then
       -- Transitioning TO confirmed/received/paid: create journal entry
       raise notice 'handle_purchase_invoice_change: transitioning TO confirmed/received/paid, creating journal entry';
       perform public.create_purchase_invoice_journal_entry(NEW);
-      
+
     elsif v_old_status IN ('confirmed', 'received', 'paid') AND v_new_status IN ('draft', 'sent', 'cancelled') then
       -- Transitioning FROM confirmed/received/paid to draft/sent/cancelled: delete journal entry
       raise notice 'handle_purchase_invoice_change: transitioning FROM confirmed/received/paid, deleting journal entry';
       perform public.delete_purchase_invoice_journal_entry(OLD.invoice_number);
-      
+
     elsif v_old_status = v_new_status AND v_old_status IN ('confirmed', 'received', 'paid') then
       -- Staying at same confirmed+ status but invoice data might have changed
       -- Only recreate journal if amounts changed (not just status transition)
-      if OLD.subtotal IS DISTINCT FROM NEW.subtotal OR 
-         OLD.tax IS DISTINCT FROM NEW.tax OR 
+      if OLD.subtotal IS DISTINCT FROM NEW.subtotal OR
+         OLD.tax IS DISTINCT FROM NEW.tax OR
          OLD.total IS DISTINCT FROM NEW.total OR
          OLD.supplier_id IS DISTINCT FROM NEW.supplier_id then
         raise notice 'handle_purchase_invoice_change: amounts changed at same status, recreating journal entry';
@@ -11923,7 +11923,7 @@ begin
         perform public.create_purchase_invoice_journal_entry(NEW);
       end if;
     end if;
-    
+
     -- Only recalculate if this is NOT a payment-only update (prevents infinite recursion)
     -- If only paid_amount, balance, or status changed → skip recalculate (it's from recalculate itself)
     -- If items, total, subtotal, tax, or other fields changed → call recalculate
@@ -11938,25 +11938,25 @@ begin
     else
       raise notice 'handle_purchase_invoice_change: only payment fields changed, skipping recalculate to avoid recursion';
     end if;
-    
+
     return NEW;
 
   elsif TG_OP = 'DELETE' then
     v_old_status := OLD.status;
     raise notice 'handle_purchase_invoice_change: DELETE invoice %, status %', OLD.id, v_old_status;
-    
+
     -- Restore inventory if was received
     if v_old_status = 'received' then
       raise notice 'handle_purchase_invoice_change: deleting received invoice, restoring inventory';
       perform public.restore_purchase_invoice_inventory(OLD);
     end if;
-    
+
     -- Delete journal entry if was confirmed or later
     if v_old_status IN ('confirmed', 'received', 'paid') then
       raise notice 'handle_purchase_invoice_change: deleting confirmed/received/paid invoice, deleting journal entry';
       perform public.delete_purchase_invoice_journal_entry(OLD.invoice_number);
     end if;
-    
+
     return OLD;
   end if;
 
@@ -11967,11 +11967,11 @@ $$;
 do $$
 begin
   drop trigger if exists trg_purchase_invoices_change on public.purchase_invoices;
-  
+
   create trigger trg_purchase_invoices_change
     after insert or update or delete on public.purchase_invoices
     for each row execute procedure public.handle_purchase_invoice_change();
-    
+
   raise notice 'Trigger trg_purchase_invoices_change created successfully';
 exception
   when others then
@@ -12067,11 +12067,11 @@ begin
   from accounts
   where id = p_account_id
     and tenant_id = user_tenant_id();
-  
+
   if not found then
     raise exception 'Account not found: %', p_account_id;
   end if;
-  
+
   -- Sum debits and credits for this account in the period
   select
     coalesce(sum(debit_amount), 0),
@@ -12085,7 +12085,7 @@ begin
     and je.status = 'posted'
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id();
-  
+
   -- Calculate balance based on account type
   -- Assets and Expenses: Debit increases balance (debit - credit)
   -- Liabilities, Equity, Income: Credit increases balance (credit - debit)
@@ -12094,7 +12094,7 @@ begin
   else
     v_balance := v_total_credit - v_total_debit;
   end if;
-  
+
   return v_balance;
 end;
 $$;
@@ -12249,7 +12249,7 @@ begin
   where a.is_active = true
     and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.category
-  having coalesce(sum(jl.debit_amount), 0) <> 0 
+  having coalesce(sum(jl.debit_amount), 0) <> 0
       or coalesce(sum(jl.credit_amount), 0) <> 0
   order by a.code;
 end;
@@ -12290,7 +12290,7 @@ begin
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id()
     and a.tenant_id = user_tenant_id();
-  
+
   -- Calculate total expenses (debit balance for expense accounts)
   select coalesce(sum(
     case
@@ -12310,10 +12310,10 @@ begin
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id()
     and a.tenant_id = user_tenant_id();
-  
+
   -- Net Income = Income - Expenses
   v_net_income := v_total_income - v_total_expense;
-  
+
   return v_net_income;
 end;
 $$;
@@ -12339,11 +12339,11 @@ begin
   from accounts
   where id = p_account_id
     and tenant_id = user_tenant_id();
-  
+
   if not found then
     raise exception 'Account not found: %', p_account_id;
   end if;
-  
+
   -- Sum all debits and credits up to the date
   select
     coalesce(sum(debit_amount), 0),
@@ -12356,14 +12356,14 @@ begin
     and je.status = 'posted'
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id();
-  
+
   -- Calculate balance based on account type
   if v_account.type in ('asset', 'expense') then
     v_balance := v_total_debit - v_total_credit;
   else
     v_balance := v_total_credit - v_total_debit;
   end if;
-  
+
   return v_balance;
 end;
 $$;
@@ -12454,7 +12454,7 @@ begin
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id()
     and a.tenant_id = user_tenant_id();
-  
+
   -- Calculate total liabilities
   select coalesce(sum(
     coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0)
@@ -12469,7 +12469,7 @@ begin
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id()
     and a.tenant_id = user_tenant_id();
-  
+
   -- Calculate total equity
   select coalesce(sum(
     coalesce(jl.credit_amount, 0) - coalesce(jl.debit_amount, 0)
@@ -12484,13 +12484,13 @@ begin
     and jl.tenant_id = user_tenant_id()
     and je.tenant_id = user_tenant_id()
     and a.tenant_id = user_tenant_id();
-  
+
   -- Calculate difference (should be near zero)
   v_diff := v_assets - (v_liabilities + v_equity);
-  
+
   -- Consider balanced if difference is less than 1 peso (rounding tolerance)
   v_is_balanced := abs(v_diff) < 1.00;
-  
+
   return query
   select v_is_balanced, v_assets, v_liabilities, v_equity, v_diff;
 end;
@@ -12519,9 +12519,9 @@ begin
     -- CASH FLOW STATEMENT (Estado de Flujo de Efectivo)
     -- Shows ACTUAL cash movements, not accrual accounting
     return query
-    
+
     -- CASH IN: Payments received from customers
-    select 
+    select
       'operatingIncome'::text as category,
       'Ingresos de Efectivo'::text as category_label,
       '4000'::text as account_code,
@@ -12531,11 +12531,11 @@ begin
     where sp.date >= p_start_date
       and sp.date <= p_end_date
       and sp.tenant_id = user_tenant_id()
-      
+
     union all
-    
+
     -- CASH OUT: Payments to suppliers (inventory purchases)
-    select 
+    select
       'costOfGoodsSold'::text as category,
       'Egresos de Efectivo - Proveedores'::text as category_label,
       '5000'::text as account_code,
@@ -12545,11 +12545,11 @@ begin
     where pp.date >= p_start_date
       and pp.date <= p_end_date
       and pp.tenant_id = user_tenant_id()
-      
+
     union all
-    
+
     -- CASH OUT: Operating expenses paid (payroll, rent, utilities, etc.)
-    select 
+    select
       a.category,
       'Egresos de Efectivo - Gastos'::text as category_label,
       a.code as account_code,
@@ -12600,7 +12600,7 @@ begin
       and a.is_active = true
       and a.tenant_id = user_tenant_id()
     group by a.id, a.code, a.name, a.type, a.category
-    having (coalesce(sum(jl.debit_amount), 0) <> 0 
+    having (coalesce(sum(jl.debit_amount), 0) <> 0
          or coalesce(sum(jl.credit_amount), 0) <> 0)
     order by a.code;
   end if;
@@ -12631,7 +12631,7 @@ as $$
   select
     mw.period_start::date,
     (mw.period_start + interval '1 month' - interval '1 day')::date as period_end,
-    
+
     -- INCOME CALCULATION
     coalesce(
       case when p_is_cash_flow then
@@ -12942,14 +12942,14 @@ begin
     and a.is_active = true
     and a.tenant_id = user_tenant_id()
   group by a.id, a.code, a.name, a.type, a.category, b.total_debit, b.total_credit
-  having (coalesce(b.total_debit, 0) <> 0 
+  having (coalesce(b.total_debit, 0) <> 0
        or coalesce(b.total_credit, 0) <> 0)
-  order by 
-    case a.type 
-      when 'asset' then 1 
-      when 'liability' then 2 
-      when 'equity' then 3 
-      else 4 
+  order by
+    case a.type
+      when 'asset' then 1
+      when 'liability' then 2
+      when 'equity' then 3
+      else 4
     end,
     a.category,
     a.code;
@@ -13002,7 +13002,7 @@ $$;
 --
 -- Complete bikeshop/workshop management system with:
 -- - Bike registration and tracking
--- - Service jobs (pegas) with workflow management
+-- - Service jobs (trabajos) with workflow management
 -- - Service packages/templates
 -- - Labor and parts tracking
 -- - Timeline/history for each bike
@@ -13050,12 +13050,12 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'brand_id') then
     alter table bikes add column brand_id uuid references bike_brands(id) on delete set null;
   end if;
-  
+
   -- Add model_id foreign key
   if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'model_id') then
     alter table bikes add column model_id uuid references bike_models(id) on delete set null;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'bikes' and column_name = 'customer_id') then
     alter table bikes add column customer_id uuid not null references customers(id) on delete cascade;
   end if;
@@ -13481,7 +13481,7 @@ exception
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in service_packages';
 end $$;
 
--- Table: mechanic_jobs (pegas)
+-- Table: mechanic_jobs (trabajos)
 -- Main table for tracking service jobs/work orders
 -- NOTE: This must exist BEFORE the table default uses it (fresh bootstrap safety).
 create sequence if not exists public.mechanic_job_number_seq
@@ -13510,31 +13510,31 @@ create table if not exists mechanic_jobs (
   customer_id uuid not null references customers(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
   service_package_id uuid references service_packages(id) on delete set null,
-  
+
   -- Dates and timeline
   arrival_date timestamp with time zone not null default now(),
   deadline timestamp with time zone,
   started_at timestamp with time zone,
   completed_at timestamp with time zone,
   delivered_at timestamp with time zone,
-  
+
   -- Status and priority
   -- NOTE: status CHECK constraint removed (Oct 2025) to support flexible job_statuses system
   -- Valid statuses are now managed via job_statuses table (Notion-style custom statuses)
   status text not null default 'PENDIENTE',
   priority text not null default 'NORMAL'
     check (priority in ('URGENTE','ALTA','NORMAL','BAJA')),
-  
+
   -- Job details
   client_request text, -- What the client reported
   diagnosis text, -- Mechanic's diagnosis
   work_performed text, -- What was actually done
   notes text, -- Internal notes
-  
+
   -- Assignment
   assigned_to uuid references customers(id) on delete set null, -- Will be employee_id when HR module exists
   assigned_technician_name text, -- Temporary until employees table exists
-  
+
   -- Costs and invoicing
   estimated_cost numeric(12,2) not null default 0,
   final_cost numeric(12,2) not null default 0,
@@ -13543,28 +13543,28 @@ create table if not exists mechanic_jobs (
   discount_amount numeric(12,2) not null default 0,
   tax_amount numeric(12,2) not null default 0,
   total_cost numeric(12,2) not null default 0,
-  
+
   -- Invoicing
   invoice_id uuid references sales_invoices(id) on delete cascade, -- CHANGED: cascade delete instead of set null
   is_invoiced boolean not null default false,
   is_paid boolean not null default false,
-  
+
   -- Warranty
   is_warranty_job boolean not null default false,
   warranty_notes text,
-  
+
   -- Customer approval
   requires_approval boolean not null default false,
   approved_by_customer boolean not null default false,
   approved_at timestamp with time zone,
-  
+
   -- Images and attachments
   image_urls text[] not null default array[]::text[],
-  
+
   -- Soft delete
   deleted_at timestamp with time zone,
   deleted_by uuid references auth.users(id) on delete set null,
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
@@ -13588,8 +13588,8 @@ end $$;
 create index if not exists idx_mechanic_jobs_status_id on mechanic_jobs(status_id);
 
 -- Add tax_treatment column to mechanic_jobs
-alter table mechanic_jobs 
-  add column if not exists tax_treatment text not null default 'no_tax' 
+alter table mechanic_jobs
+  add column if not exists tax_treatment text not null default 'no_tax'
   check (tax_treatment in ('no_tax', 'tax_included'));
 
 comment on column mechanic_jobs.tax_treatment is
@@ -13599,7 +13599,7 @@ comment on column mechanic_jobs.tax_treatment is
 do $$
 begin
   -- CRITICAL: Update foreign key constraint for invoice_id (from SET NULL to CASCADE)
-  -- This ensures pega is deleted when invoice is deleted (bidirectional cascade)
+  -- This ensures trabajo is deleted when invoice is deleted (bidirectional cascade)
   if exists (
     select 1 from information_schema.table_constraints
     where constraint_name = 'mechanic_jobs_invoice_id_fkey'
@@ -13610,7 +13610,7 @@ begin
       foreign key (invoice_id) references sales_invoices(id) on delete cascade;
     raise notice '✅ Updated mechanic_jobs.invoice_id foreign key to ON DELETE CASCADE';
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'job_number') then
     alter table mechanic_jobs add column job_number text not null unique;
   end if;
@@ -13923,10 +13923,10 @@ create table if not exists mechanic_job_bikes (
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   bike_id uuid not null references bikes(id) on delete cascade,
   order_index integer not null default 0,
-  
+
   -- Per-bike status (each bike can have independent status)
   status_id uuid references job_statuses(id) on delete set null,
-  
+
   -- Per-bike work details
   diagnosis text,
   work_requested text,        -- Solicitud del cliente (per bike)
@@ -13935,21 +13935,21 @@ create table if not exists mechanic_job_bikes (
   diagnosis_sheet_key text,
   diagnosis_sheet_data jsonb not null default '{}'::jsonb,
   diagnosis_sheet_updated_at timestamp with time zone,
-  
+
   -- Per-bike cost tracking (calculated from items)
   parts_cost numeric(12,2) not null default 0,
   labor_cost numeric(12,2) not null default 0,
   subtotal numeric(12,2) not null default 0,
-  
+
   -- Per-bike flags
   is_warranty_work boolean not null default false,
   requires_approval boolean not null default false,
   approved_by_customer boolean not null default false,
   approved_at timestamp with time zone,
-  
+
   -- Images for this specific bike work
   image_urls text[] not null default array[]::text[],
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
@@ -14071,7 +14071,7 @@ begin
     alter table mechanic_job_items add column item_type text not null default 'product' check (item_type in ('product', 'service', 'adhoc'));
     raise notice '✅ Added item_type column to mechanic_job_items';
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'service_product_id') then
     alter table mechanic_job_items add column service_product_id uuid references products(id) on delete set null;
     raise notice '✅ Added service_product_id column to mechanic_job_items';
@@ -14101,7 +14101,7 @@ begin
     alter table mechanic_job_items add column creates_lifecycle boolean not null default false;
     raise notice '✅ Added creates_lifecycle column to mechanic_job_items';
   end if;
-  
+
   -- Add index for service lookups
   if not exists (select 1 from pg_indexes where tablename = 'mechanic_job_items' and indexname = 'idx_mechanic_job_items_service_product_id') then
     create index idx_mechanic_job_items_service_product_id on mechanic_job_items(service_product_id) where service_product_id is not null;
@@ -14128,43 +14128,43 @@ drop table if exists mechanic_job_labor cascade;
 -- - Ad-hoc tasks with optional pricing
 -- - Hierarchical (linked to parent items/labor)
 -- - Completion tracking with timestamps
--- - Three-way sync with invoice and pega forms
+-- - Three-way sync with invoice and trabajo forms
 create table if not exists mechanic_job_tasks (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
   job_bike_id uuid references mechanic_job_bikes(id) on delete cascade, -- Multi-bike support
-  
+
   -- Link to parent product/service (PRIMARY KEY BINDING)
   -- NULL = standalone ad-hoc task
   parent_item_id uuid references mechanic_job_items(id) on delete cascade,
-  
+
   -- Task details
   task_name text not null,
   task_description text,
   is_completed boolean not null default false,
   completed_at timestamp with time zone,
   completed_by_user_id uuid references auth.users(id) on delete set null,
-  
+
   -- Ad-hoc pricing (creates additional line item when set)
   is_adhoc boolean not null default false,
   adhoc_price numeric(12,2), -- NULL = included in parent, NOT NULL = separate charge
   adhoc_item_id uuid references mechanic_job_items(id) on delete set null, -- Link to auto-created item
-  
+
   -- Linking behavior
   is_standalone boolean not null default false, -- true = not linked to any parent
-  
+
   -- Smart features
   parsed_from_description boolean not null default false, -- Auto-generated from P/S description
   display_order integer not null default 0, -- User can reorder tasks
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  
+
   -- Constraints
   check (
     -- Ad-hoc task must have price if it's not free
-    (is_adhoc = false) OR 
+    (is_adhoc = false) OR
     (is_adhoc = true and (adhoc_price is null or adhoc_price >= 0))
   ),
   check (
@@ -14253,13 +14253,13 @@ begin
     alter table mechanic_job_tasks add column job_bike_id uuid references mechanic_job_bikes(id) on delete cascade;
     raise notice '✅ Added job_bike_id column to mechanic_job_tasks';
   end if;
-  
+
   -- ============================================================
   -- MIGRATION: Drop old task schema columns (Nov 18, 2025)
   -- ============================================================
   -- Remove old columns: title, status, task_type, job_item_id, job_labor_id
   -- These were replaced by: task_name, is_completed, parent_item_id, parent_labor_id
-  
+
   -- Drop old constraints first
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'title') then
     -- Drop NOT NULL constraint if exists
@@ -14267,22 +14267,22 @@ begin
     alter table mechanic_job_tasks drop column title cascade;
     raise notice 'Dropped old column: title';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'status') then
     alter table mechanic_job_tasks drop column status cascade;
     raise notice 'Dropped old column: status';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'task_type') then
     alter table mechanic_job_tasks drop column task_type cascade;
     raise notice 'Dropped old column: task_type';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_item_id') then
     alter table mechanic_job_tasks drop column job_item_id cascade;
     raise notice 'Dropped old column: job_item_id';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'job_labor_id') then
     alter table mechanic_job_tasks drop column job_labor_id cascade;
     raise notice 'Dropped old column: job_labor_id';
@@ -14299,37 +14299,37 @@ begin
     alter table mechanic_job_tasks drop column parent_labor_id cascade;
     raise notice 'Dropped old column: parent_labor_id';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'priority') then
     alter table mechanic_job_tasks drop column priority cascade;
     raise notice 'Dropped old column: priority';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'assigned_to') then
     alter table mechanic_job_tasks drop column assigned_to cascade;
     raise notice 'Dropped old column: assigned_to';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'assigned_technician_name') then
     alter table mechanic_job_tasks drop column assigned_technician_name cascade;
     raise notice 'Dropped old column: assigned_technician_name';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'estimated_duration_minutes') then
     alter table mechanic_job_tasks drop column estimated_duration_minutes cascade;
     raise notice 'Dropped old column: estimated_duration_minutes';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'started_at') then
     alter table mechanic_job_tasks drop column started_at cascade;
     raise notice 'Dropped old column: started_at';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'is_auto_generated') then
     alter table mechanic_job_tasks drop column is_auto_generated cascade;
     raise notice 'Dropped old column: is_auto_generated';
   end if;
-  
+
   if exists (select 1 from information_schema.columns where table_name = 'mechanic_job_tasks' and column_name = 'description') then
     alter table mechanic_job_tasks drop column description cascade;
     raise notice 'Dropped old column: description';
@@ -14350,12 +14350,12 @@ create table if not exists mechanic_job_task_preferences (
   tenant_id uuid references tenants(id) on delete cascade not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   job_id uuid not null references mechanic_jobs(id) on delete cascade,
-  
+
   -- Which parent items/labor are collapsed (array of IDs)
   collapsed_item_ids uuid[] not null default '{}',
-  
+
   updated_at timestamp with time zone not null default now(),
-  
+
   unique(user_id, job_id)
 );
 
@@ -14457,7 +14457,7 @@ create index if not exists idx_mechanic_job_timeline_created_at on mechanic_job_
 -- ❌ OLD LEGACY TASK FUNCTIONS REMOVED (Nov 18, 2025)
 -- ============================================================
 -- The following OLD functions have been COMPLETELY REMOVED:
---   - auto_create_task_for_job_item() 
+--   - auto_create_task_for_job_item()
 --   - auto_create_task_for_job_labor()
 --   - sync_tasks_with_job_status()
 --   - get_job_task_summary()
@@ -14500,26 +14500,26 @@ begin
   from mechanic_job_items
   where job_id = coalesce(NEW.job_id, OLD.job_id)
     and coalesce(item_type, 'product') <> 'service';
-  
+
   -- Calculate labor cost (service-type items)
   select coalesce(sum(total_price), 0)
   into v_labor_cost
   from mechanic_job_items
   where job_id = coalesce(NEW.job_id, OLD.job_id)
     and coalesce(item_type, 'product') = 'service';
-  
+
   -- Calculate total
   v_total_cost := v_parts_cost + v_labor_cost;
-  
+
   -- Update mechanic_jobs table
   update mechanic_jobs
-  set 
+  set
     parts_cost = v_parts_cost,
     labor_cost = v_labor_cost,
     total_cost = v_total_cost,
     updated_at = now()
   where id = coalesce(NEW.job_id, OLD.job_id);
-  
+
   return coalesce(NEW, OLD);
 end;
 $$;
@@ -14549,8 +14549,8 @@ create trigger trg_update_job_costs_on_item_delete
 -- ============================================================
 
 -- Function: Cascade delete between mechanic jobs and invoices
--- When a pega is deleted, also delete its associated invoice
--- When an invoice is deleted, also delete its associated pega
+-- When a trabajo is deleted, also delete its associated invoice
+-- When an invoice is deleted, also delete its associated trabajo
 -- ============================================================
 -- BIDIRECTIONAL CASCADE DELETE - Trigger Approach (RLS-Compatible)
 -- ============================================================
@@ -14577,67 +14577,67 @@ begin
     when others then
       v_recursion_guard := false;
   end;
-  
+
   -- If already in recursion, skip to prevent infinite loop
   if v_recursion_guard then
     raise notice '⏭️ Skipping cascade (recursion guard active)';
     return OLD;
   end if;
-  
+
   -- Set recursion guard
   perform set_config('app.cascade_delete_in_progress', 'true', true);
-  
-  -- Handle invoice deletion → delete pega
+
+  -- Handle invoice deletion → delete trabajo
   if TG_TABLE_NAME = 'sales_invoices' then
     raise notice '🗑️ [TRIGGER] Invoice % deleted (tenant=%)', OLD.id, OLD.tenant_id;
-    
-    -- Find linked pegas
+
+    -- Find linked trabajos
     select id into v_pega_id
     from mechanic_jobs
-    where invoice_id = OLD.id 
+    where invoice_id = OLD.id
       and tenant_id = OLD.tenant_id
     limit 1;
-    
+
     if v_pega_id is not null then
-      raise notice '🔍 Found pega % linked to invoice %', v_pega_id, OLD.id;
-      
+      raise notice '🔍 Found trabajo % linked to invoice %', v_pega_id, OLD.id;
+
       -- Delete using direct SQL (SECURITY DEFINER bypasses RLS)
       execute format('delete from mechanic_jobs where id = %L', v_pega_id);
-      
+
       get diagnostics v_count = ROW_COUNT;
-      
+
       if v_count > 0 then
-        raise notice '✅ Deleted pega % linked to invoice %', v_pega_id, OLD.id;
+        raise notice '✅ Deleted trabajo % linked to invoice %', v_pega_id, OLD.id;
       else
-        raise notice '❌ Failed to delete pega %', v_pega_id;
+        raise notice '❌ Failed to delete trabajo %', v_pega_id;
       end if;
     else
-      raise notice '⚠️ No pega found with invoice_id=%', OLD.id;
+      raise notice '⚠️ No trabajo found with invoice_id=%', OLD.id;
     end if;
   end if;
 
-  -- Handle pega deletion → delete invoice  
+  -- Handle trabajo deletion → delete invoice
   if TG_TABLE_NAME = 'mechanic_jobs' then
     if OLD.invoice_id is not null then
-      raise notice '🗑️ [TRIGGER] Pega % deleted (tenant=%)', OLD.id, OLD.tenant_id;
+      raise notice '🗑️ [TRIGGER] Trabajo % deleted (tenant=%)', OLD.id, OLD.tenant_id;
       raise notice '🔍 Looking for linked invoice %', OLD.invoice_id;
-      
+
       -- Verify invoice exists
       select id into v_invoice_id
       from sales_invoices
       where id = OLD.invoice_id
         and tenant_id = OLD.tenant_id;
-      
+
       if v_invoice_id is not null then
-        raise notice '🔍 Found invoice % linked to pega %', v_invoice_id, OLD.id;
-        
+        raise notice '🔍 Found invoice % linked to trabajo %', v_invoice_id, OLD.id;
+
         -- Delete using direct SQL (SECURITY DEFINER bypasses RLS)
         execute format('delete from sales_invoices where id = %L', v_invoice_id);
-        
+
         get diagnostics v_count = ROW_COUNT;
-        
+
         if v_count > 0 then
-          raise notice '✅ Deleted invoice % linked to pega %', v_invoice_id, OLD.id;
+          raise notice '✅ Deleted invoice % linked to trabajo %', v_invoice_id, OLD.id;
         else
           raise notice '❌ Failed to delete invoice %', v_invoice_id;
         end if;
@@ -14645,13 +14645,13 @@ begin
         raise notice '⚠️ Invoice % not found (may already be deleted)', OLD.invoice_id;
       end if;
     else
-      raise notice '⚠️ Pega % has no linked invoice_id', OLD.id;
+      raise notice '⚠️ Trabajo % has no linked invoice_id', OLD.id;
     end if;
   end if;
-  
+
   -- Clear recursion guard
   perform set_config('app.cascade_delete_in_progress', 'false', true);
-  
+
   return OLD;
 exception
   when others then
@@ -14696,10 +14696,10 @@ declare
 begin
   -- Get next value from sequence (guaranteed unique, no race conditions)
   v_next_number := nextval('public.mechanic_job_number_seq');
-  
+
   -- Format as PG-00001, PG-00002, etc.
   v_job_number := 'PG-' || lpad(v_next_number::text, 5, '0');
-  
+
   return v_job_number;
 end;
 $$;
@@ -14807,14 +14807,14 @@ begin
   select * into v_job
   from public.mechanic_jobs
   where id = p_job_id;
-  
+
   if not found then
     raise notice 'Job % not found', p_job_id;
     return null;
   end if;
-  
+
   v_tenant_id := v_job.tenant_id;
-  
+
   -- Ensure job totals are current before creating invoice
   perform public.recalculate_mechanic_job_costs(p_job_id);
 
@@ -14824,24 +14824,24 @@ begin
     raise notice 'Job % already has invoice %, synced existing invoice', p_job_id, v_job.invoice_id;
     return v_job.invoice_id;
   end if;
-  
+
   -- Get customer details
   select * into v_customer
   from public.customers
   where id = v_job.customer_id;
-  
+
   if not found then
     raise notice 'Customer % not found for job %', v_job.customer_id, p_job_id;
     return null;
   end if;
-  
+
   -- ✅ CRITICAL FIX: Use arrival_date instead of created_at for invoice date
   -- This ensures invoice date matches when the job/work actually started
   v_invoice_date := coalesce(v_job.arrival_date, v_job.created_at);
-  
+
   -- Add items (products + services) from mechanic_job_items
   for v_job_item in
-    select 
+    select
       mji.product_id,
       mji.service_product_id,
       mji.product_name,
@@ -14886,11 +14886,11 @@ begin
 
     v_subtotal := v_subtotal + coalesce(v_job_item.total_price, v_job_item.quantity * v_job_item.unit_price, 0);
   end loop;
-  
+
   -- ✅ CHANGED: Allow invoice creation even with empty items
   -- Draft invoices can be created for future work planning
   -- User can add items later before posting
-  
+
   -- Calculate IVA based on job's tax treatment
   -- ✅ FIX: Read tax_treatment from job instead of hardcoding
   if v_job.tax_treatment = 'tax_included' then
@@ -14900,12 +14900,12 @@ begin
     -- No tax: iva = 0
     v_iva := 0;
   end if;
-  
+
   v_total := v_subtotal;  -- Total is always the subtotal (what customer pays)
-  
+
   -- Generate invoice number using new sequential system
   v_invoice_number := public.get_next_document_number(v_tenant_id, 'sales_invoice');
-  
+
   -- Create the invoice with status 'draft' for user review
   insert into public.sales_invoices (
     tenant_id,
@@ -14936,11 +14936,11 @@ begin
     v_customer.rut,
     v_invoice_date,  -- ✅ Now uses arrival_date
     v_invoice_date + interval '30 days',  -- 30-day payment terms
-    'Pega ' || v_job.job_number,
+    'Trabajo ' || v_job.job_number,
     'draft',  -- Always start as draft for review
     v_subtotal,
     v_iva,
-    case 
+    case
       when v_job.tax_treatment = 'tax_included' then v_subtotal / 1.19
       else v_subtotal
     end,  -- net_amount
@@ -14953,17 +14953,17 @@ begin
     now(),
     now()
   ) returning id into v_invoice_id;
-  
+
   -- Link invoice to job
   update public.mechanic_jobs
   set invoice_id = v_invoice_id,
       is_invoiced = true,
       updated_at = now()
   where id = p_job_id;
-  
-  raise notice 'Created draft invoice % for job % (customer: %, date: %, total: $%)', 
+
+  raise notice 'Created draft invoice % for job % (customer: %, date: %, total: $%)',
     v_invoice_id, v_job.job_number, v_customer.name, v_invoice_date, v_total;
-  
+
   return v_invoice_id;
 end;
 $$;
@@ -14983,7 +14983,7 @@ drop function if exists public.auto_create_invoice_for_new_job() cascade;
 -- SYNC INVOICE CHANGES BACK TO PEGA (Bidirectional Sync)
 -- ============================================================================
 -- When invoice items are modified, sync them back to the mechanic job
--- This ensures pega always reflects the latest invoice state
+-- This ensures trabajo always reflects the latest invoice state
 -- ============================================================================
 
 create or replace function public.sync_invoice_to_job_on_change()
@@ -14995,18 +14995,18 @@ as $$
 declare
   v_job_id uuid;
 begin
-  -- Skip if invoice is not linked to a pega
+  -- Skip if invoice is not linked to a trabajo
   -- Check if this invoice references a mechanic job
   select id into v_job_id
   from public.mechanic_jobs
   where invoice_id = NEW.id
   limit 1;
-  
+
   if v_job_id is null then
-    -- Not a pega-linked invoice, skip sync
+    -- Not a trabajo-linked invoice, skip sync
     return NEW;
   end if;
-  
+
   -- Skip if this UPDATE was triggered by job → invoice sync
   if current_setting('app.syncing_job_to_invoice', true) = 'true' then
     raise notice 'Skipping invoice→job sync (job→invoice sync in progress)';
@@ -15019,16 +15019,16 @@ begin
     raise notice 'Skipping invoice→job sync (circular prevention)';
     return NEW;
   end if;
-  
+
   -- Set flag to prevent circular sync
   perform set_config('app.syncing_invoice_to_job', 'true', true);
-  
+
   -- Call existing sync function to update job items from invoice
   -- Function only needs invoice_id, it finds the job internally
   perform public.sync_invoice_items_to_job(NEW.id);
-  
-  raise notice 'Synced invoice % changes to pega %', NEW.id, v_job_id;
-  
+
+  raise notice 'Synced invoice % changes to trabajo %', NEW.id, v_job_id;
+
   return NEW;
 end;
 $$;
@@ -15045,7 +15045,7 @@ drop trigger if exists trg_sync_invoice_to_job on public.sales_invoices;
 -- ============================================================================
 
 -- Function: Sync invoice items back to mechanic_job_items
--- Called when invoice items are modified to keep pega in sync
+-- Called when invoice items are modified to keep trabajo in sync
 create or replace function public.sync_invoice_items_to_job(p_invoice_id uuid)
 returns void
 language plpgsql
@@ -15086,25 +15086,25 @@ begin
   select id into v_job_id
   from mechanic_jobs
   where invoice_id = p_invoice_id;
-  
+
   if v_job_id is null then
     raise notice 'No job linked to invoice %', p_invoice_id;
     return;
   end if;
-  
+
   -- Get invoice details
   select * into v_invoice
   from sales_invoices
   where id = p_invoice_id;
-  
+
   if not found then
     raise notice 'Invoice % not found', p_invoice_id;
     return;
   end if;
-  
+
   -- Get tenant_id from invoice
   v_tenant_id := v_invoice.tenant_id;
-  
+
   -- ============================================================
   -- CRITICAL FIX (Mar 19, 2026): Disable row triggers on mechanic_job_items
   -- during the sync to prevent:
@@ -15117,14 +15117,14 @@ begin
   -- This function is SECURITY DEFINER so it has permission to alter triggers.
   -- ============================================================
   alter table mechanic_job_items disable trigger user;
-  
+
   -- Set sync flag (transaction-scoped, NOT savepoint-scoped)
   -- Using is_local=true is fine here because we no longer have BEGIN/EXCEPTION savepoints
   perform set_config('app.syncing_invoice_to_job', 'true', true);
-  
+
   -- Delete existing job items (no triggers fire — they are disabled)
   delete from mechanic_job_items where job_id = v_job_id;
-  
+
   -- Process each invoice item
   for v_item in select * from jsonb_array_elements(v_invoice.items)
   loop
@@ -15141,7 +15141,7 @@ begin
     if v_job_bike_id is not null then
       -- Validate the bike still exists for this job; if not, clear it (don't fallback to default)
       if not exists (
-        select 1 from mechanic_job_bikes 
+        select 1 from mechanic_job_bikes
         where id = v_job_bike_id and job_id = v_job_id
       ) then
         v_job_bike_id := null;
@@ -15207,15 +15207,15 @@ begin
       now(),
       now()
     );
-    
+
     v_item_count := v_item_count + 1;
   end loop;
-  
+
   v_subtotal := v_parts_cost + v_labor_cost;
-  
+
   -- Update job costs directly (no trigger cascades since we calculated everything)
   update mechanic_jobs
-  set 
+  set
     labor_cost = v_labor_cost,
     parts_cost = v_parts_cost,
     final_cost = v_subtotal,
@@ -15227,13 +15227,13 @@ begin
 
   -- Update per-bike costs if multi-bike job
   update mechanic_job_bikes mjb
-  set 
+  set
     parts_cost = coalesce(sub.parts_cost, 0),
     labor_cost = coalesce(sub.labor_cost, 0),
     subtotal = coalesce(sub.parts_cost, 0) + coalesce(sub.labor_cost, 0),
     updated_at = now()
   from (
-    select 
+    select
       mji.job_bike_id,
       sum(case when coalesce(mji.item_type, 'product') <> 'service' then mji.total_price else 0 end) as parts_cost,
       sum(case when coalesce(mji.item_type, 'product') = 'service' then mji.total_price else 0 end) as labor_cost
@@ -15247,13 +15247,13 @@ begin
 
   -- Re-enable triggers (ALWAYS runs, even if error above would propagate)
   alter table mechanic_job_items enable trigger user;
-  
+
   -- Clear the sync flag
   perform set_config('app.syncing_invoice_to_job', '', true);
-  
-  raise notice 'Synced invoice % items to job %: % items (parts: $%, labor: $%)', 
+
+  raise notice 'Synced invoice % items to job %: % items (parts: $%, labor: $%)',
     p_invoice_id, v_job_id, v_item_count, v_parts_cost, v_labor_cost;
-    
+
 exception
   when others then
     -- CRITICAL: Re-enable triggers even on error to prevent table being stuck
@@ -15286,35 +15286,35 @@ begin
   select id into v_job_id
   from mechanic_jobs
   where invoice_id = p_invoice_id;
-  
+
   if v_job_id is null then
     raise notice 'No job linked to invoice %', p_invoice_id;
     return;
   end if;
-  
+
   -- Get invoice details
   select * into v_invoice
   from sales_invoices
   where id = p_invoice_id;
-  
+
   if not found then
     raise notice 'Invoice % not found', p_invoice_id;
     return;
   end if;
-  
+
   -- Determine if paid
   v_is_paid := (lower(v_invoice.status) = 'paid');
-  
+
   -- Update job status AND tax treatment
   update mechanic_jobs
-  set 
+  set
     is_invoiced = true,
     is_paid = v_is_paid,
     tax_treatment = v_invoice.tax_treatment,  -- ✅ Sync tax treatment from invoice to job
     updated_at = now()
   where id = v_job_id;
-  
-  raise notice 'Synced invoice % status (%) and tax treatment (%) to job (is_paid: %)', 
+
+  raise notice 'Synced invoice % status (%) and tax treatment (%) to job (is_paid: %)',
     p_invoice_id, v_invoice.status, v_invoice.tax_treatment, v_is_paid;
 end;
 $$;
@@ -15323,7 +15323,7 @@ $$;
 -- REMOVED: handle_invoice_deleted_for_job trigger
 -- Reason: Conflicts with cascade_delete_pega_invoice trigger
 -- The cascade delete provides proper bidirectional deletion
--- (delete invoice → delete pega, delete pega → delete invoice)
+-- (delete invoice → delete trabajo, delete trabajo → delete invoice)
 -- ============================================================
 
 -- ============================================================
@@ -15365,26 +15365,26 @@ begin
   select * into v_job
   from mechanic_jobs
   where id = p_job_id;
-  
+
   if not found then
     raise notice 'Job % not found', p_job_id;
     return;
   end if;
-  
+
   v_invoice_id := v_job.invoice_id;
-  
+
   if v_invoice_id is null then
     raise notice 'Job % has no linked invoice', p_job_id;
     return;
   end if;
-  
+
   select coalesce(discount_amount, 0)
   into v_discount
   from mechanic_jobs
   where id = p_job_id;
-  
+
   -- Build invoice items array from mechanic_job_items (products + services)
-  for v_item in 
+  for v_item in
     select * from mechanic_job_items where job_id = p_job_id
   loop
     -- Resolve bike display name from job_bike_id
@@ -15426,10 +15426,10 @@ begin
       v_parts_cost := v_parts_cost + coalesce(v_item.total_price, v_item.quantity * v_item.unit_price, 0);
     end if;
   end loop;
-  
+
   -- Calculate totals with FRESH data (not using stale v_job record)
   v_subtotal := v_parts_cost + v_labor_cost - v_discount;
-  
+
   -- ✅ FIX: Calculate IVA based on job's tax treatment (not hardcoded)
   if v_job.tax_treatment = 'tax_included' then
     -- Tax included: net = subtotal ÷ 1.19, iva = subtotal - net
@@ -15438,9 +15438,9 @@ begin
     -- No tax: iva = 0
     v_iva_amount := 0;
   end if;
-  
+
   v_total := v_subtotal;  -- Total is always the subtotal (what customer pays)
-  
+
   -- Update the invoice with fresh calculations
   perform set_config('app.syncing_job_to_invoice', 'true', true);
 
@@ -15449,7 +15449,7 @@ begin
     items = v_items,
     subtotal = v_subtotal,
     iva_amount = v_iva_amount,
-    net_amount = case 
+    net_amount = case
       when v_job.tax_treatment = 'tax_included' then v_subtotal / 1.19
       else v_subtotal
     end,
@@ -15458,13 +15458,13 @@ begin
     discount_amount = v_discount,
     updated_at = now()
   where id = v_invoice_id;
-  
+
   -- Let the payment recalculation function handle balance and status
   perform public.recalculate_sales_invoice_payments(v_invoice_id);
 
   -- Clear job → invoice flag now that invoice update is done
   perform set_config('app.syncing_job_to_invoice', '', true);
-  
+
   raise notice 'Synced job % to invoice % (% items, subtotal: $%, total: $%)', p_job_id, v_invoice_id, jsonb_array_length(v_items), v_subtotal, v_total;
 end;
 $$;
@@ -15504,7 +15504,7 @@ begin
 
   -- Consume inventory for each item
   for v_item in
-    select 
+    select
       product_id,
       product_name,
       quantity
@@ -15533,7 +15533,7 @@ begin
 
     -- Update product inventory
     update products
-    set 
+    set
       inventory_qty = inventory_qty - v_item.quantity::integer,
       stock_quantity = stock_quantity - v_item.quantity::integer,
       updated_at = now()
@@ -15564,7 +15564,7 @@ begin
 
   -- Restore inventory from each stock movement
   for v_movement in
-    select 
+    select
       product_id,
       quantity
     from stock_movements
@@ -15591,7 +15591,7 @@ begin
 
     -- Update product inventory
     update products
-    set 
+    set
       inventory_qty = inventory_qty + v_movement.quantity::integer,
       stock_quantity = stock_quantity + v_movement.quantity::integer,
       updated_at = now()
@@ -15973,23 +15973,23 @@ begin
       end if;
 
       -- Handle inventory consumption/restoration based on status transitions
-      if v_old_status not in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') 
+      if v_old_status not in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO')
          and v_new_status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') then
         -- Moving to active/completed status: consume inventory
         v_should_consume_inventory := true;
-      elsif v_old_status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO') 
+      elsif v_old_status in ('EN_CURSO', 'FINALIZADO', 'ENTREGADO')
             and v_new_status = 'CANCELADO' then
         -- Cancelling: restore inventory
         v_should_restore_inventory := true;
       end if;
 
       -- Handle journal entries based on status transitions
-      if v_new_status in ('FINALIZADO', 'ENTREGADO') 
+      if v_new_status in ('FINALIZADO', 'ENTREGADO')
          and v_old_status not in ('FINALIZADO', 'ENTREGADO')
          and not NEW.is_invoiced then
         -- Job completed: create journal entry
         v_should_create_journal := true;
-      elsif v_new_status = 'CANCELADO' 
+      elsif v_new_status = 'CANCELADO'
             and v_old_status in ('FINALIZADO', 'ENTREGADO') then
         -- Job cancelled after completion: delete journal entry
         v_should_delete_journal := true;
@@ -16124,9 +16124,9 @@ begin
   if TG_OP = 'INSERT' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
-    
+
     -- Note: Sync to invoice is handled by statement-level trigger
-    
+
     -- Log event
     perform public.log_mechanic_job_timeline(
       NEW.job_id,
@@ -16135,23 +16135,23 @@ begin
       NEW.product_name,
       'Added part: ' || NEW.product_name || ' (Qty: ' || NEW.quantity || ')'
     );
-    
+
     return NEW;
 
   elsif TG_OP = 'UPDATE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(NEW.job_id);
-    
+
     -- Note: Sync to invoice is handled by statement-level trigger
-    
+
     return NEW;
 
   elsif TG_OP = 'DELETE' then
     -- Recalculate job costs
     perform public.recalculate_mechanic_job_costs(OLD.job_id);
-    
+
     -- Note: Sync to invoice is handled by statement-level trigger
-    
+
     return OLD;
   end if;
 
@@ -16190,7 +16190,7 @@ begin
   -- auto-propagate every mechanic_job_items statement back into sales_invoices.
   --
   -- Explicit/manual flows can still call public.sync_job_to_invoice(p_job_id) when
-  -- a user intentionally edits the pega/job and wants to push those changes to invoice.
+  -- a user intentionally edits the trabajo/job and wants to push those changes to invoice.
   raise notice 'sync_job_items_to_invoice_statement: auto back-sync disabled to prevent invoice item loss';
   return null;
 
@@ -16213,10 +16213,10 @@ begin
     loop
       -- Recalculate costs first to update job record with new totals
       perform public.recalculate_mechanic_job_costs(v_job_id);
-      
+
       -- Find the linked invoice
       select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-      
+
       if v_invoice_id is not null then
         -- Sync this job to its invoice (will remove deleted items)
         perform public.sync_job_to_invoice(v_job_id);
@@ -16230,16 +16230,16 @@ begin
   loop
     -- Recalculate costs first to update job record with new totals
     perform public.recalculate_mechanic_job_costs(v_job_id);
-    
+
     -- Find the linked invoice
     select invoice_id into v_invoice_id from mechanic_jobs where id = v_job_id;
-    
+
     if v_invoice_id is not null then
       -- Sync this job to its invoice (will recalculate fresh totals from DB)
       perform public.sync_job_to_invoice(v_job_id);
     end if;
   end loop;
-  
+
   return null;
 end;
 $$;
@@ -16359,22 +16359,22 @@ begin
   if p_description is null or trim(p_description) = '' then
     return 0;
   end if;
-  
+
   -- Split description by newlines
   v_lines := string_to_array(p_description, E'\n');
-  
+
   -- Parse each line
   foreach v_task_line in array v_lines
   loop
     v_task_line := trim(v_task_line);
-    
+
     -- Check if line starts with bullet markers: -, •, *, →, ✓, ☐, ☑, 1., 2., etc.
     if v_task_line ~ '^[-•*→✓☐☑]' or v_task_line ~ '^\d+\.' then
       -- Remove bullet marker and clean up
       v_task_name := regexp_replace(v_task_line, '^[-•*→✓☐☑]\s*', '');
       v_task_name := regexp_replace(v_task_name, '^\d+\.\s*', '');
       v_task_name := trim(v_task_name);
-      
+
       -- Skip empty lines
       if length(v_task_name) > 0 then
         insert into mechanic_job_tasks (
@@ -16394,12 +16394,12 @@ begin
           false,
           v_task_count
         );
-        
+
         v_task_count := v_task_count + 1;
       end if;
     end if;
   end loop;
-  
+
   return v_task_count;
 end;
 $$;
@@ -16425,24 +16425,24 @@ begin
     raise notice 'create_adhoc_item_for_task: skipping due to circular sync prevention';
     return null;
   end if;
-  
+
   -- Get task details
   select * into v_task
   from mechanic_job_tasks
   where id = p_task_id;
-  
+
   if not found or not v_task.is_adhoc or v_task.adhoc_price is null then
     return null;
   end if;
-  
+
   -- Check if item already exists
   if v_task.adhoc_item_id is not null then
     return v_task.adhoc_item_id;
   end if;
-  
+
   -- Set sync flag
   perform pg_catalog.set_config('app.syncing_task_to_item', 'true', true);
-  
+
   -- Create mechanic_job_item
   insert into mechanic_job_items (
     tenant_id,
@@ -16460,15 +16460,15 @@ begin
     v_task.adhoc_price
   )
   returning id into v_item_id;
-  
+
   -- Link task to item
   update mechanic_job_tasks
   set adhoc_item_id = v_item_id
   where id = p_task_id;
-  
+
   -- Clear sync flag
   perform pg_catalog.set_config('app.syncing_task_to_item', '', true);
-  
+
   raise notice 'Created ad-hoc item % for task %', v_item_id, p_task_id;
   return v_item_id;
 end;
@@ -16493,7 +16493,7 @@ begin
     raise notice 'auto_parse_item_description: skipping table %, trigger: %', TG_TABLE_NAME, TG_NAME;
     return null;  -- AFTER trigger, return null is correct
   end if;
-  
+
   -- Use exception handling to safely access fields
   begin
     -- Try to get product_id or service_product_id safely
@@ -16504,13 +16504,13 @@ begin
       raise warning 'auto_parse_item_description: column access error on table %, skipping', TG_TABLE_NAME;
       return null;
   end;
-  
+
   -- Get product/service description
   if v_product_id is not null then
     select description into v_description
     from products
     where id = v_product_id;
-    
+
     if v_description is not null then
       v_task_count := public.parse_description_to_tasks(
         NEW.tenant_id,
@@ -16518,17 +16518,17 @@ begin
         NEW.id,
         v_description
       );
-      
+
       if v_task_count > 0 then
         raise notice 'Auto-parsed % tasks from product description', v_task_count;
       end if;
     end if;
-    
+
   elsif v_service_product_id is not null then
     select description into v_description
     from products
     where id = v_service_product_id;
-    
+
     if v_description is not null then
       v_task_count := public.parse_description_to_tasks(
         NEW.tenant_id,
@@ -16536,13 +16536,13 @@ begin
         NEW.id,
         v_description
       );
-      
+
       if v_task_count > 0 then
         raise notice 'Auto-parsed % tasks from service description', v_task_count;
       end if;
     end if;
   end if;
-  
+
   return null;  -- AFTER trigger must return null
 end;
 $$;
@@ -16562,20 +16562,20 @@ as $$
 begin
   if TG_OP = 'INSERT' then
     -- ✅ UPDATED (Nov 18, 2025): Sub-tasks WITH prices should also create ad-hoc items
-    -- These appear as separate line items in pega forms and invoices
+    -- These appear as separate line items in trabajo forms and invoices
     if NEW.is_adhoc and NEW.adhoc_price is not null and NEW.adhoc_price > 0 then
       perform public.create_adhoc_item_for_task(NEW.id);
     end if;
-    
+
   elsif TG_OP = 'UPDATE' then
     -- Price added or updated on task (parent OR sub-task)
-    if NEW.is_adhoc and NEW.adhoc_price is not null and 
+    if NEW.is_adhoc and NEW.adhoc_price is not null and
        (OLD.adhoc_price is null or OLD.adhoc_price != NEW.adhoc_price) then
-      
+
       -- If item exists, update it
       if NEW.adhoc_item_id is not null then
         update mechanic_job_items
-        set 
+        set
           product_name = 'Ad-hoc: ' || NEW.task_name,
           unit_price = NEW.adhoc_price,
           total_price = NEW.adhoc_price
@@ -16585,13 +16585,13 @@ begin
         perform public.create_adhoc_item_for_task(NEW.id);
       end if;
     end if;
-    
+
     -- Price removed
     if OLD.adhoc_price is not null and NEW.adhoc_price is null and NEW.adhoc_item_id is not null then
       delete from mechanic_job_items where id = NEW.adhoc_item_id;
     end if;
   end if;
-  
+
   return null; -- AFTER trigger must return null
 end;
 $$;
@@ -16616,7 +16616,7 @@ begin
     NEW.completed_at := null;
     NEW.completed_by_user_id := null;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -16645,7 +16645,7 @@ set search_path = public
 as $$
 begin
   raise notice '🗑️ [DB] cleanup_adhoc_item_on_task_delete triggered for task: % (name: %)', OLD.id, OLD.task_name;
-  
+
   -- If task had an ad-hoc item linked, delete it
   if OLD.adhoc_item_id is not null then
     raise notice '🗑️ [DB] Task has adhoc_item_id: %, deleting item', OLD.adhoc_item_id;
@@ -16654,7 +16654,7 @@ begin
   else
     raise notice '🗑️ [DB] Task has no adhoc_item_id, nothing to clean up';
   end if;
-  
+
   return OLD;
 end;
 $$;
@@ -16759,86 +16759,86 @@ begin
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'user_id') then
     alter table employees add column user_id uuid references auth.users(id);
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'employee_number') then
     alter table employees add column employee_number text;
     -- Add unique constraint separately
     alter table employees add constraint employees_employee_number_key unique (employee_number);
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'email') then
     alter table employees add column email text unique;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'phone') then
     alter table employees add column phone text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'rut') then
     alter table employees add column rut text unique;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'birth_date') then
     alter table employees add column birth_date date;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'hire_date') then
     alter table employees add column hire_date date not null default current_date;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'termination_date') then
     alter table employees add column termination_date date;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'department_id') then
     alter table employees add column department_id uuid references departments(id);
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'job_title') then
     alter table employees add column job_title text not null default 'Sin cargo';
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'employment_type') then
     alter table employees add column employment_type text check (employment_type in ('full_time', 'part_time', 'contractor', 'intern')) not null default 'full_time';
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'status') then
     alter table employees add column status text check (status in ('active', 'inactive', 'on_leave', 'terminated')) not null default 'active';
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'photo_url') then
     alter table employees add column photo_url text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'address') then
     alter table employees add column address text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'city') then
     alter table employees add column city text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'emergency_contact_name') then
     alter table employees add column emergency_contact_name text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'emergency_contact_phone') then
     alter table employees add column emergency_contact_phone text;
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'notes') then
     alter table employees add column notes text;
   end if;
-  
+
   -- Add created_at and updated_at columns if they don't exist
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'created_at') then
     alter table employees add column created_at timestamp with time zone not null default now();
   end if;
-  
+
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'updated_at') then
     alter table employees add column updated_at timestamp with time zone not null default now();
   end if;
-  
+
   -- Fix company_id column if it exists - make it nullable
   if exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'company_id') then
     begin
@@ -16866,14 +16866,14 @@ begin
     alter table user_profiles add column employee_id uuid references employees(id) on delete set null;
     create index idx_user_profiles_employee on user_profiles(employee_id);
   end if;
-  
+
   -- Add system_role to employees (maps to user_profiles.role)
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'system_role') then
-    alter table employees add column system_role text 
+    alter table employees add column system_role text
       check (system_role in ('admin', 'manager', 'cashier', 'mechanic', 'accountant'));
     comment on column employees.system_role is 'System access role if employee has user account';
   end if;
-  
+
   -- Add tenant_id to employees (was missing!)
   if not exists (select 1 from information_schema.columns where table_name = 'employees' and column_name = 'tenant_id') then
     alter table employees add column tenant_id uuid references tenants(id) on delete cascade not null;
@@ -16910,13 +16910,13 @@ drop policy if exists "job_roles_delete" on job_roles;
 
 create policy "job_roles_select" on job_roles for select to authenticated
   using (tenant_id = public.user_tenant_id());
-  
+
 create policy "job_roles_insert" on job_roles for insert to authenticated
   with check (tenant_id = public.user_tenant_id());
-  
+
 create policy "job_roles_update" on job_roles for update to authenticated
   using (tenant_id = public.user_tenant_id());
-  
+
 create policy "job_roles_delete" on job_roles for delete to authenticated
   using (tenant_id = public.user_tenant_id());
 
@@ -16930,7 +16930,7 @@ as $$
 begin
   -- Delete existing roles for clean slate
   delete from job_roles where tenant_id = p_tenant_id;
-  
+
   -- Admin role
   insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
   values (
@@ -16941,7 +16941,7 @@ begin
     '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb,
     1
   );
-  
+
   -- Manager role
   insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
   values (
@@ -16952,7 +16952,7 @@ begin
     '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": false}'::jsonb,
     2
   );
-  
+
   -- Cashier role
   insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
   values (
@@ -16963,7 +16963,7 @@ begin
     '{"access_pos": true, "create_invoices": true, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb,
     3
   );
-  
+
   -- Mechanic role
   insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
   values (
@@ -16974,7 +16974,7 @@ begin
     '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": false, "manage_users": false, "edit_settings": false}'::jsonb,
     4
   );
-  
+
   -- Accountant role
   insert into job_roles (tenant_id, system_role, display_name, suggested_titles, default_permissions, sort_order)
   values (
@@ -16985,7 +16985,7 @@ begin
     '{"access_pos": false, "create_invoices": false, "edit_prices": false, "delete_invoices": false, "access_accounting": true, "manage_users": false, "edit_settings": false}'::jsonb,
     5
   );
-  
+
   raise notice 'Seeded 5 job roles for tenant %', p_tenant_id;
 end;
 $$;
@@ -17004,12 +17004,12 @@ create index if not exists idx_employees_name on employees using gin (
 do $$
 begin
   if not exists (
-    select 1 from information_schema.table_constraints 
+    select 1 from information_schema.table_constraints
     where constraint_name = 'departments_manager_id_fkey_employees'
   ) then
-    alter table departments 
+    alter table departments
       drop constraint if exists departments_manager_id_fkey,
-      add constraint departments_manager_id_fkey_employees 
+      add constraint departments_manager_id_fkey_employees
         foreign key (manager_id) references employees(id);
   end if;
 end $$;
@@ -17123,12 +17123,12 @@ begin
     -- Calculate total worked hours
     v_hours := extract(epoch from (NEW.check_out - NEW.check_in)) / 3600.0;
     v_hours := round(v_hours - (coalesce(NEW.break_minutes, 0) / 60.0), 2);
-    
+
     NEW.worked_hours := v_hours;
-    
+
     -- Calculate overtime (compare with scheduled hours from contract)
-    select 
-      case 
+    select
+      case
         when c.weekly_hours is not null then c.weekly_hours / 5.0 -- Assuming 5-day work week
         when ws.weekly_hours is not null then ws.weekly_hours / 5.0
         else 9.0 -- Default 9 hours/day
@@ -17139,17 +17139,17 @@ begin
     left join work_schedules ws on ws.id = c.work_schedule_id
     where e.id = NEW.employee_id
     limit 1;
-    
+
     v_scheduled_hours := coalesce(v_scheduled_hours, 9.0);
     v_overtime := greatest(0, v_hours - v_scheduled_hours);
     NEW.overtime_hours := v_overtime;
-    
+
     -- Auto-complete status
     if NEW.status = 'ongoing' then
       NEW.status := 'completed';
     end if;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -17171,21 +17171,21 @@ declare
   v_ongoing_count integer;
 begin
   -- Only check on INSERT or when status becomes 'ongoing'
-  if (TG_OP = 'INSERT' or (TG_OP = 'UPDATE' and NEW.status = 'ongoing')) 
+  if (TG_OP = 'INSERT' or (TG_OP = 'UPDATE' and NEW.status = 'ongoing'))
      and NEW.status = 'ongoing' and NEW.check_out is null then
-    
+
     select count(*) into v_ongoing_count
     from attendances
     where employee_id = NEW.employee_id
       and status = 'ongoing'
       and check_out is null
       and id != coalesce(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid);
-    
+
     if v_ongoing_count > 0 then
       raise exception 'Employee % already has an ongoing attendance session', NEW.employee_id;
     end if;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -17213,7 +17213,7 @@ set search_path = public
 as $$
 begin
   return query
-  select 
+  select
     a.id as attendance_id,
     a.employee_id,
     e.first_name || ' ' || e.last_name as employee_name,
@@ -17247,7 +17247,7 @@ set search_path = public
 as $$
 begin
   return query
-  select 
+  select
     count(distinct date(a.check_in))::integer as total_days,
     coalesce(sum(a.worked_hours), 0) as total_hours,
     coalesce(sum(a.overtime_hours), 0) as total_overtime,
@@ -17409,30 +17409,30 @@ end $$;
 create table if not exists website_pages (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  
+
   -- Page identification
   slug text not null, -- URL path: 'inicio', 'servicios', 'contacto', 'mi-pagina'
   title text not null, -- Page title for browser tab and SEO
-  
+
   -- SEO fields
   meta_title text, -- Override for <title> tag (if different from title)
   meta_description text, -- Meta description for search engines
   meta_keywords text, -- Comma-separated keywords
   og_image_url text, -- Open Graph image for social sharing
-  
+
   -- Page status
   is_published boolean default false, -- Only published pages are visible to public
   is_home boolean default false, -- Only ONE page per tenant can be home
   is_system boolean default false, -- System pages can't be deleted (home, products, cart)
-  
+
   -- Template
   template text default 'default', -- 'default', 'landing', 'blog', 'product-list'
-  
+
   -- Timestamps
   published_at timestamp with time zone, -- When page was first published
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  
+
   -- Constraints
   unique(tenant_id, slug) -- Each tenant can have one page per slug
 );
@@ -17526,34 +17526,34 @@ create trigger trg_set_published_at
 create table if not exists website_navigation (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  
+
   -- Menu location
   menu_location text not null default 'header', -- 'header', 'footer', 'sidebar'
-  
+
   -- Link display
   label text not null, -- Text shown to users
   icon text, -- Optional icon name (e.g., 'home', 'shopping_bag')
-  
+
   -- Link target
   link_type text not null default 'page', -- 'page', 'external', 'anchor', 'category', 'action'
   link_value text, -- page_id (uuid), URL, #anchor, category_id, or action name
   open_in_new_tab boolean default false,
-  
+
   -- Hierarchy (for dropdowns)
   parent_id uuid references website_navigation(id) on delete cascade,
-  
+
   -- Order and visibility
   order_index integer default 0,
   is_visible boolean default true,
-  
+
   -- Responsive visibility
   show_on_desktop boolean default true,
   show_on_mobile boolean default true,
-  
+
   -- Styling (optional)
   css_class text, -- Custom CSS class for styling
   highlight boolean default false, -- Makes item stand out (e.g., "Contact Us" button)
-  
+
   -- Timestamps
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
@@ -17626,67 +17626,67 @@ begin
   values (p_tenant_id, 'inicio', 'Inicio', true, true, true, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_home_page_id;
-  
+
   -- Create Products page (system page)
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'productos', 'Productos', true, false, true, 'product-list')
   on conflict (tenant_id, slug) do nothing
   returning id into v_products_page_id;
-  
+
   -- Create Contact page
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'contacto', 'Contacto', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_contact_page_id;
-  
+
   -- ============================================
   -- POLICY PAGES (Required for Google Merchant)
   -- ============================================
-  
+
   -- About Us page
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'nosotros', 'Sobre Nosotros', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_about_page_id;
-  
+
   -- Terms and Conditions
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'terminos', 'Términos y Condiciones', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_terms_page_id;
-  
+
   -- Privacy Policy
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'privacidad', 'Política de Privacidad', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_privacy_page_id;
-  
+
   -- Returns Policy
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'devoluciones', 'Política de Devoluciones', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_returns_page_id;
-  
+
   -- Shipping Info
   insert into website_pages (tenant_id, slug, title, is_published, is_home, is_system, template)
   values (p_tenant_id, 'envios', 'Información de Envíos', true, false, false, 'default')
   on conflict (tenant_id, slug) do nothing
   returning id into v_shipping_page_id;
-  
+
   -- Migrate existing blocks to home page (for existing tenants)
   update website_blocks
   set page_id = v_home_page_id
   where tenant_id = p_tenant_id and page_id is null;
-  
+
   -- Create default navigation for header (only if no nav exists)
   if not exists (select 1 from website_navigation where tenant_id = p_tenant_id and menu_location = 'header') then
     insert into website_navigation (tenant_id, menu_location, label, link_type, link_value, order_index)
-    values 
+    values
       (p_tenant_id, 'header', 'Inicio', 'page', v_home_page_id::text, 0),
       (p_tenant_id, 'header', 'Productos', 'page', v_products_page_id::text, 1),
       (p_tenant_id, 'header', 'Contacto', 'page', v_contact_page_id::text, 2);
   end if;
-  
+
   raise notice '✅ Seeded website pages and navigation for tenant %', p_tenant_id;
 end;
 $$;
@@ -17709,9 +17709,9 @@ begin
   -- ============================================
   -- ABOUT US PAGE (Sobre Nosotros)
   -- ============================================
-  select id into v_page_id from website_pages 
+  select id into v_page_id from website_pages
   where tenant_id = p_tenant_id and slug = 'nosotros';
-  
+
   if v_page_id is not null and not exists (
     select 1 from website_blocks where page_id = v_page_id
   ) then
@@ -17724,20 +17724,20 @@ begin
       'text_color', '#ffffff',
       'height', 'small'
     ));
-    
+
     -- Content section
     insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
     values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
       'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
         <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e;">Nuestra Historia</h2>
         <p style="font-size: 18px; line-height: 1.8; color: #444; margin-bottom: 24px;">
-          Somos una empresa chilena dedicada al mundo del ciclismo, con años de experiencia 
-          brindando productos de calidad y servicio técnico especializado. Nuestra pasión 
+          Somos una empresa chilena dedicada al mundo del ciclismo, con años de experiencia
+          brindando productos de calidad y servicio técnico especializado. Nuestra pasión
           por las bicicletas nos impulsa a ofrecer siempre lo mejor a nuestros clientes.
         </p>
         <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e; margin-top: 48px;">Nuestra Misión</h2>
         <p style="font-size: 18px; line-height: 1.8; color: #444; margin-bottom: 24px;">
-          Promover el ciclismo como estilo de vida saludable y sustentable, ofreciendo 
+          Promover el ciclismo como estilo de vida saludable y sustentable, ofreciendo
           productos de calidad, asesoría experta y servicio técnico profesional.
         </p>
         <h2 style="font-size: 32px; margin-bottom: 24px; color: #1a1a2e; margin-top: 48px;">¿Por qué elegirnos?</h2>
@@ -17752,13 +17752,13 @@ begin
       'background_color', '#ffffff'
     ));
   end if;
-  
+
   -- ============================================
   -- TERMS AND CONDITIONS PAGE
   -- ============================================
-  select id into v_page_id from website_pages 
+  select id into v_page_id from website_pages
   where tenant_id = p_tenant_id and slug = 'terminos';
-  
+
   if v_page_id is not null and not exists (
     select 1 from website_blocks where page_id = v_page_id
   ) then
@@ -17770,74 +17770,74 @@ begin
       'text_color', '#ffffff',
       'height', 'small'
     ));
-    
+
     insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
     values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
       'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
         <p style="color: #666; margin-bottom: 32px;">Última actualización: Diciembre 2025</p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">1. Aceptación de los Términos</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Al acceder y utilizar este sitio web, usted acepta estar sujeto a estos términos y 
-          condiciones de uso. Si no está de acuerdo con alguna parte de estos términos, 
+          Al acceder y utilizar este sitio web, usted acepta estar sujeto a estos términos y
+          condiciones de uso. Si no está de acuerdo con alguna parte de estos términos,
           le rogamos que no utilice nuestro sitio web.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">2. Uso del Sitio</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Este sitio web está destinado únicamente para uso personal y no comercial. 
-          Usted se compromete a utilizar el sitio de manera responsable y de acuerdo 
+          Este sitio web está destinado únicamente para uso personal y no comercial.
+          Usted se compromete a utilizar el sitio de manera responsable y de acuerdo
           con la legislación vigente en Chile.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">3. Productos y Precios</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Los precios mostrados en el sitio incluyen IVA y están expresados en pesos chilenos (CLP). 
-          Nos reservamos el derecho de modificar los precios sin previo aviso. Las fotografías 
+          Los precios mostrados en el sitio incluyen IVA y están expresados en pesos chilenos (CLP).
+          Nos reservamos el derecho de modificar los precios sin previo aviso. Las fotografías
           de los productos son referenciales.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">4. Proceso de Compra</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Al realizar una compra, usted confirma que la información proporcionada es veraz y completa. 
-          Nos reservamos el derecho de cancelar pedidos si detectamos información incorrecta o 
+          Al realizar una compra, usted confirma que la información proporcionada es veraz y completa.
+          Nos reservamos el derecho de cancelar pedidos si detectamos información incorrecta o
           actividad fraudulenta.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">5. Propiedad Intelectual</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Todo el contenido de este sitio web, incluyendo textos, imágenes, logotipos y diseños, 
+          Todo el contenido de este sitio web, incluyendo textos, imágenes, logotipos y diseños,
           está protegido por derechos de autor y no puede ser reproducido sin autorización expresa.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">6. Limitación de Responsabilidad</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          No seremos responsables por daños indirectos, incidentales o consecuentes derivados 
+          No seremos responsables por daños indirectos, incidentales o consecuentes derivados
           del uso de nuestro sitio web o productos, más allá de lo establecido por la ley chilena.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">7. Legislación Aplicable</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Estos términos se rigen por las leyes de la República de Chile. Cualquier disputa 
+          Estos términos se rigen por las leyes de la República de Chile. Cualquier disputa
           será sometida a los tribunales competentes de la ciudad de Viña del Mar.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">8. Contacto</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444;">
-          Para consultas sobre estos términos, contáctenos a través de nuestro formulario 
+          Para consultas sobre estos términos, contáctenos a través de nuestro formulario
           de contacto o al correo electrónico indicado en el sitio.
         </p>
       </div>',
       'background_color', '#ffffff'
     ));
   end if;
-  
+
   -- ============================================
   -- PRIVACY POLICY PAGE
   -- ============================================
-  select id into v_page_id from website_pages 
+  select id into v_page_id from website_pages
   where tenant_id = p_tenant_id and slug = 'privacidad';
-  
+
   if v_page_id is not null and not exists (
     select 1 from website_blocks where page_id = v_page_id
   ) then
@@ -17849,12 +17849,12 @@ begin
       'text_color', '#ffffff',
       'height', 'small'
     ));
-    
+
     insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
     values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
       'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
         <p style="color: #666; margin-bottom: 32px;">Última actualización: Diciembre 2025</p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">1. Información que Recopilamos</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
           Recopilamos información que usted nos proporciona directamente:
@@ -17867,7 +17867,7 @@ begin
           <li>RUT (para facturación)</li>
           <li>Información de pago (procesada de forma segura por terceros)</li>
         </ul>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">2. Uso de la Información</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
           Utilizamos su información para:
@@ -17879,28 +17879,28 @@ begin
           <li>Mejorar nuestros productos y servicios</li>
           <li>Cumplir con obligaciones legales y tributarias</li>
         </ul>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">3. Protección de Datos</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Implementamos medidas de seguridad técnicas y organizativas para proteger su información 
-          personal contra acceso no autorizado, alteración o destrucción. Utilizamos conexiones 
+          Implementamos medidas de seguridad técnicas y organizativas para proteger su información
+          personal contra acceso no autorizado, alteración o destrucción. Utilizamos conexiones
           seguras (HTTPS/SSL) para todas las transacciones.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">4. Compartir Información</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          No vendemos ni compartimos su información personal con terceros, excepto cuando es 
-          necesario para procesar su pedido (empresas de envío, procesadores de pago) o 
+          No vendemos ni compartimos su información personal con terceros, excepto cuando es
+          necesario para procesar su pedido (empresas de envío, procesadores de pago) o
           cuando la ley lo requiere.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">5. Cookies</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Utilizamos cookies para mejorar su experiencia de navegación, recordar sus preferencias 
-          y analizar el uso del sitio. Puede configurar su navegador para rechazar cookies, 
+          Utilizamos cookies para mejorar su experiencia de navegación, recordar sus preferencias
+          y analizar el uso del sitio. Puede configurar su navegador para rechazar cookies,
           aunque esto podría afectar algunas funcionalidades.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">6. Sus Derechos</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
           Conforme a la Ley 19.628 sobre Protección de Datos Personales, usted tiene derecho a:
@@ -17911,23 +17911,23 @@ begin
           <li>Solicitar la eliminación de sus datos</li>
           <li>Oponerse al tratamiento de sus datos</li>
         </ul>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">7. Contacto</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444;">
-          Para ejercer sus derechos o consultas sobre privacidad, contáctenos a través 
+          Para ejercer sus derechos o consultas sobre privacidad, contáctenos a través
           de nuestro formulario de contacto.
         </p>
       </div>',
       'background_color', '#ffffff'
     ));
   end if;
-  
+
   -- ============================================
   -- RETURNS POLICY PAGE
   -- ============================================
-  select id into v_page_id from website_pages 
+  select id into v_page_id from website_pages
   where tenant_id = p_tenant_id and slug = 'devoluciones';
-  
+
   if v_page_id is not null and not exists (
     select 1 from website_blocks where page_id = v_page_id
   ) then
@@ -17939,25 +17939,25 @@ begin
       'text_color', '#ffffff',
       'height', 'small'
     ));
-    
+
     insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
     values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
       'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Garantía Legal</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Todos nuestros productos cuentan con garantía legal de 6 meses según la Ley del 
-          Consumidor chilena (Ley 19.496). Esta garantía cubre defectos de fabricación 
+          Todos nuestros productos cuentan con garantía legal de 6 meses según la Ley del
+          Consumidor chilena (Ley 19.496). Esta garantía cubre defectos de fabricación
           y mal funcionamiento bajo uso normal.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Derecho a Retracto</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Para compras realizadas a través de nuestro sitio web, usted tiene derecho a 
-          retractarse de la compra dentro de los 10 días siguientes a la recepción del 
-          producto, siempre que este se encuentre en su empaque original, sin uso y 
+          Para compras realizadas a través de nuestro sitio web, usted tiene derecho a
+          retractarse de la compra dentro de los 10 días siguientes a la recepción del
+          producto, siempre que este se encuentre en su empaque original, sin uso y
           con todos sus accesorios.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Proceso de Devolución</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
           Para solicitar una devolución:
@@ -17968,7 +17968,7 @@ begin
           <li>Una vez recibido y verificado el producto, procesaremos el reembolso</li>
           <li>El reembolso se realizará por el mismo medio de pago utilizado</li>
         </ol>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Excepciones</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 16px;">
           No se aceptan devoluciones en los siguientes casos:
@@ -17980,29 +17980,29 @@ begin
           <li>Productos personalizados o a pedido</li>
           <li>Desgaste normal de componentes (neumáticos, frenos, cadenas)</li>
         </ul>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Cambios</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Aceptamos cambios de talla o modelo dentro de 15 días desde la recepción, 
+          Aceptamos cambios de talla o modelo dentro de 15 días desde la recepción,
           sujeto a disponibilidad de stock. El cliente asume el costo de envío del cambio.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Contacto</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444;">
-          Para gestionar devoluciones o cambios, contáctenos a través de nuestro 
+          Para gestionar devoluciones o cambios, contáctenos a través de nuestro
           formulario de contacto o directamente en nuestra tienda.
         </p>
       </div>',
       'background_color', '#ffffff'
     ));
   end if;
-  
+
   -- ============================================
   -- SHIPPING INFO PAGE
   -- ============================================
-  select id into v_page_id from website_pages 
+  select id into v_page_id from website_pages
   where tenant_id = p_tenant_id and slug = 'envios';
-  
+
   if v_page_id is not null and not exists (
     select 1 from website_blocks where page_id = v_page_id
   ) then
@@ -18014,16 +18014,16 @@ begin
       'text_color', '#ffffff',
       'height', 'small'
     ));
-    
+
     insert into website_blocks (tenant_id, page_id, block_type, order_index, is_visible, block_data)
     values (p_tenant_id, v_page_id, 'rich_text', 1, true, jsonb_build_object(
       'content', '<div style="max-width: 800px; margin: 0 auto; padding: 60px 20px;">
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Cobertura</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Realizamos envíos a todo Chile continental. Para zonas extremas (Arica, Punta Arenas, 
+          Realizamos envíos a todo Chile continental. Para zonas extremas (Arica, Punta Arenas,
           Chiloé y otras islas), los tiempos y costos pueden variar.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Costos de Envío</h2>
         <div style="background: #f8f9fa; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
           <p style="font-size: 18px; color: #1a1a2e; margin-bottom: 16px;"><strong>Región Metropolitana:</strong></p>
@@ -18040,7 +18040,7 @@ begin
             🚚 ¡Envío GRATIS en compras sobre $50.000!
           </p>
         </div>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Tiempos de Entrega</h2>
         <ul style="font-size: 16px; line-height: 2; color: #444; margin-bottom: 32px;">
           <li><strong>Viña del Mar / Valparaíso:</strong> 1-2 días hábiles</li>
@@ -18048,30 +18048,30 @@ begin
           <li><strong>Otras regiones:</strong> 3-5 días hábiles</li>
           <li><strong>Zonas extremas:</strong> 5-10 días hábiles</li>
         </ul>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Retiro en Tienda</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          También puede retirar su compra sin costo en nuestra tienda. Recibirá un correo 
+          También puede retirar su compra sin costo en nuestra tienda. Recibirá un correo
           de confirmación cuando su pedido esté listo para retiro (generalmente 24 horas hábiles).
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Seguimiento</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444; margin-bottom: 32px;">
-          Una vez despachado su pedido, recibirá un correo con el número de seguimiento 
+          Una vez despachado su pedido, recibirá un correo con el número de seguimiento
           para rastrear su envío en tiempo real.
         </p>
-        
+
         <h2 style="font-size: 24px; margin-bottom: 16px; color: #1a1a2e;">Bicicletas</h2>
         <p style="font-size: 16px; line-height: 1.8; color: #444;">
-          Las bicicletas se envían parcialmente armadas para mayor seguridad. Incluimos 
-          instrucciones de armado final. Para bicicletas de alta gama, recomendamos 
+          Las bicicletas se envían parcialmente armadas para mayor seguridad. Incluimos
+          instrucciones de armado final. Para bicicletas de alta gama, recomendamos
           retiro en tienda donde nuestros mecánicos realizan el armado completo sin costo adicional.
         </p>
       </div>',
       'background_color', '#ffffff'
     ));
   end if;
-  
+
   raise notice '✅ Seeded policy page content for tenant %', p_tenant_id;
 end;
 $$;
@@ -18105,20 +18105,20 @@ end $$;
 create table if not exists website_backups (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  
+
   -- Backup metadata
   name text not null, -- User-friendly name: "Before holiday redesign", "V1 Launch"
   description text, -- Optional notes about this backup
-  
+
   -- Snapshot data (complete copy of website state)
   blocks_snapshot jsonb not null default '[]'::jsonb, -- Array of all website_blocks
   settings_snapshot jsonb not null default '{}'::jsonb, -- All website_settings as key-value pairs
   pages_snapshot jsonb default '[]'::jsonb, -- Array of website_pages (for multi-page support)
-  
+
   -- Metadata
   block_count integer default 0, -- How many blocks in this backup
   is_auto_backup boolean default false, -- True if system-generated (e.g., before restore)
-  
+
   -- Timestamps
   created_at timestamp with time zone not null default now(),
   created_by uuid references auth.users(id) on delete set null -- Who created the backup
@@ -18175,7 +18175,7 @@ begin
   if v_tenant_id is null then
     raise exception 'No tenant found for current user';
   end if;
-  
+
   -- Snapshot all blocks
   select coalesce(jsonb_agg(
     jsonb_build_object(
@@ -18190,16 +18190,16 @@ begin
   into v_blocks
   from website_blocks
   where tenant_id = v_tenant_id;
-  
+
   -- Count blocks
   select count(*) into v_block_count from website_blocks where tenant_id = v_tenant_id;
-  
+
   -- Snapshot all settings as key-value object
   select coalesce(jsonb_object_agg(key, value), '{}'::jsonb)
   into v_settings
   from website_settings
   where tenant_id = v_tenant_id;
-  
+
   -- Snapshot all pages
   select coalesce(jsonb_agg(
     jsonb_build_object(
@@ -18216,7 +18216,7 @@ begin
   into v_pages
   from website_pages
   where tenant_id = v_tenant_id;
-  
+
   -- Insert backup
   insert into website_backups (
     tenant_id,
@@ -18240,7 +18240,7 @@ begin
     auth.uid()
   )
   returning id into v_backup_id;
-  
+
   return v_backup_id;
 end;
 $$;
@@ -18264,16 +18264,16 @@ begin
   if v_tenant_id is null then
     raise exception 'No tenant found for current user';
   end if;
-  
+
   -- Get the backup
   select * into v_backup
   from website_backups
   where id = p_backup_id and tenant_id = v_tenant_id;
-  
+
   if not found then
     raise exception 'Backup not found or access denied';
   end if;
-  
+
   -- Create safety backup before restoring (so user can undo)
   if p_create_safety_backup then
     perform public.create_website_backup(
@@ -18282,10 +18282,10 @@ begin
       true -- is_auto_backup
     );
   end if;
-  
+
   -- Delete current blocks
   delete from website_blocks where tenant_id = v_tenant_id;
-  
+
   -- Restore blocks from snapshot
   for v_block in select * from jsonb_array_elements(v_backup.blocks_snapshot)
   loop
@@ -18307,18 +18307,18 @@ begin
       (v_block.value->>'page_id')::uuid
     );
   end loop;
-  
+
   -- Restore settings (upsert each key-value pair)
   -- First, get all keys from the snapshot
   insert into website_settings (tenant_id, key, value)
-  select 
+  select
     v_tenant_id,
     key,
     value
   from jsonb_each_text(v_backup.settings_snapshot)
   on conflict (tenant_id, key) do update
   set value = excluded.value, updated_at = now();
-  
+
   return true;
 end;
 $$;
@@ -18336,14 +18336,14 @@ create table if not exists online_orders (
   customer_name text not null,
   customer_phone text,
   customer_address text, -- Legacy: billing address (kept for backward compatibility)
-  
+
   -- Order details
   subtotal numeric(12,2) not null default 0,
   tax_amount numeric(12,2) not null default 0,
   shipping_cost numeric(12,2) not null default 0,
   discount_amount numeric(12,2) not null default 0,
   total numeric(12,2) not null default 0,
-  
+
   -- Delivery type and shipping address
   delivery_type text not null default 'shipping' check (delivery_type in ('shipping', 'pickup')),
   shipping_address_line1 text,
@@ -18354,36 +18354,36 @@ create table if not exists online_orders (
   shipping_country text default 'Chile',
   shipping_carrier text,
   tracking_url text,
-  
+
   -- Order status (added ready_for_pickup for in-store pickup orders)
   status text not null default 'pending' check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled')),
   payment_status text not null default 'pending' check (payment_status in ('pending', 'paid', 'failed', 'refunded')),
-  
+
   -- Payment details
   payment_method text,
   payment_reference text, -- Stripe/MercadoPago transaction ID
   paid_at timestamp with time zone,
-  
+
   -- Tracking
   tracking_number text,
   shipped_at timestamp with time zone,
   delivered_at timestamp with time zone,
   ready_for_pickup_at timestamp with time zone, -- When order is ready for in-store pickup
-  
+
   -- Cancellation/refund
   cancelled_at timestamp with time zone,
   cancelled_reason text,
   refund_amount numeric(12,2) default 0,
   refunded_at timestamp with time zone,
-  
+
   -- ERP integration: Link to sales invoice when order is processed
   sales_invoice_id uuid references sales_invoices(id) on delete set null,
-  
+
   -- Notes
   customer_notes text,
   internal_notes text,
   notes text, -- Admin notes
-  
+
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, order_number)
@@ -18401,39 +18401,39 @@ do $$ begin
   alter table online_orders add column if not exists shipping_country text default 'Chile';
   alter table online_orders add column if not exists shipping_carrier text;
   alter table online_orders add column if not exists tracking_url text;
-  
+
   -- Pickup and cancellation
   alter table online_orders add column if not exists ready_for_pickup_at timestamp with time zone;
   alter table online_orders add column if not exists cancelled_at timestamp with time zone;
   alter table online_orders add column if not exists cancelled_reason text;
   alter table online_orders add column if not exists refund_amount numeric(12,2) default 0;
   alter table online_orders add column if not exists refunded_at timestamp with time zone;
-  
+
   -- Admin notes
   alter table online_orders add column if not exists notes text;
-  
+
   -- Update constraint to include ready_for_pickup
   alter table online_orders drop constraint if exists online_orders_status_check;
-  alter table online_orders add constraint online_orders_status_check 
+  alter table online_orders add constraint online_orders_status_check
     check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled'));
-    
+
   -- Update constraint for delivery type
   alter table online_orders drop constraint if exists online_orders_delivery_type_check;
-  alter table online_orders add constraint online_orders_delivery_type_check 
+  alter table online_orders add constraint online_orders_delivery_type_check
     check (delivery_type in ('shipping', 'pickup'));
-  
+
   -- CLEANUP: Remove duplicate invoice_id column (consolidated to sales_invoice_id)
   -- First copy any data from invoice_id to sales_invoice_id if sales_invoice_id is null
-  update online_orders 
-  set sales_invoice_id = invoice_id 
+  update online_orders
+  set sales_invoice_id = invoice_id
   where sales_invoice_id is null and invoice_id is not null;
-  
+
   -- Drop the redundant column
   alter table online_orders drop column if exists invoice_id;
-    
+
   raise notice '✅ Added new columns to online_orders table';
 exception
-  when others then 
+  when others then
     raise notice '⚠ Some columns may already exist or table not found: %', sqlerrm;
 end $$;
 
@@ -18732,29 +18732,29 @@ create table if not exists email_push_subscriptions (
   user_id uuid references auth.users(id) on delete cascade not null,
   tenant_id uuid references tenants(id) on delete cascade not null,
   provider text not null check (provider in ('gmail', 'zoho')),
-  
+
   -- Email address for lookup (Added Jan 10, 2026)
   email_address text,
-  
+
   -- Gmail specific: historyId for incremental sync
   gmail_history_id text,
   gmail_expiration timestamp with time zone,
-  
-  -- Zoho specific  
+
+  -- Zoho specific
   zoho_webhook_id text,
-  
+
   -- Notification trigger: update this to trigger realtime to app
   new_mail_notification boolean default false,
   notification_data jsonb,
-  
+
   -- Status
   is_active boolean default true,
   last_notification_at timestamp with time zone,
   error_message text,
-  
+
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
-  
+
   unique(user_id, provider)
 );
 
@@ -18806,18 +18806,18 @@ as $$
 begin
   -- Update the subscription to trigger realtime notification
   update email_push_subscriptions
-  set 
+  set
     new_mail_notification = true,
     notification_data = p_notification_data,
     gmail_history_id = coalesce(p_history_id, gmail_history_id),
     last_notification_at = now(),
     updated_at = now()
   where user_id = p_user_id and provider = p_provider;
-  
+
   -- If no subscription exists, create one
   if not found then
     insert into email_push_subscriptions (user_id, tenant_id, provider, gmail_history_id, new_mail_notification, notification_data, last_notification_at)
-    select 
+    select
       p_user_id,
       up.tenant_id,
       p_provider,
@@ -18841,7 +18841,7 @@ grant execute on function public.notify_new_email(uuid, text, text, jsonb) to se
 
 -- Add delivery type and fulfillment tracking to online_orders
 alter table online_orders
-  add column if not exists delivery_type text not null default 'shipping' 
+  add column if not exists delivery_type text not null default 'shipping'
     check (delivery_type in ('shipping', 'pickup')),
   add column if not exists ready_for_pickup_at timestamp with time zone,
   add column if not exists cancelled_at timestamp with time zone,
@@ -18864,7 +18864,7 @@ alter table online_orders
 do $$
 begin
   alter table online_orders drop constraint if exists online_orders_status_check;
-  alter table online_orders add constraint online_orders_status_check 
+  alter table online_orders add constraint online_orders_status_check
     check (status in ('pending', 'confirmed', 'processing', 'ready_for_pickup', 'shipped', 'delivered', 'cancelled'));
 exception when others then
   raise notice 'Could not update online_orders status constraint: %', sqlerrm;
@@ -18916,17 +18916,17 @@ begin
   from online_orders
   where id = p_order_id
   for update;
-  
+
   if not found then
     raise exception 'Order not found: %', p_order_id;
   end if;
-  
+
   -- CRITICAL: Get tenant_id from the order
   v_tenant_id := v_order.tenant_id;
   if v_tenant_id is null then
     raise exception 'Order has no tenant_id: %', p_order_id;
   end if;
-  
+
   -- Check if invoice already exists
   if v_order.sales_invoice_id is not null then
     -- Invoice exists - check if we need to update it to 'paid' status
@@ -18939,7 +18939,7 @@ begin
         and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
         and is_active = true
       limit 1;
-      
+
       -- If payment method not found, try fallback
       if v_payment_method is null then
         select * into v_payment_method
@@ -18949,12 +18949,12 @@ begin
         order by sort_order
         limit 1;
       end if;
-      
+
       -- Check if invoice is not already paid
-      perform 1 from sales_invoices 
-      where id = v_order.sales_invoice_id 
+      perform 1 from sales_invoices
+      where id = v_order.sales_invoice_id
         and status != 'paid';
-        
+
       if found then
         -- Update invoice to paid status
         update sales_invoices
@@ -18963,10 +18963,10 @@ begin
             balance = 0,
             updated_at = now()
         where id = v_order.sales_invoice_id;
-        
+
         -- Create payment record if not exists
         if not exists (
-          select 1 from sales_payments 
+          select 1 from sales_payments
           where invoice_id = v_order.sales_invoice_id
         ) and v_payment_method.id is not null then
           insert into sales_payments (
@@ -18989,17 +18989,17 @@ begin
             'Pago automático - Pedido online #' || v_order.order_number ||
             ' (' || coalesce(v_payment_method.name, v_order.payment_method) || ')'
           );
-          
+
           raise notice 'Created payment record for existing invoice (order: %)', v_order.order_number;
         end if;
-        
+
         raise notice 'Updated existing invoice to paid status (order: %)', v_order.order_number;
       end if;
     end if;
-    
+
     return v_order.sales_invoice_id;
   end if;
-  
+
   -- Get payment method configuration
   select * into v_payment_method
   from payment_methods
@@ -19007,7 +19007,7 @@ begin
     and lower(code) = lower(coalesce(v_order.payment_method, 'mercadopago'))
     and is_active = true
   limit 1;
-  
+
   -- If payment method not found, try fallback
   if v_payment_method is null then
     select * into v_payment_method
@@ -19017,7 +19017,7 @@ begin
     order by sort_order
     limit 1;
   end if;
-  
+
   -- ============================================================================
   -- DETERMINE TAX TREATMENT BASED ON PAYMENT METHOD
   -- ============================================================================
@@ -19035,7 +19035,7 @@ begin
     v_net_amount := v_order.subtotal;
     v_iva_amount := 0;
   end if;
-  
+
   -- ============================================================================
   -- DETERMINE INVOICE STATUS BASED ON PAYMENT METHOD + STATUS
   -- ============================================================================
@@ -19062,18 +19062,18 @@ begin
     else
       coalesce(v_order.created_at, now())
   end;
-  
+
   -- Generate invoice number PER TENANT in format: INV-25-00001
   v_year := to_char(v_invoice_date, 'YY');
-  
+
   select coalesce(max(cast(substring(invoice_number from '\d+$') as integer)), 0) + 1
   into v_next_number
   from sales_invoices
   where tenant_id = v_tenant_id
     and invoice_number ~ ('^INV-' || v_year || '-\d+$');
-  
+
   v_invoice_number := 'INV-' || v_year || '-' || lpad(v_next_number::text, 5, '0');
-  
+
   -- Build items JSONB array from order items
   select jsonb_agg(
     jsonb_build_object(
@@ -19087,12 +19087,12 @@ begin
   ) into v_items
   from online_order_items oi
   where oi.order_id = p_order_id;
-  
+
   -- Default to empty array if no items
   if v_items is null then
     v_items := '[]'::jsonb;
   end if;
-  
+
   -- Create sales invoice WITH tenant_id
   -- Only 'paid' status triggers inventory deduction + journal entry
   insert into sales_invoices (
@@ -19129,18 +19129,18 @@ begin
     case when v_should_create_payment then v_order.total else 0 end,
     case when v_should_create_payment then 0 else v_order.total end,
     v_items,
-    'Pedido online #' || v_order.order_number || 
-    case 
+    'Pedido online #' || v_order.order_number ||
+    case
       when v_order.delivery_type = 'pickup' then ' (Retiro en tienda)'
       else ' (Envío)'
     end,
     'ecommerce'
   )
   returning id into v_invoice_id;
-  
-  raise notice 'Created invoice % (status: %, tax: %) for online order %', 
+
+  raise notice 'Created invoice % (status: %, tax: %) for online order %',
     v_invoice_number, v_invoice_status, v_tax_treatment, v_order.order_number;
-  
+
   -- ============================================================================
   -- CRITICAL: Directly call inventory and journal functions here
   -- The trigger handle_sales_invoice_change has pg_trigger_depth() > 1 check
@@ -19153,28 +19153,28 @@ begin
       v_invoice_record sales_invoices%rowtype;
     begin
       select * into v_invoice_record from sales_invoices where id = v_invoice_id;
-      
+
       -- Consume inventory (deduct stock)
       raise notice 'Calling consume_sales_invoice_inventory for invoice %', v_invoice_number;
       perform public.consume_sales_invoice_inventory(v_invoice_record);
-      
+
       -- Create sale journal entry
       raise notice 'Calling create_sales_invoice_journal_entry for invoice %', v_invoice_number;
       perform public.create_sales_invoice_journal_entry(v_invoice_record);
     end;
   end if;
-  
+
   -- Link invoice to order + update order status
   update online_orders
-  set 
+  set
     sales_invoice_id = v_invoice_id,
-    status = case 
-      when status = 'pending' then 'confirmed' 
-      else status 
+    status = case
+      when status = 'pending' then 'confirmed'
+      else status
     end,
     updated_at = now()
   where id = p_order_id;
-  
+
   -- Create payment record ONLY if payment is confirmed
   if v_should_create_payment and v_payment_method.id is not null then
     insert into sales_payments (
@@ -19197,14 +19197,14 @@ begin
       'Pago automático - Pedido online #' || v_order.order_number ||
       ' (' || coalesce(v_payment_method.name, v_order.payment_method) || ')'
     );
-    
-    raise notice 'Created payment record for invoice % (method: %)', 
+
+    raise notice 'Created payment record for invoice % (method: %)',
       v_invoice_number, v_payment_method.name;
   elsif not v_should_create_payment then
     raise notice 'Invoice % pending manual payment confirmation (method: %)',
       v_invoice_number, v_order.payment_method;
   end if;
-  
+
   return v_invoice_id;
 end;
 $$;
@@ -19235,30 +19235,30 @@ begin
   from online_orders
   where id = p_order_id
     and tenant_id = public.user_tenant_id();
-    
+
   if v_order is null then
     raise exception 'Order not found or access denied: %', p_order_id;
   end if;
-  
+
   -- Check if already cancelled
   if v_order.status = 'cancelled' then
     raise exception 'Order is already cancelled';
   end if;
-  
+
   -- Get associated invoice if exists
   if v_order.sales_invoice_id is not null then
     select * into v_invoice
     from sales_invoices
     where id = v_order.sales_invoice_id;
   end if;
-  
+
   -- Determine refund amount
   if p_refund_amount is null then
     v_actual_refund := v_order.total;
   else
     v_actual_refund := least(p_refund_amount, v_order.total);
   end if;
-  
+
   -- Start cancellation process
   -- 1. Cancel/delete the invoice (which will restore inventory and delete journal entries)
   if v_invoice is not null then
@@ -19273,23 +19273,23 @@ begin
     ) then
       -- Delete payments first (triggers will handle journal entry reversal)
       delete from sales_payments where invoice_id = v_invoice.id;
-      
+
       -- Set invoice back to draft (which triggers inventory restoration)
       update sales_invoices
       set status = 'draft',
           updated_at = now()
       where id = v_invoice.id;
     end if;
-    
+
     -- Now delete the invoice
     delete from sales_invoices where id = v_invoice.id;
-    
+
     raise notice 'Deleted invoice % and restored inventory', v_invoice.invoice_number;
   end if;
-  
+
   -- 2. Update the order status
   update online_orders
-  set 
+  set
     status = 'cancelled',
     cancelled_at = now(),
     cancelled_reason = p_reason,
@@ -19298,7 +19298,7 @@ begin
     sales_invoice_id = null, -- Clear invoice reference
     updated_at = now()
   where id = p_order_id;
-  
+
   -- Build result
   v_result := jsonb_build_object(
     'success', true,
@@ -19310,7 +19310,7 @@ begin
     'invoice_number', coalesce(v_invoice.invoice_number, null),
     'message', format('Order %s cancelled. Refund: $%s', v_order.order_number, v_actual_refund)
   );
-  
+
   return v_result;
 end;
 $$;
@@ -19345,31 +19345,31 @@ begin
   from online_orders
   where id = p_order_id
     and tenant_id = public.user_tenant_id();
-  
+
   if not found then
     raise exception 'Order not found or access denied: %', p_order_id;
   end if;
-  
+
   -- Check order has invoice
   if v_order.sales_invoice_id is null then
     raise exception 'Order has no invoice. Call process_online_order first.';
   end if;
-  
+
   -- Get invoice
   select * into v_invoice
   from sales_invoices
   where id = v_order.sales_invoice_id;
-  
+
   if not found then
     raise exception 'Invoice not found: %', v_order.sales_invoice_id;
   end if;
-  
+
   -- Check invoice isn't already paid
   if v_invoice.status = 'paid' then
     raise notice 'Invoice already paid';
     return null;
   end if;
-  
+
   -- Get payment method
   select id into v_payment_method_id
   from payment_methods
@@ -19377,7 +19377,7 @@ begin
     and lower(code) = lower(coalesce(v_order.payment_method, 'transfer'))
     and is_active = true
   limit 1;
-  
+
   -- Fallback to any transfer method
   if v_payment_method_id is null then
     select id into v_payment_method_id
@@ -19387,19 +19387,19 @@ begin
       and is_active = true
     limit 1;
   end if;
-  
+
   if v_payment_method_id is null then
     raise exception 'No payment method found for tenant %', v_order.tenant_id;
   end if;
-  
+
   -- Update invoice to confirmed (triggers inventory deduction if not already done)
   update sales_invoices
-  set 
+  set
     status = 'confirmed',
     updated_at = now()
   where id = v_invoice.id
     and status != 'paid'; -- Only update if not already paid
-  
+
   -- Create payment record (triggers journal entry + updates invoice to paid)
   insert into sales_payments (
     tenant_id,
@@ -19421,19 +19421,19 @@ begin
     'Confirmación manual - Transferencia bancaria - Pedido #' || v_order.order_number
   )
   returning id into v_payment_id;
-  
+
   -- Update order payment status
   update online_orders
-  set 
+  set
     payment_status = 'paid',
     paid_at = p_payment_date,
     payment_reference = coalesce(p_payment_reference, payment_reference),
     updated_at = now()
   where id = p_order_id;
-  
-  raise notice 'Payment confirmed for order % (invoice %)', 
+
+  raise notice 'Payment confirmed for order % (invoice %)',
     v_order.order_number, v_invoice.invoice_number;
-  
+
   return v_payment_id;
 end;
 $$;
@@ -19464,7 +19464,7 @@ begin
   else
     raise notice 'MercadoPago order % - invoice will be created on payment confirmation', NEW.order_number;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -19502,16 +19502,16 @@ begin
   from online_orders
   where id = p_order_id
     and tenant_id = public.user_tenant_id();
-    
+
   if v_order is null then
     raise exception 'Order not found or access denied: %', p_order_id;
   end if;
-  
+
   -- Validate status transition
   if v_order.status = 'cancelled' then
     raise exception 'Cannot change status of cancelled order';
   end if;
-  
+
   -- Handle status-specific logic
   case p_new_status
     -- Order confirmed (usually after payment)
@@ -19520,13 +19520,13 @@ begin
       if v_order.sales_invoice_id is null and v_order.payment_status = 'paid' then
         v_invoice_id := public.process_online_order(p_order_id);
       end if;
-      
+
     -- Processing (preparing order)
     when 'processing' then
       if v_order.sales_invoice_id is null then
         raise exception 'Cannot process order without invoice. Confirm order first.';
       end if;
-      
+
     -- Ready for pickup (in-store pickup orders)
     when 'ready_for_pickup' then
       if v_order.delivery_type != 'pickup' then
@@ -19535,43 +19535,43 @@ begin
       update online_orders
       set ready_for_pickup_at = now()
       where id = p_order_id;
-      
+
     -- Shipped
     when 'shipped' then
       if v_order.delivery_type != 'shipping' then
         raise exception 'Can only ship delivery orders, not pickup orders';
       end if;
       update online_orders
-      set 
+      set
         shipped_at = now(),
         tracking_number = coalesce(p_tracking_number, tracking_number),
         tracking_url = coalesce(p_tracking_url, tracking_url),
         shipping_carrier = coalesce(p_carrier, shipping_carrier)
       where id = p_order_id;
-      
+
     -- Delivered
     when 'delivered' then
       update online_orders
       set delivered_at = now()
       where id = p_order_id;
-      
+
     -- Cancelled
     when 'cancelled' then
       -- Use dedicated cancel function
       return public.cancel_online_order(p_order_id, coalesce(p_notes, 'Cancelado'));
-      
+
     else
       raise exception 'Invalid status: %', p_new_status;
   end case;
-  
+
   -- Update the status
   update online_orders
-  set 
+  set
     status = p_new_status,
     notes = coalesce(p_notes, notes),
     updated_at = now()
   where id = p_order_id;
-  
+
   return jsonb_build_object(
     'success', true,
     'order_id', p_order_id,
@@ -19597,18 +19597,18 @@ declare
   v_invoice_id uuid;
 begin
   -- Only process when payment_status changes to 'paid'
-  if NEW.payment_status = 'paid' and 
+  if NEW.payment_status = 'paid' and
      (OLD.payment_status is null or OLD.payment_status != 'paid') and
      NEW.status != 'cancelled' then
-     
+
     -- Call process_online_order regardless of whether invoice exists
     -- If invoice exists, it will update it to 'paid' status
     -- If invoice doesn't exist, it will create one
     v_invoice_id := public.process_online_order(NEW.id);
-    
+
     raise notice 'Auto-processed order % -> Invoice %', NEW.order_number, v_invoice_id;
   end if;
-  
+
   return NEW;
 end;
 $$;
@@ -19618,13 +19618,13 @@ do $$
 begin
   -- Drop existing trigger if any
   drop trigger if exists trg_auto_process_paid_online_order on online_orders;
-  
+
   -- Create new trigger (AFTER to allow the row to be committed first)
   create trigger trg_auto_process_paid_online_order
     after update of payment_status on online_orders
     for each row
     execute function public.handle_online_order_payment();
-    
+
   raise notice 'Created trigger trg_auto_process_paid_online_order';
 end $$;
 
@@ -19643,13 +19643,13 @@ declare
   v_number text;
 begin
   v_year := to_char(now(), 'YY');
-  
+
   select count(*) + 1 into v_count
   from online_orders
   where extract(year from created_at) = extract(year from now());
-  
+
   v_number := 'WEB-' || v_year || '-' || lpad(v_count::text, 5, '0');
-  
+
   return v_number;
 end;
 $$;
@@ -19974,8 +19974,8 @@ do $$
 begin
   -- Only insert if website_settings table doesn't have tenant_id unique constraint
   if not exists (
-    select 1 from information_schema.table_constraints 
-    where table_name = 'website_settings' 
+    select 1 from information_schema.table_constraints
+    where table_name = 'website_settings'
       and constraint_type = 'UNIQUE'
       and constraint_name like '%tenant%'
   ) then
@@ -20267,7 +20267,7 @@ set search_path = public
 as $$
 begin
   return query
-  select 
+  select
     u.id,
     u.email::text,
     coalesce(up.role, 'viewer')::text as role,
@@ -20300,42 +20300,42 @@ declare
 begin
   -- Get caller's user ID from the session
   v_caller_user_id := auth.uid();
-  
+
   if v_caller_user_id is null then
     raise exception 'Not authenticated';
   end if;
-  
+
   -- Get caller's tenant_id and role from auth.users metadata
-  select 
+  select
     (raw_app_meta_data->>'tenant_id')::uuid,
     (raw_app_meta_data->>'role')::text
   into v_caller_tenant_id, v_caller_role
   from auth.users
   where id = v_caller_user_id;
-  
+
   -- Only managers can delete users
   if v_caller_role != 'manager' then
     raise exception 'Only managers can delete users. Your role: %', v_caller_role;
   end if;
-  
+
   -- Get the target user's tenant_id
   select (raw_app_meta_data->>'tenant_id')::uuid into v_tenant_id
   from auth.users
   where id = p_user_id;
-  
+
   -- Verify same tenant
   if v_tenant_id != v_caller_tenant_id then
     raise exception 'Cannot delete user from different tenant';
   end if;
-  
+
   -- Unlink from employee
   update employees
   set user_id = null
   where user_id = p_user_id;
-  
+
   -- Delete the auth user
   delete from auth.users where id = p_user_id;
-  
+
   raise notice 'User % deleted successfully', p_user_id;
 end;
 $$;
@@ -20355,10 +20355,10 @@ declare
 begin
   -- Bypass RLS by using security definer with explicit query
   select tenant_id into v_tenant_id
-  from user_profiles 
-  where user_id = auth.uid() 
+  from user_profiles
+  where user_id = auth.uid()
   limit 1;
-  
+
   return v_tenant_id;
 end;
 $$;
@@ -20403,7 +20403,7 @@ begin
   if exists (select 1 from information_schema.tables where table_name = 'tenants') then
     alter table tenants disable row level security;
   end if;
-  
+
   if exists (select 1 from information_schema.tables where table_name = 'user_activity_log') then
 	  alter table user_activity_log enable row level security;
 	end if;
@@ -20421,32 +20421,32 @@ begin
   if exists (select 1 from information_schema.tables where table_name = 'sales_invoice_items') then
     alter table sales_invoice_items enable row level security;
   end if;
-  
+
   alter table sales_payments enable row level security;
   alter table suppliers enable row level security;
   alter table purchase_invoices enable row level security;
-  
+
   if exists (select 1 from information_schema.tables where table_name = 'purchase_invoice_items') then
     alter table purchase_invoice_items enable row level security;
   end if;
-  
+
   alter table purchase_payments enable row level security;
-  
+
   if exists (select 1 from information_schema.tables where table_name = 'customer_bikes') then
     alter table customer_bikes enable row level security;
   end if;
-  
+
   alter table accounts enable row level security;
   alter table journal_entries enable row level security;
-  
+
   if exists (select 1 from information_schema.tables where table_name = 'journal_entry_lines') then
     alter table journal_entry_lines enable row level security;
   end if;
-  
+
   if exists (select 1 from information_schema.tables where table_name = 'fiscal_periods') then
     alter table fiscal_periods enable row level security;
   end if;
-  
+
   alter table employees enable row level security;
   alter table attendances enable row level security;
   alter table website_settings enable row level security;
@@ -20458,7 +20458,7 @@ begin
 end $$;
 
 -- Drop all existing policies before recreating (idempotent deployment)
-do $$ 
+do $$
 begin
   drop policy if exists "tenant_select_own" on tenants;
   drop policy if exists "tenant_update_own" on tenants;
@@ -20532,9 +20532,9 @@ begin
   drop policy if exists "payment_methods_update" on payment_methods;
   raise notice '✓ Dropped all existing RLS policies (idempotent deployment)';
 exception
-  when undefined_table then 
+  when undefined_table then
     raise notice '⚠ Some tables do not exist yet, skipping policy drops';
-  when undefined_object then 
+  when undefined_object then
     raise notice '⚠ Some policies do not exist yet, skipping';
   when undefined_column then
     raise notice '⚠ Column tenant_id does not exist in some tables yet, skipping policy drops';
@@ -20652,32 +20652,32 @@ end $$;
 do $$ begin
   if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sales_invoices') then
     alter table sales_invoices enable row level security;
-    
+
     drop policy if exists "sales_invoices_select" on sales_invoices;
     drop policy if exists "sales_invoices_insert" on sales_invoices;
     drop policy if exists "sales_invoices_update" on sales_invoices;
     drop policy if exists "sales_invoices_delete" on sales_invoices;
-    
-    create policy "sales_invoices_select" on sales_invoices 
-      for select 
+
+    create policy "sales_invoices_select" on sales_invoices
+      for select
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_invoices_insert" on sales_invoices 
-      for insert 
+
+    create policy "sales_invoices_insert" on sales_invoices
+      for insert
       to authenticated
       with check (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_invoices_update" on sales_invoices 
-      for update 
+
+    create policy "sales_invoices_update" on sales_invoices
+      for update
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_invoices_delete" on sales_invoices 
-      for delete 
+
+    create policy "sales_invoices_delete" on sales_invoices
+      for delete
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
+
     raise notice '✓ Created RLS policies for sales_invoices';
   else
     raise notice '⚠ Table sales_invoices does not exist yet';
@@ -20704,32 +20704,32 @@ end $$;
 do $$ begin
   if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'sales_payments') then
     alter table sales_payments enable row level security;
-    
+
     drop policy if exists "sales_payments_select" on sales_payments;
     drop policy if exists "sales_payments_insert" on sales_payments;
     drop policy if exists "sales_payments_update" on sales_payments;
     drop policy if exists "sales_payments_delete" on sales_payments;
-    
-    create policy "sales_payments_select" on sales_payments 
-      for select 
+
+    create policy "sales_payments_select" on sales_payments
+      for select
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_payments_insert" on sales_payments 
-      for insert 
+
+    create policy "sales_payments_insert" on sales_payments
+      for insert
       to authenticated
       with check (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_payments_update" on sales_payments 
-      for update 
+
+    create policy "sales_payments_update" on sales_payments
+      for update
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "sales_payments_delete" on sales_payments 
-      for delete 
+
+    create policy "sales_payments_delete" on sales_payments
+      for delete
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
+
     raise notice '✓ Created RLS policies for sales_payments';
   else
     raise notice '⚠ Table sales_payments does not exist yet';
@@ -20755,32 +20755,32 @@ end $$;
 do $$ begin
   if exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'purchase_invoices') then
     alter table purchase_invoices enable row level security;
-    
+
     drop policy if exists "purchase_invoices_select" on purchase_invoices;
     drop policy if exists "purchase_invoices_insert" on purchase_invoices;
     drop policy if exists "purchase_invoices_update" on purchase_invoices;
     drop policy if exists "purchase_invoices_delete" on purchase_invoices;
-    
-    create policy "purchase_invoices_select" on purchase_invoices 
-      for select 
+
+    create policy "purchase_invoices_select" on purchase_invoices
+      for select
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "purchase_invoices_insert" on purchase_invoices 
-      for insert 
+
+    create policy "purchase_invoices_insert" on purchase_invoices
+      for insert
       to authenticated
       with check (tenant_id = public.user_tenant_id());
-      
-    create policy "purchase_invoices_update" on purchase_invoices 
-      for update 
+
+    create policy "purchase_invoices_update" on purchase_invoices
+      for update
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
-    create policy "purchase_invoices_delete" on purchase_invoices 
-      for delete 
+
+    create policy "purchase_invoices_delete" on purchase_invoices
+      for delete
       to authenticated
       using (tenant_id = public.user_tenant_id());
-      
+
     raise notice '✓ Created RLS policies for purchase_invoices';
   else
     raise notice '⚠ Table purchase_invoices does not exist yet';
@@ -20806,32 +20806,32 @@ end $$;
 -- Purchase Payments: Tenant isolation
 do $$ begin
   alter table purchase_payments enable row level security;
-  
+
   drop policy if exists "purchase_payments_select" on purchase_payments;
   drop policy if exists "purchase_payments_insert" on purchase_payments;
   drop policy if exists "purchase_payments_update" on purchase_payments;
   drop policy if exists "purchase_payments_delete" on purchase_payments;
-  
-  create policy "purchase_payments_select" on purchase_payments 
-    for select 
+
+  create policy "purchase_payments_select" on purchase_payments
+    for select
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "purchase_payments_insert" on purchase_payments 
-    for insert 
+
+  create policy "purchase_payments_insert" on purchase_payments
+    for insert
     to authenticated
     with check (tenant_id = public.user_tenant_id());
-    
-  create policy "purchase_payments_update" on purchase_payments 
-    for update 
+
+  create policy "purchase_payments_update" on purchase_payments
+    for update
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "purchase_payments_delete" on purchase_payments 
-    for delete 
+
+  create policy "purchase_payments_delete" on purchase_payments
+    for delete
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
+
   raise notice '✓ Created RLS policies for purchase_payments';
 exception
   when undefined_table then raise notice '⚠ Table purchase_payments does not exist yet';
@@ -20944,27 +20944,27 @@ do $$ begin
   drop policy if exists "attendances_insert" on attendances;
   drop policy if exists "attendances_update" on attendances;
   drop policy if exists "attendances_delete" on attendances;
-  
-  create policy "attendances_select" on attendances 
-    for select 
+
+  create policy "attendances_select" on attendances
+    for select
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "attendances_insert" on attendances 
-    for insert 
+
+  create policy "attendances_insert" on attendances
+    for insert
     to authenticated
     with check (tenant_id = public.user_tenant_id());
-    
-  create policy "attendances_update" on attendances 
-    for update 
+
+  create policy "attendances_update" on attendances
+    for update
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "attendances_delete" on attendances 
-    for delete 
+
+  create policy "attendances_delete" on attendances
+    for delete
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
+
   raise notice '✓ Created RLS policies for attendances';
 exception
   when undefined_table then raise notice '⚠ Table attendances does not exist yet';
@@ -21073,16 +21073,16 @@ end $$;
 
 -- Company Settings: Tenant isolation (CRITICAL - logo/company data)
 do $$ begin
-  create policy "company_settings_select" on company_settings 
+  create policy "company_settings_select" on company_settings
     for select to authenticated
     using (tenant_id = public.user_tenant_id());
-  create policy "company_settings_insert" on company_settings 
+  create policy "company_settings_insert" on company_settings
     for insert to authenticated
     with check (tenant_id = public.user_tenant_id());
-  create policy "company_settings_update" on company_settings 
+  create policy "company_settings_update" on company_settings
     for update to authenticated
     using (tenant_id = public.user_tenant_id());
-  create policy "company_settings_delete" on company_settings 
+  create policy "company_settings_delete" on company_settings
     for delete to authenticated
     using (tenant_id = public.user_tenant_id());
   raise notice '✓ Created RLS policies for company_settings';
@@ -21262,29 +21262,29 @@ begin
   else
     v_job_bike_id := NEW.job_bike_id;
   end if;
-  
+
   -- Skip if no job_bike_id (legacy single-bike jobs)
   if v_job_bike_id is null then
     return coalesce(NEW, OLD);
   end if;
-  
+
   -- Calculate costs for this bike
-  select 
+  select
     coalesce(sum(case when item_type = 'product' or item_type is null then total_price else 0 end), 0),
     coalesce(sum(case when item_type = 'service' then total_price else 0 end), 0)
   into v_parts_cost, v_labor_cost
   from mechanic_job_items
   where job_bike_id = v_job_bike_id;
-  
+
   -- Update the job_bike record
   update mechanic_job_bikes
-  set 
+  set
     parts_cost = v_parts_cost,
     labor_cost = v_labor_cost,
     subtotal = v_parts_cost + v_labor_cost,
     updated_at = now()
   where id = v_job_bike_id;
-  
+
   return coalesce(NEW, OLD);
 end;
 $$;
@@ -21427,32 +21427,32 @@ end $$;
 -- Payment Methods: Tenant isolation
 do $$ begin
   alter table payment_methods enable row level security;
-  
+
   drop policy if exists "payment_methods_select" on payment_methods;
   drop policy if exists "payment_methods_insert" on payment_methods;
   drop policy if exists "payment_methods_update" on payment_methods;
   drop policy if exists "payment_methods_delete" on payment_methods;
-  
-  create policy "payment_methods_select" on payment_methods 
-    for select 
+
+  create policy "payment_methods_select" on payment_methods
+    for select
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "payment_methods_insert" on payment_methods 
-    for insert 
+
+  create policy "payment_methods_insert" on payment_methods
+    for insert
     to authenticated
     with check (tenant_id = public.user_tenant_id());
-    
-  create policy "payment_methods_update" on payment_methods 
-    for update 
+
+  create policy "payment_methods_update" on payment_methods
+    for update
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
-  create policy "payment_methods_delete" on payment_methods 
-    for delete 
+
+  create policy "payment_methods_delete" on payment_methods
+    for delete
     to authenticated
     using (tenant_id = public.user_tenant_id());
-    
+
   raise notice '✓ Created RLS policies for payment_methods';
 exception
   when undefined_table then raise notice '⚠ Table payment_methods does not exist yet';
@@ -21618,13 +21618,13 @@ begin
     -- SCENARIO: User was invited → Join existing tenant
     -- ========================================================================
     v_tenant_id := v_invitation.tenant_id;
-    
+
     raise notice '✅ User % joining tenant % via invitation (role: %)', new.email, v_tenant_id, v_invitation.role;
-    
+
     -- Create user_profile entry linking user to tenant
     begin
       insert into user_profiles (user_id, tenant_id, role, is_active, permissions)
-      values (new.id, v_tenant_id, v_invitation.role, true, 
+      values (new.id, v_tenant_id, v_invitation.role, true,
         case v_invitation.role
           when 'admin' then '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
           when 'manager' then '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
@@ -21639,11 +21639,11 @@ begin
       when others then
         raise exception '❌ Failed to create user_profile: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
     end;
-    
+
     -- Update user metadata to include tenant_id and role
     begin
       update auth.users
-      set 
+      set
         raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object(
           'tenant_id', v_tenant_id,
           'role', v_invitation.role
@@ -21655,7 +21655,7 @@ begin
       when others then
         raise warning '⚠️ Failed to update user metadata: %', SQLERRM;
     end;
-    
+
     -- Mark invitation as accepted
     begin
       update user_invitations
@@ -21666,40 +21666,40 @@ begin
       when others then
         raise warning '⚠️ Failed to mark invitation as accepted: %', SQLERRM;
     end;
-    
+
     raise notice '✅ User % joined tenant % via invitation', new.email, v_tenant_id;
   else
     -- ========================================================================
     -- SCENARIO: No invitation → Create new tenant (new business owner)
     -- ========================================================================
-    
+
     raise notice '⚠️ No pending invitation found for %, creating new tenant', new.email;
-    
+
     -- Extract shop name from signup data or email
     v_shop_name := coalesce(
       new.raw_user_meta_data->>'shop_name',
       split_part(new.email, '@', 1) || '''s Shop'
     );
-    
+
     -- Generate base subdomain from shop name or email
     v_subdomain_base := coalesce(
       new.raw_user_meta_data->>'subdomain',
       lower(regexp_replace(split_part(new.email, '@', 1), '[^a-z0-9]', '', 'g'))
     );
-    
+
     v_subdomain := v_subdomain_base;
-    
+
     -- Handle duplicate subdomains by appending counter
     while exists (select 1 from tenants where subdomain = v_subdomain) loop
       v_subdomain := v_subdomain_base || v_counter;
       v_counter := v_counter + 1;
-      
+
       -- Prevent infinite loop
       if v_counter > 100 then
         raise exception 'Could not generate unique subdomain for %', new.email;
       end if;
     end loop;
-    
+
     -- Create new tenant
     begin
       insert into tenants (shop_name, subdomain, owner_email, plan, is_active, currency, timezone)
@@ -21718,11 +21718,11 @@ begin
       when others then
         raise exception '❌ Failed to create tenant: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
     end;
-    
+
     -- Create user_profile entry linking user to tenant as admin
     begin
       insert into user_profiles (user_id, tenant_id, role, is_active, permissions)
-      values (new.id, v_tenant_id, 'admin', true, 
+      values (new.id, v_tenant_id, 'admin', true,
         '{"access_pos": true, "create_invoices": true, "edit_prices": true, "delete_invoices": true, "access_accounting": true, "manage_users": true, "edit_settings": true}'::jsonb
       );
       raise notice '✅ Created user_profile for admin user %', new.id;
@@ -21730,7 +21730,7 @@ begin
       when others then
         raise exception '❌ Failed to create user_profile for new tenant: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
     end;
-    
+
     -- Update user metadata to include tenant_id and role
     begin
       update auth.users
@@ -21744,7 +21744,7 @@ begin
       when others then
         raise warning '⚠️ Failed to update user metadata: %', SQLERRM;
     end;
-    
+
     raise notice '✅ Created new tenant % for user % with subdomain %', v_tenant_id, new.email, v_subdomain;
   end if;
 
@@ -21785,7 +21785,7 @@ declare
   ];
 begin
   raise notice 'Starting tenant_id migration for existing tables...';
-  
+
   foreach v_table in array v_tables loop
     begin
       -- Check if table exists and doesn't have tenant_id
@@ -21804,7 +21804,7 @@ begin
       raise notice '❌ Error migrating %: %', v_table, SQLERRM;
     end;
   end loop;
-  
+
   raise notice 'tenant_id migration complete!';
 end $$;
 
@@ -22422,7 +22422,7 @@ exception when others then null; end $$;
 -- PUBLIC STORE RLS POLICIES
 -- Allow both anonymous AND authenticated website customers to read tenant-scoped data
 -- These policies enable public-facing storefronts to work with or without auth
--- 
+--
 -- ARCHITECTURE NOTE:
 -- - ERP Users: Have user_profiles record → use user_tenant_id() function
 -- - Website Customers: Have customers record (NO user_profiles) → use explicit tenant_id filter
@@ -22481,14 +22481,14 @@ drop policy if exists "public_bikes_select_own" on bikes;
 
 -- Tenants: Public read access (for subdomain lookup)
 -- Required for public store tenant detection from URL
-create policy "public_tenants_select" on tenants 
-  for select 
+create policy "public_tenants_select" on tenants
+  for select
   to anon
   using (is_active = true);
 
 -- Tenants: Authenticated users can also lookup tenants (for website customers)
-create policy "public_tenants_select_authenticated" on tenants 
-  for select 
+create policy "public_tenants_select_authenticated" on tenants
+  for select
   to authenticated
   using (is_active = true);
 
@@ -22498,13 +22498,13 @@ create policy "public_tenants_select_authenticated" on tenants
 
 -- Website blocks: Public read access (for homepage content)
 -- App must filter by tenant_id explicitly
-create policy "public_website_blocks_select" on website_blocks 
-  for select 
+create policy "public_website_blocks_select" on website_blocks
+  for select
   to anon
   using (is_visible = true);
 
-create policy "public_website_blocks_select_authenticated" on website_blocks 
-  for select 
+create policy "public_website_blocks_select_authenticated" on website_blocks
+  for select
   to authenticated
   using (is_visible = true);
 
@@ -22517,8 +22517,8 @@ create policy "public_website_blocks_select_authenticated" on website_blocks
 -- Products: Public read access (only active products)
 -- App must filter by tenant_id explicitly
 -- Note: We allow products with 0 stock to be displayed (can show as "out of stock")
-create policy "public_products_select" on products 
-  for select 
+create policy "public_products_select" on products
+  for select
   to anon
   using (
     is_active = true
@@ -22529,8 +22529,8 @@ create policy "public_products_select" on products
 -- Products: Authenticated website customers can also browse
 -- This is SEPARATE from ERP products_select which uses user_tenant_id()
 -- Website customers don't have user_profiles, so they need this policy
-create policy "public_products_select_authenticated" on products 
-  for select 
+create policy "public_products_select_authenticated" on products
+  for select
   to authenticated
   using (
     is_active = true
@@ -22543,13 +22543,13 @@ create policy "public_products_select_authenticated" on products
 
 -- Product Categories: Public read access (hierarchical categories)
 -- App must filter by tenant_id explicitly
-create policy "public_product_categories_select" on product_categories 
-  for select 
+create policy "public_product_categories_select" on product_categories
+  for select
   to anon
   using (is_active = true);
 
-create policy "public_product_categories_select_authenticated" on product_categories 
-  for select 
+create policy "public_product_categories_select_authenticated" on product_categories
+  for select
   to authenticated
   using (is_active = true);
 
@@ -22566,13 +22566,13 @@ end $$;
 
 -- Website banners: Public read access (only active)
 -- App must filter by tenant_id explicitly
-create policy "public_website_banners_select" on website_banners 
-  for select 
+create policy "public_website_banners_select" on website_banners
+  for select
   to anon
   using (active = true);
 
-create policy "public_website_banners_select_authenticated" on website_banners 
-  for select 
+create policy "public_website_banners_select_authenticated" on website_banners
+  for select
   to authenticated
   using (active = true);
 
@@ -22581,12 +22581,12 @@ create policy "public_website_banners_select_authenticated" on website_banners
 do $$ begin
   drop policy if exists "public_website_content_select" on website_content;
   drop policy if exists "public_website_content_select_authenticated" on website_content;
-  create policy "public_website_content_select" on website_content 
-    for select 
+  create policy "public_website_content_select" on website_content
+    for select
     to anon
     using (tenant_id is not null); -- Defense-in-depth: require valid tenant
-  create policy "public_website_content_select_authenticated" on website_content 
-    for select 
+  create policy "public_website_content_select_authenticated" on website_content
+    for select
     to authenticated
     using (tenant_id is not null);
 exception
@@ -22595,8 +22595,8 @@ end $$;
 
 -- Website settings: Public read access
 -- App must filter by tenant_id explicitly
-create policy "public_website_settings_select" on website_settings 
-  for select 
+create policy "public_website_settings_select" on website_settings
+  for select
   to anon
   using (
     tenant_id is not null and
@@ -22606,8 +22606,8 @@ create policy "public_website_settings_select" on website_settings
     lower(key) not like '%private%'
   );
 
-create policy "public_website_settings_select_authenticated" on website_settings 
-  for select 
+create policy "public_website_settings_select_authenticated" on website_settings
+  for select
   to authenticated
   using (
     tenant_id is not null and
@@ -22619,25 +22619,25 @@ create policy "public_website_settings_select_authenticated" on website_settings
 
 -- Featured products: Public read access
 -- App must filter by tenant_id explicitly
-create policy "public_featured_products_select" on featured_products 
-  for select 
+create policy "public_featured_products_select" on featured_products
+  for select
   to anon
   using (active = true);
 
-create policy "public_featured_products_select_authenticated" on featured_products 
-  for select 
+create policy "public_featured_products_select_authenticated" on featured_products
+  for select
   to authenticated
   using (active = true);
 
 -- Product brands: Public read access
 -- App must filter by tenant_id explicitly
-create policy "public_product_brands_select" on product_brands 
-  for select 
+create policy "public_product_brands_select" on product_brands
+  for select
   to anon
   using (is_active = true);
 
-create policy "public_product_brands_select_authenticated" on product_brands 
-  for select 
+create policy "public_product_brands_select_authenticated" on product_brands
+  for select
   to authenticated
   using (is_active = true);
 
@@ -22647,22 +22647,22 @@ create policy "public_product_brands_select_authenticated" on product_brands
 -- ============================================================================
 
 -- Customers: Authenticated users can view their own customer record
-create policy "public_customers_select_own" on customers 
-  for select 
+create policy "public_customers_select_own" on customers
+  for select
   to authenticated
   using (auth_user_id = auth.uid());
 
 -- Customers: Authenticated users can update their own customer record
-create policy "public_customers_update_own" on customers 
-  for update 
+create policy "public_customers_update_own" on customers
+  for update
   to authenticated
   using (auth_user_id = auth.uid());
 
 -- Customers: INSERT own record (for website signup - user can only create their own customer record)
 -- This is CRITICAL because website customers don't have user_profiles, so user_tenant_id() returns NULL
 -- and the regular customers_insert policy fails
-create policy "public_customers_insert_own" on customers 
-  for insert 
+create policy "public_customers_insert_own" on customers
+  for insert
   to authenticated
   with check (
     auth_user_id = auth.uid() AND  -- Can only create their own record
@@ -22670,16 +22670,16 @@ create policy "public_customers_insert_own" on customers
   );
 
 -- Online Orders: Authenticated customers can view their own orders
-create policy "public_online_orders_select_authenticated" on online_orders 
-  for select 
+create policy "public_online_orders_select_authenticated" on online_orders
+  for select
   to authenticated
   using (customer_id IN (
     SELECT id FROM customers WHERE auth_user_id = auth.uid()
   ));
 
 -- Online Order Items: Authenticated customers can view their own order items
-create policy "public_online_order_items_select_authenticated" on online_order_items 
-  for select 
+create policy "public_online_order_items_select_authenticated" on online_order_items
+  for select
   to authenticated
   using (order_id IN (
     SELECT id FROM online_orders WHERE customer_id IN (
@@ -22687,17 +22687,17 @@ create policy "public_online_order_items_select_authenticated" on online_order_i
     )
   ));
 
--- Mechanic Jobs (Pegas): Website customers can view their own service history
-create policy "public_mechanic_jobs_select_own" on mechanic_jobs 
-  for select 
+-- Mechanic Jobs (Trabajos): Website customers can view their own service history
+create policy "public_mechanic_jobs_select_own" on mechanic_jobs
+  for select
   to authenticated
   using (customer_id IN (
     SELECT id FROM customers WHERE auth_user_id = auth.uid()
   ));
 
 -- Bikes: Website customers can view their own bikes
-create policy "public_bikes_select_own" on bikes 
-  for select 
+create policy "public_bikes_select_own" on bikes
+  for select
   to authenticated
   using (customer_id IN (
     SELECT id FROM customers WHERE auth_user_id = auth.uid()
@@ -23318,53 +23318,53 @@ create table if not exists f29_declarations (
   period_month integer not null check (period_month between 1 and 12),
   period_year integer not null check (period_year between 2000 and 2100),
   status text not null check (status in ('draft', 'submitted', 'paid')) default 'draft',
-  
+
   -- IVA Section (Lines 1-43)
   iva_debito_ventas numeric(15,2) default 0, -- Line 3: Domestic sales IVA
   iva_debito_exportaciones numeric(15,2) default 0, -- Line 5: Exports (usually 0)
   iva_debito_activos_fijos numeric(15,2) default 0, -- Line 7: Fixed asset sales IVA
   iva_debito_total numeric(15,2) default 0, -- Line 15: Total IVA débito
-  
+
   iva_credito_compras numeric(15,2) default 0, -- Line 30: Purchases IVA
   iva_credito_importaciones numeric(15,2) default 0, -- Line 31: Import IVA
   iva_credito_activos_fijos numeric(15,2) default 0, -- Line 32: Fixed asset purchases IVA
   iva_credito_total numeric(15,2) default 0, -- Line 40: Total IVA crédito
-  
+
   iva_remanente_mes_anterior numeric(15,2) default 0, -- Line 35: Previous month credit carryover
   iva_remanente_mes_siguiente numeric(15,2) default 0, -- Line 42: Credit to carry forward
   iva_neto numeric(15,2) default 0, -- Line 43: Net IVA (débito - crédito)
-  
+
   -- PPM Section (Lines 50-60)
   ppm_ventas_netas numeric(15,2) default 0, -- Line 50: Net sales base
   ppm_tasa_porcentaje numeric(5,2) default 1.0, -- Line 52: PPM rate (%)
   ppm_monto numeric(15,2) default 0, -- Line 54: PPM amount to pay
   ppm_remanente numeric(15,2) default 0, -- Line 56: PPM credit carryover
-  
+
   -- Retenciones - Tax Withholdings (Lines 70-100)
   retencion_segunda_categoria numeric(15,2) default 0, -- Line 72: Employee income tax
   retencion_honorarios numeric(15,2) default 0, -- Line 74: Professional fees (10%)
   retencion_arrendamiento numeric(15,2) default 0, -- Line 76: Rental income
-  
+
   -- Otros Impuestos - Other Taxes (Lines 110-150)
   impuesto_adicional numeric(15,2) default 0, -- Line 115: Additional tax
   impuesto_especifico numeric(15,2) default 0, -- Line 117: Specific tax
-  
+
   -- Totals
   total_a_pagar numeric(15,2) default 0, -- Total amount to pay
   total_a_favor numeric(15,2) default 0, -- Total credit in favor
-  
+
   -- Filing tracking
   folio_number text, -- SII confirmation folio
   filed_at timestamp with time zone,
   paid_at timestamp with time zone,
   payment_reference text,
   due_date date,
-  
+
   -- Metadata
   notes text,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
-  
+
   unique(tenant_id, period_year, period_month)
 );
 
@@ -23423,10 +23423,10 @@ begin
   -- Calculate period dates
   v_start_date := make_date(p_year, p_month, 1);
   v_end_date := (v_start_date + interval '1 month' - interval '1 day')::date;
-  
+
   -- Due date: 12th of following month
   v_due_date := make_date(p_year, p_month, 1) + interval '1 month 12 days' - interval '1 day';
-  
+
   -- Calculate IVA Débito (Sales tax collected) - Account 2150
   -- Sum CREDIT movements (IVA débito is a liability, increases with CREDIT)
   select coalesce(sum(jl.credit_amount - jl.debit_amount), 0)
@@ -23439,7 +23439,7 @@ begin
     and je.entry_date >= v_start_date
     and je.entry_date <= v_end_date
     and je.status = 'posted';
-  
+
   -- Calculate IVA Crédito (Purchase tax paid) - Account 2120
   -- Sum DEBIT movements (IVA crédito is an asset, increases with DEBIT)
   select coalesce(sum(jl.debit_amount - jl.credit_amount), 0)
@@ -23452,7 +23452,7 @@ begin
     and je.entry_date >= v_start_date
     and je.entry_date <= v_end_date
     and je.status = 'posted';
-  
+
   -- Calculate Net Sales (Revenue) - Account 4100
   -- Sum CREDIT movements (revenue is CREDIT)
   select coalesce(sum(jl.credit_amount - jl.debit_amount), 0)
@@ -23465,22 +23465,22 @@ begin
     and je.entry_date >= v_start_date
     and je.entry_date <= v_end_date
     and je.status = 'posted';
-  
+
   -- Calculate PPM (1% of net sales by default)
   -- TODO: Get tenant-specific PPM rate from settings
   v_ppm_monto := v_ventas_netas * 0.01;
-  
+
   -- Calculate withholdings (if HR module tracks this)
   -- TODO: Query payroll/honorarios tables when implemented
   v_retencion_honorarios := 0;
   v_retencion_segunda := 0;
-  
+
   -- Calculate net IVA (positive = owe to SII, negative = SII owes us)
   v_iva_neto := v_iva_debito - v_iva_credito;
-  
+
   -- Calculate total to pay
   v_total_pagar := greatest(v_iva_neto, 0) + v_ppm_monto + v_retencion_honorarios + v_retencion_segunda;
-  
+
   -- Insert or update F29 declaration
   insert into f29_declarations (
     tenant_id,
@@ -23535,7 +23535,7 @@ begin
     due_date = excluded.due_date,
     updated_at = now()
   returning id into v_f29_id;
-  
+
   return jsonb_build_object(
     'success', true,
     'f29_id', v_f29_id,
@@ -23561,7 +23561,7 @@ create table if not exists medical_leaves (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   employee_id uuid references employees(id) on delete cascade not null,
-  
+
   -- Leave details
   leave_type text not null check (leave_type in (
     'enfermedad_comun', -- Common illness
@@ -23571,18 +23571,18 @@ create table if not exists medical_leaves (
     'paternal', -- Paternity leave
     'pre_post_natal' -- Pre/post natal
   )),
-  
+
   -- Dates
   start_date date not null,
   end_date date not null,
   days_count integer generated always as (end_date - start_date + 1) stored,
-  
+
   -- Medical certificate
   certificate_number text, -- Folio de licencia médica
   doctor_name text,
   doctor_rut text,
   issuing_institution text, -- COMPIN, IST, Mutual, etc.
-  
+
   -- Status
   status text not null check (status in (
     'pending', -- Waiting approval
@@ -23590,21 +23590,21 @@ create table if not exists medical_leaves (
     'rejected', -- Rejected
     'paid' -- Subsidy paid
   )) default 'pending',
-  
+
   -- Financial
   daily_subsidy_amount numeric(10,2), -- Subsidio diario
   total_subsidy_amount numeric(10,2), -- Total subsidy
   paid_by text check (paid_by in ('employer', 'mutual', 'isapre', 'fonasa')),
   paid_at timestamp with time zone,
-  
+
   -- Attachments
   certificate_url text, -- Scanned medical certificate
   approval_url text, -- COMPIN/IST approval
-  
+
   -- Notes
   diagnosis text,
   notes text,
-  
+
   -- Metadata
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
@@ -23671,7 +23671,7 @@ create table if not exists employment_contracts (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   employee_id uuid references employees(id) on delete cascade not null,
-  
+
   -- Contract type
   contract_type text not null check (contract_type in (
     'indefinido', -- Indefinite term
@@ -23680,25 +23680,25 @@ create table if not exists employment_contracts (
     'part_time', -- Part-time
     'honorarios' -- Contractor (not employee)
   )),
-  
+
   -- Contract period
   start_date date not null,
   end_date date, -- NULL for indefinite contracts
-  
+
   -- Position
   position_title text not null,
   department text,
   job_description text,
-  
+
   -- Schedule
   weekly_hours integer default 45, -- Hours per week
   work_schedule text, -- e.g., "Lunes a Viernes 9:00-18:00"
-  
+
   -- Compensation
   base_salary numeric(12,2) not null,
   payment_frequency text check (payment_frequency in ('monthly', 'biweekly', 'weekly')) default 'monthly',
   payment_method text check (payment_method in ('bank_transfer', 'check', 'cash')) default 'bank_transfer',
-  
+
   -- Benefits
   includes_transportation boolean default false,
   includes_lunch boolean default false,
@@ -23706,16 +23706,16 @@ create table if not exists employment_contracts (
   includes_health_insurance boolean default false,
   includes_life_insurance boolean default false,
   vacation_days integer default 15, -- Días de vacaciones al año
-  
+
   -- Status
   status text not null check (status in ('active', 'terminated', 'suspended')) default 'active',
   termination_date date,
   termination_reason text,
-  
+
   -- Documents
   contract_url text, -- Signed contract PDF
   addendum_urls jsonb, -- Array of addendum URLs
-  
+
   -- Metadata
   notes text,
   created_at timestamp with time zone default now(),
@@ -23753,12 +23753,12 @@ create table if not exists payroll_records (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   employee_id uuid references employees(id) on delete cascade not null,
-  
+
   -- Period
   period_month integer not null check (period_month between 1 and 12),
   period_year integer not null check (period_year between 2000 and 2100),
   payment_date date not null,
-  
+
   -- Haberes (Income)
   base_salary numeric(12,2) default 0,
   overtime_hours numeric(5,2) default 0,
@@ -23770,44 +23770,44 @@ create table if not exists payroll_records (
   housing_allowance numeric(10,2) default 0,
   other_allowances numeric(10,2) default 0,
   total_haberes numeric(12,2) default 0,
-  
+
   -- Descuentos Legales (Legal Deductions)
   afp_deduction numeric(10,2) default 0, -- 10% or 11.44% with commission
   health_deduction numeric(10,2) default 0, -- 7% minimum
   unemployment_deduction numeric(10,2) default 0, -- Seguro cesantía 0.6%
   income_tax numeric(10,2) default 0, -- Impuesto único segunda categoría
   total_legal_deductions numeric(12,2) default 0,
-  
+
   -- Otros Descuentos (Other Deductions)
   loan_deduction numeric(10,2) default 0, -- Préstamos
   advance_deduction numeric(10,2) default 0, -- Anticipos
   other_deductions numeric(10,2) default 0,
   total_other_deductions numeric(12,2) default 0,
-  
+
   -- Totals
   total_deductions numeric(12,2) default 0,
   net_salary numeric(12,2) default 0, -- Líquido a pagar
-  
+
   -- Employer contributions (NOT deducted from employee)
   employer_prevision numeric(10,2) default 0, -- ~3%
   employer_health numeric(10,2) default 0,
   employer_unemployment numeric(10,2) default 0, -- 2.4%
   employer_mutual numeric(10,2) default 0, -- Accident insurance ~0.9%
   employer_total_cost numeric(12,2) default 0,
-  
+
   -- Status
   status text not null check (status in ('draft', 'approved', 'paid')) default 'draft',
   paid_at timestamp with time zone,
   payment_reference text,
-  
+
   -- Documents
   payslip_url text, -- PDF de liquidación
-  
+
   -- Metadata
   notes text,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now(),
-  
+
   unique(tenant_id, employee_id, period_year, period_month)
 );
 
@@ -23864,46 +23864,46 @@ begin
   select * into v_employee
   from employees
   where id = p_employee_id and tenant_id = p_tenant_id;
-  
+
   if not found then
     return jsonb_build_object('success', false, 'error', 'Employee not found');
   end if;
-  
+
   -- Get base salary
   v_base_salary := coalesce(v_employee.base_salary, 0);
-  
+
   -- Calculate total haberes (income)
   v_total_haberes := v_base_salary +
                      coalesce(v_employee.mobility_allowance, 0) +
                      coalesce(v_employee.lunch_allowance, 0) +
                      coalesce(v_employee.housing_allowance, 0) +
                      coalesce(v_employee.bonus_amount, 0);
-  
+
   -- Calculate AFP deduction (10% + commission, typically ~11.44%)
   v_afp_deduction := v_base_salary * (10.0 + coalesce(v_employee.afp_commission, 1.16)) / 100.0;
-  
+
   -- Calculate health deduction (7% minimum or plan value)
   v_health_deduction := greatest(
     v_base_salary * 0.07, -- 7% minimum
     coalesce(v_employee.health_plan_pesos, 0)
   );
-  
+
   -- Calculate unemployment insurance deduction (0.6%)
-  v_unemployment_deduction := case 
-    when v_employee.seguro_cesantia then v_base_salary * 0.006 
-    else 0 
+  v_unemployment_deduction := case
+    when v_employee.seguro_cesantia then v_base_salary * 0.006
+    else 0
   end;
-  
+
   -- TODO: Calculate income tax (Segunda Categoría)
   -- Requires tax brackets and tramos implementation
   v_income_tax := 0;
-  
+
   -- Calculate total deductions
   v_total_deductions := v_afp_deduction + v_health_deduction + v_unemployment_deduction + v_income_tax;
-  
+
   -- Calculate net salary
   v_net_salary := v_total_haberes - v_total_deductions;
-  
+
   -- Insert or update payroll record
   insert into payroll_records (
     tenant_id,
@@ -23974,7 +23974,7 @@ begin
     employer_total_cost = excluded.employer_total_cost,
     updated_at = now()
   returning id into v_payroll_id;
-  
+
   return jsonb_build_object(
     'success', true,
     'payroll_id', v_payroll_id,
@@ -24019,10 +24019,10 @@ begin
   end loop;
 end $$;
 
-comment on function public.generate_f29_from_accounting is 
+comment on function public.generate_f29_from_accounting is
 'Auto-generates F29 declaration from accounting data. Future enhancement: integrate with payroll_records for employee withholdings (línea 72).';
 
-comment on table f29_declarations is 
+comment on table f29_declarations is
 'Chilean monthly tax declaration (Formulario 29). Integrates with accounting (IVA), HR (withholdings), and revenue data.';
 
 --------------------------------------------------------------------------------
@@ -24102,7 +24102,7 @@ begin
   select count(*) into v_whatsapp_channel_count
   from whatsapp_channels
   where tenant_id = p_tenant_id;
-  
+
   -- Build summary object
   v_summary := jsonb_build_object(
     'products', v_product_count,
@@ -24127,7 +24127,7 @@ begin
     'whatsapp_channels', v_whatsapp_channel_count,
     'captured_at', now()
   );
-  
+
   -- Collect backup data (all tenant tables)
   v_backup_data := jsonb_build_object(
     'products', (select jsonb_agg(to_jsonb(t.*)) from products t where tenant_id = p_tenant_id),
@@ -24169,10 +24169,10 @@ begin
     'whatsapp_conversation_bindings', (select jsonb_agg(to_jsonb(t.*)) from whatsapp_conversation_bindings t where tenant_id = p_tenant_id),
     'whatsapp_webhook_events', (select jsonb_agg(to_jsonb(t.*)) from whatsapp_webhook_events t where tenant_id = p_tenant_id)
   );
-  
+
   -- Calculate backup size
   v_backup_size := length(v_backup_data::text);
-  
+
   -- Insert backup record
   insert into database_backups (
     tenant_id,
@@ -24195,7 +24195,7 @@ begin
     p_notes,
     auth.uid()
   ) returning id into v_backup_id;
-  
+
   return jsonb_build_object(
     'success', true,
     'backup_id', v_backup_id,
@@ -24222,7 +24222,7 @@ exception
       SQLERRM,
       auth.uid()
     );
-    
+
     return jsonb_build_object(
       'success', false,
       'error', SQLERRM
@@ -24251,14 +24251,14 @@ begin
   select backup_data, summary into v_backup_data, v_summary
   from database_backups
   where id = p_backup_id and tenant_id = p_tenant_id and status = 'completed';
-  
+
   if not found then
     return jsonb_build_object('success', false, 'error', 'Backup not found or invalid');
   end if;
-  
+
   -- START TRANSACTION: Delete existing data and restore backup
   -- WARNING: This will delete ALL tenant data and restore from backup
-  
+
   -- Delete existing data (in STRICT reverse dependency order)
   -- Level 5: Deepest children first
   delete from journal_lines where entry_id in (select id from journal_entries where tenant_id = p_tenant_id);
@@ -24274,7 +24274,7 @@ begin
     or conversation_id in (select id from conversations where tenant_id = p_tenant_id);
   delete from whatsapp_conversation_bindings where tenant_id = p_tenant_id;
   delete from whatsapp_webhook_events where tenant_id = p_tenant_id;
-  
+
   -- Level 4: Tables that reference Level 5 or standalone with FKs
   delete from journal_entries where tenant_id = p_tenant_id;
   delete from sales_payments where tenant_id = p_tenant_id;
@@ -24285,7 +24285,7 @@ begin
   delete from stock_movements where tenant_id = p_tenant_id;
   delete from conversations where tenant_id = p_tenant_id;
   delete from whatsapp_channels where tenant_id = p_tenant_id;
-  
+
   -- Level 3: Invoices and e-commerce content
   delete from sales_invoices where tenant_id = p_tenant_id;
   delete from purchase_invoices where tenant_id = p_tenant_id;
@@ -24295,13 +24295,13 @@ begin
   delete from website_banners where tenant_id = p_tenant_id;
   delete from website_settings where tenant_id = p_tenant_id;
   delete from company_settings where tenant_id = p_tenant_id;
-  
+
   -- Level 2: Payment methods (references accounts), then products/employees/bikes
   delete from payment_methods where tenant_id = p_tenant_id;  -- BEFORE accounts!
   delete from products where tenant_id = p_tenant_id;
   delete from employees where tenant_id = p_tenant_id;
   delete from bike_models where tenant_id = p_tenant_id;
-  
+
   -- Level 1: Base tables (brands, categories, customers, suppliers, accounts)
   delete from accounts where tenant_id = p_tenant_id;  -- AFTER payment_methods!
   delete from product_categories where tenant_id = p_tenant_id;
@@ -24309,32 +24309,32 @@ begin
   delete from bike_brands where tenant_id = p_tenant_id;
   delete from customers where tenant_id = p_tenant_id;
   delete from suppliers where tenant_id = p_tenant_id;
-  
+
   -- Restore data from backup
   -- Product Brands (restore before products)
   if v_backup_data ? 'product_brands' and v_backup_data->'product_brands' is not null and jsonb_typeof(v_backup_data->'product_brands') = 'array' then
     insert into product_brands select * from jsonb_populate_recordset(null::product_brands, v_backup_data->'product_brands');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Product Categories (restore BEFORE products - they have FK dependency)
   if v_backup_data ? 'product_categories' and v_backup_data->'product_categories' is not null and jsonb_typeof(v_backup_data->'product_categories') = 'array' then
     insert into product_categories select * from jsonb_populate_recordset(null::product_categories, v_backup_data->'product_categories');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Products (restore AFTER categories - products reference category_id)
   if v_backup_data ? 'products' and v_backup_data->'products' is not null and jsonb_typeof(v_backup_data->'products') = 'array' then
     insert into products select * from jsonb_populate_recordset(null::products, v_backup_data->'products');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Customers
   if v_backup_data ? 'customers' and v_backup_data->'customers' is not null and jsonb_typeof(v_backup_data->'customers') = 'array' then
     insert into customers select * from jsonb_populate_recordset(null::customers, v_backup_data->'customers');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Suppliers
   if v_backup_data ? 'suppliers' and v_backup_data->'suppliers' is not null and jsonb_typeof(v_backup_data->'suppliers') = 'array' then
     insert into suppliers select * from jsonb_populate_recordset(null::suppliers, v_backup_data->'suppliers');
@@ -24376,167 +24376,167 @@ begin
     insert into whatsapp_webhook_events select * from jsonb_populate_recordset(null::whatsapp_webhook_events, v_backup_data->'whatsapp_webhook_events');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Sales Invoices
   if v_backup_data ? 'sales_invoices' and v_backup_data->'sales_invoices' is not null and jsonb_typeof(v_backup_data->'sales_invoices') = 'array' then
     insert into sales_invoices select * from jsonb_populate_recordset(null::sales_invoices, v_backup_data->'sales_invoices');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Sales Payments
   if v_backup_data ? 'sales_payments' and v_backup_data->'sales_payments' is not null and jsonb_typeof(v_backup_data->'sales_payments') = 'array' then
     insert into sales_payments select * from jsonb_populate_recordset(null::sales_payments, v_backup_data->'sales_payments');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Purchase Invoices
   if v_backup_data ? 'purchase_invoices' and v_backup_data->'purchase_invoices' is not null and jsonb_typeof(v_backup_data->'purchase_invoices') = 'array' then
     insert into purchase_invoices select * from jsonb_populate_recordset(null::purchase_invoices, v_backup_data->'purchase_invoices');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Purchase Payments
   if v_backup_data ? 'purchase_payments' and v_backup_data->'purchase_payments' is not null and jsonb_typeof(v_backup_data->'purchase_payments') = 'array' then
     insert into purchase_payments select * from jsonb_populate_recordset(null::purchase_payments, v_backup_data->'purchase_payments');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Employees & Contracts
   if v_backup_data ? 'employees' and v_backup_data->'employees' is not null and jsonb_typeof(v_backup_data->'employees') = 'array' then
     insert into employees select * from jsonb_populate_recordset(null::employees, v_backup_data->'employees');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   if v_backup_data ? 'employee_contracts' and v_backup_data->'employee_contracts' is not null and jsonb_typeof(v_backup_data->'employee_contracts') = 'array' then
     insert into employee_contracts select * from jsonb_populate_recordset(null::employee_contracts, v_backup_data->'employee_contracts');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Attendance
   if v_backup_data ? 'attendance_records' and v_backup_data->'attendance_records' is not null and jsonb_typeof(v_backup_data->'attendance_records') = 'array' then
     insert into attendance_records select * from jsonb_populate_recordset(null::attendance_records, v_backup_data->'attendance_records');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Accounting
   if v_backup_data ? 'accounts' and v_backup_data->'accounts' is not null and jsonb_typeof(v_backup_data->'accounts') = 'array' then
     insert into accounts select * from jsonb_populate_recordset(null::accounts, v_backup_data->'accounts');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Payment Methods (restore after accounts - they reference account_id)
   if v_backup_data ? 'payment_methods' and v_backup_data->'payment_methods' is not null and jsonb_typeof(v_backup_data->'payment_methods') = 'array' then
     insert into payment_methods select * from jsonb_populate_recordset(null::payment_methods, v_backup_data->'payment_methods');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   if v_backup_data ? 'journal_entries' and v_backup_data->'journal_entries' is not null and jsonb_typeof(v_backup_data->'journal_entries') = 'array' then
     insert into journal_entries select * from jsonb_populate_recordset(null::journal_entries, v_backup_data->'journal_entries');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   if v_backup_data ? 'journal_lines' and v_backup_data->'journal_lines' is not null and jsonb_typeof(v_backup_data->'journal_lines') = 'array' then
     insert into journal_lines select * from jsonb_populate_recordset(null::journal_lines, v_backup_data->'journal_lines');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Stock Movements
   if v_backup_data ? 'stock_movements' and v_backup_data->'stock_movements' is not null and jsonb_typeof(v_backup_data->'stock_movements') = 'array' then
     insert into stock_movements select * from jsonb_populate_recordset(null::stock_movements, v_backup_data->'stock_movements');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Bike Brands (restore before bike_models and bikes)
   if v_backup_data ? 'bike_brands' and v_backup_data->'bike_brands' is not null and jsonb_typeof(v_backup_data->'bike_brands') = 'array' then
     insert into bike_brands select * from jsonb_populate_recordset(null::bike_brands, v_backup_data->'bike_brands');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Bike Models (restore before bikes)
   if v_backup_data ? 'bike_models' and v_backup_data->'bike_models' is not null and jsonb_typeof(v_backup_data->'bike_models') = 'array' then
     insert into bike_models select * from jsonb_populate_recordset(null::bike_models, v_backup_data->'bike_models');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Bikes
   if v_backup_data ? 'bikes' and v_backup_data->'bikes' is not null and jsonb_typeof(v_backup_data->'bikes') = 'array' then
     insert into bikes select * from jsonb_populate_recordset(null::bikes, v_backup_data->'bikes');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
-  -- Mechanic Jobs (Pegas)
+
+  -- Mechanic Jobs (Trabajos)
   if v_backup_data ? 'mechanic_jobs' and v_backup_data->'mechanic_jobs' is not null and jsonb_typeof(v_backup_data->'mechanic_jobs') = 'array' then
     insert into mechanic_jobs select * from jsonb_populate_recordset(null::mechanic_jobs, v_backup_data->'mechanic_jobs');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Mechanic Job Items
   if v_backup_data ? 'mechanic_job_items' and v_backup_data->'mechanic_job_items' is not null and jsonb_typeof(v_backup_data->'mechanic_job_items') = 'array' then
     insert into mechanic_job_items select * from jsonb_populate_recordset(null::mechanic_job_items, v_backup_data->'mechanic_job_items');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Mechanic Job Timeline
   if v_backup_data ? 'mechanic_job_timeline' and v_backup_data->'mechanic_job_timeline' is not null and jsonb_typeof(v_backup_data->'mechanic_job_timeline') = 'array' then
     insert into mechanic_job_timeline select * from jsonb_populate_recordset(null::mechanic_job_timeline, v_backup_data->'mechanic_job_timeline');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Company Settings
   if v_backup_data ? 'company_settings' and v_backup_data->'company_settings' is not null and jsonb_typeof(v_backup_data->'company_settings') = 'array' then
     insert into company_settings select * from jsonb_populate_recordset(null::company_settings, v_backup_data->'company_settings');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Website Settings
   if v_backup_data ? 'website_settings' and v_backup_data->'website_settings' is not null and jsonb_typeof(v_backup_data->'website_settings') = 'array' then
     insert into website_settings select * from jsonb_populate_recordset(null::website_settings, v_backup_data->'website_settings');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Website Banners
   if v_backup_data ? 'website_banners' and v_backup_data->'website_banners' is not null and jsonb_typeof(v_backup_data->'website_banners') = 'array' then
     insert into website_banners select * from jsonb_populate_recordset(null::website_banners, v_backup_data->'website_banners');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Website Content
   if v_backup_data ? 'website_content' and v_backup_data->'website_content' is not null and jsonb_typeof(v_backup_data->'website_content') = 'array' then
     insert into website_content select * from jsonb_populate_recordset(null::website_content, v_backup_data->'website_content');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Website Blocks
   if v_backup_data ? 'website_blocks' and v_backup_data->'website_blocks' is not null and jsonb_typeof(v_backup_data->'website_blocks') = 'array' then
     insert into website_blocks select * from jsonb_populate_recordset(null::website_blocks, v_backup_data->'website_blocks');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Featured Products
   if v_backup_data ? 'featured_products' and v_backup_data->'featured_products' is not null and jsonb_typeof(v_backup_data->'featured_products') = 'array' then
     insert into featured_products select * from jsonb_populate_recordset(null::featured_products, v_backup_data->'featured_products');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Online Orders
   if v_backup_data ? 'online_orders' and v_backup_data->'online_orders' is not null and jsonb_typeof(v_backup_data->'online_orders') = 'array' then
     insert into online_orders select * from jsonb_populate_recordset(null::online_orders, v_backup_data->'online_orders');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Online Order Items
   if v_backup_data ? 'online_order_items' and v_backup_data->'online_order_items' is not null and jsonb_typeof(v_backup_data->'online_order_items') = 'array' then
     insert into online_order_items select * from jsonb_populate_recordset(null::online_order_items, v_backup_data->'online_order_items');
     v_tables_restored := v_tables_restored + 1;
   end if;
-  
+
   -- Update backup record
   update database_backups
   set status = 'restored',
       restored_at = now(),
       restored_by = auth.uid()
   where id = p_backup_id;
-  
+
   return jsonb_build_object(
     'success', true,
     'backup_id', p_backup_id,
@@ -24576,7 +24576,7 @@ begin
   ) into v_result
   from database_backups
   where id = p_backup_id;
-  
+
   return v_result;
 end;
 $$;
@@ -24596,15 +24596,15 @@ declare
   v_backup_ids uuid[];
 begin
   -- Get retention settings
-  select keep_last_n_backups, auto_delete_old 
+  select keep_last_n_backups, auto_delete_old
   into v_keep_count, v_auto_delete
   from backup_schedules
   where tenant_id = p_tenant_id;
-  
+
   if not found or not v_auto_delete then
     return jsonb_build_object('success', true, 'deleted_count', 0, 'message', 'Auto-delete disabled');
   end if;
-  
+
   -- Get IDs of backups to delete (keep newest N, delete older)
   select array_agg(id) into v_backup_ids
   from (
@@ -24616,14 +24616,14 @@ begin
     order by created_at desc
     offset v_keep_count
   ) old_backups;
-  
+
   if v_backup_ids is not null then
     delete from database_backups
     where id = any(v_backup_ids);
-    
+
     get diagnostics v_deleted_count = row_count;
   end if;
-  
+
   return jsonb_build_object(
     'success', true,
     'deleted_count', v_deleted_count,
@@ -24762,7 +24762,7 @@ begin
     into v_max_existing
     using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
   end if;
-  
+
   -- Insert or update sequence (atomic operation)
   insert into document_sequences (tenant_id, document_type, last_number)
   values (p_tenant_id, p_document_type, greatest(v_max_existing, 0) + 1)
@@ -24771,10 +24771,10 @@ begin
     last_number = greatest(document_sequences.last_number, v_max_existing) + 1,
     updated_at = now()
   returning last_number into v_next_number;
-  
+
   -- Format: PREFIX-NNNNN (e.g., FV-00143)
   v_formatted_number := v_prefix || '-' || lpad(v_next_number::text, 5, '0');
-  
+
   return v_formatted_number;
 end;
 $$;
@@ -24870,18 +24870,18 @@ begin
     into v_max_existing
     using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
   end if;
-  
+
   -- Get current sequence value (or 0 if none)
   select coalesce(last_number, 0) into v_current_number
   from document_sequences
   where tenant_id = p_tenant_id and document_type = p_document_type;
-  
+
   -- Preview should never suggest a number below the real max already in use
   v_next_number := greatest(coalesce(v_current_number, 0), coalesce(v_max_existing, 0)) + 1;
-  
+
   -- Format: PREFIX-NNNNN (e.g., FV-00143)
   v_formatted_number := v_prefix || '-' || lpad(v_next_number::text, 5, '0');
-  
+
   return v_formatted_number;
 end;
 $$;
@@ -24942,7 +24942,7 @@ create policy "reset_configurations_delete" on reset_configurations
 
 -- ============================================================
 -- DATA MIGRATION: RECALCULATE EXISTING PEGA COSTS
--- Run this once to fix pegas that already have items but show $0
+-- Run this once to fix trabajos that already have items but show $0
 -- ============================================================
 
 do $$
@@ -24952,8 +24952,8 @@ declare
   v_labor_cost numeric;
   v_updated_count integer := 0;
 begin
-  raise notice 'Starting pega cost recalculation...';
-  
+  raise notice 'Starting trabajo cost recalculation...';
+
   for v_job in select id, job_number from mechanic_jobs loop
     -- Calculate parts cost (products only)
     select coalesce(sum(total_price), 0)
@@ -24961,32 +24961,32 @@ begin
     from mechanic_job_items
     where job_id = v_job.id
       and coalesce(item_type, 'product') not in ('service', 'adhoc');
-    
+
     -- Calculate labor cost (services + ad-hoc tasks)
     select coalesce(sum(total_price), 0)
     into v_labor_cost
     from mechanic_job_items
     where job_id = v_job.id
       and coalesce(item_type, 'product') in ('service', 'adhoc');
-    
+
     -- Update job if costs changed
     update mechanic_jobs
-    set 
+    set
       parts_cost = v_parts_cost,
       labor_cost = v_labor_cost,
       total_cost = v_parts_cost + v_labor_cost,
       updated_at = now()
     where id = v_job.id
       and (parts_cost != v_parts_cost or labor_cost != v_labor_cost or total_cost != (v_parts_cost + v_labor_cost));
-    
+
     if found then
       v_updated_count := v_updated_count + 1;
-      raise notice 'Updated pega %: parts=$%, labor=$%, total=$%', 
+      raise notice 'Updated trabajo %: parts=$%, labor=$%, total=$%',
         v_job.job_number, v_parts_cost, v_labor_cost, v_parts_cost + v_labor_cost;
     end if;
   end loop;
-  
-  raise notice 'Pega cost recalculation complete! Updated % pegas.', v_updated_count;
+
+  raise notice 'Trabajo cost recalculation complete! Updated % trabajos.', v_updated_count;
 end $$;
 
 
@@ -25333,10 +25333,10 @@ DECLARE
     v_chat_type TEXT;
 BEGIN
     -- Get conversation details
-    SELECT type INTO v_chat_type 
-    FROM conversations 
+    SELECT type INTO v_chat_type
+    FROM conversations
     WHERE id = p_conversation_id;
-    
+
     IF v_chat_type IS NULL THEN
         RETURN; -- Conversation does not exist
     END IF;
@@ -25358,20 +25358,20 @@ BEGIN
     ELSE
         v_is_employee := false;
     END IF;
-    
+
     -- AUTH LOGIC:
     -- 1. Participant can delete (Standard)
     -- 2. Employee can delete 'support' chats (Shared Inbox)
-    
+
     -- Get user role
     SELECT role INTO v_user_role FROM user_profiles WHERE user_id = v_user_id;
-    
+
     -- AUTH LOGIC:
     -- 1. Participant can delete (Standard)
     -- 2. Employee can delete 'support' chats (Shared Inbox)
     -- 3. Admins/Managers can delete any chat
-    
-    IF v_is_participant 
+
+    IF v_is_participant
        OR (v_is_employee AND v_chat_type = 'support')
        OR (v_user_role IN ('admin', 'manager', 'owner')) THEN
         -- Allowed
@@ -25379,18 +25379,18 @@ BEGIN
     ELSE
         RAISE EXCEPTION 'User is not authorized to delete this conversation (Code: P0001)';
     END IF;
-    
+
     -- DELETE OPERATIONS
-    
+
     -- 1. Messages (Foreign Key)
     DELETE FROM messages WHERE conversation_id = p_conversation_id;
-    
+
     -- 2. Participants
     DELETE FROM conversation_participants WHERE conversation_id = p_conversation_id;
-    
+
     -- 3. Conversation
     DELETE FROM conversations WHERE id = p_conversation_id;
-    
+
 END;
 $$;
 
@@ -25512,7 +25512,7 @@ begin
 
   -- 3. Merge updates
   -- We update status, responded_at, and any other fields provided
-  v_new_metadata := v_current_metadata || 
+  v_new_metadata := v_current_metadata ||
                     jsonb_build_object(
                       'status', p_status,
                       'responded_at', now()

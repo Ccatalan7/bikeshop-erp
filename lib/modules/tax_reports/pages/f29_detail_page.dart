@@ -312,7 +312,7 @@ class _F29DetailPageState extends State<F29DetailPage> {
             const SizedBox(height: 16),
             if (_f29.retencionSegundaCategoria > 0)
               _buildLineItem(
-                'Retención 2da Categoría - Empleados (Línea 72)',
+                'Retención 2da Categoría - Trabajadores (Línea 72)',
                 _f29.retencionSegundaCategoria,
                 isCredit: true,
               ),
@@ -518,8 +518,8 @@ class _F29DetailPageState extends State<F29DetailPage> {
 
     if (success) {
       // Reload F29
-      final updated =
-          await service.getDeclarationForPeriod(_f29.periodYear, _f29.periodMonth);
+      final updated = await service.getDeclarationForPeriod(
+          _f29.periodYear, _f29.periodMonth);
       if (updated != null) {
         setState(() => _f29 = updated);
       }
@@ -542,7 +542,7 @@ class _F29DetailPageState extends State<F29DetailPage> {
 
   Future<void> _markAsPaid() async {
     final paymentRefController = TextEditingController();
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -593,8 +593,8 @@ class _F29DetailPageState extends State<F29DetailPage> {
 
     if (success) {
       // Reload F29
-      final updated =
-          await service.getDeclarationForPeriod(_f29.periodYear, _f29.periodMonth);
+      final updated = await service.getDeclarationForPeriod(
+          _f29.periodYear, _f29.periodMonth);
       if (updated != null) {
         setState(() => _f29 = updated);
       }
@@ -656,8 +656,8 @@ class _F29DetailPageState extends State<F29DetailPage> {
 
     if (success) {
       // Reload F29
-      final updated =
-          await service.getDeclarationForPeriod(_f29.periodYear, _f29.periodMonth);
+      final updated = await service.getDeclarationForPeriod(
+          _f29.periodYear, _f29.periodMonth);
       if (updated != null) {
         setState(() => _f29 = updated);
       }

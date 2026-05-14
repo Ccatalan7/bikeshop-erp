@@ -3920,7 +3920,7 @@ class BikeshopService extends ChangeNotifier {
               }
 
               // For invoice changes, we use a longer debounce since these are less critical
-              // The Pegas table will still show correct data on next user interaction
+              // The Trabajos table will still show correct data on next user interaction
               _debouncedNotifyInvoiceChange();
             },
           )

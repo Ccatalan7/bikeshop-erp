@@ -1523,7 +1523,7 @@ class _PegasListPageState extends State<PegasListPage> {
       ),
       child: InkWell(
         onTap: () {
-          print('🔵 DEBUG: Pega card tapped! Job: ${job.jobNumber}');
+          print('🔵 DEBUG: Trabajo card tapped! Job: ${job.jobNumber}');
           setState(() {
             _selectedJob = job;
             _loadingDetails = true;

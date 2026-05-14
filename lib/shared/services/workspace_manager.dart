@@ -4,6 +4,46 @@ import '../utils/web_url.dart';
 
 import 'package:go_router/go_router.dart';
 
+const double workspaceMinDrawerWidth = 200.0;
+const double workspaceMaxDrawerWidth = 400.0;
+const double workspaceDefaultDrawerWidth = 280.0;
+
+String workspaceRoutePath(String route) {
+  return Uri.tryParse(route)?.path ?? route.split('?').first;
+}
+
+String inferWorkspaceModuleRoot(String route) {
+  final path = workspaceRoutePath(route);
+  const moduleRoots = [
+    '/accounting',
+    '/tax-reports',
+    '/clientes',
+    '/taller',
+    '/inventory',
+    '/sales',
+    '/purchases',
+    '/pos',
+    '/hr',
+    '/website',
+    '/tienda',
+    '/mail',
+    '/chat',
+    '/tools',
+    '/settings',
+    '/debug',
+    '/dashboard',
+  ];
+
+  for (final root in moduleRoots) {
+    if (path == root || path.startsWith('$root/')) {
+      return root;
+    }
+  }
+
+  final segments = path.split('/').where((segment) => segment.isNotEmpty);
+  return segments.isEmpty ? '/dashboard' : '/${segments.first}';
+}
+
 /// Maps route paths to human-readable titles for workspace tabs
 String getRouteTitle(String path) {
   // Remove query parameters and clean the path
@@ -35,10 +75,10 @@ String getRouteTitle(String path) {
 
     // Bikeshop / Taller
     '/taller': 'Taller',
-    '/taller/pegas': 'Pegas',
+    '/taller/pegas': 'Trabajos',
     '/taller/calendario': 'Calendario Taller',
-    '/taller/nueva-pega': 'Nueva Pega',
-    '/taller/estados': 'Estados de Pegas',
+    '/taller/nueva-pega': 'Nuevo Trabajo',
+    '/taller/estados': 'Estados de Trabajos',
     '/taller/sujetos': 'Catálogo de Elementos',
     '/taller/marcas-bicicletas': 'Marcas de Bicicletas',
     '/taller/enciclopedia': 'Enciclopedia de Bicicletas',
@@ -83,8 +123,8 @@ String getRouteTitle(String path) {
     '/pos/receipt': 'Recibo POS',
 
     // HR
-    '/hr/employees': 'Empleados',
-    '/hr/employees/new': 'Nuevo Empleado',
+    '/hr/employees': 'Trabajadores',
+    '/hr/employees/new': 'Nuevo Trabajador',
     '/hr/attendance': 'Asistencia',
     '/hr/kiosk': 'Modo Kiosko',
     '/hr/medical-leaves': 'Licencias Médicas',
@@ -141,8 +181,8 @@ String getRouteTitle(String path) {
       return 'Editar Asiento';
     }
     if (cleanPath.startsWith('/accounting/expenses/')) return 'Editar Gasto';
-    if (cleanPath.startsWith('/hr/employees/')) return 'Editar Empleado';
-    if (cleanPath.startsWith('/taller/pega/')) return 'Editar Pega';
+    if (cleanPath.startsWith('/hr/employees/')) return 'Editar Trabajador';
+    if (cleanPath.startsWith('/taller/pega/')) return 'Editar Trabajo';
   }
 
   // Handle detail views /clientes/:id → "Cliente"
@@ -150,7 +190,7 @@ String getRouteTitle(String path) {
     return 'Detalle Cliente';
   }
   if (RegExp(r'^/taller/pega/[^/]+$').hasMatch(cleanPath)) {
-    return 'Detalle Pega';
+    return 'Detalle Trabajo';
   }
   if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Factura';
@@ -191,13 +231,43 @@ class Workspace {
   String currentRoute; // Track current route for title updates
   final GlobalKey<NavigatorState> navigatorKey;
   GoRouter? router; // Track actual router instance for external navigation
+  bool isDrawerVisible;
+  double drawerWidth;
+  bool isResizingDrawer;
+  bool isPinned;
+  String? pinnedRouteRoot;
+  final List<String> routeHistory;
+  int routeHistoryIndex;
+  bool isApplyingHistoryNavigation;
 
   Workspace({
     required this.id,
     required this.title,
     required this.initialRoute,
+    this.isDrawerVisible = true,
+    this.drawerWidth = workspaceDefaultDrawerWidth,
+    this.isResizingDrawer = false,
+    this.isPinned = false,
+    this.pinnedRouteRoot,
   })  : currentRoute = initialRoute,
-        navigatorKey = GlobalKey<NavigatorState>();
+        navigatorKey = GlobalKey<NavigatorState>(),
+        routeHistory = [initialRoute],
+        routeHistoryIndex = 0,
+        isApplyingHistoryNavigation = false;
+
+  bool get canGoBack => routeHistoryIndex > 0;
+  bool get canGoForward => routeHistoryIndex < routeHistory.length - 1;
+
+  String get moduleRoot =>
+      pinnedRouteRoot ?? inferWorkspaceModuleRoot(currentRoute);
+
+  bool allowsRoute(String route) {
+    if (!isPinned) return true;
+    final root = pinnedRouteRoot ?? inferWorkspaceModuleRoot(currentRoute);
+    final path = workspaceRoutePath(route);
+    if (root == '/dashboard') return path == '/dashboard';
+    return path == root || path.startsWith('$root/');
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -224,6 +294,11 @@ class WorkspaceManager extends ChangeNotifier {
       _workspaces.isEmpty ? null : _workspaces[_activeIndex];
   bool get isInitialized => _isInitialized;
   bool get isAIPanelOpen => _isAIPanelOpen;
+
+  Workspace? workspaceById(String id) {
+    final index = _workspaces.indexWhere((workspace) => workspace.id == id);
+    return index == -1 ? null : _workspaces[index];
+  }
 
   WorkspaceManager() {
     debugPrint(
@@ -319,6 +394,62 @@ class WorkspaceManager extends ChangeNotifier {
     }
   }
 
+  void reorderWorkspace(int oldIndex, int newIndex) {
+    if (oldIndex < 0 ||
+        oldIndex >= _workspaces.length ||
+        newIndex < 0 ||
+        oldIndex == newIndex) {
+      return;
+    }
+
+    final activeId = activeWorkspace?.id;
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final workspace = _workspaces.removeAt(oldIndex);
+    final insertIndex = _normalizeWorkspaceInsertIndex(workspace, newIndex);
+    _workspaces.insert(insertIndex, workspace);
+
+    if (activeId != null) {
+      _activeIndex = _workspaces.indexWhere((w) => w.id == activeId);
+      if (_activeIndex == -1) _activeIndex = 0;
+    }
+
+    notifyListeners();
+  }
+
+  void moveWorkspaceToIndex(String workspaceId, int targetIndex) {
+    final oldIndex = _workspaces.indexWhere((w) => w.id == workspaceId);
+    if (oldIndex == -1) return;
+
+    var newIndex = targetIndex;
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    if (oldIndex == newIndex) return;
+
+    final activeId = activeWorkspace?.id;
+    final workspace = _workspaces.removeAt(oldIndex);
+    final insertIndex = _normalizeWorkspaceInsertIndex(workspace, newIndex);
+    _workspaces.insert(insertIndex, workspace);
+
+    if (activeId != null) {
+      _activeIndex = _workspaces.indexWhere((w) => w.id == activeId);
+      if (_activeIndex == -1) _activeIndex = 0;
+    }
+
+    notifyListeners();
+  }
+
+  int _normalizeWorkspaceInsertIndex(Workspace workspace, int targetIndex) {
+    final pinnedCount =
+        _workspaces.where((candidate) => candidate.isPinned).length;
+    final minIndex = workspace.isPinned ? 0 : pinnedCount;
+    final maxIndex = workspace.isPinned ? pinnedCount : _workspaces.length;
+    return targetIndex.clamp(minIndex, maxIndex).toInt();
+  }
+
   /// Close a workspace tab
   void closeWorkspace(int index) {
     if (_workspaces.length <= 1) {
@@ -356,6 +487,68 @@ class WorkspaceManager extends ChangeNotifier {
     }
   }
 
+  void setWorkspaceDrawerVisible(String workspaceId, bool visible) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null || workspace.isDrawerVisible == visible) return;
+    workspace.isDrawerVisible = visible;
+    notifyListeners();
+  }
+
+  void showWorkspaceDrawer(String workspaceId) =>
+      setWorkspaceDrawerVisible(workspaceId, true);
+
+  void hideWorkspaceDrawer(String workspaceId) =>
+      setWorkspaceDrawerVisible(workspaceId, false);
+
+  void startWorkspaceDrawerResize(String workspaceId) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null || workspace.isResizingDrawer) return;
+    workspace.isResizingDrawer = true;
+    notifyListeners();
+  }
+
+  void updateWorkspaceDrawerWidth(String workspaceId, double newWidth) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null) return;
+
+    final clampedWidth =
+        newWidth.clamp(workspaceMinDrawerWidth, workspaceMaxDrawerWidth);
+    if (workspace.drawerWidth == clampedWidth) return;
+
+    workspace.drawerWidth = clampedWidth.toDouble();
+    notifyListeners();
+  }
+
+  void stopWorkspaceDrawerResize(String workspaceId) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null || !workspace.isResizingDrawer) return;
+    workspace.isResizingDrawer = false;
+    notifyListeners();
+  }
+
+  void toggleWorkspacePinned(int index) {
+    if (index < 0 || index >= _workspaces.length) return;
+
+    final activeId = activeWorkspace?.id;
+    final workspace = _workspaces.removeAt(index);
+    workspace.isPinned = !workspace.isPinned;
+    workspace.pinnedRouteRoot = workspace.isPinned
+        ? inferWorkspaceModuleRoot(workspace.currentRoute)
+        : null;
+
+    final pinnedInsertIndex =
+        _workspaces.where((candidate) => candidate.isPinned).length;
+    final insertIndex = pinnedInsertIndex.clamp(0, _workspaces.length).toInt();
+    _workspaces.insert(insertIndex, workspace);
+
+    if (activeId != null) {
+      _activeIndex = _workspaces.indexWhere((w) => w.id == activeId);
+      if (_activeIndex == -1) _activeIndex = 0;
+    }
+
+    notifyListeners();
+  }
+
   /// Navigate the currently active workspace to a new route
   /// This is essential for external UI elements (like global FABs)
   /// that exist outside the individual GoRouter subtrees.
@@ -363,6 +556,11 @@ class WorkspaceManager extends ChangeNotifier {
     if (_workspaces.isEmpty) return;
 
     final activeWorkspace = _workspaces[_activeIndex];
+    if (!activeWorkspace.allowsRoute(route)) {
+      openRouteInWorkspace(route);
+      return;
+    }
+
     if (activeWorkspace.router != null) {
       debugPrint(
           '🧭 [WorkspaceManager] External navigation triggered to: $route');
@@ -371,6 +569,44 @@ class WorkspaceManager extends ChangeNotifier {
       debugPrint(
           '⚠️ [WorkspaceManager] Cannot navigate: active workspace router is null');
     }
+  }
+
+  void navigateActiveWorkspaceBack() {
+    final workspace = activeWorkspace;
+    if (workspace == null || !workspace.canGoBack) return;
+
+    workspace.routeHistoryIndex -= 1;
+    _navigateWorkspaceToHistoryEntry(workspace);
+  }
+
+  void navigateActiveWorkspaceForward() {
+    final workspace = activeWorkspace;
+    if (workspace == null || !workspace.canGoForward) return;
+
+    workspace.routeHistoryIndex += 1;
+    _navigateWorkspaceToHistoryEntry(workspace);
+  }
+
+  void _navigateWorkspaceToHistoryEntry(Workspace workspace) {
+    final route = workspace.routeHistory[workspace.routeHistoryIndex];
+    workspace.isApplyingHistoryNavigation = true;
+    workspace.currentRoute = route;
+    workspace.title = getRouteTitle(route);
+    workspace.router?.go(route);
+    notifyListeners();
+  }
+
+  void openRouteInWorkspace(String route) {
+    final existingIndex = _workspaces.indexWhere(
+      (workspace) =>
+          workspace.currentRoute == route || workspace.initialRoute == route,
+    );
+    if (existingIndex != -1) {
+      switchToWorkspace(existingIndex);
+      return;
+    }
+
+    addWorkspace(title: getRouteTitle(route), initialRoute: route);
   }
 
   /// Toggles the AI Assistant right panel visibility
@@ -384,26 +620,63 @@ class WorkspaceManager extends ChangeNotifier {
   void updateActiveWorkspaceRoute(String newRoute) {
     if (_workspaces.isEmpty) return;
 
-    final workspace = _workspaces[_activeIndex];
-    if (workspace.currentRoute == newRoute) return;
-
-    workspace.currentRoute = newRoute;
-    workspace.title = getRouteTitle(newRoute);
-    debugPrint(
-        '📍 [WorkspaceManager] Updated workspace "${workspace.id}" to route: $newRoute → title: "${workspace.title}"');
-    notifyListeners();
+    updateWorkspaceRouteById(_workspaces[_activeIndex].id, newRoute);
   }
 
   /// Update a specific workspace's route and title
   void updateWorkspaceRoute(int index, String newRoute) {
     if (index >= 0 && index < _workspaces.length) {
-      final workspace = _workspaces[index];
-      if (workspace.currentRoute == newRoute) return;
-
-      workspace.currentRoute = newRoute;
-      workspace.title = getRouteTitle(newRoute);
-      notifyListeners();
+      updateWorkspaceRouteById(_workspaces[index].id, newRoute);
     }
+  }
+
+  String? handleWorkspaceRouteChange(String workspaceId, String newRoute) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null) return null;
+
+    if (!workspace.allowsRoute(newRoute)) {
+      final fallbackRoute = workspace.allowsRoute(workspace.currentRoute)
+          ? workspace.currentRoute
+          : (workspace.pinnedRouteRoot ?? workspace.initialRoute);
+      openRouteInWorkspace(newRoute);
+      return fallbackRoute;
+    }
+
+    updateWorkspaceRouteById(workspaceId, newRoute);
+    return null;
+  }
+
+  void updateWorkspaceRouteById(String workspaceId, String newRoute) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null) return;
+
+    if (workspace.currentRoute == newRoute) {
+      workspace.isApplyingHistoryNavigation = false;
+      return;
+    }
+
+    workspace.currentRoute = newRoute;
+    workspace.title = getRouteTitle(newRoute);
+
+    if (workspace.isApplyingHistoryNavigation) {
+      workspace.isApplyingHistoryNavigation = false;
+    } else {
+      if (workspace.routeHistoryIndex < workspace.routeHistory.length - 1) {
+        workspace.routeHistory.removeRange(
+          workspace.routeHistoryIndex + 1,
+          workspace.routeHistory.length,
+        );
+      }
+      if (workspace.routeHistory.isEmpty ||
+          workspace.routeHistory.last != newRoute) {
+        workspace.routeHistory.add(newRoute);
+      }
+      workspace.routeHistoryIndex = workspace.routeHistory.length - 1;
+    }
+
+    debugPrint(
+        '📍 [WorkspaceManager] Updated workspace "${workspace.id}" to route: $newRoute → title: "${workspace.title}"');
+    notifyListeners();
   }
 
   /// Check if a workspace with the given route already exists

@@ -40,7 +40,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   }
 
   double _sumSplits(String lineId) {
-    final splits = _paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[];
+    final splits =
+        _paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[];
     return splits.fold<double>(0, (sum, s) => sum + s.amount);
   }
 
@@ -76,7 +77,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
       final lineId = line.id;
       if (lineId == null) continue;
 
-      final splits = _paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[];
+      final splits =
+          _paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[];
       if (splits.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -92,7 +94,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         if (split.methodId == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Selecciona método de pago para ${line.employeeName}.'),
+              content:
+                  Text('Selecciona método de pago para ${line.employeeName}.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -115,7 +118,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
     return true;
   }
 
-  Map<String, dynamic>? _buildSplitsPayload(List<PayrollVoucherLine> includedLines) {
+  Map<String, dynamic>? _buildSplitsPayload(
+      List<PayrollVoucherLine> includedLines) {
     final payload = <String, dynamic>{};
 
     for (final line in includedLines) {
@@ -279,14 +283,15 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         // Update line logic
         final em = _employeeMap[line.employeeId];
 
-        final splits = _paymentSplitsByLineId[line.id!] ?? const <_PaymentSplitDraft>[];
+        final splits =
+            _paymentSplitsByLineId[line.id!] ?? const <_PaymentSplitDraft>[];
         final primaryMethodId = splits.isNotEmpty
-          ? (splits
-              .firstWhere((s) => s.amount > 0, orElse: () => splits.first)
-              .methodId ??
-            _selectedMethodIds[line.id] ??
-            line.paymentMethodId)
-          : (_selectedMethodIds[line.id] ?? line.paymentMethodId);
+            ? (splits
+                    .firstWhere((s) => s.amount > 0, orElse: () => splits.first)
+                    .methodId ??
+                _selectedMethodIds[line.id] ??
+                line.paymentMethodId)
+            : (_selectedMethodIds[line.id] ?? line.paymentMethodId);
 
         // Sync salary account from current profile if available
         final salaryAccountId = em?.salaryAccountId ?? line.salaryAccountId;
@@ -294,7 +299,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         // Determine method name for legacy string
         String? methodName = line.paymentMethod;
         if (primaryMethodId != null) {
-          final m = _availableMethods.firstWhere((m) => m['id'] == primaryMethodId,
+          final m = _availableMethods.firstWhere(
+              (m) => m['id'] == primaryMethodId,
               orElse: () => {'name': 'transfer'});
           methodName = m['name'];
         }
@@ -412,7 +418,8 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                   final lineId = line.id;
                   final splits = lineId == null
                       ? const <_PaymentSplitDraft>[]
-                      : (_paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[]);
+                      : (_paymentSplitsByLineId[lineId] ??
+                          const <_PaymentSplitDraft>[]);
                   final splitSum = lineId == null ? 0.0 : _sumSplits(lineId);
                   final delta = line.totalAmount - splitSum;
 
@@ -464,20 +471,23 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                 return Padding(
                                   padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: DropdownButtonFormField<String>(
                                           initialValue: split.methodId,
                                           isExpanded: true,
                                           decoration: InputDecoration(
-                                            labelText:
-                                                i == 0 ? 'Métodos de Pago' : null,
+                                            labelText: i == 0
+                                                ? 'Métodos de Pago'
+                                                : null,
                                             isDense: true,
                                             border: const OutlineInputBorder(),
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
-                                                    horizontal: 10, vertical: 12),
+                                                    horizontal: 10,
+                                                    vertical: 12),
                                           ),
                                           items: _availableMethods
                                               .map((m) => DropdownMenuItem(
@@ -506,11 +516,13 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                             prefixText: '\$ ',
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
-                                                    horizontal: 10, vertical: 12),
+                                                    horizontal: 10,
+                                                    vertical: 12),
                                           ),
                                           keyboardType: TextInputType.number,
                                           inputFormatters: [
-                                            FilteringTextInputFormatter.digitsOnly,
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
                                           ],
                                           onChanged: _isProcessing
                                               ? null
@@ -555,8 +567,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                             ? null
                                             : () => _addSplit(
                                                 lineId, line.totalAmount),
-                                        icon:
-                                            const Icon(Icons.add, size: 18),
+                                        icon: const Icon(Icons.add, size: 18),
                                         label: const Text('Agregar método'),
                                       ),
                                     ],
@@ -584,7 +595,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${includedLines.length} empleados'),
+                      Text('${includedLines.length} trabajadores'),
                       Text('Total: ${currency.format(totalAmount)}',
                           style: TextStyle(
                               fontSize: 22,

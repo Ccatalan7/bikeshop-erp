@@ -271,7 +271,7 @@ class VeryfiAdapter {
   /// Parse a Veryfi response map into a `Invoice`.
   ///
   /// `tenantId` is required (multi-tenant). `defaultInvoiceType` can be
-  /// used to mark pegas/service invoices if needed.
+  /// used to mark trabajos/service invoices if needed.
   static Invoice parseInvoice({
     required Map<String, dynamic> veryfiJson,
     required String tenantId,

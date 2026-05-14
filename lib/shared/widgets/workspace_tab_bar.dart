@@ -35,24 +35,41 @@ class WorkspaceTabBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              itemCount: workspaceManager.workspaces.length,
-              itemBuilder: (context, index) {
-                final workspace = workspaceManager.workspaces[index];
-                final isActive = index == workspaceManager.activeIndex;
-
-                return _WorkspaceTab(
-                  workspace: workspace,
-                  isActive: isActive,
-                  onTap: () => workspaceManager.switchToWorkspace(index),
-                  onClose: workspaceManager.workspaces.length > 1
-                      ? () => workspaceManager.closeWorkspace(index)
-                      : null,
-                );
-              },
+              padding: EdgeInsets.zero,
+              child: Row(
+                children: [
+                  for (var index = 0;
+                      index < workspaceManager.workspaces.length;
+                      index++)
+                    _WorkspaceTabDropTarget(
+                      key: ValueKey(
+                          'workspace-tab-target-${workspaceManager.workspaces[index].id}'),
+                      targetIndex: index,
+                      child: _WorkspaceTab(
+                        key: ValueKey(
+                            'workspace-tab-${workspaceManager.workspaces[index].id}'),
+                        index: index,
+                        workspace: workspaceManager.workspaces[index],
+                        isActive: index == workspaceManager.activeIndex,
+                        onTap: () => workspaceManager.switchToWorkspace(index),
+                        onTogglePin: () =>
+                            workspaceManager.toggleWorkspacePinned(index),
+                        onClose: workspaceManager.workspaces.length > 1
+                            ? () => workspaceManager.closeWorkspace(index)
+                            : null,
+                      ),
+                    ),
+                  _WorkspaceDropSlot(
+                    targetIndex: workspaceManager.workspaces.length,
+                    trailing: true,
+                  ),
+                ],
+              ),
             ),
           ),
+          const _WorkspaceNavigationControls(),
           // New tab button with dropdown menu
           if (workspaceManager.workspaces.length <
               WorkspaceManager.maxWorkspaces)
@@ -79,15 +96,20 @@ class WorkspaceTabBar extends StatelessWidget {
 }
 
 class _WorkspaceTab extends StatefulWidget {
+  final int index;
   final Workspace workspace;
   final bool isActive;
   final VoidCallback onTap;
+  final VoidCallback onTogglePin;
   final VoidCallback? onClose;
 
   const _WorkspaceTab({
+    super.key,
+    required this.index,
     required this.workspace,
     required this.isActive,
     required this.onTap,
+    required this.onTogglePin,
     this.onClose,
   });
 
@@ -104,6 +126,11 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
     final textColor = widget.isActive
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface;
+    final showTabTools = _isHovered || widget.isActive;
+    final showPinControl = showTabTools || widget.workspace.isPinned;
+    final pinColor = widget.workspace.isPinned
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -111,10 +138,7 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
-          constraints: const BoxConstraints(
-            minWidth: 120,
-            maxWidth: 200,
-          ),
+          width: widget.workspace.isPinned ? 176 : 184,
           decoration: BoxDecoration(
             color: widget.isActive
                 ? theme.colorScheme.surfaceContainerHighest
@@ -137,6 +161,46 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
+              if (showTabTools)
+                Draggable<String>(
+                  data: widget.workspace.id,
+                  feedback: _WorkspaceDragPreview(
+                    title: widget.workspace.title,
+                    isPinned: widget.workspace.isPinned,
+                  ),
+                  childWhenDragging: Opacity(
+                    opacity: 0.35,
+                    child: _WorkspaceDragHandle(color: pinColor),
+                  ),
+                  child: _WorkspaceDragHandle(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.7),
+                  ),
+                ),
+              if (showPinControl)
+                InkWell(
+                  onTap: widget.onTogglePin,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(
+                      widget.workspace.isPinned
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                      size: 14,
+                      color: pinColor,
+                    ),
+                  ),
+                ),
+              if (widget.workspace.isPinned && !showTabTools)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Container(
+                    width: 1,
+                    height: 16,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                  ),
+                ),
               Expanded(
                 child: Text(
                   widget.workspace.title,
@@ -150,7 +214,7 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
                   maxLines: 1,
                 ),
               ),
-              if (widget.onClose != null && (_isHovered || widget.isActive))
+              if (widget.onClose != null && showTabTools)
                 InkWell(
                   onTap: widget.onClose,
                   borderRadius: BorderRadius.circular(12),
@@ -164,6 +228,242 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceTabDropTarget extends StatelessWidget {
+  final int targetIndex;
+  final Widget child;
+
+  const _WorkspaceTabDropTarget({
+    super.key,
+    required this.targetIndex,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) {
+        context
+            .read<WorkspaceManager>()
+            .moveWorkspaceToIndex(details.data, targetIndex);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: isHovered
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+class _WorkspaceDropSlot extends StatelessWidget {
+  final int targetIndex;
+  final bool trailing;
+
+  const _WorkspaceDropSlot({
+    required this.targetIndex,
+    this.trailing = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) {
+        context
+            .read<WorkspaceManager>()
+            .moveWorkspaceToIndex(details.data, targetIndex);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: trailing ? 18 : 8,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: isHovered
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkspaceDragHandle extends StatelessWidget {
+  final Color color;
+
+  const _WorkspaceDragHandle({
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Icon(
+        Icons.drag_indicator,
+        size: 14,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _WorkspaceDragPreview extends StatelessWidget {
+  final String title;
+  final bool isPinned;
+
+  const _WorkspaceDragPreview({
+    required this.title,
+    required this.isPinned,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 170,
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.primary),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isPinned ? Icons.push_pin : Icons.tab_outlined,
+              size: 14,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceNavigationControls extends StatelessWidget {
+  const _WorkspaceNavigationControls();
+
+  @override
+  Widget build(BuildContext context) {
+    final workspaceManager = context.watch<WorkspaceManager>();
+    final workspace = workspaceManager.activeWorkspace;
+    final theme = Theme.of(context);
+
+    return Container(
+      height: 28,
+      margin: const EdgeInsets.only(right: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.surface,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _WorkspaceNavButton(
+            icon: Icons.arrow_back,
+            tooltip: 'Atrás',
+            enabled: workspace?.canGoBack ?? false,
+            onPressed: workspaceManager.navigateActiveWorkspaceBack,
+          ),
+          Container(
+            width: 1,
+            height: 16,
+            color: theme.dividerColor,
+          ),
+          _WorkspaceNavButton(
+            icon: Icons.arrow_forward,
+            tooltip: 'Adelante',
+            enabled: workspace?.canGoForward ?? false,
+            onPressed: workspaceManager.navigateActiveWorkspaceForward,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceNavButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _WorkspaceNavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(7),
+        child: SizedBox(
+          width: 30,
+          height: 26,
+          child: Icon(
+            icon,
+            size: 15,
+            color: enabled
+                ? theme.colorScheme.onSurface
+                : theme.disabledColor.withValues(alpha: 0.55),
           ),
         ),
       ),

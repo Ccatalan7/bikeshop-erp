@@ -4,7 +4,7 @@
 
 ## Business Context
 
-The **Pegas Module** (mechanic jobs/maintenance) represents **the majority of the business**. This is a bike repair shop in Viña del Mar, Chile, not primarily a retail store. The workflow handles complex, multi-day repair jobs with diagnosis, budgeting, parts ordering, and client communication.
+The **Trabajos module** (mechanic jobs/maintenance) represents **the majority of the business**. This is a bike repair shop in Viña del Mar, Chile, not primarily a retail store. The workflow handles complex, multi-day repair jobs with diagnosis, budgeting, parts ordering, and client communication.
 
 ## The 4 Sales Scenarios (By Volume)
 
@@ -12,7 +12,7 @@ The **Pegas Module** (mechanic jobs/maintenance) represents **the majority of th
 **This is what the business IS ABOUT.**
 - Client brings bike → Diagnosis → Budget approval → Repair → Delivery
 - Duration: Days to weeks
-- Tracked in **Pegas Module** with full job lifecycle
+- Tracked in **Trabajos** with full job lifecycle
 - Invoice created **manually when ready** (NOT auto-generated on job creation)
 - Links to Inventory (parts used) and Accounting (payments)
 
@@ -21,16 +21,16 @@ The **Pegas Module** (mechanic jobs/maintenance) represents **the majority of th
 
 ### **Scenario 2: Emergency Service + Products (~10%)**
 - Urgent repair + parts/accessories → Fixed in ~1 hour
-- Can use POS for speed OR quick Pegas job for tracking
+- Can use POS for speed OR quick trabajo for tracking
 
 ### **Scenario 3: Rush Service Only (~5%)**
 - Quick service (brake adjustment, tire inflation) → POS or manual invoice
 
-## Pegas Workflow Architecture
+## Trabajo Workflow Architecture
 
 ### **Phase 1: Job Intake**
 ```
-Client brings bike → Staff creates Pegas job record:
+Client brings bike → Staff creates a trabajo record:
   - Customer info (name, phone, email)
   - Bike details (brand, model, color, problem description)
   - Initial status: 'en conversacion' or 'diagnostico'
@@ -47,12 +47,12 @@ Job visible to all team members for coordination
 ```
 ⚠️ CRITICAL: Invoice creation timing is FLEXIBLE!
 
-Option 1: Create invoice WITH pega (if products/services selected during job creation)
+Option 1: Create invoice WITH trabajo (if products/services selected during job creation)
   - Staff adds parts/labor while creating job
   - System creates invoice immediately
   - Invoice links back: mechanic_jobs.invoice_id = created_invoice.id
 
-Option 2: Create invoice AFTER pega (most common for complex jobs)
+Option 2: Create invoice AFTER trabajo (most common for complex jobs)
   - Create job first (diagnosis phase)
   - Add parts as job progresses
   - Click "Generar Factura" button when ready (could be immediately, after diagnosis, or days later)
@@ -110,7 +110,7 @@ If issues arise → Covered under guarantee (no additional charge)
 Final status: 'entregada' (delivered)
 ```
 
-## Database Schema (Pegas Core Tables)
+## Database Schema (Trabajos Core Tables)
 
 ```sql
 -- Main job tracking
@@ -162,7 +162,7 @@ void _onCustomerSelected(Customer customer) async {
   );
   
   if (pendingInvoices.isNotEmpty) {
-    // Show dialog: "Cliente tiene X facturas pendientes. ¿Abrir factura del pega?"
+    // Show dialog: "Cliente tiene X facturas pendientes. ¿Abrir factura del trabajo?"
     final selectedInvoice = await _showPendingInvoiceDialog(context, pendingInvoices);
     
     if (selectedInvoice != null) {
@@ -184,8 +184,8 @@ void _onCustomerSelected(Customer customer) async {
 ## Critical Business Rules
 
 ### **Invoice Timing**
-- ✅ Invoice CAN be created WITH pega (if products/services selected during job creation)
-- ✅ Invoice CAN be created AFTER pega (via "Generar Factura" button - most common for complex jobs)
+- ✅ Invoice CAN be created WITH trabajo (if products/services selected during job creation)
+- ✅ Invoice CAN be created AFTER trabajo (via "Generar Factura" button - most common for complex jobs)
 - ✅ Staff decides when to create invoice based on job complexity
 - ✅ Invoice can be created at ANY point in job lifecycle
 - ✅ Invoice can be modified until payment is processed
@@ -211,13 +211,13 @@ void _onCustomerSelected(Customer customer) async {
 - ✅ If job is deleted → Inventory is restored (if invoice was posted)
 
 ### **Multi-Tenant Isolation**
-- ✅ ALL Pegas tables have `tenant_id` column
+- ✅ ALL Trabajos tables have `tenant_id` column
 - ✅ ALL queries filter by `tenant_id`
 - ✅ Jobs from different bike shops are completely isolated
 
 ## Module Boundaries
 
-### **What Pegas Module DOES:**
+### **What Trabajos DOES:**
 - ✅ Track job lifecycle (status, notes, diagnosis)
 - ✅ Store bike details and problem description
 - ✅ Track parts used in repair
@@ -226,7 +226,7 @@ void _onCustomerSelected(Customer customer) async {
 - ✅ Link to invoice record (when created)
 - ✅ Provide UI for mechanics and front desk staff
 
-### **What Pegas Module DOES NOT DO:**
+### **What Trabajos DOES NOT DO:**
 - ❌ Generate invoices automatically
 - ❌ Process payments (that's Accounting Module)
 - ❌ Manage inventory (that's Inventory Module)
@@ -242,10 +242,10 @@ void _onCustomerSelected(Customer customer) async {
 
 ## AI Agent Guidelines
 
-**When working on Pegas-related features:**
+**When working on Trabajos-related features:**
 
-1. ✅ **Invoice creation is FLEXIBLE** - Can be created WITH pega (current feature) OR manually after (also supported)
-2. ✅ **Keep both invoice creation paths working** - Don't break the existing "create invoice with pega" feature
+1. ✅ **Invoice creation is FLEXIBLE** - Can be created WITH trabajo (current feature) OR manually after (also supported)
+2. ✅ **Keep both invoice creation paths working** - Don't break the existing "create invoice with trabajo" feature
 3. 🔄 **Payment webhooks are FUTURE enhancement** - Manual recording is current state, but automation may come later
 4. ✅ **ALWAYS preserve job-invoice bidirectional link** - Critical for data integrity
 5. ✅ **ALWAYS filter by tenant_id** - Multi-tenant isolation is non-negotiable

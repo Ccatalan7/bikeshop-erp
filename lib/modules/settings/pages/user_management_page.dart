@@ -775,7 +775,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _detailLine(
               'Email verificado', user['emailConfirmed'] == true ? 'Sí' : 'No'),
           _detailLine('Último acceso', _formatDate(user['lastSignInAt'])),
-          _detailLine('Empleado vinculado',
+          _detailLine('Trabajador vinculado',
               user['employeeName']?.toString() ?? 'No vinculado'),
           const SizedBox(height: 18),
           Wrap(

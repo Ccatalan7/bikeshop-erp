@@ -451,7 +451,7 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                                 if (latestJob != null) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Pega: ${latestJob.jobNumber}',
+                                    'Trabajo: ${latestJob.jobNumber}',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: Theme.of(context)
@@ -774,8 +774,10 @@ class _BikeshopClientsListPageState extends State<BikeshopClientsListPage> {
                 '${jobsForDate.length} trabajo${jobsForDate.length != 1 ? 's' : ''}',
                 style: TextStyle(
                   fontSize: 12,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
               ),
             ],

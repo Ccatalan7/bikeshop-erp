@@ -1157,9 +1157,7 @@ ${hintLines.join('\n')}
     }
 
     final normalized = _normalizeText(message);
-    final mentionsJob = normalized.contains('pega') ||
-        normalized.contains('pegas') ||
-        normalized.contains('trabajo') ||
+    final mentionsJob = normalized.contains('trabajo') ||
         normalized.contains('trabajos') ||
         normalized.contains('orden de trabajo') ||
         normalized.contains('ordenes de trabajo') ||
@@ -1179,8 +1177,6 @@ ${hintLines.join('\n')}
     final searchTerm = _extractEntitySearchTerm(
       message,
       removePatterns: const [
-        'pega',
-        'pegas',
         'trabajo',
         'trabajos',
         'orden de trabajo',
@@ -1270,9 +1266,9 @@ ${hintLines.join('\n')}
     if (jobs.isEmpty) {
       if (searchTerm.isNotEmpty) {
         return _textResponse(
-            'No encontré pegas que coincidan con "$searchTerm".');
+            'No encontré trabajos que coincidan con "$searchTerm".');
       }
-      return _textResponse('No encontré pegas para mostrar ahora mismo.');
+      return _textResponse('No encontré trabajos para mostrar ahora mismo.');
     }
 
     jobs.sort((a, b) {
@@ -1309,14 +1305,14 @@ ${hintLines.join('\n')}
       final job = limited.first;
       final label = _jobCardTitle(job);
       final intro = wantsRecent && searchTerm.isEmpty
-          ? 'La pega más reciente es $label.'
-          : 'Encontré la pega $label.';
+          ? 'El trabajo más reciente es $label.'
+          : 'Encontré el trabajo $label.';
       return _cardResponse(intro, cards: cards);
     }
 
     final headline = searchTerm.isNotEmpty
-        ? 'Encontré ${limited.length} pegas para "$searchTerm" que puedes abrir directo desde aquí.'
-        : 'Encontré ${limited.length} pegas recientes que puedes abrir directo desde aquí.';
+        ? 'Encontré ${limited.length} trabajos para "$searchTerm" que puedes abrir directo desde aquí.'
+        : 'Encontré ${limited.length} trabajos recientes que puedes abrir directo desde aquí.';
     return _cardResponse(headline, cards: cards);
   }
 
@@ -1637,7 +1633,7 @@ ${hintLines.join('\n')}
 
   String _jobCardTitle(MechanicJob job) {
     final number = (job.jobNumber ?? '').trim();
-    return number.isNotEmpty ? number : 'Pega sin número';
+    return number.isNotEmpty ? number : 'Trabajo sin número';
   }
 
   String _jobStatusLabel(MechanicJob job) {
@@ -1670,12 +1666,12 @@ ${hintLines.join('\n')}
 
     return AIAssistantActionCard(
       kind: 'job',
-      eyebrow: 'Pega',
+      eyebrow: 'Trabajo',
       title: _jobCardTitle(job),
       subtitle: subtitleParts.join(' • '),
       description: descriptionParts.join(' • '),
       route: '/taller/pegas/${job.id}',
-      ctaLabel: 'Abrir pega',
+      ctaLabel: 'Abrir trabajo',
       chips: [
         _jobStatusLabel(job),
         if (job.isInvoiced) 'Facturada',
@@ -3249,7 +3245,7 @@ ${hintLines.join('\n')}
     return '''
 You are a helpful and powerful AI assistant for "Vinabike" Bike Shop ERP.
 Your capabilities include:
-1. Managing repair jobs (Pegas).
+1. Managing repair jobs (Trabajos).
 2. Checking inventory stock and prices via semantic search.
 3. Navigating the app to show the user specific products in the Inventory module.
 4. Answering technical questions about bike compatibility by searching the internet.

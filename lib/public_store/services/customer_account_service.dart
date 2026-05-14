@@ -12,7 +12,7 @@ import '../../modules/website/models/website_models.dart';
 /// - Address book (multiple shipping addresses)
 /// - Order history and tracking
 /// - Bikes registered to customer
-/// - Service history (mechanic jobs/pegas)
+/// - Service history (mechanic jobs/trabajos)
 enum CustomerAuthResult {
   success,
   emailVerificationRequired,
