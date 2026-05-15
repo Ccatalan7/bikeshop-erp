@@ -94,7 +94,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final selectedConversation = _selectedConversation(provider.conversations);
 
     if (selectedConversation != null) {
-      return _buildConversationView(provider, selectedConversation);
+      return _buildConversationView(selectedConversation);
     }
 
     return Column(
@@ -107,12 +107,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  Widget _buildConversationView(
-    ChatProvider provider,
-    Conversation conversation,
-  ) {
-    final title = provider.getChatTitle(conversation);
-
+  Widget _buildConversationView(Conversation conversation) {
     return Column(
       children: [
         Container(
@@ -128,19 +123,17 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back, size: 20),
-                tooltip: 'Volver a mensajes',
+                tooltip: 'Volver a bandeja de entrada',
                 onPressed: () {
                   setState(() => _selectedConversationId = null);
                 },
               ),
               Expanded(
-                child: Text(
-                  title,
+                child: const Text(
+                  'Bandeja de entrada',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(

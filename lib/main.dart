@@ -708,10 +708,10 @@ class VinabikeApp extends StatelessWidget {
                             // Only this part needs to rebuild on workspace changes
                             Expanded(
                               child: Selector<WorkspaceManager,
-                                  (int, List<String>, bool)>(
+                                  (int, String, bool)>(
                                 selector: (_, wm) => (
-                                  wm.activeIndex,
-                                  wm.workspaces.map((w) => w.id).toList(),
+                                  wm.activeStackIndex,
+                                  wm.workspaceStackSignature,
                                   wm.isAIPanelOpen,
                                 ),
                                 builder: (context, data, _) {
@@ -729,7 +729,8 @@ class VinabikeApp extends StatelessWidget {
                                         child: IndexedStack(
                                           index: data.$1,
                                           sizing: StackFit.expand,
-                                          children: workspaceManager.workspaces
+                                          children: workspaceManager
+                                              .workspaceStackOrder
                                               .map((workspace) {
                                             return _WorkspaceRouterView(
                                               key: ValueKey(workspace.id),
@@ -818,9 +819,6 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
   @override
   void initState() {
     super.initState();
-
-    debugPrint(
-        '🎯 [WorkspaceRouterView] Creating router for workspace: ${widget.workspace.title} with route: ${widget.workspace.initialRoute}');
 
     // Create the router with an explicit initial location for this workspace.
     // This avoids post-frame .go() calls that can cause extra navigation cycles.

@@ -263,6 +263,8 @@ class _ChatWindowState extends State<ChatWindow> {
   Timer? _serviceWindowTicker;
   Future<Map<String, dynamic>?>? _whatsAppContactFuture;
   String? _whatsAppContactFutureConversationId;
+  Future<Map<String, dynamic>?>? _conversationContactFuture;
+  String? _conversationContactFutureConversationId;
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
@@ -278,6 +280,8 @@ class _ChatWindowState extends State<ChatWindow> {
   void _clearWhatsAppContactCache() {
     _whatsAppContactFuture = null;
     _whatsAppContactFutureConversationId = null;
+    _conversationContactFuture = null;
+    _conversationContactFutureConversationId = null;
   }
 
   Future<Map<String, dynamic>?> _getWhatsAppContactFuture() {
@@ -287,6 +291,23 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     return _whatsAppContactFuture ??= _resolveConversationWhatsAppContact();
+  }
+
+  Future<Map<String, dynamic>?> _getConversationContactFuture() {
+    if (_isWhatsAppConversation) {
+      return _getWhatsAppContactFuture();
+    }
+
+    if (!widget.conversation.isSupport) {
+      return Future.value(null);
+    }
+
+    if (_conversationContactFutureConversationId != widget.conversation.id) {
+      _conversationContactFutureConversationId = widget.conversation.id;
+      _conversationContactFuture = _resolvePotentialWhatsAppContact();
+    }
+
+    return _conversationContactFuture ??= _resolvePotentialWhatsAppContact();
   }
 
   void _debugLogWhatsAppSend(
@@ -2142,7 +2163,6 @@ class _ChatWindowState extends State<ChatWindow> {
           if (compact) {
             return Column(
               children: [
-                _buildChatInfoMobileHeader(theme, title, subtitle),
                 _buildChatInfoSectionBar(
                   theme,
                   mediaCount: mediaCount,
@@ -2171,55 +2191,6 @@ class _ChatWindowState extends State<ChatWindow> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildChatInfoMobileHeader(
-    ThemeData theme,
-    String title,
-    String subtitle,
-  ) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 10, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: Row(
-        children: [
-          _buildChatInfoAvatar(size: 42),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Cerrar',
-            icon: const Icon(Icons.close),
-            onPressed: _toggleChatInfoPanel,
-          ),
-        ],
       ),
     );
   }
@@ -2505,6 +2476,7 @@ class _ChatWindowState extends State<ChatWindow> {
               title: 'Nombre',
               value: title,
             ),
+            if (widget.conversation.isSupport) _buildContactPhoneInfoRow(),
             _buildInfoRowTile(
               icon: Icons.route_outlined,
               title: 'Canal',
@@ -2875,6 +2847,27 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  Widget _buildContactPhoneInfoRow() {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _getConversationContactFuture(),
+      builder: (context, snapshot) {
+        final rawPhone = snapshot.data?['phone']?.toString().trim();
+        final hasPhone = rawPhone != null && rawPhone.isNotEmpty;
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+        return _buildInfoRowTile(
+          icon: Icons.phone_iphone_outlined,
+          title: 'Teléfono',
+          value: hasPhone
+              ? _formatContactPhone(rawPhone)
+              : isLoading
+                  ? 'Buscando...'
+                  : 'Sin teléfono registrado',
+        );
+      },
+    );
+  }
+
   Widget _buildInfoRowTile({
     required IconData icon,
     required String title,
@@ -3212,6 +3205,24 @@ class _ChatWindowState extends State<ChatWindow> {
 
   String _formatPanelDate(DateTime value) {
     return DateFormat('dd/MM/yyyy HH:mm').format(value);
+  }
+
+  String _formatContactPhone(String rawPhone) {
+    final trimmed = rawPhone.trim();
+    final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.startsWith('56') && digits.length == 11) {
+      final national = digits.substring(2);
+      return '+56 ${national[0]} ${national.substring(1, 5)} ${national.substring(5)}';
+    }
+
+    if (digits.length == 9 && digits.startsWith('9')) {
+      return '+56 ${digits[0]} ${digits.substring(1, 5)} ${digits.substring(5)}';
+    }
+
+    if (trimmed.startsWith('+')) return trimmed;
+    if (digits.isNotEmpty) return '+$digits';
+    return trimmed;
   }
 
   String _safeArchiveFilePart(String value) {

@@ -17,9 +17,9 @@ class WorkspaceContainer extends StatelessWidget {
     final workspaceManager = context.watch<WorkspaceManager>();
 
     return IndexedStack(
-      index: workspaceManager.activeIndex,
+      index: workspaceManager.activeStackIndex,
       sizing: StackFit.expand,
-      children: workspaceManager.workspaces.map((workspace) {
+      children: workspaceManager.workspaceStackOrder.map((workspace) {
         return _WorkspaceInstance(
           key: ValueKey(workspace.id),
           workspace: workspace,

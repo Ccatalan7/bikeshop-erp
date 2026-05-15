@@ -5,13 +5,149 @@ import '../services/workspace_manager.dart';
 import '../../modules/ai_assistant/widgets/global_ai_button.dart';
 
 /// Tab bar UI for switching between workspaces
-class WorkspaceTabBar extends StatelessWidget {
+class WorkspaceTabBar extends StatefulWidget {
   const WorkspaceTabBar({super.key});
+
+  @override
+  State<WorkspaceTabBar> createState() => _WorkspaceTabBarState();
+}
+
+class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
+  String? _draggingWorkspaceId;
+  int? _hoveringWorkspaceIndex;
+
+  static const double _regularTabWidth = 184;
+  static const double _pinnedTabWidth = 176;
+  static const double _trailingDropWidth = 24;
+
+  void _startDrag(String workspaceId) {
+    setState(() {
+      _draggingWorkspaceId = workspaceId;
+      _hoveringWorkspaceIndex = null;
+    });
+  }
+
+  void _hoverIndex(int targetIndex) {
+    if (_draggingWorkspaceId == null) {
+      return;
+    }
+
+    final normalizedTargetIndex = _normalizedVisualTargetIndex(targetIndex);
+    if (normalizedTargetIndex == null ||
+        _hoveringWorkspaceIndex == normalizedTargetIndex) {
+      return;
+    }
+
+    setState(() {
+      _hoveringWorkspaceIndex = normalizedTargetIndex;
+    });
+  }
+
+  void _finishDrag() {
+    if (_draggingWorkspaceId == null && _hoveringWorkspaceIndex == null) {
+      return;
+    }
+
+    setState(() {
+      _draggingWorkspaceId = null;
+      _hoveringWorkspaceIndex = null;
+    });
+  }
+
+  List<Workspace> _displayedWorkspaces(List<Workspace> source) {
+    final workspaces = List<Workspace>.from(source);
+    if (_draggingWorkspaceId == null || _hoveringWorkspaceIndex == null) {
+      return workspaces;
+    }
+
+    final draggedIndex =
+        workspaces.indexWhere((w) => w.id == _draggingWorkspaceId);
+    if (draggedIndex == -1) return workspaces;
+
+    final draggedWorkspace = workspaces.removeAt(draggedIndex);
+    final insertIndex =
+        _normalizeVisualInsertIndex(workspaces, draggedWorkspace);
+    workspaces.insert(insertIndex, draggedWorkspace);
+    return workspaces;
+  }
+
+  int? _normalizedVisualTargetIndex(int targetIndex) {
+    final workspaceManager = context.read<WorkspaceManager>();
+    final workspaces = List<Workspace>.from(workspaceManager.workspaces);
+    final draggedIndex =
+        workspaces.indexWhere((w) => w.id == _draggingWorkspaceId);
+    if (draggedIndex == -1) return null;
+
+    final draggedWorkspace = workspaces.removeAt(draggedIndex);
+    return _normalizeVisualInsertIndex(
+      workspaces,
+      draggedWorkspace,
+      targetIndex: targetIndex,
+    );
+  }
+
+  int _normalizeVisualInsertIndex(
+    List<Workspace> workspaces,
+    Workspace draggedWorkspace, {
+    int? targetIndex,
+  }) {
+    final pinnedCount = workspaces.where((w) => w.isPinned).length;
+    final minIndex = draggedWorkspace.isPinned ? 0 : pinnedCount;
+    final maxIndex =
+        draggedWorkspace.isPinned ? pinnedCount : workspaces.length;
+    return (targetIndex ?? _hoveringWorkspaceIndex ?? workspaces.length)
+        .clamp(minIndex, maxIndex)
+        .toInt();
+  }
+
+  double _tabWidthFor(Workspace workspace) =>
+      workspace.isPinned ? _pinnedTabWidth : _regularTabWidth;
+
+  List<_WorkspaceTabPlacement> _placementsFor(List<Workspace> workspaces) {
+    var left = 0.0;
+    return workspaces.map((workspace) {
+      final width = _tabWidthFor(workspace);
+      final placement = _WorkspaceTabPlacement(
+        workspace: workspace,
+        left: left,
+        width: width,
+      );
+      left += width;
+      return placement;
+    }).toList();
+  }
+
+  List<_WorkspaceDropPlacement> _dropPlacementsFor(
+    List<Workspace> workspaces,
+  ) {
+    var left = 0.0;
+    return workspaces.asMap().entries.map((entry) {
+      final workspace = entry.value;
+      final width = _tabWidthFor(workspace);
+      final placement = _WorkspaceDropPlacement(
+        workspace: workspace,
+        targetIndex: entry.key,
+        left: left,
+        width: width,
+      );
+      left += width;
+      return placement;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final workspaceManager = context.watch<WorkspaceManager>();
     final theme = Theme.of(context);
+    final displayedWorkspaces =
+        _displayedWorkspaces(workspaceManager.workspaces);
+    final placements = _placementsFor(displayedWorkspaces);
+    final dropPlacements = _dropPlacementsFor(workspaceManager.workspaces);
+    final stripWidth = placements.fold<double>(
+          0,
+          (width, placement) => width + placement.width,
+        ) +
+        _trailingDropWidth;
 
     // Debug: Log workspace state
     if (!workspaceManager.isInitialized) {
@@ -38,34 +174,100 @@ class WorkspaceTabBar extends StatelessWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.zero,
-              child: Row(
-                children: [
-                  for (var index = 0;
-                      index < workspaceManager.workspaces.length;
-                      index++)
-                    _WorkspaceTabDropTarget(
-                      key: ValueKey(
-                          'workspace-tab-target-${workspaceManager.workspaces[index].id}'),
-                      targetIndex: index,
-                      child: _WorkspaceTab(
+              child: SizedBox(
+                width: stripWidth,
+                height: 40,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (var index = 0; index < placements.length; index++)
+                      AnimatedPositioned(
                         key: ValueKey(
-                            'workspace-tab-${workspaceManager.workspaces[index].id}'),
-                        index: index,
-                        workspace: workspaceManager.workspaces[index],
-                        isActive: index == workspaceManager.activeIndex,
-                        onTap: () => workspaceManager.switchToWorkspace(index),
-                        onTogglePin: () =>
-                            workspaceManager.toggleWorkspacePinned(index),
-                        onClose: workspaceManager.workspaces.length > 1
-                            ? () => workspaceManager.closeWorkspace(index)
-                            : null,
+                            'workspace-tab-position-${placements[index].workspace.id}'),
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        left: placements[index].left,
+                        top: 0,
+                        width: placements[index].width,
+                        height: 40,
+                        child: _WorkspaceTab(
+                          key: ValueKey(
+                              'workspace-tab-${placements[index].workspace.id}'),
+                          index: index,
+                          workspace: placements[index].workspace,
+                          isActive: placements[index].workspace.id ==
+                              workspaceManager.activeWorkspace?.id,
+                          isDragging: placements[index].workspace.id ==
+                              _draggingWorkspaceId,
+                          onTap: () {
+                            workspaceManager.switchToWorkspaceById(
+                              placements[index].workspace.id,
+                            );
+                          },
+                          onTogglePin: () =>
+                              workspaceManager.toggleWorkspacePinned(
+                            workspaceManager.workspaces.indexWhere(
+                              (w) => w.id == placements[index].workspace.id,
+                            ),
+                          ),
+                          onDragStarted: () =>
+                              _startDrag(placements[index].workspace.id),
+                          onDragEnded: _finishDrag,
+                          onClose: workspaceManager.workspaces.length > 1
+                              ? () => workspaceManager.closeWorkspaceById(
+                                    placements[index].workspace.id,
+                                  )
+                              : null,
+                        ),
                       ),
-                    ),
-                  _WorkspaceDropSlot(
-                    targetIndex: workspaceManager.workspaces.length,
-                    trailing: true,
-                  ),
-                ],
+                    if (_draggingWorkspaceId != null) ...[
+                      for (final placement in dropPlacements)
+                        Positioned(
+                          left: placement.left,
+                          top: 0,
+                          width: placement.width,
+                          height: 40,
+                          child: _WorkspaceTabDropTarget(
+                            workspaceId: placement.workspace.id,
+                            targetIndex: placement.targetIndex,
+                            draggingWorkspaceId: _draggingWorkspaceId,
+                            onHoverIndex: _hoverIndex,
+                            onAccept: (workspaceId, targetIndex) {
+                              workspaceManager.moveWorkspaceToIndex(
+                                workspaceId,
+                                targetIndex,
+                              );
+                              _finishDrag();
+                            },
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      Positioned(
+                        left: stripWidth - _trailingDropWidth,
+                        top: 0,
+                        width: _trailingDropWidth,
+                        height: 40,
+                        child: _WorkspaceTabDropTarget(
+                          targetIndex: workspaceManager.workspaces.length,
+                          draggingWorkspaceId: _draggingWorkspaceId,
+                          onHoverIndex: _hoverIndex,
+                          onAccept: (workspaceId, targetIndex) {
+                            workspaceManager.moveWorkspaceToIndex(
+                              workspaceId,
+                              targetIndex,
+                            );
+                            _finishDrag();
+                          },
+                          child: _WorkspaceDropSlot(
+                            isActive: _draggingWorkspaceId != null &&
+                                _hoveringWorkspaceIndex ==
+                                    workspaceManager.workspaces.length,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -99,8 +301,11 @@ class _WorkspaceTab extends StatefulWidget {
   final int index;
   final Workspace workspace;
   final bool isActive;
+  final bool isDragging;
   final VoidCallback onTap;
   final VoidCallback onTogglePin;
+  final VoidCallback onDragStarted;
+  final VoidCallback onDragEnded;
   final VoidCallback? onClose;
 
   const _WorkspaceTab({
@@ -108,8 +313,11 @@ class _WorkspaceTab extends StatefulWidget {
     required this.index,
     required this.workspace,
     required this.isActive,
+    required this.isDragging,
     required this.onTap,
     required this.onTogglePin,
+    required this.onDragStarted,
+    required this.onDragEnded,
     this.onClose,
   });
 
@@ -131,103 +339,115 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
     final pinColor = widget.workspace.isPinned
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
+    final tabColor = widget.isActive
+        ? Color.alphaBlend(
+            theme.colorScheme.primary.withValues(alpha: 0.05),
+            theme.colorScheme.surface,
+          )
+        : _isHovered
+            ? theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.55)
+            : Colors.transparent;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        child: Container(
-          width: widget.workspace.isPinned ? 176 : 184,
-          decoration: BoxDecoration(
-            color: widget.isActive
-                ? theme.colorScheme.surfaceContainerHighest
-                : _isHovered
-                    ? theme.colorScheme.surfaceContainerHigh
-                    : Colors.transparent,
-            border: Border(
-              right: BorderSide(
-                color: theme.dividerColor,
-                width: 1,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 120),
+          opacity: widget.isDragging ? 0.58 : 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: widget.workspace.isPinned ? 176 : 184,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tabColor,
+              border: Border(
+                bottom: BorderSide(
+                  color: widget.isActive
+                      ? theme.colorScheme.primary
+                      : Colors.transparent,
+                  width: 2,
+                ),
               ),
-              bottom: widget.isActive
-                  ? BorderSide(
-                      color: theme.colorScheme.primary,
-                      width: 2,
-                    )
-                  : BorderSide.none,
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              if (showTabTools)
-                Draggable<String>(
-                  data: widget.workspace.id,
-                  feedback: _WorkspaceDragPreview(
-                    title: widget.workspace.title,
-                    isPinned: widget.workspace.isPinned,
-                  ),
-                  childWhenDragging: Opacity(
-                    opacity: 0.35,
-                    child: _WorkspaceDragHandle(color: pinColor),
-                  ),
-                  child: _WorkspaceDragHandle(
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.7),
-                  ),
-                ),
-              if (showPinControl)
-                InkWell(
-                  onTap: widget.onTogglePin,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Icon(
-                      widget.workspace.isPinned
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                      size: 14,
-                      color: pinColor,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  if (showTabTools)
+                    Draggable<String>(
+                      data: widget.workspace.id,
+                      onDragStarted: widget.onDragStarted,
+                      onDragEnd: (_) => widget.onDragEnded(),
+                      feedback: _WorkspaceDragPreview(
+                        title: widget.workspace.title,
+                        isPinned: widget.workspace.isPinned,
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.35,
+                        child: _WorkspaceDragHandle(color: pinColor),
+                      ),
+                      child: _WorkspaceDragHandle(
+                        color: theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.7),
+                      ),
+                    ),
+                  if (showPinControl)
+                    InkWell(
+                      onTap: widget.onTogglePin,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Icon(
+                          widget.workspace.isPinned
+                              ? Icons.push_pin
+                              : Icons.push_pin_outlined,
+                          size: 14,
+                          color: pinColor,
+                        ),
+                      ),
+                    ),
+                  if (widget.workspace.isPinned && !showTabTools)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Container(
+                        width: 1,
+                        height: 16,
+                        color:
+                            theme.colorScheme.primary.withValues(alpha: 0.35),
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      widget.workspace.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: textColor,
+                        fontWeight: widget.isActive
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                ),
-              if (widget.workspace.isPinned && !showTabTools)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Container(
-                    width: 1,
-                    height: 16,
-                    color: theme.colorScheme.primary.withValues(alpha: 0.35),
-                  ),
-                ),
-              Expanded(
-                child: Text(
-                  widget.workspace.title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: textColor,
-                    fontWeight:
-                        widget.isActive ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
+                  if (widget.onClose != null && showTabTools)
+                    InkWell(
+                      onTap: widget.onClose,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.close,
+                          size: 14,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              if (widget.onClose != null && showTabTools)
-                InkWell(
-                  onTap: widget.onClose,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.close,
-                      size: 14,
-                      color: textColor,
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -235,84 +455,162 @@ class _WorkspaceTabState extends State<_WorkspaceTab> {
   }
 }
 
-class _WorkspaceTabDropTarget extends StatelessWidget {
+class _WorkspaceTabDropTarget extends StatefulWidget {
+  final String? workspaceId;
   final int targetIndex;
+  final String? draggingWorkspaceId;
+  final ValueChanged<int> onHoverIndex;
+  final void Function(String workspaceId, int targetIndex) onAccept;
   final Widget child;
 
   const _WorkspaceTabDropTarget({
-    super.key,
+    this.workspaceId,
     required this.targetIndex,
+    required this.draggingWorkspaceId,
+    required this.onHoverIndex,
+    required this.onAccept,
     required this.child,
   });
 
   @override
+  State<_WorkspaceTabDropTarget> createState() =>
+      _WorkspaceTabDropTargetState();
+}
+
+class _WorkspaceTabDropTargetState extends State<_WorkspaceTabDropTarget> {
+  @override
   Widget build(BuildContext context) {
     return DragTarget<String>(
-      onWillAcceptWithDetails: (details) => true,
+      onWillAcceptWithDetails: (details) => widget.draggingWorkspaceId != null,
+      onMove: (details) {
+        final zone = _hoverZone(context, details);
+        final targetIndex = _targetIndexFor(details.data, zone);
+        if (targetIndex != null) {
+          widget.onHoverIndex(targetIndex);
+        }
+      },
       onAcceptWithDetails: (details) {
-        context
-            .read<WorkspaceManager>()
-            .moveWorkspaceToIndex(details.data, targetIndex);
+        final zone = _hoverZone(context, details);
+        widget.onAccept(
+          details.data,
+          _targetIndexFor(details.data, zone) ?? widget.targetIndex,
+        );
       },
       builder: (context, candidateData, rejectedData) {
-        final isHovered = candidateData.isNotEmpty;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isHovered
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
-                width: 2,
+        final isHovered = candidateData.any((id) => id != widget.workspaceId);
+        return Stack(
+          children: [
+            widget.child,
+            Positioned(
+              left: 0,
+              top: 8,
+              bottom: 8,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: isHovered ? 2 : 0,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
-          ),
-          child: child,
+          ],
         );
       },
     );
+  }
+
+  String _hoverZone(
+    BuildContext context,
+    DragTargetDetails<String> details,
+  ) {
+    if (widget.workspaceId == null) return 'trailing';
+
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return 'unknown';
+
+    final localPosition = renderObject.globalToLocal(details.offset);
+    final width = renderObject.size.width;
+    if (width <= 0) return 'unknown';
+
+    final hoverRatio = localPosition.dx / width;
+    if (details.data == widget.workspaceId) {
+      return hoverRatio < 0.5 ? 'self-left' : 'self-right';
+    }
+
+    const edgeDeadZone = 0.22;
+    if (hoverRatio < edgeDeadZone) return 'left-edge';
+    if (hoverRatio > 1 - edgeDeadZone) return 'right-edge';
+    return 'middle';
+  }
+
+  int? _targetIndexFor(String draggedWorkspaceId, String zone) {
+    if (zone == 'unknown') return null;
+    if (widget.workspaceId == null) return widget.targetIndex;
+    if (draggedWorkspaceId != widget.workspaceId) return widget.targetIndex;
+
+    if (zone == 'self-left') {
+      return widget.targetIndex;
+    }
+    if (zone == 'self-right') {
+      return widget.targetIndex + 1;
+    }
+    return null;
   }
 }
 
 class _WorkspaceDropSlot extends StatelessWidget {
-  final int targetIndex;
-  final bool trailing;
+  final bool isActive;
 
   const _WorkspaceDropSlot({
-    required this.targetIndex,
-    this.trailing = false,
+    required this.isActive,
   });
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) {
-        context
-            .read<WorkspaceManager>()
-            .moveWorkspaceToIndex(details.data, targetIndex);
-      },
-      builder: (context, candidateData, rejectedData) {
-        final isHovered = candidateData.isNotEmpty;
-        return AnimatedContainer(
+    return SizedBox(
+      width: 24,
+      height: 40,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: trailing ? 18 : 8,
-          height: double.infinity,
+          width: isActive ? 2 : 0,
+          height: 24,
           decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isHovered
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
-                width: 2,
-              ),
-            ),
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(999),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+}
+
+class _WorkspaceTabPlacement {
+  final Workspace workspace;
+  final double left;
+  final double width;
+
+  const _WorkspaceTabPlacement({
+    required this.workspace,
+    required this.left,
+    required this.width,
+  });
+}
+
+class _WorkspaceDropPlacement {
+  final Workspace workspace;
+  final int targetIndex;
+  final double left;
+  final double width;
+
+  const _WorkspaceDropPlacement({
+    required this.workspace,
+    required this.targetIndex,
+    required this.left,
+    required this.width,
+  });
 }
 
 class _WorkspaceDragHandle extends StatelessWidget {

@@ -47,9 +47,9 @@ class _WorkspaceContent extends StatelessWidget {
           const WorkspaceTabBar(),
           Expanded(
             child: IndexedStack(
-              index: workspaceManager.activeIndex,
+              index: workspaceManager.activeStackIndex,
               sizing: StackFit.expand,
-              children: workspaceManager.workspaces.map((workspace) {
+              children: workspaceManager.workspaceStackOrder.map((workspace) {
                 return _WorkspaceInstance(
                   key: ValueKey(workspace.id),
                   workspace: workspace,

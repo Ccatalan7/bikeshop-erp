@@ -284,14 +284,29 @@ class WorkspaceManager extends ChangeNotifier {
   static const int maxWorkspaces = 10;
 
   final List<Workspace> _workspaces = [];
+  final List<String> _workspaceStackOrderIds = [];
   int _activeIndex = 0;
   bool _isInitialized = false;
   bool _isAIPanelOpen = false;
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
+  List<Workspace> get workspaceStackOrder => List.unmodifiable(
+        _workspaceStackOrderIds
+            .map(workspaceById)
+            .whereType<Workspace>()
+            .toList(),
+      );
   int get activeIndex => _activeIndex;
   Workspace? get activeWorkspace =>
       _workspaces.isEmpty ? null : _workspaces[_activeIndex];
+  int get activeStackIndex {
+    final activeId = activeWorkspace?.id;
+    if (activeId == null) return 0;
+    final index = _workspaceStackOrderIds.indexOf(activeId);
+    return index == -1 ? 0 : index;
+  }
+
+  String get workspaceStackSignature => _workspaceStackOrderIds.join('|');
   bool get isInitialized => _isInitialized;
   bool get isAIPanelOpen => _isAIPanelOpen;
 
@@ -370,6 +385,7 @@ class WorkspaceManager extends ChangeNotifier {
     );
 
     _workspaces.add(workspace);
+    _workspaceStackOrderIds.add(id);
     _activeIndex = _workspaces.length - 1;
     debugPrint(
         '✅ [WorkspaceManager] Workspace added. Total: ${_workspaces.length}, Active: $_activeIndex');
@@ -422,16 +438,14 @@ class WorkspaceManager extends ChangeNotifier {
     final oldIndex = _workspaces.indexWhere((w) => w.id == workspaceId);
     if (oldIndex == -1) return;
 
-    var newIndex = targetIndex;
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
-
-    if (oldIndex == newIndex) return;
-
     final activeId = activeWorkspace?.id;
     final workspace = _workspaces.removeAt(oldIndex);
-    final insertIndex = _normalizeWorkspaceInsertIndex(workspace, newIndex);
+    final insertIndex = _normalizeWorkspaceInsertIndex(workspace, targetIndex);
+    if (oldIndex == insertIndex) {
+      _workspaces.insert(oldIndex, workspace);
+      return;
+    }
+
     _workspaces.insert(insertIndex, workspace);
 
     if (activeId != null) {
@@ -458,7 +472,8 @@ class WorkspaceManager extends ChangeNotifier {
     }
 
     if (index >= 0 && index < _workspaces.length) {
-      _workspaces.removeAt(index);
+      final closedWorkspace = _workspaces.removeAt(index);
+      _workspaceStackOrderIds.remove(closedWorkspace.id);
 
       // Adjust active index if needed
       if (_activeIndex >= _workspaces.length) {
@@ -698,6 +713,7 @@ class WorkspaceManager extends ChangeNotifier {
   /// Clear all workspaces and reset to initial state
   void reset() {
     _workspaces.clear();
+    _workspaceStackOrderIds.clear();
     _activeIndex = 0;
     addWorkspace(title: 'Dashboard', initialRoute: '/dashboard');
   }
