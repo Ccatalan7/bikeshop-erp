@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/workspace_manager.dart';
 import '../../modules/ai_assistant/widgets/global_ai_button.dart';
+import 'share_workspace_link_button.dart';
 
 /// Tab bar UI for switching between workspaces
 class WorkspaceTabBar extends StatefulWidget {
@@ -272,6 +273,7 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
             ),
           ),
           const _WorkspaceNavigationControls(),
+          const ShareWorkspaceLinkButton(),
           // New tab button with dropdown menu
           if (workspaceManager.workspaces.length <
               WorkspaceManager.maxWorkspaces)

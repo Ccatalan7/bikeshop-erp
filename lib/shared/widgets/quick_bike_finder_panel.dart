@@ -451,8 +451,16 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
   Widget _buildSearchArea(ThemeData theme, List<_BikeFinderResult> results) {
     final summaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.62);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -467,7 +475,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
             },
             decoration: InputDecoration(
               isDense: true,
-              hintText: 'Cliente, bici, serie, RUT, teléfono…',
+              hintText: 'Buscar cliente, bici, serie o teléfono',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -491,37 +499,20 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
                 ],
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
+                child: _buildFilterMenu(
+                  theme,
+                  label: 'Marca',
                   value: _selectedBrand,
-                  isDense: true,
-                  decoration: InputDecoration(
-                    labelText: 'Marca',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todas'),
-                    ),
-                    ..._brandOptions.map(
-                      (brand) => DropdownMenuItem<String>(
-                        value: brand,
-                        child: Text(brand),
-                      ),
-                    ),
-                  ],
+                  allLabel: 'Todas',
+                  options: _brandOptions,
                   onChanged: (value) {
                     setState(() {
                       _selectedBrand = value;
@@ -535,29 +526,12 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: DropdownButtonFormField<String>(
+                child: _buildFilterMenu(
+                  theme,
+                  label: 'Modelo',
                   value: _selectedModel,
-                  isDense: true,
-                  decoration: InputDecoration(
-                    labelText: 'Modelo',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Todos'),
-                    ),
-                    ..._modelOptions.map(
-                      (model) => DropdownMenuItem<String>(
-                        value: model,
-                        child: Text(model),
-                      ),
-                    ),
-                  ],
+                  allLabel: 'Todos',
+                  options: _modelOptions,
                   onChanged: (value) {
                     setState(() {
                       _selectedModel = value;
@@ -567,56 +541,184 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                FilterChip(
-                  label: const Text('Con historial'),
-                  selected: _onlyWithHistory,
-                  onSelected: (value) =>
-                      setState(() => _onlyWithHistory = value),
-                ),
-                const SizedBox(width: 6),
-                FilterChip(
-                  label: const Text('Con trabajos activos'),
-                  selected: _onlyActiveJobs,
-                  onSelected: (value) =>
-                      setState(() => _onlyActiveJobs = value),
-                ),
-                const SizedBox(width: 6),
-                FilterChip(
-                  label: const Text('En garantía'),
-                  selected: _onlyWarranty,
-                  onSelected: (value) => setState(() => _onlyWarranty = value),
-                ),
-                const SizedBox(width: 6),
-                TextButton(
-                  onPressed: _hasActiveFilters
-                      ? () {
-                          setState(() {
-                            _selectedBrand = null;
-                            _selectedModel = null;
-                            _onlyWithHistory = false;
-                            _onlyActiveJobs = false;
-                            _onlyWarranty = false;
-                          });
-                        }
-                      : null,
-                  child: const Text('Limpiar filtros'),
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildToggleFilter(
+                theme,
+                icon: Icons.history_rounded,
+                label: 'Historial',
+                selected: _onlyWithHistory,
+                onTap: () =>
+                    setState(() => _onlyWithHistory = !_onlyWithHistory),
+              ),
+              _buildToggleFilter(
+                theme,
+                icon: Icons.build_circle_outlined,
+                label: 'Activas',
+                selected: _onlyActiveJobs,
+                color: Colors.orange.shade700,
+                onTap: () => setState(() => _onlyActiveJobs = !_onlyActiveJobs),
+              ),
+              _buildToggleFilter(
+                theme,
+                icon: Icons.verified_user_outlined,
+                label: 'Garantía',
+                selected: _onlyWarranty,
+                color: Colors.green.shade700,
+                onTap: () => setState(() => _onlyWarranty = !_onlyWarranty),
+              ),
+              if (_hasActiveFilters) _buildClearFiltersButton(theme),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            _buildSummaryText(results),
-            style: theme.textTheme.bodySmall?.copyWith(color: summaryColor),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _buildSummaryText(results),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: summaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '${results.length}',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildFilterMenu(
+    ThemeData theme, {
+    required String label,
+    required String? value,
+    required String allLabel,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isDense: true,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: theme.colorScheme.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+      items: [
+        DropdownMenuItem<String>(
+          value: null,
+          child: Text(allLabel),
+        ),
+        ...options.map(
+          (option) => DropdownMenuItem<String>(
+            value: option,
+            child: Text(
+              option,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildToggleFilter(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final accent = color ?? theme.colorScheme.primary;
+    return Material(
+      color:
+          selected ? accent.withValues(alpha: 0.12) : theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.55)
+                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.52),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                selected ? Icons.check_rounded : icon,
+                size: 15,
+                color: selected ? accent : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: selected ? accent : theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClearFiltersButton(ThemeData theme) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: _clearFilters,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Text(
+            'Limpiar',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedBrand = null;
+      _selectedModel = null;
+      _onlyWithHistory = false;
+      _onlyActiveJobs = false;
+      _onlyWarranty = false;
+    });
   }
 
   bool get _hasActiveFilters {
@@ -743,35 +845,43 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
         : (bike.isUnderWarranty
             ? Colors.green.shade700
             : theme.colorScheme.primary);
+    final phone = owner?.phone?.trim();
+    final serial = bike.serialNumber?.trim();
 
     return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(14),
+      color: theme.colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _openBike(bike),
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: accentColor.withValues(alpha: 0.18),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
             ),
           ),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: accentColor.withValues(alpha: 0.12),
-                    child: Text(
-                      ownerInitials.isEmpty ? '?' : ownerInitials,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: accentColor,
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Center(
+                      child: Text(
+                        ownerInitials.isEmpty ? '?' : ownerInitials,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: accentColor,
+                        ),
                       ),
                     ),
                   ),
@@ -788,128 +898,147 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          ownerName,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.78),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if ((owner?.phone?.trim().isNotEmpty ?? false) ||
-                            (bike.serialNumber?.trim().isNotEmpty ?? false))
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              [
-                                if (owner?.phone?.trim().isNotEmpty ?? false)
-                                  owner!.phone!.trim(),
-                                if (bike.serialNumber?.trim().isNotEmpty ??
-                                    false)
-                                  'Serie ${bike.serialNumber!.trim()}',
-                              ].join(' · '),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.58),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                ownerName,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.72),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                        if ((phone?.isNotEmpty ?? false) ||
+                            (serial?.isNotEmpty ?? false))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 3,
+                              children: [
+                                if (phone?.isNotEmpty ?? false)
+                                  _buildBikeFact(
+                                    theme,
+                                    icon: Icons.phone_iphone_outlined,
+                                    label: phone!,
+                                  ),
+                                if (serial?.isNotEmpty ?? false)
+                                  _buildBikeFact(
+                                    theme,
+                                    icon: Icons.qr_code_2_outlined,
+                                    label: 'Serie $serial',
+                                  ),
+                              ],
                             ),
                           ),
                       ],
                     ),
                   ),
-                  Column(
-                    children: [
-                      IconButton(
-                        tooltip: 'Abrir ficha',
-                        onPressed: () => _openBike(bike),
-                        icon: const Icon(Icons.arrow_forward_ios_rounded,
-                            size: 18),
-                      ),
-                      if (ownerBikeCount > 1)
-                        IconButton(
-                          tooltip: isExpanded
-                              ? 'Ocultar otras bicicletas'
-                              : 'Ver otras bicicletas del cliente',
-                          onPressed: () => _toggleOwnerExpansion(customerId),
-                          icon: Icon(
-                            isExpanded
-                                ? Icons.keyboard_arrow_up_rounded
-                                : Icons.keyboard_arrow_down_rounded,
-                          ),
-                        ),
-                    ],
+                  const SizedBox(width: 8),
+                  _buildBikeStatusBadge(theme, bike, metrics, accentColor),
+                  IconButton(
+                    tooltip: 'Abrir ficha',
+                    onPressed: () => _openBike(bike),
+                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               Wrap(
-                spacing: 6,
+                spacing: 10,
                 runSpacing: 6,
                 children: [
                   if ((bike.brand?.trim().isNotEmpty ?? false))
-                    _MetricChip(
-                        label: bike.brand!.trim(), icon: Icons.sell_outlined),
+                    _buildBikeFact(
+                      theme,
+                      label: bike.brand!.trim(),
+                      icon: Icons.sell_outlined,
+                    ),
                   if ((bike.model?.trim().isNotEmpty ?? false))
-                    _MetricChip(
-                        label: bike.model!.trim(),
-                        icon: Icons.category_outlined),
+                    _buildBikeFact(
+                      theme,
+                      label: bike.model!.trim(),
+                      icon: Icons.category_outlined,
+                    ),
                   if (metrics.totalJobs > 0)
-                    _MetricChip(
+                    _buildBikeFact(
+                      theme,
                       label:
                           '${metrics.totalJobs} servicio${metrics.totalJobs == 1 ? '' : 's'}',
                       icon: Icons.history,
                     ),
                   if (metrics.activeJobs > 0)
-                    _MetricChip(
+                    _buildBikeFact(
+                      theme,
                       label:
                           '${metrics.activeJobs} activo${metrics.activeJobs == 1 ? '' : 's'}',
                       icon: Icons.build_circle_outlined,
-                      foregroundColor: Colors.orange.shade800,
-                      backgroundColor: Colors.orange.shade50,
+                      color: Colors.orange.shade800,
                     ),
                   if (metrics.lastDeliveredAt != null)
-                    _MetricChip(
+                    _buildBikeFact(
+                      theme,
                       label:
                           'Últ. ${_dateFormat.format(metrics.lastDeliveredAt!)}',
                       icon: Icons.event_available_outlined,
                     ),
-                  if (bike.isUnderWarranty)
-                    _MetricChip(
-                      label: 'Garantía',
-                      icon: Icons.verified_user_outlined,
-                      foregroundColor: Colors.green.shade800,
-                      backgroundColor: Colors.green.shade50,
-                    ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              const SizedBox(height: 11),
+              Row(
                 children: [
-                  ActionChip(
-                    avatar: const Icon(Icons.pedal_bike_outlined, size: 16),
-                    label: const Text('Abrir bici'),
-                    onPressed: () => _openBike(bike),
+                  if (ownerBikeCount > 1)
+                    TextButton.icon(
+                      onPressed: () => _toggleOwnerExpansion(customerId),
+                      icon: Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                      ),
+                      label: Text('$ownerBikeCount bicis'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (ownerBikeCount > 1) const Spacer(),
+                  _buildFinderActionButton(
+                    theme,
+                    icon: Icons.pedal_bike_outlined,
+                    label: 'Bici',
+                    onTap: () => _openBike(bike),
                   ),
-                  ActionChip(
-                    avatar: const Icon(Icons.person_outline, size: 16),
-                    label: const Text('Abrir cliente'),
-                    onPressed: () => _openClient(bike),
+                  const SizedBox(width: 8),
+                  _buildFinderActionButton(
+                    theme,
+                    icon: Icons.person_outline,
+                    label: 'Cliente',
+                    onTap: () => _openClient(bike),
                   ),
                 ],
               ),
-              if (ownerBikeCount > 1)
+              if (ownerBikeCount > 1 && isExpanded)
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    isExpanded
-                        ? 'Otras bicicletas de $ownerName'
-                        : '$ownerName tiene ${ownerBikeCount.toString()} bicicletas registradas',
+                    'Otras bicicletas de $ownerName',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color:
                           theme.colorScheme.onSurface.withValues(alpha: 0.62),
@@ -930,6 +1059,79 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBikeStatusBadge(
+    ThemeData theme,
+    Bike bike,
+    _BikeFinderMetrics metrics,
+    Color accentColor,
+  ) {
+    final label = metrics.activeJobs > 0
+        ? '${metrics.activeJobs} activo${metrics.activeJobs == 1 ? '' : 's'}'
+        : bike.isUnderWarranty
+            ? 'Garantía'
+            : metrics.hasHistory
+                ? 'Historial'
+                : 'Ficha';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: accentColor,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBikeFact(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    Color? color,
+  }) {
+    final fg = color ?? theme.colorScheme.onSurface.withValues(alpha: 0.66);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: fg),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: fg,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFinderActionButton(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        minimumSize: const Size(0, 34),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
     );
   }
@@ -1022,51 +1224,6 @@ class _BikeFinderMetrics {
       activeJobs: activeJobs ?? this.activeJobs,
       lastDeliveredAt: lastDeliveredAt ?? this.lastDeliveredAt,
       lastArrivalAt: lastArrivalAt ?? this.lastArrivalAt,
-    );
-  }
-}
-
-class _MetricChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color? foregroundColor;
-  final Color? backgroundColor;
-
-  const _MetricChip({
-    required this.label,
-    required this.icon,
-    this.foregroundColor,
-    this.backgroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fg =
-        foregroundColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.78);
-    final bg = backgroundColor ??
-        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fg),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ],
-      ),
     );
   }
 }

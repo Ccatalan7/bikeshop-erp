@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/document_accounting_preview.dart';
+import '../../../shared/services/document_accounting_context_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
@@ -45,6 +47,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   PurchaseInvoice? _selectedInvoice;
   bool _isHydratingSelectedInvoice = false;
+  final DocumentAccountingContextService _documentAccountingContextService =
+      DocumentAccountingContextService();
+  Future<DocumentAccountingContext>? _accountingContextFuture;
+  String? _accountingContextInvoiceId;
   // When true, the right pane shows the inline payment form instead of the PDF
   bool _showingPaymentForm = false;
   // Payment form state
@@ -328,6 +334,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         _selectedInvoice = null;
         _showingPaymentForm = false;
         _isHydratingSelectedInvoice = false;
+        _accountingContextInvoiceId = null;
+        _accountingContextFuture = null;
       });
       return;
     }
@@ -336,6 +344,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       _selectedInvoice = invoice;
       _showingPaymentForm = false;
       _isHydratingSelectedInvoice = true;
+      _accountingContextInvoiceId = null;
+      _accountingContextFuture = null;
     });
 
     final fullInvoice =
@@ -348,9 +358,27 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
 
     setState(() {
-      _selectedInvoice = fullInvoice ?? invoice;
+      final hydratedInvoice = fullInvoice ?? invoice;
+      _selectedInvoice = hydratedInvoice;
       _isHydratingSelectedInvoice = false;
+      _primeAccountingContext(hydratedInvoice);
     });
+  }
+
+  void _primeAccountingContext(PurchaseInvoice invoice) {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || invoiceId.isEmpty) {
+      _accountingContextInvoiceId = null;
+      _accountingContextFuture = null;
+      return;
+    }
+
+    _accountingContextInvoiceId = invoiceId;
+    _accountingContextFuture =
+        _documentAccountingContextService.loadPurchaseInvoice(
+      invoiceId: invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+    );
   }
 
   Widget _buildMobileHeader(List<PurchaseInvoice> invoices) {
@@ -1315,7 +1343,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
         // Clear selection if this invoice was selected
         if (_selectedInvoice?.id == invoice.id) {
-          setState(() => _selectedInvoice = null);
+          setState(() {
+            _selectedInvoice = null;
+            _accountingContextInvoiceId = null;
+            _accountingContextFuture = null;
+          });
         }
 
         if (mounted) {
@@ -1498,7 +1530,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       if (!mounted) return;
 
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
       }
 
       String message;
@@ -1631,8 +1666,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       if (!mounted) return;
 
       setState(() {
-        _selectedInvoice = updated ?? invoice;
+        final refreshedInvoice = updated ?? invoice;
+        _selectedInvoice = refreshedInvoice;
         _showingPaymentForm = false;
+        _primeAccountingContext(refreshedInvoice);
       });
     } catch (e) {
       if (mounted) {
@@ -1705,7 +1742,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
       if (!mounted) return;
 
-      setState(() => _selectedInvoice = updated ?? invoice);
+      setState(() {
+        final refreshedInvoice = updated ?? invoice;
+        _selectedInvoice = refreshedInvoice;
+        _primeAccountingContext(refreshedInvoice);
+      });
       messenger.showSnackBar(
         const SnackBar(
             content: Text('Pago eliminado correctamente'),
@@ -1936,8 +1977,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   }
 
   Widget _buildInvoicePreview(PurchaseInvoice invoice) {
+    final accountingFuture = _accountingContextInvoiceId == invoice.id
+        ? _accountingContextFuture
+        : null;
+
     return Container(
-      color: Colors.grey[50],
+      color: const Color(0xFFF4F6FA),
       child: Column(
         children: [
           _buildActionBar(invoice),
@@ -1947,23 +1992,57 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 ? _buildInlinePaymentForm(invoice)
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      final double availableWidth = constraints.maxWidth - 40;
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Container(
-                          width: availableWidth,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                      final double paperWidth = (constraints.maxWidth - 48)
+                          .clamp(360.0, 920.0)
+                          .toDouble();
+
+                      return FutureBuilder<DocumentAccountingContext>(
+                        future: accountingFuture,
+                        builder: (context, snapshot) {
+                          final accounting =
+                              snapshot.data ?? DocumentAccountingContext.empty;
+                          final isLoadingAccounting =
+                              accountingFuture != null &&
+                                  snapshot.connectionState ==
+                                      ConnectionState.waiting;
+
+                          return SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(24, 18, 24, 34),
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 1240),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    if (isLoadingAccounting)
+                                      const DocumentAccountingLoadingStrip()
+                                    else
+                                      DocumentPaymentsDropdown(
+                                        title: 'Pagos realizados',
+                                        payments: accounting.payments,
+                                      ),
+                                    const SizedBox(height: 24),
+                                    DocumentPaperShell(
+                                      width: paperWidth,
+                                      status: _documentPreviewStatus(invoice),
+                                      child: _buildInvoiceDocument(
+                                        invoice,
+                                        paperWidth,
+                                      ),
+                                    ),
+                                    if (!isLoadingAccounting)
+                                      DocumentJournalEntriesSection(
+                                        entries: accounting.journalEntries,
+                                        documentLabel: 'Factura de compra',
+                                        emptyReference: invoice.invoiceNumber,
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                          child: _buildInvoiceDocument(invoice, availableWidth),
-                        ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -1971,6 +2050,86 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         ],
       ),
     );
+  }
+
+  DocumentPaperStatus _documentPreviewStatus(PurchaseInvoice invoice) {
+    final effectiveBalance = _effectiveBalance(invoice);
+    final now = DateTime.now();
+    final isPaid = invoice.status == PurchaseInvoiceStatus.paid ||
+        (invoice.paidAmount > 0 && effectiveBalance <= 1);
+    final isOverdue = !isPaid &&
+        effectiveBalance > 1 &&
+        invoice.dueDate != null &&
+        invoice.dueDate!.isBefore(now);
+
+    if (invoice.status == PurchaseInvoiceStatus.cancelled) {
+      return const DocumentPaperStatus(
+        label: 'ANULADA',
+        foreground: Color(0xFF991B1B),
+        background: Color(0xFFFFF1F2),
+        border: Color(0xFFFECACA),
+      );
+    }
+
+    if (isPaid) {
+      return const DocumentPaperStatus(
+        label: 'PAGADA',
+        foreground: Color(0xFF047857),
+        background: Color(0xFFECFDF5),
+        border: Color(0xFFA7F3D0),
+      );
+    }
+
+    if (isOverdue) {
+      return const DocumentPaperStatus(
+        label: 'VENCIDA',
+        foreground: Color(0xFFB91C1C),
+        background: Color(0xFFFEF2F2),
+        border: Color(0xFFFECACA),
+      );
+    }
+
+    if (invoice.paidAmount > 0 && effectiveBalance > 1) {
+      return const DocumentPaperStatus(
+        label: 'PAGO PARCIAL',
+        foreground: Color(0xFFB45309),
+        background: Color(0xFFFFFBEB),
+        border: Color(0xFFFDE68A),
+      );
+    }
+
+    switch (invoice.status) {
+      case PurchaseInvoiceStatus.sent:
+        return const DocumentPaperStatus(
+          label: 'ENVIADA',
+          foreground: Color(0xFF1D4ED8),
+          background: Color(0xFFEFF6FF),
+          border: Color(0xFFBFDBFE),
+        );
+      case PurchaseInvoiceStatus.confirmed:
+        return const DocumentPaperStatus(
+          label: 'CONFIRMADA',
+          foreground: Color(0xFF6D28D9),
+          background: Color(0xFFF5F3FF),
+          border: Color(0xFFDDD6FE),
+        );
+      case PurchaseInvoiceStatus.received:
+        return const DocumentPaperStatus(
+          label: 'RECIBIDA',
+          foreground: Color(0xFF0F766E),
+          background: Color(0xFFF0FDFA),
+          border: Color(0xFF99F6E4),
+        );
+      case PurchaseInvoiceStatus.draft:
+      case PurchaseInvoiceStatus.paid:
+      case PurchaseInvoiceStatus.cancelled:
+        return const DocumentPaperStatus(
+          label: 'BORRADOR',
+          foreground: Color(0xFF475569),
+          background: Color(0xFFF8FAFC),
+          border: Color(0xFFE2E8F0),
+        );
+    }
   }
 
   Widget _buildInlinePaymentForm(PurchaseInvoice invoice) {
@@ -2250,7 +2409,12 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               // Close button
               IconButton(
                 icon: const Icon(Icons.close, size: 20),
-                onPressed: () => setState(() => _selectedInvoice = null),
+                onPressed: () => setState(() {
+                  _selectedInvoice = null;
+                  _showingPaymentForm = false;
+                  _accountingContextInvoiceId = null;
+                  _accountingContextFuture = null;
+                }),
                 tooltip: 'Cerrar',
                 color: Colors.grey[600],
                 padding: const EdgeInsets.all(8),

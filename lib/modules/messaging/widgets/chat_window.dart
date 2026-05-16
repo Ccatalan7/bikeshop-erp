@@ -23,6 +23,8 @@ import '../utils/message_parser.dart';
 import 'assign_context_dialog.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/route_share_service.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/utils/file_download.dart';
 
@@ -68,6 +70,20 @@ class _ChatAttachment {
     required this.name,
     required this.extension,
     required this.isImage,
+  });
+}
+
+class _RouteSharePreview {
+  final AppRouteLinkSegment link;
+  final String title;
+  final String intro;
+  final String trailingText;
+
+  const _RouteSharePreview({
+    required this.link,
+    required this.title,
+    required this.intro,
+    required this.trailingText,
   });
 }
 
@@ -1015,13 +1031,14 @@ class _ChatWindowState extends State<ChatWindow> {
     });
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendMessage({Map<String, dynamic>? metadata}) async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSendingMessage) {
       return;
     }
     final chatProvider = context.read<ChatProvider>();
     final pendingText = text;
+    final messageMetadata = <String, dynamic>{...?metadata};
 
     if (_isWhatsAppConversation) {
       // Snappy precheck: derive the 24h window state from messages we already
@@ -1051,7 +1068,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
     try {
       if (!_isWhatsAppConversation) {
-        await chatProvider.sendMessage(pendingText);
+        await chatProvider.sendMessage(
+          pendingText,
+          metadata: messageMetadata.isEmpty ? null : messageMetadata,
+        );
         if (!mounted) {
           return;
         }
@@ -1069,6 +1089,7 @@ class _ChatWindowState extends State<ChatWindow> {
           content: pendingText,
           type: 'text',
           metadata: {
+            ...messageMetadata,
             'channel': 'whatsapp',
             'provider': 'whatsapp',
             'pending': true,
@@ -3594,7 +3615,7 @@ class _ChatWindowState extends State<ChatWindow> {
       name: 'smart_actions',
       anchorKey: _smartActionsButtonKey,
       width: 460,
-      estimatedHeight: _isWhatsAppConversation ? 430 : 270,
+      estimatedHeight: _isWhatsAppConversation ? 560 : 400,
       panelBuilder: (overlayContext) => _buildSmartActionsPanel(
         overlayContext,
         parentContext: context,
@@ -3608,7 +3629,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }) {
     final theme = Theme.of(overlayContext);
     final showingAutomaticMessages = _showAutomaticMessagesPanel;
-    final panelHeight = _isWhatsAppConversation ? 430.0 : 270.0;
+    final panelHeight = _isWhatsAppConversation ? 560.0 : 400.0;
     final headerColor =
         showingAutomaticMessages ? const Color(0xFF2DD4BF) : Colors.amber;
     final headerIcon =
@@ -3725,6 +3746,23 @@ class _ChatWindowState extends State<ChatWindow> {
                       if (showingAutomaticMessages)
                         _buildAutomaticMessagesPanelBody(theme)
                       else ...[
+                        _buildPopoverSectionHeader(
+                          'Colaboración',
+                          'Enlaces rápidos para trabajar con el equipo',
+                        ),
+                        const SizedBox(height: 8),
+                        _buildCommandActionTile(
+                          icon: Icons.ios_share_outlined,
+                          color: const Color(0xFF2563EB),
+                          title: 'Enviar página actual',
+                          subtitle: 'Comparte este módulo en la conversación',
+                          badge: 'ERP',
+                          onTap: () {
+                            _removeComposerMenuOverlay(notify: true);
+                            unawaited(_shareCurrentPageInChat());
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         if (_isWhatsAppConversation) ...[
                           _buildPopoverSectionHeader(
                             'Solicitudes al cliente',
@@ -4265,7 +4303,10 @@ class _ChatWindowState extends State<ChatWindow> {
     ].join('\n');
   }
 
-  Future<void> _sendPreparedMessage(String message) async {
+  Future<void> _sendPreparedMessage(
+    String message, {
+    Map<String, dynamic>? metadata,
+  }) async {
     if (_isSendingMessage) {
       _showErrorSnackBar(
         context,
@@ -4280,7 +4321,7 @@ class _ChatWindowState extends State<ChatWindow> {
       selection: TextSelection.collapsed(offset: message.length),
     );
 
-    await _sendMessage();
+    await _sendMessage(metadata: metadata);
 
     if (!mounted) return;
     if (previousValue.text.trim().isNotEmpty &&
@@ -4290,6 +4331,46 @@ class _ChatWindowState extends State<ChatWindow> {
         _lastComposerSelection = previousValue.selection;
       }
     }
+  }
+
+  Future<void> _shareCurrentPageInChat() async {
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+
+    final link = _buildCurrentWorkspaceLink();
+    if (link == null) {
+      _showErrorSnackBar(
+        context,
+        'Esta página todavía no se puede compartir.',
+      );
+      return;
+    }
+
+    await _sendPreparedMessage(
+      link.shareText,
+      metadata: _routeShareMetadata(link),
+    );
+  }
+
+  SharedRouteLink? _buildCurrentWorkspaceLink() {
+    final workspace = context.read<WorkspaceManager>().activeWorkspace;
+    if (workspace == null) return null;
+
+    return RouteShareService.buildForRoute(
+      route: workspace.currentRoute,
+      title: workspace.title,
+    );
+  }
+
+  Map<String, dynamic> _routeShareMetadata(SharedRouteLink link) {
+    return {
+      'share_kind': 'route',
+      'route': link.route,
+      'title': link.title,
+      'deep_link': link.uri.toString(),
+      if (link.webUri != null) 'web_link': link.webUri.toString(),
+    };
   }
 
   /// Send an action request message to the customer
@@ -5502,6 +5583,221 @@ class _ChatWindowState extends State<ChatWindow> {
     return colors[name.hashCode.abs() % colors.length];
   }
 
+  _RouteSharePreview? _routeSharePreviewFor(Message message) {
+    AppRouteLinkSegment? link;
+    for (final segment in MessageParser.parse(message.content)) {
+      if (segment is AppRouteLinkSegment) {
+        link = segment;
+        break;
+      }
+    }
+    if (link == null) return null;
+
+    final linkStart = message.content.indexOf(link.text);
+    final beforeLink =
+        linkStart <= 0 ? '' : message.content.substring(0, linkStart).trim();
+    final afterLink = linkStart < 0
+        ? ''
+        : message.content.substring(linkStart + link.text.length).trim();
+    final beforeLines = beforeLink
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    final metadataTitle = message.metadata['title']?.toString().trim();
+    final inferredTitle = metadataTitle != null && metadataTitle.isNotEmpty
+        ? metadataTitle
+        : beforeLines.isNotEmpty
+            ? beforeLines.last
+            : getRouteTitle(link.route);
+
+    if (beforeLines.isNotEmpty && beforeLines.last == inferredTitle) {
+      beforeLines.removeLast();
+    }
+
+    return _RouteSharePreview(
+      link: link,
+      title: inferredTitle,
+      intro: beforeLines.join('\n'),
+      trailingText: afterLink,
+    );
+  }
+
+  Widget _buildRouteShareMessage(
+    BuildContext context,
+    Message message,
+    bool isMe,
+  ) {
+    final preview = _routeSharePreviewFor(message);
+    if (preview == null) {
+      return ParsedMessageText(
+        text: message.content,
+        isMe: isMe,
+        onReferenceTap: widget.onReferenceTap,
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 14,
+        ),
+      );
+    }
+
+    const textStyle = TextStyle(color: Colors.black87, fontSize: 14);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (preview.intro.isNotEmpty) ...[
+          ParsedMessageText(
+            text: preview.intro,
+            isMe: isMe,
+            onReferenceTap: widget.onReferenceTap,
+            style: textStyle,
+          ),
+          const SizedBox(height: 8),
+        ],
+        _buildRouteShareCard(context, preview),
+        if (preview.trailingText.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ParsedMessageText(
+            text: preview.trailingText,
+            isMe: isMe,
+            onReferenceTap: widget.onReferenceTap,
+            style: textStyle,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRouteShareCard(
+    BuildContext context,
+    _RouteSharePreview preview,
+  ) {
+    final theme = Theme.of(context);
+    final routeLabel = _routePreviewSectionLabel(preview.link.route);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _openRouteShareLink(context, preview.link),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 250),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.travel_explore_outlined,
+                  color: Color(0xFF2563EB),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vinabike ERP',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF2563EB),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      preview.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Abrir en $routeLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: Color(0xFF2563EB),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _routePreviewSectionLabel(String route) {
+    final path = Uri.tryParse(route)?.path ?? route;
+    if (path.startsWith('/pos')) return 'Punto de venta';
+    if (path.startsWith('/taller')) return 'Taller';
+    if (path.startsWith('/sales')) return 'Ventas';
+    if (path.startsWith('/purchases')) return 'Compras';
+    if (path.startsWith('/inventory')) return 'Inventario';
+    if (path.startsWith('/clientes')) return 'Clientes';
+    if (path.startsWith('/chat')) return 'Mensajería';
+    if (path.startsWith('/accounting')) return 'Contabilidad';
+    if (path.startsWith('/hr')) return 'RR.HH.';
+    if (path.startsWith('/website') || path.startsWith('/tienda')) {
+      return 'Sitio web';
+    }
+    return 'Workspace';
+  }
+
+  Future<void> _openRouteShareLink(
+    BuildContext context,
+    AppRouteLinkSegment link,
+  ) async {
+    try {
+      context
+          .read<WorkspaceManager>()
+          .navigateActiveWorkspaceFromSharedLink(link.route);
+      return;
+    } catch (_) {
+      if (await canLaunchUrl(link.uri)) {
+        await launchUrl(link.uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir el enlace compartido.')),
+    );
+  }
+
   Widget _buildMessageBubble(
     BuildContext context,
     Message msg,
@@ -5627,15 +5923,7 @@ class _ChatWindowState extends State<ChatWindow> {
               contentWidget = _buildActionRequestCard(context, msg, isMe);
             } else {
               // Text Message
-              contentWidget = ParsedMessageText(
-                text: msg.content,
-                isMe: isMe,
-                onReferenceTap: widget.onReferenceTap,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontSize: 14,
-                ),
-              );
+              contentWidget = _buildRouteShareMessage(context, msg, isMe);
             }
 
             // Timestamp

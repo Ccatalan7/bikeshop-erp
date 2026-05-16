@@ -95,7 +95,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   Iterable<shared_supplier.Supplier> get _supplierSuggestions {
     final query = _supplierController.text.trim().toLowerCase();
     if (query.isEmpty) {
-      return _suppliers.take(6);
+      return const Iterable<shared_supplier.Supplier>.empty();
     }
 
     return _suppliers.where((supplier) {
@@ -332,6 +332,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     }
 
     final description = _descriptionController.text.trim();
+    final expenseService = context.read<ExpenseService>();
 
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) {
@@ -393,7 +394,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         ],
       );
 
-      await context.read<ExpenseService>().saveExpense(expense);
+      await expenseService.saveExpense(expense);
       if (!mounted) return;
 
       setState(() {
@@ -623,82 +624,65 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   Widget _buildHeader(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withValues(alpha: 0.78),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
-        borderRadius: BorderRadius.circular(24),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.flash_on_rounded, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Quick Expenses',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Registra un gasto pagado sin salir del módulo actual.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.84),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (_bannerMessage != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.info_outline, color: Colors.white, size: 16),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      _bannerMessage!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
             ),
-          ],
+            child: Icon(
+              Icons.bolt_rounded,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Nuevo gasto',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _bannerMessage ?? 'Listo para registrar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton.outlined(
+            tooltip: 'Recargar',
+            onPressed: _isLoading ? null : () => _loadData(refresh: true),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+          ),
+          const SizedBox(width: 6),
+          IconButton.filledTonal(
+            tooltip: 'Abrir módulo completo',
+            onPressed: _isSaving
+                ? null
+                : () => context.push('/accounting/expenses/new'),
+            icon: const Icon(Icons.open_in_full_rounded, size: 18),
+          ),
         ],
       ),
     );
@@ -712,19 +696,19 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             label: 'Hoy',
             value: _currencyFormat.format(_todayExpenseTotal),
             icon: Icons.today_rounded,
-            accentColor: const Color(0xFF0F9D58),
+            accentColor: const Color(0xFF0F766E),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _StatCard(
             label: 'Mes',
             value: _currencyFormat.format(_monthExpenseTotal),
             icon: Icons.insights_rounded,
-            accentColor: const Color(0xFF1A73E8),
+            accentColor: theme.colorScheme.primary,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: _StatCard(
             label: 'Pendientes',
@@ -732,7 +716,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                 ? '0'
                 : '$_pendingExpenseCount · ${_currencyFormat.format(_pendingBalanceTotal)}',
             icon: Icons.schedule_rounded,
-            accentColor: const Color(0xFFFF8F00),
+            accentColor: const Color(0xFFD97706),
           ),
         ),
       ],
@@ -740,52 +724,51 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   Widget _buildFormCard(ThemeData theme) {
+    final supplierSuggestions = _supplierSuggestions.toList(growable: false);
+
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.42),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'Captura rápida',
-                style: theme.textTheme.titleMedium?.copyWith(
+          Text(
+            'Captura rápida',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<ExpenseDocumentType>(
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: WidgetStatePropertyAll(
+                theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _isSaving
-                    ? null
-                    : () => context.push('/accounting/expenses/new'),
-                icon: const Icon(Icons.open_in_full_rounded, size: 18),
-                label: const Text('Módulo completo'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SegmentedButton<ExpenseDocumentType>(
+            ),
             segments: const [
               ButtonSegment<ExpenseDocumentType>(
                 value: ExpenseDocumentType.invoice,
-                icon: Icon(Icons.receipt_long_outlined, size: 16),
+                icon: Icon(Icons.receipt_long_outlined, size: 15),
                 label: Text('Factura'),
               ),
               ButtonSegment<ExpenseDocumentType>(
                 value: ExpenseDocumentType.receipt,
-                icon: Icon(Icons.point_of_sale_outlined, size: 16),
+                icon: Icon(Icons.point_of_sale_outlined, size: 15),
                 label: Text('Boleta'),
               ),
               ButtonSegment<ExpenseDocumentType>(
                 value: ExpenseDocumentType.reimbursement,
-                icon: Icon(Icons.replay_circle_filled_outlined, size: 16),
+                icon: Icon(Icons.replay_circle_filled_outlined, size: 15),
                 label: Text('Reembolso'),
               ),
             ],
@@ -806,31 +789,37 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
             ],
             onChanged: (_) => _handleFormValueChanged(),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
             decoration: InputDecoration(
               labelText: 'Monto total',
               hintText: '45.000',
               prefixIcon: const Icon(Icons.payments_outlined),
               suffixText: 'CLP',
+              filled: true,
+              fillColor: theme.colorScheme.surface,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 7,
+            runSpacing: 7,
             children: [10000, 25000, 50000, 100000]
                 .map(
-                  (amount) => ActionChip(
+                  (amount) => ChoiceChip(
                     label: Text(_currencyFormat.format(amount)),
-                    onPressed:
-                        _isSaving ? null : () => _applyAmountPreset(amount),
+                    selected: _totalAmount == amount,
+                    onSelected:
+                        _isSaving ? null : (_) => _applyAmountPreset(amount),
                   ),
                 )
                 .toList(),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           TextField(
             controller: _descriptionController,
             maxLines: 2,
@@ -841,37 +830,77 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                 padding: EdgeInsets.only(bottom: 28),
                 child: Icon(Icons.notes_rounded),
               ),
+              filled: true,
+              fillColor: theme.colorScheme.surface,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
           const SizedBox(height: 14),
+          _buildFormSectionLabel(theme, 'Clasificación'),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<Account>(
+            initialValue: _selectedAccount,
+            isExpanded: true,
+            decoration: _fieldDecoration(
+              theme,
+              label: 'Cuenta de gasto',
+              icon: Icons.account_balance_wallet_outlined,
+            ),
+            items: _accounts
+                .map(
+                  (account) => DropdownMenuItem<Account>(
+                    value: account,
+                    child: Text(
+                      '${account.code} · ${account.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: _isSaving
+                ? null
+                : (account) => setState(() => _selectedAccount = account),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: DropdownButtonFormField<Account>(
-                  initialValue: _selectedAccount,
+                child: DropdownButtonFormField<ExpenseCategory>(
+                  initialValue: _selectedCategory,
                   isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Cuenta',
-                    prefixIcon:
-                        const Icon(Icons.account_balance_wallet_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  decoration: _fieldDecoration(
+                    theme,
+                    label: 'Categoría',
+                    icon: Icons.sell_outlined,
                   ),
-                  items: _accounts
-                      .map(
-                        (account) => DropdownMenuItem<Account>(
-                          value: account,
-                          child: Text('${account.code} · ${account.name}'),
+                  items: [
+                    const DropdownMenuItem<ExpenseCategory>(
+                      value: null,
+                      child: Text('Sin categoría'),
+                    ),
+                    ..._categories.map(
+                      (category) => DropdownMenuItem<ExpenseCategory>(
+                        value: category,
+                        child: Text(
+                          category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ),
+                  ],
                   onChanged: _isSaving
                       ? null
-                      : (account) => setState(() => _selectedAccount = account),
+                      : (category) {
+                          if (category == null) {
+                            setState(() => _selectedCategory = null);
+                          } else {
+                            _selectCategory(category);
+                          }
+                        },
                 ),
               ),
               const SizedBox(width: 10),
@@ -879,12 +908,10 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                 child: DropdownButtonFormField<PaymentMethod>(
                   initialValue: _selectedPaymentMethod,
                   isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Pago',
-                    prefixIcon: const Icon(Icons.account_balance_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  decoration: _fieldDecoration(
+                    theme,
+                    label: 'Pago',
+                    icon: Icons.account_balance_outlined,
                   ),
                   items: _paymentMethods
                       .map(
@@ -903,38 +930,9 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               ),
             ],
           ),
-          if (_categories.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Text(
-              'Categoría sugerida',
-              style: theme.textTheme.labelLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _categories
-                  .take(6)
-                  .map(
-                    (category) => ChoiceChip(
-                      label: Text(category.name),
-                      selected: _selectedCategory == category,
-                      onSelected: _isSaving
-                          ? null
-                          : (selected) {
-                              if (!selected) {
-                                setState(() => _selectedCategory = null);
-                                return;
-                              }
-                              _selectCategory(category);
-                            },
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
           const SizedBox(height: 14),
+          _buildFormSectionLabel(theme, 'Proveedor y documento'),
+          const SizedBox(height: 8),
           TextField(
             controller: _supplierController,
             decoration: InputDecoration(
@@ -948,21 +946,36 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                       tooltip: 'Quitar proveedor',
                     )
                   : null,
+              filled: true,
+              fillColor: theme.colorScheme.surface,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) {
+              if (_selectedSupplier != null &&
+                  _supplierController.text.trim() != _selectedSupplier!.name) {
+                _selectedSupplier = null;
+              }
+              setState(() {});
+            },
           ),
-          if (_supplierSuggestions.isNotEmpty) ...[
+          if (_selectedSupplier != null) ...[
+            const SizedBox(height: 8),
+            _buildSelectedSupplier(theme),
+          ] else if (supplierSuggestions.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(16),
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.38),
+                ),
               ),
               child: Column(
-                children: _supplierSuggestions
+                children: supplierSuggestions
                     .map(
                       (supplier) => ListTile(
                         dense: true,
@@ -1002,27 +1015,31 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               ),
             ),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _isSaving ? null : _pickExpenseDate,
                   icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                  label: Text('Fecha ${_formatDate(_expenseDate)}'),
+                  label: Text(_formatDate(_expenseDate)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
                   controller: _referenceController,
-                  decoration: InputDecoration(
-                    labelText: 'Referencia',
-                    hintText: 'N° doc / folio',
-                    prefixIcon: const Icon(Icons.tag_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  decoration: _fieldDecoration(
+                    theme,
+                    label: 'Referencia',
+                    hint: 'N° doc',
+                    icon: Icons.tag_outlined,
                   ),
                 ),
               ),
@@ -1033,7 +1050,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
               ),
@@ -1085,10 +1102,93 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormSectionLabel(ThemeData theme, String label) {
+    return Text(
+      label,
+      style: theme.textTheme.labelLarge?.copyWith(
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.82),
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(
+    ThemeData theme, {
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: theme.colorScheme.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _buildSelectedSupplier(ThemeData theme) {
+    final supplier = _selectedSupplier;
+    if (supplier == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.storefront_outlined,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  supplier.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  supplier.rut ?? supplier.phone ?? 'Sin RUT',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Quitar proveedor',
+            onPressed: _isSaving ? null : _clearSupplier,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
@@ -1256,7 +1356,8 @@ class _RailButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: selected ? accentColor.withValues(alpha: 0.14) : Colors.transparent,
+        color:
+            selected ? accentColor.withValues(alpha: 0.14) : Colors.transparent,
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,

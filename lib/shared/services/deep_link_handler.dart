@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 
+import 'route_share_service.dart';
+
 /// Handles deep links for OAuth callbacks and other app-specific URLs.
 /// Listens for `vinabike://` scheme links and processes them accordingly.
 class DeepLinkHandler extends ChangeNotifier {
@@ -14,15 +16,19 @@ class DeepLinkHandler extends ChangeNotifier {
   DeepLinkHandler._internal();
 
   final AppLinks _appLinks = AppLinks();
+  final StreamController<String> _routeLinkController =
+      StreamController<String>.broadcast();
   StreamSubscription<Uri>? _subscription;
   bool _isInitialized = false;
 
   /// Pending OAuth code to be processed (set when app opens from deep link)
   String? _pendingOAuthCode;
   String? _pendingOAuthProvider;
+  String? _pendingRoute;
 
   String? get pendingOAuthCode => _pendingOAuthCode;
   String? get pendingOAuthProvider => _pendingOAuthProvider;
+  Stream<String> get routeLinks => _routeLinkController.stream;
 
   /// Initialize the deep link handler and start listening
   Future<void> initialize() async {
@@ -57,14 +63,19 @@ class DeepLinkHandler extends ChangeNotifier {
 
   /// Process incoming deep link
   void _handleDeepLink(Uri uri) {
-    // Expected format: vinabike://mail/oauth?provider=zoho&oauth_code=...
-    // or: vinabike://mail/oauth?provider=gmail&oauth_code=...
-
     if (uri.scheme != 'vinabike') {
       debugPrint('🔗 [DeepLink] Ignoring non-vinabike scheme: ${uri.scheme}');
       return;
     }
 
+    final sharedRoute = RouteShareService.routeFromUri(uri);
+    if (sharedRoute != null) {
+      _handleRouteLink(sharedRoute);
+      return;
+    }
+
+    // Expected format: vinabike://mail/oauth?provider=zoho&oauth_code=...
+    // or: vinabike://mail/oauth?provider=gmail&oauth_code=...
     if (uri.host == 'mail' && uri.path.contains('oauth')) {
       final provider = uri.queryParameters['provider'];
       final code = uri.queryParameters['oauth_code'] ??
@@ -81,6 +92,21 @@ class DeepLinkHandler extends ChangeNotifier {
         _handleOAuthCallback(provider, code);
       }
     }
+  }
+
+  void _handleRouteLink(String route) {
+    _pendingRoute = route;
+    debugPrint('🔗 [DeepLink] Stored pending route: $route');
+    if (!_routeLinkController.isClosed) {
+      _routeLinkController.add(route);
+    }
+    notifyListeners();
+  }
+
+  String? takePendingRoute() {
+    final route = _pendingRoute;
+    _pendingRoute = null;
+    return route;
   }
 
   /// Store OAuth callback data so the mail page can exchange it after
@@ -103,6 +129,7 @@ class DeepLinkHandler extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _routeLinkController.close();
     _subscription = null;
     _isInitialized = false;
     _instance = null;

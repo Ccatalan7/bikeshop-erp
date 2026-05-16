@@ -76,6 +76,7 @@ import 'shared/widgets/right_toolbar.dart';
 import 'shared/widgets/query_performance_gauge.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
+import 'shared/services/route_share_service.dart';
 
 // Custom scroll behavior to prevent browser navigation gestures on trackpad
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -681,95 +682,97 @@ class VinabikeApp extends StatelessWidget {
                 child: child ?? const SizedBox.shrink(),
               ),
             ),
-            home: Selector<WorkspaceManager, bool>(
-              selector: (_, wm) => wm.workspaces.isEmpty,
-              builder: (context, isEmpty, _) {
-                // Check if workspaces are initialized
-                if (isEmpty) {
-                  debugPrint(
-                      '⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
-                  return const Scaffold(
-                    body: BrandedLoadingOverlay(
-                        message: 'Cargando espacios de trabajo...'),
-                  );
-                }
+            home: _WorkspaceDeepLinkBridge(
+              child: Selector<WorkspaceManager, bool>(
+                selector: (_, wm) => wm.workspaces.isEmpty,
+                builder: (context, isEmpty, _) {
+                  // Check if workspaces are initialized
+                  if (isEmpty) {
+                    debugPrint(
+                        '⚠️ [Main] WorkspaceManager has no workspaces yet, showing loading...');
+                    return const Scaffold(
+                      body: BrandedLoadingOverlay(
+                          message: 'Cargando espacios de trabajo...'),
+                    );
+                  }
 
-                // Scaffold and tab bar are stable - only IndexedStack rebuilds with workspace changes
-                return Scaffold(
-                  body: Stack(
-                    children: [
-                      SafeArea(
-                        bottom:
-                            false, // Only add top padding for iOS status bar
-                        child: Column(
-                          children: [
-                            // Tab bar has its own internal Consumer, stable during rebuilds
-                            const WorkspaceTabBar(),
-                            // Only this part needs to rebuild on workspace changes
-                            Expanded(
-                              child: Selector<WorkspaceManager,
-                                  (int, String, bool)>(
-                                selector: (_, wm) => (
-                                  wm.activeStackIndex,
-                                  wm.workspaceStackSignature,
-                                  wm.isAIPanelOpen,
-                                ),
-                                builder: (context, data, _) {
-                                  final workspaceManager =
-                                      context.read<WorkspaceManager>();
+                  // Scaffold and tab bar are stable - only IndexedStack rebuilds with workspace changes
+                  return Scaffold(
+                    body: Stack(
+                      children: [
+                        SafeArea(
+                          bottom:
+                              false, // Only add top padding for iOS status bar
+                          child: Column(
+                            children: [
+                              // Tab bar has its own internal Consumer, stable during rebuilds
+                              const WorkspaceTabBar(),
+                              // Only this part needs to rebuild on workspace changes
+                              Expanded(
+                                child: Selector<WorkspaceManager,
+                                    (int, String, bool)>(
+                                  selector: (_, wm) => (
+                                    wm.activeStackIndex,
+                                    wm.workspaceStackSignature,
+                                    wm.isAIPanelOpen,
+                                  ),
+                                  builder: (context, data, _) {
+                                    final workspaceManager =
+                                        context.read<WorkspaceManager>();
 
-                                  // Use a Row so the workspace pane stays at
-                                  // index 0 regardless of AI panel state. This
-                                  // prevents the IndexedStack (and its child
-                                  // Routers) from being destroyed and recreated
-                                  // every time the AI panel is toggled.
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: IndexedStack(
-                                          index: data.$1,
-                                          sizing: StackFit.expand,
-                                          children: workspaceManager
-                                              .workspaceStackOrder
-                                              .map((workspace) {
-                                            return _WorkspaceRouterView(
-                                              key: ValueKey(workspace.id),
-                                              workspace: workspace,
-                                              authService: authService,
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ),
-                                      // Right panel – only mounted when open, but
-                                      // its addition/removal never shifts the
-                                      // workspace pane above.
-                                      if (data.$3)
-                                        Container(
-                                          width: 400,
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .scaffoldBackgroundColor,
-                                            border: Border(
-                                              left: BorderSide(
-                                                  color: Theme.of(context)
-                                                      .dividerColor),
-                                            ),
+                                    // Use a Row so the workspace pane stays at
+                                    // index 0 regardless of AI panel state. This
+                                    // prevents the IndexedStack (and its child
+                                    // Routers) from being destroyed and recreated
+                                    // every time the AI panel is toggled.
+                                    return Row(
+                                      children: [
+                                        Expanded(
+                                          child: IndexedStack(
+                                            index: data.$1,
+                                            sizing: StackFit.expand,
+                                            children: workspaceManager
+                                                .workspaceStackOrder
+                                                .map((workspace) {
+                                              return _WorkspaceRouterView(
+                                                key: ValueKey(workspace.id),
+                                                workspace: workspace,
+                                                authService: authService,
+                                              );
+                                            }).toList(),
                                           ),
-                                          child: const AIChatPanel(jobs: []),
                                         ),
-                                    ],
-                                  );
-                                },
+                                        // Right panel – only mounted when open, but
+                                        // its addition/removal never shifts the
+                                        // workspace pane above.
+                                        if (data.$3)
+                                          Container(
+                                            width: 400,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .scaffoldBackgroundColor,
+                                              border: Border(
+                                                left: BorderSide(
+                                                    color: Theme.of(context)
+                                                        .dividerColor),
+                                              ),
+                                            ),
+                                            child: const AIChatPanel(jobs: []),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const QueryPerformanceGauge(),
-                    ],
-                  ),
-                );
-              },
+                        const QueryPerformanceGauge(),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           );
         },
@@ -791,6 +794,61 @@ bool _supportsFirebaseInitialization() {
     case TargetPlatform.fuchsia:
       return false;
   }
+}
+
+class _WorkspaceDeepLinkBridge extends StatefulWidget {
+  final Widget child;
+
+  const _WorkspaceDeepLinkBridge({required this.child});
+
+  @override
+  State<_WorkspaceDeepLinkBridge> createState() =>
+      _WorkspaceDeepLinkBridgeState();
+}
+
+class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge> {
+  StreamSubscription<String>? _routeSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (kIsWeb) return;
+
+    final handler = DeepLinkHandler.instance;
+    _routeSubscription = handler.routeLinks.listen(_openSharedRoute);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pendingRoute = handler.takePendingRoute();
+      if (pendingRoute != null) {
+        _openSharedRoute(pendingRoute);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _routeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _openSharedRoute(String route) {
+    if (!mounted) return;
+
+    final normalizedRoute = RouteShareService.normalizeRoute(route);
+    if (normalizedRoute == null) {
+      debugPrint('🔗 [DeepLink] Ignored unsupported shared route: $route');
+      return;
+    }
+
+    final workspaceManager = context.read<WorkspaceManager>();
+    debugPrint('🔗 [DeepLink] Opening shared route: $normalizedRoute');
+    workspaceManager.navigateActiveWorkspaceFromSharedLink(normalizedRoute);
+    DeepLinkHandler.instance.takePendingRoute();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _WorkspaceRouterView extends StatefulWidget {

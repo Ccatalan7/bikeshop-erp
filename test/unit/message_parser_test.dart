@@ -38,5 +38,29 @@ void main() {
       expect(segments.length, 1);
       expect(segments[0], isA<TextSegment>());
     });
+
+    test('parses shared Vinabike route links', () {
+      final segments = MessageParser.parse(
+        'Mira vinabike://app/open?route=%2Fsales%2Finvoices&title=Facturas',
+      );
+
+      expect(segments.length, 2);
+      expect(segments[0], isA<TextSegment>());
+      expect(segments[1], isA<AppRouteLinkSegment>());
+      expect((segments[1] as AppRouteLinkSegment).route, '/sales/invoices');
+    });
+
+    test('parses ERP web route links', () {
+      final segments = MessageParser.parse(
+        'Mira https://erp.vinabike.cl/inventory/products?view=table',
+      );
+
+      expect(segments.length, 2);
+      expect(segments[1], isA<AppRouteLinkSegment>());
+      expect(
+        (segments[1] as AppRouteLinkSegment).route,
+        '/inventory/products?view=table',
+      );
+    });
   });
 }

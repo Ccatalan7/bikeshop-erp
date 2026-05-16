@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +14,8 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/document_accounting_preview.dart';
+import '../../../shared/services/document_accounting_context_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../settings/services/appearance_service.dart';
@@ -38,6 +39,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   Invoice? _selectedInvoice;
   bool _isHydratingSelectedInvoice = false;
   bool _showPaymentTerminal = false;
+  final DocumentAccountingContextService _documentAccountingContextService =
+      DocumentAccountingContextService();
+  Future<DocumentAccountingContext>? _accountingContextFuture;
+  String? _accountingContextInvoiceId;
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
   static const double _maxListPaneWidth = 900.0;
@@ -537,6 +542,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       setState(() {
         _selectedInvoice = null;
         _isHydratingSelectedInvoice = false;
+        _accountingContextInvoiceId = null;
+        _accountingContextFuture = null;
       });
       return;
     }
@@ -544,6 +551,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     setState(() {
       _selectedInvoice = invoice;
       _isHydratingSelectedInvoice = true;
+      _accountingContextInvoiceId = null;
+      _accountingContextFuture = null;
     });
 
     final fullInvoice = await context.read<SalesService>().fetchInvoice(
@@ -555,9 +564,27 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     }
 
     setState(() {
-      _selectedInvoice = fullInvoice ?? invoice;
+      final hydratedInvoice = fullInvoice ?? invoice;
+      _selectedInvoice = hydratedInvoice;
       _isHydratingSelectedInvoice = false;
+      _primeAccountingContext(hydratedInvoice);
     });
+  }
+
+  void _primeAccountingContext(Invoice invoice) {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || invoiceId.isEmpty) {
+      _accountingContextInvoiceId = null;
+      _accountingContextFuture = null;
+      return;
+    }
+
+    _accountingContextInvoiceId = invoiceId;
+    _accountingContextFuture =
+        _documentAccountingContextService.loadSalesInvoice(
+      invoiceId: invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+    );
   }
 
   Widget _buildSplitView(List<Invoice> invoices, SalesService salesService) {
@@ -1370,8 +1397,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       return _buildPaymentTerminal(invoice);
     }
 
+    final accountingFuture = _accountingContextInvoiceId == invoice.id
+        ? _accountingContextFuture
+        : null;
+
     return Container(
-      color: Colors.grey[50],
+      color: const Color(0xFFF4F6FA),
       child: Column(
         children: [
           _buildActionBar(invoice),
@@ -1379,24 +1410,51 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final double availableWidth = constraints.maxWidth - 40;
+                final double paperWidth =
+                    (constraints.maxWidth - 48).clamp(360.0, 920.0).toDouble();
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Container(
-                    width: availableWidth,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                return FutureBuilder<DocumentAccountingContext>(
+                  future: accountingFuture,
+                  builder: (context, snapshot) {
+                    final accounting =
+                        snapshot.data ?? DocumentAccountingContext.empty;
+                    final isLoadingAccounting = accountingFuture != null &&
+                        snapshot.connectionState == ConnectionState.waiting;
+
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 18, 24, 34),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1240),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (isLoadingAccounting)
+                                const DocumentAccountingLoadingStrip()
+                              else
+                                DocumentPaymentsDropdown(
+                                  title: 'Pagos recibidos',
+                                  payments: accounting.payments,
+                                ),
+                              const SizedBox(height: 24),
+                              DocumentPaperShell(
+                                width: paperWidth,
+                                status: _documentPreviewStatus(invoice),
+                                child:
+                                    _buildInvoiceDocument(invoice, paperWidth),
+                              ),
+                              if (!isLoadingAccounting)
+                                DocumentJournalEntriesSection(
+                                  entries: accounting.journalEntries,
+                                  documentLabel: 'Factura',
+                                  emptyReference: invoice.invoiceNumber,
+                                ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                    child: _buildInvoiceDocument(invoice, availableWidth),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -1404,6 +1462,83 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         ],
       ),
     );
+  }
+
+  DocumentPaperStatus _documentPreviewStatus(Invoice invoice) {
+    final calculatedBalance = invoice.total - invoice.paidAmount;
+    final effectiveBalance = invoice.balance > 0
+        ? invoice.balance
+        : calculatedBalance.clamp(0.0, invoice.total).toDouble();
+    final now = DateTime.now();
+    final isPaid = invoice.status == InvoiceStatus.paid ||
+        (invoice.paidAmount > 0 && effectiveBalance <= 1);
+    final isOverdue = !isPaid &&
+        effectiveBalance > 1 &&
+        (invoice.status == InvoiceStatus.overdue ||
+            (invoice.dueDate != null && invoice.dueDate!.isBefore(now)));
+
+    if (invoice.status == InvoiceStatus.cancelled) {
+      return const DocumentPaperStatus(
+        label: 'ANULADA',
+        foreground: Color(0xFF991B1B),
+        background: Color(0xFFFFF1F2),
+        border: Color(0xFFFECACA),
+      );
+    }
+
+    if (isPaid) {
+      return const DocumentPaperStatus(
+        label: 'PAGADA',
+        foreground: Color(0xFF047857),
+        background: Color(0xFFECFDF5),
+        border: Color(0xFFA7F3D0),
+      );
+    }
+
+    if (isOverdue) {
+      return const DocumentPaperStatus(
+        label: 'VENCIDA',
+        foreground: Color(0xFFB91C1C),
+        background: Color(0xFFFEF2F2),
+        border: Color(0xFFFECACA),
+      );
+    }
+
+    if (invoice.paidAmount > 0 && effectiveBalance > 1) {
+      return const DocumentPaperStatus(
+        label: 'PAGO PARCIAL',
+        foreground: Color(0xFFB45309),
+        background: Color(0xFFFFFBEB),
+        border: Color(0xFFFDE68A),
+      );
+    }
+
+    switch (invoice.status) {
+      case InvoiceStatus.sent:
+        return const DocumentPaperStatus(
+          label: 'ENVIADA',
+          foreground: Color(0xFF1D4ED8),
+          background: Color(0xFFEFF6FF),
+          border: Color(0xFFBFDBFE),
+        );
+      case InvoiceStatus.confirmed:
+        return const DocumentPaperStatus(
+          label: 'CONFIRMADA',
+          foreground: Color(0xFF6D28D9),
+          background: Color(0xFFF5F3FF),
+          border: Color(0xFFDDD6FE),
+        );
+      case InvoiceStatus.draft:
+      case InvoiceStatus.paid:
+      case InvoiceStatus.overdue:
+      case InvoiceStatus.cancelled:
+        return const DocumentPaperStatus(
+          label: 'BORRADOR',
+          foreground: Color(0xFF475569),
+          background: Color(0xFFF8FAFC),
+          border: Color(0xFFE2E8F0),
+        );
+    }
   }
 
   Widget _buildPaymentTerminal(Invoice invoice) {
@@ -1445,8 +1580,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                     await salesService.fetchInvoice(invoice.id!, refresh: true);
                 if (mounted) {
                   setState(() {
-                    if (updated != null) _selectedInvoice = updated;
+                    final refreshedInvoice = updated ?? invoice;
+                    _selectedInvoice = refreshedInvoice;
                     _showPaymentTerminal = false;
+                    _primeAccountingContext(refreshedInvoice);
                   });
                 }
               },
@@ -1501,7 +1638,12 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
               // Close button
               IconButton(
                 icon: const Icon(Icons.close, size: 20),
-                onPressed: () => setState(() => _selectedInvoice = null),
+                onPressed: () => setState(() {
+                  _selectedInvoice = null;
+                  _showPaymentTerminal = false;
+                  _accountingContextInvoiceId = null;
+                  _accountingContextFuture = null;
+                }),
                 tooltip: 'Cerrar',
                 color: Colors.grey[600],
                 padding: const EdgeInsets.all(8),
@@ -1757,6 +1899,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           .firstWhere((i) => i.id == invoice.id, orElse: () => invoice);
       if (!mounted) return;
       final resolvedBikeNames = await _resolveBikeNames(freshInvoice);
+      if (!mounted) return;
       final diagnosisNarratives =
           mode == InvoicePdfExportMode.invoiceWithDiagnosis
               ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
@@ -1839,6 +1982,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           .firstWhere((i) => i.id == invoice.id, orElse: () => invoice);
       if (!mounted) return;
       final resolvedBikeNames = await _resolveBikeNames(freshInvoice);
+      if (!mounted) return;
       final diagnosisNarratives =
           mode == InvoicePdfExportMode.invoiceWithDiagnosis
               ? await InvoicePdfGenerator.resolveDiagnosisNarratives(
@@ -1934,15 +2078,16 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
             onPressed: () async {
               Navigator.pop(context);
               // Delete invoice via service
+              final messenger = ScaffoldMessenger.of(context);
               try {
                 final salesService = context.read<SalesService>();
-                final messenger =
-                    ScaffoldMessenger.of(context); // Capture before async
 
                 await salesService.deleteInvoice(invoice.id!);
                 setState(() {
                   _selectedInvoice = null;
                   _isHydratingSelectedInvoice = false;
+                  _accountingContextInvoiceId = null;
+                  _accountingContextFuture = null;
                 });
                 await salesService.loadInvoices(
                   forceRefresh: true,
@@ -1958,7 +2103,6 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 }
               } catch (e) {
                 if (mounted) {
-                  final messenger = ScaffoldMessenger.of(context);
                   messenger.showSnackBar(
                     SnackBar(
                       content: Text('Error al eliminar factura: $e'),
@@ -2447,7 +2591,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           invoice.id!, InvoiceStatus.sent);
       if (!mounted) return;
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
         messenger.showSnackBar(
           const SnackBar(content: Text('Factura marcada como enviada')),
         );
@@ -2473,7 +2620,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           invoice.id!, InvoiceStatus.confirmed);
       if (!mounted) return;
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
         messenger.showSnackBar(
           const SnackBar(
               content: Text(
@@ -2523,7 +2673,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           invoice.id!, InvoiceStatus.draft);
       if (!mounted) return;
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
         messenger.showSnackBar(
           const SnackBar(content: Text('Factura revertida a borrador')),
         );
@@ -2571,7 +2724,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           invoice.id!, InvoiceStatus.sent);
       if (!mounted) return;
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
         messenger.showSnackBar(
           const SnackBar(content: Text('Factura revertida a enviada')),
         );
@@ -2590,6 +2746,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     if (invoice.id == null) return;
     final salesService = context.read<SalesService>();
     final messenger = ScaffoldMessenger.of(context);
+    await salesService.loadPayments(forceRefresh: true);
     final payments = salesService.getPaymentsForInvoice(invoice.id!);
 
     if (payments.isEmpty) {
@@ -2602,6 +2759,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
     final lastPayment = payments.first;
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2633,7 +2791,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           await salesService.fetchInvoice(invoice.id!, refresh: true);
       if (!mounted) return;
       if (updated != null) {
-        setState(() => _selectedInvoice = updated);
+        setState(() {
+          _selectedInvoice = updated;
+          _primeAccountingContext(updated);
+        });
         messenger.showSnackBar(
           const SnackBar(
             content: Text('Pago eliminado correctamente'),

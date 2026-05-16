@@ -1,6 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/message_parser.dart';
+import '../../../shared/services/workspace_manager.dart';
 import 'quick_actions/job_preview_dialog.dart';
 import 'quick_actions/invoice_preview_dialog.dart';
 
@@ -39,6 +42,17 @@ class ParsedMessageText extends StatelessWidget {
               recognizer: TapGestureRecognizer()
                 ..onTap = () => _handleRefTap(context, segment),
             );
+          } else if (segment is AppRouteLinkSegment) {
+            return TextSpan(
+              text: segment.text,
+              style: baseStyle.copyWith(
+                color: linkColor,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.underline,
+              ),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => _handleRouteLinkTap(context, segment),
+            );
           } else {
             return TextSpan(text: segment.text, style: baseStyle);
           }
@@ -65,6 +79,28 @@ class ParsedMessageText extends StatelessWidget {
             return AlertDialog(title: Text('Unknown Ref: ${ref.text}'));
         }
       },
+    );
+  }
+
+  Future<void> _handleRouteLinkTap(
+    BuildContext context,
+    AppRouteLinkSegment link,
+  ) async {
+    try {
+      context
+          .read<WorkspaceManager>()
+          .navigateActiveWorkspaceFromSharedLink(link.route);
+      return;
+    } catch (_) {
+      if (await canLaunchUrl(link.uri)) {
+        await launchUrl(link.uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir el enlace compartido.')),
     );
   }
 }

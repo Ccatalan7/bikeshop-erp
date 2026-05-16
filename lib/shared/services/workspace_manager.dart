@@ -586,6 +586,23 @@ class WorkspaceManager extends ChangeNotifier {
     }
   }
 
+  /// Navigate from an in-app shared link while preserving a useful back
+  /// milestone. If the active workspace is pinned and cannot leave its module,
+  /// the destination workspace still gets a return entry back to the source.
+  void navigateActiveWorkspaceFromSharedLink(String route) {
+    if (_workspaces.isEmpty) return;
+
+    final sourceWorkspace = _workspaces[_activeIndex];
+    final returnRoute = sourceWorkspace.currentRoute;
+
+    if (sourceWorkspace.allowsRoute(route)) {
+      navigateActiveWorkspace(route);
+      return;
+    }
+
+    openRouteInWorkspace(route, returnRoute: returnRoute);
+  }
+
   void navigateActiveWorkspaceBack() {
     final workspace = activeWorkspace;
     if (workspace == null || !workspace.canGoBack) return;
@@ -611,17 +628,86 @@ class WorkspaceManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  void openRouteInWorkspace(String route) {
+  void openRouteInWorkspace(String route, {String? returnRoute}) {
     final existingIndex = _workspaces.indexWhere(
       (workspace) =>
           workspace.currentRoute == route || workspace.initialRoute == route,
     );
     if (existingIndex != -1) {
-      switchToWorkspace(existingIndex);
+      final workspace = _workspaces[existingIndex];
+      final shouldNavigate = workspace.currentRoute != route;
+      _activeIndex = existingIndex;
+
+      _installReturnMilestone(
+        workspace: workspace,
+        returnRoute: returnRoute,
+        targetRoute: route,
+        includeTarget: !shouldNavigate,
+      );
+
+      if (shouldNavigate) {
+        if (workspace.router != null) {
+          workspace.router!.go(route);
+        } else {
+          updateWorkspaceRouteById(workspace.id, route);
+          return;
+        }
+      }
+
+      notifyListeners();
       return;
     }
 
-    addWorkspace(title: getRouteTitle(route), initialRoute: route);
+    final workspaceId =
+        addWorkspace(title: getRouteTitle(route), initialRoute: route);
+    final workspace = workspaceById(workspaceId);
+    if (workspace != null) {
+      _installReturnMilestone(
+        workspace: workspace,
+        returnRoute: returnRoute,
+        targetRoute: route,
+        includeTarget: true,
+      );
+      notifyListeners();
+    }
+  }
+
+  void _installReturnMilestone({
+    required Workspace workspace,
+    required String? returnRoute,
+    required String targetRoute,
+    required bool includeTarget,
+  }) {
+    if (returnRoute == null || returnRoute == targetRoute) return;
+
+    if (workspace.routeHistoryIndex < workspace.routeHistory.length - 1) {
+      workspace.routeHistory.removeRange(
+        workspace.routeHistoryIndex + 1,
+        workspace.routeHistory.length,
+      );
+    }
+
+    if (includeTarget &&
+        workspace.routeHistory.length == 1 &&
+        workspace.routeHistory.first == targetRoute) {
+      workspace.routeHistory
+        ..clear()
+        ..add(returnRoute)
+        ..add(targetRoute);
+      workspace.routeHistoryIndex = 1;
+      return;
+    }
+
+    if (workspace.routeHistory.isEmpty ||
+        workspace.routeHistory.last != returnRoute) {
+      workspace.routeHistory.add(returnRoute);
+    }
+
+    if (includeTarget && workspace.routeHistory.last != targetRoute) {
+      workspace.routeHistory.add(targetRoute);
+    }
+
+    workspace.routeHistoryIndex = workspace.routeHistory.length - 1;
   }
 
   /// Toggles the AI Assistant right panel visibility
