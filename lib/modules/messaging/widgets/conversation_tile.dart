@@ -3,13 +3,16 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/conversation.dart';
 import '../providers/chat_provider.dart';
+import '../../../shared/services/route_share_service.dart';
 
 class ConversationTile extends StatefulWidget {
   final Conversation conversation;
   final bool isActive;
   final bool isMobile;
+  final bool isPinned;
   final String subtitle;
   final VoidCallback onTap;
+  final Future<void> Function()? onTogglePinned;
   final Future<bool> Function() onDelete;
 
   const ConversationTile({
@@ -17,8 +20,10 @@ class ConversationTile extends StatefulWidget {
     required this.conversation,
     required this.isActive,
     required this.isMobile,
+    this.isPinned = false,
     required this.subtitle,
     required this.onTap,
+    this.onTogglePinned,
     required this.onDelete,
   });
 
@@ -33,98 +38,174 @@ class _ConversationTileState extends State<ConversationTile> {
     if (dt == null) return '';
     final now = DateTime.now();
     final local = dt.toLocal();
-    final diff = now.difference(local);
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final localDate = DateTime(local.year, local.month, local.day);
 
-    if (diff.inDays == 0 && now.day == local.day) {
+    if (now.year == local.year &&
+        now.month == local.month &&
+        now.day == local.day) {
       return DateFormat.Hm().format(local);
-    } else if (diff.inDays < 7) {
-      return DateFormat.E().format(local);
-    } else {
-      return DateFormat.Md().format(local);
     }
+
+    if (localDate == yesterday) {
+      return 'Ayer';
+    }
+
+    final diff = now.difference(local);
+    if (diff.inDays < 7) {
+      const weekdays = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
+      return weekdays[local.weekday - 1];
+    }
+
+    return DateFormat('dd/MM/yy').format(local);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final conv = widget.conversation;
-    final isPending = conv.status == 'pending';
+    final title = provider.getChatTitle(conv);
     final hasUnread = conv.unreadCount > 0;
-    final channelIcon = conv.isWhatsApp
-        ? Icons.phone_in_talk_outlined
-        : conv.isWebsitePortal
-            ? Icons.language_outlined
-            : Icons.people_outline;
-    final channelColor = isPending
-        ? Colors.orange[700]
-        : conv.isWhatsApp
-            ? const Color(0xFF047857)
-            : conv.isWebsitePortal
-                ? const Color(0xFF093357)
-                : Colors.grey[600];
+    final isPending = conv.status == 'pending';
+    final accentColor = _channelColor(conv, isPending);
+    const unreadColor = Color(0xFF16A34A);
+    final signalColor = hasUnread ? unreadColor : accentColor;
+    final timeColor = hasUnread
+        ? unreadColor
+        : colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
+    final backgroundColor = widget.isActive
+        ? colorScheme.primary.withValues(alpha: 0.09)
+        : hasUnread
+            ? unreadColor.withValues(alpha: 0.075)
+            : _isHovering
+                ? colorScheme.onSurface.withValues(alpha: 0.035)
+                : Colors.transparent;
+    final leftEdgeColor = widget.isActive
+        ? colorScheme.primary
+        : hasUnread
+            ? unreadColor
+            : Colors.transparent;
 
-    Widget content = ListTile(
-      selected: widget.isActive,
-      selectedTileColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-      contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-      onTap: widget.onTap,
-      leading: Stack(
-        children: [
-          CircleAvatar(
-            backgroundColor: isPending ? Colors.orange[100] : Colors.grey[200],
-            child: Icon(
-              channelIcon,
-              color: channelColor,
-              size: 20,
-            ),
-          ),
-          if (hasUnread)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
-                child: Text(
-                  '${conv.unreadCount}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+    Widget content = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 76),
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            border: Border(
+              left: BorderSide(
+                color: leftEdgeColor,
+                width: 3,
               ),
             ),
-        ],
-      ),
-      title: Text(
-        provider.getChatTitle(conv),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: hasUnread ? FontWeight.bold : FontWeight.w500,
-          color: Colors.black87,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildAvatar(title, conv, accentColor, hasUnread),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight:
+                                  hasUnread ? FontWeight.w800 : FontWeight.w700,
+                              color: colorScheme.onSurface,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatTime(conv.lastMessageAt ?? conv.updatedAt),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: timeColor,
+                            fontWeight:
+                                hasUnread ? FontWeight.w800 : FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (conv.lastMessageIsMine) ...[
+                          _buildDeliveryIcon(conv),
+                          const SizedBox(width: 4),
+                        ],
+                        if (_previewIcon(conv) != null) ...[
+                          Icon(
+                            _previewIcon(conv),
+                            size: 14,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.72),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            _previewText(conv),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: isPending
+                                  ? const Color(0xFFB45309)
+                                  : hasUnread
+                                      ? colorScheme.onSurface
+                                      : colorScheme.onSurfaceVariant,
+                              fontWeight:
+                                  hasUnread ? FontWeight.w700 : FontWeight.w500,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        _buildContextPill(
+                          conv,
+                          signalColor,
+                          prominent: hasUnread,
+                        ),
+                        if (widget.isPinned) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.push_pin,
+                            size: 12,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.75),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildTrailing(conv, hasUnread, theme, unreadColor),
+            ],
+          ),
         ),
       ),
-      subtitle: Text(
-        widget.subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isPending ? Colors.orange[700] : Colors.grey[600],
-          fontSize: 12,
-          fontWeight: isPending ? FontWeight.w500 : FontWeight.normal,
-        ),
-      ),
-      trailing: _buildTrailing(conv, hasUnread, context),
     );
 
     if (widget.isMobile) {
@@ -140,91 +221,318 @@ class _ConversationTileState extends State<ConversationTile> {
         confirmDismiss: (_) => widget.onDelete(),
         child: content,
       );
-    } else {
-      return MouseRegion(
-        onEnter: (_) => setState(() => _isHovering = true),
-        onExit: (_) => setState(() => _isHovering = false),
-        child: content,
-      );
     }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: content,
+    );
+  }
+
+  Widget _buildAvatar(
+    String title,
+    Conversation conv,
+    Color accentColor,
+    bool hasUnread,
+  ) {
+    final initials = _initialsFor(title);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor:
+              accentColor.withValues(alpha: hasUnread ? 0.16 : 0.1),
+          child: Text(
+            initials,
+            style: TextStyle(
+              color: accentColor,
+              fontWeight: FontWeight.w800,
+              fontSize: initials.length > 1 ? 12 : 15,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        Positioned(
+          right: -2,
+          bottom: -1,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 2,
+              ),
+            ),
+            child: Icon(
+              _channelIcon(conv),
+              size: 12,
+              color: accentColor,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContextPill(
+    Conversation conv,
+    Color accentColor, {
+    bool prominent = false,
+  }) {
+    final theme = Theme.of(context);
+    final label = _contextSummary(conv);
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: prominent ? 0.13 : 0.07),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: accentColor,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0,
+        ),
+      ),
+    );
   }
 
   Widget _buildTrailing(
-      Conversation conv, bool hasUnread, BuildContext context) {
-    if (!widget.isMobile) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
+    Conversation conv,
+    bool hasUnread,
+    ThemeData theme,
+    Color unreadColor,
+  ) {
+    final menuVisible = _isHovering || widget.isActive;
+    return SizedBox(
+      width: 34,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            _formatTime(conv.lastMessageAt ?? conv.updatedAt),
-            style: TextStyle(
-              fontSize: 11,
-              color:
-                  hasUnread ? Theme.of(context).primaryColor : Colors.grey[400],
-              fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          // Animated slider for dropdown
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            width: _isHovering ? 32.0 : 0.0,
-            child: ClipRect(
-              child: OverflowBox(
-                minWidth: 0,
-                maxWidth: 32.0,
-                alignment: Alignment.centerRight,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 150),
-                  opacity: _isHovering ? 1.0 : 0.0,
-                  curve: Curves.easeOut,
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: PopupMenuButton<String>(
-                      padding: EdgeInsets.zero,
-                      tooltip: 'Opciones',
-                      icon: Icon(Icons.keyboard_arrow_down,
-                          size: 20, color: Colors.grey[600]),
-                      splashRadius: 16,
-                      onSelected: (value) {
-                        if (value == 'delete') {
-                          Future.delayed(const Duration(milliseconds: 100),
-                              widget.onDelete);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline,
-                                  color: Colors.red, size: 20),
-                              SizedBox(width: 12),
-                              Text('Eliminar chat',
-                                  style: TextStyle(color: Colors.red)),
-                            ],
+          if (hasUnread)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              constraints: const BoxConstraints(minWidth: 22),
+              decoration: BoxDecoration(
+                color: unreadColor,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: [
+                  BoxShadow(
+                    color: unreadColor.withValues(alpha: 0.22),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                conv.unreadCount > 99 ? '99+' : '${conv.unreadCount}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 18),
+          const SizedBox(height: 4),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 120),
+            opacity: menuVisible ? 1 : 0,
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                tooltip: 'Opciones del chat',
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                splashRadius: 16,
+                onSelected: (value) {
+                  if (value == 'pin') {
+                    widget.onTogglePinned?.call();
+                  } else if (value == 'delete') {
+                    Future.delayed(
+                      const Duration(milliseconds: 80),
+                      widget.onDelete,
+                    );
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (widget.onTogglePinned != null)
+                    PopupMenuItem<String>(
+                      value: 'pin',
+                      child: Row(
+                        children: [
+                          Icon(
+                            widget.isPinned
+                                ? Icons.push_pin
+                                : Icons.push_pin_outlined,
+                            size: 18,
                           ),
+                          const SizedBox(width: 10),
+                          Text(
+                              widget.isPinned ? 'Desfijar chat' : 'Fijar chat'),
+                        ],
+                      ),
+                    ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                        SizedBox(width: 10),
+                        Text(
+                          'Eliminar chat',
+                          style: TextStyle(color: Colors.red),
                         ),
                       ],
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
         ],
-      );
-    }
-
-    // Mobile: Just timestamp
-    return Text(
-      _formatTime(conv.lastMessageAt ?? conv.updatedAt),
-      style: TextStyle(
-        fontSize: 11,
-        color: hasUnread ? Theme.of(context).primaryColor : Colors.grey[400],
-        fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
       ),
     );
+  }
+
+  Widget _buildDeliveryIcon(Conversation conv) {
+    final status = conv.lastMessageExternalStatus?.toLowerCase();
+    final isRead = status == 'read';
+    final isDelivered = status == 'delivered' || status == 'sent' || isRead;
+    return Icon(
+      isDelivered ? Icons.done_all : Icons.done,
+      size: 14,
+      color: isRead
+          ? const Color(0xFF0EA5E9)
+          : Theme.of(context)
+              .colorScheme
+              .onSurfaceVariant
+              .withValues(alpha: 0.7),
+    );
+  }
+
+  IconData? _previewIcon(Conversation conv) {
+    final metadata = conv.lastMessageMetadata;
+    if (metadata['share_kind'] == 'route' || metadata['route'] != null) {
+      return Icons.link;
+    }
+
+    return switch (conv.lastMessageType) {
+      'image' => Icons.image_outlined,
+      'file' => Icons.attach_file,
+      'action_request' => Icons.bolt,
+      'system' => Icons.info_outline,
+      _ => null,
+    };
+  }
+
+  String _previewText(Conversation conv) {
+    final metadata = conv.lastMessageMetadata;
+    final title = metadata['title']?.toString().trim();
+    String preview;
+
+    if (metadata['share_kind'] == 'route' || metadata['route'] != null) {
+      preview = title == null || title.isEmpty
+          ? 'Página compartida del ERP'
+          : 'Página compartida: $title';
+    } else {
+      preview = switch (conv.lastMessageType) {
+        'image' => 'Foto',
+        'file' => metadata['filename']?.toString().trim().isNotEmpty == true
+            ? 'Archivo: ${metadata['filename']}'
+            : 'Archivo adjunto',
+        'action_request' =>
+          title == null || title.isEmpty ? 'Solicitud interactiva' : title,
+        'system' => conv.lastMessageContent?.trim() ?? 'Actualización del chat',
+        _ => conv.lastMessageContent?.trim() ?? '',
+      };
+    }
+
+    preview = preview.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (preview.isEmpty) preview = widget.subtitle;
+    if (preview.contains('vinabike://app/open') ||
+        preview.contains('${RouteShareService.publicHost}'
+            '${RouteShareService.publicOpenPath}') ||
+        RouteShareService.isShareLink(preview)) {
+      preview = 'Página compartida del ERP';
+    }
+    if (conv.lastMessageIsMine && preview.isNotEmpty) {
+      return 'Tú: $preview';
+    }
+    return preview;
+  }
+
+  String _contextSummary(Conversation conv) {
+    final context = switch (conv.contextType) {
+      'order' => 'Pedido web',
+      'job' => 'Trabajo',
+      'invoice' => 'Factura',
+      'bike' => 'Bicicleta',
+      'customer' => 'Cliente',
+      'product' => 'Producto',
+      _ => null,
+    };
+
+    final channel = conv.shortChannelLabel;
+    final status = switch (conv.status) {
+      'pending' => 'pendiente',
+      'resolved' => 'resuelto',
+      'rejected' => 'rechazado',
+      _ => null,
+    };
+
+    return [
+      if (context != null) context,
+      channel,
+      if (status != null) status,
+    ].join(' · ');
+  }
+
+  IconData _channelIcon(Conversation conv) {
+    if (conv.isWhatsApp) return Icons.phone_in_talk_outlined;
+    if (conv.isWebsitePortal) return Icons.language_outlined;
+    return Icons.people_outline;
+  }
+
+  Color _channelColor(Conversation conv, bool isPending) {
+    if (isPending) return const Color(0xFFD97706);
+    if (conv.isWhatsApp) return const Color(0xFF047857);
+    if (conv.isWebsitePortal) return const Color(0xFF0F4C81);
+    return const Color(0xFF475569);
+  }
+
+  String _initialsFor(String title) {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return '?';
+    if (RegExp(r'^\+?[0-9 ]+$').hasMatch(trimmed)) return '#';
+
+    final words = trimmed
+        .split(RegExp(r'\s+'))
+        .where((word) => word.trim().isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) {
+      return words.first.characters.take(2).toString().toUpperCase();
+    }
+    return '${words.first.characters.first}${words.last.characters.first}'
+        .toUpperCase();
   }
 }

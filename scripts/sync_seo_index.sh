@@ -193,6 +193,33 @@ cat > "$INDEX_FILE" << HEREDOC
 
   ${GOOGLE_FONTS_LINKS}
 
+  <!-- ERP shared-link handoff: WhatsApp opens HTTPS, this opens the desktop app. -->
+  <script>
+    (function () {
+      try {
+        var path = (window.location.pathname || '').replace(/\/+$/, '');
+        if (path !== '/app/open') return;
+
+        var params = new URLSearchParams(window.location.search || '');
+        var route = params.get('route');
+        if (!route) return;
+
+        var title = params.get('title') || '';
+        var appUrl = 'vinabike://app/open?route=' + encodeURIComponent(route) +
+          '&title=' + encodeURIComponent(title);
+
+        window.vinabikeAppHandoffUrl = appUrl;
+        window.vinabikeAppHandoffStartedAt = Date.now();
+
+        setTimeout(function () {
+          window.location.href = appUrl;
+        }, 30);
+      } catch (e) {
+        // Keep the Flutter fallback page available.
+      }
+    })();
+  </script>
+
   <!-- Google Analytics GA4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=$GA_ID"></script>
   <script>

@@ -31,8 +31,38 @@
       "ignore": [
         "firebase.json",
         "**/.*",
+        "!**/.well-known",
+        "!**/.well-known/**",
         "**/node_modules/**",
         "**/*.exe"
+      ],
+      "headers": [
+        {
+          "source": "/.well-known/apple-app-site-association",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/apple-app-site-association",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        }
       ],
       "rewrites": [
         {
@@ -47,10 +77,38 @@
       "ignore": [
         "firebase.json",
         "**/.*",
+        "!**/.well-known",
+        "!**/.well-known/**",
         "**/node_modules/**",
         "**/*.exe"
       ],
       "headers": [
+        {
+          "source": "/.well-known/apple-app-site-association",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/apple-app-site-association",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
         {
           "source": "/",
           "headers": [

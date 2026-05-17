@@ -8,9 +8,11 @@ interface NotificationPayload {
     record: {
         id: string
         conversation_id: string
-        sender_id: string
-        content: string
-        type: string
+        sender_id: string | null
+        content: string | null
+        type: string | null
+        external_provider?: string | null
+        message_direction?: string | null
         created_at: string
     }
     schema: 'public'
@@ -40,12 +42,21 @@ Deno.serve(async (req) => {
         content_preview: record.content?.substring(0, 50)
     })
 
-    // 1. Get recipients (other participants)
-    const { data: participants, error: pError } = await supabase
+    const isExternalInbound = !record.sender_id && record.message_direction === 'inbound'
+
+    // 1. Get recipients (other participants). External inbound messages such as
+    // WhatsApp rows do not have an auth sender_id, so applying neq(null) breaks
+    // the PostgREST UUID filter and prevents FCM from being sent.
+    let participantsQuery = supabase
         .from('conversation_participants')
         .select('user_id')
         .eq('conversation_id', record.conversation_id)
-        .neq('user_id', record.sender_id) // Exclude sender
+
+    if (record.sender_id) {
+        participantsQuery = participantsQuery.neq('user_id', record.sender_id) // Exclude internal sender
+    }
+
+    const { data: participants, error: pError } = await participantsQuery
 
     console.log("👥 Participants query result:", { participants, error: pError })
 
@@ -77,66 +88,74 @@ Deno.serve(async (req) => {
     // 3. Get Sender info (for notification title)
     // sender_id is the auth.users.id, not user_profiles.id
     // We need to join user_profiles → employees to get the name
-    let senderName = "Usuario"
-    try {
-        console.log("Looking up sender for user_id:", record.sender_id)
+    let senderName = isExternalInbound && record.external_provider === 'whatsapp'
+        ? 'WhatsApp'
+        : 'Usuario'
 
-        // First try: Get employee via user_profiles.employee_id
-        const { data: userProfile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('employee_id')
-            .eq('user_id', record.sender_id)
-            .maybeSingle()
+    if (record.sender_id) {
+        try {
+            console.log("Looking up sender for user_id:", record.sender_id)
 
-        console.log("User profile lookup:", { userProfile, error: profileError })
-
-        if (userProfile?.employee_id) {
-            // Get employee name
-            const { data: employee } = await supabase
-                .from('employees')
-                .select('first_name, last_name')
-                .eq('id', userProfile.employee_id)
+            // First try: Get employee via user_profiles.employee_id
+            const { data: userProfile, error: profileError } = await supabase
+                .from('user_profiles')
+                .select('employee_id')
+                .eq('user_id', record.sender_id)
                 .maybeSingle()
 
-            console.log("Employee lookup:", employee)
+            console.log("User profile lookup:", { userProfile, error: profileError })
 
-            if (employee) {
-                senderName = `${employee.first_name} ${employee.last_name}`.trim()
-            }
-        }
+            if (userProfile?.employee_id) {
+                // Get employee name
+                const { data: employee } = await supabase
+                    .from('employees')
+                    .select('first_name, last_name')
+                    .eq('id', userProfile.employee_id)
+                    .maybeSingle()
 
-        // Fallback: Try auth.users metadata or email
-        if (senderName === "Usuario") {
-            console.log("No employee found, trying auth.users...")
-            // Use Supabase Admin API to get user info
-            const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(record.sender_id)
+                console.log("Employee lookup:", employee)
 
-            console.log("Auth user lookup:", { authUser: authUser?.user?.email, error: authError })
-
-            if (authUser?.user) {
-                // Try metadata first (might have display_name or full_name)
-                const metadata = authUser.user.user_metadata
-                if (metadata?.full_name) {
-                    senderName = metadata.full_name
-                } else if (metadata?.name) {
-                    senderName = metadata.name
-                } else if (authUser.user.email) {
-                    // Use email username as fallback
-                    senderName = authUser.user.email.split('@')[0]
+                if (employee) {
+                    senderName = `${employee.first_name} ${employee.last_name}`.trim()
                 }
             }
-        }
 
-        if (senderName === "Usuario") {
-            console.log("No name found anywhere, using fallback")
+            // Fallback: Try auth.users metadata or email
+            if (senderName === "Usuario") {
+                console.log("No employee found, trying auth.users...")
+                // Use Supabase Admin API to get user info
+                const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(record.sender_id)
+
+                console.log("Auth user lookup:", { authUser: authUser?.user?.email, error: authError })
+
+                if (authUser?.user) {
+                    // Try metadata first (might have display_name or full_name)
+                    const metadata = authUser.user.user_metadata
+                    if (metadata?.full_name) {
+                        senderName = metadata.full_name
+                    } else if (metadata?.name) {
+                        senderName = metadata.name
+                    } else if (authUser.user.email) {
+                        // Use email username as fallback
+                        senderName = authUser.user.email.split('@')[0]
+                    }
+                }
+            }
+
+            if (senderName === "Usuario") {
+                console.log("No name found anywhere, using fallback")
+            }
+        } catch (e) {
+            console.error("Error fetching sender:", e)
         }
-    } catch (e) {
-        console.error("Error fetching sender:", e)
     }
 
     console.log("Final senderName:", senderName)
 
-    const messageBody = record.type === 'text' ? record.content : '📷 Imagen adjunta'
+    const messageBody = record.type === 'text' ? (record.content || '') : '📷 Imagen adjunta'
+    const senderIdForPayload = record.sender_id || 'external_whatsapp'
+    const messageTypeForPayload = record.type || 'text'
+    const contentForPayload = record.content || ''
 
     // 4. Send Notifications via FCM (DATA-ONLY for custom handling)
     const accessToken = await getAccessToken()
@@ -156,12 +175,13 @@ Deno.serve(async (req) => {
                         // This prevents duplicate notifications on web
                         data: {
                             conversation_id: record.conversation_id,
-                            sender_id: record.sender_id,
+                            sender_id: senderIdForPayload,
                             sender_name: senderName,
                             title: senderName,
                             body: messageBody,
-                            type: record.type,
-                            content: record.content,
+                            type: messageTypeForPayload,
+                            content: contentForPayload,
+                            route: `/chat?conversation=${record.conversation_id}`,
                             click_action: 'FLUTTER_NOTIFICATION_CLICK',
                         },
                         // Android-specific: high priority for background wake + custom channel

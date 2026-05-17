@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "FTKGRTMZG5.com.vinabike.vinabikeErp",
+        "paths": [
+          "/app/open",
+          "/app/open/*"
+        ]
+      },
+      {
+        "appID": "FTKGRTMZG5.com.vinabike.erp",
+        "paths": [
+          "/app/open",
+          "/app/open/*"
+        ]
+      }
+    ]
+  }
+}

@@ -658,6 +658,7 @@ Viña Bike
     String? contextId,
     DateTime? lastInboundAt,
     String? clientMessageId,
+    Map<String, dynamic>? metadata,
   }) async {
     _resetLastAttemptState(resolvedMessageText: message);
 
@@ -687,6 +688,7 @@ Viña Bike
       'text': message,
       'metadata': {
         'source': 'flutter_erp',
+        ...?metadata,
         if (clientMessageId != null) 'client_message_id': clientMessageId,
       },
     };

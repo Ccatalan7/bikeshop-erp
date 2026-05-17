@@ -9,6 +9,9 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const WHATSAPP_VERIFY_TOKEN = Deno.env.get('WHATSAPP_VERIFY_TOKEN') ?? ''
+const WHATSAPP_ACCESS_TOKEN = Deno.env.get('WHATSAPP_ACCESS_TOKEN') ?? ''
+const WHATSAPP_API_VERSION = Deno.env.get('WHATSAPP_API_VERSION') ?? 'v23.0'
+const WHATSAPP_MEDIA_BUCKET = Deno.env.get('WHATSAPP_MEDIA_BUCKET') ?? 'vinabike-assets'
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? ''
 
 type JsonRecord = Record<string, unknown>
@@ -110,6 +113,271 @@ function getMessageBody(message: JsonRecord) {
   }
 
   return type
+}
+
+function stringValue(value: unknown) {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function safeStoragePart(value: string) {
+  const cleaned = value
+    .trim()
+    .replaceAll(/[^A-Za-z0-9._-]+/g, '_')
+    .replaceAll(/_+/g, '_')
+    .replaceAll(/^[._-]+|[._-]+$/g, '')
+  return cleaned || 'media'
+}
+
+function extensionForContentType(contentType: string, fallback = 'bin') {
+  const normalized = contentType.toLowerCase().split(';')[0].trim()
+  switch (normalized) {
+    case 'image/jpeg':
+      return 'jpg'
+    case 'image/png':
+      return 'png'
+    case 'image/gif':
+      return 'gif'
+    case 'image/webp':
+      return 'webp'
+    case 'video/mp4':
+      return 'mp4'
+    case 'audio/mpeg':
+      return 'mp3'
+    case 'audio/ogg':
+      return 'ogg'
+    case 'application/pdf':
+      return 'pdf'
+    default:
+      return fallback
+  }
+}
+
+function mediaRecordForMessage(message: JsonRecord) {
+  const messageType = getMessageType(message)
+  const candidates = [
+    message[messageType],
+    message.image,
+    message.document,
+    message.video,
+    message.audio,
+    message.sticker,
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') {
+      const record = candidate as JsonRecord
+      if (stringValue(record.id)) {
+        return {
+          media: record,
+          messageType,
+          mediaId: stringValue(record.id)!,
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function filenameForMedia(
+  messageType: string,
+  media: JsonRecord,
+  externalMessageId: string,
+  contentType: string,
+) {
+  const explicit = stringValue(media.filename)
+  if (explicit) return explicit
+
+  const fallbackExtension = extensionForContentType(
+    contentType,
+    messageType === 'image' || messageType === 'sticker' ? 'jpg' : 'bin',
+  )
+  const label = messageType === 'document'
+    ? 'documento'
+    : messageType === 'video'
+    ? 'video'
+    : messageType === 'audio'
+    ? 'audio'
+    : 'imagen'
+  return `${label}_${safeStoragePart(externalMessageId)}.${fallbackExtension}`
+}
+
+async function fetchWhatsAppMediaMetadata(params: {
+  supabase: ReturnType<typeof createClient>
+  message: JsonRecord
+  phoneNumberId: string
+  waId: string
+  externalMessageId: string
+}) {
+  const mediaCandidate = mediaRecordForMessage(params.message)
+  if (!mediaCandidate) return {}
+
+  const { media, messageType, mediaId } = mediaCandidate
+  const baseMetadata: JsonRecord = {
+    whatsapp_media_id: mediaId,
+    media_id: mediaId,
+    media_source: 'whatsapp_cloud_api',
+  }
+
+  if (!WHATSAPP_ACCESS_TOKEN) {
+    return {
+      ...baseMetadata,
+      media_unavailable_reason: 'missing_whatsapp_access_token',
+    }
+  }
+
+  try {
+    const infoResponse = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+        },
+      },
+    )
+    const info = await infoResponse.json().catch(() => ({})) as JsonRecord
+    if (!infoResponse.ok) {
+      console.error('❌ [WHATSAPP-WEBHOOK] Media metadata fetch failed', info)
+      return {
+        ...baseMetadata,
+        whatsapp_media_fetch_error: info,
+      }
+    }
+
+    const temporaryUrl = stringValue(info.url)
+    if (!temporaryUrl) {
+      return {
+        ...baseMetadata,
+        whatsapp_media_fetch_error: 'missing_media_url',
+      }
+    }
+
+    const mediaResponse = await fetch(temporaryUrl, {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      },
+    })
+
+    if (!mediaResponse.ok) {
+      console.error('❌ [WHATSAPP-WEBHOOK] Media download failed', {
+        status: mediaResponse.status,
+        statusText: mediaResponse.statusText,
+      })
+      return {
+        ...baseMetadata,
+        whatsapp_media_download_error: {
+          status: mediaResponse.status,
+          statusText: mediaResponse.statusText,
+        },
+      }
+    }
+
+    const contentType = stringValue(mediaResponse.headers.get('content-type')) ??
+      stringValue(info.mime_type) ??
+      stringValue(media.mime_type) ??
+      (messageType === 'image' || messageType === 'sticker'
+        ? 'image/jpeg'
+        : 'application/octet-stream')
+    const bytes = new Uint8Array(await mediaResponse.arrayBuffer())
+    const filename = filenameForMedia(
+      messageType,
+      media,
+      params.externalMessageId,
+      contentType,
+    )
+    const extension = extensionForContentType(
+      contentType,
+      filename.includes('.') ? filename.split('.').pop() ?? 'bin' : 'bin',
+    )
+    const storagePath = [
+      'whatsapp-media',
+      safeStoragePart(params.phoneNumberId),
+      safeStoragePart(params.waId),
+      `${safeStoragePart(params.externalMessageId)}.${extension}`,
+    ].join('/')
+
+    const { error: uploadError } = await params.supabase.storage
+      .from(WHATSAPP_MEDIA_BUCKET)
+      .upload(storagePath, new Blob([bytes], { type: contentType }), {
+        contentType,
+        upsert: true,
+      })
+
+    if (uploadError) {
+      console.error('❌ [WHATSAPP-WEBHOOK] Media storage upload failed', uploadError)
+      return {
+        ...baseMetadata,
+        whatsapp_media_storage_error: uploadError.message,
+      }
+    }
+
+    const { data: publicUrlData } = params.supabase.storage
+      .from(WHATSAPP_MEDIA_BUCKET)
+      .getPublicUrl(storagePath)
+    const publicUrl = publicUrlData.publicUrl
+
+    return {
+      ...baseMetadata,
+      url: publicUrl,
+      ...(messageType === 'image' || messageType === 'sticker'
+        ? { media_url: publicUrl }
+        : { document_url: publicUrl, documentUrl: publicUrl }),
+      filename,
+      originalFilename: filename,
+      extension,
+      contentType,
+      content_type: contentType,
+      sizeBytes: bytes.byteLength,
+      size_bytes: bytes.byteLength,
+      storageBucket: WHATSAPP_MEDIA_BUCKET,
+      storage_bucket: WHATSAPP_MEDIA_BUCKET,
+      storagePath: storagePath,
+      storage_path: storagePath,
+      whatsapp_media_info: info,
+    } as JsonRecord
+  } catch (error) {
+    console.error('❌ [WHATSAPP-WEBHOOK] Media hydration failed', error)
+    return {
+      ...baseMetadata,
+      whatsapp_media_error: String(error),
+    }
+  }
+}
+
+async function mergeMessageMetadata(
+  supabase: ReturnType<typeof createClient>,
+  messageId: string,
+  metadataUpdates: JsonRecord,
+) {
+  if (!Object.keys(metadataUpdates).length) return
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('metadata')
+    .eq('id', messageId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('❌ [WHATSAPP-WEBHOOK] Failed to read message metadata', error)
+    return
+  }
+
+  const currentMetadata = (data?.metadata ?? {}) as JsonRecord
+  const { error: updateError } = await supabase
+    .from('messages')
+    .update({
+      metadata: {
+        ...currentMetadata,
+        ...metadataUpdates,
+      },
+    })
+    .eq('id', messageId)
+
+  if (updateError) {
+    console.error('❌ [WHATSAPP-WEBHOOK] Failed to update message media metadata', updateError)
+  }
 }
 
 function parseActionTarget(message: JsonRecord): ActionTarget | null {
@@ -258,10 +526,19 @@ serve(async (req) => {
             continue
           }
 
+          const mediaMetadata = await fetchWhatsAppMediaMetadata({
+            supabase,
+            message,
+            phoneNumberId,
+            waId,
+            externalMessageId,
+          })
+
           const inboundPayload = {
             message,
             contact: contacts[0] ?? null,
             metadata,
+            media: Object.keys(mediaMetadata).length ? mediaMetadata : null,
           }
 
           const { data: ingestResult, error: ingestError } = await supabase.rpc(
@@ -288,6 +565,11 @@ serve(async (req) => {
 
           const actionTarget = parseActionTarget(message)
           const isDuplicate = Boolean((ingestResult as JsonRecord | null)?.duplicate)
+          const messageId = String((ingestResult as JsonRecord | null)?.message_id ?? '')
+
+          if (!isDuplicate && messageId && Object.keys(mediaMetadata).length) {
+            await mergeMessageMetadata(supabase, messageId, mediaMetadata)
+          }
 
           if (!isDuplicate && actionTarget) {
             if (actionTarget.kind === 'job') {

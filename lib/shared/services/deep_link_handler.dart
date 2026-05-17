@@ -63,14 +63,14 @@ class DeepLinkHandler extends ChangeNotifier {
 
   /// Process incoming deep link
   void _handleDeepLink(Uri uri) {
-    if (uri.scheme != 'vinabike') {
-      debugPrint('🔗 [DeepLink] Ignoring non-vinabike scheme: ${uri.scheme}');
-      return;
-    }
-
     final sharedRoute = RouteShareService.routeFromUri(uri);
     if (sharedRoute != null) {
       _handleRouteLink(sharedRoute);
+      return;
+    }
+
+    if (uri.scheme != 'vinabike') {
+      debugPrint('🔗 [DeepLink] Ignoring non-vinabike scheme: ${uri.scheme}');
       return;
     }
 

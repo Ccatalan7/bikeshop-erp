@@ -363,6 +363,12 @@ class ChatProvider extends ChangeNotifier {
         contextType: old.contextType,
         contextId: old.contextId,
         lastMessageAt: old.lastMessageAt,
+        lastMessageContent: old.lastMessageContent,
+        lastMessageType: old.lastMessageType,
+        lastMessageMetadata: old.lastMessageMetadata,
+        lastMessageIsMine: old.lastMessageIsMine,
+        lastMessageDirection: old.lastMessageDirection,
+        lastMessageExternalStatus: old.lastMessageExternalStatus,
         updatedAt: old.updatedAt,
         participantIds: old.participantIds,
         unreadCount: 0, // Force clear
@@ -372,11 +378,7 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // Mark conversation as read on server
-    _service.markAsRead(conversationId).then((_) {
-      // Refresh conversations to ensure server sync (optional but good for consistency)
-      loadConversations();
-    });
+    _markConversationReadAndRefresh(conversationId);
 
     // 1. Unsubscribe from old message stream
     _messagesRetryTimer?.cancel();
@@ -385,6 +387,24 @@ class ChatProvider extends ChangeNotifier {
 
     // 2. Subscribe to new message stream
     _subscribeToActiveMessages(conversationId);
+  }
+
+  void clearActiveConversation({String? conversationId}) {
+    if (_activeConversationId == null) return;
+    if (conversationId != null && _activeConversationId != conversationId) {
+      return;
+    }
+
+    _messagesRetryTimer?.cancel();
+    _messagesRetryAttempt = 0;
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
+
+    _activeConversationId = null;
+    _activeMessages = [];
+    _optimisticMessages.clear();
+    _isLoading = false;
+    notifyListeners();
   }
 
   void _subscribeToActiveMessages(String conversationId) {
@@ -448,6 +468,16 @@ class ChatProvider extends ChangeNotifier {
       3 => const Duration(seconds: 5),
       _ => const Duration(seconds: 10),
     };
+  }
+
+  void _markConversationReadAndRefresh(String conversationId) {
+    _service.markAsRead(conversationId).then((_) {
+      if (_activeConversationId == conversationId) {
+        loadConversations();
+      }
+    }).catchError((error) {
+      debugPrint('⚠️ Error marking conversation as read: $error');
+    });
   }
 
   /// Create a new internal chat

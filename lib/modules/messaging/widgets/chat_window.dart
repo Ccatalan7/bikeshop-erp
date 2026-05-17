@@ -284,6 +284,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
+  final Map<String, Future<String?>> _whatsAppMediaFutureCache = {};
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
 
@@ -428,6 +429,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
+    context
+        .read<ChatProvider>()
+        .clearActiveConversation(conversationId: widget.conversation.id);
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
     _removeOverlay();
@@ -1118,6 +1122,7 @@ class _ChatWindowState extends State<ChatWindow> {
         chatProvider: chatProvider,
         optimisticMessageId: optimisticMessageId,
         pendingText: pendingText,
+        messageMetadata: messageMetadata,
         sendStartedAt: sendStartedAt,
       ));
       return;
@@ -1144,6 +1149,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required ChatProvider chatProvider,
     required String optimisticMessageId,
     required String pendingText,
+    required Map<String, dynamic> messageMetadata,
     required DateTime sendStartedAt,
   }) async {
     final whatsappService = WhatsAppService();
@@ -1204,6 +1210,7 @@ class _ChatWindowState extends State<ChatWindow> {
         contextId: widget.conversation.contextId,
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
+        metadata: messageMetadata,
       )
           .then(
         (value) {
@@ -3158,8 +3165,12 @@ class _ChatWindowState extends State<ChatWindow> {
     final hasAttachmentMetadata = [
       'url',
       'media_url',
+      'image_url',
+      'file_url',
       'documentUrl',
       'document_url',
+      'storage_url',
+      'public_url',
     ].any((key) => metadata.containsKey(key));
 
     if (message.type != 'image' &&
@@ -3178,9 +3189,53 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   String? _messageAttachmentUrl(Message message) {
-    for (final key in ['url', 'media_url', 'documentUrl', 'document_url']) {
+    for (final key in [
+      'url',
+      'media_url',
+      'image_url',
+      'file_url',
+      'documentUrl',
+      'document_url',
+      'storage_url',
+      'public_url',
+      'whatsapp_media_url',
+      'download_url',
+    ]) {
       final value = message.metadata[key]?.toString().trim();
       if (value != null && value.startsWith('http')) return value;
+    }
+
+    final mediaMetadata = message.metadata['media'];
+    if (mediaMetadata is Map) {
+      for (final key in [
+        'url',
+        'media_url',
+        'image_url',
+        'file_url',
+        'documentUrl',
+        'document_url',
+      ]) {
+        final value = mediaMetadata[key]?.toString().trim();
+        if (value != null && value.startsWith('http')) return value;
+      }
+    }
+
+    final rawPayload = message.metadata['raw_payload'];
+    if (rawPayload is Map) {
+      final rawMedia = rawPayload['media'];
+      if (rawMedia is Map) {
+        for (final key in [
+          'url',
+          'media_url',
+          'image_url',
+          'file_url',
+          'documentUrl',
+          'document_url',
+        ]) {
+          final value = rawMedia[key]?.toString().trim();
+          if (value != null && value.startsWith('http')) return value;
+        }
+      }
     }
 
     final content = message.content.trim();
@@ -3188,9 +3243,418 @@ class _ChatWindowState extends State<ChatWindow> {
     return null;
   }
 
+  bool _messageHasRemoteWhatsAppMedia(Message message) {
+    final provider = message.metadata['provider']?.toString() ??
+        message.metadata['external_provider']?.toString();
+    return provider == 'whatsapp' &&
+        (message.type == 'image' || message.type == 'file') &&
+        _messageRemoteMediaId(message) != null;
+  }
+
+  String? _messageRemoteMediaId(Message message) {
+    for (final key in ['whatsapp_media_id', 'media_id']) {
+      final value = message.metadata[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+
+    final rawPayload = message.metadata['raw_payload'];
+    if (rawPayload is Map) {
+      final rawMedia = rawPayload['media'];
+      if (rawMedia is Map) {
+        for (final key in ['whatsapp_media_id', 'media_id', 'id']) {
+          final value = rawMedia[key]?.toString().trim();
+          if (value != null && value.isNotEmpty) return value;
+        }
+      }
+
+      final rawMessage = rawPayload['message'];
+      if (rawMessage is Map) {
+        final messageType =
+            rawMessage['type']?.toString() ?? message.metadata['message_type'];
+        final candidates = [
+          if (messageType != null) rawMessage[messageType.toString()],
+          rawMessage['image'],
+          rawMessage['document'],
+          rawMessage['video'],
+          rawMessage['audio'],
+          rawMessage['sticker'],
+        ];
+        for (final candidate in candidates) {
+          if (candidate is! Map) continue;
+          final value = candidate['id']?.toString().trim();
+          if (value != null && value.isNotEmpty) return value;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  String? _messageImageCaption(Message message) {
+    final content = message.content.trim();
+    if (content.isNotEmpty &&
+        !content.startsWith('http') &&
+        content.toLowerCase() != 'imagen recibida') {
+      return content;
+    }
+
+    final rawPayload = message.metadata['raw_payload'];
+    if (rawPayload is Map) {
+      final rawMessage = rawPayload['message'];
+      if (rawMessage is Map) {
+        final image = rawMessage['image'];
+        if (image is Map) {
+          final caption = image['caption']?.toString().trim();
+          if (caption != null && caption.isNotEmpty) return caption;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> _resolveWhatsAppMediaUrl(Message message) async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'whatsapp-media',
+        body: {'messageId': message.id},
+      );
+
+      if (response.status < 200 || response.status >= 300) {
+        debugPrint(
+          '❌ [WhatsAppMedia] hydrate_failed status=${response.status} data=${response.data}',
+        );
+        return null;
+      }
+
+      final data = response.data;
+      if (data is! Map) return null;
+
+      final metadataUpdates = Map<String, dynamic>.from(
+        (data['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
+      final resolvedUrl = data['url']?.toString().trim() ??
+          metadataUpdates['url']?.toString().trim() ??
+          metadataUpdates['media_url']?.toString().trim() ??
+          metadataUpdates['document_url']?.toString().trim();
+
+      if (resolvedUrl == null || resolvedUrl.isEmpty) return null;
+
+      if (mounted && metadataUpdates.isNotEmpty) {
+        context
+            .read<ChatProvider>()
+            .updateMessageMetadataById(message.id, metadataUpdates);
+      }
+
+      return resolvedUrl;
+    } catch (error) {
+      debugPrint(
+          '❌ [WhatsAppMedia] hydrate_error message=${message.id}: $error');
+      return null;
+    }
+  }
+
+  Widget _buildImageMessage(
+    BuildContext context,
+    Message message,
+    String url,
+  ) {
+    final caption = _messageImageCaption(message);
+
+    return GestureDetector(
+      onTap: () {
+        _showImagePreview(url);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              width: 220,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 220,
+                  height: 160,
+                  color: Colors.grey[300],
+                  child: const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) =>
+                  _buildImageUnavailableMessage(
+                title: 'No se pudo cargar la imagen',
+                subtitle: 'Toca para intentar abrirla.',
+                onTap: () => _openAttachmentUrl(url, 'Imagen'),
+              ),
+            ),
+          ),
+          if (caption != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              caption,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontSize: 13,
+                height: 1.25,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeferredWhatsAppImageMessage(
+    BuildContext context,
+    Message message,
+  ) {
+    final future = _whatsAppMediaFutureCache.putIfAbsent(
+      message.id,
+      () => _resolveWhatsAppMediaUrl(message),
+    );
+
+    return FutureBuilder<String?>(
+      future: future,
+      builder: (context, snapshot) {
+        final resolvedUrl = snapshot.data;
+        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+          return _buildImageMessage(context, message, resolvedUrl);
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildImageLoadingMessage();
+        }
+
+        return _buildImageUnavailableMessage(
+          title: 'Imagen pendiente',
+          subtitle:
+              'No se pudo descargar desde WhatsApp. Toca para reintentar.',
+          onTap: () {
+            setState(() {
+              _whatsAppMediaFutureCache.remove(message.id);
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildImageLoadingMessage() {
+    return Container(
+      width: 220,
+      height: 160,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageUnavailableMessage({
+    required String title,
+    required String subtitle,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 220,
+        height: 150,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.image_not_supported_outlined,
+                size: 32, color: Color(0xFF475569)),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileMessage(
+    BuildContext context,
+    Message message,
+    String? fileUrl,
+    bool isMe, {
+    bool isLoading = false,
+    bool failed = false,
+  }) {
+    final metadata = message.metadata;
+    final contentType = metadata['contentType']?.toString() ??
+        metadata['content_type']?.toString() ??
+        '';
+    final extension =
+        _messageAttachmentExtension(message, fileUrl ?? '', contentType);
+    final fileName = _messageAttachmentName(message, extension);
+    final subtitle = isLoading
+        ? 'Descargando desde WhatsApp...'
+        : failed
+            ? 'No se pudo descargar. Toca para reintentar.'
+            : extension.toUpperCase();
+
+    return GestureDetector(
+      onTap: () async {
+        if (fileUrl != null) {
+          await _openAttachmentUrl(fileUrl, fileName);
+          return;
+        }
+
+        if (failed) {
+          setState(() {
+            _whatsAppMediaFutureCache.remove(message.id);
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.white.withValues(alpha: 0.3) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getFileIcon(extension),
+              color: isMe ? Colors.black87 : Colors.blue[600],
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fileName,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: failed ? Colors.red[600] : Colors.grey[600],
+                      fontSize: 11,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (isLoading)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Icon(
+                failed ? Icons.refresh : Icons.download,
+                color: failed ? Colors.red[500] : Colors.grey[500],
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeferredWhatsAppFileMessage(
+    BuildContext context,
+    Message message,
+    bool isMe,
+  ) {
+    final future = _whatsAppMediaFutureCache.putIfAbsent(
+      message.id,
+      () => _resolveWhatsAppMediaUrl(message),
+    );
+
+    return FutureBuilder<String?>(
+      future: future,
+      builder: (context, snapshot) {
+        final resolvedUrl = snapshot.data;
+        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+          return _buildFileMessage(context, message, resolvedUrl, isMe);
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildFileMessage(
+            context,
+            message,
+            null,
+            isMe,
+            isLoading: true,
+          );
+        }
+
+        return _buildFileMessage(
+          context,
+          message,
+          null,
+          isMe,
+          failed: true,
+        );
+      },
+    );
+  }
+
   String _messageAttachmentName(Message message, String extension) {
     final metadata = message.metadata;
-    for (final key in ['filename', 'documentFilename', 'document_filename']) {
+    for (final key in [
+      'filename',
+      'documentFilename',
+      'document_filename',
+      'originalFilename',
+      'original_filename',
+    ]) {
       final value = metadata[key]?.toString().trim();
       if (value != null && value.isNotEmpty) return value;
     }
@@ -3211,6 +3675,9 @@ class _ChatWindowState extends State<ChatWindow> {
     if (explicit != null && explicit.isNotEmpty) return explicit;
 
     if (contentType.contains('/')) {
+      final mapped = _extensionForContentType(contentType);
+      if (mapped != null) return mapped;
+
       final fromType = contentType.split('/').last.split(';').first;
       if (fromType.isNotEmpty) return fromType.toLowerCase();
     }
@@ -3222,6 +3689,37 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     return message.type == 'image' ? 'jpg' : 'file';
+  }
+
+  String? _extensionForContentType(String contentType) {
+    switch (contentType.toLowerCase().split(';').first.trim()) {
+      case 'image/jpeg':
+        return 'jpg';
+      case 'image/png':
+        return 'png';
+      case 'image/gif':
+        return 'gif';
+      case 'image/webp':
+        return 'webp';
+      case 'video/mp4':
+        return 'mp4';
+      case 'audio/mpeg':
+        return 'mp3';
+      case 'audio/ogg':
+        return 'ogg';
+      case 'application/pdf':
+        return 'pdf';
+      case 'application/msword':
+        return 'doc';
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return 'docx';
+      case 'application/vnd.ms-excel':
+        return 'xls';
+      case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        return 'xlsx';
+      default:
+        return null;
+    }
   }
 
   String _formatPanelDate(DateTime value) {
@@ -4368,6 +4866,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'share_kind': 'route',
       'route': link.route,
       'title': link.title,
+      'url': link.link,
       'deep_link': link.uri.toString(),
       if (link.webUri != null) 'web_link': link.webUri.toString(),
     };
@@ -5821,103 +6320,38 @@ class _ChatWindowState extends State<ChatWindow> {
             // Message Content Widget
             Widget contentWidget;
             if (msg.type == 'image') {
-              contentWidget = GestureDetector(
-                onTap: () {
-                  _showImagePreview(msg.content);
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    msg.content,
-                    width: 200,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        width: 200,
-                        height: 150,
-                        color: Colors.grey[300],
-                        child: const Center(child: CircularProgressIndicator()),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      width: 200,
-                      height: 150,
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.broken_image, size: 48),
-                    ),
-                  ),
-                ),
-              );
+              final mediaUrl = _messageAttachmentUrl(msg);
+              if (mediaUrl != null) {
+                contentWidget = _buildImageMessage(context, msg, mediaUrl);
+              } else if (_messageHasRemoteWhatsAppMedia(msg)) {
+                contentWidget = _buildDeferredWhatsAppImageMessage(
+                  context,
+                  msg,
+                );
+              } else {
+                contentWidget = _buildImageUnavailableMessage(
+                  title: 'Imagen sin archivo',
+                  subtitle: 'El mensaje no trae una URL válida.',
+                );
+              }
             } else if (msg.metadata['type'] == 'quote_request') {
               contentWidget = _buildQuoteCard(context, msg, isMe);
             } else if (msg.type == 'file') {
-              // File attachment (PDF, doc, etc.)
-              contentWidget = GestureDetector(
-                onTap: () async {
-                  // Open URL in browser
-                  final url = Uri.parse(msg.content);
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } else {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'No se pudo abrir: ${msg.metadata['filename'] ?? 'archivo'}')),
-                    );
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? Colors.white.withValues(alpha: 0.3)
-                        : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _getFileIcon(msg.metadata['extension'] ?? ''),
-                        color: isMe ? Colors.black87 : Colors.blue[600],
-                        size: 32,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg.metadata['filename'] ?? 'Archivo',
-                              style: TextStyle(
-                                color: isMe ? Colors.black87 : Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              (msg.metadata['extension'] ?? '').toUpperCase(),
-                              style: TextStyle(
-                                color: isMe ? Colors.black54 : Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.download,
-                        color: isMe ? Colors.black54 : Colors.grey[500],
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              final fileUrl = _messageAttachmentUrl(msg);
+              if (fileUrl != null) {
+                contentWidget = _buildFileMessage(context, msg, fileUrl, isMe);
+              } else if (_messageHasRemoteWhatsAppMedia(msg)) {
+                contentWidget =
+                    _buildDeferredWhatsAppFileMessage(context, msg, isMe);
+              } else {
+                contentWidget = _buildFileMessage(
+                  context,
+                  msg,
+                  null,
+                  isMe,
+                  failed: true,
+                );
+              }
             } else if (msg.type == 'action_request') {
               // ACTION REQUEST - Interactive buttons for customers
               contentWidget = _buildActionRequestCard(context, msg, isMe);

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'workspace_manager.dart';
 
 class SharedRouteLink {
@@ -19,7 +17,7 @@ class SharedRouteLink {
 
   String get shareText {
     return 'Revisa esto en Vinabike ERP:\n'
-        '$title\n'
+        '$title\n\n'
         '$link';
   }
 }
@@ -28,6 +26,9 @@ class RouteShareService {
   static const String scheme = 'vinabike';
   static const String host = 'app';
   static const String openPath = '/open';
+  static const String publicScheme = 'https';
+  static const String publicHost = 'vinabike.cl';
+  static const String publicOpenPath = '/app/open';
 
   static const List<String> _erpRouteRoots = [
     '/dashboard',
@@ -72,12 +73,17 @@ class RouteShareService {
           'title': trimmedTitle,
         },
       ),
-      webUri: _buildWebUri(normalizedRoute),
+      webUri: _buildPublicOpenUri(normalizedRoute, trimmedTitle),
     );
   }
 
   static String? routeFromUri(Uri uri) {
     if (uri.scheme == scheme && uri.host == host && uri.path == openPath) {
+      return normalizeRoute(uri.queryParameters['route']);
+    }
+
+    if ((uri.scheme == 'http' || uri.scheme == 'https') &&
+        _isPublicOpenPath(uri.path)) {
       return normalizeRoute(uri.queryParameters['route']);
     }
 
@@ -111,21 +117,20 @@ class RouteShareService {
     return uri != null && routeFromUri(uri) != null;
   }
 
-  static Uri? _buildWebUri(String route) {
-    if (!kIsWeb) return null;
-
-    final current = Uri.base;
-    if (!current.hasScheme || current.host.isEmpty) return null;
-    final routeUri = Uri.parse(route);
+  static Uri _buildPublicOpenUri(String route, String title) {
     return Uri(
-      scheme: current.scheme,
-      userInfo: current.userInfo,
-      host: current.host,
-      port: current.hasPort ? current.port : null,
-      path: routeUri.path,
-      query: routeUri.hasQuery ? routeUri.query : null,
-      fragment: routeUri.hasFragment ? routeUri.fragment : null,
+      scheme: publicScheme,
+      host: publicHost,
+      path: publicOpenPath,
+      queryParameters: {
+        'route': route,
+        'title': title,
+      },
     );
+  }
+
+  static bool _isPublicOpenPath(String path) {
+    return path == publicOpenPath || path == '$publicOpenPath/';
   }
 
   static bool _isAllowedErpPath(String path) {

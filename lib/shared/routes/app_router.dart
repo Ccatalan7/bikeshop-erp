@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../widgets/main_layout.dart';
 import '../pages/auth_callback_page.dart';
+import '../pages/app_link_landing_page.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
@@ -451,6 +452,7 @@ class AppRouter {
           // Common public prefixes (clean + legacy)
           const publicPrefixes = [
             '/auth/callback',
+            '/app/open',
             '/productos',
             '/producto',
             '/carrito',
@@ -623,6 +625,15 @@ class AppRouter {
         GoRoute(
           path: '/auth/callback',
           builder: (context, state) => const AuthCallbackPage(),
+        ),
+
+        GoRoute(
+          path: '/app/open',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            AppLinkLandingPage(uri: state.uri),
+          ),
         ),
 
         // ========================================

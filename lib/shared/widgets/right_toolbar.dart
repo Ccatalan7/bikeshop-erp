@@ -163,6 +163,11 @@ class _RightToolbarState extends State<RightToolbar> {
   }) {
     final badgeCount = _toolBadgeCount(tool, chatProvider);
     final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
+    final badgeColor = tool == ToolbarTool.messages
+        ? const Color(0xFF16A34A)
+        : theme.colorScheme.error;
+    final badgeTextColor =
+        tool == ToolbarTool.messages ? Colors.white : theme.colorScheme.onError;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -181,18 +186,25 @@ class _RightToolbarState extends State<RightToolbar> {
               constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
               padding: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                color: theme.colorScheme.error,
+                color: badgeColor,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
                   color: theme.colorScheme.surface,
                   width: 1.5,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: badgeColor.withValues(alpha: 0.24),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               alignment: Alignment.center,
               child: Text(
                 badgeLabel,
                 style: TextStyle(
-                  color: theme.colorScheme.onError,
+                  color: badgeTextColor,
                   fontSize: 9,
                   fontWeight: FontWeight.w800,
                   height: 1,

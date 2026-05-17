@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
@@ -26,12 +27,14 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   _MessageFilter _filter = _MessageFilter.all;
   String _searchTerm = '';
   String? _selectedConversationId;
+  Set<String> _pinnedConversationIds = {};
   bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChanged);
+    unawaited(_loadPinnedConversations());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(context.read<ChatProvider>().loadConversations());
@@ -48,6 +51,27 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   void _handleSearchChanged() {
     setState(() => _searchTerm = _searchController.text.trim().toLowerCase());
+  }
+
+  Future<void> _loadPinnedConversations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pinned = prefs.getStringList('quick_messages_pinned_conversations');
+    if (!mounted || pinned == null) return;
+    setState(() => _pinnedConversationIds = pinned.toSet());
+  }
+
+  Future<void> _togglePinnedConversation(String conversationId) async {
+    final next = {..._pinnedConversationIds};
+    if (!next.remove(conversationId)) {
+      next.add(conversationId);
+    }
+
+    setState(() => _pinnedConversationIds = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'quick_messages_pinned_conversations',
+      next.toList()..sort(),
+    );
   }
 
   Future<void> _refresh() async {
@@ -128,8 +152,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                   setState(() => _selectedConversationId = null);
                 },
               ),
-              Expanded(
-                child: const Text(
+              const Expanded(
+                child: Text(
                   'Bandeja de entrada',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -159,6 +183,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final unread = provider.totalUnreadCount;
     final whatsapp = conversations.where((c) => c.isWhatsApp).length;
     final team = conversations.where((c) => c.isInternal).length;
+    final clients = conversations.where((c) => c.isSupport).length;
+    final theme = Theme.of(context);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
@@ -167,40 +193,13 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           Row(
             children: [
               Expanded(
-                child: _buildMetricChip(
-                  icon: Icons.mark_chat_unread_outlined,
-                  label: 'Sin leer',
-                  value: unread,
-                  alert: unread > 0,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMetricChip(
-                  icon: Icons.phone_in_talk_outlined,
-                  label: 'WhatsApp',
-                  value: whatsapp,
-                  color: const Color(0xFF047857),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMetricChip(
-                  icon: Icons.groups_outlined,
-                  label: 'Equipo',
-                  value: team,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
                 child: FilledButton.icon(
                   onPressed: _showNewChatDialog,
                   icon: const Icon(Icons.add_comment_outlined, size: 18),
-                  label: const Text('Nuevo'),
+                  label: const Text('Nuevo chat'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(38),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -223,12 +222,44 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildInboxStat(
+                icon: Icons.mark_chat_unread_outlined,
+                label: 'Sin leer',
+                value: unread,
+                alert: unread > 0,
+              ),
+              const SizedBox(width: 8),
+              _buildInboxStat(
+                icon: Icons.phone_in_talk_outlined,
+                label: 'WhatsApp',
+                value: whatsapp,
+                color: const Color(0xFF047857),
+              ),
+              const SizedBox(width: 8),
+              _buildInboxStat(
+                icon: Icons.language_outlined,
+                label: 'Clientes',
+                value: clients,
+                color: const Color(0xFF0F4C81),
+              ),
+              const SizedBox(width: 8),
+              _buildInboxStat(
+                icon: Icons.groups_outlined,
+                label: 'Equipo',
+                value: team,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMetricChip({
+  Widget _buildInboxStat({
     required IconData icon,
     required String label,
     required int value,
@@ -237,46 +268,39 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }) {
     final theme = Theme.of(context);
     final baseColor = alert
-        ? const Color(0xFFB45309)
+        ? const Color(0xFF16A34A)
         : color ?? theme.colorScheme.onSurfaceVariant;
 
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      decoration: BoxDecoration(
-        color: baseColor.withValues(alpha: alert ? 0.08 : 0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: baseColor.withValues(alpha: 0.24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 15, color: baseColor),
-              const SizedBox(width: 5),
-              Text(
-                '$value',
-                style: TextStyle(
-                  color: baseColor,
-                  fontSize: 13,
+    return Expanded(
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        decoration: BoxDecoration(
+          color: baseColor.withValues(alpha: alert ? 0.14 : 0.06),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: baseColor.withValues(alpha: alert ? 0.34 : 0.16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: baseColor),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                '$label $value',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: alert ? baseColor : theme.colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -296,7 +320,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                   tooltip: 'Limpiar búsqueda',
                   onPressed: _searchController.clear,
                 ),
-          hintText: 'Buscar mensajes...',
+          hintText: 'Buscar nombre, mensaje o canal...',
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -307,7 +331,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Widget _buildFilterStrip(ChatProvider provider) {
     return SizedBox(
-      height: 42,
+      height: 40,
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         scrollDirection: Axis.horizontal,
@@ -337,13 +361,92 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   Widget _buildFilterChip(_MessageFilter filter, String label, int count) {
+    final theme = Theme.of(context);
+    final selected = _filter == filter;
+    final colorScheme = theme.colorScheme;
+    final accentColor = switch (filter) {
+      _MessageFilter.unread => const Color(0xFF16A34A),
+      _MessageFilter.whatsapp => const Color(0xFF047857),
+      _MessageFilter.clients => const Color(0xFF0F4C81),
+      _MessageFilter.team => const Color(0xFF475569),
+      _MessageFilter.all => colorScheme.primary,
+    };
+    final hasSignal = filter == _MessageFilter.unread && count > 0;
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        selected: _filter == filter,
-        label: Text('$label $count'),
-        onSelected: (_) => setState(() => _filter = filter),
-        visualDensity: VisualDensity.compact,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(7),
+        onTap: () => setState(() => _filter = filter),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? accentColor.withValues(alpha: 0.11)
+                : hasSignal
+                    ? accentColor.withValues(alpha: 0.07)
+                    : colorScheme.surface,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: selected
+                  ? accentColor.withValues(alpha: 0.55)
+                  : hasSignal
+                      ? accentColor.withValues(alpha: 0.28)
+                      : colorScheme.outlineVariant,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                Icon(Icons.check, size: 14, color: accentColor),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: selected
+                      ? accentColor
+                      : hasSignal
+                          ? accentColor
+                          : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                constraints: const BoxConstraints(minWidth: 19),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? accentColor.withValues(alpha: 0.16)
+                      : hasSignal
+                          ? accentColor.withValues(alpha: 0.18)
+                          : colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: selected
+                        ? accentColor
+                        : hasSignal
+                            ? accentColor
+                            : colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -367,9 +470,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final conversation = conversations[index];
+          final isPinned = _pinnedConversationIds.contains(conversation.id);
           return ConversationTile(
             conversation: conversation,
             isActive: conversation.id == provider.activeConversationId,
+            isPinned: isPinned,
             isMobile: false,
             subtitle: _subtitle(conversation),
             onTap: () {
@@ -378,6 +483,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                     conversation.id,
                   );
             },
+            onTogglePinned: () => _togglePinnedConversation(conversation.id),
             onDelete: () => _confirmDelete(provider, conversation),
           );
         },
@@ -404,6 +510,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       conversation.title ?? '',
       conversation.creatorName ?? '',
       conversation.channelLabel,
+      conversation.lastMessageContent ?? '',
       _subtitle(conversation),
     ].join(' ').toLowerCase();
 
@@ -411,19 +518,33 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   int _compareConversations(Conversation a, Conversation b) {
-    final unreadCompare = b.unreadCount.compareTo(a.unreadCount);
-    if (unreadCompare != 0) return unreadCompare;
+    final pinCompare = _pinRank(b).compareTo(_pinRank(a));
+    if (pinCompare != 0) return pinCompare;
 
     final pendingCompare = _pendingRank(b).compareTo(_pendingRank(a));
     if (pendingCompare != 0) return pendingCompare;
 
+    final unreadCompare = _unreadRank(b).compareTo(_unreadRank(a));
+    if (unreadCompare != 0) return unreadCompare;
+
     final aDate = a.lastMessageAt ?? a.updatedAt;
     final bDate = b.lastMessageAt ?? b.updatedAt;
-    return bDate.compareTo(aDate);
+    final dateCompare = bDate.compareTo(aDate);
+    if (dateCompare != 0) return dateCompare;
+
+    return b.unreadCount.compareTo(a.unreadCount);
   }
 
   int _pendingRank(Conversation conversation) {
     return conversation.isSupport && conversation.status == 'pending' ? 1 : 0;
+  }
+
+  int _unreadRank(Conversation conversation) {
+    return conversation.unreadCount > 0 ? 1 : 0;
+  }
+
+  int _pinRank(Conversation conversation) {
+    return _pinnedConversationIds.contains(conversation.id) ? 1 : 0;
   }
 
   String _subtitle(Conversation conversation) {

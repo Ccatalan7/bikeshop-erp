@@ -45,6 +45,9 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   double _expandedWidth = _defaultExpandedWidth;
   RealtimeChannel? _realtimeChannel;
 
+  int get _unreadCount =>
+      _conversations.fold<int>(0, (sum, item) => sum + item.unreadCount);
+
   void _safeSetState(VoidCallback update) {
     if (!mounted) return;
 
@@ -540,6 +543,12 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
   }
 
   Widget _buildCollapsedBar(ThemeData theme) {
+    final unreadCount = _unreadCount;
+    final badgeCount = unreadCount > 0 ? unreadCount : _conversations.length;
+    final badgeColor = unreadCount > 0
+        ? const Color(0xFF16A34A)
+        : theme.colorScheme.onSurfaceVariant;
+
     return InkWell(
       onTap: () => _safeSetState(() => _isExpanded = true),
       child: Column(
@@ -554,16 +563,27 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
               style: theme.textTheme.labelMedium,
             ),
           ),
-          if (_conversations.isNotEmpty) ...[
+          if (badgeCount > 0) ...[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                shape: BoxShape.circle,
+                color: badgeColor,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: unreadCount > 0
+                    ? [
+                        BoxShadow(
+                          color: badgeColor.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
               child: Text(
-                '${_conversations.length}',
+                badgeCount > 99 ? '99+' : '$badgeCount',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
@@ -659,16 +679,28 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
             itemBuilder: (context, index) {
               final conv = _conversations[index];
               final isDeleting = _deletingConversationIds.contains(conv.id);
+              final hasUnread = conv.unreadCount > 0;
               return ListTile(
+                tileColor: hasUnread
+                    ? const Color(0xFF16A34A).withValues(alpha: 0.07)
+                    : null,
                 leading: CircleAvatar(
-                  backgroundColor: theme.colorScheme.primaryContainer,
+                  backgroundColor: hasUnread
+                      ? const Color(0xFF16A34A).withValues(alpha: 0.14)
+                      : theme.colorScheme.primaryContainer,
                   child: Icon(_channelIcon(conv),
-                      size: 18, color: theme.colorScheme.primary),
+                      size: 18,
+                      color: hasUnread
+                          ? const Color(0xFF16A34A)
+                          : theme.colorScheme.primary),
                 ),
                 title: Text(
                   conv.title ?? 'Sin título',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w600,
+                  ),
                 ),
                 subtitle: Text(
                   conv.channelLabel,
@@ -681,8 +713,8 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                       Container(
                         margin: const EdgeInsets.only(right: 2),
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF16A34A),
                           shape: BoxShape.circle,
                         ),
                         child: Text(
@@ -709,7 +741,11 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
                     ),
                   ],
                 ),
-                onTap: () => _safeSetState(() => _activeConversation = conv),
+                onTap: () => _safeSetState(() {
+                  final opened = _copyConversationWithUnread(conv, 0);
+                  _conversations[index] = opened;
+                  _activeConversation = opened;
+                }),
               );
             },
           ),
@@ -777,5 +813,32 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     if (conversation.isWhatsApp) return Icons.phone_in_talk_outlined;
     if (conversation.isWebsitePortal) return Icons.language_outlined;
     return Icons.chat_bubble_outline;
+  }
+
+  Conversation _copyConversationWithUnread(
+    Conversation conversation,
+    int unreadCount,
+  ) {
+    return Conversation(
+      id: conversation.id,
+      type: conversation.type,
+      channel: conversation.channel,
+      status: conversation.status,
+      title: conversation.title,
+      contextType: conversation.contextType,
+      contextId: conversation.contextId,
+      updatedAt: conversation.updatedAt,
+      lastMessageAt: conversation.lastMessageAt,
+      lastMessageContent: conversation.lastMessageContent,
+      lastMessageType: conversation.lastMessageType,
+      lastMessageMetadata: conversation.lastMessageMetadata,
+      lastMessageIsMine: conversation.lastMessageIsMine,
+      lastMessageDirection: conversation.lastMessageDirection,
+      lastMessageExternalStatus: conversation.lastMessageExternalStatus,
+      unreadCount: unreadCount,
+      participantIds: conversation.participantIds,
+      createdBy: conversation.createdBy,
+      creatorName: conversation.creatorName,
+    );
   }
 }

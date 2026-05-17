@@ -361,7 +361,7 @@ function buildGraphPayload(request: SendRequest, to: string, mediaId?: string) {
   if (request.type === 'text') {
     payload.text = {
       body: request.text ?? '',
-      preview_url: false,
+      preview_url: /https?:\/\//i.test(request.text ?? ''),
     }
     return payload
   }

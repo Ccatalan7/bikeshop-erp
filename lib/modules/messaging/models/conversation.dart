@@ -8,6 +8,12 @@ class Conversation {
   final String? contextId;
   final DateTime updatedAt;
   final DateTime? lastMessageAt;
+  final String? lastMessageContent;
+  final String? lastMessageType;
+  final Map<String, dynamic> lastMessageMetadata;
+  final bool lastMessageIsMine;
+  final String? lastMessageDirection;
+  final String? lastMessageExternalStatus;
   final int unreadCount; // Computed client-side or via view
   final List<String> participantIds;
   final String? createdBy; // Customer who created the request
@@ -23,6 +29,12 @@ class Conversation {
     this.contextId,
     required this.updatedAt,
     this.lastMessageAt,
+    this.lastMessageContent,
+    this.lastMessageType,
+    this.lastMessageMetadata = const {},
+    this.lastMessageIsMine = false,
+    this.lastMessageDirection,
+    this.lastMessageExternalStatus,
     this.unreadCount = 0,
     required this.participantIds,
     this.createdBy,
@@ -105,6 +117,16 @@ class Conversation {
       lastMessageAt: json['last_message_at'] != null
           ? DateTime.parse(json['last_message_at'])
           : null,
+      lastMessageContent: json['last_message_content']?.toString(),
+      lastMessageType: json['last_message_type']?.toString(),
+      lastMessageMetadata: Map<String, dynamic>.from(
+        (json['last_message_metadata'] as Map?)?.cast<String, dynamic>() ??
+            const {},
+      ),
+      lastMessageIsMine: json['last_message_is_mine'] == true,
+      lastMessageDirection: json['last_message_direction']?.toString(),
+      lastMessageExternalStatus:
+          json['last_message_external_status']?.toString(),
       unreadCount: json['unread_count'] ?? 0,
       participantIds: pIds,
       createdBy: json['created_by'],

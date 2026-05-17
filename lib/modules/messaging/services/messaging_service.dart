@@ -188,8 +188,15 @@ class MessagingService {
 
     final Map<String, int> unreadMap = {};
     for (var row in unreadResponse) {
-      unreadMap[row['conversation_id']] = row['unread_count'] ?? 0;
+      final conversationId = row['conversation_id']?.toString();
+      if (conversationId == null) continue;
+      unreadMap[conversationId] = row['unread_count'] ?? 0;
     }
+
+    final conversationIds =
+        data.map((json) => json['id']?.toString()).whereType<String>().toSet();
+    final latestMessages =
+        await _fetchLatestMessagesForConversations(conversationIds);
 
     // Collect support conversation IDs and creator IDs to fetch customer names
     // and WhatsApp contact names in batch.
@@ -248,9 +255,33 @@ class MessagingService {
     }
 
     return data.map((json) {
-      // Inject unread count and creator name into json before parsing
-      json['unread_count'] = unreadMap[json['id']] ?? 0;
+      // Inject unread count and creator name into json before parsing.
       final conversationId = json['id']?.toString();
+      final latestMessage =
+          conversationId == null ? null : latestMessages[conversationId];
+      final participates = _currentUserParticipates(json, userId);
+      final serverUnreadCount =
+          conversationId == null ? 0 : unreadMap[conversationId] ?? 0;
+      json['unread_count'] = serverUnreadCount > 0
+          ? serverUnreadCount
+          : _needsSharedInboxUnreadHint(
+              conversation: json,
+              latestMessage: latestMessage,
+              userId: userId,
+              currentUserParticipates: participates,
+            )
+              ? 1
+              : 0;
+      if (latestMessage != null) {
+        final lastMessage = latestMessage;
+        json['last_message_content'] = lastMessage['content'];
+        json['last_message_type'] = lastMessage['type'];
+        json['last_message_metadata'] = lastMessage['metadata'];
+        json['last_message_direction'] = lastMessage['message_direction'];
+        json['last_message_external_status'] = lastMessage['external_status'];
+        json['last_message_is_mine'] =
+            lastMessage['sender_id']?.toString() == userId;
+      }
       final createdBy = json['created_by'];
       if (conversationId != null &&
           whatsappContactNames.containsKey(conversationId)) {
@@ -260,6 +291,82 @@ class MessagingService {
       }
       return Conversation.fromJson(json);
     }).toList();
+  }
+
+  Future<Map<String, Map<String, dynamic>>>
+      _fetchLatestMessagesForConversations(
+    Set<String> conversationIds,
+  ) async {
+    if (conversationIds.isEmpty) return {};
+
+    try {
+      final limit = (conversationIds.length * 8).clamp(50, 500).toInt();
+      final rows = await _client
+          .from('messages')
+          .select(
+            'id, conversation_id, content, type, sender_id, created_at, metadata, message_direction, external_status',
+          )
+          .inFilter('conversation_id', conversationIds.toList())
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      final latestByConversation = <String, Map<String, dynamic>>{};
+      for (final row in rows) {
+        final message = Map<String, dynamic>.from(row as Map);
+        final conversationId = message['conversation_id']?.toString();
+        if (conversationId == null) continue;
+        latestByConversation.putIfAbsent(conversationId, () => message);
+      }
+
+      return latestByConversation;
+    } catch (e) {
+      debugPrint('⚠️ Error fetching latest message previews: $e');
+      return {};
+    }
+  }
+
+  bool _currentUserParticipates(dynamic conversation, String userId) {
+    final participants = conversation['conversation_participants'];
+    if (participants is! List) return false;
+
+    return participants.any(
+      (participant) => participant['user_id']?.toString() == userId,
+    );
+  }
+
+  bool _needsSharedInboxUnreadHint({
+    required dynamic conversation,
+    required Map<String, dynamic>? latestMessage,
+    required String userId,
+    required bool currentUserParticipates,
+  }) {
+    if (latestMessage == null || currentUserParticipates) return false;
+    if (conversation['type']?.toString() != 'support') return false;
+
+    final status = conversation['status']?.toString();
+    if (status == 'resolved' || status == 'rejected') return false;
+
+    final messageType = latestMessage['type']?.toString();
+    if (messageType == 'system') return false;
+
+    final senderId = latestMessage['sender_id']?.toString();
+    if (senderId == userId) return false;
+
+    final direction = latestMessage['message_direction']?.toString();
+    if (direction == 'outbound') return false;
+
+    final createdAt = DateTime.tryParse(
+      latestMessage['created_at']?.toString() ?? '',
+    );
+    if (createdAt == null) return false;
+    if (DateTime.now().difference(createdAt.toLocal()) >
+        const Duration(days: 7)) {
+      return false;
+    }
+
+    // Shared WhatsApp/web support threads may not have a staff participant row
+    // yet. Until the current user opens the chat, show one clear unread hint.
+    return direction == 'inbound' || senderId == null || senderId.isNotEmpty;
   }
 
   /// Fetch all conversations linked to a specific customer (via conversation_contexts)
@@ -352,6 +459,11 @@ class MessagingService {
   Future<void> markAsRead(String conversationId) async {
     final userId = currentUserId;
     if (userId == null) return;
+
+    await _addCurrentUserAsParticipant(
+      conversationId: conversationId,
+      userId: userId,
+    );
 
     await _client.rpc('mark_conversation_read', params: {
       'p_conversation_id': conversationId,

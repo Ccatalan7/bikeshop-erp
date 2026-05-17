@@ -378,6 +378,10 @@ verify_jwt = false
 # Zoho redirects the browser back here without a Supabase Authorization header.
 verify_jwt = false
 
+[functions.push-notification]
+# Database webhooks call this function without a user Supabase JWT.
+verify_jwt = false
+
 [functions.whatsapp-send]
 # The send function decodes the Supabase JWT after gateway verification to avoid
 # an extra Auth API round trip on every message send.
