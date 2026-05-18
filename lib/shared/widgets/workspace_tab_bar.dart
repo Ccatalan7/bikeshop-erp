@@ -810,6 +810,20 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
           ),
         ),
         const PopupMenuItem(
+          value: {
+            'title': 'Navegador web',
+            'route':
+                '/tools/web?url=https%3A%2F%2Fwww.google.com&name=Navegador%20web',
+          },
+          child: Row(
+            children: [
+              Icon(Icons.language, size: 18),
+              SizedBox(width: 12),
+              Text('Navegador web'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
           value: {'title': 'Productos', 'route': '/inventory/products'},
           child: Row(
             children: [

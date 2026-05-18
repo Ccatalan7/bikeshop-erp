@@ -60,7 +60,6 @@ class WindowZoomScope extends StatelessWidget {
     }
 
     final zoomService = context.watch<WindowZoomService>();
-
     return Focus(
       autofocus: true,
       child: Shortcuts(
@@ -114,7 +113,7 @@ class _ZoomContent extends StatelessWidget {
         // Calculate the scaled dimensions
         final scaledWidth = constraints.maxWidth / scale;
         final scaledHeight = constraints.maxHeight / scale;
-        
+
         return ClipRect(
           child: OverflowBox(
             alignment: Alignment.topLeft,

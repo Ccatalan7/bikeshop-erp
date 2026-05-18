@@ -47,7 +47,23 @@ String inferWorkspaceModuleRoot(String route) {
 /// Maps route paths to human-readable titles for workspace tabs
 String getRouteTitle(String path) {
   // Remove query parameters and clean the path
-  final cleanPath = path.split('?').first;
+  final uri = Uri.tryParse(path);
+  final cleanPath = uri?.path ?? path.split('?').first;
+
+  if (cleanPath == '/tools/web') {
+    final webName = uri?.queryParameters['name']?.trim();
+    if (webName != null && webName.isNotEmpty) return webName;
+
+    final webUrl = uri?.queryParameters['url']?.trim();
+    if (webUrl != null && webUrl.isNotEmpty) {
+      final parsedWebUrl = Uri.tryParse(webUrl);
+      if (parsedWebUrl?.host.isNotEmpty == true) {
+        return parsedWebUrl!.host;
+      }
+    }
+
+    return 'Navegador web';
+  }
 
   // Route to title mappings
   final Map<String, String> routeTitles = {

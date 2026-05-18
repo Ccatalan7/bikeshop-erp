@@ -2625,7 +2625,7 @@ class AppRouter {
           pageBuilder: (context, state) {
             final url =
                 state.uri.queryParameters['url'] ?? 'https://www.google.com';
-            final name = state.uri.queryParameters['name'] ?? 'Web Tool';
+            final name = state.uri.queryParameters['name'] ?? 'Navegador web';
             return _buildDeferredPageWithNoTransition(
               context,
               state,
