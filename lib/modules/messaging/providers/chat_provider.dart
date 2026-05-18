@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../models/conversation.dart';
@@ -30,7 +31,12 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
   final Map<String, int> _conversationOpeningUnreadCounts = {};
+  final Map<String, DateTime> _lastReadSyncByConversation = {};
+  final Set<String> _recentIncomingNotificationKeys = {};
+  final List<String> _recentIncomingNotificationKeyOrder = [];
   bool _isLoading = false;
+  bool _isLoadingConversations = false;
+  bool _hasPendingConversationRefresh = false;
   String? _activeConversationId;
 
   // Subscriptions
@@ -38,6 +44,7 @@ class ChatProvider extends ChangeNotifier {
   RealtimeChannel? _conversationsSubscription;
   StreamSubscription? _notificationSubscription;
   Timer? _conversationsRefreshTimer;
+  Timer? _conversationsFollowUpRefreshTimer;
   Timer? _messagesRetryTimer;
   int _messagesRetryAttempt = 0;
   static const int _maxMessageStreamRetryAttempts = 4;
@@ -127,6 +134,18 @@ class ChatProvider extends ChangeNotifier {
     final compact = content.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (compact.length <= 48) return compact;
     return '${compact.substring(0, 48)}...';
+  }
+
+  String? _textValue(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text == 'null') return null;
+    return text;
+  }
+
+  DateTime? _dateValue(dynamic value) {
+    final text = _textValue(value);
+    if (text == null) return null;
+    return DateTime.tryParse(text)?.toLocal();
   }
 
   void _debugLogWhatsAppStatusChanges(List<Message> nextMessages) {
@@ -226,24 +245,190 @@ class ChatProvider extends ChangeNotifier {
     loadConversations(); // Initial load
 
     _conversationsSubscription = _service.subscribeToConversationsUpdates(() {
-      // Refresh immediately for fast list reordering, then once more after the
-      // unread-count view has caught up to the message/conversation triggers.
-      loadConversations();
-      _scheduleConversationRefresh();
+      _scheduleConversationRefresh(const Duration(milliseconds: 80));
+      _scheduleConversationFollowUpRefresh();
     });
 
     // Also listen to NotificationService for realtime alerts (triggers badge update)
     _notificationSubscription = NotificationService().onMessageReceived.listen(
-      (_) {
-        _scheduleConversationRefresh();
+      (message) {
+        applyIncomingNotification(message);
       },
     );
   }
 
-  void _scheduleConversationRefresh() {
+  void applyIncomingNotification(RemoteMessage message) {
+    final data = message.data;
+    if (_isNonChatNotification(data)) return;
+
+    final conversationId = _textValue(data['conversation_id']) ??
+        _textValue(data['chat_id']) ??
+        _conversationIdFromRoute(_textValue(data['route']));
+
+    if (conversationId == null) {
+      _scheduleConversationRefresh(const Duration(milliseconds: 80));
+      _scheduleConversationFollowUpRefresh();
+      return;
+    }
+
+    final content = _textValue(data['content']) ??
+        _textValue(data['body']) ??
+        message.notification?.body ??
+        '';
+    final createdAt = _dateValue(data['created_at']) ?? DateTime.now();
+    final notificationKey = _incomingNotificationKey(
+      message: message,
+      data: data,
+      conversationId: conversationId,
+      content: content,
+      createdAt: createdAt,
+    );
+
+    if (!_rememberIncomingNotificationKey(notificationKey)) {
+      return;
+    }
+
+    final updated = _applyIncomingMessagePreview(
+      conversationId: conversationId,
+      content: content,
+      messageType: _textValue(data['type']) ?? 'text',
+      senderId: _textValue(data['sender_id']),
+      direction: _textValue(data['message_direction']),
+      externalStatus: _textValue(data['external_status']),
+      createdAt: createdAt,
+    );
+
+    if (updated) {
+      _scheduleConversationRefresh(const Duration(milliseconds: 900));
+    } else {
+      _scheduleConversationRefresh(const Duration(milliseconds: 80));
+    }
+    _scheduleConversationFollowUpRefresh();
+  }
+
+  bool _isNonChatNotification(Map<String, dynamic> data) {
+    final notificationType = _textValue(data['notification_type']);
+    final type = _textValue(data['type']);
+    final route = _textValue(data['route']);
+    return notificationType == 'mail' || type == 'mail' || route == '/mail';
+  }
+
+  String? _conversationIdFromRoute(String? route) {
+    if (route == null || route.isEmpty) return null;
+    final uri = Uri.tryParse(route);
+    return uri?.queryParameters['conversation'];
+  }
+
+  String _incomingNotificationKey({
+    required RemoteMessage message,
+    required Map<String, dynamic> data,
+    required String conversationId,
+    required String content,
+    required DateTime createdAt,
+  }) {
+    final explicitId = message.messageId ??
+        _textValue(data['id']) ??
+        _textValue(data['message_id']);
+    if (explicitId != null && explicitId.isNotEmpty) return explicitId;
+    return [
+      conversationId,
+      _textValue(data['sender_id']) ?? '',
+      createdAt.toIso8601String(),
+      content,
+    ].join('|');
+  }
+
+  bool _rememberIncomingNotificationKey(String key) {
+    if (!_recentIncomingNotificationKeys.add(key)) return false;
+    _recentIncomingNotificationKeyOrder.add(key);
+    while (_recentIncomingNotificationKeyOrder.length > 80) {
+      final oldest = _recentIncomingNotificationKeyOrder.removeAt(0);
+      _recentIncomingNotificationKeys.remove(oldest);
+    }
+    return true;
+  }
+
+  bool _applyIncomingMessagePreview({
+    required String conversationId,
+    required String content,
+    required String messageType,
+    required String? senderId,
+    required String? direction,
+    required String? externalStatus,
+    required DateTime createdAt,
+  }) {
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index == -1) return false;
+
+    final old = _conversations[index];
+    final isCurrentUserSender =
+        senderId != null && senderId == _service.currentUserId;
+    final isIncoming = messageType != 'system' &&
+        direction != 'outbound' &&
+        !isCurrentUserSender;
+    final shouldIncrementUnread =
+        isIncoming && _activeConversationId != conversationId;
+    final nextUnreadCount =
+        shouldIncrementUnread ? old.unreadCount + 1 : old.unreadCount;
+    final nextDirection = direction ??
+        (isCurrentUserSender
+            ? 'outbound'
+            : old.isSupport
+                ? 'inbound'
+                : null);
+
+    _conversations[index] = Conversation(
+      id: old.id,
+      type: old.type,
+      channel: old.channel,
+      status: old.status,
+      title: old.title,
+      contextType: old.contextType,
+      contextId: old.contextId,
+      updatedAt: createdAt,
+      lastMessageAt: createdAt,
+      staffLastReadAt: old.staffLastReadAt,
+      lastMessageContent: content.isNotEmpty ? content : old.lastMessageContent,
+      lastMessageType: messageType,
+      lastMessageMetadata: old.lastMessageMetadata,
+      lastMessageIsMine: isCurrentUserSender,
+      lastMessageDirection: nextDirection,
+      lastMessageExternalStatus:
+          externalStatus ?? old.lastMessageExternalStatus,
+      unreadCount: nextUnreadCount,
+      participantIds: old.participantIds,
+      createdBy: old.createdBy,
+      creatorName: old.creatorName,
+      contextHint: old.contextHint,
+    );
+
+    _sortConversationsByRecentActivity();
+    notifyListeners();
+    return true;
+  }
+
+  void _sortConversationsByRecentActivity() {
+    _conversations.sort((a, b) {
+      final aDate = a.lastMessageAt ?? a.updatedAt;
+      final bDate = b.lastMessageAt ?? b.updatedAt;
+      return bDate.compareTo(aDate);
+    });
+  }
+
+  void _scheduleConversationRefresh([
+    Duration delay = const Duration(milliseconds: 120),
+  ]) {
     _conversationsRefreshTimer?.cancel();
     _conversationsRefreshTimer = Timer(
-      const Duration(milliseconds: 500),
+      delay,
+      loadConversations,
+    );
+  }
+
+  void _scheduleConversationFollowUpRefresh() {
+    _conversationsFollowUpRefreshTimer?.cancel();
+    _conversationsFollowUpRefreshTimer = Timer(
+      const Duration(milliseconds: 700),
       loadConversations,
     );
   }
@@ -326,6 +511,12 @@ class ChatProvider extends ChangeNotifier {
   /// Load conversations list
   Future<void> loadConversations({String? type}) async {
     // Don't set global loading here to avoid screen flickering on updates
+    if (_isLoadingConversations) {
+      _hasPendingConversationRefresh = true;
+      return;
+    }
+
+    _isLoadingConversations = true;
     try {
       final newConversations = await _service.getConversations(type: type);
       _conversations = newConversations;
@@ -335,6 +526,12 @@ class ChatProvider extends ChangeNotifier {
       if (_userCache.isEmpty) await _loadUserCache();
     } catch (e) {
       debugPrint('❌ Error loading conversations: $e');
+    } finally {
+      _isLoadingConversations = false;
+      if (_hasPendingConversationRefresh) {
+        _hasPendingConversationRefresh = false;
+        _scheduleConversationRefresh(const Duration(milliseconds: 80));
+      }
     }
   }
 
@@ -367,6 +564,7 @@ class ChatProvider extends ChangeNotifier {
         contextType: old.contextType,
         contextId: old.contextId,
         lastMessageAt: old.lastMessageAt,
+        staffLastReadAt: old.staffLastReadAt,
         lastMessageContent: old.lastMessageContent,
         lastMessageType: old.lastMessageType,
         lastMessageMetadata: old.lastMessageMetadata,
@@ -427,6 +625,7 @@ class ChatProvider extends ChangeNotifier {
           _pruneConfirmedOptimisticMessages(messages);
           _activeMessages = messages;
           _isLoading = false;
+          _markActiveConversationReadIfNeeded(conversationId, messages);
           notifyListeners();
         },
         onError: (error) {
@@ -436,6 +635,33 @@ class ChatProvider extends ChangeNotifier {
     } catch (error) {
       _handleMessageStreamError(conversationId, error);
     }
+  }
+
+  void _markActiveConversationReadIfNeeded(
+    String conversationId,
+    List<Message> messages,
+  ) {
+    if (_activeConversationId != conversationId || messages.isEmpty) return;
+
+    final latestVisibleMessageAt =
+        _latestVisibleMessageFromAnotherSender(messages);
+    if (latestVisibleMessageAt == null) return;
+
+    final lastSync = _lastReadSyncByConversation[conversationId];
+    if (lastSync != null && !latestVisibleMessageAt.isAfter(lastSync)) {
+      return;
+    }
+
+    _markConversationReadAndRefresh(conversationId, refreshAfter: false);
+  }
+
+  DateTime? _latestVisibleMessageFromAnotherSender(List<Message> messages) {
+    for (var index = messages.length - 1; index >= 0; index--) {
+      final message = messages[index];
+      if (message.type == 'system' || message.isMe) continue;
+      return message.createdAt;
+    }
+    return null;
   }
 
   void _handleMessageStreamError(String conversationId, Object error) {
@@ -475,12 +701,25 @@ class ChatProvider extends ChangeNotifier {
     };
   }
 
-  void _markConversationReadAndRefresh(String conversationId) {
+  void _markConversationReadAndRefresh(
+    String conversationId, {
+    bool refreshAfter = true,
+  }) {
+    final syncStartedAt = DateTime.now();
+    _lastReadSyncByConversation[conversationId] = syncStartedAt;
+
     _service.markAsRead(conversationId).then((_) {
       if (_activeConversationId == conversationId) {
-        loadConversations();
+        if (refreshAfter) {
+          loadConversations();
+        } else {
+          _scheduleConversationRefresh(const Duration(milliseconds: 120));
+        }
       }
     }).catchError((error) {
+      if (_lastReadSyncByConversation[conversationId] == syncStartedAt) {
+        _lastReadSyncByConversation.remove(conversationId);
+      }
       debugPrint('⚠️ Error marking conversation as read: $error');
     });
   }
@@ -808,6 +1047,7 @@ class ChatProvider extends ChangeNotifier {
   @override
   void dispose() {
     _conversationsRefreshTimer?.cancel();
+    _conversationsFollowUpRefreshTimer?.cancel();
     _messagesRetryTimer?.cancel();
     _messagesSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();

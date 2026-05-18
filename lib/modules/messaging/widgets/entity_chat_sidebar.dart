@@ -829,6 +829,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       contextId: conversation.contextId,
       updatedAt: conversation.updatedAt,
       lastMessageAt: conversation.lastMessageAt,
+      staffLastReadAt: conversation.staffLastReadAt,
       lastMessageContent: conversation.lastMessageContent,
       lastMessageType: conversation.lastMessageType,
       lastMessageMetadata: conversation.lastMessageMetadata,
@@ -839,6 +840,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       participantIds: conversation.participantIds,
       createdBy: conversation.createdBy,
       creatorName: conversation.creatorName,
+      contextHint: conversation.contextHint,
     );
   }
 }

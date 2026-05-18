@@ -1069,9 +1069,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         return;
       }
 
-      // FORCE ChatProvider refresh to ensure badge updates immediately
-      // This covers cases where ChatProvider's internal listener might have missed it
-      context.read<ChatProvider>().loadConversations();
+      context.read<ChatProvider>().applyIncomingNotification(message);
 
       final notification = message.notification;
       final title = notification?.title ?? 'Nuevo Mensaje';

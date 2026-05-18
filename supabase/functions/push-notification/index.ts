@@ -174,6 +174,8 @@ Deno.serve(async (req) => {
                         // DATA-ONLY payload - prevents FCM auto-display, lets our code handle it
                         // This prevents duplicate notifications on web
                         data: {
+                            id: record.id,
+                            message_id: record.id,
                             conversation_id: record.conversation_id,
                             sender_id: senderIdForPayload,
                             sender_name: senderName,
@@ -181,6 +183,9 @@ Deno.serve(async (req) => {
                             body: messageBody,
                             type: messageTypeForPayload,
                             content: contentForPayload,
+                            created_at: record.created_at,
+                            message_direction: record.message_direction ?? '',
+                            external_provider: record.external_provider ?? '',
                             route: `/chat?conversation=${record.conversation_id}`,
                             click_action: 'FLUTTER_NOTIFICATION_CLICK',
                         },

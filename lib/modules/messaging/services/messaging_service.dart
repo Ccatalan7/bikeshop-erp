@@ -973,6 +973,12 @@ class MessagingService {
       latestMessage['created_at']?.toString() ?? '',
     );
     if (createdAt == null) return false;
+
+    final staffLastReadAt = _dateValue(conversation['staff_last_read_at']);
+    if (staffLastReadAt != null && !createdAt.isAfter(staffLastReadAt)) {
+      return false;
+    }
+
     if (DateTime.now().difference(createdAt.toLocal()) >
         const Duration(days: 7)) {
       return false;
@@ -1413,25 +1419,31 @@ class MessagingService {
     }
   }
 
-  /// Listen for ANY changes to the conversations table (for list re-fetch)
+  /// Listen for messaging changes that can affect inbox order or unread badges.
   RealtimeChannel subscribeToConversationsUpdates(VoidCallback onUpdate) {
-    // We listen to the global 'conversations' table changes
-    // Ideally, we would filter by 'participant', but Supabase Realtime filters are limited on joins.
-    // So we listen to ALL 'conversations' changes, and the client will re-fetch.
-    // Optimization: Listen to specific IDs if list is small, or just accept the overhead for now.
-    // Better: Filter where 'id' is in the user's conversation list? Hard to maintain.
-    // Simplest robust solution: Listen to 'conversations' table.
+    final channelName =
+        'public:messaging-inbox-${DateTime.now().microsecondsSinceEpoch}';
+    void handleChange(PostgresChangePayload payload) => onUpdate();
+
     return _client
-        .channel('public:conversations')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'conversations',
-          callback: (payload) {
-            // Trigger update regardless of payload for simplicity,
-            // the Provider will re-fetch the user's specific list.
-            onUpdate();
-          },
+          callback: handleChange,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversation_participants',
+          callback: handleChange,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'messages',
+          callback: handleChange,
         )
         .subscribe();
   }

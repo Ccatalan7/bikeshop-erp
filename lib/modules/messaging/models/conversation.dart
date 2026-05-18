@@ -10,6 +10,7 @@ class Conversation {
   final String? contextId;
   final DateTime updatedAt;
   final DateTime? lastMessageAt;
+  final DateTime? staffLastReadAt;
   final String? lastMessageContent;
   final String? lastMessageType;
   final Map<String, dynamic> lastMessageMetadata;
@@ -32,6 +33,7 @@ class Conversation {
     this.contextId,
     required this.updatedAt,
     this.lastMessageAt,
+    this.staffLastReadAt,
     this.lastMessageContent,
     this.lastMessageType,
     this.lastMessageMetadata = const {},
@@ -145,6 +147,9 @@ class Conversation {
       updatedAt: DateTime.parse(json['updated_at']),
       lastMessageAt: json['last_message_at'] != null
           ? DateTime.parse(json['last_message_at'])
+          : null,
+      staffLastReadAt: json['staff_last_read_at'] != null
+          ? DateTime.parse(json['staff_last_read_at'])
           : null,
       lastMessageContent: json['last_message_content']?.toString(),
       lastMessageType: json['last_message_type']?.toString(),
