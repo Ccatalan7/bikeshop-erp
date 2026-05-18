@@ -120,7 +120,10 @@ class _CalculatorPanelState extends State<CalculatorPanel> {
       return value.toInt().toString();
     }
     // Limit to 10 decimal places and strip trailing zeros
-    return value.toStringAsFixed(10).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return value
+        .toStringAsFixed(10)
+        .replaceAll(RegExp(r'0+$'), '')
+        .replaceAll(RegExp(r'\.$'), '');
   }
 
   @override
@@ -128,14 +131,15 @@ class _CalculatorPanelState extends State<CalculatorPanel> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final bgColor = isDark ? const Color(0xFF252525) : const Color(0xFFF8F9FA);
     final displayBg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
     final buttonBg = isDark ? const Color(0xFF2E2E2E) : Colors.white;
-    final operatorBg = isDark ? const Color(0xFF1976D2) : const Color(0xFF1976D2);
-    final functionBg = isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE0E0E0);
+    final operatorBg =
+        isDark ? const Color(0xFF1976D2) : const Color(0xFF1976D2);
+    final functionBg =
+        isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE0E0E0);
 
-    return Container(
-      color: bgColor,
+    return ColoredBox(
+      color: Colors.transparent,
       child: Column(
         children: [
           // Display area
@@ -181,38 +185,76 @@ class _CalculatorPanelState extends State<CalculatorPanel> {
                 children: [
                   // Row 1: C, ±, %, ÷
                   _buildRow([
-                    _CalcButton('C', onTap: _onClear, bgColor: functionBg, textColor: isDark ? Colors.white70 : Colors.black87),
-                    _CalcButton('±', onTap: _onToggleSign, bgColor: functionBg, textColor: isDark ? Colors.white70 : Colors.black87),
-                    _CalcButton('%', onTap: _onPercent, bgColor: functionBg, textColor: isDark ? Colors.white70 : Colors.black87),
-                    _CalcButton('÷', onTap: () => _onOperator('÷'), bgColor: operatorBg, textColor: Colors.white),
+                    _CalcButton('C',
+                        onTap: _onClear,
+                        bgColor: functionBg,
+                        textColor: isDark ? Colors.white70 : Colors.black87),
+                    _CalcButton('±',
+                        onTap: _onToggleSign,
+                        bgColor: functionBg,
+                        textColor: isDark ? Colors.white70 : Colors.black87),
+                    _CalcButton('%',
+                        onTap: _onPercent,
+                        bgColor: functionBg,
+                        textColor: isDark ? Colors.white70 : Colors.black87),
+                    _CalcButton('÷',
+                        onTap: () => _onOperator('÷'),
+                        bgColor: operatorBg,
+                        textColor: Colors.white),
                   ]),
                   // Row 2: 7, 8, 9, ×
                   _buildRow([
-                    _CalcButton('7', onTap: () => _onDigit('7'), bgColor: buttonBg),
-                    _CalcButton('8', onTap: () => _onDigit('8'), bgColor: buttonBg),
-                    _CalcButton('9', onTap: () => _onDigit('9'), bgColor: buttonBg),
-                    _CalcButton('×', onTap: () => _onOperator('×'), bgColor: operatorBg, textColor: Colors.white),
+                    _CalcButton('7',
+                        onTap: () => _onDigit('7'), bgColor: buttonBg),
+                    _CalcButton('8',
+                        onTap: () => _onDigit('8'), bgColor: buttonBg),
+                    _CalcButton('9',
+                        onTap: () => _onDigit('9'), bgColor: buttonBg),
+                    _CalcButton('×',
+                        onTap: () => _onOperator('×'),
+                        bgColor: operatorBg,
+                        textColor: Colors.white),
                   ]),
                   // Row 3: 4, 5, 6, −
                   _buildRow([
-                    _CalcButton('4', onTap: () => _onDigit('4'), bgColor: buttonBg),
-                    _CalcButton('5', onTap: () => _onDigit('5'), bgColor: buttonBg),
-                    _CalcButton('6', onTap: () => _onDigit('6'), bgColor: buttonBg),
-                    _CalcButton('−', onTap: () => _onOperator('−'), bgColor: operatorBg, textColor: Colors.white),
+                    _CalcButton('4',
+                        onTap: () => _onDigit('4'), bgColor: buttonBg),
+                    _CalcButton('5',
+                        onTap: () => _onDigit('5'), bgColor: buttonBg),
+                    _CalcButton('6',
+                        onTap: () => _onDigit('6'), bgColor: buttonBg),
+                    _CalcButton('−',
+                        onTap: () => _onOperator('−'),
+                        bgColor: operatorBg,
+                        textColor: Colors.white),
                   ]),
                   // Row 4: 1, 2, 3, +
                   _buildRow([
-                    _CalcButton('1', onTap: () => _onDigit('1'), bgColor: buttonBg),
-                    _CalcButton('2', onTap: () => _onDigit('2'), bgColor: buttonBg),
-                    _CalcButton('3', onTap: () => _onDigit('3'), bgColor: buttonBg),
-                    _CalcButton('+', onTap: () => _onOperator('+'), bgColor: operatorBg, textColor: Colors.white),
+                    _CalcButton('1',
+                        onTap: () => _onDigit('1'), bgColor: buttonBg),
+                    _CalcButton('2',
+                        onTap: () => _onDigit('2'), bgColor: buttonBg),
+                    _CalcButton('3',
+                        onTap: () => _onDigit('3'), bgColor: buttonBg),
+                    _CalcButton('+',
+                        onTap: () => _onOperator('+'),
+                        bgColor: operatorBg,
+                        textColor: Colors.white),
                   ]),
                   // Row 5: ⌫, 0, ., =
                   _buildRow([
-                    _CalcButton('⌫', onTap: _onBackspace, bgColor: functionBg, textColor: isDark ? Colors.white70 : Colors.black87, fontSize: 18),
-                    _CalcButton('0', onTap: () => _onDigit('0'), bgColor: buttonBg),
+                    _CalcButton('⌫',
+                        onTap: _onBackspace,
+                        bgColor: functionBg,
+                        textColor: isDark ? Colors.white70 : Colors.black87,
+                        fontSize: 18),
+                    _CalcButton('0',
+                        onTap: () => _onDigit('0'), bgColor: buttonBg),
                     _CalcButton('.', onTap: _onDecimal, bgColor: buttonBg),
-                    _CalcButton('=', onTap: _onEquals, bgColor: const Color(0xFF388E3C), textColor: Colors.white),
+                    _CalcButton('=',
+                        onTap: _onEquals,
+                        bgColor: const Color(0xFF388E3C),
+                        textColor: Colors.white),
                   ]),
                 ],
               ),

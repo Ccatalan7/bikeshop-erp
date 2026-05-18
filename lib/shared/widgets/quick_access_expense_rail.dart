@@ -465,8 +465,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     final theme = Theme.of(context);
 
     if (widget.embedded) {
-      return Container(
-        color: theme.colorScheme.surface,
+      return ColoredBox(
+        color: Colors.transparent,
         child: _buildPanel(theme),
       );
     }

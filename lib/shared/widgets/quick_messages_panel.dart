@@ -226,7 +226,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           height: 42,
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color:
+                Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
             border: Border(
               bottom: BorderSide(color: Theme.of(context).dividerColor),
             ),

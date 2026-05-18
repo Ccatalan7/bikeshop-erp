@@ -1045,6 +1045,23 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 - ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
 - ✅ **ALLOWED:** You may create standalone .sql files (e.g. `supabase/migrations/YYYYMMDD_name.sql`) for specific deployments to avoid running the entire schema, BUT you must ALSO update `core_schema.sql` as the source of truth.
 
+## Standalone SQL Deployment Status Rule
+
+Any standalone SQL file created for deployment, including `supabase/migrations/*.sql` and root-level `DEPLOY_*.sql` files, must carry an explicit deployment status comment near the top.
+
+Required status format:
+```sql
+-- Deployment status: NOT DEPLOYED
+```
+
+After the SQL has actually been run against the real linked Supabase project `xzdvtzdqjeyqxnkqprtf`, update that same file immediately:
+```sql
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on YYYY-MM-DD
+-- Deployment verification: <short description of the verification query/result>
+```
+
+Never mark a standalone SQL file as deployed after only running it on a local Supabase database. If deployment is not completed or verification did not run, leave the file marked `NOT DEPLOYED` and say that clearly to the user.
+
 **⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
 
 **BEFORE creating ANY database column/function/trigger, you MUST:**

@@ -140,15 +140,15 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
       return exactMatch;
     }
 
-    final results = await inventory.searchProducts(normalizedBarcode, limit: 10);
+    final results =
+        await inventory.searchProducts(normalizedBarcode, limit: 10);
     final normalizedCode = normalizedBarcode.toLowerCase();
     return results.cast<Product?>().firstWhere(
           (product) =>
               product != null &&
               (product.sku.toLowerCase() == normalizedCode ||
                   product.barcode?.toLowerCase() == normalizedCode ||
-                  product.supplierCode?.trim().toLowerCase() ==
-                      normalizedCode),
+                  product.supplierCode?.trim().toLowerCase() == normalizedCode),
           orElse: () => null,
         );
   }
@@ -589,10 +589,9 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
 
-    return Container(
-      color: bg,
+    return ColoredBox(
+      color: Colors.transparent,
       child: switch (_step) {
         _QuickSaleStep.cart => _buildCartStep(theme, isDark),
         _QuickSaleStep.payment => _buildPaymentStep(theme, isDark),

@@ -433,7 +433,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     final results = _buildResults();
 
     return ColoredBox(
-      color: theme.colorScheme.surface,
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

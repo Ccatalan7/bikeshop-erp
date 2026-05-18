@@ -297,8 +297,8 @@ class _QuickPurchasePanelState extends State<QuickPurchasePanel> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+    return ColoredBox(
+      color: Colors.transparent,
       child: _editingItem != null
           ? _buildEditView(theme, isDark)
           : Column(

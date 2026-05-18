@@ -157,8 +157,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+    return ColoredBox(
+      color: Colors.transparent,
       child: _editingTask != null
           ? _buildEditView(theme, isDark)
           : Column(

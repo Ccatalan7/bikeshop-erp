@@ -1,4 +1,6 @@
 -- Shared read state for staff-facing support/WhatsApp inboxes.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-05-18
+-- Deployment verification: live column exists and conversation_unread_counts uses staff_last_read_at
 --
 -- Internal chats still use each participant's own last_read_at. Support chats
 -- use staff_last_read_at for staff users so one teammate reading a customer
