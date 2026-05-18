@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
+import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
 // For VoidCallback
 
@@ -44,6 +45,612 @@ class MessagingService {
 
   bool _isDuplicateParticipantError(Object error) {
     return error is PostgrestException && error.code == '23505';
+  }
+
+  String? _text(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text == 'null') return null;
+    return text;
+  }
+
+  double? _doubleValue(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  DateTime? _dateValue(dynamic value) {
+    final text = _text(value);
+    if (text == null) return null;
+    return DateTime.tryParse(text);
+  }
+
+  Map<String, dynamic> _rowMap(dynamic row) {
+    if (row is Map<String, dynamic>) return row;
+    return Map<String, dynamic>.from(row as Map);
+  }
+
+  (String?, String?) _primaryContextFromConversation(dynamic rawConversation) {
+    final json = _rowMap(rawConversation);
+    String? contextType = _text(json['context_type']);
+    String? contextId = _text(json['context_id']);
+
+    final contexts = json['conversation_contexts'];
+    if ((contextType == null || contextId == null) && contexts is List) {
+      dynamic selectedContext;
+      for (final context in contexts) {
+        if (context is Map && context['is_primary'] == true) {
+          selectedContext = context;
+          break;
+        }
+      }
+      if (selectedContext == null && contexts.isNotEmpty) {
+        selectedContext = contexts.first;
+      }
+      if (selectedContext is Map) {
+        contextType ??= _text(selectedContext['context_type']);
+        contextId ??= _text(selectedContext['context_id']);
+      }
+    }
+
+    return (contextType, contextId);
+  }
+
+  String _jobStatusLabel(dynamic rawStatus) {
+    final status = _text(rawStatus)?.toUpperCase();
+    return switch (status) {
+      'PENDIENTE' => 'Pendiente',
+      'DIAGNOSTICO' => 'Diagnóstico',
+      'ESPERANDO_APROBACION' => 'Esperando aprobación',
+      'ESPERANDO_REPUESTOS' => 'Esperando repuestos',
+      'EN_CURSO' => 'En curso',
+      'FINALIZADO' => 'Finalizado',
+      'ENTREGADO' => 'Entregado',
+      'CANCELADO' => 'Cancelado',
+      _ => _text(rawStatus) ?? 'Trabajo activo',
+    };
+  }
+
+  String? _jobStatusColor(Map<String, dynamic> job) {
+    final joinedStatus = job['job_status'];
+    if (joinedStatus is Map) {
+      final color = _text(joinedStatus['color']);
+      if (color != null) return color;
+    }
+
+    final status = _text(job['status'])?.toUpperCase();
+    return switch (status) {
+      'PENDIENTE' => '#F59E0B',
+      'DIAGNOSTICO' => '#3B82F6',
+      'ESPERANDO_APROBACION' => '#F59E0B',
+      'ESPERANDO_REPUESTOS' => '#8B5CF6',
+      'EN_CURSO' => '#06B6D4',
+      'FINALIZADO' => '#10B981',
+      'ENTREGADO' => '#16A34A',
+      'CANCELADO' => '#EF4444',
+      _ => null,
+    };
+  }
+
+  bool _isOpenJob(Map<String, dynamic> job) {
+    final status = _text(job['status'])?.toUpperCase();
+    return status != 'FINALIZADO' &&
+        status != 'ENTREGADO' &&
+        status != 'CANCELADO';
+  }
+
+  DateTime _jobSortDate(Map<String, dynamic> job) {
+    return _dateValue(job['status_updated_at']) ??
+        _dateValue(job['updated_at']) ??
+        _dateValue(job['arrival_date']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String? _bikeNameFromRow(Map<String, dynamic>? bike) {
+    if (bike == null) return null;
+    final parts = <String>[
+      if (_text(bike['brand']) != null) _text(bike['brand'])!,
+      if (_text(bike['model']) != null) _text(bike['model'])!,
+      if (_text(bike['year']) != null) _text(bike['year'])!,
+    ];
+    return parts.isEmpty ? null : parts.join(' ');
+  }
+
+  String? _invoiceStatusLabel(dynamic rawStatus) {
+    final status = _text(rawStatus)?.toLowerCase();
+    return switch (status) {
+      'draft' => 'Borrador',
+      'sent' => 'Enviada',
+      'confirmed' => 'Confirmada',
+      'paid' => 'Pagada',
+      'overdue' => 'Vencida',
+      'cancelled' || 'canceled' => 'Cancelada',
+      _ => _text(rawStatus),
+    };
+  }
+
+  Set<String> _phoneLookupCandidates(String phone) {
+    final trimmed = phone.trim();
+    final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    final candidates = <String>{trimmed};
+    if (digits.isNotEmpty) {
+      candidates.add(digits);
+      candidates.add('+$digits');
+      if (digits.startsWith('56') && digits.length > 2) {
+        final local = digits.substring(2);
+        candidates.add(local);
+        candidates.add('+56 $local');
+        candidates.add('+56$local');
+      } else {
+        candidates.add('56$digits');
+        candidates.add('+56$digits');
+      }
+    }
+    return candidates.where((candidate) => candidate.trim().isNotEmpty).toSet();
+  }
+
+  Future<Map<String, ConversationContextHint>>
+      _fetchContextHintsForConversations(List<dynamic> rawConversations) async {
+    if (rawConversations.isEmpty) return {};
+
+    final tenantId = await TenantService().getTenantId();
+    final conversationRows = <String, Map<String, dynamic>>{};
+    final contextTypeByConversation = <String, String?>{};
+    final contextIdByConversation = <String, String?>{};
+    final customerIdByConversation = <String, String>{};
+    final contactNameByConversation = <String, String>{};
+    final phoneByConversation = <String, String>{};
+    final explicitJobIds = <String>{};
+    final explicitInvoiceIds = <String>{};
+    final orderIds = <String>{};
+    final creatorIds = <String>{};
+
+    for (final raw in rawConversations) {
+      final row = _rowMap(raw);
+      final conversationId = _text(row['id']);
+      if (conversationId == null) continue;
+      conversationRows[conversationId] = row;
+
+      final (contextType, contextId) = _primaryContextFromConversation(row);
+      contextTypeByConversation[conversationId] = contextType;
+      contextIdByConversation[conversationId] = contextId;
+
+      if (contextType == 'customer' && contextId != null) {
+        customerIdByConversation[conversationId] = contextId;
+      } else if (contextType == 'job' && contextId != null) {
+        explicitJobIds.add(contextId);
+      } else if (contextType == 'invoice' && contextId != null) {
+        explicitInvoiceIds.add(contextId);
+      } else if (contextType == 'order' && contextId != null) {
+        orderIds.add(contextId);
+      }
+
+      final createdBy = _text(row['created_by']);
+      if (createdBy != null && row['type'] == 'support') {
+        creatorIds.add(createdBy);
+      }
+    }
+
+    final customerRowsById = <String, Map<String, dynamic>>{};
+    final customerRowsByAuthId = <String, Map<String, dynamic>>{};
+
+    void captureCustomer(dynamic rawCustomer) {
+      final customer = _rowMap(rawCustomer);
+      final id = _text(customer['id']);
+      if (id != null) customerRowsById[id] = customer;
+      final authUserId = _text(customer['auth_user_id']);
+      if (authUserId != null) customerRowsByAuthId[authUserId] = customer;
+    }
+
+    Future<void> loadCustomersByIds(Set<String> ids) async {
+      final missingIds = ids.where((id) => !customerRowsById.containsKey(id));
+      if (missingIds.isEmpty) return;
+      try {
+        dynamic query = _client.from('customers').select(
+              'id, auth_user_id, name, phone',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('id', missingIds.toList());
+        for (final row in rows as List) {
+          captureCustomer(row);
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading context customers: $e');
+      }
+    }
+
+    try {
+      final ids = conversationRows.keys.toList();
+      final bindings = await _client
+          .from('whatsapp_conversation_bindings')
+          .select(
+            'conversation_id, customer_id, contact_name, external_phone_number',
+          )
+          .inFilter('conversation_id', ids);
+
+      final phoneCandidatesByConversation = <String, Set<String>>{};
+      final allPhoneCandidates = <String>{};
+      for (final rawBinding in bindings as List) {
+        final binding = _rowMap(rawBinding);
+        final conversationId = _text(binding['conversation_id']);
+        if (conversationId == null) continue;
+
+        final customerId = _text(binding['customer_id']);
+        if (customerId != null) {
+          customerIdByConversation[conversationId] = customerId;
+        }
+
+        final contactName = _text(binding['contact_name']);
+        if (contactName != null) {
+          contactNameByConversation[conversationId] = contactName;
+        }
+
+        final phone = _text(binding['external_phone_number']);
+        if (phone != null) {
+          phoneByConversation[conversationId] = phone;
+          final candidates = _phoneLookupCandidates(phone);
+          phoneCandidatesByConversation[conversationId] = candidates;
+          allPhoneCandidates.addAll(candidates);
+        }
+      }
+
+      if (allPhoneCandidates.isNotEmpty) {
+        dynamic query = _client.from('customers').select(
+              'id, auth_user_id, name, phone',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final customersByPhone = await query.inFilter(
+          'phone',
+          allPhoneCandidates.toList(),
+        );
+        for (final rawCustomer in customersByPhone as List) {
+          final customer = _rowMap(rawCustomer);
+          captureCustomer(customer);
+          final phone = _text(customer['phone']);
+          final customerId = _text(customer['id']);
+          if (phone == null || customerId == null) continue;
+          for (final entry in phoneCandidatesByConversation.entries) {
+            if (entry.value.contains(phone)) {
+              customerIdByConversation.putIfAbsent(entry.key, () => customerId);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error loading WhatsApp context hints: $e');
+    }
+
+    if (creatorIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('customers').select(
+              'id, auth_user_id, name, phone',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('auth_user_id', creatorIds.toList());
+        for (final row in rows as List) {
+          captureCustomer(row);
+        }
+        for (final entry in conversationRows.entries) {
+          final createdBy = _text(entry.value['created_by']);
+          if (createdBy == null) continue;
+          final customer = customerRowsByAuthId[createdBy];
+          final customerId = customer == null ? null : _text(customer['id']);
+          if (customerId != null) {
+            customerIdByConversation.putIfAbsent(entry.key, () => customerId);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading creator context customers: $e');
+      }
+    }
+
+    final invoiceRowsById = <String, Map<String, dynamic>>{};
+    Future<void> loadInvoicesByIds(Set<String> ids) async {
+      final missingIds = ids.where((id) => !invoiceRowsById.containsKey(id));
+      if (missingIds.isEmpty) return;
+      try {
+        dynamic query = _client.from('sales_invoices').select(
+              'id, customer_id, customer_name, invoice_number, status, total, balance, date',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('id', missingIds.toList());
+        for (final row in rows as List) {
+          final invoice = _rowMap(row);
+          final id = _text(invoice['id']);
+          if (id != null) invoiceRowsById[id] = invoice;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading context invoices: $e');
+      }
+    }
+
+    await loadInvoicesByIds(explicitInvoiceIds);
+    for (final entry in contextIdByConversation.entries) {
+      if (contextTypeByConversation[entry.key] != 'invoice') continue;
+      final invoice = invoiceRowsById[entry.value];
+      final customerId = invoice == null ? null : _text(invoice['customer_id']);
+      if (customerId != null) customerIdByConversation[entry.key] = customerId;
+      final customerName =
+          invoice == null ? null : _text(invoice['customer_name']);
+      if (customerName != null) {
+        contactNameByConversation[entry.key] = customerName;
+      }
+    }
+
+    if (orderIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('online_orders').select(
+              'id, customer_id, customer_name, customer_phone',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('id', orderIds.toList());
+        final ordersById = <String, Map<String, dynamic>>{};
+        for (final row in rows as List) {
+          final order = _rowMap(row);
+          final id = _text(order['id']);
+          if (id != null) ordersById[id] = order;
+        }
+        for (final entry in contextIdByConversation.entries) {
+          if (contextTypeByConversation[entry.key] != 'order') continue;
+          final order = ordersById[entry.value];
+          if (order == null) continue;
+          final customerId = _text(order['customer_id']);
+          if (customerId != null) {
+            customerIdByConversation[entry.key] = customerId;
+          }
+          final customerName = _text(order['customer_name']);
+          if (customerName != null) {
+            contactNameByConversation[entry.key] = customerName;
+          }
+          final phone = _text(order['customer_phone']);
+          if (phone != null) phoneByConversation[entry.key] = phone;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading order context hints: $e');
+      }
+    }
+
+    final jobRowsById = <String, Map<String, dynamic>>{};
+    final jobRowsByInvoiceId = <String, Map<String, dynamic>>{};
+
+    void captureJob(dynamic rawJob) {
+      final job = _rowMap(rawJob);
+      final id = _text(job['id']);
+      if (id != null) jobRowsById[id] = job;
+      final invoiceId = _text(job['invoice_id']);
+      if (invoiceId != null) jobRowsByInvoiceId[invoiceId] = job;
+    }
+
+    Future<void> loadJobsByIds(Set<String> ids) async {
+      final missingIds = ids.where((id) => !jobRowsById.containsKey(id));
+      if (missingIds.isEmpty) return;
+      try {
+        dynamic query = _client.from('mechanic_jobs').select('''
+          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
+          status_updated_at, invoice_id, arrival_date, updated_at,
+          job_status:job_statuses(name, color)
+        ''');
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query
+            .inFilter('id', missingIds.toList())
+            .isFilter('deleted_at', null);
+        for (final row in rows as List) {
+          captureJob(row);
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading explicit job context hints: $e');
+      }
+    }
+
+    await loadJobsByIds(explicitJobIds);
+    for (final entry in contextIdByConversation.entries) {
+      if (contextTypeByConversation[entry.key] != 'job') continue;
+      final job = jobRowsById[entry.value];
+      final customerId = job == null ? null : _text(job['customer_id']);
+      if (customerId != null) customerIdByConversation[entry.key] = customerId;
+    }
+
+    final invoiceIdsNeedingJob = {...explicitInvoiceIds};
+    if (invoiceIdsNeedingJob.isNotEmpty) {
+      try {
+        dynamic query = _client.from('mechanic_jobs').select('''
+          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
+          status_updated_at, invoice_id, arrival_date, updated_at,
+          job_status:job_statuses(name, color)
+        ''');
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query
+            .inFilter('invoice_id', invoiceIdsNeedingJob.toList())
+            .isFilter('deleted_at', null);
+        for (final row in rows as List) {
+          captureJob(row);
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading invoice job context hints: $e');
+      }
+    }
+
+    await loadCustomersByIds(customerIdByConversation.values.toSet());
+
+    final activeJobByCustomerId = <String, Map<String, dynamic>>{};
+    final customerIds = customerIdByConversation.values.toSet();
+    if (customerIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('mechanic_jobs').select('''
+          id, tenant_id, customer_id, bike_id, job_number, status, status_id,
+          status_updated_at, invoice_id, arrival_date, updated_at,
+          job_status:job_statuses(name, color)
+        ''');
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query
+            .inFilter('customer_id', customerIds.toList())
+            .isFilter('deleted_at', null)
+            .order('updated_at', ascending: false)
+            .limit(300);
+        final jobs = (rows as List).map(_rowMap).where(_isOpenJob).toList()
+          ..sort((a, b) => _jobSortDate(b).compareTo(_jobSortDate(a)));
+        for (final job in jobs) {
+          captureJob(job);
+          final customerId = _text(job['customer_id']);
+          if (customerId != null) {
+            activeJobByCustomerId.putIfAbsent(customerId, () => job);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading active customer job context hints: $e');
+      }
+    }
+
+    final selectedJobByConversation = <String, Map<String, dynamic>>{};
+    final invoiceIdsToLoad = <String>{...explicitInvoiceIds};
+    for (final conversationId in conversationRows.keys) {
+      final contextType = contextTypeByConversation[conversationId];
+      final contextId = contextIdByConversation[conversationId];
+      final customerId = customerIdByConversation[conversationId];
+
+      Map<String, dynamic>? job;
+      if (contextType == 'job' && contextId != null) {
+        job = jobRowsById[contextId];
+      } else if (contextType == 'invoice' && contextId != null) {
+        job = jobRowsByInvoiceId[contextId];
+      }
+      job ??= customerId == null ? null : activeJobByCustomerId[customerId];
+
+      if (job != null) {
+        selectedJobByConversation[conversationId] = job;
+        final invoiceId = _text(job['invoice_id']);
+        if (invoiceId != null) invoiceIdsToLoad.add(invoiceId);
+      }
+    }
+
+    await loadInvoicesByIds(invoiceIdsToLoad);
+
+    final bikeRowsById = <String, Map<String, dynamic>>{};
+    final bikeNameByJobId = <String, String>{};
+    final bikeIdByJobId = <String, String>{};
+    final bikeIds = <String>{};
+    final selectedJobIds = <String>{};
+    for (final job in selectedJobByConversation.values) {
+      final jobId = _text(job['id']);
+      if (jobId != null) selectedJobIds.add(jobId);
+      final bikeId = _text(job['bike_id']);
+      if (bikeId != null) bikeIds.add(bikeId);
+    }
+
+    if (bikeIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('bikes').select('id, brand, model, year');
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('id', bikeIds.toList());
+        for (final row in rows as List) {
+          final bike = _rowMap(row);
+          final id = _text(bike['id']);
+          if (id != null) bikeRowsById[id] = bike;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading context bikes: $e');
+      }
+    }
+
+    if (selectedJobIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('mechanic_job_bikes').select('''
+          job_id, bike_id, order_index,
+          bike:bikes(id, brand, model, year)
+        ''');
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query
+            .inFilter('job_id', selectedJobIds.toList())
+            .order('order_index');
+        for (final rawRow in rows as List) {
+          final row = _rowMap(rawRow);
+          final jobId = _text(row['job_id']);
+          if (jobId == null || bikeNameByJobId.containsKey(jobId)) continue;
+          final bikeId = _text(row['bike_id']);
+          if (bikeId != null) bikeIdByJobId[jobId] = bikeId;
+          final bike = row['bike'] is Map ? _rowMap(row['bike']) : null;
+          final bikeName = _bikeNameFromRow(bike);
+          if (bikeName != null) bikeNameByJobId[jobId] = bikeName;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading context job bikes: $e');
+      }
+    }
+
+    final result = <String, ConversationContextHint>{};
+    for (final conversationId in conversationRows.keys) {
+      final customerId = customerIdByConversation[conversationId];
+      final customer = customerId == null ? null : customerRowsById[customerId];
+      final job = selectedJobByConversation[conversationId];
+      final contextType = contextTypeByConversation[conversationId];
+      final contextId = contextIdByConversation[conversationId];
+      final explicitInvoiceId = contextType == 'invoice' ? contextId : null;
+      final jobInvoiceId = job == null ? null : _text(job['invoice_id']);
+      final invoiceId = explicitInvoiceId ?? jobInvoiceId;
+      final invoice = invoiceId == null ? null : invoiceRowsById[invoiceId];
+      final jobId = job == null ? null : _text(job['id']);
+      final jobBikeId = jobId == null ? null : bikeIdByJobId[jobId];
+      final directBikeId = job == null ? null : _text(job['bike_id']);
+      final bikeId = directBikeId ?? jobBikeId;
+      final bikeName = jobId == null
+          ? null
+          : bikeNameByJobId[jobId] ?? _bikeNameFromRow(bikeRowsById[bikeId]);
+
+      final hint = ConversationContextHint(
+        customerId: customerId,
+        customerName: _text(customer == null ? null : customer['name']) ??
+            contactNameByConversation[conversationId],
+        phone: _text(customer == null ? null : customer['phone']) ??
+            phoneByConversation[conversationId],
+        primaryContextType: contextType,
+        primaryContextId: contextId,
+        jobId: jobId,
+        jobNumber: job == null ? null : _text(job['job_number']),
+        jobStatus: job == null
+            ? null
+            : (job['job_status'] is Map
+                    ? _text((job['job_status'] as Map)['name'])
+                    : null) ??
+                _jobStatusLabel(job['status']),
+        jobStatusColor: job == null ? null : _jobStatusColor(job),
+        bikeId: bikeId,
+        bikeName: bikeName,
+        invoiceId: invoiceId,
+        invoiceNumber:
+            invoice == null ? null : _text(invoice['invoice_number']),
+        invoiceStatus:
+            invoice == null ? null : _invoiceStatusLabel(invoice['status']),
+        invoiceBalance:
+            invoice == null ? null : _doubleValue(invoice['balance']),
+        invoiceTotal: invoice == null ? null : _doubleValue(invoice['total']),
+      );
+
+      if (hint.hasCustomer || hint.hasOperationalContext) {
+        result[conversationId] = hint;
+      }
+    }
+
+    return result;
   }
 
   Future<void> _addCurrentUserAsParticipant({
@@ -254,6 +861,8 @@ class MessagingService {
       }
     }
 
+    final contextHints = await _fetchContextHintsForConversations(data);
+
     return data.map((json) {
       // Inject unread count and creator name into json before parsing.
       final conversationId = json['id']?.toString();
@@ -288,6 +897,11 @@ class MessagingService {
         json['creator_name'] = whatsappContactNames[conversationId];
       } else if (createdBy != null && customerNames.containsKey(createdBy)) {
         json['creator_name'] = customerNames[createdBy];
+      }
+      final contextHint =
+          conversationId == null ? null : contextHints[conversationId];
+      if (contextHint != null) {
+        json['context_hint'] = contextHint.toJson();
       }
       return Conversation.fromJson(json);
     }).toList();

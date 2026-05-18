@@ -1,3 +1,5 @@
+import 'conversation_context_hint.dart';
+
 class Conversation {
   final String id;
   final String type; // 'internal' or 'support'
@@ -18,6 +20,7 @@ class Conversation {
   final List<String> participantIds;
   final String? createdBy; // Customer who created the request
   final String? creatorName; // Name of the creator (for support chats)
+  final ConversationContextHint? contextHint;
 
   Conversation({
     required this.id,
@@ -39,6 +42,7 @@ class Conversation {
     required this.participantIds,
     this.createdBy,
     this.creatorName,
+    this.contextHint,
   });
 
   static String normalizeChannel(dynamic rawChannel, String type) {
@@ -63,8 +67,33 @@ class Conversation {
   bool get isWhatsApp => channel == 'whatsapp';
   bool get isWebsitePortal => channel == 'website_portal';
   bool get hasLinkedContext => contextType != null && contextId != null;
+  bool get hasDetectedContext => contextHint?.hasOperationalContext ?? false;
+  bool get hasAnyContext =>
+      effectiveContextType != null && effectiveContextId != null;
+  String? get effectiveContextType {
+    if (contextType != null &&
+        contextId != null &&
+        supportsContextPanel(contextType)) {
+      return contextType;
+    }
+    if (contextHint?.hasJob == true) return 'job';
+    if (contextHint?.hasInvoice == true) return 'invoice';
+    return contextType ?? contextHint?.effectiveContextType;
+  }
+
+  String? get effectiveContextId {
+    if (contextType != null &&
+        contextId != null &&
+        supportsContextPanel(contextType)) {
+      return contextId;
+    }
+    if (contextHint?.hasJob == true) return contextHint?.jobId;
+    if (contextHint?.hasInvoice == true) return contextHint?.invoiceId;
+    return contextId ?? contextHint?.effectiveContextId;
+  }
+
   bool get hasSupportedContextPanel =>
-      contextId != null && supportsContextPanel(contextType);
+      effectiveContextId != null && supportsContextPanel(effectiveContextType);
 
   String get channelLabel {
     if (isWhatsApp) return 'Cliente WhatsApp';
@@ -131,6 +160,11 @@ class Conversation {
       participantIds: pIds,
       createdBy: json['created_by'],
       creatorName: json['creator_name'] ?? json['customers']?['name'],
+      contextHint: json['context_hint'] is Map
+          ? ConversationContextHint.fromJson(
+              Map<String, dynamic>.from(json['context_hint'] as Map),
+            )
+          : null,
     );
   }
 }

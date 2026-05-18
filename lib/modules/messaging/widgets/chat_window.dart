@@ -21,6 +21,7 @@ import 'parsed_message_text.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import 'assign_context_dialog.dart';
+import 'chat_attachment_viewer.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/route_share_service.dart';
@@ -287,6 +288,10 @@ class _ChatWindowState extends State<ChatWindow> {
   final Map<String, Future<String?>> _whatsAppMediaFutureCache = {};
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
+
+  String? get _effectiveContextType => widget.conversation.effectiveContextType;
+
+  String? get _effectiveContextId => widget.conversation.effectiveContextId;
 
   bool get _canUseSmartActions =>
       widget.conversation.isSupport && !widget.conversation.isInternal;
@@ -1206,8 +1211,8 @@ class _ChatWindowState extends State<ChatWindow> {
         message: pendingText,
         contactName: contact?['name']?.toString(),
         conversationId: widget.conversation.id,
-        contextType: widget.conversation.contextType,
-        contextId: widget.conversation.contextId,
+        contextType: _effectiveContextType,
+        contextId: _effectiveContextId,
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
         metadata: messageMetadata,
@@ -1810,8 +1815,8 @@ class _ChatWindowState extends State<ChatWindow> {
         contactName: contact?['name']?.toString(),
         conversationId: widget.conversation.id,
         customerId: contact?['customer_id']?.toString(),
-        contextType: widget.conversation.contextType,
-        contextId: widget.conversation.contextId,
+        contextType: _effectiveContextType,
+        contextId: _effectiveContextId,
         clientMessageId: optimisticMessageId,
         metadata: metadata,
       );
@@ -1862,6 +1867,8 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final chatProvider = context.watch<ChatProvider>();
     final messages = chatProvider.activeMessages;
     final timelineItems = _buildTimelineItems(messages);
@@ -1888,7 +1895,7 @@ class _ChatWindowState extends State<ChatWindow> {
           // Messages
           Expanded(
             child: Container(
-              color: Colors.grey[50], // Light background for chat area
+              color: _chatTimelineBackground(theme),
               child: isLoading && messages.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : ListView.builder(
@@ -1916,14 +1923,26 @@ class _ChatWindowState extends State<ChatWindow> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+              color: colorScheme.surface,
+              border:
+                  Border(top: BorderSide(color: colorScheme.outlineVariant)),
             ),
             child: _buildComposer(context),
           ),
         ],
       ],
     );
+  }
+
+  Color _chatTimelineBackground(ThemeData theme) {
+    final surface = theme.colorScheme.surface;
+    if (surface.computeLuminance() < 0.35) {
+      return Color.alphaBlend(
+        Colors.white.withValues(alpha: 0.04),
+        surface,
+      );
+    }
+    return const Color(0xFFF8FAFC);
   }
 
   Widget _buildPendingRequestBanner(BuildContext context) {
@@ -2014,11 +2033,17 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Widget _buildHeader(BuildContext context, ChatProvider chatProvider) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final conversation = widget.conversation;
-    final hasContext = conversation.hasLinkedContext;
+    final hasContext = conversation.hasAnyContext;
     final hasSupportedContextPanel = conversation.hasSupportedContextPanel;
+    final contextType = conversation.effectiveContextType;
     final title = chatProvider.getChatTitle(conversation);
     final subtitle = _buildConversationSubtitle(conversation);
+    final jobContextColor = _headerJobContextColor(conversation);
+    final hasJobContext = conversation.effectiveContextType == 'job' &&
+        conversation.effectiveContextId != null;
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -2026,8 +2051,8 @@ class _ChatWindowState extends State<ChatWindow> {
         vertical: widget.compact ? 8 : 12,
       ),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-        color: Colors.white,
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
+        color: colorScheme.surface,
       ),
       child: Row(
         children: [
@@ -2045,8 +2070,9 @@ class _ChatWindowState extends State<ChatWindow> {
                       CircleAvatar(
                         radius: widget.compact ? 17 : 20,
                         backgroundColor: conversation.type == 'support'
-                            ? _accentBlue.withValues(alpha: 0.08)
-                            : Colors.grey[200],
+                            ? colorScheme.primary.withValues(alpha: 0.1)
+                            : colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.12),
                         child: Icon(
                           conversation.isWhatsApp
                               ? Icons.phone_in_talk_outlined
@@ -2054,8 +2080,8 @@ class _ChatWindowState extends State<ChatWindow> {
                                   ? Icons.language_outlined
                                   : Icons.groups_outlined,
                           color: conversation.type == 'support'
-                              ? _accentBlue
-                              : Colors.grey[700],
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
                           size: 20,
                         ),
                       ),
@@ -2068,19 +2094,15 @@ class _ChatWindowState extends State<ChatWindow> {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
+                            _buildHeaderContextSummary(
+                              conversation,
+                              fallback: subtitle,
                             ),
                           ],
                         ),
@@ -2091,7 +2113,9 @@ class _ChatWindowState extends State<ChatWindow> {
                             ? Icons.keyboard_arrow_up
                             : Icons.info_outline,
                         size: 18,
-                        color: _showChatInfoPanel ? _accentBlue : Colors.grey,
+                        color: _showChatInfoPanel
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
                       ),
                     ],
                   ),
@@ -2103,7 +2127,7 @@ class _ChatWindowState extends State<ChatWindow> {
           if (_canStartWhatsAppFromConversation)
             IconButton(
               icon: const Icon(Icons.phone_in_talk_outlined),
-              color: _accentBlue,
+              color: colorScheme.primary,
               tooltip: 'Contactar por WhatsApp',
               onPressed: _isSendingMessage
                   ? null
@@ -2114,8 +2138,8 @@ class _ChatWindowState extends State<ChatWindow> {
               widget.onShowContextPanel != null)
             IconButton(
               icon: Icon(
-                _contextIcon(conversation.contextType),
-                color: _accentBlue,
+                _contextIcon(contextType),
+                color: colorScheme.primary,
               ),
               tooltip: 'Mostrar detalles',
               onPressed: widget.onShowContextPanel,
@@ -2123,10 +2147,14 @@ class _ChatWindowState extends State<ChatWindow> {
           IconButton(
             icon: Icon(
               hasContext ? Icons.link : Icons.link_off,
-              color: hasContext ? _accentBlue : Colors.grey,
+              color: hasJobContext
+                  ? jobContextColor
+                  : hasContext
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
             ),
             tooltip: hasContext
-                ? 'Contexto vinculado: ${_contextLabel(conversation.contextType)}'
+                ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
                 : 'Vincular contexto del chat',
             onPressed: () => _showAssignContextDialog(context),
           ),
@@ -2146,6 +2174,95 @@ class _ChatWindowState extends State<ChatWindow> {
         _selectedChatInfoSection = _ChatInfoSection.info;
       }
     });
+  }
+
+  Color _headerJobContextColor(Conversation conversation) {
+    return _colorFromHex(
+      conversation.contextHint?.jobStatusColor,
+      const Color(0xFF16A34A),
+    );
+  }
+
+  Widget _buildHeaderContextSummary(
+    Conversation conversation, {
+    required String fallback,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hint = conversation.contextHint;
+    final hasJob =
+        hint?.hasJob == true || conversation.effectiveContextType == 'job';
+    final bikeName = hint?.bikeName?.trim();
+    final hasBike = bikeName != null && bikeName.isNotEmpty;
+
+    if (!hasJob && !hasBike) {
+      return Text(
+        fallback,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+
+    final jobColor = _headerJobContextColor(conversation);
+    final jobLabel = [
+      if (hint?.jobNumber?.trim().isNotEmpty == true)
+        hint!.jobNumber!.trim()
+      else if (hasJob)
+        'Trabajo',
+      if (hint?.jobStatus?.trim().isNotEmpty == true) hint!.jobStatus!.trim(),
+    ].join(' · ');
+
+    return SizedBox(
+      height: 22,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          if (jobLabel.isNotEmpty)
+            _buildHeaderContextChip(
+              label: jobLabel,
+              color: jobColor,
+              prominent: true,
+            ),
+          if (jobLabel.isNotEmpty && hasBike) const SizedBox(width: 6),
+          if (hasBike)
+            _buildHeaderContextChip(
+              label: bikeName,
+              color: colorScheme.onSurfaceVariant,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderContextChip({
+    required String label,
+    required Color color,
+    bool prominent = false,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: prominent ? 0.13 : 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+    );
   }
 
   Widget _buildChatInfoPanel(
@@ -2516,10 +2633,9 @@ class _ChatWindowState extends State<ChatWindow> {
               value: _statusLabel(widget.conversation.status),
             ),
             _buildInfoRowTile(
-              icon: _contextIcon(widget.conversation.contextType),
+              icon: _contextIcon(_effectiveContextType),
               title: 'Contexto',
-              value: _contextLabel(widget.conversation.contextType) ??
-                  'Sin contexto',
+              value: _contextLabel(_effectiveContextType) ?? 'Sin contexto',
             ),
             _buildInfoRowTile(
               icon: Icons.schedule_outlined,
@@ -2530,6 +2646,10 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ],
         ),
+        if (widget.conversation.contextHint?.hasOperationalContext == true) ...[
+          const SizedBox(height: 18),
+          _buildOperationalContextCard(theme),
+        ],
         const SizedBox(height: 18),
         Wrap(
           spacing: 10,
@@ -2626,6 +2746,7 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildChatWorkflowSection(ThemeData theme) {
     final hasSupportedContextPanel =
         widget.conversation.hasSupportedContextPanel;
+    final contextType = _effectiveContextType;
     final canResolve = widget.conversation.type == 'support' &&
         widget.conversation.status == 'active';
 
@@ -2642,17 +2763,21 @@ class _ChatWindowState extends State<ChatWindow> {
               color: _accentBlue,
               title: widget.conversation.hasLinkedContext
                   ? 'Cambiar contexto'
-                  : 'Vincular contexto',
-              subtitle: _contextLabel(widget.conversation.contextType) ??
+                  : widget.conversation.hasDetectedContext
+                      ? 'Confirmar contexto detectado'
+                      : 'Vincular contexto',
+              subtitle: _contextLabel(contextType) ??
                   'Conecta este chat con cliente, trabajo, factura o pedido',
               onTap: () => _showAssignContextDialog(context),
             ),
             if (hasSupportedContextPanel && widget.onShowContextPanel != null)
               _buildManagementActionTile(
-                icon: _contextIcon(widget.conversation.contextType),
+                icon: _contextIcon(contextType),
                 color: const Color(0xFF2563EB),
-                title: 'Abrir detalles vinculados',
-                subtitle: 'Revisa el panel operativo del contexto actual',
+                title: widget.conversation.hasLinkedContext
+                    ? 'Abrir detalles vinculados'
+                    : 'Abrir contexto detectado',
+                subtitle: 'Revisa trabajo, factura o pedido sin salir del chat',
                 onTap: widget.onShowContextPanel!,
               ),
             if (_canUseSmartActions)
@@ -2816,6 +2941,188 @@ class _ChatWindowState extends State<ChatWindow> {
             if (index > 0) const Divider(height: 1, color: Color(0xFFE2E8F0)),
             children[index],
           ],
+        ],
+      ),
+    );
+  }
+
+  Color _colorFromHex(String? value, Color fallback) {
+    final raw = value?.trim();
+    if (raw == null || raw.isEmpty) return fallback;
+    final normalized = raw.replaceFirst('#', '');
+    final parsed = int.tryParse('ff$normalized', radix: 16);
+    return parsed == null ? fallback : Color(parsed);
+  }
+
+  String _formatPanelCurrency(double? amount) {
+    if (amount == null) return '-';
+    return NumberFormat.currency(
+      locale: 'es_CL',
+      symbol: r'$',
+      decimalDigits: 0,
+    ).format(amount);
+  }
+
+  Widget _buildOperationalContextCard(ThemeData theme) {
+    final hint = widget.conversation.contextHint;
+    if (hint == null || !hint.hasOperationalContext) {
+      return const SizedBox.shrink();
+    }
+
+    final statusColor = _colorFromHex(
+      hint.jobStatusColor,
+      const Color(0xFF2563EB),
+    );
+    final invoiceSummary = [
+      if (hint.invoiceStatus != null) hint.invoiceStatus!,
+      if (hint.invoiceBalance != null)
+        'Saldo ${_formatPanelCurrency(hint.invoiceBalance)}',
+    ].join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _contextIcon(_effectiveContextType),
+                  color: statusColor,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.conversation.hasLinkedContext
+                          ? 'Contexto operativo'
+                          : 'Contexto detectado',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      widget.conversation.hasLinkedContext
+                          ? 'Vinculado al chat'
+                          : 'Resuelto desde cliente, WhatsApp y trabajos activos',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (hint.customerLabel != null)
+            _buildOperationalContextRow(
+              icon: Icons.person_outline,
+              title: 'Cliente',
+              value: hint.customerLabel!,
+            ),
+          if (hint.hasJob)
+            _buildOperationalContextRow(
+              icon: Icons.build_outlined,
+              title: hint.jobLabel ?? 'Trabajo activo',
+              value: [
+                if (hint.jobStatus != null) hint.jobStatus!,
+                if (hint.bikeName != null) hint.bikeName!,
+              ].join(' · '),
+              color: statusColor,
+            ),
+          if (hint.hasInvoice)
+            _buildOperationalContextRow(
+              icon: Icons.receipt_long_outlined,
+              title: hint.invoiceLabel ?? 'Factura vinculada',
+              value: invoiceSummary.isEmpty
+                  ? _formatPanelCurrency(hint.invoiceTotal)
+                  : invoiceSummary,
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (widget.conversation.hasSupportedContextPanel &&
+                  widget.onShowContextPanel != null)
+                FilledButton.icon(
+                  onPressed: widget.onShowContextPanel,
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Abrir panel'),
+                ),
+              if (!widget.conversation.hasLinkedContext)
+                OutlinedButton.icon(
+                  onPressed: () => _showAssignContextDialog(context),
+                  icon: const Icon(Icons.link, size: 16),
+                  label: const Text('Fijar contexto'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOperationalContextRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    Color? color,
+  }) {
+    final effectiveColor = color ?? const Color(0xFF64748B);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 17, color: effectiveColor),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                if (value.trim().isNotEmpty)
+                  Text(
+                    value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -3051,7 +3358,7 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildMediaTile(_ChatAttachment attachment) {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => _showImagePreview(attachment.url),
+      onTap: () => _openAttachmentViewer(attachment),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Stack(
@@ -3092,7 +3399,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildFileTile(ThemeData theme, _ChatAttachment attachment) {
     return InkWell(
-      onTap: () => _openAttachmentUrl(attachment.url, attachment.name),
+      onTap: () => _openAttachmentViewer(attachment),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
@@ -3363,7 +3670,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
     return GestureDetector(
       onTap: () {
-        _showImagePreview(url);
+        _openMessageAttachmentViewer(message, url);
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3394,7 +3701,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   _buildImageUnavailableMessage(
                 title: 'No se pudo cargar la imagen',
                 subtitle: 'Toca para intentar abrirla.',
-                onTap: () => _openAttachmentUrl(url, 'Imagen'),
+                onTap: () => _openMessageAttachmentViewer(message, url),
               ),
             ),
           ),
@@ -3538,7 +3845,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return GestureDetector(
       onTap: () async {
         if (fileUrl != null) {
-          await _openAttachmentUrl(fileUrl, fileName);
+          _openMessageAttachmentViewer(message, fileUrl);
           return;
         }
 
@@ -3726,6 +4033,44 @@ class _ChatWindowState extends State<ChatWindow> {
     return DateFormat('dd/MM/yyyy HH:mm').format(value);
   }
 
+  String _messageAttachmentContentType(Message message) {
+    final metadata = message.metadata;
+    return metadata['contentType']?.toString() ??
+        metadata['content_type']?.toString() ??
+        '';
+  }
+
+  void _openAttachmentViewer(_ChatAttachment attachment) {
+    if (!mounted) return;
+    ChatAttachmentViewer.show(
+      context,
+      url: attachment.url,
+      fileName: attachment.name,
+      extension: attachment.extension,
+      contentType: _messageAttachmentContentType(attachment.message),
+      isImage: attachment.isImage,
+    );
+  }
+
+  void _openMessageAttachmentViewer(Message message, String url) {
+    if (!mounted) return;
+
+    final contentType = _messageAttachmentContentType(message);
+    final extension = _messageAttachmentExtension(message, url, contentType);
+    final isImage = message.type == 'image' ||
+        contentType.toLowerCase().startsWith('image/') ||
+        ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
+
+    ChatAttachmentViewer.show(
+      context,
+      url: url,
+      fileName: _messageAttachmentName(message, extension),
+      extension: extension,
+      contentType: contentType,
+      isImage: isImage,
+    );
+  }
+
   String _formatContactPhone(String rawPhone) {
     final trimmed = rawPhone.trim();
     final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
@@ -3751,45 +4096,6 @@ class _ChatWindowState extends State<ChatWindow> {
         .replaceAll(RegExp(r'_+'), '_');
     if (cleaned.isEmpty) return 'chat';
     return cleaned.length > 48 ? cleaned.substring(0, 48) : cleaned;
-  }
-
-  void _showImagePreview(String url) {
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Stack(
-          children: [
-            InteractiveViewer(child: Image.network(url)),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 32),
-                onPressed: () {
-                  Navigator.of(dialogContext).maybePop();
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openAttachmentUrl(String urlValue, String name) async {
-    final url = Uri.tryParse(urlValue);
-    if (url == null || !await canLaunchUrl(url)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo abrir: $name')),
-      );
-      return;
-    }
-
-    await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _downloadCurrentChatArchive() async {
@@ -3916,7 +4222,7 @@ class _ChatWindowState extends State<ChatWindow> {
   String _buildConversationSubtitle(Conversation conversation) {
     final parts = <String>[conversation.channelLabel];
 
-    final contextLabel = _contextLabel(conversation.contextType);
+    final contextLabel = _contextLabel(conversation.effectiveContextType);
     if (contextLabel != null) parts.add(contextLabel);
     parts.add(_statusLabel(conversation.status));
 
@@ -4038,8 +4344,8 @@ class _ChatWindowState extends State<ChatWindow> {
       context: context,
       builder: (ctx) => AssignContextDialog(
         conversationId: widget.conversation.id,
-        currentContextType: widget.conversation.contextType,
-        currentContextId: widget.conversation.contextId,
+        currentContextType: _effectiveContextType,
+        currentContextId: _effectiveContextId,
       ),
     );
   }
@@ -4071,8 +4377,8 @@ class _ChatWindowState extends State<ChatWindow> {
             widget.conversation.title ??
             'Cliente',
         customerId: contact?['customer_id']?.toString(),
-        contextType: widget.conversation.contextType,
-        contextId: widget.conversation.contextId,
+        contextType: _effectiveContextType,
+        contextId: _effectiveContextId,
       );
 
       if (!mounted) return;
@@ -4883,9 +5189,8 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
 
-    final conversation = widget.conversation;
-    final contextType = conversation.contextType;
-    final contextId = conversation.contextId;
+    final contextType = _effectiveContextType;
+    final contextId = _effectiveContextId;
 
     // Validate context
     if (contextId == null) {
@@ -5050,10 +5355,8 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
 
-    final conversation = widget.conversation;
-    // Check context
-    final contextType = conversation.contextType;
-    final contextId = conversation.contextId;
+    final contextType = _effectiveContextType;
+    final contextId = _effectiveContextId;
 
     if (contextId == null) {
       _showErrorSnackBar(
@@ -5584,8 +5887,8 @@ class _ChatWindowState extends State<ChatWindow> {
             ? 'cliente'
             : customerName,
         conversationId: widget.conversation.id,
-        contextType: widget.conversation.contextType,
-        contextId: widget.conversation.contextId,
+        contextType: _effectiveContextType,
+        contextId: _effectiveContextId,
       );
 
       if (!success) {

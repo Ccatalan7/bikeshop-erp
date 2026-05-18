@@ -12,6 +12,8 @@ class AppearanceService extends ChangeNotifier {
   static const String _companyLogoKey = 'company_logo';
   static const String _themeModeKey = 'theme_mode';
   static const String _sidebarPaletteKey = 'sidebar_palette';
+  static const String _messagingSidebarPaletteKey =
+      'quick_chat_uses_sidebar_palette';
 
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
@@ -22,6 +24,7 @@ class AppearanceService extends ChangeNotifier {
   int _cacheBuster = DateTime.now().millisecondsSinceEpoch;
   ThemeMode _themeMode = ThemeMode.light;
   String _sidebarPaletteCode = 'vinabike';
+  bool _messagingUsesSidebarPalette = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   final _supabase = Supabase.instance.client;
@@ -66,6 +69,8 @@ class AppearanceService extends ChangeNotifier {
       _companyLogoUrl != null && _companyLogoUrl!.isNotEmpty;
   ThemeMode get themeMode => _themeMode;
   String get sidebarPaletteCode => _sidebarPaletteCode;
+  bool get messagingUsesSidebarPalette => _messagingUsesSidebarPalette;
+  bool get quickChatUsesSidebarPalette => _messagingUsesSidebarPalette;
   SidebarPaletteOption get sidebarPalette => sidebarPalettes.firstWhere(
         (palette) => palette.code == _sidebarPaletteCode,
         orElse: () => sidebarPalettes.first,
@@ -206,6 +211,8 @@ class AppearanceService extends ChangeNotifier {
               .any((palette) => palette.code == sidebarPaletteString)) {
         _sidebarPaletteCode = sidebarPaletteString;
       }
+      _messagingUsesSidebarPalette =
+          prefs.getBool(_messagingSidebarPaletteKey) ?? false;
 
       // Get tenant_id for loading settings
       final tenantId = await TenantService().getTenantId();
@@ -451,6 +458,76 @@ class AppearanceService extends ChangeNotifier {
       rethrow;
     }
   }
+
+  Future<void> setMessagingUsesSidebarPalette(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_messagingSidebarPaletteKey, value);
+      _messagingUsesSidebarPalette = value;
+      notifyListeners();
+    } catch (e) {
+      debugPrint(
+          '[AppearanceService] Error saving messaging palette setting: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setQuickChatUsesSidebarPalette(bool value) {
+    return setMessagingUsesSidebarPalette(value);
+  }
+}
+
+ThemeData buildSidebarPaletteTheme(
+  ThemeData baseTheme,
+  SidebarPaletteOption palette,
+) {
+  final textTheme = baseTheme.textTheme.apply(
+    bodyColor: palette.foreground,
+    displayColor: palette.foreground,
+  );
+
+  return baseTheme.copyWith(
+    primaryColor: palette.accent,
+    dividerColor: palette.border,
+    scaffoldBackgroundColor: palette.background,
+    canvasColor: palette.background,
+    cardColor: palette.backgroundAlt,
+    iconTheme: baseTheme.iconTheme.copyWith(color: palette.mutedForeground),
+    textTheme: textTheme,
+    listTileTheme: baseTheme.listTileTheme.copyWith(
+      iconColor: palette.mutedForeground,
+      textColor: palette.foreground,
+    ),
+    colorScheme: baseTheme.colorScheme.copyWith(
+      brightness: palette.background.computeLuminance() < 0.35
+          ? Brightness.dark
+          : Brightness.light,
+      primary: palette.accent,
+      onPrimary: palette.onAccent,
+      secondary: palette.accent,
+      surface: palette.background,
+      onSurface: palette.foreground,
+      onSurfaceVariant: palette.mutedForeground,
+      outline: palette.border,
+      outlineVariant: palette.border,
+    ),
+  );
+}
+
+BoxDecoration buildSidebarPaletteDecoration(SidebarPaletteOption palette) {
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        palette.background,
+        Color.alphaBlend(
+          palette.accent.withValues(alpha: 0.08),
+          palette.backgroundAlt,
+        ),
+      ],
+    ),
+  );
 }
 
 class SidebarPaletteOption {

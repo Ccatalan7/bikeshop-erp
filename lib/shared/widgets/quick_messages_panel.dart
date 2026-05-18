@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../modules/crm/models/crm_models.dart';
+import '../../modules/crm/services/customer_service.dart';
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/widgets/chat_window.dart';
@@ -27,8 +29,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   _MessageFilter _filter = _MessageFilter.all;
   String _searchTerm = '';
   String? _selectedConversationId;
+  String? _openingCustomerId;
   Set<String> _pinnedConversationIds = {};
+  List<Customer> _whatsAppContacts = [];
   bool _isRefreshing = false;
+  bool _isLoadingWhatsAppContacts = false;
 
   @override
   void initState() {
@@ -38,6 +43,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(context.read<ChatProvider>().loadConversations());
+        unawaited(_loadWhatsAppContacts());
       }
     });
   }
@@ -50,7 +56,19 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   void _handleSearchChanged() {
-    setState(() => _searchTerm = _searchController.text.trim().toLowerCase());
+    setState(() => _searchTerm = _normalizeSearchText(_searchController.text));
+  }
+
+  String _normalizeSearchText(String? value) {
+    final text = value?.trim().toLowerCase() ?? '';
+    return text
+        .replaceAll(RegExp(r'[áàäâãåā]'), 'a')
+        .replaceAll(RegExp(r'[éèëêē]'), 'e')
+        .replaceAll(RegExp(r'[íìïîī]'), 'i')
+        .replaceAll(RegExp(r'[óòöôõøō]'), 'o')
+        .replaceAll(RegExp(r'[úùüûū]'), 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll('ç', 'c');
   }
 
   Future<void> _loadPinnedConversations() async {
@@ -58,6 +76,41 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final pinned = prefs.getStringList('quick_messages_pinned_conversations');
     if (!mounted || pinned == null) return;
     setState(() => _pinnedConversationIds = pinned.toSet());
+  }
+
+  Future<void> _loadWhatsAppContacts() async {
+    if (_isLoadingWhatsAppContacts) return;
+    setState(() => _isLoadingWhatsAppContacts = true);
+    try {
+      final customers =
+          await context.read<CustomerService>().getCustomersForList();
+      final contacts = customers
+          .where((customer) =>
+              customer.id != null &&
+              customer.isActive &&
+              _hasWhatsAppPhone(customer.phone))
+          .toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+      if (!mounted) return;
+      setState(() {
+        _whatsAppContacts = contacts;
+        _isLoadingWhatsAppContacts = false;
+      });
+    } catch (error) {
+      debugPrint('Error loading WhatsApp contact search candidates: $error');
+      if (mounted) {
+        setState(() => _isLoadingWhatsAppContacts = false);
+      }
+    }
+  }
+
+  bool _hasWhatsAppPhone(String? phone) {
+    return _normalizedPhone(phone).length >= 8;
+  }
+
+  String _normalizedPhone(String? phone) {
+    return phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
   }
 
   Future<void> _togglePinnedConversation(String conversationId) async {
@@ -77,6 +130,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
     await context.read<ChatProvider>().loadConversations();
+    await _loadWhatsAppContacts();
     if (mounted) {
       setState(() => _isRefreshing = false);
     }
@@ -98,6 +152,40 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           ).toString();
     context.read<RightToolbarService>().close();
     context.go(route);
+  }
+
+  Future<void> _openWhatsAppContact(Customer customer) async {
+    final phone = customer.phone?.trim();
+    final customerId = customer.id;
+    if (phone == null || phone.isEmpty || customerId == null) return;
+
+    setState(() => _openingCustomerId = customerId);
+    try {
+      final provider = context.read<ChatProvider>();
+      await provider.openWhatsAppCustomerChat(
+        phoneNumber: phone,
+        contactName: customer.name,
+        customerId: customerId,
+      );
+
+      if (!mounted) return;
+      final conversationId = provider.activeConversationId;
+      setState(() {
+        _selectedConversationId = conversationId;
+        _openingCustomerId = null;
+      });
+      _searchController.clear();
+    } catch (error) {
+      debugPrint('Error opening WhatsApp customer from quick search: $error');
+      if (!mounted) return;
+      setState(() => _openingCustomerId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo iniciar el chat de WhatsApp'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Conversation? _selectedConversation(List<Conversation> conversations) {
@@ -123,7 +211,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
     return Column(
       children: [
-        _buildActionBar(provider),
+        _buildActionBar(),
         _buildSearchField(),
         _buildFilterStrip(provider),
         Expanded(child: _buildConversationList(provider)),
@@ -178,14 +266,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  Widget _buildActionBar(ChatProvider provider) {
-    final conversations = provider.conversations;
-    final unread = provider.totalUnreadCount;
-    final whatsapp = conversations.where((c) => c.isWhatsApp).length;
-    final team = conversations.where((c) => c.isInternal).length;
-    final clients = conversations.where((c) => c.isSupport).length;
-    final theme = Theme.of(context);
-
+  Widget _buildActionBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       child: Column(
@@ -222,85 +303,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildInboxStat(
-                icon: Icons.mark_chat_unread_outlined,
-                label: 'Sin leer',
-                value: unread,
-                alert: unread > 0,
-              ),
-              const SizedBox(width: 8),
-              _buildInboxStat(
-                icon: Icons.phone_in_talk_outlined,
-                label: 'WhatsApp',
-                value: whatsapp,
-                color: const Color(0xFF047857),
-              ),
-              const SizedBox(width: 8),
-              _buildInboxStat(
-                icon: Icons.language_outlined,
-                label: 'Clientes',
-                value: clients,
-                color: const Color(0xFF0F4C81),
-              ),
-              const SizedBox(width: 8),
-              _buildInboxStat(
-                icon: Icons.groups_outlined,
-                label: 'Equipo',
-                value: team,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildInboxStat({
-    required IconData icon,
-    required String label,
-    required int value,
-    Color? color,
-    bool alert = false,
-  }) {
-    final theme = Theme.of(context);
-    final baseColor = alert
-        ? const Color(0xFF16A34A)
-        : color ?? theme.colorScheme.onSurfaceVariant;
-
-    return Expanded(
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 7),
-        decoration: BoxDecoration(
-          color: baseColor.withValues(alpha: alert ? 0.14 : 0.06),
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: baseColor.withValues(alpha: alert ? 0.34 : 0.16),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: baseColor),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                '$label $value',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: alert ? baseColor : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -320,7 +323,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                   tooltip: 'Limpiar búsqueda',
                   onPressed: _searchController.clear,
                 ),
-          hintText: 'Buscar nombre, mensaje o canal...',
+          hintText: 'Buscar chats o clientes WhatsApp...',
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -452,41 +455,182 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   Widget _buildConversationList(ChatProvider provider) {
+    final isSearching = _searchTerm.isNotEmpty;
     final conversations = provider.conversations
-        .where((conversation) => _matchesFilter(conversation))
+        .where((conversation) => isSearching || _matchesFilter(conversation))
         .where((conversation) => _matchesSearch(provider, conversation))
         .toList()
       ..sort(_compareConversations);
+    final contactMatches = isSearching
+        ? _matchingWhatsAppContacts(provider).take(10).toList()
+        : <Customer>[];
 
-    if (conversations.isEmpty) {
+    if (conversations.isEmpty &&
+        contactMatches.isEmpty &&
+        !(isSearching && _isLoadingWhatsAppContacts)) {
       return _buildEmptyState(provider.conversations.isEmpty);
     }
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: ListView.separated(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
-        itemCount: conversations.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final conversation = conversations[index];
-          final isPinned = _pinnedConversationIds.contains(conversation.id);
-          return ConversationTile(
-            conversation: conversation,
-            isActive: conversation.id == provider.activeConversationId,
-            isPinned: isPinned,
-            isMobile: false,
-            subtitle: _subtitle(conversation),
-            onTap: () {
-              setState(() => _selectedConversationId = conversation.id);
-              context.read<ChatProvider>().setActiveConversation(
-                    conversation.id,
-                  );
-            },
-            onTogglePinned: () => _togglePinnedConversation(conversation.id),
-            onDelete: () => _confirmDelete(provider, conversation),
-          );
-        },
+        children: [
+          if (isSearching && conversations.isNotEmpty)
+            _buildSearchSectionHeader(
+              icon: Icons.chat_bubble_outline,
+              title: 'Chats',
+              count: conversations.length,
+            ),
+          for (final conversation in conversations) ...[
+            _buildConversationResult(provider, conversation),
+            const Divider(height: 1),
+          ],
+          if (isSearching &&
+              (contactMatches.isNotEmpty || _isLoadingWhatsAppContacts)) ...[
+            _buildSearchSectionHeader(
+              icon: Icons.phone_in_talk_outlined,
+              title: 'Clientes con WhatsApp',
+              count: contactMatches.length,
+            ),
+            if (_isLoadingWhatsAppContacts)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            for (final customer in contactMatches) ...[
+              _buildWhatsAppContactTile(customer),
+              const Divider(height: 1),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversationResult(
+    ChatProvider provider,
+    Conversation conversation,
+  ) {
+    final isPinned = _pinnedConversationIds.contains(conversation.id);
+    return ConversationTile(
+      conversation: conversation,
+      isActive: conversation.id == provider.activeConversationId,
+      isPinned: isPinned,
+      isMobile: false,
+      subtitle: _subtitle(conversation),
+      onTap: () {
+        setState(() => _selectedConversationId = conversation.id);
+        context.read<ChatProvider>().setActiveConversation(conversation.id);
+      },
+      onTogglePinned: () => _togglePinnedConversation(conversation.id),
+      onDelete: () => _confirmDelete(provider, conversation),
+    );
+  }
+
+  Widget _buildSearchSectionHeader({
+    required IconData icon,
+    required String title,
+    required int count,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 7),
+          Text(
+            title,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWhatsAppContactTile(Customer customer) {
+    final theme = Theme.of(context);
+    final phone = customer.phone?.trim() ?? '';
+    final isOpening = _openingCustomerId == customer.id;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isOpening ? null : () => _openWhatsAppContact(customer),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFF047857).withValues(alpha: 0.1),
+                child: Text(
+                  customer.initials,
+                  style: const TextStyle(
+                    color: Color(0xFF047857),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      phone,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isOpening)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(
+                  Icons.add_comment_outlined,
+                  size: 19,
+                  color: Color(0xFF047857),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -505,16 +649,69 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   bool _matchesSearch(ChatProvider provider, Conversation conversation) {
     if (_searchTerm.isEmpty) return true;
 
-    final haystack = [
+    final haystack = _normalizeSearchText([
       provider.getChatTitle(conversation),
       conversation.title ?? '',
       conversation.creatorName ?? '',
+      conversation.contextHint?.customerLabel ?? '',
+      conversation.contextHint?.phone ?? '',
+      conversation.contextHint?.jobNumber ?? '',
+      conversation.contextHint?.jobStatus ?? '',
+      conversation.contextHint?.bikeName ?? '',
       conversation.channelLabel,
       conversation.lastMessageContent ?? '',
       _subtitle(conversation),
-    ].join(' ').toLowerCase();
+    ].join(' '));
 
     return haystack.contains(_searchTerm);
+  }
+
+  List<Customer> _matchingWhatsAppContacts(ChatProvider provider) {
+    final existingCustomerIds = <String>{};
+    final existingPhones = <String>{};
+    final existingNames = <String>{};
+    for (final conversation in provider.conversations) {
+      if (!conversation.isWhatsApp) continue;
+      final title = _normalizeSearchText(provider.getChatTitle(conversation));
+      if (title.isNotEmpty) existingNames.add(title);
+      final customerId = conversation.contextHint?.customerId;
+      if (customerId != null && customerId.isNotEmpty) {
+        existingCustomerIds.add(customerId);
+      }
+      final phone = _normalizedPhone(conversation.contextHint?.phone);
+      if (phone.isNotEmpty) existingPhones.add(phone);
+    }
+
+    return _whatsAppContacts.where((customer) {
+      final customerId = customer.id;
+      final phone = _normalizedPhone(customer.phone);
+      final name = _normalizeSearchText(customer.name);
+      if (customerId != null && existingCustomerIds.contains(customerId)) {
+        return false;
+      }
+      if (phone.isNotEmpty && existingPhones.contains(phone)) {
+        return false;
+      }
+      if (name.isNotEmpty && existingNames.contains(name)) {
+        return false;
+      }
+      return _matchesCustomerSearch(customer);
+    }).toList();
+  }
+
+  bool _matchesCustomerSearch(Customer customer) {
+    final phone = _normalizedPhone(customer.phone);
+    final searchDigits = _normalizedPhone(_searchTerm);
+    final haystack = _normalizeSearchText([
+      customer.name,
+      customer.email ?? '',
+      customer.rut,
+      customer.phone ?? '',
+      phone,
+    ].join(' '));
+
+    return haystack.contains(_searchTerm) ||
+        (searchDigits.isNotEmpty && phone.contains(searchDigits));
   }
 
   int _compareConversations(Conversation a, Conversation b) {

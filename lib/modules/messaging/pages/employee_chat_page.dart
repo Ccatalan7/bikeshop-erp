@@ -9,6 +9,7 @@ import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
 import '../../messaging/utils/message_parser.dart';
 import '../../messaging/widgets/conversation_tile.dart';
+import '../../settings/services/appearance_service.dart';
 
 // Track last handled deep link with timestamp to prevent rapid re-processing
 String? _lastHandledConversationId;
@@ -26,8 +27,6 @@ class EmployeeChatPage extends StatefulWidget {
 class _EmployeeChatPageState extends State<EmployeeChatPage>
     with SingleTickerProviderStateMixin {
   static const Color _accentBlue = Color(0xFF093357);
-  static const Color _borderColor = Color(0xFFE5E7EB);
-  static const Color _softSurface = Color(0xFFF8FAFC);
 
   late TabController _tabController;
   ReferenceSegment? _activeReference;
@@ -152,6 +151,23 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   @override
   Widget build(BuildContext context) {
+    final appearanceService = context.watch<AppearanceService>();
+    if (appearanceService.messagingUsesSidebarPalette) {
+      final paletteTheme = buildSidebarPaletteTheme(
+        Theme.of(context),
+        appearanceService.sidebarPalette,
+      );
+
+      return Theme(
+        data: paletteTheme,
+        child: Builder(builder: _buildContent),
+      );
+    }
+
+    return _buildContent(context);
+  }
+
+  Widget _buildContent(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final activeId = provider.activeConversationId;
     final allConversations = provider.conversations;
@@ -205,14 +221,18 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     List<Conversation> allConversations,
     int pendingCount,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Mensajería interna',
-          style: TextStyle(color: Colors.black87),
+          style: TextStyle(color: colorScheme.onSurface),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         elevation: 1,
         actions: [
           IconButton(
@@ -231,9 +251,9 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Theme.of(context).primaryColor,
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: Theme.of(context).primaryColor,
+          labelColor: colorScheme.primary,
+          unselectedLabelColor: colorScheme.onSurfaceVariant,
+          indicatorColor: colorScheme.primary,
           tabs: [
             Tab(
               child: Row(
@@ -274,6 +294,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     int activeSupportCount,
     int internalCount,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final hasConversationContext =
         activeConversation?.hasSupportedContextPanel ?? false;
     final isConversationContextClosed = hasConversationContext &&
@@ -282,14 +304,16 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         hasConversationContext && !isConversationContextClosed;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       body: Row(
         children: [
           // Left Sidebar: Thread List
           Container(
             width: 360,
             decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: Colors.grey[200]!)),
-              color: Colors.white,
+              border:
+                  Border(right: BorderSide(color: colorScheme.outlineVariant)),
+              color: colorScheme.surface,
             ),
             child: Column(
               children: [
@@ -303,13 +327,13 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 Container(
                   decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: Colors.grey[200]!),
+                      bottom: BorderSide(color: colorScheme.outlineVariant),
                     ),
                   ),
                   child: TabBar(
                     controller: _tabController,
-                    labelColor: Theme.of(context).primaryColor,
-                    unselectedLabelColor: Colors.grey[600],
+                    labelColor: colorScheme.primary,
+                    unselectedLabelColor: colorScheme.onSurfaceVariant,
                     indicatorSize: TabBarIndicatorSize.tab,
                     tabs: [
                       Tab(
@@ -362,13 +386,15 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.chat_bubble_outline,
-                              size: 64, color: Colors.grey[300]),
+                              size: 64,
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.34)),
                           const SizedBox(height: 16),
                           Text(
                             'Selecciona una conversación',
                             style: TextStyle(
                               fontSize: 18,
-                              color: Colors.grey[500],
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -389,8 +415,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           else if (activeConversation?.hasSupportedContextPanel == true &&
               showConversationContextPanel)
             ChatContextPanel(
-              contextType: activeConversation!.contextType!,
-              contextId: activeConversation.contextId!,
+              contextType: activeConversation!.effectiveContextType!,
+              contextId: activeConversation.effectiveContextId!,
               onClose: () => _closeConversationContextPanel(activeConversation),
             ),
         ],
@@ -403,20 +429,24 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     required int activeSupportCount,
     required int internalCount,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: _borderColor)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Mensajería interna',
                   style: TextStyle(
+                    color: colorScheme.onSurface,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
@@ -443,7 +473,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           Text(
             'Equipo, chat web y WhatsApp separados por canal.',
             style: TextStyle(
-              color: Colors.grey[600],
+              color: colorScheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -488,15 +518,25 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     IconData icon, {
     bool alert = false,
   }) {
-    final color = alert ? const Color(0xFFB45309) : const Color(0xFF475569);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color =
+        alert ? const Color(0xFFB45309) : colorScheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
       decoration: BoxDecoration(
-        color: alert ? color.withValues(alpha: 0.06) : _softSurface,
+        color: alert
+            ? color.withValues(alpha: 0.06)
+            : Color.alphaBlend(
+                colorScheme.primary.withValues(alpha: 0.035),
+                colorScheme.surface,
+              ),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: alert ? color.withValues(alpha: 0.35) : _borderColor,
+          color: alert
+              ? color.withValues(alpha: 0.35)
+              : colorScheme.outlineVariant,
         ),
       ),
       child: Row(
@@ -661,18 +701,24 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     required String subtitle,
     required IconData icon,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _softSurface,
+        color: Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: 0.035),
+          colorScheme.surface,
+        ),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: _accentBlue),
+          Icon(icon, size: 18, color: colorScheme.primary),
           const SizedBox(width: 9),
           Expanded(
             child: Column(
@@ -680,7 +726,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -689,7 +736,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -703,6 +750,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   }
 
   Widget _buildSupportOverview(List<Conversation> conversations) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final orderContexts = conversations
         .where((conversation) => conversation.contextType == 'order')
         .length;
@@ -720,16 +769,20 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _softSurface,
+        color: Color.alphaBlend(
+          colorScheme.primary.withValues(alpha: 0.035),
+          colorScheme.surface,
+        ),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Bandeja de clientes',
             style: TextStyle(
+              color: colorScheme.onSurface,
               fontSize: 13,
               fontWeight: FontWeight.w800,
             ),
@@ -738,7 +791,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           Text(
             'Chat web y WhatsApp viven separados para no mezclar canales ni permisos de envío.',
             style: TextStyle(
-              color: Colors.grey[600],
+              color: colorScheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -795,14 +848,17 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     IconData icon, {
     bool alert = false,
   }) {
-    final color = alert ? const Color(0xFFB45309) : const Color(0xFF475569);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color =
+        alert ? const Color(0xFFB45309) : colorScheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -822,7 +878,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               label,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.grey[700],
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -844,6 +900,9 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     required ChatProvider provider,
     required String? activeId,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -851,10 +910,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           margin: const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surface,
             border: Border(
-              top: const BorderSide(color: _borderColor),
-              bottom: const BorderSide(color: _borderColor),
+              top: BorderSide(color: colorScheme.outlineVariant),
+              bottom: BorderSide(color: colorScheme.outlineVariant),
               left: BorderSide(color: color, width: 3),
             ),
           ),
@@ -883,7 +942,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: Colors.grey[600],
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],

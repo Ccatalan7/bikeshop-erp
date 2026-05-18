@@ -71,7 +71,6 @@ class _ConversationTileState extends State<ConversationTile> {
     final isPending = conv.status == 'pending';
     final accentColor = _channelColor(conv, isPending);
     const unreadColor = Color(0xFF16A34A);
-    final signalColor = hasUnread ? unreadColor : accentColor;
     final timeColor = hasUnread
         ? unreadColor
         : colorScheme.onSurfaceVariant.withValues(alpha: 0.68);
@@ -181,10 +180,11 @@ class _ConversationTileState extends State<ConversationTile> {
                     const SizedBox(height: 5),
                     Row(
                       children: [
-                        _buildContextPill(
-                          conv,
-                          signalColor,
-                          prominent: hasUnread,
+                        Expanded(
+                          child: _buildContextPills(
+                            conv,
+                            prominent: hasUnread,
+                          ),
                         ),
                         if (widget.isPinned) ...[
                           const SizedBox(width: 6),
@@ -279,18 +279,61 @@ class _ConversationTileState extends State<ConversationTile> {
     );
   }
 
-  Widget _buildContextPill(
-    Conversation conv,
-    Color accentColor, {
+  Widget _buildContextPills(
+    Conversation conv, {
+    bool prominent = false,
+  }) {
+    final hint = conv.contextHint;
+    final items = <Widget>[];
+
+    if (hint?.hasJob == true) {
+      items.add(
+        _buildMiniContextPill(
+          label: [
+            hint!.jobNumber?.trim().isNotEmpty == true
+                ? hint.jobNumber!.trim()
+                : 'Trabajo',
+            if (hint.jobStatus?.trim().isNotEmpty == true)
+              hint.jobStatus!.trim(),
+          ].join(' · '),
+          color: _colorFromHex(hint.jobStatusColor, const Color(0xFF2563EB)),
+          prominent: true,
+        ),
+      );
+    }
+
+    if (hint?.bikeName?.trim().isNotEmpty == true) {
+      items.add(
+        _buildMiniContextPill(
+          label: hint!.bikeName!.trim(),
+          color: const Color(0xFF475569),
+          prominent: prominent,
+        ),
+      );
+    }
+
+    if (items.isNotEmpty) {
+      return Wrap(
+        spacing: 5,
+        runSpacing: 4,
+        children: items,
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMiniContextPill({
+    required String label,
+    required Color color,
     bool prominent = false,
   }) {
     final theme = Theme.of(context);
-    final label = _contextSummary(conv);
     return Container(
-      constraints: const BoxConstraints(maxWidth: 190),
+      constraints: const BoxConstraints(maxWidth: 178),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: prominent ? 0.13 : 0.07),
+        color: color.withValues(alpha: prominent ? 0.13 : 0.07),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -298,12 +341,20 @@ class _ConversationTileState extends State<ConversationTile> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(
-          color: accentColor,
+          color: color,
           fontWeight: FontWeight.w700,
           letterSpacing: 0,
         ),
       ),
     );
+  }
+
+  Color _colorFromHex(String? value, Color fallback) {
+    final raw = value?.trim();
+    if (raw == null || raw.isEmpty) return fallback;
+    final normalized = raw.replaceFirst('#', '');
+    final parsed = int.tryParse('ff$normalized', radix: 16);
+    return parsed == null ? fallback : Color(parsed);
   }
 
   Widget _buildTrailing(
@@ -478,32 +529,6 @@ class _ConversationTileState extends State<ConversationTile> {
       return 'Tú: $preview';
     }
     return preview;
-  }
-
-  String _contextSummary(Conversation conv) {
-    final context = switch (conv.contextType) {
-      'order' => 'Pedido web',
-      'job' => 'Trabajo',
-      'invoice' => 'Factura',
-      'bike' => 'Bicicleta',
-      'customer' => 'Cliente',
-      'product' => 'Producto',
-      _ => null,
-    };
-
-    final channel = conv.shortChannelLabel;
-    final status = switch (conv.status) {
-      'pending' => 'pendiente',
-      'resolved' => 'resuelto',
-      'rejected' => 'rechazado',
-      _ => null,
-    };
-
-    return [
-      if (context != null) context,
-      channel,
-      if (status != null) status,
-    ].join(' · ');
   }
 
   IconData _channelIcon(Conversation conv) {

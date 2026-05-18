@@ -255,6 +255,10 @@ class ChatProvider extends ChangeNotifier {
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
         return c.creatorName ?? 'Cliente';
       }
+      final hintedCustomer = c.contextHint?.customerLabel;
+      if (hintedCustomer != null && hintedCustomer.isNotEmpty) {
+        return hintedCustomer;
+      }
       if (c.title != null && c.title!.trim().isNotEmpty) {
         return c.title!.trim();
       }
@@ -374,6 +378,7 @@ class ChatProvider extends ChangeNotifier {
         unreadCount: 0, // Force clear
         createdBy: old.createdBy,
         creatorName: old.creatorName,
+        contextHint: old.contextHint,
       );
       notifyListeners();
     }

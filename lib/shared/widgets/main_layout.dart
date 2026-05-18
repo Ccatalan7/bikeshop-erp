@@ -473,51 +473,86 @@ const List<MenuSubItem> _toolsMenuItems = [
 ];
 
 const String _toolsSectionKey = 'tools';
+const String _neutralDarkSidebarVinabikeLogoAsset =
+    'assets/images/vinabike_logo_dark.png';
+const Map<String, String> _darkSidebarVinabikeLogoAssets = {
+  'midnight': 'assets/images/vinabike_logo_dark_midnight.png',
+  'aubergine': 'assets/images/vinabike_logo_dark_aubergine.png',
+  'graphite_copper': 'assets/images/vinabike_logo_dark_graphite_copper.png',
+  'evergreen': 'assets/images/vinabike_logo_dark_evergreen.png',
+  'pacific': 'assets/images/vinabike_logo_dark_pacific.png',
+};
 
 ThemeData _sidebarPaletteTheme(
   ThemeData baseTheme,
   SidebarPaletteOption palette,
 ) {
-  final textTheme = baseTheme.textTheme.apply(
-    bodyColor: palette.foreground,
-    displayColor: palette.foreground,
-  );
-
-  return baseTheme.copyWith(
-    primaryColor: palette.accent,
-    dividerColor: palette.border,
-    iconTheme: baseTheme.iconTheme.copyWith(color: palette.mutedForeground),
-    textTheme: textTheme,
-    listTileTheme: baseTheme.listTileTheme.copyWith(
-      iconColor: palette.mutedForeground,
-      textColor: palette.foreground,
-    ),
-    colorScheme: baseTheme.colorScheme.copyWith(
-      primary: palette.accent,
-      onPrimary: palette.onAccent,
-      secondary: palette.accent,
-      surface: palette.background,
-      onSurface: palette.foreground,
-      onSurfaceVariant: palette.mutedForeground,
-      outline: palette.border,
-      outlineVariant: palette.border,
-    ),
-  );
+  return buildSidebarPaletteTheme(baseTheme, palette);
 }
 
 BoxDecoration _sidebarPaletteDecoration(SidebarPaletteOption palette) {
-  return BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        palette.background,
-        Color.alphaBlend(
-          palette.accent.withValues(alpha: 0.08),
-          palette.backgroundAlt,
-        ),
-      ],
+  return buildSidebarPaletteDecoration(palette);
+}
+
+bool _shouldUseDarkVinabikeLogo(ThemeData theme, String? logoUrl) {
+  if (logoUrl == null || logoUrl.isEmpty) return false;
+  if (theme.colorScheme.surface.computeLuminance() > 0.35) return false;
+
+  final parsedUri = Uri.tryParse(logoUrl);
+  final rawFileName = parsedUri != null && parsedUri.pathSegments.isNotEmpty
+      ? parsedUri.pathSegments.last
+      : logoUrl;
+  final fileName = (() {
+    try {
+      return Uri.decodeComponent(rawFileName).toLowerCase();
+    } catch (_) {
+      return rawFileName.toLowerCase();
+    }
+  })();
+
+  return fileName.contains('vinabike') || fileName.contains('viñabike');
+}
+
+Widget _buildAdaptiveCompanyLogo({
+  required BuildContext context,
+  required AppearanceService appearanceService,
+  required Widget Function(BuildContext context) fallbackBuilder,
+}) {
+  final theme = Theme.of(context);
+  final logoUrl = appearanceService.companyLogoUrl;
+
+  if (_shouldUseDarkVinabikeLogo(theme, logoUrl)) {
+    return Image.asset(
+      _darkSidebarVinabikeLogoAssets[appearanceService.sidebarPaletteCode] ??
+          _neutralDarkSidebarVinabikeLogoAsset,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+    );
+  }
+
+  if (logoUrl == null || logoUrl.isEmpty) {
+    return fallbackBuilder(context);
+  }
+
+  return CachedNetworkImage(
+    imageUrl: logoUrl,
+    fit: BoxFit.contain,
+    imageBuilder: (context, imageProvider) => Image(
+      image: imageProvider,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
     ),
+    placeholder: (context, url) => Center(
+      child: SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: theme.colorScheme.primary,
+        ),
+      ),
+    ),
+    errorWidget: (context, url, error) => fallbackBuilder(context),
   );
 }
 
@@ -624,6 +659,12 @@ class _SidebarOptionsPanel extends StatelessWidget {
                         .withValues(alpha: 0.3)),
                 _SidebarPalettePicker(
                   appearanceService: appearanceService,
+                ),
+                _OptionSwitchTile(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'Paleta en mensajería y barra derecha',
+                  value: appearanceService.messagingUsesSidebarPalette,
+                  onChanged: appearanceService.setMessagingUsesSidebarPalette,
                 ),
                 Divider(
                     height: 1,
@@ -736,6 +777,55 @@ class _OptionTile extends StatelessWidget {
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
             const SizedBox(width: 12),
             Text(label, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionSwitchTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _OptionSwitchTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
           ],
         ),
       ),
@@ -1868,25 +1958,14 @@ class _AppSidebarState extends State<AppSidebar> {
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: CachedNetworkImage(
-                              imageUrl: appearanceService.companyLogoUrl!,
-                              fit: BoxFit.contain,
-                              imageBuilder: (context, imageProvider) => Image(
-                                image: imageProvider,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.high,
+                            child: _buildAdaptiveCompanyLogo(
+                              context: context,
+                              appearanceService: appearanceService,
+                              fallbackBuilder: (context) => _buildDefaultHeader(
+                                context,
+                                theme,
+                                appearanceService,
                               ),
-                              placeholder: (context, url) => const Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) =>
-                                  _buildDefaultHeader(
-                                      context, theme, appearanceService),
                             ),
                           ),
                         )
@@ -2642,25 +2721,14 @@ class _AppDrawerState extends State<AppDrawer> {
                   child: appearanceService.hasCustomLogo
                       ? Padding(
                           padding: const EdgeInsets.all(8),
-                          child: CachedNetworkImage(
-                            imageUrl: appearanceService.companyLogoUrl!,
-                            fit: BoxFit.contain,
-                            imageBuilder: (context, imageProvider) => Image(
-                              image: imageProvider,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                            ),
-                            placeholder: (context, url) {
-                              final theme = Theme.of(context);
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  color: theme.colorScheme.primary,
-                                ),
-                              );
-                            },
-                            errorWidget: (context, url, error) =>
+                          child: _buildAdaptiveCompanyLogo(
+                            context: context,
+                            appearanceService: appearanceService,
+                            fallbackBuilder: (context) =>
                                 _Helper.buildDefaultDrawerHeader(
-                                    context, appearanceService),
+                              context,
+                              appearanceService,
+                            ),
                           ),
                         )
                       : _Helper.buildDefaultDrawerHeader(
@@ -2995,6 +3063,24 @@ class _AppDrawerState extends State<AppDrawer> {
                 onTap: () {
                   final newMode = isDark ? ThemeMode.light : ThemeMode.dark;
                   appearanceService.setThemeMode(newMode);
+                },
+              );
+            },
+          ),
+
+          Consumer<AppearanceService>(
+            builder: (context, appearanceService, _) {
+              return ListTile(
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: const Text('Paleta en mensajería y barra derecha'),
+                trailing: Switch(
+                  value: appearanceService.messagingUsesSidebarPalette,
+                  onChanged: appearanceService.setMessagingUsesSidebarPalette,
+                ),
+                onTap: () {
+                  appearanceService.setMessagingUsesSidebarPalette(
+                    !appearanceService.messagingUsesSidebarPalette,
+                  );
                 },
               );
             },

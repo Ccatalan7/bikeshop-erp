@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/settings/services/appearance_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
@@ -232,18 +233,38 @@ class _RightToolbarState extends State<RightToolbar> {
     final isDark = theme.brightness == Brightness.dark;
     final toolbarService = context.watch<RightToolbarService>();
     final chatProvider = context.watch<ChatProvider>();
+    final appearanceService = context.watch<AppearanceService>();
     final activeTool = toolbarService.activeTool;
     final visibleTools = _visibleTools(toolbarService);
+    final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
+    final sidebarPalette = appearanceService.sidebarPalette;
+    final stripTheme = useToolbarPalette
+        ? buildSidebarPaletteTheme(theme, sidebarPalette)
+        : theme;
 
     final barBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F1F3);
     final barBorder =
         isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
-    final activeBg = isDark
-        ? theme.colorScheme.primary.withValues(alpha: 0.2)
-        : theme.colorScheme.primary.withValues(alpha: 0.1);
+    final activeBg = useToolbarPalette
+        ? sidebarPalette.accent.withValues(alpha: 0.16)
+        : isDark
+            ? theme.colorScheme.primary.withValues(alpha: 0.2)
+            : theme.colorScheme.primary.withValues(alpha: 0.1);
 
     final bool isExpanded = activeTool != null;
     final double currentWidth = isExpanded ? _expandedWidth : _collapsedWidth;
+    final shellDecoration = isExpanded || !useToolbarPalette
+        ? BoxDecoration(
+            color: barBg,
+            border: Border(
+              left: BorderSide(color: barBorder, width: 1),
+            ),
+          )
+        : buildSidebarPaletteDecoration(sidebarPalette).copyWith(
+            border: Border(
+              left: BorderSide(color: sidebarPalette.border, width: 1),
+            ),
+          );
 
     return Stack(
       children: [
@@ -252,12 +273,7 @@ class _RightToolbarState extends State<RightToolbar> {
               _isResizing ? Duration.zero : const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
           width: currentWidth,
-          decoration: BoxDecoration(
-            color: barBg,
-            border: Border(
-              left: BorderSide(color: barBorder, width: 1),
-            ),
-          ),
+          decoration: shellDecoration,
           child: isExpanded
               ? _buildExpanded(
                   theme,
@@ -265,9 +281,10 @@ class _RightToolbarState extends State<RightToolbar> {
                   activeTool,
                   visibleTools,
                   chatProvider,
+                  appearanceService,
                 )
               : _buildCollapsed(
-                  theme,
+                  stripTheme,
                   activeBg,
                   visibleTools,
                   chatProvider,
@@ -356,139 +373,181 @@ class _RightToolbarState extends State<RightToolbar> {
     ToolbarTool tool,
     List<ToolbarTool> visibleTools,
     ChatProvider chatProvider,
+    AppearanceService appearanceService,
   ) {
-    final railBg = isDark ? const Color(0xFF161616) : const Color(0xFFE8EAED);
-    final railBorder =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
+    final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
+    final palette = appearanceService.sidebarPalette;
+    final railTheme =
+        useToolbarPalette ? buildSidebarPaletteTheme(theme, palette) : theme;
+    final railBg = useToolbarPalette
+        ? palette.background
+        : isDark
+            ? const Color(0xFF161616)
+            : const Color(0xFFE8EAED);
+    final railBorder = useToolbarPalette
+        ? palette.border
+        : isDark
+            ? const Color(0xFF2E2E2E)
+            : const Color(0xFFDDE0E4);
+    final railDecoration = useToolbarPalette
+        ? buildSidebarPaletteDecoration(palette).copyWith(
+            border: Border(
+              left: BorderSide(color: railBorder, width: 1),
+            ),
+          )
+        : BoxDecoration(
+            color: railBg,
+            border: Border(
+              left: BorderSide(color: railBorder, width: 1),
+            ),
+          );
+    final useSidebarPalette = tool == ToolbarTool.messages &&
+        appearanceService.messagingUsesSidebarPalette;
+    final panelTheme =
+        useSidebarPalette ? buildSidebarPaletteTheme(theme, palette) : theme;
+    final panelBorderColor = useSidebarPalette
+        ? palette.border
+        : isDark
+            ? const Color(0xFF2E2E2E)
+            : const Color(0xFFDDE0E4);
+
+    final panelContent = Column(
+      children: [
+        // Header bar
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: panelBorderColor),
+            ),
+          ),
+          child: Row(
+            children: [
+              _buildToolIcon(
+                panelTheme,
+                tool,
+                chatProvider,
+                iconSize: 18,
+                iconColor: panelTheme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _toolTitle(tool),
+                style: panelTheme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (tool == ToolbarTool.performance)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => context
+                        .read<RightToolbarService>()
+                        .unpinGaugeFromToolbar(),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.push_pin_outlined,
+                        size: 18,
+                        color: panelTheme.colorScheme.onSurface
+                            .withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+                ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _close,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: panelTheme.colorScheme.onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Tool content
+        Expanded(child: _toolPanel(tool)),
+      ],
+    );
 
     return Row(
       children: [
         // Panel area first (left), mini rail on right edge
         Expanded(
-          child: Column(
-            children: [
-              // Header bar
-              Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark
-                          ? const Color(0xFF2E2E2E)
-                          : const Color(0xFFDDE0E4),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    _buildToolIcon(
-                      theme,
-                      tool,
-                      chatProvider,
-                      iconSize: 18,
-                      iconColor: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _toolTitle(tool),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (tool == ToolbarTool.performance)
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => context
-                              .read<RightToolbarService>()
-                              .unpinGaugeFromToolbar(),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              Icons.push_pin_outlined,
-                              size: 18,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ),
-                      ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _close,
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.close,
-                            size: 18,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Tool content
-              Expanded(child: _toolPanel(tool)),
-            ],
+          child: Theme(
+            data: panelTheme,
+            child: useSidebarPalette
+                ? DecoratedBox(
+                    decoration: buildSidebarPaletteDecoration(palette),
+                    child: panelContent,
+                  )
+                : panelContent,
           ),
         ),
         // Mini icon rail — right edge, always visible to switch tools
-        Container(
-          width: _collapsedWidth,
-          decoration: BoxDecoration(
-            color: railBg,
-            border: Border(
-              left: BorderSide(color: railBorder, width: 1),
-            ),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              for (final t in visibleTools)
-                Tooltip(
-                  message: _toolTitle(t),
-                  preferBelow: false,
-                  waitDuration: const Duration(milliseconds: 300),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _selectTool(t),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        margin: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: t == tool
-                              ? theme.colorScheme.primary
-                                  .withValues(alpha: isDark ? 0.25 : 0.12)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: _buildToolIcon(
-                          theme,
-                          t,
-                          chatProvider,
-                          iconSize: 20,
-                          iconColor: t == tool
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.55),
+        Theme(
+          data: railTheme,
+          child: Container(
+            width: _collapsedWidth,
+            decoration: railDecoration,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                for (final t in visibleTools)
+                  Tooltip(
+                    message: _toolTitle(t),
+                    preferBelow: false,
+                    waitDuration: const Duration(milliseconds: 300),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _selectTool(t),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 4, horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: t == tool
+                                ? railTheme.colorScheme.primary.withValues(
+                                    alpha: useToolbarPalette
+                                        ? 0.16
+                                        : isDark
+                                            ? 0.25
+                                            : 0.12,
+                                  )
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: _buildToolIcon(
+                            railTheme,
+                            t,
+                            chatProvider,
+                            iconSize: 20,
+                            iconColor: t == tool
+                                ? railTheme.colorScheme.primary
+                                : railTheme.colorScheme.onSurface
+                                    .withValues(alpha: 0.55),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
