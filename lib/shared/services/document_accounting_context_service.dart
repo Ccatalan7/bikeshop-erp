@@ -110,13 +110,17 @@ class DocumentAccountingContextService {
       invoiceId: invoiceId,
       paymentPrefix: 'PAG',
     );
+    final linkedExpenses = await _loadLinkedPurchaseExpenses(
+      purchaseInvoiceId: invoiceId,
+    );
     final journalEntries = await _loadJournalEntries(
       sourceModule: 'purchase_invoices',
       sourceReferences: [invoiceNumber, invoiceId],
     );
 
     return DocumentAccountingContext(
-      payments: payments,
+      payments: [...payments, ...linkedExpenses]
+        ..sort((left, right) => right.date.compareTo(left.date)),
       journalEntries: journalEntries,
     );
   }
@@ -160,6 +164,67 @@ class DocumentAccountingContextService {
       }).toList();
     } catch (e) {
       debugPrint('DocumentAccountingContextService._loadPayments error: $e');
+      return const [];
+    }
+  }
+
+  Future<List<DocumentPaymentRecord>> _loadLinkedPurchaseExpenses({
+    required String purchaseInvoiceId,
+  }) async {
+    try {
+      final response = await _client
+          .from('expense_links')
+          .select(
+            'expense_id, link_kind, allocated_amount, notes, expenses(id, expense_number, supplier_name, issue_date, total_amount, payment_status, payment_method_id)',
+          )
+          .eq('purchase_invoice_id', purchaseInvoiceId)
+          .order('created_at', ascending: false);
+
+      final rows = (response as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+
+      final methodIds = rows
+          .map((row) => _parseNestedMap(row['expenses']))
+          .map((expense) => expense?['payment_method_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final methodsById = await _loadPaymentMethods(methodIds);
+
+      return rows.map((row) {
+        final expense = _parseNestedMap(row['expenses']) ?? const {};
+        final expenseId =
+            expense['id']?.toString() ?? row['expense_id']?.toString() ?? '';
+        final methodId = expense['payment_method_id']?.toString();
+        final linkKind = _linkKindLabel(row['link_kind']?.toString());
+        final supplierName = _blankToNull(expense['supplier_name']);
+        final amount = _toDouble(row['allocated_amount']) > 0
+            ? _toDouble(row['allocated_amount'])
+            : _toDouble(expense['total_amount']);
+
+        return DocumentPaymentRecord(
+          id: expenseId,
+          number:
+              expense['expense_number']?.toString().trim().isNotEmpty == true
+                  ? expense['expense_number'].toString()
+                  : _shortDocumentNumber('GTO', expenseId),
+          date: _parseDate(expense['issue_date']),
+          reference: [
+            linkKind,
+            if (supplierName != null) supplierName,
+          ].join(' · '),
+          status: _expensePaymentStatusLabel(
+            expense['payment_status']?.toString(),
+          ),
+          methodName: methodsById[methodId] ?? 'Sin método',
+          amount: amount,
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint(
+        'DocumentAccountingContextService._loadLinkedPurchaseExpenses error: $e',
+      );
       return const [];
     }
   }
@@ -304,5 +369,40 @@ class DocumentAccountingContextService {
   static String? _blankToNull(dynamic value) {
     final text = value?.toString().trim();
     return text == null || text.isEmpty ? null : text;
+  }
+
+  static Map<String, dynamic>? _parseNestedMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return value.map((key, dynamic val) => MapEntry(key.toString(), val));
+    }
+    return null;
+  }
+
+  static String _expensePaymentStatusLabel(String? value) {
+    switch (value) {
+      case 'paid':
+        return 'Pagada';
+      case 'partial':
+        return 'Parcial';
+      case 'scheduled':
+        return 'Programada';
+      case 'void':
+        return 'Anulada';
+      case 'pending':
+      default:
+        return 'Pendiente';
+    }
+  }
+
+  static String _linkKindLabel(String? value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega / transporte';
+      case 'import_cost':
+        return 'Costo de importación';
+      default:
+        return 'Gasto relacionado';
+    }
   }
 }

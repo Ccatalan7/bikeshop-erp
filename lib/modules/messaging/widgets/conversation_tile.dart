@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/conversation.dart';
 import '../providers/chat_provider.dart';
 import '../../../shared/services/route_share_service.dart';
+import '../../../shared/services/image_service.dart';
 
 class ConversationTile extends StatefulWidget {
   final Conversation conversation;
@@ -237,22 +238,30 @@ class _ConversationTileState extends State<ConversationTile> {
     bool hasUnread,
   ) {
     final initials = _initialsFor(title);
+    final avatarUrl = conv.contextHint?.customerImageUrl?.trim();
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+    final fallbackAvatar = _buildInitialsAvatar(
+      initials,
+      accentColor,
+      hasUnread,
+    );
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor:
-              accentColor.withValues(alpha: hasUnread ? 0.16 : 0.1),
-          child: Text(
-            initials,
-            style: TextStyle(
-              color: accentColor,
-              fontWeight: FontWeight.w800,
-              fontSize: initials.length > 1 ? 12 : 15,
-              letterSpacing: 0,
-            ),
-          ),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: hasAvatar
+              ? ImageService.buildCachedImage(
+                  imageUrl: avatarUrl,
+                  width: 44,
+                  height: 44,
+                  isCircular: true,
+                  placeholder: fallbackAvatar,
+                  errorWidget: fallbackAvatar,
+                )
+              : fallbackAvatar,
         ),
         Positioned(
           right: -2,
@@ -276,6 +285,26 @@ class _ConversationTileState extends State<ConversationTile> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInitialsAvatar(
+    String initials,
+    Color accentColor,
+    bool hasUnread,
+  ) {
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: accentColor.withValues(alpha: hasUnread ? 0.16 : 0.1),
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: accentColor,
+          fontWeight: FontWeight.w800,
+          fontSize: initials.length > 1 ? 12 : 15,
+          letterSpacing: 0,
+        ),
+      ),
     );
   }
 

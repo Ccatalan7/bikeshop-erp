@@ -1,6 +1,7 @@
 class ConversationContextHint {
   final String? customerId;
   final String? customerName;
+  final String? customerImageUrl;
   final String? phone;
   final String? primaryContextType;
   final String? primaryContextId;
@@ -19,6 +20,7 @@ class ConversationContextHint {
   const ConversationContextHint({
     this.customerId,
     this.customerName,
+    this.customerImageUrl,
     this.phone,
     this.primaryContextType,
     this.primaryContextId,
@@ -47,6 +49,7 @@ class ConversationContextHint {
     return ConversationContextHint(
       customerId: json['customer_id']?.toString(),
       customerName: json['customer_name']?.toString(),
+      customerImageUrl: json['customer_image_url']?.toString(),
       phone: json['phone']?.toString(),
       primaryContextType: json['primary_context_type']?.toString(),
       primaryContextId: json['primary_context_id']?.toString(),
@@ -68,6 +71,7 @@ class ConversationContextHint {
     return {
       if (customerId != null) 'customer_id': customerId,
       if (customerName != null) 'customer_name': customerName,
+      if (customerImageUrl != null) 'customer_image_url': customerImageUrl,
       if (phone != null) 'phone': phone,
       if (primaryContextType != null)
         'primary_context_type': primaryContextType,

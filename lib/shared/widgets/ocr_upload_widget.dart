@@ -90,6 +90,13 @@ class OCRUploadWidget extends StatefulWidget {
   /// Supplier name for display and assignment to products
   final String? supplierName;
 
+  /// Show product/stock review. Expense capture uses the same OCR pipeline but
+  /// only needs document header totals, supplier, date, and folio.
+  final bool showLineItemReview;
+
+  /// Optional title override for non-purchase invoice workflows.
+  final String? title;
+
   const OCRUploadWidget({
     super.key,
     required this.onComplete,
@@ -99,6 +106,8 @@ class OCRUploadWidget extends StatefulWidget {
     this.provider = OCRProvider.auto,
     this.supplierId,
     this.supplierName,
+    this.showLineItemReview = true,
+    this.title,
   });
 
   @override
@@ -252,9 +261,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           children: [
             // Title
             Text(
-              widget.documentType == OCRDocumentType.invoice
-                  ? 'Escanear Factura'
-                  : 'Escanear Boleta/Recibo',
+              widget.title ??
+                  (widget.documentType == OCRDocumentType.invoice
+                      ? 'Escanear Factura'
+                      : 'Escanear Boleta/Recibo'),
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -703,366 +713,374 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         ),
         const SizedBox(height: 24),
 
-        // Products Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        if (widget.showLineItemReview) ...[
+          // Products Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Productos Detectados (${data.lineItems.length})',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (data.lineItems.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child:
+                            _buildCompactDiagnosticsStatus(invoiceDiagnostics),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: () => setState(() => _showStock = !_showStock),
+                icon: Icon(
+                  _showStock ? Icons.visibility_off : Icons.visibility,
+                  size: 16,
+                ),
+                label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (data.lineItems.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    'Productos Detectados (${data.lineItems.length})',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No se detectaron productos individuales. Se importará solo el total.',
+                      style: TextStyle(color: Colors.orange.shade900),
                     ),
                   ),
-                  if (data.lineItems.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: _buildCompactDiagnosticsStatus(invoiceDiagnostics),
-                    ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            TextButton.icon(
-              onPressed: () => setState(() => _showStock = !_showStock),
-              icon: Icon(
-                _showStock ? Icons.visibility_off : Icons.visibility,
-                size: 16,
-              ),
-              label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        if (data.lineItems.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber, color: Colors.orange.shade700),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'No se detectaron productos individuales. Se importará solo el total.',
-                    style: TextStyle(color: Colors.orange.shade900),
-                  ),
+            )
+          else
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ),
-          )
-        else
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Column(
-                  children: [
-                    // Header Row
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.5),
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8)),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 32), // Status icon width
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 3,
-                            child: Text('SKU',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                          Expanded(
-                            flex: _showStock
-                                ? 8
-                                : 10, // Give description most space
-                            child: Text('Descripción',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                          if (_showStock)
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    children: [
+                      // Header Row
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.5),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(8)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 32), // Status icon width
+                            const SizedBox(width: 12),
                             Expanded(
-                              flex: 2,
-                              child: Text('Stock',
+                              flex: 3,
+                              child: Text('SKU',
                                   style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.grey.shade700,
                                       fontSize: 12)),
                             ),
-                          Expanded(
-                            flex: 2,
-                            child: Text('Cant.',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text('Precio',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text('Dscto',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text('Total',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
-                                    fontSize: 12)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Scrollable Data Rows
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: data.lineItems.map((item) {
-                            final rowDiagnostics = _getRowDiagnostics(item);
-                            // Determine verification status
-                            Widget statusIcon;
-                            String tooltip;
-
-                            if (item.sku == null || item.sku!.isEmpty) {
-                              statusIcon = const Icon(
-                                  Icons.remove_circle_outline,
-                                  size: 18,
-                                  color: Colors.grey);
-                              tooltip = 'Sin código SKU';
-                            } else if (item.existsInDatabase == true) {
-                              statusIcon = const Icon(Icons.check_circle,
-                                  size: 18, color: Colors.green);
-                              tooltip =
-                                  'Producto encontrado: ${item.matchedProductName ?? item.sku}';
-                            } else {
-                              statusIcon = const Icon(Icons.warning_amber,
-                                  size: 18, color: Colors.orange);
-                              tooltip = 'Producto nuevo - debe crearse';
-                            }
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              decoration: BoxDecoration(
-                                  border: Border(
-                                      bottom: BorderSide(
-                                          color: Colors.grey.shade200))),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 32,
-                                    child: Tooltip(
-                                        message: tooltip, child: statusIcon),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    flex: 3,
-                                    child: TextField(
-                                      decoration: InputDecoration(
-                                        hintText: 'ASIGNAR SKU',
-                                        isDense: true,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 4, vertical: 4),
-                                        border: (item.sku == null ||
-                                                item.sku!.isEmpty)
-                                            ? OutlineInputBorder(
-                                                borderSide: BorderSide(
-                                                    color:
-                                                        Colors.orange.shade300,
-                                                    width: 0.5),
-                                              )
-                                            : InputBorder.none,
-                                        filled: (item.sku == null ||
-                                            item.sku!.isEmpty),
-                                        fillColor: Colors.orange.shade50,
-                                        hintStyle: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.orange.shade300),
-                                      ),
-                                      controller: _skuControllers.putIfAbsent(
-                                          _parsedData!.lineItems.indexOf(item),
-                                          () => TextEditingController(
-                                              text: item.sku)),
-                                      style: TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 13,
+                            Expanded(
+                              flex: _showStock
+                                  ? 8
+                                  : 10, // Give description most space
+                              child: Text('Descripción',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
+                            if (_showStock)
+                              Expanded(
+                                flex: 2,
+                                child: Text('Stock',
+                                    style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: item.existsInDatabase == true
-                                            ? Colors.green.shade700
-                                            : null,
+                                        color: Colors.grey.shade700,
+                                        fontSize: 12)),
+                              ),
+                            Expanded(
+                              flex: 2,
+                              child: Text('Cant.',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('Precio',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text('Dscto',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text('Total',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Scrollable Data Rows
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: data.lineItems.map((item) {
+                              final rowDiagnostics = _getRowDiagnostics(item);
+                              // Determine verification status
+                              Widget statusIcon;
+                              String tooltip;
+
+                              if (item.sku == null || item.sku!.isEmpty) {
+                                statusIcon = const Icon(
+                                    Icons.remove_circle_outline,
+                                    size: 18,
+                                    color: Colors.grey);
+                                tooltip = 'Sin código SKU';
+                              } else if (item.existsInDatabase == true) {
+                                statusIcon = const Icon(Icons.check_circle,
+                                    size: 18, color: Colors.green);
+                                tooltip =
+                                    'Producto encontrado: ${item.matchedProductName ?? item.sku}';
+                              } else {
+                                statusIcon = const Icon(Icons.warning_amber,
+                                    size: 18, color: Colors.orange);
+                                tooltip = 'Producto nuevo - debe crearse';
+                              }
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                    border: Border(
+                                        bottom: BorderSide(
+                                            color: Colors.grey.shade200))),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 32,
+                                      child: Tooltip(
+                                          message: tooltip, child: statusIcon),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 3,
+                                      child: TextField(
+                                        decoration: InputDecoration(
+                                          hintText: 'ASIGNAR SKU',
+                                          isDense: true,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 4, vertical: 4),
+                                          border: (item.sku == null ||
+                                                  item.sku!.isEmpty)
+                                              ? OutlineInputBorder(
+                                                  borderSide: BorderSide(
+                                                      color: Colors
+                                                          .orange.shade300,
+                                                      width: 0.5),
+                                                )
+                                              : InputBorder.none,
+                                          filled: (item.sku == null ||
+                                              item.sku!.isEmpty),
+                                          fillColor: Colors.orange.shade50,
+                                          hintStyle: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.orange.shade300),
+                                        ),
+                                        controller: _skuControllers.putIfAbsent(
+                                            _parsedData!.lineItems
+                                                .indexOf(item),
+                                            () => TextEditingController(
+                                                text: item.sku)),
+                                        style: TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: item.existsInDatabase == true
+                                              ? Colors.green.shade700
+                                              : null,
+                                        ),
+                                        onChanged: (newSku) =>
+                                            _updateItemSku(item, newSku),
                                       ),
-                                      onChanged: (newSku) =>
-                                          _updateItemSku(item, newSku),
                                     ),
-                                  ),
-                                  Expanded(
-                                    flex: _showStock ? 8 : 10,
-                                    child: Text(
-                                      item.description,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13),
+                                    Expanded(
+                                      flex: _showStock ? 8 : 10,
+                                      child: Text(
+                                        item.description,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
                                     ),
-                                  ),
-                                  if (_showStock)
+                                    if (_showStock)
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                            item.currentStock?.toString() ??
+                                                '-',
+                                            style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.blueGrey)),
+                                      ),
                                     Expanded(
                                       flex: 2,
                                       child: Text(
-                                          item.currentStock?.toString() ?? '-',
-                                          style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.blueGrey)),
+                                          item.quantity?.toStringAsFixed(0) ??
+                                              '1',
+                                          style: const TextStyle(fontSize: 13)),
                                     ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                        item.quantity?.toStringAsFixed(0) ??
-                                            '1',
-                                        style: const TextStyle(fontSize: 13)),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                        item.unitPrice != null
-                                            ? '\$${item.unitPrice!.toStringAsFixed(0)}'
-                                            : '-',
-                                        style: const TextStyle(fontSize: 13)),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                        (item.discount != null &&
-                                                item.discount! > 0)
-                                            ? '\$${item.discount!.toStringAsFixed(0)}'
-                                            : (item.discountRate != null &&
-                                                    item.discountRate! > 0)
-                                                ? '${item.discountRate!.toStringAsFixed(0)}%'
-                                                : '-',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.orange.shade800)),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        if (!rowDiagnostics.isComplete ||
-                                            !rowDiagnostics.isConsistent ||
-                                            rowDiagnostics.wasAutoAdjusted)
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(right: 6),
-                                            child: Tooltip(
-                                              message:
-                                                  _buildRowDiagnosticsTooltip(
-                                                item,
-                                                rowDiagnostics,
-                                              ),
-                                              child: Icon(
-                                                !rowDiagnostics.isComplete ||
-                                                        !rowDiagnostics
-                                                            .isConsistent
-                                                    ? Icons.error_outline
-                                                    : Icons.auto_fix_high,
-                                                size: 16,
-                                                color: !rowDiagnostics
-                                                            .isComplete ||
-                                                        !rowDiagnostics
-                                                            .isConsistent
-                                                    ? Colors.orange.shade700
-                                                    : Colors.blue.shade700,
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                          item.unitPrice != null
+                                              ? '\$${item.unitPrice!.toStringAsFixed(0)}'
+                                              : '-',
+                                          style: const TextStyle(fontSize: 13)),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                          (item.discount != null &&
+                                                  item.discount! > 0)
+                                              ? '\$${item.discount!.toStringAsFixed(0)}'
+                                              : (item.discountRate != null &&
+                                                      item.discountRate! > 0)
+                                                  ? '${item.discountRate!.toStringAsFixed(0)}%'
+                                                  : '-',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.orange.shade800)),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          if (!rowDiagnostics.isComplete ||
+                                              !rowDiagnostics.isConsistent ||
+                                              rowDiagnostics.wasAutoAdjusted)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  right: 6),
+                                              child: Tooltip(
+                                                message:
+                                                    _buildRowDiagnosticsTooltip(
+                                                  item,
+                                                  rowDiagnostics,
+                                                ),
+                                                child: Icon(
+                                                  !rowDiagnostics.isComplete ||
+                                                          !rowDiagnostics
+                                                              .isConsistent
+                                                      ? Icons.error_outline
+                                                      : Icons.auto_fix_high,
+                                                  size: 16,
+                                                  color: !rowDiagnostics
+                                                              .isComplete ||
+                                                          !rowDiagnostics
+                                                              .isConsistent
+                                                      ? Colors.orange.shade700
+                                                      : Colors.blue.shade700,
+                                                ),
                                               ),
                                             ),
+                                          Text(
+                                            item.total != null
+                                                ? '\$${item.total!.toStringAsFixed(0)}'
+                                                : '-',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color:
+                                                  !rowDiagnostics.isComplete ||
+                                                          !rowDiagnostics
+                                                              .isConsistent
+                                                      ? Colors.orange.shade800
+                                                      : null,
+                                            ),
                                           ),
-                                        Text(
-                                          item.total != null
-                                              ? '\$${item.total!.toStringAsFixed(0)}'
-                                              : '-',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: !rowDiagnostics.isComplete ||
-                                                    !rowDiagnostics.isConsistent
-                                                ? Colors.orange.shade800
-                                                : null,
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+          const SizedBox(height: 24),
 
-        const SizedBox(height: 24),
-
-        // Create New Products Button (if any unrecognized products)
-        if (data.lineItems.any((item) => item.existsInDatabase == false))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: OutlinedButton.icon(
-              onPressed: _openBulkCreateScreen,
-              icon: const Icon(Icons.add_circle_outline, color: Colors.orange),
-              label: Text(
-                'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
-                style: const TextStyle(color: Colors.orange),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: Colors.orange),
+          // Create New Products Button (if any unrecognized products)
+          if (data.lineItems.any((item) => item.existsInDatabase == false))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: OutlinedButton.icon(
+                onPressed: _openBulkCreateScreen,
+                icon:
+                    const Icon(Icons.add_circle_outline, color: Colors.orange),
+                label: Text(
+                  'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
+                  style: const TextStyle(color: Colors.orange),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: Colors.orange),
+                ),
               ),
             ),
-          ),
+        ],
 
         // Action Buttons
         Row(

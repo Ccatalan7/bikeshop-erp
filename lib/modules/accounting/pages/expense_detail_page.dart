@@ -8,6 +8,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/expense.dart';
+import '../models/expense_link.dart';
 import '../models/expense_line.dart';
 import '../models/expense_payment.dart';
 import '../services/expense_service.dart';
@@ -26,6 +27,7 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
   final NumberFormat _currencyFormat = ChileanUtils.currencyFormat;
 
   Expense? _expense;
+  List<ExpenseLink> _expenseLinks = const [];
   bool _isLoading = true;
   bool _isProcessing = false;
   String? _error;
@@ -51,12 +53,14 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
       final results = await Future.wait([
         _expenseService.getExpense(widget.expenseId, forceRefresh: refresh),
         _expenseService.fetchPaymentMethods(),
+        _expenseService.fetchLinksForExpense(widget.expenseId),
       ]);
 
       if (mounted) {
         setState(() {
           _expense = results[0] as Expense;
           _paymentMethods = results[1] as Map<String, String>;
+          _expenseLinks = results[2] as List<ExpenseLink>;
           _isLoading = false;
         });
       }
@@ -66,6 +70,106 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
           _isLoading = false;
           _error = e.toString();
         });
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteExpense() async {
+    final expense = _expense;
+    if (expense?.id == null) return;
+
+    final links = _expenseLinks;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Eliminar gasto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Se eliminará ${expense!.expenseNumber} y también sus líneas, pagos, adjuntos y asientos contables relacionados.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (links.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Este gasto está vinculado a factura de compra. Al eliminarlo se quitará ese vínculo, pero la factura de compra no se eliminará.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...links.take(3).map(
+                      (link) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '- ${_linkKindLabel(link.linkKind)} · ${_purchaseInvoiceLabel(link)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                if (links.length > 3)
+                  Text(
+                    '+${links.length - 3} vínculos más',
+                    style: theme.textTheme.bodySmall,
+                  ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                'Esta acción no se puede deshacer.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      await _expenseService.deleteExpense(expense!.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            links.isEmpty
+                ? 'Gasto ${expense.expenseNumber} eliminado.'
+                : 'Gasto ${expense.expenseNumber} eliminado y desvinculado de la factura de compra.',
+          ),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.pop(true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar el gasto: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
       }
     }
   }
@@ -233,16 +337,30 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
           const SizedBox(height: 16),
           // Row 4: Supplier (Demoted) + Actions
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.store_outlined, size: 18, color: Colors.grey.shade500),
-              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  expense.supplierName ?? 'Proveedor sin nombre',
-                  style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14),
+                child: Wrap(
+                  spacing: 18,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _buildMetaItem(
+                      Icons.store_outlined,
+                      expense.supplierName ?? 'Proveedor sin nombre',
+                    ),
+                    if (_expenseLinks.isNotEmpty)
+                      _buildInlinePurchaseLink(context, _expenseLinks.first),
+                    if (_expenseLinks.length > 1)
+                      Text(
+                        '+${_expenseLinks.length - 1} vínculos',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               // Action Buttons
@@ -269,6 +387,13 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
                   icon: const Icon(Icons.edit, size: 18),
                   tooltip: 'Editar',
                 ),
+                const SizedBox(width: 8),
+                IconButton.outlined(
+                  onPressed: _isProcessing ? null : _confirmDeleteExpense,
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  tooltip: 'Eliminar',
+                  color: Colors.red.shade700,
+                ),
               ]
             ],
           ),
@@ -294,6 +419,17 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isProcessing ? null : _confirmDeleteExpense,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Eliminar'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 if (expense.postingStatus != ExpensePostingStatus.posted)
                   Expanded(
                     child: AppButton(
@@ -310,6 +446,79 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     );
   }
 
+  Widget _buildInlinePurchaseLink(BuildContext context, ExpenseLink link) {
+    final theme = Theme.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => context.push('/purchases/${link.purchaseInvoiceId}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _linkKindIcon(link.linkKind),
+                size: 16,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Factura compra ${_purchaseInvoiceLabel(link)} · ${_linkKindLabel(link.linkKind)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: theme.colorScheme.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _purchaseInvoiceLabel(ExpenseLink link) {
+    final number = (link.purchaseInvoiceNumber ?? '').trim();
+    final supplier = (link.purchaseSupplierName ?? '').trim();
+    if (number.isEmpty && supplier.isEmpty) return 'Factura de compra';
+    if (number.isEmpty) return supplier;
+    if (supplier.isEmpty) return number;
+    return '$number · $supplier';
+  }
+
+  String _linkKindLabel(String value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega / transporte';
+      case 'import_cost':
+        return 'Costo de importación';
+      default:
+        return 'Relacionado';
+    }
+  }
+
+  IconData _linkKindIcon(String value) {
+    switch (value) {
+      case 'delivery':
+        return Icons.local_shipping_outlined;
+      case 'import_cost':
+        return Icons.public_outlined;
+      default:
+        return Icons.receipt_long_outlined;
+    }
+  }
+
   String _buildPaymentMethodsSummary(Expense expense) {
     // If there are explicit payments, prefer showing the breakdown.
     if (expense.payments.isNotEmpty) {
@@ -321,12 +530,10 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
       }
 
       if (totalsByMethod.isNotEmpty) {
-        final parts = totalsByMethod.entries
-            .map((e) {
-              final name = _paymentMethods[e.key] ?? 'Método';
-              return '$name ${_currencyFormat.format(e.value)}';
-            })
-            .toList();
+        final parts = totalsByMethod.entries.map((e) {
+          final name = _paymentMethods[e.key] ?? 'Método';
+          return '$name ${_currencyFormat.format(e.value)}';
+        }).toList();
         return parts.join(' · ');
       }
     }
@@ -566,7 +773,8 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
     );
   }
 
-  Widget _buildPaymentsList(BuildContext context, List<ExpensePayment> payments) {
+  Widget _buildPaymentsList(
+      BuildContext context, List<ExpensePayment> payments) {
     return Column(
       children: payments
           .map((p) => Card(

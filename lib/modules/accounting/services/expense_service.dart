@@ -5,8 +5,10 @@ import '../../../shared/services/database_service.dart';
 import '../models/expense.dart';
 import '../models/expense_attachment.dart';
 import '../models/expense_category.dart';
+import '../models/expense_link.dart';
 import '../models/expense_line.dart';
 import '../models/expense_payment.dart';
+import '../models/expense_template.dart';
 
 class ExpenseService extends ChangeNotifier {
   ExpenseService(this._databaseService);
@@ -18,14 +20,17 @@ class ExpenseService extends ChangeNotifier {
   String? _error;
   bool _expensesLoaded = false;
   bool _categoriesLoaded = false;
+  bool _templatesLoaded = false;
 
   List<Expense> _expenses = const [];
   List<ExpenseCategory> _categories = const [];
+  List<ExpenseTemplate> _templates = const [];
 
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Expense> get expenses => _expenses;
   List<ExpenseCategory> get categories => _categories;
+  List<ExpenseTemplate> get templates => _templates;
 
   Future<List<Expense>> fetchExpenses({bool forceRefresh = false}) async {
     if (_expensesLoaded && !forceRefresh) {
@@ -174,6 +179,78 @@ class ExpenseService extends ChangeNotifier {
     }
   }
 
+  Future<List<ExpenseTemplate>> fetchTemplates({
+    bool forceRefresh = false,
+  }) async {
+    if (_templatesLoaded && !forceRefresh) {
+      return _templates;
+    }
+
+    try {
+      final rows = await _databaseService.select(
+        'expense_templates',
+        orderBy: 'priority',
+      );
+      _templates = rows
+          .map(ExpenseTemplate.fromJson)
+          .where((template) => template.isActive)
+          .toList()
+        ..sort((left, right) {
+          final priority = left.priority.compareTo(right.priority);
+          if (priority != 0) return priority;
+          return left.name.compareTo(right.name);
+        });
+      _templatesLoaded = true;
+      notifyListeners();
+      return _templates;
+    } catch (e) {
+      if (e.toString().contains('expense_templates')) {
+        _templates = const [];
+        _templatesLoaded = true;
+        notifyListeners();
+        return _templates;
+      }
+      throw Exception('No se pudieron cargar las plantillas de gasto: $e');
+    }
+  }
+
+  Future<ExpenseTemplate> saveTemplate(ExpenseTemplate template) async {
+    try {
+      final payload = template.toJson();
+      Map<String, dynamic> stored;
+
+      if (template.id == null || template.id!.isEmpty) {
+        payload.remove('id');
+        stored = await _databaseService.insert('expense_templates', payload);
+      } else {
+        payload.remove('created_at');
+        stored = await _databaseService.update(
+          'expense_templates',
+          template.id!,
+          payload,
+        );
+      }
+
+      final saved = ExpenseTemplate.fromJson(stored);
+      await fetchTemplates(forceRefresh: true);
+      notifyListeners();
+      return saved;
+    } catch (e) {
+      throw Exception('No se pudo guardar la plantilla de gasto: $e');
+    }
+  }
+
+  Future<void> deleteTemplate(String id) async {
+    if (id.isEmpty) return;
+    try {
+      await _databaseService.delete('expense_templates', id);
+      await fetchTemplates(forceRefresh: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('No se pudo eliminar la plantilla de gasto: $e');
+    }
+  }
+
   Future<Expense> saveExpense(Expense expense) async {
     try {
       final payload = expense.toDatabasePayload();
@@ -223,8 +300,112 @@ class ExpenseService extends ChangeNotifier {
     }
   }
 
+  Future<ExpenseLink> saveExpenseLink(ExpenseLink link) async {
+    try {
+      final payload = link.toJson(includeIdentifier: false);
+      payload.removeWhere((_, value) => value == null);
+      final stored = await _client
+          .from('expense_links')
+          .upsert(
+            payload,
+            onConflict: 'tenant_id,expense_id,purchase_invoice_id,link_kind',
+          )
+          .select()
+          .single();
+
+      notifyListeners();
+      return ExpenseLink.fromJson(Map<String, dynamic>.from(stored as Map));
+    } catch (e) {
+      throw Exception('No se pudo vincular el gasto: $e');
+    }
+  }
+
+  Future<List<ExpenseLink>> fetchLinksForExpense(String expenseId) async {
+    if (expenseId.isEmpty) return const [];
+
+    try {
+      final rows = await _client
+          .from('expense_links')
+          .select(
+            '*, purchase_invoices(invoice_number, supplier_name)',
+          )
+          .eq('expense_id', expenseId)
+          .order('created_at', ascending: false) as List<dynamic>;
+
+      return rows
+          .map((row) => ExpenseLink.fromJson(Map<String, dynamic>.from(row)))
+          .toList();
+    } catch (e) {
+      throw Exception('No se pudieron cargar los vínculos del gasto: $e');
+    }
+  }
+
+  Future<List<ExpenseLink>> fetchLinksForExpenses(
+    List<String> expenseIds,
+  ) async {
+    if (expenseIds.isEmpty) return const [];
+
+    const chunkSize = 100;
+    final links = <ExpenseLink>[];
+
+    try {
+      for (var i = 0; i < expenseIds.length; i += chunkSize) {
+        final chunk = expenseIds.sublist(
+          i,
+          (i + chunkSize) > expenseIds.length
+              ? expenseIds.length
+              : (i + chunkSize),
+        );
+
+        final rows = await _client
+            .from('expense_links')
+            .select(
+              '*, purchase_invoices(invoice_number, supplier_name)',
+            )
+            .inFilter('expense_id', chunk)
+            .order('created_at', ascending: false) as List<dynamic>;
+
+        links.addAll(
+          rows.map(
+            (row) => ExpenseLink.fromJson(Map<String, dynamic>.from(row)),
+          ),
+        );
+      }
+
+      return links;
+    } catch (e) {
+      throw Exception('No se pudieron cargar los vínculos de gastos: $e');
+    }
+  }
+
+  Future<List<ExpenseLink>> fetchLinksForPurchaseInvoice(
+    String purchaseInvoiceId,
+  ) async {
+    if (purchaseInvoiceId.isEmpty) return const [];
+
+    try {
+      final rows = await _client
+          .from('expense_links')
+          .select(
+            '*, expenses(expense_number, supplier_name, issue_date, total_amount, tax_amount)',
+          )
+          .eq('purchase_invoice_id', purchaseInvoiceId)
+          .order('created_at', ascending: false) as List<dynamic>;
+
+      return rows
+          .map((row) => ExpenseLink.fromJson(Map<String, dynamic>.from(row)))
+          .toList();
+    } catch (e) {
+      throw Exception(
+        'No se pudieron cargar los gastos relacionados a la factura: $e',
+      );
+    }
+  }
+
   Future<void> deleteExpense(String id) async {
     try {
+      await _client.from('expense_links').delete().eq('expense_id', id);
+
       final paymentRows = await _databaseService.select(
         'expense_payments',
         where: 'expense_id=$id',

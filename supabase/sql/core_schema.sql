@@ -5830,6 +5830,12 @@ begin
   v_count := v_count + (case when found then 1 else 0 end);
 
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6402', 'Gastos por Transporte', 'expense', 'operatingExpense',
+    'Fletes, encomiendas y costos de transporte asociados a compras u operaciones', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6402');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6501', 'Seguros', 'expense', 'operatingExpense',
     'Primas de seguros patrimoniales y de responsabilidad', true
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6501');
@@ -8230,6 +8236,8 @@ begin
 
   if v_base_code = '6401' then
     return 'Gastos de Viaje';
+  elsif v_base_code = '6402' then
+    return 'Gastos por Transporte';
   end if;
 
   if v_base_code = '6501' then
@@ -8262,6 +8270,9 @@ begin
   end if;
   if v_name like '%luz%' or v_name like '%agua%' or v_name like '%gas%' or v_name like '%servicio básico%' or v_name like '%servicios básicos%' then
     return 'Servicios Básicos';
+  end if;
+  if v_name like '%transporte%' or v_name like '%flete%' or v_name like '%envío%' or v_name like '%envio%' or v_name like '%encomienda%' then
+    return 'Gastos por Transporte';
   end if;
 
   return 'Otros Gastos';
@@ -8684,6 +8695,195 @@ exception
   when undefined_table then raise notice '⚠ Table expense_attachments does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in expense_attachments';
 end $$;
+
+create table if not exists expense_templates (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  name text not null,
+  is_active boolean not null default true,
+  priority integer not null default 100,
+  trigger_category_id uuid references expense_categories(id) on delete set null,
+  trigger_supplier_id uuid references suppliers(id) on delete set null,
+  trigger_keywords text[] not null default '{}',
+  default_category_id uuid references expense_categories(id) on delete set null,
+  default_supplier_id uuid references suppliers(id) on delete set null,
+  default_supplier_name text,
+  default_supplier_rut text,
+  default_account_id uuid,
+  default_payment_method_id uuid,
+  default_document_type text not null default 'invoice'
+    check (default_document_type in ('invoice','receipt','ticket','reimbursement','other')),
+  default_amount numeric(14,2),
+  default_description text,
+  default_reference_prefix text,
+  default_tax_rate numeric(6,3),
+  recurrence_interval_months integer,
+  next_due_date timestamp with time zone,
+  next_review_date timestamp with time zone,
+  review_reminder_days integer not null default 15,
+  link_purchase_invoice boolean not null default false,
+  link_kind text not null default 'general',
+  notes text,
+  metadata jsonb not null default '{}',
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.expense_templates
+  add column if not exists tenant_id uuid references public.tenants(id) on delete cascade,
+  add column if not exists name text,
+  add column if not exists is_active boolean not null default true,
+  add column if not exists priority integer not null default 100,
+  add column if not exists trigger_category_id uuid references public.expense_categories(id) on delete set null,
+  add column if not exists trigger_supplier_id uuid references public.suppliers(id) on delete set null,
+  add column if not exists trigger_keywords text[] not null default '{}',
+  add column if not exists default_category_id uuid references public.expense_categories(id) on delete set null,
+  add column if not exists default_supplier_id uuid references public.suppliers(id) on delete set null,
+  add column if not exists default_supplier_name text,
+  add column if not exists default_supplier_rut text,
+  add column if not exists default_account_id uuid,
+  add column if not exists default_payment_method_id uuid,
+  add column if not exists default_document_type text not null default 'invoice',
+  add column if not exists default_amount numeric(14,2),
+  add column if not exists default_description text,
+  add column if not exists default_reference_prefix text,
+  add column if not exists default_tax_rate numeric(6,3),
+  add column if not exists recurrence_interval_months integer,
+  add column if not exists next_due_date timestamp with time zone,
+  add column if not exists next_review_date timestamp with time zone,
+  add column if not exists review_reminder_days integer not null default 15,
+  add column if not exists link_purchase_invoice boolean not null default false,
+  add column if not exists link_kind text not null default 'general',
+  add column if not exists notes text,
+  add column if not exists metadata jsonb not null default '{}',
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$ begin
+  alter table expense_templates drop constraint if exists expense_templates_default_account_id_fkey;
+  alter table expense_templates add constraint expense_templates_default_account_id_fkey
+    foreign key (tenant_id, default_account_id) references accounts(tenant_id, id) on delete restrict;
+
+  alter table expense_templates drop constraint if exists expense_templates_default_payment_method_id_fkey;
+  alter table expense_templates add constraint expense_templates_default_payment_method_id_fkey
+    foreign key (tenant_id, default_payment_method_id) references payment_methods(tenant_id, id) on delete restrict;
+exception
+  when undefined_column then null;
+  when others then raise notice '⚠️  expense_templates FKs: %', sqlerrm;
+end $$;
+
+create unique index if not exists expense_templates_tenant_name_key
+  on expense_templates(tenant_id, lower(name));
+create index if not exists idx_expense_templates_tenant
+  on expense_templates(tenant_id);
+create index if not exists idx_expense_templates_category
+  on expense_templates(trigger_category_id);
+create index if not exists idx_expense_templates_supplier
+  on expense_templates(trigger_supplier_id);
+create index if not exists idx_expense_templates_active_priority
+  on expense_templates(tenant_id, is_active, priority);
+
+alter table expense_templates enable row level security;
+
+drop policy if exists "expense_templates_select" on expense_templates;
+drop policy if exists "expense_templates_insert" on expense_templates;
+drop policy if exists "expense_templates_update" on expense_templates;
+drop policy if exists "expense_templates_delete" on expense_templates;
+
+create policy "expense_templates_select" on expense_templates
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_templates_insert" on expense_templates
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "expense_templates_update" on expense_templates
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_templates_delete" on expense_templates
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create table if not exists expense_links (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  expense_id uuid not null references expenses(id) on delete cascade,
+  purchase_invoice_id uuid not null references purchase_invoices(id) on delete cascade,
+  link_kind text not null default 'general',
+  allocated_amount numeric(14,2),
+  notes text,
+  created_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table public.expense_links
+  add column if not exists tenant_id uuid references public.tenants(id) on delete cascade,
+  add column if not exists expense_id uuid references public.expenses(id) on delete cascade,
+  add column if not exists purchase_invoice_id uuid references public.purchase_invoices(id) on delete cascade,
+  add column if not exists link_kind text not null default 'general',
+  add column if not exists allocated_amount numeric(14,2),
+  add column if not exists notes text,
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists created_at timestamp with time zone not null default now(),
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint c
+     where c.conrelid = 'public.expense_links'::regclass
+       and c.contype = 'u'
+       and pg_get_constraintdef(c.oid) like '%(tenant_id, expense_id, purchase_invoice_id, link_kind)%'
+  ) then
+    alter table public.expense_links
+      add constraint expense_links_tenant_expense_purchase_kind_key
+      unique (tenant_id, expense_id, purchase_invoice_id, link_kind);
+  end if;
+end $$;
+
+create index if not exists idx_expense_links_tenant
+  on expense_links(tenant_id);
+create index if not exists idx_expense_links_expense
+  on expense_links(expense_id);
+create index if not exists idx_expense_links_purchase_invoice
+  on expense_links(purchase_invoice_id);
+
+alter table expense_links enable row level security;
+
+drop policy if exists "expense_links_select" on expense_links;
+drop policy if exists "expense_links_insert" on expense_links;
+drop policy if exists "expense_links_update" on expense_links;
+drop policy if exists "expense_links_delete" on expense_links;
+
+create policy "expense_links_select" on expense_links
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_links_insert" on expense_links
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "expense_links_update" on expense_links
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "expense_links_delete" on expense_links
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
 
 create or replace function public.generate_expense_number()
 returns text

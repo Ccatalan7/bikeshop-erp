@@ -10,6 +10,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/search_widget.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
+import '../models/expense_link.dart';
 import '../services/expense_service.dart';
 
 class ExpenseListPage extends StatefulWidget {
@@ -29,6 +30,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   List<Expense> _filteredExpenses = const [];
   List<ExpenseCategory> _categories = const [];
   Map<String, String> _categoryNamesById = const {};
+  Map<String, List<ExpenseLink>> _expenseLinksByExpenseId = const {};
 
   ExpensePostingStatus? _postingFilter;
   ExpensePaymentStatus? _paymentFilter;
@@ -79,6 +81,13 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       final paymentRows =
           await _expenseService.fetchPaymentsForExpenses(expenseIds);
       final paymentSummary = _buildPaymentSummary(paymentRows);
+      List<ExpenseLink> expenseLinks = const [];
+      try {
+        expenseLinks = await _expenseService.fetchLinksForExpenses(expenseIds);
+      } catch (_) {
+        expenseLinks = const [];
+      }
+      final linksByExpenseId = _groupExpenseLinks(expenseLinks);
 
       setState(() {
         _categories = categories;
@@ -88,6 +97,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         };
         _allExpenses = expenses;
         _paymentMethodsMap = methods;
+        _expenseLinksByExpenseId = linksByExpenseId;
         _paymentSummaryByExpenseId
           ..clear()
           ..addAll(paymentSummary);
@@ -137,13 +147,26 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     return summaries;
   }
 
+  Map<String, List<ExpenseLink>> _groupExpenseLinks(List<ExpenseLink> links) {
+    final grouped = <String, List<ExpenseLink>>{};
+    for (final link in links) {
+      if (link.expenseId.isEmpty) continue;
+      grouped.putIfAbsent(link.expenseId, () => <ExpenseLink>[]).add(link);
+    }
+    return grouped;
+  }
+
   void _applyFilters() {
     final term = _searchController.text.trim().toLowerCase();
     final filtered = _allExpenses.where((expense) {
+      final purchaseLinks = expense.id == null
+          ? const <ExpenseLink>[]
+          : _expenseLinksByExpenseId[expense.id] ?? const <ExpenseLink>[];
       final matchesSearch = term.isEmpty ||
           expense.expenseNumber.toLowerCase().contains(term) ||
           (expense.supplierName?.toLowerCase().contains(term) ?? false) ||
-          (expense.reference?.toLowerCase().contains(term) ?? false);
+          (expense.reference?.toLowerCase().contains(term) ?? false) ||
+          purchaseLinks.any((link) => _linkSearchText(link).contains(term));
 
       final matchesPosting =
           _postingFilter == null || expense.postingStatus == _postingFilter;
@@ -215,15 +238,60 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   Future<void> _confirmDeleteExpense(Expense expense) async {
     if (expense.id == null) return;
 
+    List<ExpenseLink> links = const [];
+    try {
+      links = await _expenseService.fetchLinksForExpense(expense.id!);
+    } catch (_) {
+      links = const [];
+    }
+    if (!mounted) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
         return AlertDialog(
           title: const Text('Eliminar gasto'),
-          content: Text(
-            'Se eliminará ${expense.expenseNumber} y también sus líneas, pagos, adjuntos y asientos contables relacionados. Esta acción no se puede deshacer.',
-            style: theme.textTheme.bodyMedium,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Se eliminará ${expense.expenseNumber} y también sus líneas, pagos, adjuntos y asientos contables relacionados.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (links.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Este gasto está vinculado a factura de compra. Al eliminarlo se quitará ese vínculo, pero la factura de compra no se eliminará.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...links.take(3).map(
+                      (link) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '- ${_linkKindLabel(link.linkKind)} · ${_purchaseInvoiceLabel(link)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                if (links.length > 3)
+                  Text(
+                    '+${links.length - 3} vínculos más',
+                    style: theme.textTheme.bodySmall,
+                  ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                'Esta acción no se puede deshacer.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -256,7 +324,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Gasto ${expense.expenseNumber} eliminado junto con su información contable relacionada.',
+            links.isEmpty
+                ? 'Gasto ${expense.expenseNumber} eliminado junto con su información contable relacionada.'
+                : 'Gasto ${expense.expenseNumber} eliminado y desvinculado de la factura de compra.',
           ),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
@@ -278,6 +348,34 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
         });
       }
     }
+  }
+
+  String _purchaseInvoiceLabel(ExpenseLink link) {
+    final number = (link.purchaseInvoiceNumber ?? '').trim();
+    final supplier = (link.purchaseSupplierName ?? '').trim();
+    if (number.isEmpty && supplier.isEmpty) return 'Factura de compra';
+    if (number.isEmpty) return supplier;
+    if (supplier.isEmpty) return number;
+    return '$number · $supplier';
+  }
+
+  String _linkKindLabel(String value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega / transporte';
+      case 'import_cost':
+        return 'Costo de importación';
+      default:
+        return 'Relacionado';
+    }
+  }
+
+  String _linkSearchText(ExpenseLink link) {
+    return [
+      _purchaseInvoiceLabel(link),
+      _linkKindLabel(link.linkKind),
+      link.notes ?? '',
+    ].join(' ').toLowerCase();
   }
 
   void _showMobileFilters(BuildContext context) {
@@ -721,6 +819,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final expense = _filteredExpenses[index];
+        final purchaseLinks = expense.id == null
+            ? const <ExpenseLink>[]
+            : _expenseLinksByExpenseId[expense.id] ?? const <ExpenseLink>[];
         return _ExpenseCard(
           expense: expense,
           isMobile: isMobile,
@@ -728,6 +829,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           paymentMethodsMap: _paymentMethodsMap,
           paymentSummary: _paymentSummaryByExpenseId[expense.id],
           categoryNamesById: _categoryNamesById,
+          purchaseLinks: purchaseLinks,
           onTap: () => _openExpenseDetail(expense),
           onEdit: () => _editExpense(expense),
           onDelete: () => _confirmDeleteExpense(expense),
@@ -881,6 +983,7 @@ class _ExpenseCard extends StatelessWidget {
     required this.paymentMethodsMap,
     this.paymentSummary,
     required this.categoryNamesById,
+    required this.purchaseLinks,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
@@ -892,6 +995,7 @@ class _ExpenseCard extends StatelessWidget {
   final Map<String, String> paymentMethodsMap;
   final _ExpensePaymentSummary? paymentSummary;
   final Map<String, String> categoryNamesById;
+  final List<ExpenseLink> purchaseLinks;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -941,7 +1045,7 @@ class _ExpenseCard extends StatelessWidget {
                 // improved left indicator
                 Container(
                   width: 4,
-                  height: 48,
+                  height: purchaseLinks.isEmpty ? 48 : 68,
                   decoration: BoxDecoration(
                     color: _getStatusColor(expense.paymentStatus),
                     borderRadius: BorderRadius.circular(2),
@@ -1038,6 +1142,13 @@ class _ExpenseCard extends StatelessWidget {
                                 ),
                               ],
                             ),
+                            if (purchaseLinks.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              _buildPurchaseLinkMarker(
+                                context,
+                                purchaseLinks.first,
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1110,6 +1221,72 @@ class _ExpenseCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildPurchaseLinkMarker(BuildContext context, ExpenseLink link) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(
+          _linkKindIcon(link.linkKind),
+          size: 14,
+          color: theme.colorScheme.primary,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            'Compra ${_purchaseInvoiceLabel(link)} · ${_linkKindLabel(link.linkKind)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (purchaseLinks.length > 1) ...[
+          const SizedBox(width: 6),
+          Text(
+            '+${purchaseLinks.length - 1}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _purchaseInvoiceLabel(ExpenseLink link) {
+    final number = (link.purchaseInvoiceNumber ?? '').trim();
+    final supplier = (link.purchaseSupplierName ?? '').trim();
+    if (number.isEmpty && supplier.isEmpty) return 'factura';
+    if (number.isEmpty) return supplier;
+    if (supplier.isEmpty) return number;
+    return '$number · $supplier';
+  }
+
+  String _linkKindLabel(String value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega / transporte';
+      case 'import_cost':
+        return 'Costo importación';
+      default:
+        return 'Relacionado';
+    }
+  }
+
+  IconData _linkKindIcon(String value) {
+    switch (value) {
+      case 'delivery':
+        return Icons.local_shipping_outlined;
+      case 'import_cost':
+        return Icons.public_outlined;
+      default:
+        return Icons.link_rounded;
+    }
   }
 
   Color _getStatusColor(ExpensePaymentStatus status) {

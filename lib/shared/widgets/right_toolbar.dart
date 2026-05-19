@@ -25,6 +25,8 @@ import 'right_toolbar_glass_surface.dart';
 class RightToolbar extends StatefulWidget {
   const RightToolbar({super.key});
 
+  static const double collapsedWidth = 48.0;
+
   @override
   State<RightToolbar> createState() => _RightToolbarState();
 }
@@ -35,7 +37,7 @@ class _RightToolbarState extends State<RightToolbar> {
 
   static const double _minWidth = 320.0;
   static const double _maxWidth = 600.0;
-  static const double _collapsedWidth = 48.0;
+  static const double _collapsedWidth = RightToolbar.collapsedWidth;
   static const String _prefKey = 'right_toolbar_width';
 
   @override
@@ -238,6 +240,7 @@ class _RightToolbarState extends State<RightToolbar> {
     final activeTool = toolbarService.activeTool;
     final visibleTools = _visibleTools(toolbarService);
     final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
+    final blurEnabled = appearanceService.rightToolbarBlurEnabled;
     final sidebarPalette = appearanceService.sidebarPalette;
     final stripTheme = useToolbarPalette
         ? buildSidebarPaletteTheme(theme, sidebarPalette)
@@ -272,6 +275,7 @@ class _RightToolbarState extends State<RightToolbar> {
                 )
               : RightToolbarGlassSurface(
                   tint: useToolbarPalette ? sidebarPalette.background : null,
+                  blurEnabled: blurEnabled,
                   border: Border(
                     left: BorderSide(
                       color: (useToolbarPalette
@@ -472,6 +476,7 @@ class _RightToolbarState extends State<RightToolbar> {
             data: panelTheme,
             child: RightToolbarGlassSurface(
               tint: useSidebarPalette ? palette.background : null,
+              blurEnabled: appearanceService.rightToolbarBlurEnabled,
               border: Border(
                 left: BorderSide(
                   color: panelBorderColor.withValues(alpha: 0.72),
@@ -487,6 +492,7 @@ class _RightToolbarState extends State<RightToolbar> {
           data: railTheme,
           child: RightToolbarGlassSurface(
             tint: useToolbarPalette ? palette.background : null,
+            blurEnabled: appearanceService.rightToolbarBlurEnabled,
             border: Border(
               left: BorderSide(
                 color: railBorder.withValues(alpha: 0.72),

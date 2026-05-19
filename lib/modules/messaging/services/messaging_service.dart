@@ -247,7 +247,7 @@ class MessagingService {
       if (missingIds.isEmpty) return;
       try {
         dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone',
+              'id, auth_user_id, name, phone, image_url',
             );
         if (tenantId != null && tenantId.isNotEmpty) {
           query = query.eq('tenant_id', tenantId);
@@ -298,7 +298,7 @@ class MessagingService {
 
       if (allPhoneCandidates.isNotEmpty) {
         dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone',
+              'id, auth_user_id, name, phone, image_url',
             );
         if (tenantId != null && tenantId.isNotEmpty) {
           query = query.eq('tenant_id', tenantId);
@@ -327,7 +327,7 @@ class MessagingService {
     if (creatorIds.isNotEmpty) {
       try {
         dynamic query = _client.from('customers').select(
-              'id, auth_user_id, name, phone',
+              'id, auth_user_id, name, phone, image_url',
             );
         if (tenantId != null && tenantId.isNotEmpty) {
           query = query.eq('tenant_id', tenantId);
@@ -620,6 +620,8 @@ class MessagingService {
         customerId: customerId,
         customerName: _text(customer == null ? null : customer['name']) ??
             contactNameByConversation[conversationId],
+        customerImageUrl:
+            _text(customer == null ? null : customer['image_url']),
         phone: _text(customer == null ? null : customer['phone']) ??
             phoneByConversation[conversationId],
         primaryContextType: contextType,

@@ -932,6 +932,13 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
 
   final _toolbarKey = GlobalKey();
 
+  Widget _buildWorkspaceRouter() {
+    return Provider<Workspace>.value(
+      value: widget.workspace,
+      child: Router.withConfig(config: _router),
+    );
+  }
+
   String _currentRouterLocation() {
     return _router.routerDelegate.currentConfiguration.uri.toString();
   }
@@ -962,15 +969,33 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     super.build(context);
 
     try {
-      return Row(
+      final appearanceService = context.watch<AppearanceService>();
+      final toolbar = RightToolbar(key: _toolbarKey);
+
+      if (!appearanceService.rightToolbarOverContent) {
+        return Row(
+          children: [
+            Expanded(child: _buildWorkspaceRouter()),
+            toolbar,
+          ],
+        );
+      }
+
+      return Stack(
         children: [
-          Expanded(
-            child: Provider<Workspace>.value(
-              value: widget.workspace,
-              child: Router.withConfig(config: _router),
+          Positioned.fill(
+            child: Padding(
+              padding:
+                  const EdgeInsets.only(right: RightToolbar.collapsedWidth),
+              child: _buildWorkspaceRouter(),
             ),
           ),
-          RightToolbar(key: _toolbarKey),
+          Positioned(
+            top: 0,
+            right: 0,
+            bottom: 0,
+            child: toolbar,
+          ),
         ],
       );
     } catch (e) {

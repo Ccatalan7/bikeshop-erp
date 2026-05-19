@@ -12,6 +12,7 @@ import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/widgets/chat_window.dart';
 import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/messaging/widgets/new_chat_dialog.dart';
+import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
 
 enum _MessageFilter { all, unread, whatsapp, clients, team }
@@ -576,17 +577,10 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFF047857).withValues(alpha: 0.1),
-                child: Text(
-                  customer.initials,
-                  style: const TextStyle(
-                    color: Color(0xFF047857),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: _buildCustomerAvatar(customer),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -633,6 +627,34 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCustomerAvatar(Customer customer) {
+    const accentColor = Color(0xFF047857);
+    final fallbackAvatar = CircleAvatar(
+      radius: 22,
+      backgroundColor: accentColor.withValues(alpha: 0.1),
+      child: Text(
+        customer.initials,
+        style: const TextStyle(
+          color: accentColor,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+    final imageUrl = customer.imageUrl?.trim();
+
+    if (imageUrl == null || imageUrl.isEmpty) return fallbackAvatar;
+
+    return ImageService.buildCachedImage(
+      imageUrl: imageUrl,
+      width: 44,
+      height: 44,
+      isCircular: true,
+      placeholder: fallbackAvatar,
+      errorWidget: fallbackAvatar,
     );
   }
 

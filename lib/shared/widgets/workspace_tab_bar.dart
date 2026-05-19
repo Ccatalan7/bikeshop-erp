@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/workspace_manager.dart';
 import '../../modules/ai_assistant/widgets/global_ai_button.dart';
+import 'quick_ui_settings_button.dart';
 import 'share_workspace_link_button.dart';
 
 /// Tab bar UI for switching between workspaces
@@ -281,6 +282,7 @@ class _WorkspaceTabBarState extends State<WorkspaceTabBar> {
 
           // Global AI Assistant
           const GlobalAIFloatingButton(),
+          const QuickUiSettingsButton(),
 
           // Tab counter
           Padding(

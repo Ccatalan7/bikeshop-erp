@@ -14,6 +14,10 @@ class AppearanceService extends ChangeNotifier {
   static const String _sidebarPaletteKey = 'sidebar_palette';
   static const String _messagingSidebarPaletteKey =
       'quick_chat_uses_sidebar_palette';
+  static const String _rightToolbarOverContentKey =
+      'right_toolbar_over_content';
+  static const String _rightToolbarBlurEnabledKey =
+      'right_toolbar_blur_enabled';
 
   IconData _homeIcon = Icons.pedal_bike;
   String? _companyLogoUrl;
@@ -25,6 +29,8 @@ class AppearanceService extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
   String _sidebarPaletteCode = 'vinabike';
   bool _messagingUsesSidebarPalette = false;
+  bool _rightToolbarOverContent = true;
+  bool _rightToolbarBlurEnabled = true;
   StreamSubscription<AuthState>? _authSubscription;
 
   final _supabase = Supabase.instance.client;
@@ -71,6 +77,8 @@ class AppearanceService extends ChangeNotifier {
   String get sidebarPaletteCode => _sidebarPaletteCode;
   bool get messagingUsesSidebarPalette => _messagingUsesSidebarPalette;
   bool get quickChatUsesSidebarPalette => _messagingUsesSidebarPalette;
+  bool get rightToolbarOverContent => _rightToolbarOverContent;
+  bool get rightToolbarBlurEnabled => _rightToolbarBlurEnabled;
   SidebarPaletteOption get sidebarPalette => sidebarPalettes.firstWhere(
         (palette) => palette.code == _sidebarPaletteCode,
         orElse: () => sidebarPalettes.first,
@@ -213,6 +221,10 @@ class AppearanceService extends ChangeNotifier {
       }
       _messagingUsesSidebarPalette =
           prefs.getBool(_messagingSidebarPaletteKey) ?? false;
+      _rightToolbarOverContent =
+          prefs.getBool(_rightToolbarOverContentKey) ?? true;
+      _rightToolbarBlurEnabled =
+          prefs.getBool(_rightToolbarBlurEnabledKey) ?? true;
 
       // Get tenant_id for loading settings
       final tenantId = await TenantService().getTenantId();
@@ -474,6 +486,30 @@ class AppearanceService extends ChangeNotifier {
 
   Future<void> setQuickChatUsesSidebarPalette(bool value) {
     return setMessagingUsesSidebarPalette(value);
+  }
+
+  Future<void> setRightToolbarOverContent(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_rightToolbarOverContentKey, value);
+      _rightToolbarOverContent = value;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AppearanceService] Error saving toolbar layout: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setRightToolbarBlurEnabled(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_rightToolbarBlurEnabledKey, value);
+      _rightToolbarBlurEnabled = value;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AppearanceService] Error saving toolbar blur setting: $e');
+      rethrow;
+    }
   }
 }
 

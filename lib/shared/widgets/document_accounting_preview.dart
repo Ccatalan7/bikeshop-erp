@@ -647,6 +647,7 @@ class _StatusCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = _statusColor(text);
     return Expanded(
       flex: flex,
       child: Padding(
@@ -655,8 +656,8 @@ class _StatusCell extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: Text(
             text,
-            style: const TextStyle(
-              color: Color(0xFF16A34A),
+            style: TextStyle(
+              color: color,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -664,5 +665,14 @@ class _StatusCell extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _statusColor(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('pend')) return const Color(0xFFD97706);
+    if (normalized.contains('parcial')) return const Color(0xFF7C3AED);
+    if (normalized.contains('anulad')) return const Color(0xFFDC2626);
+    if (normalized.contains('program')) return const Color(0xFF475569);
+    return const Color(0xFF16A34A);
   }
 }

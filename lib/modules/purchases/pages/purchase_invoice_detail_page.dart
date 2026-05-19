@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../accounting/models/expense_link.dart';
+import '../../accounting/services/expense_service.dart';
 import '../models/purchase_invoice.dart';
 import '../services/purchase_service.dart';
 
@@ -26,6 +28,7 @@ class PurchaseInvoiceDetailPage extends StatefulWidget {
 class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
   late PurchaseService _purchaseService;
   PurchaseInvoice? _invoice;
+  List<ExpenseLink> _relatedExpenseLinks = const [];
   bool _isLoading = true;
   bool _isProcessing = false;
   bool _hasChanges = false; // Track if any changes were made
@@ -39,12 +42,23 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
 
   Future<void> _loadInvoice() async {
     setState(() => _isLoading = true);
+    final expenseService = context.read<ExpenseService>();
     try {
       final invoice =
           await _purchaseService.getPurchaseInvoice(widget.invoiceId);
+      var relatedLinks = const <ExpenseLink>[];
+      if (invoice?.id != null) {
+        try {
+          relatedLinks =
+              await expenseService.fetchLinksForPurchaseInvoice(invoice!.id!);
+        } catch (_) {
+          relatedLinks = const [];
+        }
+      }
       if (mounted) {
         setState(() {
           _invoice = invoice;
+          _relatedExpenseLinks = relatedLinks;
           _isLoading = false;
         });
       }
@@ -110,6 +124,8 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
                                 _buildTimeline(),
                                 const SizedBox(height: 24),
                                 _buildDetails(),
+                                const SizedBox(height: 24),
+                                _buildRelatedExpenses(),
                                 const SizedBox(height: 24),
                                 _buildItems(),
                                 const SizedBox(height: 24),
@@ -432,6 +448,143 @@ class _PurchaseInvoiceDetailPageState extends State<PurchaseInvoiceDetailPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildRelatedExpenses() {
+    final total = _relatedExpenseLinks.fold<double>(
+      0,
+      (sum, link) =>
+          sum + (link.allocatedAmount ?? link.expenseTotalAmount ?? 0),
+    );
+    final iva = _relatedExpenseLinks.fold<double>(
+      0,
+      (sum, link) => sum + (link.expenseTaxAmount ?? 0),
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Gastos relacionados',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (_relatedExpenseLinks.isNotEmpty)
+                  Text(
+                    ChileanUtils.formatCurrency(total),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_relatedExpenseLinks.isEmpty)
+              const Text(
+                'Sin fletes u otros gastos vinculados a esta factura.',
+                style: TextStyle(color: Colors.grey),
+              )
+            else ...[
+              ..._relatedExpenseLinks.map(
+                (link) => InkWell(
+                  onTap: () =>
+                      context.push('/accounting/expenses/${link.expenseId}'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.local_shipping_outlined,
+                            size: 18,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                link.expenseNumber ?? 'Gasto relacionado',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                [
+                                  _linkKindLabel(link.linkKind),
+                                  if ((link.expenseSupplierName ?? '')
+                                      .isNotEmpty)
+                                    link.expenseSupplierName!,
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              ChileanUtils.formatCurrency(
+                                link.allocatedAmount ??
+                                    link.expenseTotalAmount ??
+                                    0,
+                              ),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if ((link.expenseTaxAmount ?? 0) > 0)
+                              Text(
+                                'IVA ${ChileanUtils.formatCurrency(link.expenseTaxAmount!)}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(),
+              _buildTotalRow('Total gastos vinculados', total, bold: true),
+              if (iva > 0) _buildTotalRow('IVA crédito vinculado', iva),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _linkKindLabel(String value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega / transporte';
+      case 'import_cost':
+        return 'Costo de importación';
+      default:
+        return 'Relacionado';
+    }
   }
 
   Widget _buildItems() {
