@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 /// Universal line row wrapper for invoice/form line items.
-/// 
+///
 /// This widget encapsulates:
 /// - Hover state management (local, won't trigger parent rebuilds)
 /// - Row styling with borders and hover highlight
 /// - Index column with optional reorder arrows on hover
 /// - Consistent column layout across all forms
-/// 
+///
 /// Usage:
 /// ```dart
 /// LineRowWrapper(
@@ -29,37 +29,37 @@ import 'package:flutter/material.dart';
 class LineRowWrapper extends StatelessWidget {
   /// The 1-based index of this line
   final int index;
-  
+
   /// Whether this line can be moved up
   final bool canMoveUp;
-  
+
   /// Whether this line can be moved down
   final bool canMoveDown;
-  
+
   /// Called when user clicks up arrow
   final VoidCallback? onMoveUp;
-  
+
   /// Called when user clicks down arrow
   final VoidCallback? onMoveDown;
-  
+
   /// Called when user clicks delete button
   final VoidCallback? onRemove;
-  
+
   /// Whether the form is in edit mode
   final bool canEdit;
-  
+
   /// Width of the index column (default 40)
   final double indexColumnWidth;
-  
+
   /// Width of the actions column (default 48)
   final double actionsColumnWidth;
-  
+
   /// Whether to show the delete button in actions column
   final bool showDeleteButton;
-  
+
   /// The columns to display (excluding index and actions)
   final List<LineColumn> columns;
-  
+
   /// Optional key for the container
   final Key? rowKey;
 
@@ -139,7 +139,7 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
@@ -147,8 +147,8 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
       child: Container(
         key: widget.rowKey,
         decoration: BoxDecoration(
-          color: _isHovered 
-              ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3) 
+          color: _isHovered
+              ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
               : null,
           border: Border(
             bottom: BorderSide(
@@ -162,10 +162,10 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
             children: [
               // Index column with reorder arrows on hover
               _buildIndexColumn(theme),
-              
+
               // Content columns
               ...widget.columns.map((col) => _buildColumn(theme, col)),
-              
+
               // Actions column (always render for alignment)
               _buildActionsColumn(theme),
             ],
@@ -174,14 +174,15 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
       ),
     );
   }
-  
+
   Widget _buildIndexColumn(ThemeData theme) {
     return Container(
       width: widget.indexColumnWidth,
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         border: Border(
-          right: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          right: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.2)),
         ),
       ),
       child: Column(
@@ -200,7 +201,7 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
             )
           else
             const SizedBox(height: 18),
-          
+
           // Index number
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
@@ -212,7 +213,7 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
               ),
             ),
           ),
-          
+
           // Down arrow (only when hovering and can move down)
           if (widget.canMoveDown && _isHovered && widget.canEdit)
             InkWell(
@@ -229,46 +230,56 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
       ),
     );
   }
-  
+
   Widget _buildColumn(ThemeData theme, LineColumn column) {
     final borderDecoration = column.showRightBorder
         ? BoxDecoration(
             border: Border(
-              right: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+              right: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.2)),
             ),
           )
         : null;
-    
+    final child = column.alignment == null
+        ? column.child
+        : Align(
+            alignment: column.alignment!,
+            child: column.child,
+          );
+
     if (column.expanded) {
       return Expanded(
         child: Container(
           constraints: BoxConstraints(minWidth: column.minWidth ?? 250),
-          padding: column.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          padding: column.padding ??
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           decoration: borderDecoration,
-          child: column.child,
+          child: child,
         ),
       );
     }
-    
+
     return Container(
       width: column.width,
-      padding: column.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      padding: column.padding ??
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: borderDecoration,
-      child: column.child,
+      child: child,
     );
   }
-  
+
   Widget _buildActionsColumn(ThemeData theme) {
     return SizedBox(
       width: widget.actionsColumnWidth,
-      child: widget.showDeleteButton && widget.canEdit && widget.onRemove != null
-          ? IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              color: Colors.red,
-              onPressed: widget.onRemove,
-              tooltip: 'Eliminar línea',
-            )
-          : const SizedBox.shrink(),
+      child:
+          widget.showDeleteButton && widget.canEdit && widget.onRemove != null
+              ? IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  color: Colors.red,
+                  onPressed: widget.onRemove,
+                  tooltip: 'Eliminar línea',
+                )
+              : const SizedBox.shrink(),
     );
   }
 }
@@ -277,19 +288,22 @@ class _HoverableLineRowState extends State<_HoverableLineRow> {
 class LineColumn {
   /// Fixed width (use null for expanded columns)
   final double? width;
-  
+
   /// Whether this column should expand to fill available space
   final bool expanded;
-  
+
   /// Minimum width for expanded columns
   final double? minWidth;
-  
+
   /// Whether to show a right border
   final bool showRightBorder;
-  
+
   /// Custom padding (default: horizontal 8, vertical 12)
   final EdgeInsets? padding;
-  
+
+  /// Optional alignment for the child within the padded column area.
+  final AlignmentGeometry? alignment;
+
   /// The widget to display in this column
   final Widget child;
 
@@ -299,6 +313,8 @@ class LineColumn {
     this.minWidth,
     this.showRightBorder = true,
     this.padding,
+    this.alignment,
     required this.child,
-  }) : assert(expanded || width != null, 'Either width or expanded must be set');
+  }) : assert(
+            expanded || width != null, 'Either width or expanded must be set');
 }

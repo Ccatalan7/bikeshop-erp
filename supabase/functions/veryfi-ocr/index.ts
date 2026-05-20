@@ -26,6 +26,46 @@ function decodeBase64(contentBase64: string): Uint8Array {
   return bytes;
 }
 
+function contentTypeForFilename(filename: string): string {
+  const extension = filename.split(".").pop()?.trim().toLowerCase() ?? "";
+  switch (extension) {
+    case "pdf":
+      return "application/pdf";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "bmp":
+      return "image/bmp";
+    case "tif":
+    case "tiff":
+      return "image/tiff";
+    case "heic":
+      return "image/heic";
+    case "heif":
+      return "image/heif";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function safeContentType(contentType: unknown, filename: string): string {
+  if (typeof contentType === "string") {
+    const trimmed = contentType.trim().toLowerCase();
+    if (
+      trimmed.includes("/") &&
+      !trimmed.includes("\r") &&
+      !trimmed.includes("\n")
+    ) {
+      return trimmed;
+    }
+  }
+  return contentTypeForFilename(filename);
+}
+
 function buildVeryfiHeaders(): Headers {
   const apiUrl = Deno.env.get("VERYFI_API_URL") ??
     "https://api.veryfi.com/api/v8/partner/documents";
@@ -90,9 +130,10 @@ serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ error: "Missing authentication" }, 401);
     }
 
-    const { filename, contentBase64 } = await req.json() as {
+    const { filename, contentBase64, contentType } = await req.json() as {
       filename?: string;
       contentBase64?: string;
+      contentType?: string;
     };
 
     if (!filename || !contentBase64) {
@@ -104,10 +145,13 @@ serve(async (req: Request): Promise<Response> => {
     veryfiHeaders.delete("x-veryfi-api-url");
 
     const bytes = decodeBase64(contentBase64);
+    const mimeType = safeContentType(contentType, filename);
     const formData = new FormData();
-    formData.append("file", new Blob([bytes]), filename);
+    formData.append("file", new Blob([bytes], { type: mimeType }), filename);
 
-    console.log(`[veryfi-ocr] user=${userData.user.id} file=${filename} size=${bytes.length}`);
+    console.log(
+      `[veryfi-ocr] user=${userData.user.id} file=${filename} type=${mimeType} size=${bytes.length}`,
+    );
 
     const veryfiResponse = await fetch(apiUrl, {
       method: "POST",

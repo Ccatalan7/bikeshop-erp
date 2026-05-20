@@ -115,6 +115,42 @@ class OCRUploadWidget extends StatefulWidget {
 }
 
 class _OCRUploadWidgetState extends State<OCRUploadWidget> {
+  static const List<String> _invoiceFilePickerExtensions = [
+    'pdf',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'bmp',
+    'tif',
+    'tiff',
+    'heic',
+    'heif',
+    'json',
+    'html',
+    'htm',
+  ];
+
+  static const Set<String> _invoiceImageFileExtensions = {
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'bmp',
+    'tif',
+    'tiff',
+    'heic',
+    'heif',
+  };
+
+  static const Set<String> _supportedInvoiceFileExtensions = {
+    'pdf',
+    ..._invoiceImageFileExtensions,
+    'json',
+    'html',
+    'htm',
+  };
+
   final ImagePicker _picker = ImagePicker();
   final OCRService _ocrService = OCRService();
   final InvoiceParserService _parserService = InvoiceParserService();
@@ -317,7 +353,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             Text(
               _isDraggingInvoiceFile
                   ? 'Suelta la factura aquí'
-                  : 'Toma una foto, selecciona una imagen o arrastra un PDF aquí',
+                  : 'Toma una foto, selecciona una imagen o arrastra una imagen/PDF aquí',
               style: TextStyle(
                 fontSize: 14,
                 color: _isDraggingInvoiceFile
@@ -353,9 +389,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 ),
                 // PDF button
                 _buildActionButton(
-                  icon: Icons.picture_as_pdf,
+                  icon: Icons.upload_file,
                   label: 'Archivo',
-                  onPressed: _isProcessing ? null : _pickPDFFile,
+                  onPressed: _isProcessing ? null : _pickInvoiceFile,
                 ),
               ],
             ),
@@ -3759,7 +3795,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
   }
 
-  Future<void> _pickPDFFile() async {
+  Future<void> _pickInvoiceFile() async {
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
@@ -3770,7 +3806,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // Pick invoice file (withData: true for web compatibility)
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'json', 'html', 'htm'],
+        allowedExtensions: _invoiceFilePickerExtensions,
         withData: true, // Load bytes for web
       );
 
@@ -3806,7 +3842,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
 
       if (invoiceFile == null) {
-        throw Exception('Arrastra un archivo PDF, HTML o JSON de factura.');
+        throw Exception('Arrastra una imagen, PDF, HTML o JSON de factura.');
       }
 
       final fileName = _dropFileName(invoiceFile);
@@ -3815,6 +3851,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         fileName: fileName,
         fileBytes: bytes,
         extension: _fileExtension(fileName),
+        filePath: invoiceFile.path,
       );
     } catch (e) {
       _handleInvoiceFileProcessingError(e);
@@ -3826,6 +3863,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       fileName: file.name,
       fileBytes: await _readPickedFileBytes(file),
       extension: _fileExtension(file.name, fallback: file.extension),
+      filePath: file.path,
     );
   }
 
@@ -3833,10 +3871,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     required String fileName,
     required Uint8List fileBytes,
     required String extension,
+    String? filePath,
   }) async {
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
-    final isPdf = extension == 'pdf';
+    final normalizedExtension = extension.isNotEmpty
+        ? extension
+        : _inferInvoiceFileExtension(fileBytes);
+    final isPdf = normalizedExtension == 'pdf';
+    final isImage = _isSupportedInvoiceImageExtension(normalizedExtension);
 
     if (isPdf) {
       directPdfParsedData = await _pdfService.parseInvoiceFromBytes(
@@ -3845,16 +3888,34 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }
 
-    if (extension == 'json') {
+    if (isImage) {
+      if (_useVeryfi) {
+        parsedData = await _processWithVeryfi(
+          fileBytes,
+          _fileNameWithExtension(fileName, normalizedExtension),
+        );
+      } else if (filePath != null && filePath.trim().isNotEmpty && !kIsWeb) {
+        final recognizedText = await _ocrService.processImage(filePath);
+        if (recognizedText.text.isEmpty) {
+          throw Exception('No se pudo extraer texto de la imagen');
+        }
+        parsedData = widget.documentType == OCRDocumentType.invoice
+            ? _parserService.parseInvoice(recognizedText)
+            : _parserService.parseReceipt(recognizedText);
+      } else {
+        throw Exception('No se pudo procesar esta imagen desde Archivo.\n\n'
+            'Usa Galería o procesa con OCR en la nube.');
+      }
+    } else if (normalizedExtension == 'json') {
       parsedData = _parseAliExpressJsonFile(fileBytes);
-    } else if (extension == 'html' || extension == 'htm') {
+    } else if (normalizedExtension == 'html' || normalizedExtension == 'htm') {
       parsedData = _parseAliExpressHtmlFile(fileBytes);
     } else if (directPdfParsedData != null &&
         directPdfParsedData.lineItems.isNotEmpty &&
         _looksLikeAliExpressInvoice(directPdfParsedData, fileName: fileName)) {
       parsedData = directPdfParsedData;
     } else if (_useVeryfi) {
-      // Use Veryfi for PDF
+      // Use Veryfi for PDFs and other supported document files.
       parsedData = await _processWithVeryfi(fileBytes, fileName);
       parsedData = _mergeLineItemMedia(parsedData, directPdfParsedData);
     } else {
@@ -3862,7 +3923,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           directPdfParsedData.lineItems.isNotEmpty) {
         parsedData = directPdfParsedData;
       } else {
-        debugPrint('📄 PDF picked: $fileName');
+        debugPrint('📄 Invoice file picked: $fileName');
         parsedData = await _pdfService.parseInvoiceFromBytes(fileBytes,
             filename: fileName);
       }
@@ -3874,7 +3935,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           'Por favor, usa la opción de Cámara o Galería para escanear el documento.');
     }
 
-    debugPrint('📋 Parsed PDF data: $parsedData');
+    debugPrint('📋 Parsed invoice file data: $parsedData');
 
     parsedData = _applyAliExpressInvoiceNumber(
       parsedData,
@@ -3928,7 +3989,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   void _handleInvoiceFileProcessingError(Object error) {
-    debugPrint('❌ PDF processing error: $error');
+    debugPrint('❌ Invoice file processing error: $error');
     final errorMsg = _formatError(error);
 
     setState(() {
@@ -3958,7 +4019,71 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   bool _isSupportedInvoiceFileExtension(String extension) {
-    return const {'pdf', 'json', 'html', 'htm'}.contains(extension);
+    return _supportedInvoiceFileExtensions.contains(extension);
+  }
+
+  bool _isSupportedInvoiceImageExtension(String extension) {
+    return _invoiceImageFileExtensions.contains(extension);
+  }
+
+  String _fileNameWithExtension(String fileName, String extension) {
+    if (extension.isEmpty || _fileExtension(fileName).isNotEmpty) {
+      return fileName;
+    }
+    return '$fileName.$extension';
+  }
+
+  String _inferInvoiceFileExtension(Uint8List bytes) {
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46) {
+      return 'pdf';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return 'png';
+    }
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'jpg';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'webp';
+    }
+    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return 'bmp';
+    }
+    if (bytes.length >= 4 &&
+        ((bytes[0] == 0x49 &&
+                bytes[1] == 0x49 &&
+                bytes[2] == 0x2A &&
+                bytes[3] == 0x00) ||
+            (bytes[0] == 0x4D &&
+                bytes[1] == 0x4D &&
+                bytes[2] == 0x00 &&
+                bytes[3] == 0x2A))) {
+      return 'tiff';
+    }
+    return '';
   }
 
   Future<Uint8List> _readPickedFileBytes(PlatformFile file) async {

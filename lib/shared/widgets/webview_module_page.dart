@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:provider/provider.dart';
@@ -70,6 +71,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   bool _canGoForward = false;
   double? _lastAppliedBrowserZoom;
   double? _pendingBrowserZoom;
+  Offset _pendingWindowsTrackpadScroll = Offset.zero;
+  Offset? _lastWindowsTrackpadPosition;
+  Timer? _windowsTrackpadScrollTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -205,6 +209,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   @override
   void dispose() {
+    _windowsTrackpadScrollTimer?.cancel();
     unawaited(_webViewEnvironment?.dispose());
     _addressController.dispose();
     _addressFocusNode.dispose();
@@ -494,90 +499,206 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
     return _buildEmbeddedView(
       context,
-      child: _NativeBrowserZoomBoundary(
-        appScale: browserZoom,
-        child: InAppWebView(
-          key: ValueKey('browser-${widget.url}'),
-          webViewEnvironment: _webViewEnvironment,
-          initialUrlRequest: _urlRequest(initialUri),
-          initialSettings: _browserSettings(browserZoom),
-          onWebViewCreated: (controller) {
-            _controller = controller;
-            unawaited(_applyBrowserZoom(browserZoom));
-            unawaited(_refreshNavigationState());
-          },
-          onLoadStart: (controller, url) {
-            if (!mounted) return;
-            setState(() {
-              _isLoading = true;
-              _loadingProgress = 0;
-              _lastErrorMessage = null;
-            });
-            _setCurrentUrl(url);
-          },
-          onLoadStop: (controller, url) async {
-            if (!mounted) return;
-            setState(() {
-              _isLoading = false;
-              _loadingProgress = 100;
-            });
-            _setCurrentUrl(url);
-            _pageTitle = await controller.getTitle();
-            if (mounted) setState(() {});
-            unawaited(_applyBrowserZoom(browserZoom));
-            unawaited(_refreshNavigationState());
-          },
-          onProgressChanged: (controller, progress) {
-            if (!mounted) return;
-            setState(() {
-              _loadingProgress = progress;
-              _isLoading = progress < 100;
-            });
-          },
-          onTitleChanged: (controller, title) {
-            if (!mounted) return;
-            setState(() {
-              _pageTitle = title;
-            });
-          },
-          onUpdateVisitedHistory: (controller, url, isReload) {
-            if (!mounted) return;
-            _setCurrentUrl(url);
-            unawaited(_refreshNavigationState());
-          },
-          onReceivedError: (controller, request, error) {
-            if (!mounted || request.isForMainFrame == false) return;
-            if (_isBenignNavigationError(error)) {
-              if (kDebugMode) {
-                debugPrint(
-                  '🌐 Web workspace ignored cancelled navigation: '
-                  '${error.description}',
-                );
+      child: _buildWindowsTrackpadScrollBridge(
+        child: _NativeBrowserZoomBoundary(
+          appScale: browserZoom,
+          child: InAppWebView(
+            key: ValueKey('browser-${widget.url}'),
+            webViewEnvironment: _webViewEnvironment,
+            initialUrlRequest: _urlRequest(initialUri),
+            initialSettings: _browserSettings(browserZoom),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+              unawaited(_applyBrowserZoom(browserZoom));
+              unawaited(_refreshNavigationState());
+            },
+            onLoadStart: (controller, url) {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = true;
+                _loadingProgress = 0;
+                _lastErrorMessage = null;
+              });
+              _setCurrentUrl(url);
+            },
+            onLoadStop: (controller, url) async {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+                _loadingProgress = 100;
+              });
+              _setCurrentUrl(url);
+              _pageTitle = await controller.getTitle();
+              if (mounted) setState(() {});
+              unawaited(_applyBrowserZoom(browserZoom));
+              unawaited(_refreshNavigationState());
+            },
+            onProgressChanged: (controller, progress) {
+              if (!mounted) return;
+              setState(() {
+                _loadingProgress = progress;
+                _isLoading = progress < 100;
+              });
+            },
+            onTitleChanged: (controller, title) {
+              if (!mounted) return;
+              setState(() {
+                _pageTitle = title;
+              });
+            },
+            onUpdateVisitedHistory: (controller, url, isReload) {
+              if (!mounted) return;
+              _setCurrentUrl(url);
+              unawaited(_refreshNavigationState());
+            },
+            onReceivedError: (controller, request, error) {
+              if (!mounted || request.isForMainFrame == false) return;
+              if (_isBenignNavigationError(error)) {
+                if (kDebugMode) {
+                  debugPrint(
+                    '🌐 Web workspace ignored cancelled navigation: '
+                    '${error.description}',
+                  );
+                }
+                return;
               }
-              return;
-            }
-            setState(() {
-              _lastErrorMessage = error.description;
-              _isLoading = false;
-            });
-          },
-          onPermissionRequest: (controller, request) async {
-            return PermissionResponse(
-              resources: request.resources,
-              action: PermissionResponseAction.GRANT,
-            );
-          },
-          shouldOverrideUrlLoading: _handleNavigation,
-          onCreateWindow: _handleCreateWindow,
-          onDownloadStartRequest: (controller, request) {
-            unawaited(_openExternalUrl(request.url.toString()));
-          },
-          onConsoleMessage: (controller, consoleMessage) {
-            debugPrint('🌐 Web workspace: ${consoleMessage.message}');
-          },
+              setState(() {
+                _lastErrorMessage = error.description;
+                _isLoading = false;
+              });
+            },
+            onPermissionRequest: (controller, request) async {
+              return PermissionResponse(
+                resources: request.resources,
+                action: PermissionResponseAction.GRANT,
+              );
+            },
+            shouldOverrideUrlLoading: _handleNavigation,
+            onCreateWindow: _handleCreateWindow,
+            onDownloadStartRequest: (controller, request) {
+              unawaited(_openExternalUrl(request.url.toString()));
+            },
+            onConsoleMessage: (controller, consoleMessage) {
+              debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+            },
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildWindowsTrackpadScrollBridge({required Widget child}) {
+    if (defaultTargetPlatform != TargetPlatform.windows || kIsWeb) {
+      return child;
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      onPointerPanZoomUpdate: _queueWindowsTrackpadScroll,
+      child: child,
+    );
+  }
+
+  void _queueWindowsTrackpadScroll(PointerPanZoomUpdateEvent event) {
+    if (_controller == null) return;
+
+    // Pinch gestures arrive through the same pan/zoom channel. Let WebView2
+    // handle those natively and only smooth two-finger scroll deltas here.
+    if ((event.scale - 1).abs() > 0.001 || event.rotation.abs() > 0.001) {
+      return;
+    }
+
+    final panDelta = event.localPanDelta;
+    if (panDelta == Offset.zero) return;
+
+    _lastWindowsTrackpadPosition = event.localPosition;
+    _pendingWindowsTrackpadScroll += Offset(-panDelta.dx, -panDelta.dy);
+    _windowsTrackpadScrollTimer ??= Timer(
+      const Duration(milliseconds: 16),
+      _flushWindowsTrackpadScroll,
+    );
+  }
+
+  void _flushWindowsTrackpadScroll() {
+    _windowsTrackpadScrollTimer = null;
+
+    final delta = _pendingWindowsTrackpadScroll;
+    final position = _lastWindowsTrackpadPosition;
+    _pendingWindowsTrackpadScroll = Offset.zero;
+
+    if (delta.distanceSquared < 0.01) return;
+    unawaited(_applyWindowsTrackpadScroll(delta, position));
+  }
+
+  Future<void> _applyWindowsTrackpadScroll(
+    Offset delta,
+    Offset? position,
+  ) async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    final dx = _jsNumber(_clampTrackpadDelta(delta.dx));
+    final dy = _jsNumber(_clampTrackpadDelta(delta.dy));
+    final x = _jsNumber(position?.dx ?? 0);
+    final y = _jsNumber(position?.dy ?? 0);
+
+    try {
+      await controller.evaluateJavascript(source: '''
+(() => {
+  const dx = $dx;
+  const dy = $dy;
+  const x = $x;
+  const y = $y;
+  const overflowAllowsScroll = (value) =>
+    value === 'auto' || value === 'scroll' || value === 'overlay';
+
+  let element = document.elementFromPoint(x, y);
+  while (element && element !== document.body &&
+      element !== document.documentElement) {
+    const style = window.getComputedStyle(element);
+    const canScrollY = dy !== 0 &&
+      element.scrollHeight > element.clientHeight &&
+      overflowAllowsScroll(style.overflowY);
+    const canScrollX = dx !== 0 &&
+      element.scrollWidth > element.clientWidth &&
+      overflowAllowsScroll(style.overflowX);
+
+    if (canScrollX || canScrollY) {
+      const beforeLeft = element.scrollLeft;
+      const beforeTop = element.scrollTop;
+      element.scrollBy({
+        left: canScrollX ? dx : 0,
+        top: canScrollY ? dy : 0,
+        behavior: 'auto',
+      });
+
+      if (element.scrollLeft !== beforeLeft ||
+          element.scrollTop !== beforeTop) {
+        return;
+      }
+    }
+
+    element = element.parentElement;
+  }
+
+  window.scrollBy({left: dx, top: dy, behavior: 'auto'});
+})();
+''');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Web workspace trackpad scroll sync skipped: $error');
+      }
+    }
+  }
+
+  double _clampTrackpadDelta(double value) {
+    if (!value.isFinite) return 0;
+    return value.clamp(-240.0, 240.0).toDouble();
+  }
+
+  String _jsNumber(double value) {
+    if (!value.isFinite) return '0';
+    return value.toStringAsFixed(2);
   }
 
   Widget _buildEmbeddedView(

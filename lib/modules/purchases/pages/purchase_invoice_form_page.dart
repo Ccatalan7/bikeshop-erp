@@ -3331,6 +3331,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Cantidad column
         LineColumn(
           width: _colQuantityWidth,
+          alignment: Alignment.center,
           child: _canEditFields
               ? TextField(
                   controller: entry.quantityController,
@@ -3356,6 +3357,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Precio column
         LineColumn(
           width: _colPriceWidth,
+          alignment: Alignment.center,
           child: _canEditFields
               ? TextField(
                   controller: entry.unitCostController,
@@ -3383,6 +3385,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         // Descuento column
         LineColumn(
           width: _colDiscountWidth,
+          alignment: Alignment.center,
           child: _canEditFields
               ? TextField(
                   controller: entry.discountController,

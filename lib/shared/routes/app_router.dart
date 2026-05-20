@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../widgets/main_layout.dart';
 import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
+import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
@@ -59,7 +60,6 @@ import 'erp_routes_barrel.dart' deferred as erp
         KioskModePage,
         LabelPrinterPage,
         LoginScreen,
-        MailInboxPage,
         MechanicJobFormPage,
         MedicalLeavesPage,
         NavigationManagementPage,
@@ -2530,11 +2530,11 @@ class AppRouter {
         // Mail Module (Zoho Mail Integration)
         GoRoute(
           path: '/mail',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => erp.MailInboxPage(),
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: const mail.MailInboxPage(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) => child,
           ),
         ),
 

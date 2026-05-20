@@ -18,6 +18,7 @@ class VeryfiProxyService {
       body: {
         'filename': filename,
         'contentBase64': base64Encode(bytes),
+        'contentType': _contentTypeForFilename(filename),
       },
     );
 
@@ -40,5 +41,31 @@ class VeryfiProxyService {
 
     debugPrint('Unexpected OCR proxy response type: ${data.runtimeType}');
     throw Exception('Veryfi proxy error: Invalid response from OCR server');
+  }
+
+  String _contentTypeForFilename(String filename) {
+    final extension = filename.split('.').last.trim().toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      case 'tif':
+      case 'tiff':
+        return 'image/tiff';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'application/octet-stream';
+    }
   }
 }

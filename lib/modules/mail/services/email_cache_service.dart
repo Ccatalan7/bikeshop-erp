@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import '../providers/email_provider.dart';
@@ -12,19 +13,35 @@ class EmailCacheService {
   Database? _database;
   bool _initialized = false;
 
+  bool get _supportsLocalCache {
+    if (kIsWeb) return false;
+
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
+
   /// Initialize the cache database
   Future<void> initialize() async {
-    if (_initialized || kIsWeb) return; // Skip on web
+    if (_initialized) return;
+    if (!_supportsLocalCache) {
+      _initialized = true;
+      debugPrint(
+        '📧 [EmailCache] Local SQLite cache skipped on $defaultTargetPlatform',
+      );
+      return;
+    }
 
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'email_cache.db');
+    try {
+      final dbPath = await getDatabasesPath();
+      final path = p.join(dbPath, 'email_cache.db');
 
-    _database = await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        // Emails table - stores email metadata
-        await db.execute('''
+      _database = await openDatabase(
+        path,
+        version: 1,
+        onCreate: (db, version) async {
+          // Emails table - stores email metadata
+          await db.execute('''
           CREATE TABLE emails (
             id TEXT PRIMARY KEY,
             provider_id TEXT NOT NULL,
@@ -43,8 +60,8 @@ class EmailCacheService {
           )
         ''');
 
-        // Email content table - stores full email body separately
-        await db.execute('''
+          // Email content table - stores full email body separately
+          await db.execute('''
           CREATE TABLE email_content (
             email_id TEXT PRIMARY KEY,
             content TEXT NOT NULL,
@@ -52,21 +69,26 @@ class EmailCacheService {
           )
         ''');
 
-        // Index for faster queries
-        await db
-            .execute('CREATE INDEX idx_emails_provider ON emails(provider_id)');
-        await db.execute(
-            'CREATE INDEX idx_emails_received ON emails(received_time DESC)');
-      },
-    );
+          // Index for faster queries
+          await db.execute(
+              'CREATE INDEX idx_emails_provider ON emails(provider_id)');
+          await db.execute(
+              'CREATE INDEX idx_emails_received ON emails(received_time DESC)');
+        },
+      );
 
-    _initialized = true;
-    debugPrint('📧 [EmailCache] Database initialized');
+      debugPrint('📧 [EmailCache] Database initialized');
+    } catch (e) {
+      _database = null;
+      debugPrint('📧 [EmailCache] Local cache disabled: $e');
+    } finally {
+      _initialized = true;
+    }
   }
 
   /// Cache a list of emails (metadata only)
   Future<void> cacheEmails(List<Email> emails) async {
-    if (_database == null || kIsWeb) return;
+    if (_database == null || !_supportsLocalCache) return;
 
     final batch = _database!.batch();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -100,7 +122,7 @@ class EmailCacheService {
 
   /// Get cached emails (sorted by received time, newest first)
   Future<List<Email>> getCachedEmails({String? providerId}) async {
-    if (_database == null || kIsWeb) return [];
+    if (_database == null || !_supportsLocalCache) return [];
 
     final where = providerId != null ? 'provider_id = ?' : null;
     final whereArgs = providerId != null ? [providerId] : null;
@@ -138,7 +160,7 @@ class EmailCacheService {
 
   /// Cache email content (full body)
   Future<void> cacheContent(String emailId, String content) async {
-    if (_database == null || kIsWeb) return;
+    if (_database == null || !_supportsLocalCache) return;
 
     await _database!.insert(
       'email_content',
@@ -153,7 +175,7 @@ class EmailCacheService {
 
   /// Get cached email content
   Future<String?> getCachedContent(String emailId) async {
-    if (_database == null || kIsWeb) return null;
+    if (_database == null || !_supportsLocalCache) return null;
 
     final rows = await _database!.query(
       'email_content',
@@ -168,7 +190,7 @@ class EmailCacheService {
 
   /// Update email read status in cache
   Future<void> updateReadStatus(String emailId, bool isRead) async {
-    if (_database == null || kIsWeb) return;
+    if (_database == null || !_supportsLocalCache) return;
 
     await _database!.update(
       'emails',
@@ -180,7 +202,7 @@ class EmailCacheService {
 
   /// Clear all cached data (for logout)
   Future<void> clearCache() async {
-    if (_database == null || kIsWeb) return;
+    if (_database == null || !_supportsLocalCache) return;
 
     await _database!.delete('emails');
     await _database!.delete('email_content');
@@ -190,7 +212,7 @@ class EmailCacheService {
   /// Check if cache is stale (older than threshold)
   Future<bool> isCacheStale(
       {Duration threshold = const Duration(minutes: 30)}) async {
-    if (_database == null || kIsWeb) return true;
+    if (_database == null || !_supportsLocalCache) return true;
 
     final rows = await _database!.query(
       'emails',

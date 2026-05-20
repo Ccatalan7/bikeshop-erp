@@ -12,6 +12,7 @@ class MailAccountManager extends ChangeNotifier {
   static const int inboxPageSize = 50;
   static const int _searchWarmPageLimit = 5;
   static const int _searchWarmTargetResults = 25;
+  static const Duration _startupStepTimeout = Duration(seconds: 8);
 
   // Singleton pattern
   static MailAccountManager? _instance;
@@ -50,6 +51,7 @@ class MailAccountManager extends ChangeNotifier {
   // Push notification subscription
   RealtimeChannel? _pushChannel;
   bool _isPushEnabled = false;
+  Future<void>? _initializingFuture;
 
   /// Filter: null = all, 'gmail' = only gmail, 'zoho' = only zoho
   String? _providerFilter;
@@ -92,9 +94,29 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   /// Initialize manager and all providers
-  Future<void> initialize() async {
-    // Initialize SQLite cache
-    await _cache.initialize();
+  Future<void> initialize() {
+    _initializingFuture ??= _initializeInternal().whenComplete(() {
+      _initializingFuture = null;
+    });
+    return _initializingFuture!;
+  }
+
+  Future<void> _initializeInternal() async {
+    if (_isInitialized) {
+      debugPrint('📧 [MailManager] Already initialized');
+      notifyListeners();
+      return;
+    }
+
+    debugPrint('📧 [MailManager] Initializing...');
+
+    // Initialize SQLite cache when supported. Cache failures must never block
+    // the mail module from drawing its connect/inbox UI.
+    await _runStartupStep(
+      label: 'cache',
+      action: _cache.initialize,
+      timeout: const Duration(seconds: 3),
+    );
 
     // Ensure providers are registered
     if (_providers.isEmpty) {
@@ -109,21 +131,19 @@ class MailAccountManager extends ChangeNotifier {
 
     // Always initialize providers to load tokens from storage
     for (final provider in _providers) {
-      await provider.initialize();
+      await _runStartupStep(
+        label: '${provider.providerId} provider',
+        action: provider.initialize,
+      );
     }
-
-    // Skip if already initialized with emails
-    if (_isInitialized && _unifiedEmails.isNotEmpty) {
-      debugPrint('📧 [MailManager] Already initialized, using memory cache');
-      notifyListeners();
-      return;
-    }
-
-    debugPrint('📧 [MailManager] Initializing...');
     _isInitialized = true;
+    notifyListeners();
 
     // Set up push notifications (instant updates)
-    await _setupPushSubscription();
+    await _runStartupStep(
+      label: 'push subscription',
+      action: _setupPushSubscription,
+    );
 
     // Keep polling as fallback (5 min instead of 3 min when push is enabled)
     _startPolling();
@@ -142,11 +162,28 @@ class MailAccountManager extends ChangeNotifier {
         refreshInbox(background: true);
       } else {
         // No cache, load normally (with loading indicator)
-        await refreshInbox();
+        await _runStartupStep(
+          label: 'initial inbox refresh',
+          action: refreshInbox,
+          timeout: const Duration(seconds: 12),
+        );
       }
     }
 
     notifyListeners();
+  }
+
+  Future<void> _runStartupStep({
+    required String label,
+    required Future<void> Function() action,
+    Duration timeout = _startupStepTimeout,
+  }) async {
+    try {
+      await action().timeout(timeout);
+    } catch (e) {
+      debugPrint('📧 [MailManager] Startup step "$label" skipped: $e');
+      _error ??= 'No se pudo completar "$label".';
+    }
   }
 
   void _onProviderChange() {
