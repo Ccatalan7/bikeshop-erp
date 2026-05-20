@@ -141,14 +141,6 @@ class _MailInboxPageState extends State<MailInboxPage> {
   }
 
   Future<void> _processOAuthCode(String providerId, String code) async {
-    final provider = _manager.getProvider(providerId);
-    if (provider?.isAuthenticated ?? false) {
-      debugPrint(
-        '🔐 [Mail] Ignoring stale $providerId auth code; account is already connected.',
-      );
-      return;
-    }
-
     await _exchangeOAuthCode(providerId, code);
   }
 
@@ -195,6 +187,7 @@ class _MailInboxPageState extends State<MailInboxPage> {
 
   void _connectProvider(String providerId) async {
     try {
+      debugPrint('🔐 [Mail] Starting OAuth flow for $providerId...');
       final redirectUri = _redirectUriForProvider(providerId);
 
       // On mobile, pass state=mobile so edge function redirects to deep link
@@ -207,11 +200,13 @@ class _MailInboxPageState extends State<MailInboxPage> {
 
       if (kIsWeb) {
         // Web: direct navigation
+        debugPrint('🔐 [Mail] Redirecting browser for $providerId OAuth');
         navigateToUrl(authUrl);
       } else {
         // Mobile: open in external browser, deep link will bring user back
         final uri = Uri.parse(authUrl);
         if (await canLaunchUrl(uri)) {
+          debugPrint('🔐 [Mail] Opening browser for $providerId OAuth');
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -571,10 +566,27 @@ ${email.content ?? email.summary ?? ''}
           ),
           if (_manager.error != null) ...[
             const SizedBox(height: 6),
-            MailErrorDiagnosticBanner(message: _manager.error!),
+            _buildMailErrorBanner(_manager.error!),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildMailErrorBanner(String message) {
+    final diagnostic = MailErrorDiagnostic.fromMessage(message);
+    final providerId = _providerIdFromError(message);
+    final canReconnect = providerId != null &&
+        (diagnostic.kind == MailErrorKind.token ||
+            diagnostic.kind == MailErrorKind.permissions);
+
+    return MailErrorDiagnosticBanner(
+      message: message,
+      actionLabel: canReconnect
+          ? 'Reconectar ${_providerDisplayName(providerId)}'
+          : null,
+      actionIcon: Icons.sync_outlined,
+      onAction: canReconnect ? () => _connectProvider(providerId) : null,
     );
   }
 
@@ -594,6 +606,14 @@ ${email.content ?? email.summary ?? ''}
   }
 
   Widget _buildAddAccountMenu() {
+    final connectedProviderIds = _manager.connectedProviders
+        .map((provider) => provider.providerId)
+        .toSet();
+    final availableProviders = <({String id, String label})>[
+      (id: 'zoho', label: 'Zoho'),
+      (id: 'gmail', label: 'Gmail'),
+    ].where((provider) => !connectedProviderIds.contains(provider.id)).toList();
+
     return SizedBox(
       width: 32,
       height: 32,
@@ -602,10 +622,28 @@ ${email.content ?? email.summary ?? ''}
         iconSize: 20,
         icon: const Icon(Icons.add),
         tooltip: 'Agregar cuenta',
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'zoho', child: Text('Conectar Zoho')),
-          const PopupMenuItem(value: 'gmail', child: Text('Conectar Gmail')),
-        ],
+        itemBuilder: (context) => availableProviders.isEmpty
+            ? [
+                const PopupMenuItem(
+                  enabled: false,
+                  child: Text('No hay cuentas nuevas'),
+                ),
+              ]
+            : availableProviders
+                .map(
+                  (provider) => PopupMenuItem(
+                    value: provider.id,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _providerIcon(provider.id),
+                        const SizedBox(width: 10),
+                        Text('Conectar ${provider.label}'),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
         onSelected: _connectProvider,
       ),
     );
@@ -694,6 +732,17 @@ ${email.content ?? email.summary ?? ''}
       default:
         return const Icon(Icons.email_outlined, size: 16);
     }
+  }
+
+  String? _providerIdFromError(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('gmail')) return 'gmail';
+    if (lower.contains('zoho')) return 'zoho';
+    return null;
+  }
+
+  String _providerDisplayName(String providerId) {
+    return providerId == 'gmail' ? 'Gmail' : 'Zoho';
   }
 
   Widget _buildEmailList() {

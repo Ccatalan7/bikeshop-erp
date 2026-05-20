@@ -3466,7 +3466,7 @@ create policy "stock_adjustments_delete" on stock_adjustments
 create table if not exists product_bulk_edit_history (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade not null,
-  operation text not null check (operation in ('classification', 'channels', 'pricing', 'stock', 'images')),
+  operation text not null check (operation in ('classification', 'channels', 'pricing', 'stock', 'images', 'custom')),
   scope_source text not null check (scope_source in ('selected', 'filtered', 'all')),
   status text not null check (status in ('completed', 'partial', 'failed', 'skipped')),
   actor_name text,

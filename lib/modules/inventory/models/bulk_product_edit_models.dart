@@ -16,7 +16,8 @@ enum BulkProductEditOperation {
   channels('Canales y estado'),
   pricing('Precios y costos'),
   stock('Ajuste de stock'),
-  images('Imágenes');
+  images('Imágenes'),
+  custom('Personalizada');
 
   const BulkProductEditOperation(this.label);
   final String label;
@@ -77,6 +78,95 @@ enum BulkPriceRounding {
 
   const BulkPriceRounding(this.label);
   final String label;
+}
+
+enum BulkCustomProductFieldType {
+  text,
+  longText,
+  integer,
+  decimal,
+  toggle,
+  category,
+  brand,
+  supplier,
+  textList;
+}
+
+enum BulkCustomProductFieldGroup {
+  identity('Identidad'),
+  classification('Clasificación'),
+  pricingStock('Precios e inventario'),
+  status('Estado y canales'),
+  website('Tienda online'),
+  seoMerchant('SEO y Merchant'),
+  technical('Datos técnicos');
+
+  const BulkCustomProductFieldGroup(this.label);
+  final String label;
+}
+
+class BulkCustomProductFieldDefinition {
+  const BulkCustomProductFieldDefinition({
+    required this.key,
+    required this.label,
+    required this.group,
+    required this.type,
+    this.helperText,
+    this.isRequired = false,
+    this.allowClear = true,
+    this.searchAliases = const [],
+  });
+
+  final String key;
+  final String label;
+  final BulkCustomProductFieldGroup group;
+  final BulkCustomProductFieldType type;
+  final String? helperText;
+  final bool isRequired;
+  final bool allowClear;
+  final List<String> searchAliases;
+}
+
+class BulkCustomProductTemplate {
+  const BulkCustomProductTemplate({
+    required this.id,
+    required this.name,
+    required this.fieldKeys,
+    required this.values,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final List<String> fieldKeys;
+  final Map<String, dynamic> values;
+  final DateTime createdAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'field_keys': fieldKeys,
+      'values': values,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  factory BulkCustomProductTemplate.fromJson(Map<String, dynamic> json) {
+    return BulkCustomProductTemplate(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Plantilla',
+      fieldKeys: json['field_keys'] is List
+          ? List<String>.from(json['field_keys'] as List)
+          : const [],
+      values: json['values'] is Map
+          ? Map<String, dynamic>.from(json['values'] as Map)
+          : const {},
+      createdAt: json['created_at'] == null
+          ? DateTime.now()
+          : DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now(),
+    );
+  }
 }
 
 BulkProductScopeSource bulkProductScopeSourceFromValue(String? value) {

@@ -14,6 +14,7 @@ import 'product_image_fingerprint_service.dart';
 
 class BulkProductEditService {
   static final DateTime _legacyInferenceCutoffAt = DateTime.utc(2026, 4, 8);
+  static const String _customClearSentinel = '__bulk_clear__';
 
   BulkProductEditService({
     DatabaseService? databaseService,
@@ -858,6 +859,145 @@ class BulkProductEditService {
     );
   }
 
+  Future<BulkUpdateResult> applyCustom({
+    required List<Product> products,
+    required Set<String> enabledProductIds,
+    required List<BulkCustomProductFieldDefinition> fields,
+    required Map<String, dynamic> values,
+    required Map<String, String> categoryNamesById,
+    required Map<String, String> brandNamesById,
+    required Map<String, String> supplierNamesById,
+  }) async {
+    var succeeded = 0;
+    var skipped = 0;
+    final errors = <String>[];
+    final items = <BulkUpdateItemResult>[];
+    final activeProducts = products.where((product) {
+      final productId = product.id;
+      return productId != null && enabledProductIds.contains(productId);
+    }).toList(growable: false);
+
+    for (final product in activeProducts) {
+      final productId = product.id;
+      if (productId == null) continue;
+
+      final payload = <String, dynamic>{};
+      final beforeValues = <String, dynamic>{};
+      final afterValues = <String, dynamic>{};
+      final changedFields = <String>[];
+
+      try {
+        for (final field in fields) {
+          final rawValue = values[field.key];
+          final normalized = _normalizeCustomValue(field, rawValue);
+          final beforeValue = _readCustomFieldValue(product, field.key);
+          final afterValue = _displayReadyCustomValue(
+            field: field,
+            value: normalized,
+            categoryNamesById: categoryNamesById,
+            brandNamesById: brandNamesById,
+            supplierNamesById: supplierNamesById,
+          );
+          final currentValue = _displayReadyCustomValue(
+            field: field,
+            value: beforeValue,
+            categoryNamesById: categoryNamesById,
+            brandNamesById: brandNamesById,
+            supplierNamesById: supplierNamesById,
+          );
+
+          if (_customValuesEquivalent(field, beforeValue, normalized)) {
+            continue;
+          }
+
+          _writeCustomPayload(
+            payload: payload,
+            field: field,
+            value: normalized,
+            brandNamesById: brandNamesById,
+          );
+          beforeValues[field.key] = currentValue;
+          afterValues[field.key] = afterValue;
+          changedFields.add(field.key);
+        }
+
+        if (payload.isEmpty) {
+          skipped += 1;
+          items.add(
+            BulkUpdateItemResult(
+              productId: productId,
+              productName: product.name,
+              productSku: product.sku,
+              status: BulkUpdateItemStatus.skipped,
+              summary: 'Sin cambios efectivos en campos personalizados.',
+              beforeValues: beforeValues,
+              afterValues: beforeValues,
+            ),
+          );
+          continue;
+        }
+
+        payload['updated_at'] = DateTime.now().toIso8601String();
+
+        await _db.update(
+          'products',
+          productId,
+          payload,
+          applyTimestamps: false,
+        );
+        succeeded += 1;
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.updated,
+            summary: _summarizeCustomFieldTransitions(
+              changedFields,
+              fields,
+              beforeValues,
+              afterValues,
+            ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+          ),
+        );
+      } catch (error) {
+        errors.add('${product.name}: $error');
+        items.add(
+          BulkUpdateItemResult(
+            productId: productId,
+            productName: product.name,
+            productSku: product.sku,
+            status: BulkUpdateItemStatus.failed,
+            summary: changedFields.isEmpty
+                ? 'No se pudo preparar la actualización personalizada.'
+                : _summarizeCustomFieldTransitions(
+                    changedFields,
+                    fields,
+                    beforeValues,
+                    afterValues,
+                  ),
+            beforeValues: beforeValues,
+            afterValues: afterValues,
+            changedFields: changedFields,
+            error: error.toString(),
+          ),
+        );
+      }
+    }
+
+    return BulkUpdateResult(
+      total: activeProducts.length,
+      succeeded: succeeded,
+      skipped: skipped,
+      failed: errors.length,
+      errors: errors,
+      items: items,
+    );
+  }
+
   Future<void> recordHistory({
     required BulkProductEditOperation operation,
     required BulkProductScopeSource scopeSource,
@@ -1072,9 +1212,9 @@ class BulkProductEditService {
   }) {
     final groupedRows = <String, List<_LegacyStockAdjustmentRow>>{};
     for (final row in session.rows) {
-      groupedRows.putIfAbsent(
-          row.productId, () => <_LegacyStockAdjustmentRow>[])
-        ..add(row);
+      groupedRows
+          .putIfAbsent(row.productId, () => <_LegacyStockAdjustmentRow>[])
+          .add(row);
     }
 
     final items = groupedRows.entries.map((entry) {
@@ -1236,6 +1376,246 @@ class BulkProductEditService {
     return 'Usuario actual';
   }
 
+  dynamic _readCustomFieldValue(Product product, String key) {
+    return switch (key) {
+      'name' => product.name,
+      'sku' => product.sku,
+      'supplier_code' => product.supplierCode,
+      'barcode' => product.barcode,
+      'gtin' => product.gtin,
+      'description' => product.description,
+      'category_id' => product.categoryId,
+      'brand_id' => product.brandId,
+      'model' => product.model,
+      'supplier_id' => product.supplierId,
+      'price' => product.price,
+      'cost' => product.cost,
+      'min_stock_level' => product.minStockLevel,
+      'max_stock_level' => product.maxStockLevel,
+      'warehouse_location' => product.warehouseLocation,
+      'is_active' => product.isActive,
+      'is_published' => product.isPublished,
+      'is_google_merchant' => product.isGoogleMerchant,
+      'website_name' => product.websiteName,
+      'website_price' => product.websitePrice,
+      'website_description' => product.websiteDescription,
+      'website_seo_title' => product.websiteSeoTitle,
+      'website_seo_description' => product.websiteSeoDescription,
+      'website_search_terms' => product.websiteSearchTerms,
+      'website_merchant_title' => product.websiteMerchantTitle,
+      'website_merchant_description' => product.websiteMerchantDescription,
+      'website_merchant_brand' => product.websiteMerchantBrand,
+      'website_merchant_gtin' => product.websiteMerchantGtin,
+      'website_merchant_mpn' => product.websiteMerchantMpn,
+      'website_google_product_category' => product.websiteGoogleProductCategory,
+      'manufacturer' => product.manufacturer,
+      'manufacturer_sku' => product.manufacturerSku,
+      'hs_code' => product.hsCode,
+      'country_of_origin' => product.countryOfOrigin,
+      'color' => product.color,
+      'size' => product.size,
+      'material' => product.material,
+      'warranty_months' => product.warrantyMonths,
+      'tags' => product.tags,
+      'serialized' => product.serialized,
+      'lot_tracking' => product.lotTracking,
+      'expiration_tracking' => product.expirationTracking,
+      'expiry_days' => product.expiryDays,
+      _ => null,
+    };
+  }
+
+  dynamic _normalizeCustomValue(
+    BulkCustomProductFieldDefinition field,
+    dynamic value,
+  ) {
+    if (value == _customClearSentinel) {
+      if (!field.allowClear) {
+        throw Exception('${field.label} no puede quedar vacío.');
+      }
+      return null;
+    }
+
+    switch (field.type) {
+      case BulkCustomProductFieldType.toggle:
+        if (value is bool) return value;
+        return value?.toString().toLowerCase() == 'true';
+      case BulkCustomProductFieldType.integer:
+        final parsed = _parseNullableInt(value);
+        if (parsed == null && field.isRequired) {
+          throw Exception('${field.label} requiere un número entero.');
+        }
+        return parsed;
+      case BulkCustomProductFieldType.decimal:
+        final parsed = _parseNullableDouble(value);
+        if (parsed == null && field.isRequired) {
+          throw Exception('${field.label} requiere un número válido.');
+        }
+        return parsed;
+      case BulkCustomProductFieldType.textList:
+        final parsed = _parseTextList(value);
+        if (parsed.isEmpty && field.isRequired) {
+          throw Exception('${field.label} no puede quedar vacío.');
+        }
+        return parsed;
+      case BulkCustomProductFieldType.category:
+      case BulkCustomProductFieldType.brand:
+      case BulkCustomProductFieldType.supplier:
+      case BulkCustomProductFieldType.text:
+      case BulkCustomProductFieldType.longText:
+        final text = value?.toString().trim() ?? '';
+        if (text.isEmpty) {
+          if (field.isRequired) {
+            throw Exception('${field.label} no puede quedar vacío.');
+          }
+          return null;
+        }
+        return text;
+    }
+  }
+
+  void _writeCustomPayload({
+    required Map<String, dynamic> payload,
+    required BulkCustomProductFieldDefinition field,
+    required dynamic value,
+    required Map<String, String> brandNamesById,
+  }) {
+    switch (field.key) {
+      case 'brand_id':
+        payload['brand_id'] = value;
+        payload['brand'] = value == null ? null : brandNamesById[value];
+      case 'is_active':
+        payload['is_active'] = value;
+        if (value == false) {
+          payload['is_published'] = false;
+          payload['show_on_website'] = false;
+          payload['is_google_merchant'] = false;
+        }
+      case 'is_published':
+        payload['is_published'] = value;
+        payload['show_on_website'] = value;
+        if (value == false) {
+          payload['is_google_merchant'] = false;
+        }
+      case 'is_google_merchant':
+        payload['is_google_merchant'] = value;
+        if (value == true) {
+          payload['is_published'] = true;
+          payload['show_on_website'] = true;
+        }
+      default:
+        payload[field.key] = value;
+    }
+  }
+
+  dynamic _displayReadyCustomValue({
+    required BulkCustomProductFieldDefinition field,
+    required dynamic value,
+    required Map<String, String> categoryNamesById,
+    required Map<String, String> brandNamesById,
+    required Map<String, String> supplierNamesById,
+  }) {
+    if (value == null) return null;
+    switch (field.key) {
+      case 'category_id':
+        return categoryNamesById[value] ?? value;
+      case 'brand_id':
+        return brandNamesById[value] ?? value;
+      case 'supplier_id':
+        return supplierNamesById[value] ?? value;
+      default:
+        return value;
+    }
+  }
+
+  bool _customValuesEquivalent(
+    BulkCustomProductFieldDefinition field,
+    dynamic before,
+    dynamic after,
+  ) {
+    switch (field.type) {
+      case BulkCustomProductFieldType.decimal:
+        final beforeDouble = _parseNullableDouble(before);
+        final afterDouble = _parseNullableDouble(after);
+        if (beforeDouble == null || afterDouble == null) {
+          return beforeDouble == afterDouble;
+        }
+        return !_doubleChanged(beforeDouble, afterDouble);
+      case BulkCustomProductFieldType.integer:
+        return _parseNullableInt(before) == _parseNullableInt(after);
+      case BulkCustomProductFieldType.textList:
+        final beforeList = _parseTextList(before);
+        final afterList = _parseTextList(after);
+        if (beforeList.length != afterList.length) return false;
+        for (var i = 0; i < beforeList.length; i += 1) {
+          if (beforeList[i] != afterList[i]) return false;
+        }
+        return true;
+      case BulkCustomProductFieldType.toggle:
+        return before == after;
+      case BulkCustomProductFieldType.category:
+      case BulkCustomProductFieldType.brand:
+      case BulkCustomProductFieldType.supplier:
+      case BulkCustomProductFieldType.text:
+      case BulkCustomProductFieldType.longText:
+        return (before?.toString().trim() ?? '') ==
+            (after?.toString().trim() ?? '');
+    }
+  }
+
+  int? _parseNullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return int.tryParse(text.replaceAll(RegExp(r'[^0-9-]'), ''));
+  }
+
+  double? _parseNullableDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return double.tryParse(
+      text.replaceAll(RegExp(r'[^0-9,.-]'), '').replaceAll(',', '.'),
+    );
+  }
+
+  List<String> _parseTextList(dynamic value) {
+    if (value == null) return const [];
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    return value
+        .toString()
+        .split(RegExp(r'[\n,;]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String _summarizeCustomFieldTransitions(
+    List<String> fieldKeys,
+    List<BulkCustomProductFieldDefinition> fields,
+    Map<String, dynamic> beforeValues,
+    Map<String, dynamic> afterValues,
+  ) {
+    final labels = {
+      for (final field in fields) field.key: field.label,
+    };
+    return fieldKeys
+        .map(
+          (field) => '${labels[field] ?? field}: '
+              '${_formatFieldValue(field, beforeValues[field])} -> '
+              '${_formatFieldValue(field, afterValues[field])}',
+        )
+        .join(' · ');
+  }
+
   bool _doubleChanged(double current, double next) {
     return (current - next).abs() > 0.009;
   }
@@ -1294,6 +1674,9 @@ class BulkProductEditService {
     }
     if (value is bool) {
       return value ? 'Sí' : 'No';
+    }
+    if (value is List) {
+      return value.isEmpty ? 'Vacío' : value.join(', ');
     }
     if (value is num) {
       return value.toString();

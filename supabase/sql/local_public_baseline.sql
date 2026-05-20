@@ -17601,7 +17601,7 @@ CREATE TABLE public.product_bulk_edit_history (
     errors jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_by uuid DEFAULT auth.uid(),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT product_bulk_edit_history_operation_check CHECK ((operation = ANY (ARRAY['classification'::text, 'channels'::text, 'pricing'::text, 'stock'::text, 'images'::text]))),
+    CONSTRAINT product_bulk_edit_history_operation_check CHECK ((operation = ANY (ARRAY['classification'::text, 'channels'::text, 'pricing'::text, 'stock'::text, 'images'::text, 'custom'::text]))),
     CONSTRAINT product_bulk_edit_history_scope_source_check CHECK ((scope_source = ANY (ARRAY['selected'::text, 'filtered'::text, 'all'::text]))),
     CONSTRAINT product_bulk_edit_history_status_check CHECK ((status = ANY (ARRAY['completed'::text, 'partial'::text, 'failed'::text, 'skipped'::text])))
 );
@@ -33322,5 +33322,4 @@ ALTER TABLE public.zoho_tokens ENABLE ROW LEVEL SECURITY;
 --
 -- PostgreSQL database dump complete
 --
-
 

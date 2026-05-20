@@ -105,7 +105,6 @@ class MailAccountManager extends ChangeNotifier {
   Future<void> _initializeInternal() async {
     if (_isInitialized) {
       debugPrint('📧 [MailManager] Already initialized');
-      notifyListeners();
       return;
     }
 

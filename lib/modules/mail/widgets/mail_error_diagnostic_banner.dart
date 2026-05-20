@@ -145,11 +145,17 @@ class MailErrorDiagnostic {
 class MailErrorDiagnosticBanner extends StatelessWidget {
   final String message;
   final bool compact;
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
 
   const MailErrorDiagnosticBanner({
     super.key,
     required this.message,
     this.compact = true,
+    this.actionLabel,
+    this.actionIcon,
+    this.onAction,
   });
 
   @override
@@ -206,6 +212,24 @@ class MailErrorDiagnosticBanner extends StatelessWidget {
                     height: 1.25,
                   ),
                 ),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: onAction,
+                    icon: Icon(actionIcon ?? Icons.refresh, size: 16),
+                    label: Text(actionLabel!),
+                    style: TextButton.styleFrom(
+                      foregroundColor: color,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
