@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_provider.dart';
@@ -255,7 +256,7 @@ class MailAccountManager extends ChangeNotifier {
 
     try {
       final allEmails = <Email>[];
-      final failedProviders = <String>[];
+      final failedProviders = <EmailProvider>[];
 
       for (final provider in connectedProviders) {
         try {
@@ -270,7 +271,7 @@ class MailAccountManager extends ChangeNotifier {
           allEmails.addAll(_mergeProviderEmails(provider.providerId, emails));
         } catch (e) {
           debugPrint('Error fetching ${provider.providerId} inbox: $e');
-          failedProviders.add(provider.providerId);
+          failedProviders.add(provider);
           allEmails.addAll(
             _unifiedEmails
                 .where((email) => email.providerId == provider.providerId),
@@ -290,9 +291,12 @@ class MailAccountManager extends ChangeNotifier {
       }
 
       if (failedProviders.isNotEmpty) {
-        _error = failedProviders.length == 1
-            ? 'No se pudo actualizar ${failedProviders.first}. Mostrando correos guardados.'
-            : 'No se pudieron actualizar algunas cuentas. Mostrando correos guardados.';
+        _error = _providerFailureMessage(
+          failedProviders,
+          singleAction: 'No se pudo actualizar',
+          multiAction: 'No se pudieron actualizar algunas cuentas',
+          suffix: 'Mostrando correos guardados.',
+        );
       }
 
       // Save to SQLite cache for next app launch
@@ -379,7 +383,7 @@ class MailAccountManager extends ChangeNotifier {
 
     try {
       final results = <Email>[];
-      final failedProviders = <String>[];
+      final failedProviders = <EmailProvider>[];
 
       for (final provider in _providersForActiveFilter()) {
         try {
@@ -402,7 +406,7 @@ class MailAccountManager extends ChangeNotifier {
           results.addAll(providerResults);
         } catch (e) {
           debugPrint('Error searching ${provider.providerId} inbox: $e');
-          failedProviders.add(provider.providerId);
+          failedProviders.add(provider);
         }
       }
 
@@ -411,9 +415,11 @@ class MailAccountManager extends ChangeNotifier {
       _searchResults = _dedupeAndSort(results);
 
       if (failedProviders.isNotEmpty) {
-        _error = failedProviders.length == 1
-            ? 'No se pudo buscar en ${failedProviders.first}.'
-            : 'No se pudo buscar en algunas cuentas.';
+        _error = _providerFailureMessage(
+          failedProviders,
+          singleAction: 'No se pudo buscar en',
+          multiAction: 'No se pudo buscar en algunas cuentas',
+        );
       }
     } catch (e) {
       if (requestId != _searchRequestId) return;
@@ -470,12 +476,44 @@ class MailAccountManager extends ChangeNotifier {
 
   String _emailKey(Email email) => '${email.providerId}:${email.id}';
 
+  String _providerFailureMessage(
+    List<EmailProvider> providers, {
+    required String singleAction,
+    required String multiAction,
+    String? suffix,
+  }) {
+    String withSuffix(String value) {
+      final trimmedSuffix = suffix?.trim();
+      if (trimmedSuffix == null || trimmedSuffix.isEmpty) return value;
+      return '$value $trimmedSuffix';
+    }
+
+    String providerDetail(EmailProvider provider) {
+      final detail = provider.error?.trim();
+      if (detail == null || detail.isEmpty) return provider.displayName;
+      return '${provider.displayName}: $detail';
+    }
+
+    if (providers.length == 1) {
+      final provider = providers.first;
+      final detail = provider.error?.trim();
+      if (detail == null || detail.isEmpty) {
+        return withSuffix('$singleAction ${provider.displayName}.');
+      }
+      return withSuffix('$singleAction ${provider.displayName}: $detail');
+    }
+
+    final details = providers.map(providerDetail).join(' · ');
+    return withSuffix('$multiAction. $details');
+  }
+
   /// Select an email and load its content
   Future<void> selectEmail(Email email) async {
     final provider = getProvider(email.providerId);
     if (provider == null) return;
 
     final requestId = ++_selectionRequestId;
+    String? cachedContent;
 
     _selectedProvider = provider;
     _selectedEmail = email;
@@ -484,16 +522,18 @@ class MailAccountManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cachedContent = await _cache.getCachedContent(email.id);
+      cachedContent = await _cache.getCachedContent(email.id);
       if (!_isCurrentSelection(requestId, email.id)) return;
 
-      final hasRenderableCachedContent = cachedContent != null &&
-          cachedContent.trim().isNotEmpty &&
-          !(provider is GmailProvider && _isPlainTextFallback(cachedContent));
+      final hasCachedContent =
+          cachedContent != null && cachedContent.trim().isNotEmpty;
+      final isPlainGmailFallback = hasCachedContent &&
+          provider is GmailProvider &&
+          _isPlainTextFallback(cachedContent);
 
-      if (hasRenderableCachedContent) {
+      if (hasCachedContent) {
         _selectedEmail = email.copyWith(content: cachedContent);
-        _isLoadingSelectedEmail = false;
+        _isLoadingSelectedEmail = isPlainGmailFallback;
         notifyListeners();
       }
 
@@ -535,9 +575,23 @@ class MailAccountManager extends ChangeNotifier {
       if (!_isCurrentSelection(requestId, email.id)) return;
       debugPrint('Error loading email content: $e');
       _isLoadingSelectedEmail = false;
+      final fallbackContent = _fallbackContentForEmail(
+        email,
+        cachedContent: cachedContent,
+        currentContent: _selectedEmail?.content,
+      );
+      if (fallbackContent != null) {
+        _selectedEmail = (_selectedEmail ?? email).copyWith(
+          content: fallbackContent,
+        );
+      }
+
       final hasLoadedBody = _selectedEmail?.content?.trim().isNotEmpty ?? false;
       if (!hasLoadedBody) {
-        _selectedEmailError = 'No se pudo cargar el contenido del mensaje.';
+        final detail = provider.error?.trim();
+        _selectedEmailError = detail == null || detail.isEmpty
+            ? 'No se pudo cargar el contenido del mensaje.'
+            : 'No se pudo cargar el contenido del mensaje. $detail';
       }
     }
 
@@ -571,6 +625,30 @@ class MailAccountManager extends ChangeNotifier {
 
   bool _isCurrentSelection(int requestId, String emailId) {
     return requestId == _selectionRequestId && _selectedEmail?.id == emailId;
+  }
+
+  String? _fallbackContentForEmail(
+    Email email, {
+    required String? cachedContent,
+    required String? currentContent,
+  }) {
+    final current = currentContent?.trim();
+    if (current != null && current.isNotEmpty) return currentContent;
+
+    final cached = cachedContent?.trim();
+    if (cached != null && cached.isNotEmpty) return cachedContent;
+
+    final summary = email.summary?.trim();
+    if (summary != null && summary.isNotEmpty) {
+      return _plainTextToHtml(summary);
+    }
+
+    return null;
+  }
+
+  String _plainTextToHtml(String text) {
+    final escaped = const HtmlEscape().convert(text);
+    return '<pre style="margin:0;white-space:pre-wrap;word-wrap:break-word;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;line-height:1.45">$escaped</pre>';
   }
 
   bool _isPlainTextFallback(String content) {

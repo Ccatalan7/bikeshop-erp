@@ -439,7 +439,7 @@ class GmailProvider extends EmailProvider {
       final url = '$_apiBase/messages/${email.id}?format=full';
       final data = await _proxyRequest(method: 'GET', url: url);
 
-      final payload = data['payload'];
+      final payload = _asStringMap(data['payload']);
       String content = '';
 
       if (payload != null) {
@@ -451,11 +451,18 @@ class GmailProvider extends EmailProvider {
         // native mail clients.
       }
 
+      if (content.trim().isEmpty) {
+        final summary = email.summary?.trim();
+        if (summary != null && summary.isNotEmpty) {
+          content = _plainTextToHtml(summary);
+        }
+      }
+
       _selectedEmail = email.copyWith(content: content);
       return _selectedEmail!;
     } catch (e) {
       debugPrint('getEmailContent error: $e');
-      _error = e.toString();
+      _error = _friendlyGmailError(e);
       rethrow;
     } finally {
       _isLoading = false;
@@ -469,8 +476,8 @@ class GmailProvider extends EmailProvider {
 
     final url = '$_apiBase/messages/${email.id}?format=full';
     final data = await _proxyRequest(method: 'GET', url: url);
-    final payload = data['payload'];
-    if (payload is! Map<String, dynamic>) return email;
+    final payload = _asStringMap(data['payload']);
+    if (payload == null) return email;
 
     final resolvedContent = await _resolveInlineImages(
       content,
@@ -499,10 +506,15 @@ class GmailProvider extends EmailProvider {
       6,
       (part) async {
         final headers = part['headers'] as List?;
-        final contentIdHeader = headers?.firstWhere(
-          (h) => h['name']?.toString().toLowerCase() == 'content-id',
-          orElse: () => null,
-        );
+        Map<dynamic, dynamic>? contentIdHeader;
+        if (headers != null) {
+          for (final header in headers.whereType<Map>()) {
+            if (header['name']?.toString().toLowerCase() == 'content-id') {
+              contentIdHeader = header;
+              break;
+            }
+          }
+        }
 
         if (contentIdHeader == null) return null;
 
@@ -512,7 +524,8 @@ class GmailProvider extends EmailProvider {
         if (!htmlContent.contains('cid:$contentId')) return null;
 
         try {
-          final body = part['body'];
+          final body = _asStringMap(part['body']);
+          if (body == null) return null;
           String? base64Data;
 
           if (body['data'] != null) {
@@ -598,7 +611,10 @@ class GmailProvider extends EmailProvider {
 
     if (part['parts'] != null) {
       for (final nestedPart in part['parts']) {
-        _collectInlineParts(nestedPart, collected);
+        final typedPart = _asStringMap(nestedPart);
+        if (typedPart != null) {
+          _collectInlineParts(typedPart, collected);
+        }
       }
     }
   }
@@ -634,15 +650,22 @@ class GmailProvider extends EmailProvider {
     final nestedParts = part['parts'];
     if (nestedParts is List) {
       for (final nestedPart in nestedParts) {
-        if (nestedPart is Map<String, dynamic>) {
-          final nestedBody = _extractMimeBody(nestedPart, targetMimeType);
-          if (nestedBody != null && nestedBody.trim().isNotEmpty) {
-            return nestedBody;
-          }
+        final typedPart = _asStringMap(nestedPart);
+        if (typedPart == null) continue;
+
+        final nestedBody = _extractMimeBody(typedPart, targetMimeType);
+        if (nestedBody != null && nestedBody.trim().isNotEmpty) {
+          return nestedBody;
         }
       }
     }
 
+    return null;
+  }
+
+  Map<String, dynamic>? _asStringMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
     return null;
   }
 
@@ -784,22 +807,88 @@ class GmailProvider extends EmailProvider {
 
   String _friendlyGmailError(Object error) {
     final raw = error.toString();
+    final lower = raw.toLowerCase();
+    final detail = _compactErrorDetail(raw);
+
+    if (_containsAny(lower, const [
+      'missing stored gmail refresh token',
+      'invalid_grant',
+      'token has been expired or revoked',
+      'refresh token',
+      'unauthorized',
+      'status: 401',
+      ' 401',
+    ])) {
+      return 'Token/OAuth Gmail: la conexión venció o fue revocada. Vuelve a conectar Gmail. Detalle: $detail';
+    }
+
+    if (_containsAny(lower, const [
+      'database',
+      'sqlstate',
+      'relation ',
+      'schema cache',
+      'postgrest',
+      'email_accounts',
+      'user_profiles',
+      'tenant profile',
+      'current user has no tenant profile',
+      'duplicate key',
+      'violates',
+      'permission denied for table',
+    ])) {
+      return 'Base de datos Gmail: la función no pudo leer la cuenta conectada o el perfil del usuario. Detalle: $detail';
+    }
+
     if (raw.contains('status: 400') ||
         raw.contains('Bad Request') ||
         raw.contains('INVALID_ARGUMENT')) {
-      return 'Gmail rechazó la solicitud de actualización. Intenta actualizar nuevamente.';
-    }
-    if (raw.contains('status: 401') || raw.contains('Unauthorized')) {
-      return 'La conexión con Gmail venció. Vuelve a conectar la cuenta.';
+      return 'Gmail API: Gmail rechazó la solicitud de actualización. Detalle: $detail';
     }
     if (raw.contains('status: 403') || raw.contains('insufficient')) {
-      return 'Gmail no autorizó esta operación. Revisa los permisos de la cuenta.';
+      return 'Permisos Gmail: Gmail no autorizó esta operación. Revisa los permisos de la cuenta. Detalle: $detail';
     }
-    return 'No se pudo actualizar Gmail en este momento.';
+    if (_containsAny(lower, const [
+      'timeout',
+      'socket',
+      'network',
+      'failed host',
+      'connection reset',
+      'connection refused',
+      'xmlhttprequest',
+      'clientexception',
+      'status: 502',
+      'status: 503',
+      'status: 504',
+    ])) {
+      return 'Red/API Gmail: no se pudo contactar Gmail o la función temporalmente. Detalle: $detail';
+    }
+    return 'No se pudo actualizar Gmail en este momento. Detalle: $detail';
   }
 
   String _friendlyGmailConnectionError(Object error) {
     final raw = error.toString();
+    final lower = raw.toLowerCase();
+    if (_containsAny(lower, const [
+      'database',
+      'sqlstate',
+      'relation ',
+      'schema cache',
+      'postgrest',
+      'email_accounts',
+      'user_profiles',
+      'tenant profile',
+    ])) {
+      return 'Base de datos Gmail: no se pudo guardar o leer la conexión de Gmail.';
+    }
+    if (_containsAny(lower, const [
+      'invalid_grant',
+      'token',
+      'oauth',
+      'unauthorized',
+      'status: 401',
+    ])) {
+      return 'Token/OAuth Gmail: no se pudo autorizar Gmail. Vuelve a conectar la cuenta.';
+    }
     if (raw.contains('status: 400') || raw.contains('Bad Request')) {
       return 'El código de conexión de Gmail ya venció. Inicia la conexión nuevamente.';
     }
@@ -807,6 +896,19 @@ class GmailProvider extends EmailProvider {
       return 'No se pudo autorizar Gmail. Vuelve a conectar la cuenta.';
     }
     return 'No se pudo conectar Gmail en este momento.';
+  }
+
+  bool _containsAny(String text, List<String> needles) {
+    return needles.any(text.contains);
+  }
+
+  String _compactErrorDetail(String raw) {
+    final cleaned = raw
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.length <= 220) return cleaned;
+    return '${cleaned.substring(0, 220)}...';
   }
 
   @override

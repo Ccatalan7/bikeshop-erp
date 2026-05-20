@@ -11,6 +11,7 @@ import '../providers/mail_account_manager.dart';
 import '../widgets/email_list_item_unified.dart';
 import '../widgets/email_detail_view_unified.dart';
 import '../widgets/compose_email_dialog.dart';
+import '../widgets/mail_error_diagnostic_banner.dart';
 
 enum _InboxQuickFilter { all, unread, attachments }
 
@@ -570,14 +571,7 @@ ${email.content ?? email.summary ?? ''}
           ),
           if (_manager.error != null) ...[
             const SizedBox(height: 6),
-            Text(
-              _manager.error!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            MailErrorDiagnosticBanner(message: _manager.error!),
           ],
         ],
       ),

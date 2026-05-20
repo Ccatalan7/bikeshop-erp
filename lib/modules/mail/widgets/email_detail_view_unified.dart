@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../providers/email_provider.dart';
+import 'mail_error_diagnostic_banner.dart';
 
 /// Email detail view for unified inbox
 class EmailDetailViewUnified extends StatelessWidget {
@@ -395,14 +396,11 @@ class _EmailBodyPane extends StatelessWidget {
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text(
-                error!.contains('404')
+              MailErrorDiagnosticBanner(
+                message: error!.contains('404')
                     ? 'No se pudo encontrar el contenido del mensaje.'
                     : error!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                compact: false,
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
