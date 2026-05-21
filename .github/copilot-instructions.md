@@ -1302,6 +1302,66 @@ values ('Product', 50, 50);
 
 ---
 
+# 🧰 CRITICAL: WORKSHOP CONSUMABLES ARE NON-STOCK PRODUCTS
+
+Products with `purchase_treatment = 'workshop_consumable'` / `PurchaseTreatment.workshopConsumable` are **not normal inventory items with a different label**.
+
+They represent materials bought for quick internal workshop use, where the purchase is recognized as an expense/direct cost instead of being capitalized as sellable stock.
+
+## Canonical Behavior
+
+- `product_type` remains `product`, but `purchase_treatment` is `workshop_consumable`.
+- `track_stock` must be `false`.
+- `inventory_qty` and `stock_quantity` must be treated as non-operational and normally persisted as `0` when saving/converting to workshop consumable.
+- `min_stock_level`, `max_stock_level`, low-stock status, reorder logic, and stock valuation do not apply.
+- A workshop consumable must not create stock movements, stock adjustments, inventory asset value, or smart purchase-list replenishment just because it appears in a product table.
+- Converting an existing stocked product to workshop consumable must use the established inventory-conversion flow so any existing stock/value is discharged auditably before `track_stock` becomes false.
+
+## UI Rules Across Modules
+
+Any module that displays or edits product stock must gate stock UI by the effective stock behavior, not by `product_type` alone.
+
+If the product currently is, or the row is being changed to, `PurchaseTreatment.workshopConsumable`:
+
+- Hide or disable **Stock actual**, stock objective, stock result, stock minimum/maximum, warehouse stock, and stock adjustment controls.
+- Do not show normal stock badges such as "En stock", "Agotado", "Stock bajo", "Reponer", or reorder prompts.
+- Show a clear neutral label such as `Consumible taller` / `No maneja stock` instead of `0 stock` when the user needs context.
+- In tables with configurable columns or custom templates, stock fields must become unavailable/disabled for those rows when treatment is `Consumible taller`; do not let the user edit purchase treatment to consumable and stock in the same row as if both changes were compatible.
+- Bulk/custom edit tables must recompute this per row from the **effective** value, including unsaved row edits. If a row currently is, or is changed to, `Consumible taller`, replace stock inputs with a non-editable `No maneja stock` state, clear/ignore pending stock edits for that row, and do not create stock adjustments on apply.
+- If a list needs a quantity-like hint for consumables, it must be explicitly labeled as usage/cost context, never as inventory availability.
+
+This applies to:
+
+- Product form and product detail.
+- Product list columns, filters, badges, search results, and cards.
+- Bulk edit / custom template editors.
+- Imports, exports, and mass creation.
+- POS, sales invoices, workshop job item pickers, and any product selector.
+- Purchase invoices, expense/cost flows, supplier ordering, and smart purchase lists.
+- Inventory reports, valuation reports, stock movement ledgers, and dashboards.
+- Website/Merchant publishing surfaces if they expose availability text.
+
+## Accounting / Flow Rules
+
+- Purchase invoice lines for workshop consumables should post to the configured expense/direct-cost account, not to inventory asset.
+- Sales/POS/workshop usage must not decrement stock for workshop consumables.
+- Reports must exclude workshop consumables from inventory valuation and stock availability totals.
+- Smart purchase/reorder features must not treat workshop consumables as low-stock products unless a separate, explicitly designed non-stock replenishment workflow exists.
+
+## Developer Checklist
+
+When touching product stock behavior, ask:
+
+1. Does this code check `tracksInventory` / `purchaseTreatment` before showing or editing stock?
+2. Does this workflow accidentally treat `workshop_consumable` as `inventory` because `product_type == product`?
+3. Does this UI show `0 stock` where it should show `No maneja stock`?
+4. Does this update create stock movements or inventory value for a non-stock consumable?
+5. If purchase treatment changes in-row, do dependent stock controls update immediately?
+
+If the answer is unclear, inspect `PurchaseTreatment`, `tracksInventory`, and existing conversion helpers before adding behavior.
+
+---
+
 # 🔗 CRITICAL: PRODUCTS DENORMALIZATION PATTERN (supplier_id + supplier_name, brand_id + brand)
 
 **⚠️ PRODUCTS TABLE HAS DENORMALIZED FK + TEXT PAIRS — BOTH MUST BE UPDATED TOGETHER!**

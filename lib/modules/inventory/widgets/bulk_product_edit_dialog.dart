@@ -89,7 +89,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   List<Product> _matchedProducts = const [];
   Set<String> _enabledRowIds = <String>{};
   Set<String> _customSelectedFieldKeys = <String>{};
-  Map<String, dynamic> _customFieldValues = <String, dynamic>{};
+  String? _selectedCustomTemplateId;
+  Map<String, Map<String, dynamic>> _customRowValues =
+      <String, Map<String, dynamic>>{};
   List<BulkCustomProductTemplate> _customTemplates = const [];
   Map<String, BulkClassificationRowDraft> _classificationDrafts =
       <String, BulkClassificationRowDraft>{};
@@ -168,9 +170,70 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     ),
     BulkCustomProductFieldDefinition(
       key: 'description',
-      label: 'Descripción interna',
+      label: 'Descripción detallada',
       group: BulkCustomProductFieldGroup.identity,
       type: BulkCustomProductFieldType.longText,
+      searchAliases: ['descripcion del producto'],
+    ),
+    BulkCustomProductFieldDefinition(
+      key: 'product_type',
+      label: 'Tipo de producto',
+      group: BulkCustomProductFieldGroup.format,
+      type: BulkCustomProductFieldType.choice,
+      isRequired: true,
+      allowClear: false,
+      helperText: 'Producto físico o servicio.',
+      choices: [
+        BulkCustomProductFieldChoice(value: 'product', label: 'Producto'),
+        BulkCustomProductFieldChoice(value: 'service', label: 'Servicio'),
+      ],
+      searchAliases: ['tipo registro producto servicio'],
+    ),
+    BulkCustomProductFieldDefinition(
+      key: 'purchase_treatment',
+      label: 'Tratamiento de compra',
+      group: BulkCustomProductFieldGroup.format,
+      type: BulkCustomProductFieldType.choice,
+      isRequired: true,
+      allowClear: false,
+      helperText: 'Inventario normal o consumible de taller.',
+      choices: [
+        BulkCustomProductFieldChoice(value: 'inventory', label: 'Inventario'),
+        BulkCustomProductFieldChoice(
+          value: 'workshop_consumable',
+          label: 'Consumible taller',
+        ),
+      ],
+      searchAliases: ['normal consumible taller compra inventario'],
+    ),
+    BulkCustomProductFieldDefinition(
+      key: 'is_set',
+      label: 'Es un Juego/Set',
+      group: BulkCustomProductFieldGroup.format,
+      type: BulkCustomProductFieldType.toggle,
+      helperText:
+          'Marca el producto como set. Los componentes se editan en la ficha individual.',
+      searchAliases: ['juego set paquete kit conjunto'],
+    ),
+    BulkCustomProductFieldDefinition(
+      key: 'set_type',
+      label: 'Tipo de Set',
+      group: BulkCustomProductFieldGroup.format,
+      type: BulkCustomProductFieldType.choice,
+      helperText: 'Al elegir un tipo, el producto queda marcado como set.',
+      choices: [
+        BulkCustomProductFieldChoice(value: 'pair', label: 'Par'),
+        BulkCustomProductFieldChoice(
+          value: 'frontRear',
+          label: 'Delantero/Trasero',
+        ),
+        BulkCustomProductFieldChoice(
+          value: 'leftRight',
+          label: 'Izquierdo/Derecho',
+        ),
+        BulkCustomProductFieldChoice(value: 'custom', label: 'Personalizado'),
+      ],
+      searchAliases: ['juego set tipo par delantero trasero izquierdo derecho'],
     ),
     BulkCustomProductFieldDefinition(
       key: 'category_id',
@@ -213,24 +276,24 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       allowClear: false,
     ),
     BulkCustomProductFieldDefinition(
+      key: 'stock',
+      label: 'Stock actual',
+      group: BulkCustomProductFieldGroup.pricingStock,
+      type: BulkCustomProductFieldType.integer,
+      isRequired: true,
+      allowClear: false,
+      helperText: 'Se aplica como ajuste auditable por conteo/revisión.',
+      searchAliases: [
+        'stock cantidad inventario stock disponible existencias unidades'
+      ],
+    ),
+    BulkCustomProductFieldDefinition(
       key: 'min_stock_level',
       label: 'Stock mínimo',
       group: BulkCustomProductFieldGroup.pricingStock,
       type: BulkCustomProductFieldType.integer,
       isRequired: true,
       allowClear: false,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'max_stock_level',
-      label: 'Stock máximo',
-      group: BulkCustomProductFieldGroup.pricingStock,
-      type: BulkCustomProductFieldType.integer,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'warehouse_location',
-      label: 'Ubicación en bodega',
-      group: BulkCustomProductFieldGroup.pricingStock,
-      type: BulkCustomProductFieldType.text,
     ),
     BulkCustomProductFieldDefinition(
       key: 'is_active',
@@ -325,85 +388,6 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       label: 'Google product category',
       group: BulkCustomProductFieldGroup.seoMerchant,
       type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'manufacturer',
-      label: 'Fabricante',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'manufacturer_sku',
-      label: 'SKU fabricante',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'hs_code',
-      label: 'HS code',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'country_of_origin',
-      label: 'País de origen',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'color',
-      label: 'Color',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'size',
-      label: 'Talla / medida',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'material',
-      label: 'Material',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.text,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'warranty_months',
-      label: 'Garantía (meses)',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.integer,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'tags',
-      label: 'Etiquetas',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.textList,
-      helperText: 'Una por línea o separadas por coma.',
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'serialized',
-      label: 'Serializado',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.toggle,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'lot_tracking',
-      label: 'Control por lote',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.toggle,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'expiration_tracking',
-      label: 'Control de vencimiento',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.toggle,
-    ),
-    BulkCustomProductFieldDefinition(
-      key: 'expiry_days',
-      label: 'Días para vencimiento',
-      group: BulkCustomProductFieldGroup.technical,
-      type: BulkCustomProductFieldType.integer,
     ),
   ];
 
@@ -544,6 +528,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         .toList(growable: false);
   }
 
+  BulkCustomProductTemplate? get _customActiveTemplate {
+    final id = _selectedCustomTemplateId;
+    if (id == null) return null;
+    return _customTemplates.where((template) => template.id == id).firstOrNull;
+  }
+
   List<BulkCustomProductFieldDefinition> get _filteredCustomFields {
     final query = _normalizeSearchText(_customFieldSearch);
     return _customProductFields.where((field) {
@@ -604,6 +594,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       _syncPricingDrafts();
       _syncStockDrafts();
       _syncImageAssignments();
+      _syncCustomRowValues();
       _isRefreshingScope = false;
     });
   }
@@ -713,6 +704,28 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     }
   }
 
+  void _syncCustomRowValues({bool preserveExisting = true}) {
+    if (_selectedCustomTemplateId == null || _customSelectedFieldKeys.isEmpty) {
+      _customRowValues = <String, Map<String, dynamic>>{};
+      return;
+    }
+
+    final selectedFields = _customSelectedDefinitions;
+    final next = <String, Map<String, dynamic>>{};
+    for (final product
+        in _matchedProducts.where((product) => product.id != null)) {
+      final productId = product.id!;
+      final existing = preserveExisting ? _customRowValues[productId] : null;
+      next[productId] = {
+        for (final field in selectedFields)
+          field.key: existing != null && existing.containsKey(field.key)
+              ? existing[field.key]
+              : _rawProductCustomValue(product, field),
+      };
+    }
+    _customRowValues = next;
+  }
+
   bool get _canMoveNextFromScope => _matchedProducts.isNotEmpty;
 
   bool get _canApply {
@@ -729,10 +742,10 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         return _imageAssignments.values
             .any((assignment) => assignment.enabled && assignment.file != null);
       case BulkProductEditOperation.custom:
-        return _customSelectedFieldKeys.isNotEmpty &&
-            _customSelectedDefinitions
-                .every((field) => _customFieldHasUsableValue(field)) &&
-            _enabledRowIds.isNotEmpty;
+        return _selectedCustomTemplateId != null &&
+            _customSelectedFieldKeys.isNotEmpty &&
+            _enabledRowIds.isNotEmpty &&
+            !_customTableHasInvalidValues;
       case null:
         return false;
     }
@@ -781,7 +794,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           products: _matchedProducts,
           enabledProductIds: _enabledRowIds,
           fields: _customSelectedDefinitions,
-          values: _customFieldValues,
+          rowValues: _customRowValues,
           categoryNamesById: {
             for (final category in widget.categories)
               if (category.id != null) category.id!: category.name,
@@ -959,14 +972,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         };
       case BulkProductEditOperation.custom:
         return {
+          if (_customActiveTemplate != null)
+            'Plantilla': _customActiveTemplate!.name,
           'Campos': _customSelectedDefinitions
               .map((field) => field.label)
               .toList(growable: false),
-          'Valores': {
-            for (final field in _customSelectedDefinitions)
-              field.label:
-                  _displayCustomValue(field, _customFieldValues[field.key]),
-          },
+          'Modo': 'Valores por fila',
         };
     }
   }
@@ -2367,12 +2378,14 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   Widget _buildOperationStep(ThemeData theme) {
     final cards = <({
       BulkProductEditOperation operation,
+      String? templateId,
       IconData icon,
       String title,
       String description,
     })>[
       (
         operation: BulkProductEditOperation.classification,
+        templateId: null,
         icon: Icons.account_tree_outlined,
         title: 'Clasificación',
         description:
@@ -2380,6 +2393,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       ),
       (
         operation: BulkProductEditOperation.channels,
+        templateId: null,
         icon: Icons.public_outlined,
         title: 'Canales y estado',
         description:
@@ -2387,6 +2401,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       ),
       (
         operation: BulkProductEditOperation.pricing,
+        templateId: null,
         icon: Icons.attach_money_rounded,
         title: 'Precios y costos',
         description:
@@ -2394,6 +2409,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       ),
       (
         operation: BulkProductEditOperation.stock,
+        templateId: null,
         icon: Icons.inventory_outlined,
         title: 'Ajuste de stock',
         description:
@@ -2401,6 +2417,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       ),
       (
         operation: BulkProductEditOperation.images,
+        templateId: null,
         icon: Icons.photo_library_outlined,
         title: 'Imágenes',
         description:
@@ -2408,10 +2425,21 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       ),
       (
         operation: BulkProductEditOperation.custom,
+        templateId: null,
         icon: Icons.tune_rounded,
-        title: 'Personalizada',
+        title: 'Crear nueva',
         description:
-            'Elige campos del formulario, busca por categoría y guarda plantillas reutilizables.',
+            'Elige campos del formulario y guárdalos como una nueva plantilla.',
+      ),
+      ..._customTemplates.map(
+        (template) => (
+          operation: BulkProductEditOperation.custom,
+          templateId: template.id,
+          icon: Icons.view_column_outlined,
+          title: template.name,
+          description:
+              'Plantilla personalizada · ${template.fieldKeys.length} campo(s).',
+        ),
       ),
     ];
 
@@ -2437,13 +2465,31 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
           spacing: 16,
           runSpacing: 16,
           children: cards.map((card) {
-            final isSelected = _operation == card.operation;
+            final isSelected = _operation == card.operation &&
+                (card.operation != BulkProductEditOperation.custom ||
+                    _selectedCustomTemplateId == card.templateId);
             return SizedBox(
               width: 290,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
-                  setState(() => _operation = card.operation);
+                  setState(() {
+                    _operation = card.operation;
+                    if (card.operation == BulkProductEditOperation.custom) {
+                      final template = _customTemplates
+                          .where((item) => item.id == card.templateId)
+                          .firstOrNull;
+                      if (template == null) {
+                        _selectedCustomTemplateId = null;
+                        _customRowValues.clear();
+                      } else {
+                        _selectCustomTemplate(template);
+                      }
+                    } else {
+                      _selectedCustomTemplateId = null;
+                      _customRowValues.clear();
+                    }
+                  });
                   _syncStockDrafts();
                   _syncImageAssignments();
                 },
@@ -2637,9 +2683,13 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         if (files == 0) return 'Sin archivos asignados al lote';
         return '$files archivo(s) en memoria de asociación';
       case BulkProductEditOperation.custom:
+        final template = _customActiveTemplate;
+        if (template != null) {
+          return 'Plantilla: ${template.name} · ${_customSelectedFieldKeys.length} columna(s)';
+        }
         final count = _customSelectedFieldKeys.length;
-        if (count == 0) return 'Sin campos seleccionados';
-        return '$count campo(s): ${_customSelectedDefinitions.take(4).map((field) => field.label).join(', ')}';
+        if (count == 0) return 'Crear nueva plantilla';
+        return 'Nueva plantilla: $count campo(s) seleccionados';
       case null:
         return null;
     }
@@ -2658,7 +2708,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       BulkProductEditOperation.images =>
         'Arrastra archivos, revisa el match automático y corrige manualmente los casos dudosos.',
       BulkProductEditOperation.custom =>
-        'Selecciona campos del formulario, define sus valores y revisa el impacto antes de aplicar el lote.',
+        'Crea una plantilla con columnas del formulario o edita el lote desde una plantilla guardada.',
       null => 'Selecciona primero la operación que quieres ejecutar.',
     };
   }
@@ -3319,6 +3369,11 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
   Widget _buildCustomConfig(ThemeData theme) {
     final selectedDefinitions = _customSelectedDefinitions;
+    final activeTemplate = _customActiveTemplate;
+
+    if (activeTemplate != null) {
+      return _buildSelectedCustomTemplatePanel(theme, activeTemplate);
+    }
 
     return SizedBox(
       height: 430,
@@ -3353,9 +3408,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
               ),
             ],
           ),
-          if (_isLoadingCustomTemplates || _customTemplates.isNotEmpty) ...[
+          if (_isLoadingCustomTemplates) ...[
             const SizedBox(height: 10),
-            _buildCustomTemplateStrip(theme),
+            const LinearProgressIndicator(minHeight: 2),
           ],
           const SizedBox(height: 12),
           Expanded(
@@ -3370,8 +3425,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  flex: 6,
-                  child: _buildCustomValueEditors(theme),
+                  flex: 4,
+                  child: _buildCustomTemplateHelpPanel(theme),
                 ),
               ],
             ),
@@ -3381,28 +3436,121 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     );
   }
 
-  Widget _buildCustomTemplateStrip(ThemeData theme) {
-    if (_isLoadingCustomTemplates) {
-      return const LinearProgressIndicator(minHeight: 2);
-    }
+  Widget _buildSelectedCustomTemplatePanel(
+    ThemeData theme,
+    BulkCustomProductTemplate template,
+  ) {
+    final fields = _customSelectedDefinitions;
 
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _customTemplates.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final template = _customTemplates[index];
-          return InputChip(
-            avatar: const Icon(Icons.bookmark_border_rounded, size: 16),
-            label: Text(template.name),
-            tooltip: '${template.fieldKeys.length} campo(s)',
-            onPressed: () => _applyCustomTemplate(template),
-            onDeleted: () => _deleteCustomTemplate(template.id),
-            deleteIcon: const Icon(Icons.close_rounded, size: 16),
-          );
-        },
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.view_column_outlined,
+                color: theme.colorScheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  template.name,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'La tabla inferior muestra ${fields.length} columna(s): ${fields.take(5).map((field) => field.label).join(', ')}${fields.length > 5 ? '...' : ''}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _selectedCustomTemplateId = null;
+                _customRowValues.clear();
+              });
+            },
+            icon: const Icon(Icons.arrow_back_rounded, size: 16),
+            label: const Text('Crear otra'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomTemplateHelpPanel(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Plantilla nueva',
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '1. Selecciona los campos que quieres convertir en columnas.\n'
+            '2. Guarda la plantilla con un nombre.\n'
+            '3. Vuelve a Operación y elige esa plantilla para editar valores por producto.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.16),
+              ),
+            ),
+            child: Text(
+              _customTemplates.isEmpty
+                  ? 'Cuando guardes esta plantilla, aparecerá como una tarjeta nueva en Operación.'
+                  : '${_customTemplates.length} plantilla(s) guardada(s) aparecerán como tarjetas en Operación.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3410,7 +3558,9 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
   Widget _buildCustomGroupRail(ThemeData theme) {
     final groups = <BulkCustomProductFieldGroup?>[
       null,
-      ...BulkCustomProductFieldGroup.values,
+      ...BulkCustomProductFieldGroup.values.where(
+        (group) => _customProductFields.any((field) => field.group == group),
+      ),
     ];
 
     return Container(
@@ -3548,304 +3698,260 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
     );
   }
 
-  Widget _buildCustomValueEditors(ThemeData theme) {
-    final fields = _customSelectedDefinitions;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+  Widget _buildCustomTableCell({
+    required ThemeData theme,
+    required String productId,
+    required BulkCustomProductFieldDefinition field,
+    required dynamic value,
+    required dynamic originalValue,
+    required bool enabled,
+  }) {
+    final isValid = _customCellValueIsValid(field, value);
+    final stockChanged =
+        field.key == 'stock' && _customStockValueChanged(originalValue, value);
+    final borderColor = isValid
+        ? theme.colorScheme.outlineVariant.withValues(alpha: 0.55)
+        : theme.colorScheme.error;
+    final decoration = InputDecoration(
+      isDense: true,
+      filled: !enabled,
+      fillColor: enabled
+          ? null
+          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(
+          color: isValid ? theme.colorScheme.primary : theme.colorScheme.error,
+          width: 1.4,
         ),
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-            child: Row(
-              children: [
-                Text(
-                  'Valores a aplicar',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                if (fields.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: _clearCustomSelection,
-                    icon: const Icon(Icons.remove_done_rounded, size: 16),
-                    label: const Text('Limpiar'),
-                  ),
-              ],
+      suffixIconConstraints: const BoxConstraints(minWidth: 28),
+      suffixIcon: !isValid
+          ? Icon(
+              Icons.error_outline_rounded,
+              size: 16,
+              color: theme.colorScheme.error,
+            )
+          : null,
+    );
+    final cellKey =
+        ValueKey('custom-cell-$productId-${field.key}-$_customValueRevision');
+
+    switch (field.type) {
+      case BulkCustomProductFieldType.toggle:
+        final bool? current = value is bool ? value : null;
+        return DropdownButtonFormField<bool?>(
+          key: cellKey,
+          initialValue: current,
+          isExpanded: true,
+          decoration: decoration,
+          items: [
+            if (current == null)
+              const DropdownMenuItem<bool?>(
+                value: null,
+                child: Text('Sin valor'),
+              ),
+            const DropdownMenuItem<bool?>(
+              value: true,
+              child: Text('Sí'),
             ),
+            const DropdownMenuItem<bool?>(
+              value: false,
+              child: Text('No'),
+            ),
+          ],
+          onChanged: enabled
+              ? (next) => _setCustomRowValue(productId, field.key, next)
+              : null,
+        );
+      case BulkCustomProductFieldType.category:
+      case BulkCustomProductFieldType.brand:
+      case BulkCustomProductFieldType.supplier:
+      case BulkCustomProductFieldType.choice:
+        return DropdownButtonFormField<String?>(
+          key: cellKey,
+          initialValue: _customDropdownValue(field, value),
+          isExpanded: true,
+          decoration: decoration,
+          items: _customDropdownItems(field, value),
+          onChanged: enabled
+              ? (next) => _setCustomRowValue(productId, field.key, next)
+              : null,
+        );
+      case BulkCustomProductFieldType.integer:
+      case BulkCustomProductFieldType.decimal:
+      case BulkCustomProductFieldType.text:
+      case BulkCustomProductFieldType.longText:
+      case BulkCustomProductFieldType.textList:
+        final isParagraph = field.type == BulkCustomProductFieldType.longText ||
+            field.type == BulkCustomProductFieldType.textList;
+        final input = TextFormField(
+          key: cellKey,
+          initialValue: _customCellInputText(value),
+          enabled: enabled,
+          minLines: 1,
+          maxLines: isParagraph ? 2 : 1,
+          keyboardType: field.type == BulkCustomProductFieldType.integer ||
+                  field.type == BulkCustomProductFieldType.decimal
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          decoration: decoration,
+          onChanged: (next) => _setCustomRowValue(productId, field.key, next),
+        );
+        if (!stockChanged || !isValid) return input;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            input,
+            Positioned(
+              top: -7,
+              right: 6,
+              child: _buildStockChangedBadge(theme, originalValue),
+            ),
+          ],
+        );
+    }
+  }
+
+  String _customCellInputText(dynamic value) {
+    if (value == null || value == _customClearSentinel) return '';
+    if (value is List) return value.join('\n');
+    return value.toString();
+  }
+
+  bool _customStockValueChanged(dynamic originalValue, dynamic value) {
+    final original = _parseNullableInt(originalValue);
+    final current = _parseNullableInt(value);
+    return original != null && current != null && original != current;
+  }
+
+  Widget _buildStockChangedBadge(ThemeData theme, dynamic originalValue) {
+    final original = _parseNullableInt(originalValue);
+    final message = original == null
+        ? 'Stock original no disponible'
+        : 'Stock original antes del cambio: $original';
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 250),
+      child: Container(
+        height: 18,
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.28),
           ),
-          Divider(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Text(
+          'Editado',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
             height: 1,
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.25),
           ),
-          Expanded(
-            child: fields.isEmpty
-                ? Center(
-                    child: Text(
-                      'Selecciona campos para definir sus valores.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: fields.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return _buildCustomValueEditor(theme, fields[index]);
-                    },
-                  ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildCustomValueEditor(
-    ThemeData theme,
+  String? _customDropdownValue(
     BulkCustomProductFieldDefinition field,
+    dynamic value,
   ) {
-    final value = _customFieldValues[field.key];
-    final isClear = value == _customClearSentinel;
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
 
-    if (isClear) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: theme.colorScheme.error.withValues(alpha: 0.18),
+  List<DropdownMenuItem<String?>> _customDropdownItems(
+    BulkCustomProductFieldDefinition field,
+    dynamic value,
+  ) {
+    final current = _customDropdownValue(field, value);
+    final items = <DropdownMenuItem<String?>>[
+      DropdownMenuItem<String?>(
+        value: null,
+        child: Text(field.isRequired ? 'Elige valor' : 'Sin valor'),
+      ),
+    ];
+
+    switch (field.type) {
+      case BulkCustomProductFieldType.category:
+        items.addAll(
+          widget.categories.map(
+            (category) => DropdownMenuItem<String?>(
+              value: category.id,
+              child: Text(category.name, overflow: TextOverflow.ellipsis),
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.cleaning_services_outlined,
-                size: 18, color: theme.colorScheme.error),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '${field.label}: se limpiará',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+        );
+      case BulkCustomProductFieldType.brand:
+        items.addAll(
+          widget.brands.map(
+            (brand) => DropdownMenuItem<String?>(
+              value: brand.id,
+              child: Text(brand.name, overflow: TextOverflow.ellipsis),
             ),
-            TextButton(
-              onPressed: () => setState(() {
-                _customFieldValues.remove(field.key);
-                _customValueRevision += 1;
-              }),
-              child: const Text('Cancelar'),
+          ),
+        );
+      case BulkCustomProductFieldType.supplier:
+        items.addAll(
+          widget.suppliers.map(
+            (supplier) => DropdownMenuItem<String?>(
+              value: supplier.id,
+              child: Text(supplier.name, overflow: TextOverflow.ellipsis),
             ),
-          ],
+          ),
+        );
+      case BulkCustomProductFieldType.choice:
+        items.addAll(
+          field.choices.map(
+            (choice) => DropdownMenuItem<String?>(
+              value: choice.value,
+              child: Text(choice.label, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        );
+      case BulkCustomProductFieldType.toggle:
+      case BulkCustomProductFieldType.integer:
+      case BulkCustomProductFieldType.decimal:
+      case BulkCustomProductFieldType.text:
+      case BulkCustomProductFieldType.longText:
+      case BulkCustomProductFieldType.textList:
+        break;
+    }
+
+    final hasCurrent = current == null ||
+        items.any((item) => item.value?.toString() == current);
+    if (!hasCurrent) {
+      items.insert(
+        1,
+        DropdownMenuItem<String?>(
+          value: current,
+          child: Text(
+            'Actual: ${_displayCustomValue(field, current)}',
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                field.label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (field.allowClear)
-              TextButton.icon(
-                onPressed: () => setState(() {
-                  _customFieldValues[field.key] = _customClearSentinel;
-                  _customValueRevision += 1;
-                }),
-                icon: const Icon(Icons.cleaning_services_outlined, size: 15),
-                label: const Text('Limpiar campo'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        _buildCustomValueInput(theme, field),
-        if (field.helperText != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            field.helperText!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCustomValueInput(
-    ThemeData theme,
-    BulkCustomProductFieldDefinition field,
-  ) {
-    final key = ValueKey('custom-${field.key}-$_customValueRevision');
-
-    switch (field.type) {
-      case BulkCustomProductFieldType.toggle:
-        final value = _customFieldValues[field.key] as bool?;
-        return _buildCustomDropdown<bool?>(
-          key: key,
-          theme: theme,
-          value: value,
-          items: const [
-            DropdownMenuItem<bool?>(
-              value: null,
-              child: Text('Elige estado'),
-            ),
-            DropdownMenuItem<bool?>(
-              value: true,
-              child: Text('Activar'),
-            ),
-            DropdownMenuItem<bool?>(
-              value: false,
-              child: Text('Desactivar'),
-            ),
-          ],
-          onChanged: (next) => _setCustomFieldValue(field.key, next),
-        );
-      case BulkCustomProductFieldType.category:
-        return _buildCustomDropdown<String?>(
-          key: key,
-          theme: theme,
-          value: _customStringValue(field.key),
-          items: [
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('Elige categoría'),
-            ),
-            if (field.allowClear)
-              const DropdownMenuItem<String?>(
-                value: _customClearSentinel,
-                child: Text('Limpiar categoría'),
-              ),
-            ...widget.categories.map(
-              (category) => DropdownMenuItem<String?>(
-                value: category.id,
-                child: Text(category.name),
-              ),
-            ),
-          ],
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.brand:
-        return _buildCustomDropdown<String?>(
-          key: key,
-          theme: theme,
-          value: _customStringValue(field.key),
-          items: [
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('Elige marca'),
-            ),
-            if (field.allowClear)
-              const DropdownMenuItem<String?>(
-                value: _customClearSentinel,
-                child: Text('Limpiar marca'),
-              ),
-            ...widget.brands.map(
-              (brand) => DropdownMenuItem<String?>(
-                value: brand.id,
-                child: Text(brand.name),
-              ),
-            ),
-          ],
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.supplier:
-        return _buildCustomDropdown<String?>(
-          key: key,
-          theme: theme,
-          value: _customStringValue(field.key),
-          items: [
-            const DropdownMenuItem<String?>(
-              value: null,
-              child: Text('Elige proveedor'),
-            ),
-            if (field.allowClear)
-              const DropdownMenuItem<String?>(
-                value: _customClearSentinel,
-                child: Text('Limpiar proveedor'),
-              ),
-            ...widget.suppliers.map(
-              (supplier) => DropdownMenuItem<String?>(
-                value: supplier.id,
-                child: Text(supplier.name),
-              ),
-            ),
-          ],
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.integer:
-      case BulkCustomProductFieldType.decimal:
-        return TextFormField(
-          key: key,
-          initialValue: _customInputText(field),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(isDense: true),
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.longText:
-        return TextFormField(
-          key: key,
-          initialValue: _customInputText(field),
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(isDense: true),
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.textList:
-        return TextFormField(
-          key: key,
-          initialValue: _customInputText(field),
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(isDense: true),
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-      case BulkCustomProductFieldType.text:
-        return TextFormField(
-          key: key,
-          initialValue: _customInputText(field),
-          decoration: const InputDecoration(isDense: true),
-          onChanged: (value) => _setCustomFieldValue(field.key, value),
-        );
-    }
-  }
-
-  Widget _buildCustomDropdown<T>({
-    required Key key,
-    required ThemeData theme,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return DropdownButtonFormField<T>(
-      key: key,
-      initialValue: value,
-      isExpanded: true,
-      decoration: const InputDecoration(isDense: true),
-      items: items,
-      onChanged: onChanged,
-    );
+    return items;
   }
 
   Widget _buildClassificationRows(ThemeData theme) {
@@ -4447,11 +4553,27 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
   Widget _buildCustomRows(ThemeData theme) {
     final fields = _customSelectedDefinitions;
+    final activeTemplate = _customActiveTemplate;
+
+    if (activeTemplate == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Crea y guarda una plantilla, luego selecciónala en Operación para editar el lote como tabla.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
 
     if (fields.isEmpty) {
       return Center(
         child: Text(
-          'Selecciona al menos un campo en reglas y valores base.',
+          'La plantilla no tiene campos válidos.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -4459,72 +4581,124 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       );
     }
 
-    return _buildRowList(
-      theme: theme,
-      rowBuilder: (product) {
-        final productId = product.id;
-        if (productId == null) return const SizedBox.shrink();
-        final enabled = _enabledRowIds.contains(productId);
-        return _buildDataRowShell(
-          theme: theme,
-          product: product,
-          enabled: enabled,
-          onEnabledChanged: (value) => _toggleRow(productId, value),
-          trailing: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: fields.take(6).map((field) {
-              final current = _displayProductCustomValue(product, field);
-              final next =
-                  _displayCustomValue(field, _customFieldValues[field.key]);
-              final invalid = !_customFieldHasUsableValue(field);
-              return Container(
-                constraints: const BoxConstraints(minWidth: 160),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: invalid
-                      ? theme.colorScheme.error.withValues(alpha: 0.06)
-                      : theme.colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.36),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: invalid
-                        ? theme.colorScheme.error.withValues(alpha: 0.22)
-                        : theme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.35),
+    const checkboxWidth = 48.0;
+    const identityWidth = 330.0;
+    const columnWidth = 230.0;
+    final tableWidth =
+        checkboxWidth + identityWidth + fields.length * columnWidth;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: tableWidth,
+        child: Column(
+          children: [
+            Container(
+              height: 44,
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.35),
+              child: Row(
+                children: [
+                  const SizedBox(width: checkboxWidth),
+                  SizedBox(
+                    width: identityWidth,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'Producto',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      field.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                  for (final field in fields)
+                    SizedBox(
+                      width: columnWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          field.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$current -> $next',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: invalid
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+            Expanded(
+              child: ListView.separated(
+                controller: _rowsScrollController,
+                itemCount: _matchedProducts.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color:
+                      theme.colorScheme.outlineVariant.withValues(alpha: 0.22),
                 ),
-              );
-            }).toList(growable: false),
-          ),
-        );
-      },
+                itemBuilder: (context, index) {
+                  final product = _matchedProducts[index];
+                  final productId = product.id;
+                  if (productId == null) return const SizedBox.shrink();
+                  final rowEnabled = _enabledRowIds.contains(productId);
+                  final rowValues = _customRowValues[productId] ??
+                      <String, dynamic>{
+                        for (final field in fields)
+                          field.key: _rawProductCustomValue(product, field),
+                      };
+
+                  return SizedBox(
+                    height: 74,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: checkboxWidth,
+                          child: Checkbox(
+                            value: rowEnabled,
+                            onChanged: (value) =>
+                                _toggleRow(productId, value ?? false),
+                          ),
+                        ),
+                        SizedBox(
+                          width: identityWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: _buildProductIdentity(theme, product),
+                          ),
+                        ),
+                        for (final field in fields)
+                          SizedBox(
+                            width: columnWidth,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              child: _buildCustomTableCell(
+                                theme: theme,
+                                productId: productId,
+                                field: field,
+                                value: rowValues[field.key],
+                                originalValue:
+                                    _rawProductCustomValue(product, field),
+                                enabled: rowEnabled,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -4650,87 +4824,101 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
 
   void _toggleCustomField(BulkCustomProductFieldDefinition field) {
     setState(() {
+      _selectedCustomTemplateId = null;
+      _customRowValues.clear();
       if (_customSelectedFieldKeys.contains(field.key)) {
         _customSelectedFieldKeys.remove(field.key);
-        _customFieldValues.remove(field.key);
       } else {
         _customSelectedFieldKeys.add(field.key);
       }
     });
   }
 
-  void _setCustomFieldValue(String key, dynamic value) {
+  void _setCustomRowValue(String productId, String key, dynamic value) {
     setState(() {
-      if (value == null || (value is String && value.isEmpty)) {
-        _customFieldValues.remove(key);
-      } else {
-        _customFieldValues[key] = value;
+      final row = Map<String, dynamic>.from(
+        _customRowValues[productId] ?? const <String, dynamic>{},
+      );
+      row[key] = value;
+      _customRowValues[productId] = row;
+    });
+  }
+
+  bool get _customTableHasInvalidValues {
+    if (_customSelectedDefinitions.isEmpty) return true;
+    for (final productId in _enabledRowIds) {
+      final values = _customRowValues[productId];
+      if (values == null) return true;
+      for (final field in _customSelectedDefinitions) {
+        if (!values.containsKey(field.key)) return true;
+        if (!_customCellValueIsValid(field, values[field.key])) return true;
       }
-    });
+    }
+    return false;
   }
 
-  void _clearCustomSelection() {
-    setState(() {
-      _customSelectedFieldKeys.clear();
-      _customFieldValues.clear();
-      _customValueRevision += 1;
-    });
-  }
-
-  String? _customStringValue(String key) {
-    final value = _customFieldValues[key];
-    return value is String ? value : null;
-  }
-
-  String _customInputText(BulkCustomProductFieldDefinition field) {
-    final value = _customFieldValues[field.key];
-    if (value == null || value == _customClearSentinel) return '';
-    if (value is List) return value.join('\n');
-    return value.toString();
-  }
-
-  bool _customFieldHasUsableValue(BulkCustomProductFieldDefinition field) {
-    final value = _customFieldValues[field.key];
+  bool _customCellValueIsValid(
+    BulkCustomProductFieldDefinition field,
+    dynamic value,
+  ) {
     if (value == _customClearSentinel) return field.allowClear;
+    final text = value?.toString().trim() ?? '';
+
     switch (field.type) {
       case BulkCustomProductFieldType.toggle:
         return value is bool;
+      case BulkCustomProductFieldType.choice:
+        if (text.isEmpty) return !field.isRequired;
+        return field.choices.any((choice) => choice.value == text);
       case BulkCustomProductFieldType.category:
+        if (text.isEmpty) return !field.isRequired;
+        return widget.categories.any((category) => category.id == text);
       case BulkCustomProductFieldType.brand:
+        if (text.isEmpty) return !field.isRequired;
+        return widget.brands.any((brand) => brand.id == text);
       case BulkCustomProductFieldType.supplier:
-        return value is String && value.trim().isNotEmpty;
+        if (text.isEmpty) return !field.isRequired;
+        return widget.suppliers.any((supplier) => supplier.id == text);
       case BulkCustomProductFieldType.integer:
-        return _parseNullableInt(value) != null;
+        if (text.isEmpty) return !field.isRequired;
+        final parsed = _parseNullableInt(value);
+        if (field.key == 'stock') return parsed != null && parsed >= 0;
+        return parsed != null;
       case BulkCustomProductFieldType.decimal:
+        if (text.isEmpty) return !field.isRequired;
         return _parseNullableDouble(value) != null;
       case BulkCustomProductFieldType.textList:
-        return _parseTextList(value).isNotEmpty;
+        final values = _parseTextList(value);
+        return values.isNotEmpty || !field.isRequired;
       case BulkCustomProductFieldType.text:
       case BulkCustomProductFieldType.longText:
-        return value is String && value.trim().isNotEmpty;
+        return text.isNotEmpty || !field.isRequired;
     }
   }
 
-  String _displayProductCustomValue(
+  dynamic _rawProductCustomValue(
     Product product,
     BulkCustomProductFieldDefinition field,
   ) {
-    final value = switch (field.key) {
+    return switch (field.key) {
       'name' => product.name,
       'sku' => product.sku,
       'supplier_code' => product.supplierCode,
       'barcode' => product.barcode,
       'gtin' => product.gtin,
       'description' => product.description,
-      'category_id' => product.categoryName,
-      'brand_id' => product.brand,
+      'product_type' => product.productType.name,
+      'purchase_treatment' => product.purchaseTreatment.dbValue,
+      'is_set' => product.isSet,
+      'set_type' => product.setType,
+      'category_id' => product.categoryId,
+      'brand_id' => product.brandId,
       'model' => product.model,
-      'supplier_id' => product.supplierName,
+      'supplier_id' => product.supplierId,
       'price' => product.price,
       'cost' => product.cost,
+      'stock' => product.inventoryQty,
       'min_stock_level' => product.minStockLevel,
-      'max_stock_level' => product.maxStockLevel,
-      'warehouse_location' => product.warehouseLocation,
       'is_active' => product.isActive,
       'is_published' => product.isPublished,
       'is_google_merchant' => product.isGoogleMerchant,
@@ -4746,22 +4934,8 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       'website_merchant_gtin' => product.websiteMerchantGtin,
       'website_merchant_mpn' => product.websiteMerchantMpn,
       'website_google_product_category' => product.websiteGoogleProductCategory,
-      'manufacturer' => product.manufacturer,
-      'manufacturer_sku' => product.manufacturerSku,
-      'hs_code' => product.hsCode,
-      'country_of_origin' => product.countryOfOrigin,
-      'color' => product.color,
-      'size' => product.size,
-      'material' => product.material,
-      'warranty_months' => product.warrantyMonths,
-      'tags' => product.tags,
-      'serialized' => product.serialized,
-      'lot_tracking' => product.lotTracking,
-      'expiration_tracking' => product.expirationTracking,
-      'expiry_days' => product.expiryDays,
       _ => null,
     };
-    return _formatCustomDisplayValue(value);
   }
 
   String _displayCustomValue(
@@ -4788,6 +4962,12 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                 .firstOrNull
                 ?.name ??
             'Sin valor';
+      case BulkCustomProductFieldType.choice:
+        return field.choices
+                .where((choice) => choice.value == value)
+                .firstOrNull
+                ?.label ??
+            _formatCustomDisplayValue(value);
       case BulkCustomProductFieldType.textList:
         return _formatCustomDisplayValue(_parseTextList(value));
       case BulkCustomProductFieldType.integer:
@@ -4938,7 +5118,7 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name.trim(),
       fieldKeys: _customSelectedFieldKeys.toList(growable: false),
-      values: Map<String, dynamic>.from(_customFieldValues),
+      values: const <String, dynamic>{},
       createdAt: DateTime.now(),
     );
 
@@ -4947,29 +5127,32 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
         template,
         ..._customTemplates.where((item) => item.name != template.name),
       ].take(20).toList(growable: false);
-    });
-    await _persistCustomTemplates();
-  }
-
-  Future<void> _deleteCustomTemplate(String id) async {
-    setState(() {
-      _customTemplates =
-          _customTemplates.where((template) => template.id != id).toList();
-    });
-    await _persistCustomTemplates();
-  }
-
-  void _applyCustomTemplate(BulkCustomProductTemplate template) {
-    final validKeys = _customProductFields.map((field) => field.key).toSet();
-    setState(() {
-      _customSelectedFieldKeys =
-          template.fieldKeys.where(validKeys.contains).toSet();
-      _customFieldValues = {
-        for (final entry in template.values.entries)
-          if (validKeys.contains(entry.key)) entry.key: entry.value,
-      };
+      _operation = null;
+      _selectedCustomTemplateId = null;
+      _customSelectedFieldKeys.clear();
+      _customRowValues.clear();
       _customValueRevision += 1;
+      _stepIndex = 1;
     });
+    await _persistCustomTemplates();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Plantilla "${template.name}" guardada. Selecciónala en Operación.',
+        ),
+      ),
+    );
+  }
+
+  void _selectCustomTemplate(BulkCustomProductTemplate template) {
+    final validKeys = _customProductFields.map((field) => field.key).toSet();
+    _operation = BulkProductEditOperation.custom;
+    _selectedCustomTemplateId = template.id;
+    _customSelectedFieldKeys =
+        template.fieldKeys.where(validKeys.contains).toSet();
+    _syncCustomRowValues(preserveExisting: false);
+    _customValueRevision += 1;
   }
 
   Widget _buildApplySummary(ThemeData theme) {
@@ -5076,7 +5259,15 @@ class _BulkProductEditDialogState extends State<BulkProductEditDialog> {
                       if (_stepIndex == 1 && _operation == null) return;
                       setState(() => _stepIndex += 1);
                     },
-              child: Text(_stepIndex == 1 ? 'Revisar lote' : 'Siguiente'),
+              child: Text(
+                _stepIndex == 1 &&
+                        _operation == BulkProductEditOperation.custom &&
+                        _selectedCustomTemplateId == null
+                    ? 'Crear plantilla'
+                    : _stepIndex == 1
+                        ? 'Revisar lote'
+                        : 'Siguiente',
+              ),
             )
           else
             FilledButton.icon(

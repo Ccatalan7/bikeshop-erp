@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/stock_adjustment_origin.dart';
+import '../../../shared/models/product.dart'
+    show PurchaseTreatment, parsePurchaseTreatment;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -863,7 +865,7 @@ class BulkProductEditService {
     required List<Product> products,
     required Set<String> enabledProductIds,
     required List<BulkCustomProductFieldDefinition> fields,
-    required Map<String, dynamic> values,
+    required Map<String, Map<String, dynamic>> rowValues,
     required Map<String, String> categoryNamesById,
     required Map<String, String> brandNamesById,
     required Map<String, String> supplierNamesById,
@@ -885,9 +887,12 @@ class BulkProductEditService {
       final beforeValues = <String, dynamic>{};
       final afterValues = <String, dynamic>{};
       final changedFields = <String>[];
+      int? targetStock;
 
       try {
+        final values = rowValues[productId] ?? const <String, dynamic>{};
         for (final field in fields) {
+          if (!values.containsKey(field.key)) continue;
           final rawValue = values[field.key];
           final normalized = _normalizeCustomValue(field, rawValue);
           final beforeValue = _readCustomFieldValue(product, field.key);
@@ -910,6 +915,25 @@ class BulkProductEditService {
             continue;
           }
 
+          if (field.key == 'stock') {
+            if (!product.tracksInventory) {
+              throw Exception(
+                'Stock actual solo aplica a productos con control de inventario.',
+              );
+            }
+            final parsedStock =
+                normalized is int ? normalized : _parseNullableInt(normalized);
+            if (parsedStock == null || parsedStock < 0) {
+              throw Exception(
+                  'Stock actual requiere un número mayor o igual a 0.');
+            }
+            targetStock = parsedStock;
+            beforeValues[field.key] = currentValue;
+            afterValues[field.key] = afterValue;
+            changedFields.add(field.key);
+            continue;
+          }
+
           _writeCustomPayload(
             payload: payload,
             field: field,
@@ -921,7 +945,7 @@ class BulkProductEditService {
           changedFields.add(field.key);
         }
 
-        if (payload.isEmpty) {
+        if (payload.isEmpty && targetStock == null) {
           skipped += 1;
           items.add(
             BulkUpdateItemResult(
@@ -937,14 +961,51 @@ class BulkProductEditService {
           continue;
         }
 
-        payload['updated_at'] = DateTime.now().toIso8601String();
-
-        await _db.update(
-          'products',
-          productId,
-          payload,
-          applyTimestamps: false,
+        _normalizeCustomPayloadDependencies(
+          payload: payload,
+          afterValues: afterValues,
         );
+
+        final conversionTarget = _customInventoryConversionTarget(
+          product: product,
+          payload: payload,
+        );
+        if (conversionTarget != null && targetStock != null) {
+          throw Exception(
+            'No se puede ajustar Stock actual y convertir el producto a servicio/consumible en la misma fila.',
+          );
+        }
+        if (conversionTarget != null) {
+          await _inventoryService.convertProductInventoryToNonStock(
+            productId: productId,
+            targetPurchaseTreatment: conversionTarget.purchaseTreatment,
+            targetProductType: conversionTarget.productType,
+            reason: 'Edición masiva personalizada',
+          );
+        }
+
+        if (payload.isNotEmpty) {
+          payload['updated_at'] = DateTime.now().toIso8601String();
+
+          await _db.update(
+            'products',
+            productId,
+            payload,
+            applyTimestamps: false,
+          );
+        }
+        if (targetStock != null) {
+          final delta = targetStock - product.inventoryQty;
+          await _inventoryService.applyStockAdjustment(
+            productId: productId,
+            quantity: delta.abs(),
+            type: delta > 0 ? 'IN' : 'OUT',
+            reasonType: 'count',
+            note: 'Edición masiva personalizada: Stock actual',
+            effectiveAt: DateTime.now(),
+            adjustmentOrigin: StockAdjustmentOrigin.massEditPanel.value,
+          );
+        }
         succeeded += 1;
         items.add(
           BulkUpdateItemResult(
@@ -1384,15 +1445,18 @@ class BulkProductEditService {
       'barcode' => product.barcode,
       'gtin' => product.gtin,
       'description' => product.description,
+      'product_type' => product.productType.name,
+      'purchase_treatment' => product.purchaseTreatment.dbValue,
+      'is_set' => product.isSet,
+      'set_type' => product.setType,
       'category_id' => product.categoryId,
       'brand_id' => product.brandId,
       'model' => product.model,
       'supplier_id' => product.supplierId,
       'price' => product.price,
       'cost' => product.cost,
+      'stock' => product.inventoryQty,
       'min_stock_level' => product.minStockLevel,
-      'max_stock_level' => product.maxStockLevel,
-      'warehouse_location' => product.warehouseLocation,
       'is_active' => product.isActive,
       'is_published' => product.isPublished,
       'is_google_merchant' => product.isGoogleMerchant,
@@ -1408,19 +1472,6 @@ class BulkProductEditService {
       'website_merchant_gtin' => product.websiteMerchantGtin,
       'website_merchant_mpn' => product.websiteMerchantMpn,
       'website_google_product_category' => product.websiteGoogleProductCategory,
-      'manufacturer' => product.manufacturer,
-      'manufacturer_sku' => product.manufacturerSku,
-      'hs_code' => product.hsCode,
-      'country_of_origin' => product.countryOfOrigin,
-      'color' => product.color,
-      'size' => product.size,
-      'material' => product.material,
-      'warranty_months' => product.warrantyMonths,
-      'tags' => product.tags,
-      'serialized' => product.serialized,
-      'lot_tracking' => product.lotTracking,
-      'expiration_tracking' => product.expirationTracking,
-      'expiry_days' => product.expiryDays,
       _ => null,
     };
   }
@@ -1440,10 +1491,27 @@ class BulkProductEditService {
       case BulkCustomProductFieldType.toggle:
         if (value is bool) return value;
         return value?.toString().toLowerCase() == 'true';
+      case BulkCustomProductFieldType.choice:
+        final text = value?.toString().trim() ?? '';
+        if (text.isEmpty) {
+          if (field.isRequired) {
+            throw Exception('${field.label} requiere una opción.');
+          }
+          return null;
+        }
+        final allowedValues =
+            field.choices.map((choice) => choice.value).toSet();
+        if (!allowedValues.contains(text)) {
+          throw Exception('${field.label} tiene una opción inválida.');
+        }
+        return text;
       case BulkCustomProductFieldType.integer:
         final parsed = _parseNullableInt(value);
         if (parsed == null && field.isRequired) {
           throw Exception('${field.label} requiere un número entero.');
+        }
+        if (field.key == 'stock' && parsed != null && parsed < 0) {
+          throw Exception('${field.label} no puede ser negativo.');
         }
         return parsed;
       case BulkCustomProductFieldType.decimal:
@@ -1481,6 +1549,40 @@ class BulkProductEditService {
     required Map<String, String> brandNamesById,
   }) {
     switch (field.key) {
+      case 'product_type':
+        payload['product_type'] = value;
+        if (value == ProductType.service.name) {
+          payload['purchase_treatment'] = PurchaseTreatment.inventory.dbValue;
+          payload['track_stock'] = false;
+          payload['inventory_qty'] = 0;
+          payload['stock_quantity'] = 0;
+          payload['min_stock_level'] = 0;
+          payload['max_stock_level'] = 0;
+          payload['is_google_merchant'] = false;
+          payload['is_set'] = false;
+          payload['set_type'] = null;
+        }
+      case 'purchase_treatment':
+        payload['purchase_treatment'] = value;
+        if (value == PurchaseTreatment.workshopConsumable.dbValue) {
+          payload['track_stock'] = false;
+          payload['inventory_qty'] = 0;
+          payload['stock_quantity'] = 0;
+          payload['min_stock_level'] = 0;
+          payload['max_stock_level'] = 0;
+          payload['is_set'] = false;
+          payload['set_type'] = null;
+        }
+      case 'is_set':
+        payload['is_set'] = value;
+        if (value == false) {
+          payload['set_type'] = null;
+        }
+      case 'set_type':
+        payload['set_type'] = value;
+        if (value != null) {
+          payload['is_set'] = true;
+        }
       case 'brand_id':
         payload['brand_id'] = value;
         payload['brand'] = value == null ? null : brandNamesById[value];
@@ -1508,6 +1610,91 @@ class BulkProductEditService {
     }
   }
 
+  void _normalizeCustomPayloadDependencies({
+    required Map<String, dynamic> payload,
+    required Map<String, dynamic> afterValues,
+  }) {
+    if (payload['product_type'] == ProductType.service.name) {
+      payload['purchase_treatment'] = PurchaseTreatment.inventory.dbValue;
+      payload['track_stock'] = false;
+      payload['inventory_qty'] = 0;
+      payload['stock_quantity'] = 0;
+      payload['min_stock_level'] = 0;
+      payload['max_stock_level'] = 0;
+      payload['is_google_merchant'] = false;
+      payload['is_set'] = false;
+      payload['set_type'] = null;
+      if (afterValues.containsKey('purchase_treatment')) {
+        afterValues['purchase_treatment'] =
+            PurchaseTreatment.inventory.displayName;
+      }
+      if (afterValues.containsKey('is_set')) {
+        afterValues['is_set'] = false;
+      }
+      if (afterValues.containsKey('set_type')) {
+        afterValues['set_type'] = null;
+      }
+    }
+
+    if (payload['purchase_treatment'] ==
+        PurchaseTreatment.workshopConsumable.dbValue) {
+      payload['track_stock'] = false;
+      payload['inventory_qty'] = 0;
+      payload['stock_quantity'] = 0;
+      payload['min_stock_level'] = 0;
+      payload['max_stock_level'] = 0;
+      payload['is_set'] = false;
+      payload['set_type'] = null;
+      if (afterValues.containsKey('is_set')) {
+        afterValues['is_set'] = false;
+      }
+      if (afterValues.containsKey('set_type')) {
+        afterValues['set_type'] = null;
+      }
+    }
+
+    if (payload['is_set'] == false) {
+      payload['set_type'] = null;
+      if (afterValues.containsKey('set_type')) {
+        afterValues['set_type'] = null;
+      }
+    }
+  }
+
+  _CustomInventoryConversionTarget? _customInventoryConversionTarget({
+    required Product product,
+    required Map<String, dynamic> payload,
+  }) {
+    final currentTracksInventory = product.tracksInventory;
+    if (!currentTracksInventory || product.inventoryQty <= 0) {
+      return null;
+    }
+
+    final targetProductType = ProductType.values.firstWhere(
+      (type) =>
+          type.name == (payload['product_type'] ?? product.productType.name),
+      orElse: () => product.productType,
+    );
+    final targetPurchaseTreatment = targetProductType == ProductType.service
+        ? PurchaseTreatment.inventory
+        : parsePurchaseTreatment(
+            payload['purchase_treatment'] ?? product.purchaseTreatment.dbValue,
+            productType: targetProductType.name,
+            trackStock: payload['track_stock'] as bool?,
+          );
+    final targetTracksInventory = targetProductType != ProductType.service &&
+        targetPurchaseTreatment == PurchaseTreatment.inventory;
+
+    if (targetTracksInventory) {
+      return null;
+    }
+
+    return _CustomInventoryConversionTarget(
+      productType: targetProductType,
+      purchaseTreatment: targetPurchaseTreatment,
+    );
+  }
+
   dynamic _displayReadyCustomValue({
     required BulkCustomProductFieldDefinition field,
     required dynamic value,
@@ -1524,6 +1711,13 @@ class BulkProductEditService {
       case 'supplier_id':
         return supplierNamesById[value] ?? value;
       default:
+        if (field.type == BulkCustomProductFieldType.choice) {
+          return field.choices
+                  .where((choice) => choice.value == value)
+                  .firstOrNull
+                  ?.label ??
+              value;
+        }
         return value;
     }
   }
@@ -1553,6 +1747,7 @@ class BulkProductEditService {
         return true;
       case BulkCustomProductFieldType.toggle:
         return before == after;
+      case BulkCustomProductFieldType.choice:
       case BulkCustomProductFieldType.category:
       case BulkCustomProductFieldType.brand:
       case BulkCustomProductFieldType.supplier:
@@ -2116,4 +2311,14 @@ class _BulkImageAutoMatch {
 
   final Product product;
   final int score;
+}
+
+class _CustomInventoryConversionTarget {
+  const _CustomInventoryConversionTarget({
+    required this.productType,
+    required this.purchaseTreatment,
+  });
+
+  final ProductType productType;
+  final PurchaseTreatment purchaseTreatment;
 }

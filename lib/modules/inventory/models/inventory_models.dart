@@ -5,6 +5,7 @@ class Product {
   static const String listPreviewSelect =
       'id,tenant_id,name,sku,category_id,category_name,supplier_id,'
       'supplier_name,supplier_code,brand_id,brand,model,barcode,price,cost,'
+      'gtin,description,website_description,'
       'inventory_qty,stock_quantity,min_stock_level,max_stock_level,'
       'image_url,image_url_optimized,image_fingerprint,image_urls,'
       'website_name,website_price,website_image_url,'

@@ -86,6 +86,7 @@ enum BulkCustomProductFieldType {
   integer,
   decimal,
   toggle,
+  choice,
   category,
   brand,
   supplier,
@@ -94,6 +95,7 @@ enum BulkCustomProductFieldType {
 
 enum BulkCustomProductFieldGroup {
   identity('Identidad'),
+  format('Tipo y set'),
   classification('Clasificación'),
   pricingStock('Precios e inventario'),
   status('Estado y canales'),
@@ -114,6 +116,7 @@ class BulkCustomProductFieldDefinition {
     this.helperText,
     this.isRequired = false,
     this.allowClear = true,
+    this.choices = const [],
     this.searchAliases = const [],
   });
 
@@ -124,7 +127,18 @@ class BulkCustomProductFieldDefinition {
   final String? helperText;
   final bool isRequired;
   final bool allowClear;
+  final List<BulkCustomProductFieldChoice> choices;
   final List<String> searchAliases;
+}
+
+class BulkCustomProductFieldChoice {
+  const BulkCustomProductFieldChoice({
+    required this.value,
+    required this.label,
+  });
+
+  final String value;
+  final String label;
 }
 
 class BulkCustomProductTemplate {
