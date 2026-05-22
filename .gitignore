@@ -13,7 +13,15 @@
 migrate_working_dir/
 .tools/
 reports/product_image_pipeline*/
-14: .firebase/
+.firebase/
+
+# Installed dependencies and generated platform caches must stay local.
+# Commit lockfiles instead; every machine should install dependencies from the lockfile.
+node_modules/
+**/node_modules/
+**/.dart_tool/
+**/build/
+**/Pods/
 
 # IntelliJ related
 *.iml

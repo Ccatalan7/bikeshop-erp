@@ -14,6 +14,82 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# Build And Dependency Hygiene
+
+This repo is used from multiple machines: macOS laptops/desktops and Windows laptops. Build behavior must be deterministic across those machines.
+
+## Never Commit Installed Dependencies Or Build Caches
+
+Do **not** commit installed/generated folders:
+
+- `node_modules/` or `**/node_modules/`
+- `.dart_tool/` or `**/.dart_tool/`
+- `build/` or `**/build/`
+- `Pods/` or `**/Pods/`
+- Flutter/Xcode ephemeral caches such as `macos/Flutter/ephemeral/` and `ios/Flutter/ephemeral/`
+- tool caches such as `.firebase/`
+
+Commit the manifests and lockfiles instead:
+
+- `pubspec.yaml` + `pubspec.lock`
+- root `package.json` + `package-lock.json`
+- `cloudflare-worker/package.json` + `cloudflare-worker/package-lock.json`
+- `ios/Podfile` + `ios/Podfile.lock`
+- `macos/Podfile` + `macos/Podfile.lock`
+
+If a dependency folder is accidentally tracked, remove it from git tracking with `git rm --cached` and keep the local folder on disk. Do not delete another developer's local dependency/cache folder unless they explicitly ask for a clean rebuild.
+
+## Pull / Build Baseline
+
+After pulling changes on any machine:
+
+1. Run `flutter pub get` at the repo root.
+2. If working on the mobile scanner app, run `flutter pub get` in `mobile_scanner_app/`.
+3. If root Node scripts are needed, run `npm ci` at the repo root.
+4. If Cloudflare Worker scripts are needed, run `npm ci` in `cloudflare-worker/`.
+5. For macOS/iOS native dependency changes, let Flutter run CocoaPods or run `pod install` in the relevant `macos/` or `ios/` folder.
+
+Use lockfiles for repeatability. Do not use `npm install`, `flutter pub upgrade`, or broad package upgrades as a default fix for machine-specific build problems.
+
+## Native Build Slowness Triage
+
+When a build suddenly gets slower after recent commits, inspect dependency/platform changes first:
+
+- `pubspec.yaml` / `pubspec.lock`
+- `macos/Podfile.lock`
+- `ios/Podfile.lock`
+- `windows/flutter/generated_plugins.cmake`
+- platform project files under `macos/`, `ios/`, `windows/`, and `android/`
+
+Native plugins such as Firebase, in-app web views, ML Kit, WebView, Bluetooth, and notification plugins can make the first build after pull slower because Xcode/MSBuild/CocoaPods recompiles native code. Document this when introducing or upgrading them.
+
+For cross-device inconsistency, compare toolchain versions before changing app code:
+
+- `flutter --version`
+- `dart --version`
+- `xcodebuild -version` on macOS
+- `pod --version` on macOS/iOS work
+- `node --version` and `npm --version` for JS/Cloudflare work
+
+## macOS `MallocStackLogging` Warning
+
+The terminal warning:
+
+```text
+MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+```
+
+is a macOS allocator/debug-environment warning from the local shell/tool process. It is not, by itself, a Flutter build failure if the build already says `Built ... .app`.
+
+When this appears:
+
+- First confirm whether the build succeeded.
+- Check local shell/Xcode environment variables such as `MallocStackLogging`, `MallocStackLoggingNoCompact`, `MallocScribble`, and `MallocGuardEdges`.
+- Treat it as machine-local unless the repo explicitly sets those variables.
+- Do not add repo code workarounds for this warning without evidence that it affects the app binary or causes a real build failure.
+
+---
+
 # 🚴 CRITICAL: BIKE WORKSHOP MASTER SCHEMA (ALWAYS UPDATE)
 
 **Canonical living document:** `BIKE_WORKSHOP_MASTER_SCHEMA.md`
