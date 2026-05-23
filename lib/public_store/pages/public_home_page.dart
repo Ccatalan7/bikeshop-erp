@@ -14,6 +14,7 @@ import '../../modules/website/widgets/inline_edit_toolbar.dart'
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/services/tenant_service.dart';
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -201,8 +202,16 @@ class _PublicHomePageState extends State<PublicHomePage>
 
     try {
       final inventoryService = context.read<PublicInventoryService>();
+      final websiteService = context.read<WebsiteService>();
+      final visibilityPolicy =
+          PublicProductVisibilityPolicy.hasAnySetting(websiteService.settings)
+              ? PublicProductVisibilityPolicy.fromSettings(
+                  websiteService.settings,
+                )
+              : null;
       final products = await inventoryService.getFeaturedProductsForTenant(
         tenantId: tenantId,
+        policy: visibilityPolicy,
         limit: 8,
       );
       if (!mounted) return;

@@ -44,6 +44,10 @@ class NotificationService {
 
   bool _isInitialized = false;
   RealtimeChannel? _desktopMessagesChannel;
+  Timer? _desktopMessagesRetryTimer;
+  int _desktopMessagesRetryAttempt = 0;
+  bool _desktopMessagesSetupInFlight = false;
+  String? _desktopMessagesTenantId;
 
   // Cache for messaging style notifications to support grouping
   // Key: conversation_id (or sender_id if 1:1)
@@ -346,7 +350,7 @@ class NotificationService {
 
       if (_usesDesktopRealtimeNotifications) {
         if (data.session != null) {
-          _setupDesktopMessageRealtime();
+          unawaited(_setupDesktopMessageRealtime());
         } else if (data.event == AuthChangeEvent.signedOut) {
           unawaited(_teardownDesktopMessageRealtime());
         }
@@ -583,7 +587,7 @@ class NotificationService {
       return;
     }
 
-    _setupDesktopMessageRealtime();
+    unawaited(_setupDesktopMessageRealtime());
   }
 
   bool get _usesDesktopRealtimeNotifications {
@@ -592,56 +596,197 @@ class NotificationService {
         defaultTargetPlatform != TargetPlatform.iOS;
   }
 
-  void _setupDesktopMessageRealtime() {
-    if (_desktopMessagesChannel != null) return;
+  Future<void> _setupDesktopMessageRealtime({bool force = false}) async {
+    if (_desktopMessagesSetupInFlight) return;
 
-    debugPrint('🔔 Setting up Realtime subscription for public:messages...');
-    _desktopMessagesChannel = _supabase
-        .channel('public:messages')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          callback: (payload) {
-            final newMessage = payload.newRecord;
-            final currentUserId = _supabase.auth.currentUser?.id;
-            final senderId = newMessage['sender_id'];
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      debugPrint(
+          '🔔 Desktop message notifications waiting for authenticated session');
+      return;
+    }
 
-            // Show notification only if:
-            // 1. We are logged in
-            // 2. The sender is NOT us (incoming message)
-            if (currentUserId != null && senderId != currentUserId) {
-              final content = newMessage['content'] ?? 'New Image';
+    final tenantService = TenantService();
+    final cachedTenantId = tenantService.currentTenantId;
+    final tenantId = (cachedTenantId != null && cachedTenantId.isNotEmpty)
+        ? cachedTenantId
+        : await tenantService.getTenantId();
 
-              // Notify in-app listeners (Desktop)
-              _messageStreamController.add(RemoteMessage(
-                notification: RemoteNotification(
-                  title: 'New Message',
-                  body: content,
-                ),
-                data: newMessage,
-              ));
+    if (tenantId == null || tenantId.isEmpty) {
+      debugPrint('⚠️ Desktop message notifications waiting for tenant context');
+      _scheduleDesktopMessageRealtimeReconnect('tenant context unavailable');
+      return;
+    }
 
-              if (_notificationsEnabled) {
-                // Play sound and vibrate
-                playNotificationSound();
-                _triggerVibration();
+    if (!force &&
+        _desktopMessagesChannel != null &&
+        _desktopMessagesTenantId == tenantId) {
+      return;
+    }
 
-                showLocalNotification('New Message', content);
-              }
-            }
-          },
-        )
-        .subscribe((status, error) {
-      if (status == RealtimeSubscribeStatus.channelError) {
-        debugPrint('❌ Desktop message notification realtime error: $error');
+    _desktopMessagesSetupInFlight = true;
+    try {
+      _desktopMessagesRetryTimer?.cancel();
+      _desktopMessagesRetryTimer = null;
+
+      if (_desktopMessagesChannel != null) {
+        await _teardownDesktopMessageRealtime(cancelRetry: false);
       }
+
+      if (_supabase.auth.currentUser == null) return;
+
+      debugPrint(
+          '🔔 Setting up tenant-filtered Realtime subscription for public:messages...');
+
+      late final RealtimeChannel channel;
+      channel = _supabase
+          .channel('desktop-message-notifications-$tenantId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'tenant_id',
+              value: tenantId,
+            ),
+            callback: (payload) {
+              final newMessage = payload.newRecord;
+              final currentUserId = _supabase.auth.currentUser?.id;
+              final senderId = newMessage['sender_id'];
+
+              // Show notification only if:
+              // 1. We are logged in
+              // 2. The sender is NOT us (incoming message)
+              if (currentUserId != null && senderId != currentUserId) {
+                final content = newMessage['content'] ?? 'New Image';
+
+                // Notify in-app listeners (Desktop)
+                _messageStreamController.add(RemoteMessage(
+                  notification: RemoteNotification(
+                    title: 'New Message',
+                    body: content,
+                  ),
+                  data: newMessage,
+                ));
+
+                if (_notificationsEnabled) {
+                  // Play sound and vibrate
+                  playNotificationSound();
+                  _triggerVibration();
+
+                  showLocalNotification('New Message', content);
+                }
+              }
+            },
+          )
+          .subscribe((status, error) {
+        _handleDesktopMessageRealtimeStatus(channel, status, error);
+      });
+
+      _desktopMessagesChannel = channel;
+      _desktopMessagesTenantId = tenantId;
+    } catch (e) {
+      debugPrint('⚠️ Desktop message notification realtime setup failed: $e');
+      _scheduleDesktopMessageRealtimeReconnect('setup failed');
+    } finally {
+      _desktopMessagesSetupInFlight = false;
+    }
+  }
+
+  void _handleDesktopMessageRealtimeStatus(
+    RealtimeChannel channel,
+    RealtimeSubscribeStatus status,
+    Object? error,
+  ) {
+    if (!identical(channel, _desktopMessagesChannel)) return;
+
+    switch (status) {
+      case RealtimeSubscribeStatus.subscribed:
+        _desktopMessagesRetryAttempt = 0;
+        _desktopMessagesRetryTimer?.cancel();
+        _desktopMessagesRetryTimer = null;
+        debugPrint(
+            '✅ Desktop message notification realtime active for tenant $_desktopMessagesTenantId');
+        break;
+      case RealtimeSubscribeStatus.channelError:
+        debugPrint(
+            '⚠️ Desktop message notification realtime issue: ${_describeDesktopRealtimeIssue(error)}');
+        _scheduleDesktopMessageRealtimeReconnect('channel error');
+        break;
+      case RealtimeSubscribeStatus.closed:
+        debugPrint('ℹ️ Desktop message notification realtime closed');
+        _scheduleDesktopMessageRealtimeReconnect('channel closed');
+        break;
+      case RealtimeSubscribeStatus.timedOut:
+        debugPrint('⚠️ Desktop message notification realtime timed out');
+        _scheduleDesktopMessageRealtimeReconnect('subscribe timeout');
+        break;
+    }
+  }
+
+  String _describeDesktopRealtimeIssue(Object? error) {
+    if (error == null) return 'socket closed without error details';
+
+    final description = error.toString();
+    if (description.contains('RealtimeCloseEvent(code: 1002')) {
+      return '$description; websocket protocol close, retrying';
+    }
+    return description;
+  }
+
+  void _scheduleDesktopMessageRealtimeReconnect(String reason) {
+    if (!_usesDesktopRealtimeNotifications ||
+        _supabase.auth.currentUser == null ||
+        (_desktopMessagesRetryTimer?.isActive ?? false)) {
+      return;
+    }
+
+    const retryDelays = <Duration>[
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+      Duration(seconds: 20),
+      Duration(seconds: 30),
+    ];
+    final nextAttempt = _desktopMessagesRetryAttempt + 1;
+    final delayIndex = nextAttempt > retryDelays.length
+        ? retryDelays.length - 1
+        : nextAttempt - 1;
+    final delay = retryDelays[delayIndex];
+    _desktopMessagesRetryAttempt = nextAttempt;
+
+    debugPrint(
+        '🔁 Desktop message notification realtime reconnect in ${delay.inSeconds}s ($reason)');
+
+    _desktopMessagesRetryTimer = Timer(delay, () {
+      _desktopMessagesRetryTimer = null;
+      unawaited(_reconnectDesktopMessageRealtime());
     });
   }
 
-  Future<void> _teardownDesktopMessageRealtime() async {
+  Future<void> _reconnectDesktopMessageRealtime() async {
+    if (_supabase.auth.currentUser == null) {
+      await _teardownDesktopMessageRealtime();
+      return;
+    }
+
+    await _teardownDesktopMessageRealtime(cancelRetry: false);
+    await _setupDesktopMessageRealtime(force: true);
+  }
+
+  Future<void> _teardownDesktopMessageRealtime({
+    bool cancelRetry = true,
+  }) async {
+    if (cancelRetry) {
+      _desktopMessagesRetryTimer?.cancel();
+      _desktopMessagesRetryTimer = null;
+      _desktopMessagesRetryAttempt = 0;
+    }
+
     final channel = _desktopMessagesChannel;
     _desktopMessagesChannel = null;
+    _desktopMessagesTenantId = null;
     if (channel != null) {
       await channel.unsubscribe();
     }

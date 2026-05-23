@@ -1858,12 +1858,34 @@ class AppRouter {
         // Sales Module
         GoRoute(
           path: '/sales/invoices',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => erp.InvoiceListPage(),
-          ),
+          pageBuilder: (context, state) {
+            final initialInvoiceId =
+                state.uri.queryParameters['selectedInvoiceId'] ??
+                    state.uri.queryParameters['invoiceId'];
+            final initialInvoiceNumber =
+                state.uri.queryParameters['selectedInvoiceNumber'] ??
+                    state.uri.queryParameters['invoiceNumber'];
+            final forceSplitView =
+                state.uri.queryParameters['view'] == 'split' ||
+                    state.uri.queryParameters['preview'] == '1';
+            final invoiceSelectionKey =
+                initialInvoiceId ?? initialInvoiceNumber;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.InvoiceListPage(
+                initialInvoiceId: initialInvoiceId,
+                initialInvoiceNumber: initialInvoiceNumber,
+                forceSplitView: forceSplitView,
+              ),
+              pageKeyOverride: invoiceSelectionKey == null
+                  ? null
+                  : ValueKey(
+                      'sales-invoices:$invoiceSelectionKey:${forceSplitView ? 'split' : 'list'}',
+                    ),
+            );
+          },
         ),
         GoRoute(
           path: '/sales/invoices/new',
@@ -1931,12 +1953,15 @@ class AppRouter {
         ),
         GoRoute(
           path: '/sales/payments',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => erp.PaymentsPage(),
-          ),
+          pageBuilder: (context, state) {
+            final paymentId = state.uri.queryParameters['paymentId'];
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => erp.PaymentsPage(highlightPaymentId: paymentId),
+            );
+          },
         ),
 
         // Sales Reports
@@ -2072,14 +2097,19 @@ class AppRouter {
         ),
         GoRoute(
           path: '/purchases/payments',
-          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
-            context,
-            state,
-            erp.loadLibrary(),
-            () => MainLayout(
-              child: erp.PurchasePaymentsListPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final paymentId = state.uri.queryParameters['paymentId'];
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              erp.loadLibrary(),
+              () => MainLayout(
+                child: erp.PurchasePaymentsListPage(
+                  highlightPaymentId: paymentId,
+                ),
+              ),
+            );
+          },
         ),
         GoRoute(
           path: '/purchases/smart-list',

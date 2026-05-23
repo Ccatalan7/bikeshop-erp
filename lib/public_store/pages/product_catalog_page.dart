@@ -10,10 +10,12 @@ import '../services/public_store_scroll_state.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
 import '../../shared/models/product.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
 // import '../providers/cart_provider.dart'; // Unused
 import '../widgets/full_page_loading.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/services/website_service.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../widgets/public_store_layout.dart';
@@ -294,6 +296,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
     // Use public inventory service (works for anonymous users)
     final publicInventoryService = context.read<PublicInventoryService>();
+    final visibilityPolicy = _readVisibilityPolicy();
 
     if (resetPage) {
       _currentPage = 1;
@@ -317,12 +320,14 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         categoryCountsFuture = _loadCategoryCounts(
           tenantId: tenantId,
           service: publicInventoryService,
+          policy: visibilityPolicy,
           token: token,
         );
         productPageFuture = publicInventoryService.getProductPageForTenant(
           tenantId: tenantId,
           searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
           productType: _selectedProductType,
+          policy: visibilityPolicy,
           onlyInStock: true,
           sortBy: _sortBy,
           limit: _itemsPerPage,
@@ -386,6 +391,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       categoryCountsFuture ??= _loadCategoryCounts(
         tenantId: tenantId,
         service: publicInventoryService,
+        policy: visibilityPolicy,
         token: token,
       );
 
@@ -398,6 +404,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           categoryIds: selectedCategoryIds,
           searchQuery: _searchQuery.trim().isEmpty ? null : _searchQuery,
           productType: _selectedProductType,
+          policy: visibilityPolicy,
           onlyInStock: true,
           sortBy: _sortBy,
           limit: _itemsPerPage,
@@ -436,14 +443,23 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Future<void> _loadCategoryCounts({
     required String tenantId,
     required PublicInventoryService service,
+    required PublicProductVisibilityPolicy? policy,
     required int token,
   }) async {
-    final signature = '$tenantId|${_selectedProductType?.name ?? 'all'}';
+    final signature = [
+      tenantId,
+      _selectedProductType?.name ?? 'all',
+      policy?.stockPolicy.storageValue ?? 'server',
+      policy?.requireImage ?? 'server',
+      policy?.requireVisibleCategory ?? 'server',
+      policy?.includeUncategorized ?? 'server',
+    ].join('|');
     if (signature == _lastCategoryCountsSignature) return;
 
     final snapshot = await service.getCategoryCountsForTenant(
       tenantId: tenantId,
       productType: _selectedProductType,
+      policy: policy,
       onlyInStock: true,
     );
 
@@ -453,6 +469,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       _categoryTotalCount = snapshot.totalCount;
       _lastCategoryCountsSignature = signature;
     });
+  }
+
+  PublicProductVisibilityPolicy? _readVisibilityPolicy() {
+    try {
+      final service = context.read<WebsiteService>();
+      if (!PublicProductVisibilityPolicy.hasAnySetting(service.settings)) {
+        return null;
+      }
+      return PublicProductVisibilityPolicy.fromSettings(service.settings);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _loadVisibleCategories(String tenantId) async {

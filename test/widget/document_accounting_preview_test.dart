@@ -20,6 +20,7 @@ void main() {
         reference: 'POS-123',
       ),
     ];
+    DocumentPaymentRecord? tappedPayment;
 
     final journalEntries = [
       DocumentJournalEntryRecord(
@@ -72,6 +73,7 @@ void main() {
                   DocumentPaymentsDropdown(
                     title: 'Pagos recibidos',
                     payments: payments,
+                    onPaymentTap: (payment) => tappedPayment = payment,
                   ),
                   DocumentJournalEntriesSection(
                     entries: journalEntries,
@@ -88,7 +90,10 @@ void main() {
 
     await tester.tap(find.text('Pagos recibidos'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('COB-000001'));
+    await tester.pump();
 
     expect(tester.takeException(), isNull);
+    expect(tappedPayment?.id, 'payment-1');
   });
 }

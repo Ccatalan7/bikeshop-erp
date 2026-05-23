@@ -6,11 +6,13 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../public_store/services/public_inventory_service.dart';
+import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../services/website_service.dart';
 
 enum _CatalogKindFilter { all, products, services }
 
@@ -35,7 +37,7 @@ extension on _VisibilityFilter {
       case _VisibilityFilter.all:
         return 'Todos';
       case _VisibilityFilter.visible:
-        return 'En web';
+        return 'Marcados web';
       case _VisibilityFilter.hidden:
         return 'Ocultos';
     }
@@ -99,6 +101,61 @@ extension on _StockFilter {
   }
 }
 
+enum _CategoryProductCountFilter { all, withProducts, empty }
+
+extension on _CategoryProductCountFilter {
+  String get label {
+    switch (this) {
+      case _CategoryProductCountFilter.all:
+        return 'Todas';
+      case _CategoryProductCountFilter.withProducts:
+        return 'Con productos';
+      case _CategoryProductCountFilter.empty:
+        return 'Sin productos';
+    }
+  }
+}
+
+enum _PublicCatalogListView {
+  all,
+  publicProducts,
+  publicServices,
+  markedWeb,
+  hiddenByRules,
+}
+
+extension on _PublicCatalogListView {
+  String get label {
+    switch (this) {
+      case _PublicCatalogListView.all:
+        return 'Resultado actual';
+      case _PublicCatalogListView.publicProducts:
+        return 'Productos públicos';
+      case _PublicCatalogListView.publicServices:
+        return 'Servicios públicos';
+      case _PublicCatalogListView.markedWeb:
+        return 'Marcados web';
+      case _PublicCatalogListView.hiddenByRules:
+        return 'Ocultos por reglas';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _PublicCatalogListView.all:
+        return Icons.filter_list_outlined;
+      case _PublicCatalogListView.publicProducts:
+        return Icons.storefront_outlined;
+      case _PublicCatalogListView.publicServices:
+        return Icons.design_services_outlined;
+      case _PublicCatalogListView.markedWeb:
+        return Icons.public_outlined;
+      case _PublicCatalogListView.hiddenByRules:
+        return Icons.rule_folder_outlined;
+    }
+  }
+}
+
 class ProductWebsiteVisibilityPage extends StatefulWidget {
   const ProductWebsiteVisibilityPage({
     super.key,
@@ -118,9 +175,11 @@ class _ProductWebsiteVisibilityPageState
       'id,name,sku,product_type,category_id,category_name,brand_id,brand,'
       'price,inventory_qty,stock_quantity,track_stock,is_active,is_published,'
       'show_on_website,image_url,image_url_optimized,image_urls,description,'
-      'website_description,updated_at';
+      'website_description,website_image_url,website_image_url_optimized,'
+      'website_image_urls,updated_at';
 
   final _searchController = TextEditingController();
+  final _categorySearchController = TextEditingController();
   final _horizontalScrollController = ScrollController();
   final _verticalScrollController = ScrollController();
   final _supabase = Supabase.instance.client;
@@ -128,6 +187,7 @@ class _ProductWebsiteVisibilityPageState
 
   List<_WebsiteProductVisibilityRow> _products = [];
   List<_WebsiteProductVisibilityRow> _filteredProducts = [];
+  List<_WebsiteCategoryVisibilityOption> _websiteCategories = [];
   final Set<String> _selectedProductIds = <String>{};
   final Set<String> _selectedCategoryIds = <String>{};
   final Set<String> _selectedBrandIds = <String>{};
@@ -135,24 +195,36 @@ class _ProductWebsiteVisibilityPageState
   String? _tenantId;
   bool _isLoading = true;
   bool _isApplying = false;
+  bool _isSavingRules = false;
+  bool _showCategorySelectionPage = false;
   String? _error;
+  PublicProductVisibilityPolicy _visibilityPolicy =
+      const PublicProductVisibilityPolicy();
+  final Set<String> _categoryDraftSelection = <String>{};
 
   final Set<_CatalogKindFilter> _kindFilters = <_CatalogKindFilter>{};
   final Set<_VisibilityFilter> _visibilityFilters = <_VisibilityFilter>{};
   final Set<_ActiveFilter> _activeFilters = <_ActiveFilter>{};
   final Set<_ReadinessFilter> _readinessFilters = <_ReadinessFilter>{};
   final Set<_StockFilter> _stockFilters = <_StockFilter>{};
+  _CategoryProductCountFilter _categoryProductCountFilter =
+      _CategoryProductCountFilter.all;
+  _PublicCatalogListView _publicCatalogListView = _PublicCatalogListView.all;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_applyFilters);
+    _categorySearchController.addListener(_refreshCategorySelectionPage);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _categorySearchController
+      ..removeListener(_refreshCategorySelectionPage)
+      ..dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
@@ -175,17 +247,42 @@ class _ProductWebsiteVisibilityPageState
           .select(_productSelectColumns)
           .eq('tenant_id', tenantId)
           .order('name', ascending: true);
+      final categoriesResponse = await _supabase
+          .from('product_categories')
+          .select('id,name,full_path,show_on_website,is_active')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('full_path', ascending: true)
+          .order('name', ascending: true);
+      final settingsResponse = await _supabase
+          .from('website_settings')
+          .select('key,value')
+          .eq('tenant_id', tenantId)
+          .inFilter('key', PublicProductVisibilityPolicy.settingKeys);
 
       final rows = (response as List)
           .map((row) => _WebsiteProductVisibilityRow.fromJson(
                 Map<String, dynamic>.from(row as Map),
               ))
           .toList(growable: false);
+      final categories = (categoriesResponse as List)
+          .map((row) => _WebsiteCategoryVisibilityOption.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ))
+          .toList(growable: false);
+      final settings = <String, String>{};
+      for (final row in settingsResponse as List) {
+        final map = Map<String, dynamic>.from(row as Map);
+        settings[map['key']?.toString() ?? ''] = map['value']?.toString() ?? '';
+      }
 
       if (!mounted) return;
       setState(() {
         _tenantId = tenantId;
         _products = rows;
+        _websiteCategories = categories;
+        _visibilityPolicy =
+            PublicProductVisibilityPolicy.fromSettings(settings);
         _selectedProductIds.removeWhere(
           (id) => !_products.any((product) => product.id == id),
         );
@@ -206,8 +303,18 @@ class _ProductWebsiteVisibilityPageState
     final query = _normalizeSearch(_searchController.text);
     final selectedCategoryIds = Set<String>.from(_selectedCategoryIds);
     final selectedBrandIds = Set<String>.from(_selectedBrandIds);
+    final publicCatalogListView = _publicCatalogListView;
+    final visibleWebsiteCategoryIds = _visibleWebsiteCategoryIds;
 
     final filtered = _products.where((product) {
+      if (!_matchesPublicCatalogListView(
+        product,
+        publicCatalogListView,
+        visibleWebsiteCategoryIds,
+      )) {
+        return false;
+      }
+
       if (query.isNotEmpty && !product.matchesQuery(query)) return false;
 
       if (!_matchesKindFilters(product)) return false;
@@ -230,6 +337,40 @@ class _ProductWebsiteVisibilityPageState
     }).toList(growable: false);
 
     setState(() => _filteredProducts = filtered);
+  }
+
+  bool _matchesPublicCatalogListView(
+    _WebsiteProductVisibilityRow product,
+    _PublicCatalogListView view,
+    Set<String> visibleWebsiteCategoryIds,
+  ) {
+    switch (view) {
+      case _PublicCatalogListView.all:
+        return true;
+      case _PublicCatalogListView.publicProducts:
+        return product.isVisibleInPublicProductsCatalog(
+          _visibilityPolicy,
+          visibleWebsiteCategoryIds,
+        );
+      case _PublicCatalogListView.publicServices:
+        return product.isVisibleInPublicServicesCatalog(
+          _visibilityPolicy,
+          visibleWebsiteCategoryIds,
+        );
+      case _PublicCatalogListView.markedWeb:
+        return product.isVisibleOnWebsite;
+      case _PublicCatalogListView.hiddenByRules:
+        return product.isHiddenFromPublicByPolicy(
+          _visibilityPolicy,
+          visibleWebsiteCategoryIds,
+        );
+    }
+  }
+
+  void _refreshCategorySelectionPage() {
+    if (mounted && _showCategorySelectionPage) {
+      setState(() {});
+    }
   }
 
   bool _matchesKindFilters(_WebsiteProductVisibilityRow product) {
@@ -475,6 +616,172 @@ class _ProductWebsiteVisibilityPageState
     publicInventoryService?.clearCache(tenantId: tenantId);
   }
 
+  Future<void> _saveVisibilityPolicy(
+    PublicProductVisibilityPolicy policy,
+  ) async {
+    if (_isSavingRules) return;
+    final tenantId = _tenantId;
+    if (tenantId == null || tenantId.isEmpty) return;
+
+    final previous = _visibilityPolicy;
+    setState(() {
+      _visibilityPolicy = policy;
+      _isSavingRules = true;
+    });
+    _applyFilters();
+
+    try {
+      await _saveWebsiteSettings(policy.toSettings(), tenantId: tenantId);
+      await _clearProductCaches(tenantId);
+      _showSnackBar('Reglas del catálogo público actualizadas.');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _visibilityPolicy = previous);
+        _applyFilters();
+      }
+      _showSnackBar('No se pudieron guardar las reglas: $e');
+    } finally {
+      if (mounted) setState(() => _isSavingRules = false);
+    }
+  }
+
+  Future<bool> _saveWebsiteCategories(Set<String> categoryIds) async {
+    if (_isSavingRules) return false;
+    final tenantId = _tenantId;
+    if (tenantId == null || tenantId.isEmpty) return false;
+
+    final previous = List<_WebsiteCategoryVisibilityOption>.from(
+      _websiteCategories,
+    );
+    final selected = Set<String>.from(categoryIds);
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    setState(() {
+      _isSavingRules = true;
+      _websiteCategories = _websiteCategories
+          .map((category) => category.copyWith(
+                showOnWebsite: selected.contains(category.id),
+              ))
+          .toList(growable: false);
+    });
+    _applyFilters();
+
+    try {
+      await _supabase.from('product_categories').update({
+        'show_on_website': false,
+        'updated_at': now,
+      }).eq('tenant_id', tenantId);
+
+      if (selected.isNotEmpty) {
+        await _supabase
+            .from('product_categories')
+            .update({
+              'show_on_website': true,
+              'updated_at': now,
+            })
+            .eq('tenant_id', tenantId)
+            .inFilter('id', selected.toList(growable: false));
+      }
+
+      await _clearProductCaches(tenantId);
+      _showSnackBar('Categorías públicas actualizadas.');
+      return true;
+    } catch (e) {
+      if (mounted) {
+        setState(() => _websiteCategories = previous);
+        _applyFilters();
+      }
+      _showSnackBar('No se pudieron guardar las categorías: $e');
+      return false;
+    } finally {
+      if (mounted) setState(() => _isSavingRules = false);
+    }
+  }
+
+  void _openCategorySelectionPage() {
+    setState(() {
+      _categoryDraftSelection
+        ..clear()
+        ..addAll(_visibleWebsiteCategoryIds);
+      _categorySearchController.clear();
+      _categoryProductCountFilter = _CategoryProductCountFilter.all;
+      _showCategorySelectionPage = true;
+    });
+  }
+
+  Future<void> _closeCategorySelectionPage() async {
+    if (!_categoryDraftHasChanges) {
+      setState(() => _showCategorySelectionPage = false);
+      return;
+    }
+
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Descartar cambios'),
+        content: const Text(
+          'Hay cambios de categorías sin guardar. Si sales ahora se perderán.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Seguir editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+
+    if (discard == true && mounted) {
+      setState(() => _showCategorySelectionPage = false);
+    }
+  }
+
+  Future<void> _saveCategorySelectionPage() async {
+    final saved = await _saveWebsiteCategories(_categoryDraftSelection);
+    if (saved && mounted) {
+      setState(() => _showCategorySelectionPage = false);
+    }
+  }
+
+  Future<void> _saveWebsiteSettings(
+    Map<String, String> settings, {
+    required String tenantId,
+  }) async {
+    try {
+      final service = context.read<WebsiteService>();
+      await service.saveSettings(settings);
+      return;
+    } catch (_) {
+      // Some embedded contexts may not expose WebsiteService; write directly.
+    }
+
+    final timestamp = DateTime.now().toUtc().toIso8601String();
+    for (final entry in settings.entries) {
+      final updated = await _supabase
+          .from('website_settings')
+          .update({
+            'value': entry.value,
+            'updated_at': timestamp,
+          })
+          .eq('tenant_id', tenantId)
+          .eq('key', entry.key)
+          .select('id');
+
+      if ((updated as List).isEmpty) {
+        await _supabase.from('website_settings').insert({
+          'tenant_id': tenantId,
+          'key': entry.key,
+          'value': entry.value,
+          'updated_at': timestamp,
+        });
+      }
+    }
+  }
+
   void _toggleSelected(String productId, bool selected) {
     setState(() {
       if (selected) {
@@ -501,6 +808,42 @@ class _ProductWebsiteVisibilityPageState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  void _clearTableFilters({
+    bool includePublicCatalogListView = false,
+    bool clearSelection = false,
+  }) {
+    _kindFilters.clear();
+    _visibilityFilters.clear();
+    _activeFilters.clear();
+    _readinessFilters.clear();
+    _stockFilters.clear();
+    _selectedCategoryIds.clear();
+    _selectedBrandIds.clear();
+    if (includePublicCatalogListView) {
+      _publicCatalogListView = _PublicCatalogListView.all;
+    }
+    if (clearSelection) {
+      _selectedProductIds.clear();
+    }
+  }
+
+  void _showPublicCatalogListView(_PublicCatalogListView view) {
+    setState(() {
+      _publicCatalogListView = view;
+      _clearTableFilters(clearSelection: true);
+    });
+    if (_searchController.text.isNotEmpty) {
+      _searchController.clear();
+    } else {
+      _applyFilters();
+    }
+  }
+
+  void _clearPublicCatalogListView() {
+    setState(() => _publicCatalogListView = _PublicCatalogListView.all);
+    _applyFilters();
   }
 
   List<_FilterOption> get _categoryOptions {
@@ -543,8 +886,79 @@ class _ProductWebsiteVisibilityPageState
       .where((product) => _selectedProductIds.contains(product.id))
       .toList(growable: false);
 
-  int get _visibleCount =>
+  Set<String> get _visibleWebsiteCategoryIds => _websiteCategories
+      .where((category) => category.showOnWebsite)
+      .map((category) => category.id)
+      .toSet();
+
+  bool get _categoryDraftHasChanges {
+    final live = _visibleWebsiteCategoryIds;
+    if (live.length != _categoryDraftSelection.length) return true;
+    return !_categoryDraftSelection.every(live.contains);
+  }
+
+  Map<String, int> get _categoryProductCounts {
+    final counts = <String, int>{};
+    for (final product in _products) {
+      final id = product.categoryId?.trim();
+      if (id == null || id.isEmpty) continue;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Map<String, int> get _categoryMarkedWebCounts {
+    final counts = <String, int>{};
+    for (final product in _products) {
+      final id = product.categoryId?.trim();
+      if (id == null || id.isEmpty || !product.isVisibleOnWebsite) continue;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  List<_WebsiteCategoryVisibilityOption> get _selectedCategorySelectionRows {
+    final rows = _websiteCategories
+        .where((category) => _categoryDraftSelection.contains(category.id))
+        .toList(growable: false);
+    rows.sort((a, b) => a.label.compareTo(b.label));
+    return rows;
+  }
+
+  int get _markedWebCount =>
       _products.where((product) => product.isVisibleOnWebsite).length;
+  int get _publicProductCount {
+    final categoryIds = _visibleWebsiteCategoryIds;
+    return _products
+        .where((product) => product.isVisibleInPublicProductsCatalog(
+              _visibilityPolicy,
+              categoryIds,
+            ))
+        .length;
+  }
+
+  int get _publicServiceCount {
+    final categoryIds = _visibleWebsiteCategoryIds;
+    return _products
+        .where((product) => product.isVisibleInPublicServicesCatalog(
+              _visibilityPolicy,
+              categoryIds,
+            ))
+        .length;
+  }
+
+  int get _policyBlockedWebCount {
+    final categoryIds = _visibleWebsiteCategoryIds;
+    return _products
+        .where((product) =>
+            product.isVisibleOnWebsite &&
+            !product.matchesPublicVisibilityPolicy(
+              _visibilityPolicy,
+              categoryIds,
+            ))
+        .length;
+  }
+
   int get _readyCount => _products
       .where((product) => product.hasImage && product.hasWebsiteDescription)
       .length;
@@ -564,8 +978,11 @@ class _ProductWebsiteVisibilityPageState
           const Expanded(child: Center(child: BrandedLoading()))
         else if (_error != null)
           Expanded(child: _buildErrorState(theme))
+        else if (_showCategorySelectionPage)
+          Expanded(child: _buildCategorySelectionPage(theme))
         else ...[
           _buildSummaryStrip(theme),
+          _buildPublicRulesPanel(theme),
           _buildFilterPanel(theme),
           _buildActionBar(theme),
           Expanded(child: _buildProductTable(theme)),
@@ -634,11 +1051,71 @@ class _ProductWebsiteVisibilityPageState
         spacing: 20,
         runSpacing: 10,
         children: [
-          _buildSummaryMetric(theme, 'Catálogo', _products.length.toString()),
-          _buildSummaryMetric(theme, 'En web', _visibleCount.toString()),
-          _buildSummaryMetric(theme, 'Listos', _readyCount.toString()),
           _buildSummaryMetric(
-              theme, 'Sin imagen', _missingImageCount.toString()),
+            theme,
+            'Catálogo',
+            _products.length.toString(),
+            tooltip: 'Total de productos y servicios del ERP.',
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Productos públicos',
+            _publicProductCount.toString(),
+            tooltip:
+                'Coincide con /productos: activo, publicado, web encendido y pasa las reglas de stock, imagen y categorías. Click para ver la lista.',
+            selected:
+                _publicCatalogListView == _PublicCatalogListView.publicProducts,
+            onTap: () => _showPublicCatalogListView(
+              _PublicCatalogListView.publicProducts,
+            ),
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Servicios públicos',
+            _publicServiceCount.toString(),
+            tooltip:
+                'Coincide con /servicios: activo, publicado, web encendido y pasa las reglas públicas. Click para ver la lista.',
+            selected:
+                _publicCatalogListView == _PublicCatalogListView.publicServices,
+            onTap: () => _showPublicCatalogListView(
+              _PublicCatalogListView.publicServices,
+            ),
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Marcados web',
+            _markedWebCount.toString(),
+            tooltip:
+                'Productos y servicios con publicación web activa antes de las reglas del catálogo público. Click para ver la lista.',
+            selected:
+                _publicCatalogListView == _PublicCatalogListView.markedWeb,
+            onTap: () => _showPublicCatalogListView(
+              _PublicCatalogListView.markedWeb,
+            ),
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Ocultos por reglas',
+            _policyBlockedWebCount.toString(),
+            tooltip:
+                'Marcados para web, pero no salen en el catálogo por las reglas de stock, imagen o categoría. Click para ver la lista.',
+            selected:
+                _publicCatalogListView == _PublicCatalogListView.hiddenByRules,
+            onTap: () => _showPublicCatalogListView(
+              _PublicCatalogListView.hiddenByRules,
+            ),
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Listos',
+            _readyCount.toString(),
+            tooltip: 'Tienen imagen y descripción web.',
+          ),
+          _buildSummaryMetric(
+            theme,
+            'Sin imagen',
+            _missingImageCount.toString(),
+          ),
           _buildSummaryMetric(
             theme,
             'Sin descripción web',
@@ -653,25 +1130,833 @@ class _ProductWebsiteVisibilityPageState
     );
   }
 
-  Widget _buildSummaryMetric(ThemeData theme, String label, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
+  Widget _buildSummaryMetric(
+    ThemeData theme,
+    String label,
+    String value, {
+    String? tooltip,
+    bool selected = false,
+    VoidCallback? onTap,
+  }) {
+    final interactive = onTap != null;
+    final foreground =
+        selected ? theme.colorScheme.primary : theme.colorScheme.onSurface;
+    final metric = Container(
+      padding: interactive
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 5)
+          : EdgeInsets.zero,
+      decoration: interactive
+          ? BoxDecoration(
+              color: selected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                  : theme.colorScheme.surface.withValues(alpha: 0.72),
+              border: Border.all(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+              ),
+              borderRadius: BorderRadius.circular(6),
+            )
+          : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: interactive ? FontWeight.w700 : null,
+            ),
           ),
-        ),
-      ],
+          if (interactive) ...[
+            const SizedBox(width: 5),
+            Icon(
+              Icons.list_alt_outlined,
+              size: 15,
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ],
+      ),
     );
+    final wrapped = interactive
+        ? Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: onTap,
+              child: metric,
+            ),
+          )
+        : metric;
+    if (tooltip == null) return wrapped;
+    return Tooltip(message: tooltip, child: wrapped);
+  }
+
+  Widget _buildPublicRulesPanel(ThemeData theme) {
+    final selectedCategoryIds = _visibleWebsiteCategoryIds;
+    final saving = _isSavingRules || _isApplying;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 900;
+          final categoryWidth = compact
+              ? constraints.maxWidth
+              : math.min(360.0, constraints.maxWidth);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.tune_outlined,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Reglas del catálogo público',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (saving)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: compact ? constraints.maxWidth : 300,
+                    child: _buildStockPolicySelector(theme, saving),
+                  ),
+                  _buildRuleSwitch(
+                    theme,
+                    label: 'Requerir imagen',
+                    value: _visibilityPolicy.requireImage,
+                    enabled: !saving,
+                    onChanged: (value) => _saveVisibilityPolicy(
+                      _visibilityPolicy.copyWith(requireImage: value),
+                    ),
+                  ),
+                  _buildRuleSwitch(
+                    theme,
+                    label: 'Filtrar por categorías',
+                    value: _visibilityPolicy.requireVisibleCategory,
+                    enabled: !saving,
+                    onChanged: (value) => _saveVisibilityPolicy(
+                      _visibilityPolicy.copyWith(
+                        requireVisibleCategory: value,
+                      ),
+                    ),
+                  ),
+                  if (_visibilityPolicy.requireVisibleCategory)
+                    _buildRuleSwitch(
+                      theme,
+                      label: 'Incluir sin categoría',
+                      value: _visibilityPolicy.includeUncategorized,
+                      enabled: !saving,
+                      onChanged: (value) => _saveVisibilityPolicy(
+                        _visibilityPolicy.copyWith(
+                          includeUncategorized: value,
+                        ),
+                      ),
+                    ),
+                  SizedBox(
+                    width: categoryWidth,
+                    child: _buildCategorySelectionEntry(
+                      theme,
+                      selectedCategoryIds: selectedCategoryIds,
+                      enabled: !saving,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCategorySelectionEntry(
+    ThemeData theme, {
+    required Set<String> selectedCategoryIds,
+    required bool enabled,
+  }) {
+    final selectedCount = selectedCategoryIds.length;
+    final summary = _categorySelectionSummaryText(selectedCategoryIds);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: enabled ? _openCategorySelectionPage : null,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: 'Categorías públicas',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 9,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                summary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: selectedCount == 0
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.colorScheme.onSurface,
+                  fontWeight:
+                      selectedCount == 0 ? FontWeight.w500 : FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$selectedCount/${_websiteCategories.length}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _categorySelectionSummaryText(Set<String> selectedCategoryIds) {
+    if (selectedCategoryIds.isEmpty) return 'Ninguna seleccionada';
+    final labels = _websiteCategories
+        .where((category) => selectedCategoryIds.contains(category.id))
+        .map((category) => category.shortLabel)
+        .toList(growable: false);
+    if (labels.isEmpty) return '${selectedCategoryIds.length} seleccionadas';
+    if (labels.length <= 2) return labels.join(', ');
+    return '${labels.take(2).join(', ')} +${labels.length - 2}';
+  }
+
+  Widget _buildStockPolicySelector(ThemeData theme, bool saving) {
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Stock público',
+        border: OutlineInputBorder(),
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      ),
+      child: SegmentedButton<PublicCatalogStockPolicy>(
+        showSelectedIcon: false,
+        segments: PublicCatalogStockPolicy.values
+            .map((policy) => ButtonSegment<PublicCatalogStockPolicy>(
+                  value: policy,
+                  label: Text(policy.label),
+                ))
+            .toList(growable: false),
+        selected: {_visibilityPolicy.stockPolicy},
+        onSelectionChanged: saving
+            ? null
+            : (values) {
+                final next = values.first;
+                _saveVisibilityPolicy(
+                  _visibilityPolicy.copyWith(stockPolicy: next),
+                );
+              },
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRuleSwitch(
+    ThemeData theme, {
+    required String label,
+    required bool value,
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: enabled ? onChanged : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategorySelectionPage(ThemeData theme) {
+    final productCounts = _categoryProductCounts;
+    final markedWebCounts = _categoryMarkedWebCounts;
+    final rows = _filteredCategorySelectionRows(productCounts);
+    final selectedRows = _selectedCategorySelectionRows;
+    final selectedProductsCount = _categoryDraftSelection.fold<int>(
+      0,
+      (sum, id) => sum + (productCounts[id] ?? 0),
+    );
+    final saving = _isSavingRules || _isApplying;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Volver a visibilidad',
+                onPressed: saving ? null : _closeCategorySelectionPage,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Categorías públicas',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Elige qué categorías participan cuando la regla de categorías está activa.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: saving
+                    ? null
+                    : () {
+                        setState(() {
+                          _categoryDraftSelection
+                            ..clear()
+                            ..addAll(_visibleWebsiteCategoryIds);
+                          _showCategorySelectionPage = false;
+                        });
+                      },
+                child: const Text('Descartar'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: saving || !_categoryDraftHasChanges
+                    ? null
+                    : _saveCategorySelectionPage,
+                icon: saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: const Text('Guardar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildCategorySelectionToolbar(theme, rows.length),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              _buildSummaryMetric(
+                theme,
+                'Categorías',
+                _websiteCategories.length.toString(),
+              ),
+              _buildSummaryMetric(
+                theme,
+                'Seleccionadas',
+                _categoryDraftSelection.length.toString(),
+              ),
+              _buildSummaryMetric(
+                theme,
+                'En vista',
+                rows.length.toString(),
+              ),
+              _buildSummaryMetric(
+                theme,
+                'Productos en selección',
+                selectedProductsCount.toString(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 1040;
+                final selectedBlock = _buildCategoryListBlock(
+                  theme,
+                  title: 'Seleccionadas',
+                  subtitle: 'Se muestran en el catálogo público',
+                  rows: selectedRows,
+                  productCounts: productCounts,
+                  markedWebCounts: markedWebCounts,
+                  saving: saving,
+                  selectedList: true,
+                  emptyMessage: 'No hay categorías seleccionadas.',
+                );
+                final availableBlock = _buildCategoryListBlock(
+                  theme,
+                  title: 'Disponibles',
+                  subtitle: 'No seleccionadas para el catálogo público',
+                  rows: rows,
+                  productCounts: productCounts,
+                  markedWebCounts: markedWebCounts,
+                  saving: saving,
+                  selectedList: false,
+                  emptyMessage: _categorySearchController.text.trim().isEmpty
+                      ? 'No quedan categorías disponibles.'
+                      : 'Sin categorías para este filtro.',
+                );
+
+                if (compact) {
+                  return Column(
+                    children: [
+                      Expanded(child: availableBlock),
+                      const SizedBox(height: 10),
+                      Expanded(child: selectedBlock),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: availableBlock),
+                    const SizedBox(width: 24),
+                    Expanded(child: selectedBlock),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategorySelectionToolbar(ThemeData theme, int visibleRows) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 980;
+        final searchWidth = compact
+            ? constraints.maxWidth
+            : math.min(360.0, constraints.maxWidth);
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: searchWidth,
+              child: TextField(
+                controller: _categorySearchController,
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  hintText: 'Buscar categoría o ruta...',
+                  suffixIcon: _categorySearchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: _categorySearchController.clear,
+                        ),
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 11,
+                  ),
+                ),
+              ),
+            ),
+            _buildCategorySegmentedFilter<_CategoryProductCountFilter>(
+              theme,
+              values: _CategoryProductCountFilter.values,
+              selected: _categoryProductCountFilter,
+              labelFor: (value) => value.label,
+              onChanged: (value) =>
+                  setState(() => _categoryProductCountFilter = value),
+            ),
+            Text(
+              '$visibleRows visibles',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryListBlock(
+    ThemeData theme, {
+    required String title,
+    required String subtitle,
+    required List<_WebsiteCategoryVisibilityOption> rows,
+    required Map<String, int> productCounts,
+    required Map<String, int> markedWebCounts,
+    required bool saving,
+    required bool selectedList,
+    required String emptyMessage,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
+            child: Row(
+              children: [
+                Icon(
+                  selectedList
+                      ? Icons.checklist_rtl_outlined
+                      : Icons.list_alt_outlined,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$title (${rows.length})',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selectedList)
+                  TextButton(
+                    onPressed: saving || rows.isEmpty
+                        ? null
+                        : () => setState(_categoryDraftSelection.clear),
+                    child: const Text('Limpiar'),
+                  )
+                else
+                  TextButton(
+                    onPressed: saving || rows.isEmpty
+                        ? null
+                        : () {
+                            setState(() {
+                              _categoryDraftSelection.addAll(
+                                rows.map((category) => category.id),
+                              );
+                            });
+                          },
+                    child: const Text('Agregar vista'),
+                  ),
+              ],
+            ),
+          ),
+          _buildCategorySelectionHeader(theme),
+          Divider(height: 1, color: theme.colorScheme.outlineVariant),
+          Expanded(
+            child: rows.isEmpty
+                ? Center(
+                    child: Text(
+                      emptyMessage,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                    itemBuilder: (context, index) {
+                      final category = rows[index];
+                      return _buildCategorySelectionRow(
+                        theme,
+                        category,
+                        productCount: productCounts[category.id] ?? 0,
+                        markedWebCount: markedWebCounts[category.id] ?? 0,
+                        saving: saving,
+                        selectedList: selectedList,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategorySegmentedFilter<T>(
+    ThemeData theme, {
+    required List<T> values,
+    required T selected,
+    required String Function(T value) labelFor,
+    required ValueChanged<T> onChanged,
+  }) {
+    return SegmentedButton<T>(
+      showSelectedIcon: false,
+      selected: {selected},
+      segments: values
+          .map((value) => ButtonSegment<T>(
+                value: value,
+                label: Text(labelFor(value)),
+              ))
+          .toList(growable: false),
+      onSelectionChanged: (values) => onChanged(values.first),
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        textStyle: WidgetStatePropertyAll(theme.textTheme.labelMedium),
+      ),
+    );
+  }
+
+  Widget _buildCategorySelectionHeader(ThemeData theme) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      child: Row(
+        children: [
+          const SizedBox(width: 44),
+          Expanded(
+            child: Text(
+              'Categoría',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 78,
+            child: Tooltip(
+              message: 'Productos en esta categoría',
+              child: Text(
+                'Prod.',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 86,
+            child: Tooltip(
+              message: 'Productos marcados para web en esta categoría',
+              child: Text(
+                'Web',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 44),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategorySelectionRow(
+    ThemeData theme,
+    _WebsiteCategoryVisibilityOption category, {
+    required int productCount,
+    required int markedWebCount,
+    required bool saving,
+    required bool selectedList,
+  }) {
+    return InkWell(
+      onTap: saving
+          ? null
+          : () {
+              setState(() {
+                if (selectedList) {
+                  _categoryDraftSelection.remove(category.id);
+                } else {
+                  _categoryDraftSelection.add(category.id);
+                }
+              });
+            },
+      child: SizedBox(
+        height: 52,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 44,
+              child: IconButton(
+                tooltip: selectedList ? 'Quitar' : 'Agregar',
+                onPressed: saving
+                    ? null
+                    : () {
+                        setState(() {
+                          if (selectedList) {
+                            _categoryDraftSelection.remove(category.id);
+                          } else {
+                            _categoryDraftSelection.add(category.id);
+                          }
+                        });
+                      },
+                icon: Icon(
+                  selectedList
+                      ? Icons.remove_circle_outline
+                      : Icons.add_circle_outline,
+                  size: 20,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                category.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 78,
+              child: Text(
+                productCount.toString(),
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            SizedBox(
+              width: 86,
+              child: Text(
+                markedWebCount.toString(),
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            SizedBox(
+              width: 44,
+              child: Icon(
+                selectedList
+                    ? Icons.keyboard_arrow_right_rounded
+                    : Icons.keyboard_arrow_left_rounded,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_WebsiteCategoryVisibilityOption> _filteredCategorySelectionRows(
+    Map<String, int> productCounts,
+  ) {
+    final query = _normalizeSearch(_categorySearchController.text);
+    final rows = _websiteCategories.where((category) {
+      if (_categoryDraftSelection.contains(category.id)) return false;
+      if (query.isNotEmpty &&
+          !_normalizeSearch(category.label).contains(query)) {
+        return false;
+      }
+
+      final count = productCounts[category.id] ?? 0;
+      switch (_categoryProductCountFilter) {
+        case _CategoryProductCountFilter.all:
+          return true;
+        case _CategoryProductCountFilter.withProducts:
+          return count > 0;
+        case _CategoryProductCountFilter.empty:
+          return count == 0;
+      }
+    }).toList(growable: false);
+    rows.sort((a, b) => a.label.compareTo(b.label));
+    return rows;
   }
 
   Widget _buildFilterPanel(ThemeData theme) {
@@ -895,13 +2180,7 @@ class _ProductWebsiteVisibilityPageState
 
   void _resetFilters() {
     setState(() {
-      _kindFilters.clear();
-      _visibilityFilters.clear();
-      _activeFilters.clear();
-      _readinessFilters.clear();
-      _stockFilters.clear();
-      _selectedCategoryIds.clear();
-      _selectedBrandIds.clear();
+      _clearTableFilters(includePublicCatalogListView: true);
     });
     if (_searchController.text.isNotEmpty) {
       _searchController.clear();
@@ -919,6 +2198,8 @@ class _ProductWebsiteVisibilityPageState
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          if (_publicCatalogListView != _PublicCatalogListView.all)
+            _buildPublicCatalogListViewControl(theme),
           FilledButton.icon(
             onPressed: _isApplying || _filteredProducts.isEmpty
                 ? null
@@ -970,11 +2251,60 @@ class _ProductWebsiteVisibilityPageState
     );
   }
 
+  Widget _buildPublicCatalogListViewControl(ThemeData theme) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.only(left: 10, right: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
+        border: Border.all(color: theme.colorScheme.primary),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _publicCatalogListView.icon,
+            size: 17,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 7),
+          Text(
+            'Lista: ${_publicCatalogListView.label}',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _filteredProducts.length.toString(),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Volver al resultado general',
+            onPressed: _clearPublicCatalogListView,
+            icon: const Icon(Icons.close, size: 16),
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProductTable(ThemeData theme) {
     if (_filteredProducts.isEmpty) {
+      final message = _publicCatalogListView == _PublicCatalogListView.all
+          ? 'No hay productos para el filtro actual.'
+          : 'No hay filas para ${_publicCatalogListView.label.toLowerCase()}.';
       return Center(
         child: Text(
-          'No hay productos para el filtro actual.',
+          message,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -984,7 +2314,7 @@ class _ProductWebsiteVisibilityPageState
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tableWidth = math.max(constraints.maxWidth, 1240.0);
+        final tableWidth = math.max(constraints.maxWidth, 1360.0);
         final selectedFilteredCount = _filteredProducts
             .where((product) => _selectedProductIds.contains(product.id))
             .length;
@@ -1166,11 +2496,34 @@ class _ProductWebsiteVisibilityPageState
           SizedBox(width: 96, child: Text(product.typeLabel)),
           SizedBox(
             width: 96,
-            child: Switch(
-              value: product.isVisibleOnWebsite,
-              onChanged: _isApplying || !product.isActive
-                  ? null
-                  : (value) => _setProductsVisibility([product], value),
+            child: Row(
+              children: [
+                Tooltip(
+                  message: product.publicVisibilityTooltip(
+                    _visibilityPolicy,
+                    _visibleWebsiteCategoryIds,
+                  ),
+                  child: Switch(
+                    value: product.isVisibleOnWebsite,
+                    onChanged: _isApplying || !product.isActive
+                        ? null
+                        : (value) => _setProductsVisibility([product], value),
+                  ),
+                ),
+                if (product.isHiddenFromPublicByPolicy(
+                  _visibilityPolicy,
+                  _visibleWebsiteCategoryIds,
+                ))
+                  Tooltip(
+                    message:
+                        'Marcado web, pero una regla del catálogo público lo oculta.',
+                    child: Icon(
+                      Icons.rule_folder_outlined,
+                      size: 18,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+              ],
             ),
           ),
           SizedBox(
@@ -1303,6 +2656,9 @@ class _WebsiteProductVisibilityRow {
     required this.imageUrls,
     required this.description,
     required this.websiteDescription,
+    required this.websiteImageUrl,
+    required this.websiteImageUrlOptimized,
+    required this.websiteImageUrls,
     required this.updatedAt,
   });
 
@@ -1324,14 +2680,26 @@ class _WebsiteProductVisibilityRow {
   final List<String> imageUrls;
   final String? description;
   final String? websiteDescription;
+  final String? websiteImageUrl;
+  final String? websiteImageUrlOptimized;
+  final List<String> websiteImageUrls;
   final DateTime updatedAt;
 
   factory _WebsiteProductVisibilityRow.fromJson(Map<String, dynamic> json) {
     final optimizedImage = json['image_url_optimized']?.toString();
     final primaryImage = json['image_url']?.toString();
+    final websiteImageUrl = _emptyToNull(json['website_image_url']);
+    final websiteImageUrlOptimized =
+        _emptyToNull(json['website_image_url_optimized']);
     final rawImageUrls = json['image_urls'];
+    final rawWebsiteImageUrls = json['website_image_urls'];
     final imageUrls = rawImageUrls is List
         ? rawImageUrls.map((value) => value.toString()).toList(growable: false)
+        : const <String>[];
+    final websiteImageUrls = rawWebsiteImageUrls is List
+        ? rawWebsiteImageUrls
+            .map((value) => value.toString())
+            .toList(growable: false)
         : const <String>[];
     final inventoryQty = (json['inventory_qty'] as num?)?.toInt();
     final stockQty = (json['stock_quantity'] as num?)?.toInt();
@@ -1350,10 +2718,20 @@ class _WebsiteProductVisibilityRow {
       isActive: json['is_active'] as bool? ?? true,
       isPublished: json['is_published'] as bool? ?? false,
       showOnWebsite: json['show_on_website'] as bool? ?? false,
-      imageUrl: _firstNonEmpty([optimizedImage, primaryImage, ...imageUrls]),
+      imageUrl: _firstNonEmpty([
+        websiteImageUrlOptimized,
+        websiteImageUrl,
+        optimizedImage,
+        primaryImage,
+        ...websiteImageUrls,
+        ...imageUrls,
+      ]),
       imageUrls: imageUrls,
       description: json['description']?.toString(),
       websiteDescription: json['website_description']?.toString(),
+      websiteImageUrl: websiteImageUrl,
+      websiteImageUrlOptimized: websiteImageUrlOptimized,
+      websiteImageUrls: websiteImageUrls,
       updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -1367,6 +2745,91 @@ class _WebsiteProductVisibilityRow {
       websiteDescription != null && websiteDescription!.trim().isNotEmpty;
   bool get isAvailableForWebsite =>
       isService || !tracksStock || stockQuantity > 0;
+  bool get hasPublicImage =>
+      _isNotBlank(websiteImageUrl) ||
+      _isNotBlank(websiteImageUrlOptimized) ||
+      websiteImageUrls.any(_isNotBlank) ||
+      _isNotBlank(imageUrl) ||
+      imageUrls.any(_isNotBlank);
+
+  bool matchesPublicVisibilityPolicy(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    if (!isVisibleOnWebsite) return false;
+    if (!isAllowedByStockPolicy(policy.stockPolicy)) return false;
+    if (policy.requireImage && !hasPublicImage) return false;
+    if (policy.requireVisibleCategory) {
+      final category = categoryId?.trim();
+      if (category == null || category.isEmpty) {
+        if (!policy.includeUncategorized) return false;
+      } else if (!visibleCategoryIds.contains(category)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool isVisibleInPublicProductsCatalog(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    return !isService &&
+        matchesPublicVisibilityPolicy(policy, visibleCategoryIds);
+  }
+
+  bool isVisibleInPublicServicesCatalog(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    return isService &&
+        matchesPublicVisibilityPolicy(policy, visibleCategoryIds);
+  }
+
+  bool isHiddenFromPublicByPolicy(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    return isVisibleOnWebsite &&
+        !matchesPublicVisibilityPolicy(policy, visibleCategoryIds);
+  }
+
+  bool isAllowedByStockPolicy(PublicCatalogStockPolicy policy) {
+    if (isService) return true;
+    switch (policy) {
+      case PublicCatalogStockPolicy.availableOnly:
+        return !tracksStock || stockQuantity > 0;
+      case PublicCatalogStockPolicy.outOfStockOnly:
+        return tracksStock && stockQuantity <= 0;
+      case PublicCatalogStockPolicy.all:
+        return true;
+    }
+  }
+
+  String publicVisibilityTooltip(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    if (!isActive) return 'Inactivo: no aparece en la tienda online.';
+    if (!isPublished || !showOnWebsite) return 'Oculto de la tienda online.';
+    if (!isAllowedByStockPolicy(policy.stockPolicy)) {
+      return 'Marcado web, pero la regla de stock lo oculta.';
+    }
+    if (policy.requireImage && !hasPublicImage) {
+      return 'Marcado web, pero la regla de imagen lo oculta.';
+    }
+    if (policy.requireVisibleCategory) {
+      final category = categoryId?.trim();
+      if (category == null || category.isEmpty) {
+        if (!policy.includeUncategorized) {
+          return 'Marcado web, pero la regla de categoría oculta productos sin categoría.';
+        }
+      } else if (!visibleCategoryIds.contains(category)) {
+        return 'Marcado web, pero su categoría no está seleccionada para el catálogo público.';
+      }
+    }
+    return isService ? 'Visible en /servicios.' : 'Visible en /productos.';
+  }
 
   String get typeLabel => isService ? 'Servicio' : 'Producto';
   String get categoryLabel =>
@@ -1420,8 +2883,16 @@ class _WebsiteProductVisibilityRow {
       imageUrls: imageUrls,
       description: description,
       websiteDescription: websiteDescription,
+      websiteImageUrl: websiteImageUrl,
+      websiteImageUrlOptimized: websiteImageUrlOptimized,
+      websiteImageUrls: websiteImageUrls,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static String? _emptyToNull(dynamic value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   static String? _firstNonEmpty(List<String?> values) {
@@ -1435,6 +2906,47 @@ class _WebsiteProductVisibilityRow {
   static String _cleanLabel(String? value, {required String fallback}) {
     final trimmed = value?.trim();
     return trimmed == null || trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  static bool _isNotBlank(String? value) => value?.trim().isNotEmpty == true;
+}
+
+class _WebsiteCategoryVisibilityOption {
+  const _WebsiteCategoryVisibilityOption({
+    required this.id,
+    required this.label,
+    required this.showOnWebsite,
+  });
+
+  final String id;
+  final String label;
+  final bool showOnWebsite;
+
+  String get shortLabel {
+    final parts = label
+        .split('/')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    return parts.isEmpty ? label : parts.last;
+  }
+
+  factory _WebsiteCategoryVisibilityOption.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString().trim() ?? '';
+    final fullPath = json['full_path']?.toString().trim() ?? '';
+    return _WebsiteCategoryVisibilityOption(
+      id: json['id']?.toString() ?? '',
+      label: fullPath.isNotEmpty ? fullPath : name,
+      showOnWebsite: json['show_on_website'] as bool? ?? false,
+    );
+  }
+
+  _WebsiteCategoryVisibilityOption copyWith({bool? showOnWebsite}) {
+    return _WebsiteCategoryVisibilityOption(
+      id: id,
+      label: label,
+      showOnWebsite: showOnWebsite ?? this.showOnWebsite,
+    );
   }
 }
 

@@ -14,6 +14,42 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# Platform Priority And Cross-Platform Usability
+
+The primary product experience is **macOS desktop**. For every task, agents should prioritize macOS desktop usability first when deciding layout density, keyboard/mouse workflows, panel behavior, window sizing, shortcuts, native integrations, and performance expectations.
+
+This does **not** mean other platforms are optional. Every implementation must still consider:
+
+- Windows desktop usability, because the ERP is actively used on Windows.
+- iOS and Android usability, especially for workflows that may be used on phones/tablets.
+- ERP web usability, including browser constraints, responsive layout, and deploy behavior.
+- Public store web usability, including mobile storefront behavior, SEO, performance, and clean routing.
+
+## Practical Rule
+
+Design and implement the best macOS desktop workflow first, then deliberately adapt it for the other supported surfaces instead of assuming the desktop UI will automatically work everywhere.
+
+For UI/UX work:
+
+- Start from a dense, professional desktop ERP layout optimized for mouse, keyboard, large tables, side panels, and repeated operational use.
+- Check how the same workflow behaves on Windows desktop before treating it as complete.
+- Provide responsive/mobile behavior when the route or feature can be reached on iOS, Android, ERP web, or public store web.
+- Avoid macOS-only assumptions in shared business logic, services, database flows, Supabase integrations, route handling, auth/OAuth, notifications, email/messaging, inventory/accounting logic, and data sync.
+- Native platform code may diverge when necessary, but shared domain behavior must remain consistent across platforms.
+
+## Verification Expectations
+
+When a task changes UI, UX, integrations, build behavior, routing, auth, notifications, messaging, files, printing/PDFs, scanning, or platform-specific plugins:
+
+1. Verify the macOS desktop path first when available.
+2. Identify which other supported surfaces are affected: Windows, iOS, Android, ERP web, public store web.
+3. Run or document the relevant cross-platform checks for those surfaces.
+4. If a platform cannot be tested in the current environment, say so explicitly and keep the implementation structured so that platform can be tested cleanly later.
+
+Do not mark a feature complete just because it works on macOS if the same code path obviously affects Windows, mobile, ERP web, or public store web.
+
+---
+
 # Build And Dependency Hygiene
 
 This repo is used from multiple machines: macOS laptops/desktops and Windows laptops. Build behavior must be deterministic across those machines.
@@ -50,6 +86,87 @@ After pulling changes on any machine:
 5. For macOS/iOS native dependency changes, let Flutter run CocoaPods or run `pod install` in the relevant `macos/` or `ios/` folder.
 
 Use lockfiles for repeatability. Do not use `npm install`, `flutter pub upgrade`, or broad package upgrades as a default fix for machine-specific build problems.
+
+## Local Storage Hygiene And Build Cache Balance
+
+This project is developed across multiple machines, including macOS laptops/desktops such as the MacBook Pro and Mac mini in Chile, plus a Windows laptop. Keep every machine clean enough to avoid emergency disk pressure, but do **not** routinely wipe all caches just because they are rebuildable. Many "junk" folders exist to keep Flutter, Xcode, Android, Gradle, CocoaPods, npm, and Supabase workflows fast.
+
+The target balance is:
+
+- Active development machines should keep enough warm caches for decent build times.
+- Low-space machines should aggressively remove stale generated output and duplicate platform images.
+- Cleanup must never delete source code, lockfiles, local database volumes, secrets, personal files, or another developer's local state unless explicitly requested.
+- Agents should explain the first-build cost after cache cleanup: the next build may re-download dependencies, recreate Pods, rebuild Xcode DerivedData, re-pull Docker images, or cold-boot/download emulators.
+
+### Safe Repo Cleanup Targets
+
+These are safe to remove when disk space is low because they are regenerated from committed manifests, lockfiles, or tool state:
+
+- root `build/` and `mobile_scanner_app/build/`
+- root `.dart_tool/` and `mobile_scanner_app/.dart_tool/`
+- Android Gradle intermediates such as `android/.gradle/` and `mobile_scanner_app/android/.gradle/`
+- Flutter ephemeral folders such as `macos/Flutter/ephemeral/`, `ios/Flutter/ephemeral/`, and their `mobile_scanner_app/` equivalents
+- local dependency installs such as root `node_modules/`, `cloudflare-worker/node_modules/`, `ios/Pods/`, `macos/Pods/`, and mobile scanner Pods when the relevant lockfiles are present
+
+Do **not** use broad recursive cleanup such as deleting every folder named `build` anywhere under the repo. Some vendored or tracked dependency trees may legitimately contain a directory named `build`. Prefer explicit known generated paths, and check `git status --short` after cleanup. If tracked files were removed by mistake, restore only those files.
+
+### Safe Machine-Level Cleanup Targets
+
+On macOS, it is generally safe to clear these when space is tight, with the tradeoff that the next build may be slower:
+
+- Xcode DerivedData: `~/Library/Developer/Xcode/DerivedData`
+- old iOS DeviceSupport symbols: `~/Library/Developer/Xcode/iOS DeviceSupport`
+- unavailable or erased simulator data through `xcrun simctl delete unavailable` or `xcrun simctl erase all`
+- CocoaPods, Homebrew, npm, pub, pip, and Gradle caches
+- editor workspace caches such as VS Code/Cursor/Antigravity `workspaceStorage`, `CachedData`, `Cache`, `Code Cache`, old logs, and crash reports
+- downloaded installers in `~/Downloads` such as old `.dmg`, `.pkg`, `.zip`, and app installer files
+- unused Docker images through normal prune commands
+
+On Windows, the equivalent cleanup targets are usually:
+
+- repo `build\`, `.dart_tool\`, `android\.gradle\`, `node_modules\`, and generated Windows build folders
+- Gradle cache under `%USERPROFILE%\.gradle\caches`
+- Flutter/Dart pub cache under `%LOCALAPPDATA%\Pub\Cache`
+- npm cache under `%LOCALAPPDATA%\npm-cache`
+- Android SDK and emulator images under `%LOCALAPPDATA%\Android\Sdk` and AVD data under `%USERPROFILE%\.android\avd`
+- VS Code/Cursor workspace storage under `%APPDATA%\Code\User\workspaceStorage` or the equivalent editor profile folder
+- old installers in Downloads
+
+### Keep These For Decent Build Times
+
+Do not wipe these routinely on active machines:
+
+- the Android SDK platform/build-tools versions currently used by the repo
+- the Android NDK version expected by Flutter's current `flutter.ndkVersion`; check the local Flutter tool before deleting duplicate NDK folders
+- at least one Android emulator system image if Android emulator testing is done frequently on that machine
+- the iOS simulator devices/runtimes actually used on macOS machines
+- Gradle, pub, npm, CocoaPods, and Xcode caches on machines with comfortable free space
+- Docker images for actively used local services when avoiding re-pulls matters
+
+For remote or slower-network machines, especially the Mac mini in Chile, prefer keeping one warmed set of Android/iOS/Flutter caches unless free space is already becoming a problem.
+
+### Never Delete Without Explicit Approval
+
+These can contain important local state and must not be removed during routine cleanup:
+
+- Supabase/Postgres Docker volumes or bind-mounted data
+- Colima/Docker Desktop VM disks
+- Docker volumes, especially when local databases may live there
+- `.env` files, secrets, credentials, certificates, keystores, signing keys, and provisioning profiles
+- user documents, photos, messages, mail, browser profiles, password stores, and app profile data
+- Git history or working-tree changes
+- local database dumps unless the user explicitly identifies them as disposable
+
+Avoid `docker system prune --volumes` unless the user explicitly wants to delete local Docker volumes and understands that local database data may be lost.
+
+### Recommended Cleanup Rhythm
+
+- Normal day-to-day work: keep caches warm; do not run full cleans unless a build is broken or disk is low.
+- When free space drops below roughly 30-50 GB: remove repo build outputs, stale editor workspace caches, old installers, and stale platform caches first.
+- Monthly or before travel/remote work: clean old Android emulator images, old iOS DeviceSupport, old Xcode DerivedData, and duplicate NDK/system images, while keeping one current working set.
+- After a major Flutter/Xcode/Android Studio upgrade: remove old platform versions and stale generated outputs once the new toolchain is confirmed working.
+
+After any large cleanup, document the expected rebuild cost and run or request the minimal dependency warmup needed for the next task: `flutter pub get`, `npm ci`, `pod install`, Android SDK image download, or a first local build.
 
 ## Native Build Slowness Triage
 
@@ -579,9 +696,43 @@ supabase functions deploy whatsapp-webhook --project-ref xzdvtzdqjeyqxnkqprtf --
 
 ## When Running Database Queries
 
-**⚠️ IMPORTANT: Use REST API with Service Role Key (psql connection is unreliable)**
+**⚠️ IMPORTANT: Use the right tool for the query type. Do not confuse disabled migrations with disabled SQL access.**
 
-The database password for psql may change. Use the **REST API with service role key** instead:
+This repo intentionally has `[db.migrations].enabled = false` in `supabase/config.toml`, so `supabase db push` can report "Skipping migrations because it is disabled". That only means the migration pipeline is disabled. It does **not** mean agents cannot run standalone SQL.
+
+### Standalone SQL / Arbitrary SQL Against Production
+
+Use `supabase db query --linked` for standalone SQL files, DDL, function replacement, cleanup SQL, and verification queries against the linked production project.
+
+```bash
+# ✅ Deploy a standalone SQL file to the linked Supabase project
+supabase db query --linked --file supabase/migrations/YYYYMMDD_name.sql --output table
+
+# ✅ Run one verification query
+supabase db query --linked --output table "select now();"
+```
+
+Rules for agents:
+
+- Run linked DB queries **sequentially**, never in parallel. Parallel `supabase db query --linked` calls can trigger Supabase temp-login auth failures or circuit breaker throttling.
+- If a linked query hits temp login throttling, stop starting new linked queries and wait before retrying.
+- Do not treat `supabase db push` skipping migrations as a blocker. Use `supabase db query --linked --file ...` for standalone deployment SQL.
+- Keep standalone SQL files idempotent and update their deployment status comment after the SQL actually runs on project `xzdvtzdqjeyqxnkqprtf`.
+- Never print DB passwords, service role keys, or full connection strings in terminal output or final responses.
+
+Use direct `psql` only when a valid DB password is available in the environment and the command can be run without exposing secrets:
+
+```bash
+# Optional fallback only when SUPABASE_DB_PASSWORD is available
+PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
+  "postgresql://postgres.xzdvtzdqjeyqxnkqprtf@aws-1-sa-east-1.pooler.supabase.com:5432/postgres" \
+  -v ON_ERROR_STOP=1 \
+  -f supabase/migrations/YYYYMMDD_name.sql
+```
+
+### REST API Inspection
+
+Use REST API with the service role key for table/view inspection and simple data checks. REST is **not** the right tool for arbitrary SQL DDL/function deployment unless a specific RPC already exists to do that work.
 
 ```bash
 # ✅ CORRECT: Use REST API with service role key from .env

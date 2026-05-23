@@ -5,6 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/models/product.dart' as shared_product;
+import '../../../shared/services/database_service.dart';
+import '../../../shared/services/image_service.dart';
+import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
 import '../models/dashboard_metrics.dart';
 import '../services/accounting_service.dart';
 import '../services/financial_reports_service.dart';
@@ -478,7 +484,8 @@ class _AccountingDashboardSectionState
             height: 4,
             child: LinearProgressIndicator(
               backgroundColor: Colors.transparent,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+              color:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
             ),
           ),
       ],
@@ -978,6 +985,13 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   List<PeriodDetailItem>? _detailItems;
   bool _isLoadingDetails = false;
   bool _showDayView = false; // false = list view, true = day grouped view
+  DateTime? _selectedDay;
+  String? _selectedDetailKey;
+  Invoice? _selectedInvoice;
+  bool _isLoadingInvoiceDetails = false;
+  String? _invoiceDetailError;
+  Map<String, String?> _invoiceProductImagesById = const {};
+  Map<String, String?> _invoiceProductImagesBySku = const {};
 
   @override
   Widget build(BuildContext context) {
@@ -1304,8 +1318,10 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -1314,13 +1330,13 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                     _ToggleIconButton(
                       icon: Icons.list,
                       isSelected: !_showDayView,
-                      onPressed: () => setState(() => _showDayView = false),
+                      onPressed: () => _setDetailViewMode(false),
                       tooltip: 'Detalle',
                     ),
                     _ToggleIconButton(
                       icon: Icons.calendar_view_day,
                       isSelected: _showDayView,
-                      onPressed: () => setState(() => _showDayView = true),
+                      onPressed: () => _setDetailViewMode(true),
                       tooltip: 'Por día',
                     ),
                   ],
@@ -1412,13 +1428,96 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   }
 
   Widget _buildDetailListView(BuildContext context, bool isIncome) {
-    return ListView.separated(
+    return ListView.builder(
       itemCount: _detailItems!.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final item = _detailItems![index];
-        return _PeriodDetailTile(item: item, isIncome: isIncome);
+        final detailKey = _detailKeyFor(item);
+        final canOpenInvoice = isIncome && _isInvoiceBackedIncome(item);
+        final isSelected = _selectedDetailKey == detailKey;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PeriodDetailTile(
+              item: item,
+              isIncome: isIncome,
+              isSelected: isSelected,
+              isLoading: isSelected && _isLoadingInvoiceDetails,
+              onTap:
+                  canOpenInvoice ? () => _openInvoiceDetailInline(item) : null,
+            ),
+            if (isSelected) _buildInlineInvoiceDetail(context),
+            if (index < _detailItems!.length - 1) const Divider(height: 1),
+          ],
+        );
       },
+    );
+  }
+
+  Widget _buildInlineInvoiceDetail(BuildContext context) {
+    if (_isLoadingInvoiceDetails) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
+        padding: const EdgeInsets.all(16),
+        decoration: _inlineDetailDecoration(context),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Cargando detalle de factura...'),
+          ],
+        ),
+      );
+    }
+
+    if (_invoiceDetailError != null) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
+        padding: const EdgeInsets.all(16),
+        decoration: _inlineDetailDecoration(context),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 18,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _invoiceDetailError!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final invoice = _selectedInvoice;
+    if (invoice == null) return const SizedBox.shrink();
+
+    return _InlineInvoiceDetailPanel(
+      invoice: invoice,
+      productImagesById: _invoiceProductImagesById,
+      productImagesBySku: _invoiceProductImagesBySku,
+      decoration: _inlineDetailDecoration(context),
+      onClose: _clearInlineInvoiceDetail,
+    );
+  }
+
+  BoxDecoration _inlineDetailDecoration(BuildContext context) {
+    return BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
     );
   }
 
@@ -1441,9 +1540,27 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
     final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
 
-    return ListView.separated(
+    DateTime? activeDay;
+    if (_selectedDay != null) {
+      for (final day in sortedDays) {
+        if (_isSameDay(_selectedDay, day)) {
+          activeDay = day;
+          break;
+        }
+      }
+    }
+
+    if (activeDay != null) {
+      return _buildSelectedDayTransactionsPage(
+        context,
+        activeDay,
+        groupedByDay[activeDay]!,
+        isIncome,
+      );
+    }
+
+    return ListView.builder(
       itemCount: sortedDays.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final day = sortedDays[index];
         final items = groupedByDay[day]!;
@@ -1451,32 +1568,156 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
             items.fold<double>(0, (sum, item) => sum + item.amount);
         final itemCount = items.length;
 
-        return ListTile(
-          dense: true,
-          leading: CircleAvatar(
-            backgroundColor: color.withValues(alpha: 0.1),
-            radius: 18,
-            child: Icon(Icons.calendar_today, color: color, size: 18),
-          ),
-          title: Text(
-            DateFormat('EEEE d', 'es_CL').format(day),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ListTile(
+                dense: true,
+                onTap: () => _openDayTransactionsPage(day),
+                hoverColor: color.withValues(alpha: 0.05),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-          ),
-          subtitle: Text(
-            '$itemCount ${itemCount == 1 ? 'transacción' : 'transacciones'}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          trailing: Text(
-            formatter.format(dayTotal),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.bold,
+                leading: CircleAvatar(
+                  backgroundColor: color.withValues(alpha: 0.1),
+                  radius: 18,
+                  child: Icon(Icons.calendar_today, color: color, size: 18),
                 ),
-          ),
+                title: Text(
+                  DateFormat('EEEE d', 'es_CL').format(day),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                subtitle: Text(
+                  '$itemCount ${itemCount == 1 ? 'transacción' : 'transacciones'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      formatter.format(dayTotal),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 20,
+                      color: color.withValues(alpha: 0.8),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (index < sortedDays.length - 1) const Divider(height: 1),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildSelectedDayTransactionsPage(
+    BuildContext context,
+    DateTime day,
+    List<PeriodDetailItem> items,
+    bool isIncome,
+  ) {
+    final sortedItems = [...items]..sort((a, b) {
+        final dateComparison = b.transactionDate.compareTo(a.transactionDate);
+        if (dateComparison != 0) return dateComparison;
+        return b.amount.compareTo(a.amount);
+      });
+
+    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
+    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
+    final total = sortedItems.fold<double>(0, (sum, item) => sum + item.amount);
+    final transactionCount = sortedItems.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 6, 10),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: _closeDayTransactionsPage,
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Volver a días',
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      DateFormat('EEEE d MMMM', 'es_CL').format(day),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                    ),
+                    Text(
+                      '$transactionCount ${transactionCount == 1 ? 'transacción' : 'transacciones'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  formatter.format(total),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            itemCount: sortedItems.length,
+            itemBuilder: (context, index) {
+              final item = sortedItems[index];
+              final detailKey = _detailKeyFor(item);
+              final canOpenInvoice = isIncome && _isInvoiceBackedIncome(item);
+              final isSelected = _selectedDetailKey == detailKey;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PeriodDetailTile(
+                    item: item,
+                    isIncome: isIncome,
+                    isSelected: isSelected,
+                    isLoading: isSelected && _isLoadingInvoiceDetails,
+                    onTap: canOpenInvoice
+                        ? () => _openInvoiceDetailInline(item)
+                        : null,
+                  ),
+                  if (isSelected) _buildInlineInvoiceDetail(context),
+                  if (index < sortedItems.length - 1) const Divider(height: 1),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1552,6 +1793,8 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
       _showingIncome = isIncome;
       _isLoadingDetails = true;
       _detailItems = null;
+      _selectedDay = null;
+      _clearInlineInvoiceDetailState();
     });
 
     try {
@@ -1596,7 +1839,204 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     setState(() {
       _selectedPeriod = null;
       _detailItems = null;
+      _selectedDay = null;
+      _clearInlineInvoiceDetailState();
     });
+  }
+
+  void _setDetailViewMode(bool showDayView) {
+    setState(() {
+      _showDayView = showDayView;
+      _selectedDay = null;
+      _clearInlineInvoiceDetailState();
+    });
+  }
+
+  void _openDayTransactionsPage(DateTime day) {
+    setState(() {
+      _selectedDay = day;
+      _clearInlineInvoiceDetailState();
+    });
+  }
+
+  void _closeDayTransactionsPage() {
+    setState(() {
+      _selectedDay = null;
+      _clearInlineInvoiceDetailState();
+    });
+  }
+
+  bool _isSameDay(DateTime? a, DateTime b) {
+    return a != null &&
+        a.year == b.year &&
+        a.month == b.month &&
+        a.day == b.day;
+  }
+
+  String _detailKeyFor(PeriodDetailItem item) {
+    return '${item.sourceType}:${item.id}';
+  }
+
+  bool _isInvoiceBackedIncome(PeriodDetailItem item) {
+    return item.sourceType == 'sales_invoice' ||
+        item.sourceType == 'sales_payment';
+  }
+
+  Future<void> _openInvoiceDetailInline(PeriodDetailItem item) async {
+    final detailKey = _detailKeyFor(item);
+
+    if (_selectedDetailKey == detailKey && _selectedInvoice != null) {
+      setState(_clearInlineInvoiceDetailState);
+      return;
+    }
+
+    final databaseService = context.read<DatabaseService>();
+    final salesService = context.read<SalesService>();
+    final inventoryService = context.read<shared_inventory.InventoryService>();
+
+    setState(() {
+      _selectedDetailKey = detailKey;
+      _selectedInvoice = null;
+      _isLoadingInvoiceDetails = true;
+      _invoiceDetailError = null;
+      _invoiceProductImagesById = const {};
+      _invoiceProductImagesBySku = const {};
+    });
+
+    try {
+      final invoiceId = await _resolveSalesInvoiceId(item, databaseService);
+      if (invoiceId == null || invoiceId.isEmpty) {
+        if (!mounted || _selectedDetailKey != detailKey) return;
+        setState(() {
+          _isLoadingInvoiceDetails = false;
+          _invoiceDetailError =
+              'No se encontró una factura vinculada a esta transacción.';
+        });
+        return;
+      }
+
+      final invoice = await salesService.fetchInvoice(invoiceId);
+      if (invoice == null) {
+        if (!mounted || _selectedDetailKey != detailKey) return;
+        setState(() {
+          _isLoadingInvoiceDetails = false;
+          _invoiceDetailError = 'No se pudo cargar la factura vinculada.';
+        });
+        return;
+      }
+
+      final imageMaps = await _loadInvoiceItemImages(
+        invoice,
+        inventoryService,
+      );
+
+      if (!mounted || _selectedDetailKey != detailKey) return;
+      setState(() {
+        _selectedInvoice = invoice;
+        _isLoadingInvoiceDetails = false;
+        _invoiceDetailError = null;
+        _invoiceProductImagesById = imageMaps.byId;
+        _invoiceProductImagesBySku = imageMaps.bySku;
+      });
+    } catch (_) {
+      if (!mounted || _selectedDetailKey != detailKey) return;
+      setState(() {
+        _isLoadingInvoiceDetails = false;
+        _invoiceDetailError = 'No se pudo abrir el detalle de la factura.';
+      });
+    }
+  }
+
+  Future<String?> _resolveSalesInvoiceId(
+    PeriodDetailItem item,
+    DatabaseService databaseService,
+  ) async {
+    if (item.sourceType == 'sales_invoice') {
+      return item.id;
+    }
+
+    if (item.sourceType == 'sales_payment') {
+      final payment = await databaseService.selectById(
+        'sales_payments',
+        item.id,
+        selectColumns: 'invoice_id',
+      );
+      return payment?['invoice_id']?.toString();
+    }
+
+    return null;
+  }
+
+  Future<({Map<String, String?> byId, Map<String, String?> bySku})>
+      _loadInvoiceItemImages(
+    Invoice invoice,
+    shared_inventory.InventoryService inventoryService,
+  ) async {
+    final productIds = invoice.items
+        .map((item) => item.productId?.trim())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final productSkus = invoice.items
+        .map((item) => item.productSku?.trim())
+        .whereType<String>()
+        .where((sku) => sku.isNotEmpty)
+        .toSet();
+
+    final byId = <String, String?>{};
+    final bySku = <String, String?>{};
+
+    if (productIds.isNotEmpty) {
+      final products = await inventoryService.getProductsByIds(productIds);
+      for (final product in products) {
+        byId[product.id] = _bestProductImageUrl(product);
+        if (product.sku.trim().isNotEmpty) {
+          bySku[product.sku.trim().toLowerCase()] = _bestProductImageUrl(
+            product,
+          );
+        }
+      }
+    }
+
+    final missingSkus = productSkus
+        .where((sku) => !bySku.containsKey(sku.toLowerCase()))
+        .toList(growable: false);
+    for (final sku in missingSkus) {
+      final product = await inventoryService.getProductBySku(sku);
+      if (product != null) {
+        bySku[sku.toLowerCase()] = _bestProductImageUrl(product);
+      }
+    }
+
+    return (byId: byId, bySku: bySku);
+  }
+
+  String? _bestProductImageUrl(shared_product.Product product) {
+    final optimized = product.imageUrlOptimized?.trim();
+    if (optimized != null && optimized.isNotEmpty) return optimized;
+
+    final primary = product.imageUrl?.trim();
+    if (primary != null && primary.isNotEmpty) return primary;
+
+    for (final imageUrl in product.imageUrls) {
+      final trimmed = imageUrl.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+
+    return null;
+  }
+
+  void _clearInlineInvoiceDetail() {
+    setState(_clearInlineInvoiceDetailState);
+  }
+
+  void _clearInlineInvoiceDetailState() {
+    _selectedDetailKey = null;
+    _selectedInvoice = null;
+    _isLoadingInvoiceDetails = false;
+    _invoiceDetailError = null;
+    _invoiceProductImagesById = const {};
+    _invoiceProductImagesBySku = const {};
   }
 
   double _calculateChartMax(double maxValue) {
@@ -1676,7 +2116,10 @@ class _ToggleIconButton extends StatelessWidget {
             size: 18,
             color: isSelected
                 ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                : Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -1688,8 +2131,17 @@ class _ToggleIconButton extends StatelessWidget {
 class _PeriodDetailTile extends StatelessWidget {
   final PeriodDetailItem item;
   final bool isIncome;
+  final bool isSelected;
+  final bool isLoading;
+  final VoidCallback? onTap;
 
-  const _PeriodDetailTile({required this.item, required this.isIncome});
+  const _PeriodDetailTile({
+    required this.item,
+    required this.isIncome,
+    this.isSelected = false,
+    this.isLoading = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1718,8 +2170,13 @@ class _PeriodDetailTile extends StatelessWidget {
         icon = Icons.attach_money;
     }
 
-    return ListTile(
+    final tile = ListTile(
       dense: true,
+      onTap: onTap,
+      hoverColor: color.withValues(alpha: 0.05),
+      selected: isSelected,
+      selectedTileColor: color.withValues(alpha: 0.07),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: CircleAvatar(
         backgroundColor: color.withValues(alpha: 0.1),
         radius: 18,
@@ -1744,12 +2201,355 @@ class _PeriodDetailTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
       ),
-      trailing: Text(
-        formatter.format(item.amount),
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.bold,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            formatter.format(item.amount),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            if (isLoading)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Icon(
+                isSelected ? Icons.keyboard_arrow_up : Icons.chevron_right,
+                size: 18,
+                color: color.withValues(alpha: 0.8),
+              ),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap == null) return tile;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: 'Ver detalle de factura',
+        waitDuration: const Duration(milliseconds: 350),
+        child: tile,
+      ),
+    );
+  }
+}
+
+class _InlineInvoiceDetailPanel extends StatelessWidget {
+  final Invoice invoice;
+  final Map<String, String?> productImagesById;
+  final Map<String, String?> productImagesBySku;
+  final BoxDecoration decoration;
+  final VoidCallback onClose;
+
+  const _InlineInvoiceDetailPanel({
+    required this.invoice,
+    required this.productImagesById,
+    required this.productImagesBySku,
+    required this.decoration,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
+    final theme = Theme.of(context);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: decoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      invoice.invoiceNumber.isEmpty
+                          ? 'Factura'
+                          : 'Factura ${invoice.invoiceNumber}',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if ((invoice.customerName ?? '').trim().isNotEmpty)
+                          invoice.customerName!.trim(),
+                        DateFormat('d MMM yyyy', 'es_CL').format(invoice.date),
+                        _invoiceStatusLabel(invoice.status),
+                      ].join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onClose,
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Cerrar detalle',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (invoice.items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Esta factura no tiene líneas registradas.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (var i = 0; i < invoice.items.length; i++) ...[
+                  _InvoiceItemDetailRow(
+                    item: invoice.items[i],
+                    imageUrl: _imageUrlForItem(invoice.items[i]),
+                    formatter: formatter,
+                  ),
+                  if (i < invoice.items.length - 1)
+                    Divider(
+                      height: 12,
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                ],
+              ],
             ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: Column(
+                children: [
+                  _InvoiceTotalLine(
+                    label: 'Subtotal',
+                    value: formatter.format(invoice.subtotal),
+                  ),
+                  if (invoice.ivaAmount > 0)
+                    _InvoiceTotalLine(
+                      label: 'IVA',
+                      value: formatter.format(invoice.ivaAmount),
+                    ),
+                  _InvoiceTotalLine(
+                    label: 'Pagado',
+                    value: formatter.format(invoice.paidAmount),
+                  ),
+                  const Divider(height: 14),
+                  _InvoiceTotalLine(
+                    label: 'Total',
+                    value: formatter.format(invoice.total),
+                    isStrong: true,
+                  ),
+                  if (invoice.balance > 0)
+                    _InvoiceTotalLine(
+                      label: 'Saldo',
+                      value: formatter.format(invoice.balance),
+                      color: Colors.orange.shade700,
+                      isStrong: true,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? _imageUrlForItem(InvoiceItem item) {
+    final productId = item.productId?.trim();
+    if (productId != null && productId.isNotEmpty) {
+      final imageUrl = productImagesById[productId]?.trim();
+      if (imageUrl != null && imageUrl.isNotEmpty) return imageUrl;
+    }
+
+    final sku = item.productSku?.trim().toLowerCase();
+    if (sku != null && sku.isNotEmpty) {
+      final imageUrl = productImagesBySku[sku]?.trim();
+      if (imageUrl != null && imageUrl.isNotEmpty) return imageUrl;
+    }
+
+    return null;
+  }
+
+  String _invoiceStatusLabel(InvoiceStatus status) {
+    switch (status) {
+      case InvoiceStatus.draft:
+        return 'Borrador';
+      case InvoiceStatus.sent:
+        return 'Enviada';
+      case InvoiceStatus.confirmed:
+        return 'Confirmada';
+      case InvoiceStatus.paid:
+        return 'Pagada';
+      case InvoiceStatus.overdue:
+        return 'Vencida';
+      case InvoiceStatus.cancelled:
+        return 'Anulada';
+    }
+  }
+}
+
+class _InvoiceItemDetailRow extends StatelessWidget {
+  final InvoiceItem item;
+  final String? imageUrl;
+  final NumberFormat formatter;
+
+  const _InvoiceItemDetailRow({
+    required this.item,
+    required this.imageUrl,
+    required this.formatter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = (item.productName ?? '').trim().isNotEmpty
+        ? item.productName!.trim()
+        : ((item.description ?? '').trim().isNotEmpty
+            ? item.description!.trim()
+            : 'Línea sin nombre');
+    final subtitleParts = <String>[
+      if ((item.productSku ?? '').trim().isNotEmpty) item.productSku!.trim(),
+      item.isService ? 'Servicio' : 'Producto',
+      '${_formatQuantity(item.quantity)} x ${formatter.format(item.unitPrice)}',
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 44,
+              height: 44,
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: imageUrl == null || imageUrl!.isEmpty
+                  ? Icon(
+                      item.isService
+                          ? Icons.handyman_outlined
+                          : Icons.inventory_2_outlined,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    )
+                  : ImageService.buildProductImage(
+                      imageUrl: imageUrl,
+                      size: 44,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitleParts.join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if ((item.description ?? '').trim().isNotEmpty &&
+                    item.description!.trim() != title)
+                  Text(
+                    item.description!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            formatter.format(item.lineTotal),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatQuantity(double value) {
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(2);
+  }
+}
+
+class _InvoiceTotalLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isStrong;
+  final Color? color;
+
+  const _InvoiceTotalLine({
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontWeight: isStrong ? FontWeight.w700 : FontWeight.w500,
+          color: color,
+        );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: style),
+          ),
+          Text(value, style: style),
+        ],
       ),
     );
   }
@@ -2148,7 +2948,8 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: Colors.black
-                                                        .withValues(alpha: 0.15),
+                                                        .withValues(
+                                                            alpha: 0.15),
                                                     blurRadius: 6,
                                                     offset: const Offset(0, 2),
                                                   ),

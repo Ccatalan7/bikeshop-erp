@@ -381,6 +381,24 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     );
   }
 
+  void _openLinkedPayment(DocumentPaymentRecord payment) {
+    if (payment.id.isEmpty) return;
+
+    switch (payment.sourceType) {
+      case DocumentPaymentSourceType.purchasePayment:
+        context.push(
+          '/purchases/payments?paymentId=${Uri.encodeComponent(payment.id)}',
+        );
+        break;
+      case DocumentPaymentSourceType.expense:
+        context.push('/accounting/expenses/${Uri.encodeComponent(payment.id)}');
+        break;
+      case DocumentPaymentSourceType.salesPayment:
+      case DocumentPaymentSourceType.unknown:
+        break;
+    }
+  }
+
   Widget _buildMobileHeader(List<PurchaseInvoice> invoices) {
     final theme = Theme.of(context);
 
@@ -2021,6 +2039,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                                       DocumentPaymentsDropdown(
                                         title: 'Pagos realizados',
                                         payments: accounting.payments,
+                                        onPaymentTap: _openLinkedPayment,
                                       ),
                                     const SizedBox(height: 24),
                                     DocumentPaperShell(

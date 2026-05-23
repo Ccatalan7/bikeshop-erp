@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
+import '../../../public_store/services/public_inventory_service.dart';
+import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
@@ -4824,6 +4826,17 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       final supabase = Supabase.instance.client;
       List<Product> products = [];
 
+      if (!widget.previewMode) {
+        products = await _loadPublicProductsFromPolicy();
+        if (mounted) {
+          setState(() {
+            _products = products.take(_maxProducts).toList();
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       // We have tenantId - fetch based on source
       switch (_productSource) {
         case 'manual':
@@ -4922,11 +4935,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           break;
       }
 
-      // Filter out out-of-stock products unless in preview mode (admin editing)
-      if (!widget.previewMode) {
-        products = products.where((p) => p.stockQuantity > 0).toList();
-      }
-
       if (mounted) {
         setState(() {
           _products = products.take(_maxProducts).toList();
@@ -4940,6 +4948,93 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<List<Product>> _loadPublicProductsFromPolicy() async {
+    final tenantId = widget.tenantId;
+    if (tenantId == null || tenantId.isEmpty) return const [];
+
+    PublicInventoryService inventoryService;
+    try {
+      inventoryService = context.read<PublicInventoryService>();
+    } catch (_) {
+      inventoryService = PublicInventoryService();
+    }
+
+    final policy = _readVisibilityPolicy();
+
+    switch (_productSource) {
+      case 'manual':
+        if (_selectedProductIds.isEmpty) return const [];
+        final page = await inventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          productIds: _selectedProductIds,
+          policy: policy,
+          onlyInStock: true,
+          limit: _selectedProductIds.length,
+        );
+        final idOrder = {
+          for (int i = 0; i < _selectedProductIds.length; i++)
+            _selectedProductIds[i]: i,
+        };
+        return page.products
+          ..sort(
+              (a, b) => (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
+
+      case 'category':
+        if (_categoryId == null || _categoryId!.isEmpty) return const [];
+        final page = await inventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          categoryIds: [_categoryId!],
+          policy: policy,
+          onlyInStock: true,
+          sortBy: 'name',
+          limit: _maxProducts,
+        );
+        return page.products;
+
+      case 'newest':
+        final page = await inventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          policy: policy,
+          onlyInStock: true,
+          sortBy: 'newest',
+          limit: _maxProducts,
+        );
+        return page.products;
+
+      case 'featured':
+      default:
+        if (widget.featuredProducts != null &&
+            widget.featuredProducts!.isNotEmpty) {
+          return widget.featuredProducts!
+              .where(
+                (product) => policy == null || policy.allowsProduct(product),
+              )
+              .take(_maxProducts)
+              .toList();
+        }
+        final page = await inventoryService.getProductPageForTenant(
+          tenantId: tenantId,
+          policy: policy,
+          onlyInStock: true,
+          sortBy: 'name',
+          limit: _maxProducts,
+        );
+        return page.products;
+    }
+  }
+
+  PublicProductVisibilityPolicy? _readVisibilityPolicy() {
+    try {
+      final service = context.read<WebsiteService>();
+      if (!PublicProductVisibilityPolicy.hasAnySetting(service.settings)) {
+        return null;
+      }
+      return PublicProductVisibilityPolicy.fromSettings(service.settings);
+    } catch (_) {
+      return null;
     }
   }
 

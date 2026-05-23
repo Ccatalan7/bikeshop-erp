@@ -8,6 +8,8 @@ import '../services/public_inventory_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/models/product.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
+import '../../modules/website/services/website_service.dart';
 
 class SearchOverlay extends StatefulWidget {
   final String tenantId;
@@ -138,11 +140,13 @@ class _SearchOverlayState extends State<SearchOverlay> {
     if (!mounted) return;
 
     final inventoryService = context.read<PublicInventoryService>();
+    final visibilityPolicy = _readVisibilityPolicy();
 
     try {
       final results = await inventoryService.searchProductsFuzzy(
         tenantId: widget.tenantId, // Use passed tenantId
         searchTerm: query,
+        policy: visibilityPolicy,
         limit: _suggestionsLimit,
       );
 
@@ -162,6 +166,18 @@ class _SearchOverlayState extends State<SearchOverlay> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  PublicProductVisibilityPolicy? _readVisibilityPolicy() {
+    try {
+      final service = context.read<WebsiteService>();
+      if (!PublicProductVisibilityPolicy.hasAnySetting(service.settings)) {
+        return null;
+      }
+      return PublicProductVisibilityPolicy.fromSettings(service.settings);
+    } catch (_) {
+      return null;
     }
   }
 

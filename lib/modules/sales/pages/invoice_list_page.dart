@@ -24,7 +24,16 @@ import '../services/sales_service.dart';
 import '../widgets/payment_form.dart' show PaymentForm;
 
 class InvoiceListPage extends StatefulWidget {
-  const InvoiceListPage({super.key});
+  const InvoiceListPage({
+    super.key,
+    this.initialInvoiceId,
+    this.initialInvoiceNumber,
+    this.forceSplitView = false,
+  });
+
+  final String? initialInvoiceId;
+  final String? initialInvoiceNumber;
+  final bool forceSplitView;
 
   @override
   State<InvoiceListPage> createState() => _InvoiceListPageState();
@@ -69,6 +78,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
   String _sortColumn = 'date';
   bool _sortAscending = false;
+  String? _lastAppliedInitialInvoiceLookupKey;
 
   // Mobile state
   bool _isSearchExpanded = false;
@@ -92,8 +102,28 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SalesService>().loadInvoices();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final salesService = context.read<SalesService>();
+      await salesService.loadInvoices();
+      if (!mounted) return;
+      await _selectInitialInvoiceIfNeeded(salesService);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant InvoiceListPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialInvoiceId == widget.initialInvoiceId &&
+        oldWidget.initialInvoiceNumber == widget.initialInvoiceNumber) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _selectInitialInvoiceIfNeeded(
+        context.read<SalesService>(),
+        force: true,
+      );
     });
   }
 
@@ -190,6 +220,72 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     });
   }
 
+  Future<void> _selectInitialInvoiceIfNeeded(
+    SalesService salesService, {
+    bool force = false,
+  }) async {
+    final invoiceId = widget.initialInvoiceId?.trim();
+    final invoiceNumber = widget.initialInvoiceNumber?.trim();
+    if ((invoiceId == null || invoiceId.isEmpty) &&
+        (invoiceNumber == null || invoiceNumber.isEmpty)) {
+      return;
+    }
+
+    final lookupKey = [
+      if (invoiceId != null && invoiceId.isNotEmpty) 'id:$invoiceId',
+      if (invoiceNumber != null && invoiceNumber.isNotEmpty)
+        'number:$invoiceNumber',
+    ].join('|');
+    if (!force && _lastAppliedInitialInvoiceLookupKey == lookupKey) return;
+
+    _lastAppliedInitialInvoiceLookupKey = lookupKey;
+
+    Invoice? cachedInvoice;
+    for (final invoice in salesService.invoices) {
+      if ((invoiceId != null &&
+              invoiceId.isNotEmpty &&
+              invoice.id == invoiceId) ||
+          (invoiceNumber != null &&
+              invoiceNumber.isNotEmpty &&
+              invoice.invoiceNumber == invoiceNumber)) {
+        cachedInvoice = invoice;
+        break;
+      }
+    }
+
+    if (mounted && cachedInvoice != null) {
+      setState(() {
+        _selectedInvoice = cachedInvoice;
+        _showPaymentTerminal = false;
+        _isHydratingSelectedInvoice = true;
+        _accountingContextInvoiceId = null;
+        _accountingContextFuture = null;
+      });
+    }
+
+    final fullInvoice = invoiceId == null || invoiceId.isEmpty
+        ? null
+        : await salesService.fetchInvoice(invoiceId);
+    if (!mounted) return;
+    if (widget.initialInvoiceId?.trim() != invoiceId ||
+        widget.initialInvoiceNumber?.trim() != invoiceNumber) {
+      return;
+    }
+
+    final selectedInvoice = fullInvoice ?? cachedInvoice;
+    if (selectedInvoice == null) {
+      setState(() => _isHydratingSelectedInvoice = false);
+      return;
+    }
+
+    setState(() {
+      _selectedInvoice = selectedInvoice;
+      _showPaymentTerminal = false;
+      _isHydratingSelectedInvoice = false;
+      _primeAccountingContext(selectedInvoice);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final salesService = context.watch<SalesService>();
@@ -198,8 +294,10 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     // Use MediaQuery for robust detection, ignoring parent constraints issues
     // FORCE mobile on Android/iOS app to avoid desktop layout on high-res phones/tablets
     final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 1100 ||
-        (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
+    final forceSplitPreview = widget.forceSplitView && _selectedInvoice != null;
+    final isMobile = !forceSplitPreview &&
+        (screenWidth < 1100 ||
+            (!kIsWeb && (Platform.isAndroid || Platform.isIOS)));
 
     return MainLayout(
       title: isMobile ? 'Ventas' : 'Facturas',
@@ -584,6 +682,17 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         _documentAccountingContextService.loadSalesInvoice(
       invoiceId: invoiceId,
       invoiceNumber: invoice.invoiceNumber,
+    );
+  }
+
+  void _openLinkedPayment(DocumentPaymentRecord payment) {
+    if (payment.id.isEmpty ||
+        payment.sourceType != DocumentPaymentSourceType.salesPayment) {
+      return;
+    }
+
+    context.push(
+      '/sales/payments?paymentId=${Uri.encodeComponent(payment.id)}',
     );
   }
 
@@ -1435,6 +1544,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                                 DocumentPaymentsDropdown(
                                   title: 'Pagos recibidos',
                                   payments: accounting.payments,
+                                  onPaymentTap: _openLinkedPayment,
                                 ),
                               const SizedBox(height: 24),
                               DocumentPaperShell(

@@ -7,7 +7,9 @@ import '../models/purchase_payment.dart';
 import '../services/purchase_service.dart';
 
 class PurchasePaymentsListPage extends StatefulWidget {
-  const PurchasePaymentsListPage({super.key});
+  const PurchasePaymentsListPage({super.key, this.highlightPaymentId});
+
+  final String? highlightPaymentId;
 
   @override
   State<PurchasePaymentsListPage> createState() =>
@@ -78,12 +80,31 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
     }
 
     final filtered = _payments.where((payment) {
-      return (payment.invoiceNumber?.toLowerCase().contains(query) ?? false) ||
+      final paymentNumber = _paymentNumber(payment).toLowerCase();
+      return paymentNumber.contains(query) ||
+          (payment.id?.toLowerCase().contains(query) ?? false) ||
+          (payment.invoiceNumber?.toLowerCase().contains(query) ?? false) ||
           (payment.supplierName?.toLowerCase().contains(query) ?? false) ||
           (payment.reference?.toLowerCase().contains(query) ?? false);
     }).toList();
 
     setState(() => _filtered = filtered);
+  }
+
+  List<PurchasePayment> _prioritizeHighlightedPayment(
+    List<PurchasePayment> payments,
+  ) {
+    final highlightId = widget.highlightPaymentId;
+    if (highlightId == null || highlightId.isEmpty) return payments;
+
+    final index = payments.indexWhere((payment) => payment.id == highlightId);
+    if (index <= 0) return payments;
+
+    return [
+      payments[index],
+      ...payments.take(index),
+      ...payments.skip(index + 1),
+    ];
   }
 
   String _getPaymentMethodName(String paymentMethodId) {
@@ -115,6 +136,7 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
       0,
       (sum, payment) => sum + payment.amount,
     );
+    final visiblePayments = _prioritizeHighlightedPayment(_filtered);
 
     return Scaffold(
       appBar: AppBar(
@@ -206,11 +228,28 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                         onRefresh: () => _loadPayments(refresh: true),
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: _filtered.length,
+                          itemCount: visiblePayments.length,
                           itemBuilder: (context, index) {
-                            final payment = _filtered[index];
+                            final payment = visiblePayments[index];
+                            final isHighlighted =
+                                payment.id == widget.highlightPaymentId;
+                            final theme = Theme.of(context);
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
+                              color: isHighlighted
+                                  ? theme.colorScheme.primary
+                                      .withValues(alpha: 0.06)
+                                  : null,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: isHighlighted
+                                      ? theme.colorScheme.primary
+                                          .withValues(alpha: 0.65)
+                                      : Colors.transparent,
+                                  width: isHighlighted ? 1.2 : 0,
+                                ),
+                              ),
                               child: ListTile(
                                 leading: CircleAvatar(
                                   backgroundColor: _getPaymentMethodColor(
@@ -220,8 +259,14 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                     color: Colors.white,
                                   ),
                                 ),
-                                title: Row(
+                                title: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
+                                    _buildPaymentCodeChip(
+                                      _paymentNumber(payment),
+                                    ),
                                     if (payment.invoiceNumber != null) ...[
                                       Text(
                                         payment.invoiceNumber!,
@@ -229,7 +274,6 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
                                     ],
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -315,5 +359,28 @@ class _PurchasePaymentsListPageState extends State<PurchasePaymentsListPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildPaymentCodeChip(String value) {
+    return Text(
+      value,
+      style: const TextStyle(
+        color: Color(0xFF2563EB),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        fontFamily: 'monospace',
+      ),
+    );
+  }
+
+  String _paymentNumber(PurchasePayment payment) {
+    final id = payment.id ?? '';
+    if (id.isEmpty) return 'PAG-000000';
+
+    final compact = id.replaceAll('-', '').toUpperCase();
+    final suffix = compact.length <= 6
+        ? compact.padLeft(6, '0')
+        : compact.substring(compact.length - 6);
+    return 'PAG-$suffix';
   }
 }

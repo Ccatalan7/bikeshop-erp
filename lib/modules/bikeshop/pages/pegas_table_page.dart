@@ -16,6 +16,7 @@ import 'package:cross_file/cross_file.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/hover_zoom_image.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/modern_context_menu.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../crm/models/crm_models.dart';
@@ -660,6 +661,67 @@ class _PegasTablePageState extends State<PegasTablePage>
         .push('/sales/invoices/$invoiceId/edit?returnTo=/taller/pegas');
     if (!mounted) return;
     await _loadData();
+  }
+
+  Future<void> _openInvoicePreview(
+    String invoiceId, {
+    Invoice? invoice,
+  }) async {
+    _markNeedsRefresh();
+    final invoiceNumber = invoice?.invoiceNumber.trim();
+    final uri = Uri(
+      path: '/sales/invoices',
+      queryParameters: {
+        'selectedInvoiceId': invoiceId,
+        if (invoiceNumber != null && invoiceNumber.isNotEmpty)
+          'selectedInvoiceNumber': invoiceNumber,
+        'view': 'split',
+      },
+    );
+    await context.push(uri.toString());
+    if (!mounted) return;
+    await _loadData();
+  }
+
+  Future<void> _showInvoiceChipContextMenu({
+    required TapDownDetails details,
+    required MechanicJob job,
+    required Invoice? invoice,
+  }) async {
+    final invoiceId = job.invoiceId;
+    if (invoiceId == null || invoiceId.isEmpty) return;
+
+    final invoiceNumber = invoice?.invoiceNumber.trim().isNotEmpty == true
+        ? invoice!.invoiceNumber.trim()
+        : 'Factura';
+    final value = await showModernContextMenu<String>(
+      context: context,
+      globalPosition: details.globalPosition,
+      title: invoiceNumber,
+      actions: const [
+        ModernContextMenuAction(
+          value: 'preview',
+          icon: Icons.receipt_long_outlined,
+          label: 'Abrir vista PDF',
+          subtitle: 'Lista de facturas, panel dividido',
+          iconColor: Color(0xFF2563EB),
+        ),
+        ModernContextMenuAction(
+          value: 'edit',
+          icon: Icons.edit_outlined,
+          label: 'Editar factura',
+          subtitle: 'Formulario completo',
+          iconColor: Color(0xFF475569),
+        ),
+      ],
+    );
+
+    if (!mounted || value == null) return;
+    if (value == 'preview') {
+      await _openInvoicePreview(invoiceId, invoice: invoice);
+    } else if (value == 'edit') {
+      await _openInvoice(invoiceId);
+    }
   }
 
   Map<String, Customer> _buildCustomerMap(List<Customer> customers) {
@@ -2948,20 +3010,9 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildJobTypeCounters() {
-    // Count total bicycles across all filtered jobs, accounting for multi-bike jobs.
-    // Use _jobBikesMap (which has actual per-job bike entries from the DB);
-    // fall back to 1 if the job has a bikeId but no entry in the map yet.
-    int bicycles = 0;
-    for (final j in _filteredJobs) {
-      if (j.jobType == JobType.itemService)
-        continue; // item/accessory jobs have no bike
-      final jobBikes = _jobBikesMap[j.id ?? ''];
-      if (jobBikes != null && jobBikes.isNotEmpty) {
-        bicycles += jobBikes.length;
-      } else if (j.bikeId != null) {
-        bicycles += 1; // fallback: primary bike only
-      }
-    }
+    final bicycleStatusBreakdown = _buildBicycleStatusBreakdown();
+    final bicycles =
+        bicycleStatusBreakdown.values.fold<int>(0, (sum, count) => sum + count);
 
     final items = _filteredJobs.where((j) {
       if (j.jobType == JobType.itemService) return true;
@@ -2983,9 +3034,14 @@ class _PegasTablePageState extends State<PegasTablePage>
     final quotations =
         _filteredJobs.where((j) => j.jobType == JobType.quotation).length;
 
-    Widget simpleCount(IconData icon, String label, int count) {
+    Widget simpleCount(
+      IconData icon,
+      String label,
+      int count, {
+      String? tooltipMessage,
+    }) {
       if (count == 0) return const SizedBox.shrink();
-      return Padding(
+      final counter = Padding(
         padding: const EdgeInsets.only(right: 16.0),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -3007,17 +3063,95 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         ),
       );
+
+      if (tooltipMessage == null || tooltipMessage.isEmpty) {
+        return counter;
+      }
+
+      return Tooltip(
+        message: tooltipMessage,
+        waitDuration: const Duration(milliseconds: 250),
+        showDuration: const Duration(seconds: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: const EdgeInsets.all(12),
+        textStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          height: 1.35,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111827),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: counter,
+      );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        simpleCount(Icons.directions_bike, 'Bicicletas', bicycles),
+        simpleCount(
+          Icons.directions_bike,
+          'Bicicletas',
+          bicycles,
+          tooltipMessage: _formatBicycleStatusBreakdown(bicycleStatusBreakdown),
+        ),
         simpleCount(Icons.build, 'Ítems', items),
         simpleCount(Icons.shield, 'Garantías', warranties),
         simpleCount(Icons.description, 'Cotizaciones', quotations),
       ],
     );
+  }
+
+  Map<String, int> _buildBicycleStatusBreakdown() {
+    final breakdown = <String, int>{};
+
+    void countStatus(String statusName) {
+      final label =
+          statusName.trim().isEmpty ? 'Sin estado' : statusName.trim();
+      breakdown[label] = (breakdown[label] ?? 0) + 1;
+    }
+
+    for (final job in _filteredJobs) {
+      if (job.jobType == JobType.itemService) {
+        continue;
+      }
+
+      final jobBikes = _jobBikesMap[job.id ?? ''];
+      if (jobBikes != null && jobBikes.isNotEmpty) {
+        for (final jobBike in jobBikes) {
+          countStatus(jobBike.customStatus?.name ?? job.statusDisplayName);
+        }
+      } else if (job.bikeId != null) {
+        countStatus(job.statusDisplayName);
+      }
+    }
+
+    return breakdown;
+  }
+
+  String _formatBicycleStatusBreakdown(Map<String, int> breakdown) {
+    if (breakdown.isEmpty) return '';
+
+    final entries = breakdown.entries.toList()
+      ..sort((a, b) {
+        final countComparison = b.value.compareTo(a.value);
+        if (countComparison != 0) return countComparison;
+        return a.key.compareTo(b.key);
+      });
+
+    return [
+      'Bicicletas por estado',
+      ...entries.map((entry) => '${entry.key}: ${entry.value}'),
+    ].join('\n');
   }
 
   Widget _buildDataTable() {
@@ -5283,46 +5417,57 @@ class _PegasTablePageState extends State<PegasTablePage>
             break;
         }
 
-        return InkWell(
-          onTap:
-              job.invoiceId != null ? () => _openInvoice(job.invoiceId!) : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            constraints: const BoxConstraints(maxWidth: 110),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: borderColor,
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: textColor,
+        final canOpenInvoice =
+            job.invoiceId != null && job.invoiceId!.isNotEmpty;
+
+        return GestureDetector(
+          onSecondaryTapDown: canOpenInvoice
+              ? (details) => _showInvoiceChipContextMenu(
+                    details: details,
+                    job: job,
+                    invoice: invoice,
+                  )
+              : null,
+          child: InkWell(
+            onTap: canOpenInvoice ? () => _openInvoice(job.invoiceId!) : null,
+            borderRadius: BorderRadius.circular(7),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              constraints: const BoxConstraints(maxWidth: 110),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: borderColor,
+                  width: 1,
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                      decoration: job.invoiceId != null
-                          ? TextDecoration.underline
-                          : null,
-                      decorationColor: textColor.withValues(alpha: 0.3),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Icon(
+                    icon,
+                    size: 14,
+                    color: textColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                        decoration:
+                            canOpenInvoice ? TextDecoration.underline : null,
+                        decorationColor: textColor.withValues(alpha: 0.3),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

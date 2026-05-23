@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/product.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/inventory/models/category_models.dart';
 
 class PublicProductPage {
@@ -91,6 +92,7 @@ class PublicInventoryService extends ChangeNotifier {
     String? sku,
     String? searchQuery,
     ProductType? productType,
+    PublicProductVisibilityPolicy? policy,
     bool onlyInStock = true,
     String sortBy = 'name',
     int limit = 20,
@@ -135,6 +137,7 @@ class PublicInventoryService extends ChangeNotifier {
   Future<PublicCategoryCountSnapshot> getCategoryCountsForTenant({
     required String tenantId,
     ProductType? productType,
+    PublicProductVisibilityPolicy? policy,
     bool onlyInStock = true,
   }) async {
     try {
@@ -197,6 +200,7 @@ class PublicInventoryService extends ChangeNotifier {
     String? categoryId,
     String? searchQuery,
     bool onlyInStock = true,
+    PublicProductVisibilityPolicy? policy,
     double? minPrice,
     double? maxPrice,
     int? limit,
@@ -211,6 +215,7 @@ class PublicInventoryService extends ChangeNotifier {
           categoryIds:
               categoryId == null || categoryId.isEmpty ? null : [categoryId],
           searchQuery: searchQuery,
+          policy: policy,
           onlyInStock: onlyInStock,
           sortBy: 'name',
           limit: limit ?? 100,
@@ -306,12 +311,9 @@ class PublicInventoryService extends ChangeNotifier {
       final products =
           (response as List).map((json) => Product.fromJson(json)).toList();
 
-      if (onlyInStock && searchQuery != null && searchQuery.isNotEmpty) {
-        return products.where((p) {
-          if (p.productType == ProductType.service) return true;
-          if (!p.trackStock) return true;
-          return p.stockQuantity > 0;
-        }).toList();
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final effectivePolicy = policy ?? const PublicProductVisibilityPolicy();
+        return products.where(effectivePolicy.allowsProduct).toList();
       }
 
       debugPrint(
@@ -420,6 +422,7 @@ class PublicInventoryService extends ChangeNotifier {
   Future<Product?> getProductById({
     required String productId,
     required String tenantId,
+    PublicProductVisibilityPolicy? policy,
   }) async {
     try {
       debugPrint(
@@ -428,6 +431,7 @@ class PublicInventoryService extends ChangeNotifier {
       final page = await getProductPageForTenant(
         tenantId: tenantId,
         productIds: [productId],
+        policy: policy,
         onlyInStock: false,
         limit: 1,
       );
@@ -456,6 +460,7 @@ class PublicInventoryService extends ChangeNotifier {
   Future<Product?> getProductBySku({
     required String sku,
     required String tenantId,
+    PublicProductVisibilityPolicy? policy,
   }) async {
     try {
       debugPrint(
@@ -464,6 +469,7 @@ class PublicInventoryService extends ChangeNotifier {
       final page = await getProductPageForTenant(
         tenantId: tenantId,
         sku: sku,
+        policy: policy,
         onlyInStock: false,
         limit: 1,
       );
@@ -494,6 +500,7 @@ class PublicInventoryService extends ChangeNotifier {
   Future<List<Product>> getFeaturedProductsForTenant({
     required String tenantId,
     int limit = 10,
+    PublicProductVisibilityPolicy? policy,
   }) async {
     try {
       debugPrint(
@@ -501,10 +508,10 @@ class PublicInventoryService extends ChangeNotifier {
 
       final response = await _supabase.rpc(
         'get_public_featured_products',
-        params: {
+        params: _cleanRpcParams({
           'p_tenant_id': tenantId,
           'p_limit': limit,
-        },
+        }),
       );
 
       final products =
@@ -527,6 +534,7 @@ class PublicInventoryService extends ChangeNotifier {
     required String tenantId,
     String? categoryId,
     String? searchQuery,
+    PublicProductVisibilityPolicy? policy,
   }) async {
     try {
       final page = await getProductPageForTenant(
@@ -534,6 +542,7 @@ class PublicInventoryService extends ChangeNotifier {
         categoryIds:
             categoryId == null || categoryId.isEmpty ? null : [categoryId],
         searchQuery: searchQuery,
+        policy: policy,
         limit: 1,
       );
       final count = page.totalCount;
@@ -593,6 +602,7 @@ class PublicInventoryService extends ChangeNotifier {
     required String tenantId,
     required String searchTerm,
     int limit = 10,
+    PublicProductVisibilityPolicy? policy,
   }) async {
     if (searchTerm.trim().isEmpty) return [];
 
@@ -601,16 +611,18 @@ class PublicInventoryService extends ChangeNotifier {
 
       final response = await _supabase.rpc(
         'search_public_products',
-        params: {
+        params: _cleanRpcParams({
           'p_search_term': searchTerm,
           'p_tenant_id': tenantId,
           'p_limit': limit,
-        },
+        }),
       );
 
       final products =
           (response as List).map((json) => Product.fromJson(json)).toList();
-      final visibleProducts = products.where(_isPubliclyVisible).toList();
+      final visibleProducts = policy == null
+          ? products
+          : products.where(policy.allowsProduct).toList();
 
       debugPrint(
           '✅ PublicInventoryService: Found ${visibleProducts.length} matches for "$searchTerm"');
@@ -622,12 +634,9 @@ class PublicInventoryService extends ChangeNotifier {
       return getProductsForTenant(
         tenantId: tenantId,
         searchQuery: searchTerm,
+        policy: policy,
         limit: limit,
       );
     }
-  }
-
-  bool _isPubliclyVisible(Product product) {
-    return product.isActive && product.isPublished;
   }
 }

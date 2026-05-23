@@ -5944,8 +5944,7 @@ $$;
 -- ============================================================================
 -- SEED WEBSITE SETTINGS FOR A TENANT
 -- ============================================================================
--- Creates 7 e-commerce defaults: site_title, site_description, contact_email,
--- enable_ecommerce (true), currency (CLP), shipping_enabled (false), theme
+-- Creates base e-commerce defaults plus product visibility rules.
 -- Called automatically by handle_new_tenant() trigger
 drop function if exists public.seed_website_settings(uuid);
 
@@ -6001,6 +6000,26 @@ begin
   insert into website_settings (tenant_id, key, value, description)
   select p_tenant_id, 'theme', 'light', 'Tema visual del sitio'
   where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'theme');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'product_visibility_stock_policy', 'available_only', 'Regla central del catálogo público para productos con/sin stock'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'product_visibility_stock_policy');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'product_visibility_require_image', 'false', 'Ocultar productos sin imagen en el catálogo público'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'product_visibility_require_image');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'product_visibility_require_visible_category', 'false', 'Usar categorías seleccionadas como filtro del catálogo público'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'product_visibility_require_visible_category');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into website_settings (tenant_id, key, value, description)
+  select p_tenant_id, 'product_visibility_include_uncategorized', 'true', 'Mostrar productos sin categoría cuando el filtro de categorías públicas está activo'
+  where not exists (select 1 from website_settings where tenant_id = p_tenant_id and key = 'product_visibility_include_uncategorized');
   v_count := v_count + (case when found then 1 else 0 end);
 
   raise notice '✓ Created % website settings for tenant %', v_count, p_tenant_id;
@@ -22927,7 +22946,10 @@ begin
   end if;
 end $$;
 
-drop function if exists public.search_public_products(text, uuid, integer);
+drop function if exists public.get_public_products(uuid, uuid[], uuid[], text, text, text, boolean, text, boolean, boolean, boolean, text, integer, integer);
+drop function if exists public.search_public_products(text, uuid, integer, text, boolean, boolean, boolean);
+drop function if exists public.get_public_featured_products(uuid, integer, text, boolean, boolean, boolean);
+drop function if exists public.get_public_product_category_counts(uuid, text, boolean, text, boolean, boolean, boolean);
 
 create or replace function public.get_public_products(
   p_tenant_id uuid,
@@ -22987,7 +23009,45 @@ as $$
       greatest(coalesce(p_offset, 0), 0) as page_offset,
       lower(coalesce(nullif(trim(p_sort_by), ''), 'name')) as sort_by,
       nullif(trim(coalesce(p_sku, '')), '') as wanted_sku,
-      nullif(trim(coalesce(p_product_type, '')), '') as wanted_product_type
+      nullif(trim(coalesce(p_product_type, '')), '') as wanted_product_type,
+      case lower(coalesce(
+        nullif(trim(coalesce((
+          select ws.value
+          from public.website_settings ws
+          where ws.tenant_id = p_tenant_id
+            and ws.key = 'product_visibility_stock_policy'
+          limit 1
+        ), '')), ''),
+        case when p_only_in_stock then 'available_only' else 'all' end
+      ))
+        when 'all' then 'all'
+        when 'both' then 'all'
+        when 'out_of_stock_only' then 'out_of_stock_only'
+        when 'out_of_stock' then 'out_of_stock_only'
+        when 'sin_stock' then 'out_of_stock_only'
+        else 'available_only'
+      end as stock_policy,
+      lower(coalesce((
+          select ws.value
+          from public.website_settings ws
+          where ws.tenant_id = p_tenant_id
+            and ws.key = 'product_visibility_require_image'
+          limit 1
+        ), 'false')) in ('true', '1', 'yes', 'si', 'sí') as require_image,
+      lower(coalesce((
+          select ws.value
+          from public.website_settings ws
+          where ws.tenant_id = p_tenant_id
+            and ws.key = 'product_visibility_require_visible_category'
+          limit 1
+        ), 'false')) in ('true', '1', 'yes', 'si', 'sí') as require_visible_category,
+      lower(coalesce((
+          select ws.value
+          from public.website_settings ws
+          where ws.tenant_id = p_tenant_id
+            and ws.key = 'product_visibility_include_uncategorized'
+          limit 1
+        ), 'true')) in ('true', '1', 'yes', 'si', 'sí') as include_uncategorized
     from (
       select trim(
         regexp_replace(
@@ -23050,10 +23110,41 @@ as $$
         or p.product_type = a.wanted_product_type
       )
       and (
-        not p_only_in_stock
+        not a.require_image
+        or nullif(btrim(coalesce(p.website_image_url, '')), '') is not null
+        or nullif(btrim(coalesce(p.website_image_url_optimized, '')), '') is not null
+        or cardinality(coalesce(p.website_image_urls, array[]::text[])) > 0
+        or nullif(btrim(coalesce(p.image_url, '')), '') is not null
+        or nullif(btrim(coalesce(p.image_url_optimized, '')), '') is not null
+        or cardinality(coalesce(p.image_urls, array[]::text[])) > 0
+      )
+      and (
+        not a.require_visible_category
+        or (p.category_id is null and a.include_uncategorized)
+        or exists (
+          select 1
+          from public.product_categories pc
+          where pc.id = p.category_id
+            and pc.tenant_id = p_tenant_id
+            and pc.is_active = true
+            and coalesce(pc.show_on_website, false) = true
+        )
+      )
+      and (
+        a.stock_policy = 'all'
         or p.product_type = 'service'
-        or coalesce(p.track_stock, true) = false
-        or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
+        or (
+          a.stock_policy = 'available_only'
+          and (
+            coalesce(p.track_stock, true) = false
+            or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
+          )
+        )
+        or (
+          a.stock_policy = 'out_of_stock_only'
+          and coalesce(p.track_stock, true) = true
+          and greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) <= 0
+        )
       )
   ),
   enriched as (
@@ -23366,7 +23457,9 @@ as $$
   ) gp;
 $$;
 
-grant execute on function public.search_public_products(text, uuid, integer)
+grant execute on function public.search_public_products(
+  text, uuid, integer
+)
   to anon, authenticated;
 
 create or replace function public.get_public_featured_products(
@@ -23410,54 +23503,61 @@ security definer
 set search_path = public
 stable
 as $$
+  with featured as (
+    select
+      fp.product_id,
+      fp.order_index
+    from public.featured_products fp
+    where fp.tenant_id = p_tenant_id
+      and fp.active = true
+  )
   select
-    p.id,
-    p.tenant_id,
-    coalesce(nullif(btrim(p.website_name), ''), p.name) as name,
-    p.sku,
-    p.barcode,
-    coalesce(p.website_price, p.price) as price,
-    0::numeric as cost,
-    p.inventory_qty,
-    p.stock_quantity,
-    coalesce(nullif(btrim(p.website_image_url), ''), p.image_url) as image_url,
-    coalesce(nullif(btrim(p.website_image_url_optimized), ''), p.image_url_optimized) as image_url_optimized,
-    case
-      when cardinality(coalesce(p.website_image_urls, array[]::text[])) > 0
-        then p.website_image_urls
-      else p.image_urls
-    end as image_urls,
-    p.description,
-    p.website_description,
-    p.category,
-    p.category_id,
-    p.category_name,
-    p.brand_id,
-    p.brand,
-    p.model,
-    p.manufacturer,
-    p.manufacturer_sku,
-    p.gtin,
-    p.product_type,
-    p.track_stock,
-    p.is_active,
-    p.is_published,
-    p.show_on_website,
-    p.created_at,
-    p.updated_at
-  from public.featured_products fp
-  join public.products p on p.id = fp.product_id
-  where fp.tenant_id = p_tenant_id
-    and fp.active = true
-    and p.tenant_id = p_tenant_id
-    and p.is_active = true
-    and coalesce(p.is_published, false) = true
-    and coalesce(p.show_on_website, false) = true
-  order by fp.order_index asc, coalesce(nullif(btrim(p.website_name), ''), p.name) asc
+    gp.id,
+    gp.tenant_id,
+    gp.name,
+    gp.sku,
+    gp.barcode,
+    gp.price,
+    gp.cost,
+    gp.inventory_qty,
+    gp.stock_quantity,
+    gp.image_url,
+    gp.image_url_optimized,
+    gp.image_urls,
+    gp.description,
+    gp.website_description,
+    gp.category,
+    gp.category_id,
+    gp.category_name,
+    gp.brand_id,
+    gp.brand,
+    gp.model,
+    gp.manufacturer,
+    gp.manufacturer_sku,
+    gp.gtin,
+    gp.product_type,
+    gp.track_stock,
+    gp.is_active,
+    gp.is_published,
+    gp.show_on_website,
+    gp.created_at,
+    gp.updated_at
+  from public.get_public_products(
+    p_tenant_id := p_tenant_id,
+    p_product_ids := (select array_agg(product_id order by order_index) from featured),
+    p_only_in_stock := true,
+    p_sort_by := 'name',
+    p_limit := 1000,
+    p_offset := 0
+  ) gp
+  join featured f on f.product_id = gp.id
+  order by f.order_index asc, gp.name asc
   limit greatest(coalesce(p_limit, 10), 0);
 $$;
 
-grant execute on function public.get_public_featured_products(uuid, integer)
+grant execute on function public.get_public_featured_products(
+  uuid, integer
+)
   to anon, authenticated;
 
 create or replace function public.get_public_product_category_counts(
@@ -23474,23 +23574,16 @@ security definer
 set search_path = public
 stable
 as $$
-  select p.category_id, count(*) as product_count
-  from public.products p
-  where p.tenant_id = p_tenant_id
-    and p.is_active = true
-    and coalesce(p.is_published, false) = true
-    and coalesce(p.show_on_website, false) = true
-    and (
-      nullif(trim(coalesce(p_product_type, '')), '') is null
-      or p.product_type = nullif(trim(coalesce(p_product_type, '')), '')
-    )
-    and (
-      not p_only_in_stock
-      or p.product_type = 'service'
-      or coalesce(p.track_stock, true) = false
-      or greatest(coalesce(p.inventory_qty, 0), coalesce(p.stock_quantity, 0)) > 0
-    )
-  group by p.category_id;
+  select gp.category_id, count(*) as product_count
+  from public.get_public_products(
+    p_tenant_id := p_tenant_id,
+    p_product_type := p_product_type,
+    p_only_in_stock := p_only_in_stock,
+    p_sort_by := 'name',
+    p_limit := 100000,
+    p_offset := 0
+  ) gp
+  group by gp.category_id;
 $$;
 
 grant execute on function public.get_public_product_category_counts(

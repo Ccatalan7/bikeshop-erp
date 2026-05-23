@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../services/workspace_manager.dart';
+import 'modern_context_menu.dart';
 
 class ExpandableMenuItem extends StatelessWidget {
   final IconData icon;
@@ -217,49 +218,24 @@ class ExpandableMenuItem extends StatelessWidget {
                   child: GestureDetector(
                     onSecondaryTapDown: enabled
                         ? (details) async {
-                            final renderBox =
-                                context.findRenderObject() as RenderBox;
-                            final overlay = Navigator.of(context)
-                                .overlay!
-                                .context
-                                .findRenderObject() as RenderBox;
-                            final position = renderBox.localToGlobal(
-                                details.localPosition,
-                                ancestor: overlay);
-
-                            final value = await showMenu<String>(
+                            final value = await showModernContextMenu<String>(
                               context: context,
-                              position: RelativeRect.fromLTRB(
-                                position.dx,
-                                position.dy,
-                                position.dx + 1,
-                                position.dy + 1,
-                              ),
-                              items: [
-                                PopupMenuItem(
+                              globalPosition: details.globalPosition,
+                              title: subItem.title,
+                              actions: [
+                                const ModernContextMenuAction(
                                   value: 'current_tab',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.tab,
-                                          size: 18,
-                                          color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.7)),
-                                      const SizedBox(width: 8),
-                                      const Text('Abrir en esta pestaña'),
-                                    ],
-                                  ),
+                                  icon: Icons.tab,
+                                  label: 'Abrir en esta pestaña',
+                                  subtitle: 'Usar el espacio activo',
+                                  iconColor: Color(0xFF475569),
                                 ),
-                                PopupMenuItem(
+                                ModernContextMenuAction(
                                   value: 'new_tab',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.open_in_new,
-                                          size: 18,
-                                          color: theme.colorScheme.primary),
-                                      const SizedBox(width: 8),
-                                      const Text('Abrir en nueva pestaña'),
-                                    ],
-                                  ),
+                                  icon: Icons.open_in_new,
+                                  label: 'Abrir en nueva pestaña',
+                                  subtitle: 'Mantener esta vista abierta',
+                                  iconColor: theme.colorScheme.primary,
                                 ),
                               ],
                             );

@@ -101,11 +101,13 @@ class _PaperStatusBadge extends StatelessWidget {
 class DocumentPaymentsDropdown extends StatelessWidget {
   final String title;
   final List<DocumentPaymentRecord> payments;
+  final ValueChanged<DocumentPaymentRecord>? onPaymentTap;
 
   const DocumentPaymentsDropdown({
     super.key,
     required this.title,
     required this.payments,
+    this.onPaymentTap,
   });
 
   @override
@@ -159,7 +161,12 @@ class DocumentPaymentsDropdown extends StatelessWidget {
               ),
             ],
           ),
-          children: [_PaymentRows(payments: payments)],
+          children: [
+            _PaymentRows(
+              payments: payments,
+              onPaymentTap: onPaymentTap,
+            ),
+          ],
         ),
       ),
     );
@@ -245,8 +252,12 @@ class DocumentAccountingLoadingStrip extends StatelessWidget {
 
 class _PaymentRows extends StatelessWidget {
   final List<DocumentPaymentRecord> payments;
+  final ValueChanged<DocumentPaymentRecord>? onPaymentTap;
 
-  const _PaymentRows({required this.payments});
+  const _PaymentRows({
+    required this.payments,
+    this.onPaymentTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +289,14 @@ class _PaymentRows extends StatelessWidget {
                   return _row(
                     children: [
                       _BodyCell(ChileanUtils.formatDate(payment.date), flex: 1),
-                      _BodyCell(payment.number, flex: 1, isLink: true),
+                      _BodyCell(
+                        payment.number,
+                        flex: 1,
+                        isLink: true,
+                        onTap: onPaymentTap == null
+                            ? null
+                            : () => onPaymentTap!(payment),
+                      ),
                       _BodyCell(payment.reference ?? '-', flex: 2),
                       _StatusCell(payment.status, flex: 1),
                       _BodyCell(payment.methodName, flex: 2),
@@ -606,6 +624,7 @@ class _BodyCell extends StatelessWidget {
   final bool alignRight;
   final bool isStrong;
   final bool isLink;
+  final VoidCallback? onTap;
 
   const _BodyCell(
     this.text, {
@@ -613,26 +632,47 @@ class _BodyCell extends StatelessWidget {
     this.alignRight = false,
     this.isStrong = false,
     this.isLink = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final textStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: isStrong ? FontWeight.w800 : FontWeight.w500,
+      color: isLink ? const Color(0xFF2563EB) : const Color(0xFF1F2937),
+      decoration: isLink && onTap != null ? TextDecoration.underline : null,
+      decorationColor: const Color(0xFF2563EB),
+    );
+
+    Widget content = Text(
+      text,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: textStyle,
+    );
+
+    if (onTap != null) {
+      content = Tooltip(
+        message: 'Abrir pago',
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(3),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1),
+            child: content,
+          ),
+        ),
+      );
+    }
+
     return Expanded(
       flex: flex,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         child: Align(
           alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-          child: Text(
-            text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isStrong ? FontWeight.w800 : FontWeight.w500,
-              color: isLink ? const Color(0xFF2563EB) : const Color(0xFF1F2937),
-            ),
-          ),
+          child: content,
         ),
       ),
     );

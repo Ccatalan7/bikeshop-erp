@@ -13,6 +13,13 @@ class DocumentAccountingContext {
   static const empty = DocumentAccountingContext();
 }
 
+enum DocumentPaymentSourceType {
+  salesPayment,
+  purchasePayment,
+  expense,
+  unknown,
+}
+
 class DocumentPaymentRecord {
   final String id;
   final String number;
@@ -21,6 +28,7 @@ class DocumentPaymentRecord {
   final String status;
   final String methodName;
   final double amount;
+  final DocumentPaymentSourceType sourceType;
 
   const DocumentPaymentRecord({
     required this.id,
@@ -30,6 +38,7 @@ class DocumentPaymentRecord {
     required this.methodName,
     required this.amount,
     this.reference,
+    this.sourceType = DocumentPaymentSourceType.unknown,
   });
 }
 
@@ -89,6 +98,7 @@ class DocumentAccountingContextService {
       table: 'sales_payments',
       invoiceId: invoiceId,
       paymentPrefix: 'COB',
+      sourceType: DocumentPaymentSourceType.salesPayment,
     );
     final journalEntries = await _loadJournalEntries(
       sourceModule: 'sales_invoices',
@@ -109,6 +119,7 @@ class DocumentAccountingContextService {
       table: 'purchase_payments',
       invoiceId: invoiceId,
       paymentPrefix: 'PAG',
+      sourceType: DocumentPaymentSourceType.purchasePayment,
     );
     final linkedExpenses = await _loadLinkedPurchaseExpenses(
       purchaseInvoiceId: invoiceId,
@@ -129,6 +140,7 @@ class DocumentAccountingContextService {
     required String table,
     required String invoiceId,
     required String paymentPrefix,
+    required DocumentPaymentSourceType sourceType,
   }) async {
     try {
       final response = await _client
@@ -160,6 +172,7 @@ class DocumentAccountingContextService {
           status: 'Pagada',
           methodName: methodsById[methodId] ?? 'Sin método',
           amount: _toDouble(row['amount']),
+          sourceType: sourceType,
         );
       }).toList();
     } catch (e) {
@@ -219,6 +232,7 @@ class DocumentAccountingContextService {
           ),
           methodName: methodsById[methodId] ?? 'Sin método',
           amount: amount,
+          sourceType: DocumentPaymentSourceType.expense,
         );
       }).toList();
     } catch (e) {

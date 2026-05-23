@@ -49,25 +49,23 @@ class MailErrorDiagnostic {
     }
 
     if (_containsAny(text, const [
-      'token',
-      'oauth',
-      'invalid_grant',
-      'unauthorized',
-      '401',
-      'refresh token',
-      'reconnect',
-      'reconecta',
-      'vuelve a conectar',
-      'venció',
-      'venció.',
-      'revoked',
-      'missing stored gmail refresh token',
+      'timeout',
+      'socket',
+      'network',
+      'failed host',
+      'connection refused',
+      'connection reset',
+      'xmlhttprequest',
+      'clientexception',
+      '502',
+      '503',
+      '504',
     ])) {
       return const MailErrorDiagnostic(
-        kind: MailErrorKind.token,
-        label: 'Token/OAuth',
-        headline: 'La conexión de la cuenta venció',
-        icon: Icons.key_off_outlined,
+        kind: MailErrorKind.network,
+        label: 'Red/API',
+        headline: 'La conexión falló temporalmente',
+        icon: Icons.cloud_off_outlined,
       );
     }
 
@@ -91,23 +89,25 @@ class MailErrorDiagnostic {
     }
 
     if (_containsAny(text, const [
-      'timeout',
-      'socket',
-      'network',
-      'failed host',
-      'connection refused',
-      'connection reset',
-      'xmlhttprequest',
-      'clientexception',
-      '502',
-      '503',
-      '504',
+      'token',
+      'token/oauth',
+      'invalid_grant',
+      'unauthorized',
+      '401',
+      'refresh token',
+      'reconnect',
+      'reconecta',
+      'vuelve a conectar',
+      'venció',
+      'venció.',
+      'revoked',
+      'missing stored gmail refresh token',
     ])) {
       return const MailErrorDiagnostic(
-        kind: MailErrorKind.network,
-        label: 'Red/API',
-        headline: 'La conexión falló temporalmente',
-        icon: Icons.cloud_off_outlined,
+        kind: MailErrorKind.token,
+        label: 'Token/OAuth',
+        headline: 'La conexión de la cuenta venció',
+        icon: Icons.key_off_outlined,
       );
     }
 

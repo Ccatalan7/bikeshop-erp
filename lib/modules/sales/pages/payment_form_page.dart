@@ -11,7 +11,9 @@ import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 
 class PaymentsPage extends StatefulWidget {
-  const PaymentsPage({super.key});
+  const PaymentsPage({super.key, this.highlightPaymentId});
+
+  final String? highlightPaymentId;
 
   @override
   State<PaymentsPage> createState() => _PaymentsPageState();
@@ -27,13 +29,13 @@ class _PaymentsPageState extends State<PaymentsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final salesService = context.read<SalesService>();
       final paymentMethodService = context.read<PaymentMethodService>();
-      
+
       // Load both payments and payment methods in parallel
       await Future.wait([
         salesService.loadPayments(forceRefresh: true),
         paymentMethodService.loadPaymentMethods(),
       ]);
-      
+
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -45,7 +47,9 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final salesService = context.watch<SalesService>();
     // Watch payment methods to trigger rebuild when loaded
     context.watch<PaymentMethodService>();
-    final payments = _filterPayments(salesService.payments, _searchTerm);
+    final payments = _prioritizeHighlightedPayment(
+      _filterPayments(salesService.payments, _searchTerm),
+    );
 
     return MainLayout(
       child: Column(
@@ -106,15 +110,33 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final paymentMethodService = context.read<PaymentMethodService>();
 
     return payments.where((payment) {
+      final paymentNumber = _paymentNumber(payment)?.toLowerCase() ?? '';
       final reference = payment.reference?.toLowerCase() ?? '';
+      final invoiceReference = payment.invoiceReference?.toLowerCase() ?? '';
       final amount = payment.amount.toStringAsFixed(0);
       final paymentMethod =
           paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
       final method = paymentMethod?.name.toLowerCase() ?? '';
-      return reference.contains(query) ||
+      return paymentNumber.contains(query) ||
+          invoiceReference.contains(query) ||
+          reference.contains(query) ||
           amount.contains(query) ||
           method.contains(query);
     }).toList();
+  }
+
+  List<Payment> _prioritizeHighlightedPayment(List<Payment> payments) {
+    final highlightId = widget.highlightPaymentId;
+    if (highlightId == null || highlightId.isEmpty) return payments;
+
+    final index = payments.indexWhere((payment) => payment.id == highlightId);
+    if (index <= 0) return payments;
+
+    return [
+      payments[index],
+      ...payments.take(index),
+      ...payments.skip(index + 1),
+    ];
   }
 
   Widget _buildEmptyState() {
@@ -147,23 +169,41 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final paymentMethod =
         paymentMethodService.getPaymentMethodById(payment.paymentMethodId);
     final methodName = paymentMethod?.name ?? 'Desconocido';
+    final theme = Theme.of(context);
+    final isHighlighted = payment.id == widget.highlightPaymentId;
+    final paymentNumber = _paymentNumber(payment);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      color: isHighlighted
+          ? theme.colorScheme.primary.withValues(alpha: 0.06)
+          : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isHighlighted
+              ? theme.colorScheme.primary.withValues(alpha: 0.65)
+              : Colors.transparent,
+          width: isHighlighted ? 1.2 : 0,
+        ),
+      ),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.green[100],
           child: const Icon(Icons.attach_money, color: Colors.green),
         ),
-        title: Row(
+        title: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
+            if (paymentNumber != null) _buildPaymentCodeChip(paymentNumber),
             Text(
               ChileanUtils.formatCurrency(payment.amount),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             if (payment.invoiceReference != null &&
                 payment.invoiceReference!.isNotEmpty) ...[
-              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -197,5 +237,28 @@ class _PaymentsPageState extends State<PaymentsPage> {
         },
       ),
     );
+  }
+
+  Widget _buildPaymentCodeChip(String value) {
+    return Text(
+      value,
+      style: const TextStyle(
+        color: Color(0xFF2563EB),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        fontFamily: 'monospace',
+      ),
+    );
+  }
+
+  String? _paymentNumber(Payment payment) {
+    final id = payment.id;
+    if (id == null || id.isEmpty) return null;
+
+    final compact = id.replaceAll('-', '').toUpperCase();
+    final suffix = compact.length <= 6
+        ? compact.padLeft(6, '0')
+        : compact.substring(compact.length - 6);
+    return 'COB-$suffix';
   }
 }

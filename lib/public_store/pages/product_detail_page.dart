@@ -10,6 +10,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../widgets/full_page_loading.dart';
 import '../../shared/models/product.dart';
+import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
@@ -102,6 +103,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         debugPrint('❌ [ProductDetail] No tenant ID available');
         return;
       }
+      final visibilityPolicy = _readVisibilityPolicy();
 
       // Load the product - support both UUID and SKU-based lookups
       // SKU format: "sku:S56467" (from legacy /shop/ URLs)
@@ -112,11 +114,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         loadedProduct = await inventoryService.getProductBySku(
           sku: sku,
           tenantId: tenantId,
+          policy: visibilityPolicy,
         );
       } else {
         loadedProduct = await inventoryService.getProductById(
           productId: widget.productId,
           tenantId: tenantId,
+          policy: visibilityPolicy,
         );
       }
 
@@ -140,6 +144,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           inventoryService: inventoryService,
           tenantId: tenantId,
           product: _product!,
+          visibilityPolicy: visibilityPolicy,
         );
       } else {
         debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
@@ -196,6 +201,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required PublicInventoryService inventoryService,
     required String tenantId,
     required Product product,
+    required PublicProductVisibilityPolicy? visibilityPolicy,
   }) async {
     final categoryId = product.categoryId;
     if (categoryId == null || categoryId.isEmpty) return;
@@ -205,6 +211,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       final allProducts = await inventoryService.getProductsForTenant(
         tenantId: tenantId,
         categoryId: categoryId,
+        policy: visibilityPolicy,
         onlyInStock: true,
         limit: 12,
       );
@@ -218,6 +225,18 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     } catch (_) {
       if (!mounted || token != _loadToken) return;
       setState(() => _isLoadingRelated = false);
+    }
+  }
+
+  PublicProductVisibilityPolicy? _readVisibilityPolicy() {
+    try {
+      final service = context.read<WebsiteService>();
+      if (!PublicProductVisibilityPolicy.hasAnySetting(service.settings)) {
+        return null;
+      }
+      return PublicProductVisibilityPolicy.fromSettings(service.settings);
+    } catch (_) {
+      return null;
     }
   }
 

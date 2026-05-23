@@ -85,5 +85,6 @@ class PeriodDetailItem {
 
   bool get isIncome =>
       sourceType == 'sales_payment' ||
+      sourceType == 'sales_invoice' ||
       (sourceType == 'journal_entry' && amount > 0);
 }
