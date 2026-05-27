@@ -48,7 +48,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         unawaited(
           context
               .read<ChatProvider>()
-              .loadConversations(refreshContextHints: false),
+              .loadConversations(refreshContextHints: true),
         );
       }
     });
@@ -152,7 +152,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     setState(() => _isRefreshing = true);
     await context
         .read<ChatProvider>()
-        .loadConversations(refreshContextHints: false);
+        .loadConversations(refreshContextHints: true);
     if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
       await _loadWhatsAppContacts();
     }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -273,6 +274,8 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _showAutomaticMessagesPanel = false;
   bool _showChatInfoPanel = false;
   bool _isExportingChatArchive = false;
+  bool _isDraggingAttachment = false;
+  bool _isUploadingDroppedAttachments = false;
   _ChatInfoSection _selectedChatInfoSection = _ChatInfoSection.info;
   final GlobalKey _smartActionsButtonKey = GlobalKey();
   final GlobalKey _emojiButtonKey = GlobalKey();
@@ -1528,7 +1531,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
     try {
       late String fileName;
-      Uint8List? bytes;
+      late Uint8List bytes;
 
       if (choice == 'camera') {
         // Use ImagePicker for camera
@@ -1572,27 +1575,124 @@ class _ChatWindowState extends State<ChatWindow> {
         );
         if (result == null || result.files.isEmpty) return;
         final file = result.files.first;
+        final pickedBytes = file.bytes;
+        if (pickedBytes == null) return;
         fileName = file.name;
-        bytes = file.bytes;
+        bytes = pickedBytes;
       }
 
-      if (bytes == null || !mounted) return;
-
-      // Show loading indicator
+      if (!mounted) return;
+      await _sendAttachmentBytes(fileName: fileName, bytes: bytes);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
+            content: Text('Error al subir archivo: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _sendDroppedFiles(List<XFile> files) async {
+    if (files.isEmpty || _isUploadingDroppedAttachments) return;
+
+    setState(() {
+      _isDraggingAttachment = false;
+      _isUploadingDroppedAttachments = true;
+    });
+
+    final isBatch = files.length > 1;
+    if (isBatch && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
           content: Row(children: [
-            SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white)),
-            SizedBox(width: 12),
-            Text('Subiendo archivo...'),
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('Subiendo ${files.length} archivos...'),
           ]),
-          duration: Duration(seconds: 60),
+          duration: const Duration(seconds: 60),
         ),
       );
+    }
+
+    var sentCount = 0;
+    for (final file in files) {
+      try {
+        final bytes = await file.readAsBytes();
+        if (!mounted) return;
+        final sent = await _sendAttachmentBytes(
+          fileName: _droppedFileName(file),
+          bytes: bytes,
+          showUploadingSnackBar: !isBatch,
+        );
+        if (sent) sentCount += 1;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo adjuntar ${_droppedFileName(file)}: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isUploadingDroppedAttachments = false);
+    if (isBatch) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sentCount == 1
+                ? '1 archivo adjuntado'
+                : '$sentCount archivos adjuntados',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  String _droppedFileName(XFile file) {
+    final rawName = file.name.trim();
+    if (rawName.isNotEmpty) return rawName;
+    final pathName = file.path.trim().split(RegExp(r'[\\/]')).last;
+    if (pathName.isNotEmpty) return pathName;
+    return 'archivo';
+  }
+
+  Future<bool> _sendAttachmentBytes({
+    required String fileName,
+    required Uint8List bytes,
+    bool showUploadingSnackBar = true,
+  }) async {
+    if (!mounted || bytes.isEmpty) return false;
+
+    try {
+      if (showUploadingSnackBar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(children: [
+              SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Subiendo archivo...'),
+            ]),
+            duration: Duration(seconds: 60),
+          ),
+        );
+      }
 
       // Determine file type and MIME
       final ext = _resolveFileExtension(fileName);
@@ -1618,10 +1718,12 @@ class _ChatWindowState extends State<ChatWindow> {
       final publicUrl =
           supabase.storage.from('vinabike-assets').getPublicUrl(storagePath);
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       // Dismiss loading snackbar
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (showUploadingSnackBar) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
 
       // Determine message type
       final msgType = isImage ? 'image' : 'file';
@@ -1646,7 +1748,7 @@ class _ChatWindowState extends State<ChatWindow> {
           messageType: msgType,
           metadata: metadata,
         );
-        return;
+        return true;
       }
 
       // Send as file message
@@ -1655,14 +1757,18 @@ class _ChatWindowState extends State<ChatWindow> {
             type: msgType,
             metadata: metadata,
           );
+      return true;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (!mounted) return false;
+      if (showUploadingSnackBar) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Error al subir archivo: $e'),
             backgroundColor: Colors.red),
       );
+      return false;
     }
   }
 
@@ -1882,7 +1988,7 @@ class _ChatWindowState extends State<ChatWindow> {
     final pendingDraft =
         chatProvider.getConversationDraft(widget.conversation.id);
 
-    return Column(
+    final chatContent = Column(
       children: [
         _buildHeader(context, chatProvider),
 
@@ -1938,6 +2044,34 @@ class _ChatWindowState extends State<ChatWindow> {
         ],
       ],
     );
+
+    return DropTarget(
+      onDragEntered: (_) {
+        if (!_showChatInfoPanel && !_isDraggingAttachment) {
+          setState(() => _isDraggingAttachment = true);
+        }
+      },
+      onDragExited: (_) {
+        if (_isDraggingAttachment) {
+          setState(() => _isDraggingAttachment = false);
+        }
+      },
+      onDragDone: (details) {
+        unawaited(_sendDroppedFiles(details.files));
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          chatContent,
+          if (_isDraggingAttachment && !_showChatInfoPanel)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _buildAttachmentDropOverlay(theme),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Color _chatTimelineBackground(ThemeData theme) {
@@ -1949,6 +2083,76 @@ class _ChatWindowState extends State<ChatWindow> {
       );
     }
     return const Color(0xFFF8FAFC);
+  }
+
+  Widget _buildAttachmentDropOverlay(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.07),
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: 0.45),
+          width: 2,
+        ),
+      ),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 300),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.14),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.upload_file_outlined,
+                color: colorScheme.primary,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Suelta para adjuntar',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Imágenes, PDF y documentos',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPendingRequestBanner(BuildContext context) {
