@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/settings/services/appearance_service.dart';
+import '../services/notification_service.dart';
 
 class QuickUiSettingsButton extends StatelessWidget {
   const QuickUiSettingsButton({super.key});
@@ -49,7 +50,7 @@ class _QuickSettingsDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: SizedBox(
           width: dialogWidth,
           height: dialogHeight,
@@ -88,6 +89,10 @@ class _QuickSettingsDialog extends StatelessWidget {
                   Tab(
                       icon: Icon(Icons.vertical_split_outlined),
                       text: 'Barra derecha'),
+                  Tab(
+                    icon: Icon(Icons.notifications_active_outlined),
+                    text: 'Notificaciones',
+                  ),
                 ],
                 labelColor: theme.colorScheme.primary,
                 unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
@@ -101,6 +106,7 @@ class _QuickSettingsDialog extends StatelessWidget {
                         _ToolbarSettingsTab(
                           appearanceService: appearanceService,
                         ),
+                        const _NotificationsSettingsTab(),
                       ],
                     );
                   },
@@ -252,6 +258,666 @@ class _ToolbarSettingsTab extends StatelessWidget {
           onChanged: appearanceService.setRightToolbarBlurEnabled,
         ),
       ],
+    );
+  }
+}
+
+class _NotificationsSettingsTab extends StatefulWidget {
+  const _NotificationsSettingsTab();
+
+  @override
+  State<_NotificationsSettingsTab> createState() =>
+      _NotificationsSettingsTabState();
+}
+
+class _NotificationsSettingsTabState extends State<_NotificationsSettingsTab> {
+  final _notificationService = NotificationService();
+
+  bool _loading = true;
+  bool _notificationsEnabled = true;
+  bool _soundEnabled = true;
+  bool _vibrationEnabled = true;
+  bool _messageNotificationsEnabled = true;
+  bool _emailNotificationsEnabled = true;
+  String _messageSoundId = NotificationService.defaultMessageSoundId;
+  String _emailSoundId = NotificationService.defaultEmailSoundId;
+  double _soundVolume = 0.56;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    await _notificationService.loadSettingsForUi();
+    if (!mounted) return;
+    setState(() {
+      _notificationsEnabled = _notificationService.notificationsEnabled;
+      _soundEnabled = _notificationService.soundEnabled;
+      _vibrationEnabled = _notificationService.vibrationEnabled;
+      _messageNotificationsEnabled =
+          _notificationService.messageNotificationsEnabled;
+      _emailNotificationsEnabled =
+          _notificationService.emailNotificationsEnabled;
+      _messageSoundId = _notificationService.messageSoundId;
+      _emailSoundId = _notificationService.emailSoundId;
+      _soundVolume = _notificationService.soundVolume;
+      _loading = false;
+    });
+  }
+
+  Future<void> _setNotificationsEnabled(bool value) async {
+    setState(() => _notificationsEnabled = value);
+    await _notificationService.setNotificationsEnabled(value);
+  }
+
+  Future<void> _setSoundEnabled(bool value) async {
+    setState(() => _soundEnabled = value);
+    await _notificationService.setSoundEnabled(value);
+  }
+
+  Future<void> _setVibrationEnabled(bool value) async {
+    setState(() => _vibrationEnabled = value);
+    await _notificationService.setVibrationEnabled(value);
+  }
+
+  Future<void> _setChannelEnabled(
+    NotificationCategory category,
+    bool value,
+  ) async {
+    setState(() {
+      switch (category) {
+        case NotificationCategory.general:
+          _notificationsEnabled = value;
+          break;
+        case NotificationCategory.message:
+          _messageNotificationsEnabled = value;
+          break;
+        case NotificationCategory.email:
+          _emailNotificationsEnabled = value;
+          break;
+      }
+    });
+    await _notificationService.setCategoryNotificationsEnabled(category, value);
+  }
+
+  Future<void> _setChannelSound(
+    NotificationCategory category,
+    String soundId,
+  ) async {
+    setState(() {
+      switch (category) {
+        case NotificationCategory.general:
+          break;
+        case NotificationCategory.message:
+          _messageSoundId = soundId;
+          break;
+        case NotificationCategory.email:
+          _emailSoundId = soundId;
+          break;
+      }
+    });
+    await _notificationService.setSoundForCategory(category, soundId);
+  }
+
+  Future<void> _setSoundVolume(double value) async {
+    setState(() => _soundVolume = value);
+    await _notificationService.setSoundVolume(value);
+  }
+
+  Future<void> _previewSound(
+    NotificationCategory category,
+    String soundId,
+  ) {
+    return _notificationService.playNotificationSound(
+      category: category,
+      soundId: soundId,
+      preview: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const _SectionLabel(
+          icon: Icons.notifications_active_outlined,
+          label: 'General',
+        ),
+        const SizedBox(height: 8),
+        _SettingsSwitchTile(
+          icon: Icons.notifications_none_outlined,
+          title: 'Activar notificaciones',
+          value: _notificationsEnabled,
+          onChanged: _setNotificationsEnabled,
+        ),
+        const SizedBox(height: 8),
+        _SettingsSwitchTile(
+          icon: Icons.volume_up_outlined,
+          title: 'Sonidos',
+          value: _soundEnabled,
+          onChanged: _setSoundEnabled,
+        ),
+        const SizedBox(height: 8),
+        _SettingsSwitchTile(
+          icon: Icons.vibration_outlined,
+          title: 'Vibración',
+          value: _vibrationEnabled,
+          onChanged: _setVibrationEnabled,
+        ),
+        const SizedBox(height: 16),
+        Material(
+          color: theme.colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.tune_outlined,
+                      size: 19,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Volumen',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${(_soundVolume * 100).round()}%',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: _soundVolume,
+                  min: 0,
+                  max: 1,
+                  divisions: 20,
+                  onChanged: _soundEnabled
+                      ? (value) => setState(() => _soundVolume = value)
+                      : null,
+                  onChangeEnd: _soundEnabled ? _setSoundVolume : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const _SectionLabel(
+          icon: Icons.mark_chat_unread_outlined,
+          label: 'Canales',
+        ),
+        const SizedBox(height: 10),
+        _NotificationChannelCard(
+          category: NotificationCategory.message,
+          icon: Icons.chat_bubble_outline,
+          title: 'Mensajes',
+          subtitle: 'WhatsApp, chats internos y soporte',
+          enabled: _messageNotificationsEnabled,
+          soundId: _messageSoundId,
+          onEnabledChanged: (value) => _setChannelEnabled(
+            NotificationCategory.message,
+            value,
+          ),
+          onSoundChanged: (soundId) => _setChannelSound(
+            NotificationCategory.message,
+            soundId,
+          ),
+          onPreview: () => _previewSound(
+            NotificationCategory.message,
+            _messageSoundId,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _NotificationChannelCard(
+          category: NotificationCategory.email,
+          icon: Icons.email_outlined,
+          title: 'Correo',
+          subtitle: 'Gmail, Zoho y bandeja unificada',
+          enabled: _emailNotificationsEnabled,
+          soundId: _emailSoundId,
+          onEnabledChanged: (value) => _setChannelEnabled(
+            NotificationCategory.email,
+            value,
+          ),
+          onSoundChanged: (soundId) => _setChannelSound(
+            NotificationCategory.email,
+            soundId,
+          ),
+          onPreview: () => _previewSound(
+            NotificationCategory.email,
+            _emailSoundId,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NotificationChannelCard extends StatelessWidget {
+  final NotificationCategory category;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final String soundId;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<String> onSoundChanged;
+  final VoidCallback onPreview;
+
+  const _NotificationChannelCard({
+    required this.category,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.soundId,
+    required this.onEnabledChanged,
+    required this.onSoundChanged,
+    required this.onPreview,
+  });
+
+  Future<void> _openSoundPicker(BuildContext context) async {
+    final selectedSoundId = await showDialog<String>(
+      context: context,
+      builder: (context) => _NotificationSoundPickerDialog(
+        category: category,
+        selectedSoundId: soundId,
+      ),
+    );
+    if (selectedSoundId == null) return;
+    onSoundChanged(selectedSoundId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectedOption = NotificationService.soundOptionById(soundId);
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: enabled,
+                  onChanged: onEnabledChanged,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openSoundPicker(context),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Sonido',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    selectedOption.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Probar sonido',
+                  onPressed: onPreview,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                selectedOption.description,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationSoundPickerDialog extends StatelessWidget {
+  final NotificationCategory category;
+  final String selectedSoundId;
+
+  const _NotificationSoundPickerDialog({
+    required this.category,
+    required this.selectedSoundId,
+  });
+
+  static const _groups = [
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.mountainBike,
+      label: 'MTB',
+      icon: Icons.directions_bike_outlined,
+    ),
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.workshop,
+      label: 'Taller',
+      icon: Icons.build_outlined,
+    ),
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.pointOfSale,
+      label: 'Caja',
+      icon: Icons.qr_code_scanner_outlined,
+    ),
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.digital,
+      label: 'Digital',
+      icon: Icons.graphic_eq_outlined,
+    ),
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.desk,
+      label: 'Escritorio',
+      icon: Icons.keyboard_outlined,
+    ),
+    _NotificationSoundGroupTab(
+      group: NotificationSoundGroup.regular,
+      label: 'Regular',
+      icon: Icons.tune_outlined,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectedOption = NotificationService.soundOptionById(selectedSoundId);
+    final selectedGroupIndex = _groups.indexWhere(
+      (group) => group.group == selectedOption.group,
+    );
+    final initialIndex = selectedGroupIndex == -1 ? 0 : selectedGroupIndex;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: DefaultTabController(
+        length: _groups.length,
+        initialIndex: initialIndex,
+        child: SizedBox(
+          width: 560,
+          height: 480,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.volume_up_outlined,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Elegir sonido',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Cerrar',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              TabBar(
+                isScrollable: true,
+                tabs: [
+                  for (final group in _groups)
+                    Tab(
+                      icon: Icon(group.icon),
+                      text: group.label,
+                    ),
+                ],
+                labelColor: theme.colorScheme.primary,
+                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                indicatorSize: TabBarIndicatorSize.tab,
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    for (final group in _groups)
+                      _NotificationSoundOptionList(
+                        category: category,
+                        group: group.group,
+                        selectedSoundId: selectedSoundId,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationSoundGroupTab {
+  final NotificationSoundGroup group;
+  final String label;
+  final IconData icon;
+
+  const _NotificationSoundGroupTab({
+    required this.group,
+    required this.label,
+    required this.icon,
+  });
+}
+
+class _NotificationSoundOptionList extends StatelessWidget {
+  final NotificationCategory category;
+  final NotificationSoundGroup group;
+  final String selectedSoundId;
+
+  const _NotificationSoundOptionList({
+    required this.category,
+    required this.group,
+    required this.selectedSoundId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = NotificationService.soundOptionsForGroup(group);
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+      itemCount: options.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final option = options[index];
+        return _NotificationSoundOptionTile(
+          category: category,
+          option: option,
+          selected: option.id == selectedSoundId,
+        );
+      },
+    );
+  }
+}
+
+class _NotificationSoundOptionTile extends StatelessWidget {
+  final NotificationCategory category;
+  final NotificationSoundOption option;
+  final bool selected;
+
+  const _NotificationSoundOptionTile({
+    required this.category,
+    required this.option,
+    required this.selected,
+  });
+
+  Future<void> _preview() {
+    return NotificationService().playNotificationSound(
+      category: category,
+      soundId: option.id,
+      preview: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: selected
+          ? theme.colorScheme.primary.withValues(alpha: 0.08)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context).pop(option.id),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      option.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Probar sonido',
+                onPressed: _preview,
+                icon: const Icon(Icons.play_arrow_rounded),
+              ),
+              SizedBox(
+                width: 30,
+                child: selected
+                    ? Icon(
+                        Icons.check_circle_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 20,
+                      )
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

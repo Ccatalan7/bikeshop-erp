@@ -20,6 +20,48 @@ class ConversationDraft {
   });
 }
 
+class _IncomingConversationPreview {
+  final String content;
+  final String messageType;
+  final String? direction;
+  final String? externalStatus;
+  final DateTime createdAt;
+  final DateTime receivedAt;
+  final int unreadCount;
+
+  const _IncomingConversationPreview({
+    required this.content,
+    required this.messageType,
+    required this.direction,
+    required this.externalStatus,
+    required this.createdAt,
+    required this.receivedAt,
+    required this.unreadCount,
+  });
+}
+
+class _OutgoingConversationPreview {
+  final String clientMessageId;
+  final String content;
+  final String messageType;
+  final Map<String, dynamic> metadata;
+  final String? direction;
+  final String? externalStatus;
+  final DateTime createdAt;
+  final Conversation previousConversation;
+
+  const _OutgoingConversationPreview({
+    required this.clientMessageId,
+    required this.content,
+    required this.messageType,
+    required this.metadata,
+    required this.direction,
+    required this.externalStatus,
+    required this.createdAt,
+    required this.previousConversation,
+  });
+}
+
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
   final UserManagementService? _userService;
@@ -31,12 +73,18 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
   final Map<String, int> _conversationOpeningUnreadCounts = {};
+  final Map<String, DateTime> _localReadAtByConversation = {};
   final Map<String, DateTime> _lastReadSyncByConversation = {};
+  final Map<String, _IncomingConversationPreview>
+      _incomingConversationPreviews = {};
+  final Map<String, _OutgoingConversationPreview>
+      _outgoingConversationPreviews = {};
   final Set<String> _recentIncomingNotificationKeys = {};
   final List<String> _recentIncomingNotificationKeyOrder = [];
   bool _isLoading = false;
   bool _isLoadingConversations = false;
   bool _hasPendingConversationRefresh = false;
+  bool _pendingConversationRefreshNeedsContextHints = false;
   String? _activeConversationId;
 
   // Subscriptions
@@ -136,6 +184,31 @@ class ChatProvider extends ChangeNotifier {
     return '${compact.substring(0, 48)}...';
   }
 
+  String _debugDuration(DateTime startedAt) {
+    return '${DateTime.now().difference(startedAt).inMilliseconds}ms';
+  }
+
+  void _debugInboxSync(
+    String event, {
+    String? conversationId,
+    String? messageId,
+    DateTime? startedAt,
+    Map<String, Object?> details = const {},
+  }) {
+    if (!kDebugMode) return;
+
+    final parts = <String>[
+      event,
+      if (conversationId != null)
+        'conversation=${_shortDebugId(conversationId)}',
+      if (messageId != null) 'message=${_shortDebugId(messageId)}',
+      if (startedAt != null) 'elapsed=${_debugDuration(startedAt)}',
+      ...details.entries.map((entry) => '${entry.key}=${entry.value}'),
+    ];
+
+    debugPrint('[InboxSync] ${parts.join(' ')}');
+  }
+
   String? _textValue(dynamic value) {
     final text = value?.toString().trim();
     if (text == null || text.isEmpty || text == 'null') return null;
@@ -149,10 +222,14 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _debugLogWhatsAppStatusChanges(List<Message> nextMessages) {
+    if (!kDebugMode) return;
+
     final previousMessages = <Message>[
       ..._activeMessages,
       ..._optimisticMessages.values,
     ];
+    if (previousMessages.isEmpty) return;
+
     final previousById = <String, Message>{
       for (final message in previousMessages) message.id: message,
     };
@@ -242,11 +319,12 @@ class ChatProvider extends ChangeNotifier {
 
   /// Initialize listener for conversation list updates
   void _initConversationsListener() {
-    loadConversations(); // Initial load
+    // Keep the first inbox pass focused on badges and previews. Context chips
+    // are useful, but they should not block message delivery feedback.
+    loadConversations(refreshContextHints: false);
 
     _conversationsSubscription = _service.subscribeToConversationsUpdates(() {
       _scheduleConversationRefresh(const Duration(milliseconds: 80));
-      _scheduleConversationFollowUpRefresh();
     });
 
     // Also listen to NotificationService for realtime alerts (triggers badge update)
@@ -368,14 +446,37 @@ class ChatProvider extends ChangeNotifier {
         !isCurrentUserSender;
     final shouldIncrementUnread =
         isIncoming && _activeConversationId != conversationId;
-    final nextUnreadCount =
-        shouldIncrementUnread ? old.unreadCount + 1 : old.unreadCount;
+    final existingPreview = _incomingConversationPreviews[conversationId];
+    final nextUnreadCount = shouldIncrementUnread
+        ? _maxInt(
+            old.unreadCount + 1,
+            (existingPreview?.unreadCount ?? 0) + 1,
+          )
+        : old.unreadCount;
     final nextDirection = direction ??
         (isCurrentUserSender
             ? 'outbound'
             : old.isSupport
                 ? 'inbound'
                 : null);
+
+    if (shouldIncrementUnread) {
+      _localReadAtByConversation.remove(conversationId);
+      _lastReadSyncByConversation.remove(conversationId);
+      _outgoingConversationPreviews.remove(conversationId);
+      _incomingConversationPreviews[conversationId] =
+          _IncomingConversationPreview(
+        content: content,
+        messageType: messageType,
+        direction: nextDirection,
+        externalStatus: externalStatus,
+        createdAt: createdAt,
+        receivedAt: DateTime.now(),
+        unreadCount: nextUnreadCount,
+      );
+    } else if (_activeConversationId == conversationId || isCurrentUserSender) {
+      _incomingConversationPreviews.remove(conversationId);
+    }
 
     _conversations[index] = Conversation(
       id: old.id,
@@ -417,11 +518,12 @@ class ChatProvider extends ChangeNotifier {
 
   void _scheduleConversationRefresh([
     Duration delay = const Duration(milliseconds: 120),
+    bool refreshContextHints = false,
   ]) {
     _conversationsRefreshTimer?.cancel();
     _conversationsRefreshTimer = Timer(
       delay,
-      loadConversations,
+      () => loadConversations(refreshContextHints: refreshContextHints),
     );
   }
 
@@ -429,7 +531,7 @@ class ChatProvider extends ChangeNotifier {
     _conversationsFollowUpRefreshTimer?.cancel();
     _conversationsFollowUpRefreshTimer = Timer(
       const Duration(milliseconds: 700),
-      loadConversations,
+      () => loadConversations(refreshContextHints: false),
     );
   }
 
@@ -509,35 +611,147 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// Load conversations list
-  Future<void> loadConversations({String? type}) async {
+  Future<void> loadConversations({
+    String? type,
+    bool refreshContextHints = true,
+  }) async {
     // Don't set global loading here to avoid screen flickering on updates
     if (_isLoadingConversations) {
+      _pendingConversationRefreshNeedsContextHints |= refreshContextHints;
+      _debugInboxSync(
+        'loadConversations:queued',
+        details: {
+          'type': type ?? 'all',
+          'refreshContextHints': refreshContextHints,
+          'pendingNeedsContextHints':
+              _pendingConversationRefreshNeedsContextHints,
+          'outgoingPreviews': _outgoingConversationPreviews.length,
+          'incomingPreviews': _incomingConversationPreviews.length,
+        },
+      );
       _hasPendingConversationRefresh = true;
       return;
     }
 
+    final startedAt = DateTime.now();
+    _debugInboxSync(
+      'loadConversations:start',
+      details: {
+        'type': type ?? 'all',
+        'refreshContextHints': refreshContextHints,
+        'active': _shortDebugId(_activeConversationId),
+        'outgoingPreviews': _outgoingConversationPreviews.length,
+        'incomingPreviews': _incomingConversationPreviews.length,
+      },
+    );
+
     _isLoadingConversations = true;
     try {
-      final newConversations = await _service.getConversations(type: type);
-      _conversations = newConversations;
+      final newConversations = await _service.getConversations(
+        type: type,
+        includeContextHints: refreshContextHints,
+      );
+      _conversations = _applyOutgoingConversationPreviews(
+        _applyIncomingConversationPreviews(
+          _applyLocalReadOverrides(
+            refreshContextHints
+                ? newConversations
+                : _mergeCachedContextHints(newConversations),
+          ),
+        ),
+      );
+      _debugInboxSync(
+        'loadConversations:applied',
+        startedAt: startedAt,
+        details: {
+          'rows': _conversations.length,
+          'refreshContextHints': refreshContextHints,
+          'outgoingPreviews': _outgoingConversationPreviews.length,
+          'incomingPreviews': _incomingConversationPreviews.length,
+        },
+      );
       notifyListeners();
 
       // Refresh cache if needed
       if (_userCache.isEmpty) await _loadUserCache();
     } catch (e) {
+      _debugInboxSync(
+        'loadConversations:error',
+        startedAt: startedAt,
+        details: {'error': e},
+      );
       debugPrint('❌ Error loading conversations: $e');
     } finally {
       _isLoadingConversations = false;
       if (_hasPendingConversationRefresh) {
         _hasPendingConversationRefresh = false;
-        _scheduleConversationRefresh(const Duration(milliseconds: 80));
+        final pendingNeedsContextHints =
+            _pendingConversationRefreshNeedsContextHints;
+        _pendingConversationRefreshNeedsContextHints = false;
+        _debugInboxSync(
+          'loadConversations:runQueued',
+          details: {'refreshContextHints': pendingNeedsContextHints},
+        );
+        _scheduleConversationRefresh(
+          const Duration(milliseconds: 80),
+          pendingNeedsContextHints,
+        );
       }
     }
   }
 
+  List<Conversation> _mergeCachedContextHints(
+    List<Conversation> conversations,
+  ) {
+    if (_conversations.isEmpty) return conversations;
+
+    final cachedById = {
+      for (final conversation in _conversations) conversation.id: conversation,
+    };
+
+    return conversations.map((conversation) {
+      if (conversation.contextHint != null) return conversation;
+
+      final cached = cachedById[conversation.id];
+      final cachedHint = cached?.contextHint;
+      if (cachedHint == null) return conversation;
+
+      return Conversation(
+        id: conversation.id,
+        type: conversation.type,
+        channel: conversation.channel,
+        status: conversation.status,
+        title: conversation.title,
+        contextType: conversation.contextType,
+        contextId: conversation.contextId,
+        updatedAt: conversation.updatedAt,
+        lastMessageAt: conversation.lastMessageAt,
+        staffLastReadAt: conversation.staffLastReadAt,
+        lastMessageContent: conversation.lastMessageContent,
+        lastMessageType: conversation.lastMessageType,
+        lastMessageMetadata: conversation.lastMessageMetadata,
+        lastMessageIsMine: conversation.lastMessageIsMine,
+        lastMessageDirection: conversation.lastMessageDirection,
+        lastMessageExternalStatus: conversation.lastMessageExternalStatus,
+        unreadCount: conversation.unreadCount,
+        participantIds: conversation.participantIds,
+        createdBy: conversation.createdBy,
+        creatorName: conversation.creatorName ?? cached?.creatorName,
+        contextHint: cachedHint,
+      );
+    }).toList(growable: false);
+  }
+
   /// Open a conversation and subscribe to updates
   void setActiveConversation(String conversationId) {
-    if (_activeConversationId == conversationId) return;
+    if (_activeConversationId == conversationId) {
+      if (_messagesSubscription == null) {
+        _isLoading = _activeMessages.isEmpty;
+        notifyListeners();
+        _subscribeToActiveMessages(conversationId);
+      }
+      return;
+    }
 
     _activeConversationId = conversationId;
     _activeMessages = []; // Clear previous chat immediately
@@ -545,7 +759,9 @@ class ChatProvider extends ChangeNotifier {
     _isLoading = true; // Show loader while stream connects
     notifyListeners();
 
-    // Optimistically update local state to clear badge immediately
+    // Keep the unread badge until the visible message stream confirms the chat
+    // is actually open. This prevents stale selections in compact panels from
+    // marking coworker/customer replies as read too early.
     final index = _conversations.indexWhere((c) => c.id == conversationId);
     if (index != -1) {
       final old = _conversations[index];
@@ -554,34 +770,11 @@ class ChatProvider extends ChangeNotifier {
       } else {
         _conversationOpeningUnreadCounts.remove(conversationId);
       }
-      // Create copy with unreadCount = 0
-      _conversations[index] = Conversation(
-        id: old.id,
-        type: old.type,
-        channel: old.channel,
-        status: old.status,
-        title: old.title,
-        contextType: old.contextType,
-        contextId: old.contextId,
-        lastMessageAt: old.lastMessageAt,
-        staffLastReadAt: old.staffLastReadAt,
-        lastMessageContent: old.lastMessageContent,
-        lastMessageType: old.lastMessageType,
-        lastMessageMetadata: old.lastMessageMetadata,
-        lastMessageIsMine: old.lastMessageIsMine,
-        lastMessageDirection: old.lastMessageDirection,
-        lastMessageExternalStatus: old.lastMessageExternalStatus,
-        updatedAt: old.updatedAt,
-        participantIds: old.participantIds,
-        unreadCount: 0, // Force clear
-        createdBy: old.createdBy,
-        creatorName: old.creatorName,
-        contextHint: old.contextHint,
+      _markConversationLocallyRead(
+        conversationId,
+        readAt: _conversationReadThroughAt(old),
       );
-      notifyListeners();
     }
-
-    _markConversationReadAndRefresh(conversationId);
 
     // 1. Unsubscribe from old message stream
     _messagesRetryTimer?.cancel();
@@ -619,6 +812,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       _messagesSubscription = _service.getMessagesStream(conversationId).listen(
         (messages) {
+          if (_activeConversationId != conversationId) return;
+
           _messagesRetryTimer?.cancel();
           _messagesRetryAttempt = 0;
           _debugLogWhatsAppStatusChanges(messages);
@@ -652,7 +847,11 @@ class ChatProvider extends ChangeNotifier {
       return;
     }
 
-    _markConversationReadAndRefresh(conversationId, refreshAfter: false);
+    _markConversationReadAndRefresh(
+      conversationId,
+      readThrough: latestVisibleMessageAt,
+      refreshAfter: false,
+    );
   }
 
   DateTime? _latestVisibleMessageFromAnotherSender(List<Message> messages) {
@@ -703,25 +902,312 @@ class ChatProvider extends ChangeNotifier {
 
   void _markConversationReadAndRefresh(
     String conversationId, {
+    DateTime? readThrough,
     bool refreshAfter = true,
   }) {
-    final syncStartedAt = DateTime.now();
-    _lastReadSyncByConversation[conversationId] = syncStartedAt;
+    final readMarker = readThrough ?? DateTime.now();
+    _lastReadSyncByConversation[conversationId] = readMarker;
+    _markConversationLocallyRead(conversationId, readAt: readMarker);
 
     _service.markAsRead(conversationId).then((_) {
-      if (_activeConversationId == conversationId) {
-        if (refreshAfter) {
-          loadConversations();
-        } else {
-          _scheduleConversationRefresh(const Duration(milliseconds: 120));
-        }
+      if (refreshAfter) {
+        loadConversations(refreshContextHints: false);
+      } else {
+        _scheduleConversationRefresh(const Duration(milliseconds: 120));
       }
     }).catchError((error) {
-      if (_lastReadSyncByConversation[conversationId] == syncStartedAt) {
+      if (_lastReadSyncByConversation[conversationId] == readMarker) {
         _lastReadSyncByConversation.remove(conversationId);
       }
+      if (_localReadAtByConversation[conversationId] == readMarker) {
+        _localReadAtByConversation.remove(conversationId);
+      }
       debugPrint('⚠️ Error marking conversation as read: $error');
+      _scheduleConversationRefresh(const Duration(milliseconds: 250));
     });
+  }
+
+  List<Conversation> _applyLocalReadOverrides(
+      List<Conversation> conversations) {
+    if (_localReadAtByConversation.isEmpty) return conversations;
+
+    return conversations.map((conversation) {
+      final localReadAt = _localReadAtByConversation[conversation.id];
+      if (localReadAt == null || conversation.unreadCount == 0) {
+        return conversation;
+      }
+
+      final lastActivity = conversation.lastMessageAt ?? conversation.updatedAt;
+      if (lastActivity.isAfter(localReadAt)) {
+        return conversation;
+      }
+
+      return _conversationWithUnreadCount(conversation, 0);
+    }).toList(growable: false);
+  }
+
+  List<Conversation> _applyIncomingConversationPreviews(
+    List<Conversation> conversations,
+  ) {
+    if (_incomingConversationPreviews.isEmpty) return conversations;
+
+    final previewsToClear = <String>[];
+    final updated = conversations.map((conversation) {
+      final preview = _incomingConversationPreviews[conversation.id];
+      if (preview == null) return conversation;
+
+      if (_shouldClearIncomingPreview(conversation, preview)) {
+        _debugInboxSync(
+          'incomingPreview:clear',
+          conversationId: conversation.id,
+          details: {
+            'serverUnread': conversation.unreadCount,
+            'serverLast': _conversationReadThroughAt(conversation),
+          },
+        );
+        previewsToClear.add(conversation.id);
+        return conversation;
+      }
+
+      _debugInboxSync(
+        'incomingPreview:keep',
+        conversationId: conversation.id,
+        details: {
+          'previewUnread': preview.unreadCount,
+          'serverUnread': conversation.unreadCount,
+        },
+      );
+      return _conversationWithIncomingPreview(conversation, preview);
+    }).toList(growable: false);
+
+    for (final conversationId in previewsToClear) {
+      _incomingConversationPreviews.remove(conversationId);
+    }
+
+    return updated;
+  }
+
+  List<Conversation> _applyOutgoingConversationPreviews(
+    List<Conversation> conversations,
+  ) {
+    if (_outgoingConversationPreviews.isEmpty) return conversations;
+
+    final previewsToClear = <String>[];
+    final updated = conversations.map((conversation) {
+      final preview = _outgoingConversationPreviews[conversation.id];
+      if (preview == null) return conversation;
+
+      final clearReason = _outgoingPreviewClearReason(conversation, preview);
+      if (clearReason != null) {
+        _debugInboxSync(
+          'outgoingPreview:clear',
+          conversationId: conversation.id,
+          messageId: preview.clientMessageId,
+          details: {
+            'reason': clearReason,
+            'serverMine': conversation.lastMessageIsMine,
+            'serverLast': _conversationReadThroughAt(conversation),
+          },
+        );
+        previewsToClear.add(conversation.id);
+        return conversation;
+      }
+
+      _debugInboxSync(
+        'outgoingPreview:keep',
+        conversationId: conversation.id,
+        messageId: preview.clientMessageId,
+        details: {
+          'serverMine': conversation.lastMessageIsMine,
+          'serverLast': _conversationReadThroughAt(conversation),
+        },
+      );
+      return _conversationWithOutgoingPreview(conversation, preview);
+    }).toList(growable: false);
+
+    for (final conversationId in previewsToClear) {
+      _outgoingConversationPreviews.remove(conversationId);
+    }
+
+    return updated;
+  }
+
+  bool _shouldClearIncomingPreview(
+    Conversation conversation,
+    _IncomingConversationPreview preview,
+  ) {
+    if (_activeConversationId == conversation.id) return true;
+
+    final serverHasUnread = conversation.unreadCount > 0;
+    final lastActivity = _conversationReadThroughAt(conversation);
+    final serverHasPreviewMessage =
+        lastActivity != null && !lastActivity.isBefore(preview.createdAt);
+    if (serverHasUnread && serverHasPreviewMessage) return true;
+
+    final staffLastReadAt = conversation.staffLastReadAt;
+    if (conversation.isSupport &&
+        conversation.unreadCount == 0 &&
+        staffLastReadAt != null &&
+        staffLastReadAt.isAfter(preview.receivedAt)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  String? _outgoingPreviewClearReason(
+    Conversation conversation,
+    _OutgoingConversationPreview preview,
+  ) {
+    final serverClientMessageId =
+        conversation.lastMessageMetadata['client_message_id']?.toString();
+    if (serverClientMessageId == preview.clientMessageId) {
+      return 'server_confirmed_client_id';
+    }
+
+    final lastActivity = _conversationReadThroughAt(conversation);
+    if (lastActivity != null &&
+        lastActivity.isAfter(preview.createdAt) &&
+        !conversation.lastMessageIsMine) {
+      return 'newer_incoming_message';
+    }
+
+    return null;
+  }
+
+  Conversation _conversationWithIncomingPreview(
+    Conversation old,
+    _IncomingConversationPreview preview,
+  ) {
+    final lastActivity = _conversationReadThroughAt(old);
+    final previewActivity = preview.receivedAt;
+    final nextActivity =
+        lastActivity == null || previewActivity.isAfter(lastActivity)
+            ? previewActivity
+            : lastActivity;
+
+    return Conversation(
+      id: old.id,
+      type: old.type,
+      channel: old.channel,
+      status: old.status,
+      title: old.title,
+      contextType: old.contextType,
+      contextId: old.contextId,
+      updatedAt:
+          nextActivity.isAfter(old.updatedAt) ? nextActivity : old.updatedAt,
+      lastMessageAt:
+          old.lastMessageAt == null || nextActivity.isAfter(old.lastMessageAt!)
+              ? nextActivity
+              : old.lastMessageAt,
+      staffLastReadAt: old.staffLastReadAt,
+      lastMessageContent:
+          preview.content.isNotEmpty ? preview.content : old.lastMessageContent,
+      lastMessageType: preview.messageType,
+      lastMessageMetadata: old.lastMessageMetadata,
+      lastMessageIsMine: false,
+      lastMessageDirection: preview.direction ?? old.lastMessageDirection,
+      lastMessageExternalStatus:
+          preview.externalStatus ?? old.lastMessageExternalStatus,
+      unreadCount: _maxInt(old.unreadCount, preview.unreadCount),
+      participantIds: old.participantIds,
+      createdBy: old.createdBy,
+      creatorName: old.creatorName,
+      contextHint: old.contextHint,
+    );
+  }
+
+  Conversation _conversationWithOutgoingPreview(
+    Conversation old,
+    _OutgoingConversationPreview preview,
+  ) {
+    final lastActivity = _conversationReadThroughAt(old);
+    final nextActivity =
+        lastActivity == null || preview.createdAt.isAfter(lastActivity)
+            ? preview.createdAt
+            : lastActivity;
+
+    return Conversation(
+      id: old.id,
+      type: old.type,
+      channel: old.channel,
+      status: old.status,
+      title: old.title,
+      contextType: old.contextType,
+      contextId: old.contextId,
+      updatedAt:
+          nextActivity.isAfter(old.updatedAt) ? nextActivity : old.updatedAt,
+      lastMessageAt:
+          old.lastMessageAt == null || nextActivity.isAfter(old.lastMessageAt!)
+              ? nextActivity
+              : old.lastMessageAt,
+      staffLastReadAt: old.staffLastReadAt,
+      lastMessageContent: preview.content,
+      lastMessageType: preview.messageType,
+      lastMessageMetadata: preview.metadata,
+      lastMessageIsMine: true,
+      lastMessageDirection: preview.direction ?? old.lastMessageDirection,
+      lastMessageExternalStatus:
+          preview.externalStatus ?? old.lastMessageExternalStatus,
+      unreadCount: 0,
+      participantIds: old.participantIds,
+      createdBy: old.createdBy,
+      creatorName: old.creatorName,
+      contextHint: old.contextHint,
+    );
+  }
+
+  void _markConversationLocallyRead(
+    String conversationId, {
+    DateTime? readAt,
+  }) {
+    _localReadAtByConversation[conversationId] = readAt ?? DateTime.now();
+    _incomingConversationPreviews.remove(conversationId);
+    _clearLocalUnreadCount(conversationId);
+  }
+
+  DateTime? _conversationReadThroughAt(Conversation conversation) {
+    return conversation.lastMessageAt ?? conversation.updatedAt;
+  }
+
+  int _maxInt(int a, int b) => a > b ? a : b;
+
+  void _clearLocalUnreadCount(String conversationId) {
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index == -1 || _conversations[index].unreadCount == 0) return;
+
+    _conversations[index] =
+        _conversationWithUnreadCount(_conversations[index], 0);
+    notifyListeners();
+  }
+
+  Conversation _conversationWithUnreadCount(
+    Conversation old,
+    int unreadCount,
+  ) {
+    return Conversation(
+      id: old.id,
+      type: old.type,
+      channel: old.channel,
+      status: old.status,
+      title: old.title,
+      contextType: old.contextType,
+      contextId: old.contextId,
+      lastMessageAt: old.lastMessageAt,
+      staffLastReadAt: old.staffLastReadAt,
+      lastMessageContent: old.lastMessageContent,
+      lastMessageType: old.lastMessageType,
+      lastMessageMetadata: old.lastMessageMetadata,
+      lastMessageIsMine: old.lastMessageIsMine,
+      lastMessageDirection: old.lastMessageDirection,
+      lastMessageExternalStatus: old.lastMessageExternalStatus,
+      updatedAt: old.updatedAt,
+      participantIds: old.participantIds,
+      unreadCount: unreadCount,
+      createdBy: old.createdBy,
+      creatorName: old.creatorName,
+      contextHint: old.contextHint,
+    );
   }
 
   /// Create a new internal chat
@@ -811,7 +1297,7 @@ class ChatProvider extends ChangeNotifier {
         contextId: contextId,
       );
 
-      await loadConversations();
+      await loadConversations(refreshContextHints: false);
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error opening WhatsApp customer chat: $e');
@@ -829,6 +1315,7 @@ class ChatProvider extends ChangeNotifier {
       {String type = 'text', Map<String, dynamic>? metadata}) async {
     final activeId = _activeConversationId;
     if (activeId == null || content.trim().isEmpty) return;
+    final sendStartedAt = DateTime.now();
 
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
     final messageMetadata = <String, dynamic>{
@@ -848,7 +1335,24 @@ class ChatProvider extends ChangeNotifier {
       isMe: true,
     );
 
-    addOptimisticMessage(tempMessage);
+    _debugInboxSync(
+      'sendMessage:start',
+      conversationId: activeId,
+      messageId: tempId,
+      details: {
+        'type': type,
+        'text': _debugPreview(content),
+      },
+    );
+
+    final previousConversation = addOptimisticMessage(tempMessage);
+    _debugInboxSync(
+      'sendMessage:optimisticApplied',
+      conversationId: activeId,
+      messageId: tempId,
+      startedAt: sendStartedAt,
+      details: {'hadPreviousRow': previousConversation != null},
+    );
 
     try {
       await _service.sendMessage(
@@ -857,29 +1361,205 @@ class ChatProvider extends ChangeNotifier {
         type: type,
         metadata: messageMetadata,
       );
+      _debugInboxSync(
+        'sendMessage:serverDone',
+        conversationId: activeId,
+        messageId: tempId,
+        startedAt: sendStartedAt,
+      );
       // Realtime stream will handle the validation/replacement
     } catch (e) {
+      _debugInboxSync(
+        'sendMessage:error',
+        conversationId: activeId,
+        messageId: tempId,
+        startedAt: sendStartedAt,
+        details: {'error': e},
+      );
       debugPrint('❌ Error sending message: $e');
       // On error, remove the temp message
       removeMessageById(tempId);
+      _restoreOutgoingMessagePreview(tempMessage, previousConversation);
       // TODO: Show error toast
     }
   }
 
-  void addOptimisticMessage(Message message) {
-    if (_activeConversationId != message.conversationId) {
-      return;
+  Conversation? _applyOutgoingMessagePreview(
+    Message message, {
+    bool notify = true,
+    String source = 'unknown',
+  }) {
+    final index =
+        _conversations.indexWhere((c) => c.id == message.conversationId);
+    if (index == -1) {
+      _debugInboxSync(
+        'outgoingPreview:missingConversation',
+        conversationId: message.conversationId,
+        messageId: message.id,
+        details: {'source': source},
+      );
+      return null;
     }
 
-    _optimisticMessages[message.id] = message;
+    final old = _conversations[index];
+    final externalStatus = message.metadata['external_status']?.toString() ??
+        message.metadata['whatsapp_status']?.toString();
+    final direction = message.metadata['message_direction']?.toString() ??
+        (old.isSupport ? 'outbound' : old.lastMessageDirection);
+
+    _incomingConversationPreviews.remove(message.conversationId);
+    _localReadAtByConversation[message.conversationId] = message.createdAt;
+    _outgoingConversationPreviews[message.conversationId] =
+        _OutgoingConversationPreview(
+      clientMessageId: message.id,
+      content: message.content,
+      messageType: message.type,
+      metadata: message.metadata,
+      direction: direction,
+      externalStatus: externalStatus,
+      createdAt: message.createdAt,
+      previousConversation: old,
+    );
+
+    _conversations[index] = _conversationWithOutgoingPreview(
+      old,
+      _outgoingConversationPreviews[message.conversationId]!,
+    );
+
+    _sortConversationsByRecentActivity();
+    _debugInboxSync(
+      'outgoingPreview:apply',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      details: {
+        'source': source,
+        'type': message.type,
+        'direction': direction,
+        'text': _debugPreview(message.content),
+      },
+    );
+    if (notify) notifyListeners();
+    return old;
+  }
+
+  void _restoreOutgoingMessagePreview(
+    Message failedMessage,
+    Conversation? previousConversation,
+  ) {
+    if (previousConversation == null) return;
+
+    final index =
+        _conversations.indexWhere((c) => c.id == failedMessage.conversationId);
+    if (index == -1) return;
+
+    final restored =
+        _restoreOutgoingMessagePreviewById(failedMessage.id, notify: false);
+    if (restored) {
+      notifyListeners();
+    }
+  }
+
+  bool _restoreOutgoingMessagePreviewById(
+    String messageId, {
+    bool notify = true,
+  }) {
+    String? conversationId;
+    _OutgoingConversationPreview? preview;
+    for (final entry in _outgoingConversationPreviews.entries) {
+      if (entry.value.clientMessageId == messageId) {
+        conversationId = entry.key;
+        preview = entry.value;
+        break;
+      }
+    }
+
+    if (conversationId == null || preview == null) return false;
+
+    final index = _conversations.indexWhere((c) => c.id == conversationId);
+    if (index == -1) {
+      _outgoingConversationPreviews.remove(conversationId);
+      return false;
+    }
+
+    final current = _conversations[index];
+    final currentClientMessageId =
+        current.lastMessageMetadata['client_message_id']?.toString();
+    if (currentClientMessageId != messageId) return false;
+
+    _debugInboxSync(
+      'outgoingPreview:restore',
+      conversationId: conversationId,
+      messageId: messageId,
+    );
+    _outgoingConversationPreviews.remove(conversationId);
+    _conversations[index] = preview.previousConversation;
+    _sortConversationsByRecentActivity();
+    if (notify) notifyListeners();
+    return true;
+  }
+
+  Conversation? addOptimisticMessage(Message message) {
+    final startedAt = DateTime.now();
+    _debugInboxSync(
+      'optimisticMessage:add',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      details: {
+        'activeMatches': _activeConversationId == message.conversationId,
+        'isMe': message.isMe,
+        'type': message.type,
+        'pending': message.metadata['pending'],
+      },
+    );
+
+    Conversation? previousConversation;
+    if (_activeConversationId != message.conversationId) {
+      _debugInboxSync(
+        'optimisticMessage:skipBubbleInactive',
+        conversationId: message.conversationId,
+        messageId: message.id,
+      );
+    } else {
+      _optimisticMessages[message.id] = message;
+    }
+
+    if (message.isMe) {
+      previousConversation = _applyOutgoingMessagePreview(
+        message,
+        notify: false,
+        source: 'addOptimisticMessage',
+      );
+    }
+
     notifyListeners();
+    _debugInboxSync(
+      'optimisticMessage:notified',
+      conversationId: message.conversationId,
+      messageId: message.id,
+      startedAt: startedAt,
+      details: {'hadPreviousRow': previousConversation != null},
+    );
+    return previousConversation;
   }
 
   void removeMessageById(String messageId) {
     final removedOptimistic = _optimisticMessages.remove(messageId) != null;
     final previousLength = _activeMessages.length;
     _activeMessages.removeWhere((message) => message.id == messageId);
-    if (removedOptimistic || _activeMessages.length != previousLength) {
+    final restoredOutgoingPreview =
+        _restoreOutgoingMessagePreviewById(messageId, notify: false);
+    _debugInboxSync(
+      'optimisticMessage:remove',
+      messageId: messageId,
+      details: {
+        'removedBubble': removedOptimistic,
+        'removedActive': previousLength != _activeMessages.length,
+        'restoredInboxPreview': restoredOutgoingPreview,
+      },
+    );
+    if (removedOptimistic ||
+        _activeMessages.length != previousLength ||
+        restoredOutgoingPreview) {
       notifyListeners();
     }
   }

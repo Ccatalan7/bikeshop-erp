@@ -29,6 +29,39 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
+enum NotificationCategory {
+  general,
+  message,
+  email,
+}
+
+enum NotificationSoundGroup {
+  mountainBike,
+  workshop,
+  pointOfSale,
+  digital,
+  desk,
+  regular,
+}
+
+class NotificationSoundOption {
+  final String id;
+  final String label;
+  final String description;
+  final String assetPath;
+  final NotificationSoundGroup group;
+  final double volumeScale;
+
+  const NotificationSoundOption({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.assetPath,
+    this.group = NotificationSoundGroup.regular,
+    this.volumeScale = 1,
+  });
+}
+
 class NotificationService {
   // Singleton pattern
   static final NotificationService _instance = NotificationService._internal();
@@ -38,6 +71,270 @@ class NotificationService {
   final _supabase = Supabase.instance.client;
   final _localNotifications = FlutterLocalNotificationsPlugin();
   AudioPlayer? _audioPlayer;
+
+  static const defaultMessageSoundId = 'mtb_freehub';
+  static const defaultEmailSoundId = 'low_tap';
+  static const defaultGeneralSoundId = 'soft_snap';
+
+  static const List<NotificationSoundOption> soundOptions = [
+    NotificationSoundOption(
+      id: 'mtb_freehub',
+      label: 'MTB freehub',
+      description: 'Ratchet real, corto y seco',
+      assetPath: 'sounds/notify_mtb_freehub.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.58,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_freehub_soft',
+      label: 'MTB freehub suave',
+      description: 'Misma textura, menos mordida',
+      assetPath: 'sounds/notify_mtb_freehub_soft.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.64,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_gravel',
+      label: 'MTB gravilla',
+      description: 'Gravilla real, breve y sin tono',
+      assetPath: 'sounds/notify_mtb_gravel.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.50,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_trail',
+      label: 'MTB sendero',
+      description: 'Rodado apagado, muy corto',
+      assetPath: 'sounds/notify_mtb_trail.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.62,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_rock_ping',
+      label: 'MTB piedra',
+      description: 'Golpe de sendero, seco',
+      assetPath: 'sounds/notify_mtb_rock_ping.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.60,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_pebble_snap',
+      label: 'MTB piedrita',
+      description: 'Chasquido corto de gravilla',
+      assetPath: 'sounds/notify_mtb_pebble_snap.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.50,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_gravel_bite',
+      label: 'MTB gravel bite',
+      description: 'Gravilla con más carácter',
+      assetPath: 'sounds/notify_mtb_gravel_bite.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.52,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_road_tick',
+      label: 'MTB road tick',
+      description: 'Rodado rápido, compacto',
+      assetPath: 'sounds/notify_mtb_road_tick.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.42,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_dust_tick',
+      label: 'MTB polvo seco',
+      description: 'Tick de camino muy corto',
+      assetPath: 'sounds/notify_mtb_dust_tick.wav',
+      group: NotificationSoundGroup.mountainBike,
+      volumeScale: 0.60,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_spokes',
+      label: 'Rayos',
+      description: 'Metal real, sin campana larga',
+      assetPath: 'sounds/notify_mtb_spokes.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.54,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_shift',
+      label: 'Cambio seco',
+      description: 'Golpe seco con textura de rueda',
+      assetPath: 'sounds/notify_mtb_shift.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.56,
+    ),
+    NotificationSoundOption(
+      id: 'mtb_bell',
+      label: 'Trail bell corta',
+      description: 'Campana real, recortada y suave',
+      assetPath: 'sounds/notify_mtb_bell.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.48,
+    ),
+    NotificationSoundOption(
+      id: 'bike_brake_chirp',
+      label: 'Freno chirp',
+      description: 'Chirrido breve, con carácter',
+      assetPath: 'sounds/notify_bike_brake_chirp.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.34,
+    ),
+    NotificationSoundOption(
+      id: 'bike_brake_soft',
+      label: 'Freno suave',
+      description: 'Freno real, más apagado',
+      assetPath: 'sounds/notify_bike_brake_soft.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.30,
+    ),
+    NotificationSoundOption(
+      id: 'bike_bell_ping',
+      label: 'Bell ping',
+      description: 'Campana corta y limpia',
+      assetPath: 'sounds/notify_bike_bell_ping.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.56,
+    ),
+    NotificationSoundOption(
+      id: 'bike_bell_double',
+      label: 'Bell doble',
+      description: 'Doble campana muy recortada',
+      assetPath: 'sounds/notify_bike_bell_double.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.62,
+    ),
+    NotificationSoundOption(
+      id: 'bike_spoke_flick',
+      label: 'Spoke flick',
+      description: 'Toque metálico de rueda',
+      assetPath: 'sounds/notify_bike_spoke_flick.wav',
+      group: NotificationSoundGroup.workshop,
+      volumeScale: 0.56,
+    ),
+    NotificationSoundOption(
+      id: 'pos_scan',
+      label: 'Scan caja',
+      description: 'Beep POS corto y limpio',
+      assetPath: 'sounds/notify_pos_scan.wav',
+      group: NotificationSoundGroup.pointOfSale,
+      volumeScale: 0.44,
+    ),
+    NotificationSoundOption(
+      id: 'pos_scan_soft',
+      label: 'Scan suave',
+      description: 'Scanner menos brillante',
+      assetPath: 'sounds/notify_pos_scan_soft.wav',
+      group: NotificationSoundGroup.pointOfSale,
+      volumeScale: 0.42,
+    ),
+    NotificationSoundOption(
+      id: 'pos_confirm',
+      label: 'Confirmación POS',
+      description: 'Confirmación compacta',
+      assetPath: 'sounds/notify_pos_confirm.wav',
+      group: NotificationSoundGroup.pointOfSale,
+      volumeScale: 0.40,
+    ),
+    NotificationSoundOption(
+      id: 'digital_blip',
+      label: 'Blip digital',
+      description: 'Digital, corto, no invasivo',
+      assetPath: 'sounds/notify_digital_blip.wav',
+      group: NotificationSoundGroup.digital,
+      volumeScale: 0.62,
+    ),
+    NotificationSoundOption(
+      id: 'digital_glint',
+      label: 'Glint digital',
+      description: 'Brillante pero recortado',
+      assetPath: 'sounds/notify_digital_glint.wav',
+      group: NotificationSoundGroup.digital,
+      volumeScale: 0.50,
+    ),
+    NotificationSoundOption(
+      id: 'digital_sent',
+      label: 'Enviado suave',
+      description: 'Confirmación digital baja',
+      assetPath: 'sounds/notify_digital_sent.wav',
+      group: NotificationSoundGroup.digital,
+      volumeScale: 0.34,
+    ),
+    NotificationSoundOption(
+      id: 'desk_trackpad',
+      label: 'Trackpad',
+      description: 'Click físico limpio',
+      assetPath: 'sounds/notify_desk_trackpad.wav',
+      group: NotificationSoundGroup.desk,
+      volumeScale: 0.74,
+    ),
+    NotificationSoundOption(
+      id: 'desk_keys',
+      label: 'Teclas rápidas',
+      description: 'Teclado real, muy corto',
+      assetPath: 'sounds/notify_desk_keys.wav',
+      group: NotificationSoundGroup.desk,
+      volumeScale: 0.76,
+    ),
+    NotificationSoundOption(
+      id: 'desk_key_soft',
+      label: 'Tecla suave',
+      description: 'Click de escritorio apagado',
+      assetPath: 'sounds/notify_desk_key_soft.wav',
+      group: NotificationSoundGroup.desk,
+      volumeScale: 0.82,
+    ),
+    NotificationSoundOption(
+      id: 'dry_click',
+      label: 'Clic seco',
+      description: 'Corto, seco, sin melodía',
+      assetPath: 'sounds/notify_dry_click.wav',
+      volumeScale: 0.9,
+    ),
+    NotificationSoundOption(
+      id: 'low_tap',
+      label: 'Tap bajo',
+      description: 'Muy discreto para uso constante',
+      assetPath: 'sounds/notify_low_tap.wav',
+      volumeScale: 0.95,
+    ),
+    NotificationSoundOption(
+      id: 'soft_tock',
+      label: 'Tock suave',
+      description: 'Más redondo y menos brillante',
+      assetPath: 'sounds/notify_soft_tock.wav',
+      volumeScale: 0.92,
+    ),
+    NotificationSoundOption(
+      id: 'soft_snap',
+      label: 'Chasquido suave',
+      description: 'El más corto de la lista',
+      assetPath: 'sounds/notify_soft_snap.wav',
+      volumeScale: 0.88,
+    ),
+    NotificationSoundOption(
+      id: 'double_click',
+      label: 'Doble clic',
+      description: 'Dos golpes secos y bajos',
+      assetPath: 'sounds/notify_double_click.wav',
+      volumeScale: 0.82,
+    ),
+    NotificationSoundOption(
+      id: 'muted_ping',
+      label: 'Ping apagado',
+      description: 'Claro, pero sin campana larga',
+      assetPath: 'sounds/notify_muted_ping.wav',
+      volumeScale: 0.78,
+    ),
+    NotificationSoundOption(
+      id: 'classic',
+      label: 'Clásico original',
+      description: 'El sonido original de la app',
+      assetPath: 'sounds/notification.mp3',
+      volumeScale: 0.78,
+    ),
+  ];
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
@@ -63,10 +360,20 @@ class NotificationService {
   bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
+  bool _messageNotificationsEnabled = true;
+  bool _emailNotificationsEnabled = true;
+  String _messageSoundId = defaultMessageSoundId;
+  String _emailSoundId = defaultEmailSoundId;
+  double _soundVolume = 0.56;
 
   bool get notificationsEnabled => _notificationsEnabled;
   bool get soundEnabled => _soundEnabled;
   bool get vibrationEnabled => _vibrationEnabled;
+  bool get messageNotificationsEnabled => _messageNotificationsEnabled;
+  bool get emailNotificationsEnabled => _emailNotificationsEnabled;
+  String get messageSoundId => _messageSoundId;
+  String get emailSoundId => _emailSoundId;
+  double get soundVolume => _soundVolume;
 
   final ValueNotifier<int> onlineOrderAlertCount = ValueNotifier<int>(0);
   final Set<String> _seenOnlineOrderAlertIds = {};
@@ -97,6 +404,63 @@ class NotificationService {
     _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
     _soundEnabled = prefs.getBool('notification_sound') ?? true;
     _vibrationEnabled = prefs.getBool('notification_vibration') ?? true;
+    _messageNotificationsEnabled =
+        prefs.getBool('notification_messages_enabled') ?? true;
+    _emailNotificationsEnabled =
+        prefs.getBool('notification_email_enabled') ?? true;
+    _messageSoundId = _validSoundId(
+      prefs.getString('notification_message_sound') ?? defaultMessageSoundId,
+      fallback: defaultMessageSoundId,
+    );
+    _emailSoundId = _validSoundId(
+      prefs.getString('notification_email_sound') ?? defaultEmailSoundId,
+      fallback: defaultEmailSoundId,
+    );
+    _soundVolume = (prefs.getDouble('notification_sound_volume') ?? 0.56)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  Future<void> loadSettingsForUi() => _loadSettings();
+
+  static NotificationSoundOption soundOptionById(String id) {
+    for (final option in soundOptions) {
+      if (option.id == id) return option;
+    }
+    return soundOptions
+        .firstWhere((option) => option.id == defaultGeneralSoundId);
+  }
+
+  static List<NotificationSoundOption> soundOptionsForGroup(
+    NotificationSoundGroup group,
+  ) {
+    return soundOptions
+        .where((option) => option.group == group)
+        .toList(growable: false);
+  }
+
+  static String _validSoundId(String id, {required String fallback}) {
+    for (final option in soundOptions) {
+      if (option.id == id) return id;
+    }
+    return fallback;
+  }
+
+  bool notificationsEnabledFor(NotificationCategory category) {
+    if (!_notificationsEnabled) return false;
+    return switch (category) {
+      NotificationCategory.general => true,
+      NotificationCategory.message => _messageNotificationsEnabled,
+      NotificationCategory.email => _emailNotificationsEnabled,
+    };
+  }
+
+  String soundIdForCategory(NotificationCategory category) {
+    return switch (category) {
+      NotificationCategory.general => defaultGeneralSoundId,
+      NotificationCategory.message => _messageSoundId,
+      NotificationCategory.email => _emailSoundId,
+    };
   }
 
   Future<void> setNotificationsEnabled(bool value) async {
@@ -115,6 +479,53 @@ class NotificationService {
     _vibrationEnabled = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notification_vibration', value);
+  }
+
+  Future<void> setCategoryNotificationsEnabled(
+    NotificationCategory category,
+    bool value,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    switch (category) {
+      case NotificationCategory.general:
+        await setNotificationsEnabled(value);
+        return;
+      case NotificationCategory.message:
+        _messageNotificationsEnabled = value;
+        await prefs.setBool('notification_messages_enabled', value);
+        return;
+      case NotificationCategory.email:
+        _emailNotificationsEnabled = value;
+        await prefs.setBool('notification_email_enabled', value);
+        return;
+    }
+  }
+
+  Future<void> setSoundForCategory(
+    NotificationCategory category,
+    String soundId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final validSoundId =
+        _validSoundId(soundId, fallback: defaultGeneralSoundId);
+    switch (category) {
+      case NotificationCategory.general:
+        return;
+      case NotificationCategory.message:
+        _messageSoundId = validSoundId;
+        await prefs.setString('notification_message_sound', validSoundId);
+        return;
+      case NotificationCategory.email:
+        _emailSoundId = validSoundId;
+        await prefs.setString('notification_email_sound', validSoundId);
+        return;
+    }
+  }
+
+  Future<void> setSoundVolume(double value) async {
+    _soundVolume = value.clamp(0.0, 1.0).toDouble();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('notification_sound_volume', _soundVolume);
   }
 
   Future<List<Map<String, dynamic>>> loadOnlineOrderAlerts(
@@ -238,8 +649,14 @@ class NotificationService {
     }
   }
 
-  Future<void> playNotificationSound() async {
-    if (!_soundEnabled) return;
+  Future<void> playNotificationSound({
+    NotificationCategory category = NotificationCategory.general,
+    String? soundId,
+    bool preview = false,
+  }) async {
+    if (!preview && (!_soundEnabled || !notificationsEnabledFor(category))) {
+      return;
+    }
 
     // Web: audio playback is often blocked by browser policy, and plugin
     // initialization can throw MissingPluginException depending on build.
@@ -247,15 +664,16 @@ class NotificationService {
     if (kIsWeb) return;
 
     try {
-      // Use a simple system beep or bundled sound
-      // For cross-platform, we use a URL approach or asset
       _audioPlayer ??= AudioPlayer();
-      await _audioPlayer!
-          .play(AssetSource('sounds/notification.mp3'), volume: 1.0);
+      final option = soundOptionById(soundId ?? soundIdForCategory(category));
+      final effectiveVolume =
+          (_soundVolume * option.volumeScale).clamp(0.0, 1.0).toDouble();
+      await _audioPlayer!.play(
+        AssetSource(option.assetPath),
+        volume: effectiveVolume,
+      );
     } catch (e) {
-      // On Web, browsers block audio if not triggered by user interaction.
-      // We catch this to prevent the app from crashing.
-      debugPrint('⚠️ Audio playback failed (likely browser policy): $e');
+      debugPrint('⚠️ Audio playback failed: $e');
     }
   }
 
@@ -315,7 +733,7 @@ class NotificationService {
         description: 'Notificaciones de mensajes de chat',
         importance: Importance.high,
         enableVibration: true,
-        playSound: true,
+        playSound: false,
       );
 
       await _localNotifications
@@ -329,7 +747,7 @@ class NotificationService {
         description: 'Notificaciones de correos entrantes',
         importance: Importance.high,
         enableVibration: true,
-        playSound: true,
+        playSound: false,
       );
 
       await _localNotifications
@@ -442,12 +860,14 @@ class NotificationService {
         }
 
         if (hasData || hasNotification) {
+          final category = categoryForMessage(message);
+
           // Notify in-app listeners (Snackbar)
           _messageStreamController.add(message);
 
-          if (_notificationsEnabled) {
+          if (notificationsEnabledFor(category)) {
             // Play sound and vibrate
-            playNotificationSound();
+            playNotificationSound(category: category);
             _triggerVibration();
 
             handleIncomingMessage(message);
@@ -670,12 +1090,18 @@ class NotificationService {
                   data: newMessage,
                 ));
 
-                if (_notificationsEnabled) {
+                if (notificationsEnabledFor(NotificationCategory.message)) {
                   // Play sound and vibrate
-                  playNotificationSound();
+                  playNotificationSound(
+                    category: NotificationCategory.message,
+                  );
                   _triggerVibration();
 
-                  showLocalNotification('New Message', content);
+                  showLocalNotification(
+                    'New Message',
+                    content,
+                    category: NotificationCategory.message,
+                  );
                 }
               }
             },
@@ -795,7 +1221,8 @@ class NotificationService {
   /// Handles an incoming FCM message and decides how to show it
   // Made public to be accessible from top-level background handler
   Future<void> handleIncomingMessage(RemoteMessage message) async {
-    if (!_notificationsEnabled) return;
+    final category = categoryForMessage(message);
+    if (!notificationsEnabledFor(category)) return;
 
     final data = message.data;
     final notification = message.notification;
@@ -811,6 +1238,7 @@ class NotificationService {
         notificationId: (data['history_id'] ?? data['email_address'] ?? 'mail')
             .toString()
             .hashCode,
+        category: NotificationCategory.email,
       );
       return;
     }
@@ -906,8 +1334,18 @@ class NotificationService {
         data['title'] ?? notification?.title ?? 'New Message',
         data['body'] ?? notification?.body ?? '',
         notificationId: conversationId.hashCode,
+        category: NotificationCategory.message,
       );
     }
+  }
+
+  NotificationCategory categoryForMessage(RemoteMessage message) {
+    final data = message.data;
+    final isMailNotification = data['type'] == 'mail' ||
+        data['notification_type'] == 'mail' ||
+        data['route'] == '/mail';
+    if (isMailNotification) return NotificationCategory.email;
+    return NotificationCategory.message;
   }
 
   Future<void> _showMessagingNotification({
@@ -915,7 +1353,7 @@ class NotificationService {
     String? conversationTitle,
     required List<Message> messages,
   }) async {
-    if (!_notificationsEnabled) return;
+    if (!notificationsEnabledFor(NotificationCategory.message)) return;
 
     // Generate a consistent ID based on conversationId hash
     // This allows updating the *same* notification slot instead of creating new ones
@@ -944,12 +1382,13 @@ class NotificationService {
           conversationId, // Same tag = replaces previous notification for this conversation
       setAsGroupSummary: false, // Individual conversation
       onlyAlertOnce: true, // Don't re-alert for updates to same notification
+      playSound: false,
       color: const Color(0xFF000000),
     );
 
     final NotificationDetails details = NotificationDetails(
       android: androidDetails,
-      macOS: const DarwinNotificationDetails(),
+      macOS: const DarwinNotificationDetails(presentSound: false),
       linux: const LinuxNotificationDetails(),
       windows: const WindowsNotificationDetails(),
     );
@@ -970,9 +1409,13 @@ class NotificationService {
   }
 
   // Legacy method kept for simple alerts or errors
-  Future<void> showLocalNotification(String title, String body,
-      {int? notificationId}) async {
-    if (!_notificationsEnabled) return;
+  Future<void> showLocalNotification(
+    String title,
+    String body, {
+    int? notificationId,
+    NotificationCategory category = NotificationCategory.general,
+  }) async {
+    if (!notificationsEnabledFor(category)) return;
     if (kIsWeb) return;
     try {
       const notificationDetails = NotificationDetails(
@@ -981,8 +1424,9 @@ class NotificationService {
           'General Notifications',
           importance: Importance.max,
           priority: Priority.high,
+          playSound: false,
         ),
-        macOS: DarwinNotificationDetails(),
+        macOS: DarwinNotificationDetails(presentSound: false),
         linux: LinuxNotificationDetails(),
         windows: WindowsNotificationDetails(),
       );

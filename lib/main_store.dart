@@ -150,6 +150,9 @@ Future<void> main() async {
     FlutterError.onError = (FlutterErrorDetails details) {
       // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
       final errorString = details.exceptionAsString();
+      if (ErrorReportingService.shouldSuppress(errorString)) {
+        return;
+      }
       if (kIsWeb) {
         if (errorString.contains('disposed') &&
             errorString.contains('EngineFlutterView')) {
@@ -174,6 +177,9 @@ Future<void> main() async {
     // AFTER data is loaded, for a seamless transition without spinner flash
   }, (error, stack) {
     final errorString = error.toString();
+    if (ErrorReportingService.shouldSuppress(errorString)) {
+      return;
+    }
 
     // Suppress Flutter Web-specific errors that don't affect functionality
     if (kIsWeb) {

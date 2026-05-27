@@ -65,6 +65,21 @@ class MessagingService {
     return DateTime.tryParse(text);
   }
 
+  void _debugInboxService(
+    String event,
+    Stopwatch stopwatch, {
+    Map<String, Object?> details = const {},
+  }) {
+    if (!kDebugMode) return;
+
+    final parts = <String>[
+      event,
+      'elapsed=${stopwatch.elapsedMilliseconds}ms',
+      ...details.entries.map((entry) => '${entry.key}=${entry.value}'),
+    ];
+    debugPrint('[InboxSync] service:${parts.join(' ')}');
+  }
+
   Map<String, dynamic> _rowMap(dynamic row) {
     if (row is Map<String, dynamic>) return row;
     return Map<String, dynamic>.from(row as Map);
@@ -734,9 +749,27 @@ class MessagingService {
 
   /// Fetch conversations for the current user with unread counts
   /// [type] filter: 'internal' or 'support'
-  Future<List<Conversation>> getConversations({String? type}) async {
+  Future<List<Conversation>> getConversations({
+    String? type,
+    bool includeContextHints = true,
+  }) async {
     final userId = currentUserId;
     if (userId == null) return [];
+    final stopwatch = Stopwatch()..start();
+    final conversationSelect = includeContextHints
+        ? '*, conversation_participants(user_id), conversation_contexts(*)'
+        : '''
+          id, type, channel, status, title, context_type, context_id,
+          updated_at, last_message_at, staff_last_read_at, created_by,
+          conversation_participants(user_id)
+        ''';
+    final internalConversationSelect = includeContextHints
+        ? '*, conversation_participants!inner(user_id), conversation_contexts(*)'
+        : '''
+          id, type, channel, status, title, context_type, context_id,
+          updated_at, last_message_at, staff_last_read_at, created_by,
+          conversation_participants!inner(user_id)
+        ''';
 
     List<dynamic> data = [];
 
@@ -744,8 +777,7 @@ class MessagingService {
       // For support chats: show ALL support conversations (shared inbox)
       final response = await _client
           .from('conversations')
-          .select(
-              '*, conversation_participants(user_id), conversation_contexts(*)')
+          .select(conversationSelect)
           .eq('type', 'support')
           .order('last_message_at', ascending: false);
       data = response as List<dynamic>;
@@ -754,32 +786,32 @@ class MessagingService {
       // For internal chats: only show ones where user is a participant
       final response = await _client
           .from('conversations')
-          .select(
-              '*, conversation_participants!inner(user_id), conversation_contexts(*)')
+          .select(internalConversationSelect)
           .eq('type', 'internal')
           .order('last_message_at', ascending: false);
       data = response as List<dynamic>;
       debugPrint('💬 Internal chats loaded: ${data.length}');
     } else {
       // No filter: get both internal (participated) and support (all)
-      final internalResponse = await _client
-          .from('conversations')
-          .select(
-              '*, conversation_participants!inner(user_id), conversation_contexts(*)')
-          .eq('type', 'internal')
-          .order('last_message_at', ascending: false);
+      final responses = await Future.wait([
+        _client
+            .from('conversations')
+            .select(internalConversationSelect)
+            .eq('type', 'internal')
+            .order('last_message_at', ascending: false),
+        _client
+            .from('conversations')
+            .select(conversationSelect)
+            .eq('type', 'support')
+            .order('last_message_at', ascending: false),
+      ]);
+      final internalResponse = responses[0] as List;
+      final supportResponse = responses[1] as List;
 
-      final supportResponse = await _client
-          .from('conversations')
-          .select(
-              '*, conversation_participants(user_id), conversation_contexts(*)')
-          .eq('type', 'support')
-          .order('last_message_at', ascending: false);
+      debugPrint('💬 Internal chats: ${internalResponse.length}');
+      debugPrint('📬 Support chats: ${supportResponse.length}');
 
-      debugPrint('💬 Internal chats: ${(internalResponse as List).length}');
-      debugPrint('📬 Support chats: ${(supportResponse as List).length}');
-
-      data = [...(internalResponse as List), ...(supportResponse as List)];
+      data = [...internalResponse, ...supportResponse];
       // Sort by last_message_at
       data.sort((a, b) {
         final aTime = a['last_message_at'] ?? a['updated_at'];
@@ -788,24 +820,18 @@ class MessagingService {
       });
       debugPrint('📊 Total conversations: ${data.length}');
     }
-
-    // Fetch unread counts for current user
-    final unreadResponse = await _client
-        .from('conversation_unread_counts')
-        .select('conversation_id, unread_count')
-        .eq('user_id', userId);
-
-    final Map<String, int> unreadMap = {};
-    for (var row in unreadResponse) {
-      final conversationId = row['conversation_id']?.toString();
-      if (conversationId == null) continue;
-      unreadMap[conversationId] = row['unread_count'] ?? 0;
-    }
+    _debugInboxService(
+      'getConversations:baseRows',
+      stopwatch,
+      details: {
+        'type': type ?? 'all',
+        'rows': data.length,
+        'includeContextHints': includeContextHints,
+      },
+    );
 
     final conversationIds =
         data.map((json) => json['id']?.toString()).whereType<String>().toSet();
-    final latestMessages =
-        await _fetchLatestMessagesForConversations(conversationIds);
 
     // Collect support conversation IDs and creator IDs to fetch customer names
     // and WhatsApp contact names in batch.
@@ -821,51 +847,157 @@ class MessagingService {
       }
     }
 
-    final Map<String, String> whatsappContactNames = {};
-    if (supportConversationIds.isNotEmpty) {
+    final unreadFuture = (() async {
+      final response = await _client
+          .from('conversation_unread_counts')
+          .select('conversation_id, unread_count')
+          .eq('user_id', userId);
+      final rows = response as List<dynamic>;
+      _debugInboxService(
+        'getConversations:unread',
+        stopwatch,
+        details: {'rows': rows.length},
+      );
+      return rows;
+    })();
+
+    final latestMessagesFuture = (() async {
+      final latestMessages =
+          await _fetchLatestMessagesForConversations(conversationIds);
+      _debugInboxService(
+        'getConversations:latestMessages',
+        stopwatch,
+        details: {'rows': latestMessages.length},
+      );
+      return latestMessages;
+    })();
+
+    final whatsappNamesFuture = (() async {
+      if (!includeContextHints || supportConversationIds.isEmpty) {
+        _debugInboxService(
+          'getConversations:whatsappNames',
+          stopwatch,
+          details: {'skipped': true},
+        );
+        return <dynamic>[];
+      }
+
       try {
-        final bindings = await _client
+        final response = await _client
             .from('whatsapp_conversation_bindings')
             .select('conversation_id, contact_name, external_phone_number')
-            .inFilter('conversation_id', supportConversationIds.toList());
-
-        for (final binding in bindings) {
-          final conversationId = binding['conversation_id']?.toString();
-          final contactName = binding['contact_name']?.toString().trim();
-          final phone = binding['external_phone_number']?.toString().trim();
-          if (conversationId == null) continue;
-          if (contactName != null && contactName.isNotEmpty) {
-            whatsappContactNames[conversationId] = contactName;
-          } else if (phone != null && phone.isNotEmpty) {
-            whatsappContactNames[conversationId] = phone;
-          }
-        }
+            .inFilter(
+              'conversation_id',
+              supportConversationIds.toList(),
+            );
+        final rows = response as List<dynamic>;
+        _debugInboxService(
+          'getConversations:whatsappNames',
+          stopwatch,
+          details: {'rows': rows.length},
+        );
+        return rows;
       } catch (e) {
         debugPrint('Error fetching WhatsApp contact names: $e');
+        return <dynamic>[];
+      }
+    })();
+
+    final customerNamesFuture = (() async {
+      if (!includeContextHints || creatorIds.isEmpty) {
+        _debugInboxService(
+          'getConversations:customerNames',
+          stopwatch,
+          details: {'skipped': true},
+        );
+        return <dynamic>[];
+      }
+
+      try {
+        final response = await _client
+            .from('customers')
+            .select('auth_user_id, name')
+            .inFilter('auth_user_id', creatorIds.toList());
+        final rows = response as List<dynamic>;
+        _debugInboxService(
+          'getConversations:customerNames',
+          stopwatch,
+          details: {'rows': rows.length},
+        );
+        return rows;
+      } catch (e) {
+        debugPrint('Error fetching customer names: $e');
+        return <dynamic>[];
+      }
+    })();
+
+    final contextHintsFuture = (() async {
+      if (!includeContextHints) {
+        _debugInboxService(
+          'getConversations:contextHints',
+          stopwatch,
+          details: {
+            'included': false,
+            'rows': 0,
+          },
+        );
+        return <String, ConversationContextHint>{};
+      }
+
+      final hints = await _fetchContextHintsForConversations(data);
+      _debugInboxService(
+        'getConversations:contextHints',
+        stopwatch,
+        details: {
+          'included': true,
+          'rows': hints.length,
+        },
+      );
+      return hints;
+    })();
+
+    final inboxPieces = await Future.wait<dynamic>([
+      unreadFuture,
+      latestMessagesFuture,
+      whatsappNamesFuture,
+      customerNamesFuture,
+      contextHintsFuture,
+    ]);
+    final unreadResponse = inboxPieces[0] as List<dynamic>;
+    final latestMessages = inboxPieces[1] as Map<String, Map<String, dynamic>>;
+    final whatsappNameRows = inboxPieces[2] as List<dynamic>;
+    final customerNameRows = inboxPieces[3] as List<dynamic>;
+    final contextHints = inboxPieces[4] as Map<String, ConversationContextHint>;
+
+    final Map<String, int> unreadMap = {};
+    for (var row in unreadResponse) {
+      final conversationId = row['conversation_id']?.toString();
+      if (conversationId == null) continue;
+      unreadMap[conversationId] = row['unread_count'] ?? 0;
+    }
+
+    final Map<String, String> whatsappContactNames = {};
+    for (final binding in whatsappNameRows) {
+      final conversationId = binding['conversation_id']?.toString();
+      final contactName = binding['contact_name']?.toString().trim();
+      final phone = binding['external_phone_number']?.toString().trim();
+      if (conversationId == null) continue;
+      if (contactName != null && contactName.isNotEmpty) {
+        whatsappContactNames[conversationId] = contactName;
+      } else if (phone != null && phone.isNotEmpty) {
+        whatsappContactNames[conversationId] = phone;
       }
     }
 
     // Fetch customer names for creators
     Map<String, String> customerNames = {};
-    if (creatorIds.isNotEmpty) {
-      try {
-        final customersResponse = await _client
-            .from('customers')
-            .select('auth_user_id, name')
-            .inFilter('auth_user_id', creatorIds.toList());
-        for (var c in customersResponse) {
-          if (c['auth_user_id'] != null && c['name'] != null) {
-            customerNames[c['auth_user_id']] = c['name'];
-          }
-        }
-      } catch (e) {
-        debugPrint('Error fetching customer names: $e');
+    for (var c in customerNameRows) {
+      if (c['auth_user_id'] != null && c['name'] != null) {
+        customerNames[c['auth_user_id']] = c['name'];
       }
     }
 
-    final contextHints = await _fetchContextHintsForConversations(data);
-
-    return data.map((json) {
+    final conversations = data.map((json) {
       // Inject unread count and creator name into json before parsing.
       final conversationId = json['id']?.toString();
       final latestMessage =
@@ -907,6 +1039,12 @@ class MessagingService {
       }
       return Conversation.fromJson(json);
     }).toList();
+    _debugInboxService(
+      'getConversations:done',
+      stopwatch,
+      details: {'rows': conversations.length},
+    );
+    return conversations;
   }
 
   Future<Map<String, Map<String, dynamic>>>
@@ -1425,7 +1563,11 @@ class MessagingService {
   RealtimeChannel subscribeToConversationsUpdates(VoidCallback onUpdate) {
     final channelName =
         'public:messaging-inbox-${DateTime.now().microsecondsSinceEpoch}';
-    void handleChange(PostgresChangePayload payload) => onUpdate();
+    void handleChange(PostgresChangePayload payload) {
+      if (_shouldRefreshInboxForRealtimePayload(payload)) {
+        onUpdate();
+      }
+    }
 
     return _client
         .channel(channelName)
@@ -1448,6 +1590,19 @@ class MessagingService {
           callback: handleChange,
         )
         .subscribe();
+  }
+
+  bool _shouldRefreshInboxForRealtimePayload(PostgresChangePayload payload) {
+    if (payload.eventType != PostgresChangeEvent.update) return true;
+
+    // Message inserts/deletes can affect inbox order and previews. Updates on
+    // messages, conversations, and participants are normally delivery/read
+    // status or last-message timestamp maintenance. Those do not need a second
+    // full inbox reload after the message insert already refreshed the row.
+    return switch (payload.table) {
+      'messages' || 'conversations' || 'conversation_participants' => false,
+      _ => true,
+    };
   }
 
   /// Create a new "Support" conversation (for Customer Portal)

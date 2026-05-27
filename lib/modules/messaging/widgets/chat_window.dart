@@ -251,6 +251,7 @@ class _ChatWindowState extends State<ChatWindow> {
   final FocusNode _emojiSearchFocusNode = FocusNode();
   final TextEditingController _emojiSearchController = TextEditingController();
   final MessagingService _messagingService = MessagingService();
+  ChatProvider? _chatProvider;
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
   OverlayEntry? _emojiOverlayEntry;
@@ -405,6 +406,12 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _chatProvider = context.read<ChatProvider>();
+  }
+
+  @override
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
@@ -434,9 +441,8 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
-    context
-        .read<ChatProvider>()
-        .clearActiveConversation(conversationId: widget.conversation.id);
+    _chatProvider?.clearActiveConversation(
+        conversationId: widget.conversation.id);
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
     _removeOverlay();
@@ -968,16 +974,16 @@ class _ChatWindowState extends State<ChatWindow> {
 
   void _loadMessages() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       final provider = context.read<ChatProvider>();
       provider.setActiveConversation(widget.conversation.id);
-      if (_openingUnreadCount == 0) {
-        final count = provider.takeOpeningUnreadCount(widget.conversation.id);
-        if (count > 0 && mounted) {
-          setState(() {
-            _openingUnreadConversationId = widget.conversation.id;
-            _openingUnreadCount = count;
-          });
-        }
+      final count = provider.takeOpeningUnreadCount(widget.conversation.id);
+      if (_openingUnreadCount == 0 && count > 0 && mounted) {
+        setState(() {
+          _openingUnreadConversationId = widget.conversation.id;
+          _openingUnreadCount = count;
+        });
       }
     });
   }

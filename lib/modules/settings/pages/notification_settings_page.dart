@@ -156,7 +156,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             trailing: OutlinedButton(
               onPressed: _notificationsEnabled && _soundEnabled
                   ? () {
-                      NotificationService().playNotificationSound();
+                      NotificationService().playNotificationSound(
+                        category: NotificationCategory.message,
+                        preview: true,
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Reproduciendo sonido...'),

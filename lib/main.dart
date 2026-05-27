@@ -215,6 +215,9 @@ Future<void> main() async {
       // Suppress Flutter Web-specific "disposed EngineFlutterView" errors
       // These occur during hot reload and navigation and don't affect functionality
       final errorString = details.exceptionAsString();
+      if (ErrorReportingService.shouldSuppress(errorString)) {
+        return; // Don't report or dump known framework/layout noise
+      }
       if (kIsWeb &&
           errorString.contains('disposed') &&
           errorString.contains('EngineFlutterView')) {
@@ -273,6 +276,9 @@ Future<void> main() async {
   }, (error, stack) {
     // Suppress Flutter Web-specific errors in zone guard as well
     final errorString = error.toString();
+    if (ErrorReportingService.shouldSuppress(errorString)) {
+      return; // Don't report known framework/layout noise
+    }
     if (kIsWeb &&
         errorString.contains('disposed') &&
         errorString.contains('EngineFlutterView')) {

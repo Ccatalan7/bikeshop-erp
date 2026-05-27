@@ -65,6 +65,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isOpen = false;
+  bool _isTriggerHovered = false;
   _JobDetailTab _selectedTab = _JobDetailTab.diagnostico;
 
   // Display page index for preview navigation (0-3 for solicitud, diagnostico, trabajos, notas)
@@ -876,156 +877,186 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
 
     return CompositedTransformTarget(
       link: _layerLink,
-      child: InkWell(
-        onTap: _showOverlay,
-        borderRadius: BorderRadius.circular(4),
-        child: Tooltip(
-          message: hasAnyContent
-              ? currentPage!.content
-              : 'Click para agregar detalles',
-          waitDuration: const Duration(milliseconds: 500),
-          showDuration: Duration.zero,
-          preferBelow: true,
-          decoration: BoxDecoration(
-            color: Colors.grey[850],
-            borderRadius: BorderRadius.circular(6),
-          ),
-          textStyle: const TextStyle(
-            fontSize: 12,
-            color: Colors.white,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isTriggerHovered = true),
+        onExit: (_) => setState(() => _isTriggerHovered = false),
+        child: InkWell(
+          onTap: _showOverlay,
+          borderRadius: BorderRadius.circular(6),
+          hoverColor: Colors.transparent,
+          splashColor:
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
+          highlightColor: Colors.transparent,
+          child: Tooltip(
+            message: hasAnyContent
+                ? currentPage!.content
+                : 'Click para agregar detalles',
+            waitDuration: const Duration(milliseconds: 500),
+            showDuration: Duration.zero,
+            preferBelow: true,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              color: Colors.transparent,
+              color: Colors.grey[850],
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: !hasAnyContent
-                      ? Text(
-                          '—',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[400],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Labeled content: "Solicitud: texto..."
-                            RichText(
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: '${currentPage!.label}: ',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: currentPage.content,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.color
-                                          ?.withValues(alpha: 0.8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+            textStyle: const TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 90),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: _isTriggerHovered
+                    ? Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.05)
+                    : Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0),
+                border: Border.all(
+                  color: _isTriggerHovered
+                      ? Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.18)
+                      : Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0),
                 ),
-                const SizedBox(width: 4),
-                // Right side: counter + navigation arrows
-                if (filledCount > 0)
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Counter badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${_displayPageIndex + 1}/$filledCount',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue[700],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: !hasAnyContent
+                        ? Text(
+                            '—',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[400],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Labeled content: "Solicitud: texto..."
+                              RichText(
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '${currentPage!.label}: ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: currentPage.content,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color
+                                            ?.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(width: 4),
+                  // Right side: counter + navigation arrows
+                  if (filledCount > 0)
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Counter badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${_displayPageIndex + 1}/$filledCount',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[700],
+                            ),
                           ),
                         ),
-                      ),
-                      // Navigation arrows (only if more than 1 page)
-                      if (filledCount > 1)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _displayPageIndex =
-                                      (_displayPageIndex - 1 + filledCount) %
-                                          filledCount;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(2),
-                                child: Icon(
-                                  Icons.chevron_left,
-                                  size: 14,
-                                  color: Colors.grey[600],
+                        // Navigation arrows (only if more than 1 page)
+                        if (filledCount > 1)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _displayPageIndex =
+                                        (_displayPageIndex - 1 + filledCount) %
+                                            filledCount;
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(
+                                    Icons.chevron_left,
+                                    size: 14,
+                                    color: Colors.grey[600],
+                                  ),
                                 ),
                               ),
-                            ),
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _displayPageIndex =
-                                      (_displayPageIndex + 1) % filledCount;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(2),
-                                child: Icon(
-                                  Icons.chevron_right,
-                                  size: 14,
-                                  color: Colors.grey[600],
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _displayPageIndex =
+                                        (_displayPageIndex + 1) % filledCount;
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(
+                                    Icons.chevron_right,
+                                    size: 14,
+                                    color: Colors.grey[600],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  )
-                else
-                  Icon(
-                    Icons.edit_outlined,
-                    size: 14,
-                    color: Colors.grey[400],
-                  ),
-              ],
+                            ],
+                          ),
+                      ],
+                    )
+                  else
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 14,
+                      color: Colors.grey[400],
+                    ),
+                ],
+              ),
             ),
           ),
         ),

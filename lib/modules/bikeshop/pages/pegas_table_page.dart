@@ -106,9 +106,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   List<MechanicJobItem> _selectedJobItems = [];
 
   // Split-pane state
+  static const String _splitPaneEnabledPrefsKey = 'pegas_split_pane_enabled';
   static const double _minListPaneWidth = 500.0;
   static const double _minDetailPaneWidth = 400.0;
   static const double _defaultListPaneWidth = 1000.0;
+  bool _isSplitPaneEnabled = false;
   double _listPaneWidth = _defaultListPaneWidth;
 
   // Column management
@@ -133,9 +135,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   // Bulk selection
   final Set<String> _selectedJobIds = {};
   bool get _isAnySelected => _selectedJobIds.isNotEmpty;
-
-  // Column visibility panel
-  bool _showColumnPanel = false;
 
   // Column drag state for live preview
   String? _draggingColumnId;
@@ -190,6 +189,7 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     _initializeColumns();
     _loadColumnOrder(); // Load saved column order
+    _loadSplitPanePreference();
     _loadListPaneWidth();
     _restoreTableState(); // Restore filters, pagination, sort from service
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -904,6 +904,58 @@ class _PegasTablePageState extends State<PegasTablePage>
     await prefs.setDouble('pegas_list_pane_width', width);
   }
 
+  Future<void> _loadSplitPanePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool(_splitPaneEnabledPrefsKey) ?? false;
+    if (mounted) {
+      setState(() => _isSplitPaneEnabled = enabled);
+    }
+  }
+
+  Future<void> _saveSplitPanePreference(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_splitPaneEnabledPrefsKey, enabled);
+  }
+
+  void _toggleSplitPane() {
+    final enabled = !_isSplitPaneEnabled;
+    setState(() {
+      _isSplitPaneEnabled = enabled;
+      if (!enabled) {
+        _selectedJob = null;
+        _selectedJobItems = [];
+        _productImages = {};
+      }
+    });
+    unawaited(_saveSplitPanePreference(enabled));
+  }
+
+  Future<void> _openJobEditor(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null || jobId.isEmpty) return;
+
+    _markNeedsRefresh();
+    final result = await context.push('/taller/pegas/$jobId');
+    if (!mounted) return;
+    if (result == true) {
+      await _loadData();
+    }
+  }
+
+  void _openJobFromTable(MechanicJob job) {
+    if (_isSplitPaneEnabled) {
+      setState(() {
+        _selectedJob = job;
+        _selectedJobItems = [];
+        _productImages = {};
+      });
+      unawaited(_loadJobDetails(job));
+      return;
+    }
+
+    unawaited(_openJobEditor(job));
+  }
+
   Future<void> _loadColumnOrder() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1220,13 +1272,12 @@ class _PegasTablePageState extends State<PegasTablePage>
           ? _buildMobileLayout()
           : _isLoading
               ? const Center(child: BrandedLoading())
-              : _selectedJob != null
+              : _selectedJob != null && _isSplitPaneEnabled
                   ? _buildSplitView()
                   : Column(
                       children: [
                         _buildModernHeader(),
                         _buildToolbar(),
-                        if (_showColumnPanel) _buildColumnVisibilityPanel(),
                         Expanded(child: _buildViewContent()),
                       ],
                     ),
@@ -2015,13 +2066,14 @@ class _PegasTablePageState extends State<PegasTablePage>
             // Regular action buttons
             if (!isMobile) ...[
               IconButton(
-                icon: Icon(_showColumnPanel
-                    ? Icons.view_column
-                    : Icons.view_column_outlined),
-                onPressed: () =>
-                    setState(() => _showColumnPanel = !_showColumnPanel),
-                tooltip: 'Columnas',
-                isSelected: _showColumnPanel,
+                icon: Icon(_isSplitPaneEnabled
+                    ? Icons.vertical_split
+                    : Icons.vertical_split_outlined),
+                onPressed: _toggleSplitPane,
+                tooltip: _isSplitPaneEnabled
+                    ? 'Panel de detalles activado'
+                    : 'Panel de detalles desactivado',
+                isSelected: _isSplitPaneEnabled,
               ),
               const SizedBox(width: 8),
               IconButton(
@@ -3037,11 +3089,10 @@ class _PegasTablePageState extends State<PegasTablePage>
     Widget simpleCount(
       IconData icon,
       String label,
-      int count, {
-      String? tooltipMessage,
-    }) {
+      int count,
+    ) {
       if (count == 0) return const SizedBox.shrink();
-      final counter = Padding(
+      return Padding(
         padding: const EdgeInsets.only(right: 16.0),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -3063,47 +3114,12 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         ),
       );
-
-      if (tooltipMessage == null || tooltipMessage.isEmpty) {
-        return counter;
-      }
-
-      return Tooltip(
-        message: tooltipMessage,
-        waitDuration: const Duration(milliseconds: 250),
-        showDuration: const Duration(seconds: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        margin: const EdgeInsets.all(12),
-        textStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          height: 1.35,
-          fontWeight: FontWeight.w500,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111827),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: counter,
-      );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        simpleCount(
-          Icons.directions_bike,
-          'Bicicletas',
-          bicycles,
-          tooltipMessage: _formatBicycleStatusBreakdown(bicycleStatusBreakdown),
-        ),
+        simpleCount(Icons.directions_bike, 'Bicicletas', bicycles),
         simpleCount(Icons.build, 'Ítems', items),
         simpleCount(Icons.shield, 'Garantías', warranties),
         simpleCount(Icons.description, 'Cotizaciones', quotations),
@@ -3136,22 +3152,6 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
 
     return breakdown;
-  }
-
-  String _formatBicycleStatusBreakdown(Map<String, int> breakdown) {
-    if (breakdown.isEmpty) return '';
-
-    final entries = breakdown.entries.toList()
-      ..sort((a, b) {
-        final countComparison = b.value.compareTo(a.value);
-        if (countComparison != 0) return countComparison;
-        return a.key.compareTo(b.key);
-      });
-
-    return [
-      'Bicicletas por estado',
-      ...entries.map((entry) => '${entry.key}: ${entry.value}'),
-    ].join('\n');
   }
 
   Widget _buildDataTable() {
@@ -3757,13 +3757,12 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (onTap == null) return badge;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: badge,
-      ),
+    return _buildInteractiveTableField(
+      onTap: onTap,
+      accentColor: accentColor,
+      padding: EdgeInsets.zero,
+      borderRadius: radius,
+      child: badge,
     );
   }
 
@@ -4311,34 +4310,26 @@ class _PegasTablePageState extends State<PegasTablePage>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        InkWell(
-          onTap: () {
-            setState(() {
-              _selectedJob = job;
-            });
-            _loadJobDetails(job);
-          },
-          child: Container(
-            width: tableWidth,
-            height: 60,
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? Color.alphaBlend(
-                      theme.colorScheme.primary.withValues(alpha: 0.08),
-                      theme.colorScheme.surface,
-                    )
-                  : theme.colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.dividerColor.withValues(alpha: 0.5),
-                ),
+        Container(
+          width: tableWidth,
+          height: 60,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Color.alphaBlend(
+                    theme.colorScheme.primary.withValues(alpha: 0.08),
+                    theme.colorScheme.surface,
+                  )
+                : theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.5),
               ),
             ),
-            child: Row(
-              children: _displayColumns.map((col) {
-                return _buildDataCell(col, job, customer, bike, jobBikes);
-              }).toList(),
-            ),
+          ),
+          child: Row(
+            children: _displayColumns.map((col) {
+              return _buildDataCell(col, job, customer, bike, jobBikes);
+            }).toList(),
           ),
         ),
         if (isExpanded && jobBikes != null && jobBikes.isNotEmpty)
@@ -4364,7 +4355,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: horizontalPadding,
-          vertical: 8,
+          vertical: 4,
         ),
         child: content,
       ),
@@ -4378,6 +4369,74 @@ class _PegasTablePageState extends State<PegasTablePage>
       'state' || 'kpi' || 'priority' || 'invoice' || 'total' => 8,
       _ => 16,
     };
+  }
+
+  Widget _buildInteractiveTableField({
+    required Widget child,
+    required VoidCallback? onTap,
+    Color? accentColor,
+    EdgeInsetsGeometry padding =
+        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    BorderRadius? borderRadius,
+    double? maxWidth,
+    GestureTapDownCallback? onSecondaryTapDown,
+  }) {
+    return _InteractiveTableField(
+      onTap: onTap,
+      accentColor: accentColor,
+      padding: padding,
+      borderRadius: borderRadius ?? BorderRadius.circular(7),
+      maxWidth: maxWidth,
+      onSecondaryTapDown: onSecondaryTapDown,
+      child: child,
+    );
+  }
+
+  void _toggleExpandedJobBikes(String? jobId) {
+    if (jobId == null) return;
+    setState(() {
+      if (_expandedJobIds.contains(jobId)) {
+        _expandedJobIds.remove(jobId);
+      } else {
+        _expandedJobIds.add(jobId);
+      }
+    });
+  }
+
+  Widget _buildBikeGlyph({double size = 35}) {
+    return Image.asset(
+      'assets/icons/mtb_bike_v3.png',
+      width: size,
+      height: size,
+      errorBuilder: (context, error, stackTrace) => Icon(
+        Icons.pedal_bike,
+        size: size,
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+      ),
+    );
+  }
+
+  Widget _buildBikePhotoButton(String imageUrl) {
+    return _buildInteractiveTableField(
+      onTap: () => _showBikeImageModal(imageUrl),
+      padding: const EdgeInsets.all(2),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          image: DecorationImage(
+            image: NetworkImage(imageUrl),
+            fit: BoxFit.cover,
+          ),
+          border: Border.all(
+            color: Theme.of(context).dividerColor,
+            width: 1,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _getCellContent(String columnId, MechanicJob job, Customer? customer,
@@ -4495,130 +4554,142 @@ class _PegasTablePageState extends State<PegasTablePage>
         return const Text('-');
 
       case 'job_number':
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => context.push('/taller/pegas/${job.id}'),
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    job.jobNumber ?? 'Sin #',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Text(
-                    DateFormat('dd/MM/yy').format(job.arrivalDate),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+        return _buildInteractiveTableField(
+          onTap: () => _openJobFromTable(job),
+          maxWidth: 104,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                job.jobNumber ?? 'Sin #',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-            ),
+              Text(
+                DateFormat('dd/MM/yy').format(job.arrivalDate),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
           ),
         );
 
       case 'customer':
         // Clickable customer with quick actions
-        return InkWell(
-          onTap: customer?.id != null
-              ? () => context.push('/clientes/${customer!.id}')
-              : null,
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      customer?.name ?? 'Desconocido',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: customer?.id != null
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                        decoration: customer?.id != null
-                            ? TextDecoration.underline
-                            : null,
-                        decorationColor: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.3),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (customer?.phone != null)
-                      Text(
-                        customer!.phone!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-              if (customer != null &&
-                  (customer.phone != null || customer.email != null))
-                PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_vert,
-                    size: 16,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.6),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final hasQuickActions = customer != null &&
+                (customer.phone != null || customer.email != null);
+            final contentMaxWidth =
+                (constraints.maxWidth - (hasQuickActions ? 28 : 0))
+                    .clamp(72.0, constraints.maxWidth)
+                    .toDouble();
+
+            final customerContent = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  customer?.name ?? 'Desconocido',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: customer?.id != null
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurface,
+                    fontWeight: customer?.id != null
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                   ),
-                  tooltip: 'Acciones rápidas',
-                  padding: EdgeInsets.zero,
-                  itemBuilder: (context) => [
-                    if (customer.phone != null)
-                      PopupMenuItem(
-                        value: 'call',
-                        child: Row(
-                          children: [
-                            Icon(Icons.phone,
-                                size: 16, color: Colors.green.shade700),
-                            const SizedBox(width: 8),
-                            const Text('Llamar',
-                                style: TextStyle(fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                    if (customer.email != null)
-                      PopupMenuItem(
-                        value: 'email',
-                        child: Row(
-                          children: [
-                            Icon(Icons.email,
-                                size: 16, color: Colors.blue.shade700),
-                            const SizedBox(width: 8),
-                            const Text('Email', style: TextStyle(fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                  ],
-                  onSelected: (value) {
-                    if (value == 'call' && customer.phone != null) {
-                      _callCustomer(customer.phone!);
-                    } else if (value == 'email' && customer.email != null) {
-                      _emailCustomer(customer.email!);
-                    }
-                  },
+                  overflow: TextOverflow.ellipsis,
                 ),
-            ],
-          ),
+                if (customer?.phone != null)
+                  Text(
+                    customer!.phone!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            );
+
+            return Row(
+              children: [
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildInteractiveTableField(
+                      onTap: customer?.id != null
+                          ? () => context.push('/clientes/${customer!.id}')
+                          : null,
+                      maxWidth: contentMaxWidth,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      child: customerContent,
+                    ),
+                  ),
+                ),
+                if (hasQuickActions)
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 16,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.7),
+                    ),
+                    tooltip: '',
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
+                    itemBuilder: (context) => [
+                      if (customer.phone != null)
+                        PopupMenuItem(
+                          value: 'call',
+                          child: Row(
+                            children: [
+                              Icon(Icons.phone,
+                                  size: 16, color: Colors.green.shade700),
+                              const SizedBox(width: 8),
+                              const Text('Llamar',
+                                  style: TextStyle(fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      if (customer.email != null)
+                        PopupMenuItem(
+                          value: 'email',
+                          child: Row(
+                            children: [
+                              Icon(Icons.email,
+                                  size: 16, color: Colors.blue.shade700),
+                              const SizedBox(width: 8),
+                              const Text('Email',
+                                  style: TextStyle(fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'call' && customer.phone != null) {
+                        _callCustomer(customer.phone!);
+                      } else if (value == 'email' && customer.email != null) {
+                        _emailCustomer(customer.email!);
+                      }
+                    },
+                  ),
+              ],
+            );
+          },
         );
 
       case 'bike':
@@ -4635,51 +4706,42 @@ class _PegasTablePageState extends State<PegasTablePage>
           final bikeName = bike?.displayName ?? 'Sin nombre';
           final bikeImageUrl = bike?.imageUrl;
 
-          return Row(
-            children: [
-              Image.asset(
-                'assets/icons/mtb_bike_v3.png',
-                width: 35,
-                height: 35,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.pedal_bike,
-                  size: 35,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (bikeImageUrl != null) ...[
-                GestureDetector(
-                  onTap: () => _showBikeImageModal(bikeImageUrl),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      image: DecorationImage(
-                        image: NetworkImage(bikeImageUrl),
-                        fit: BoxFit.cover,
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor,
-                        width: 1,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return Row(
+                children: [
+                  if (bikeImageUrl != null) ...[
+                    _buildBikePhotoButton(bikeImageUrl),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _buildInteractiveTableField(
+                        onTap: () => _showBikeProfileDialog(job, customer),
+                        maxWidth: constraints.maxWidth,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildBikeGlyph(size: 30),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                bikeName,
+                                style: const TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 6),
-              ],
-              Expanded(
-                child: Text(
-                  bikeName,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           );
         }
 
@@ -4687,62 +4749,42 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (isMultiBikeSummary) {
           final bikeCount = jobBikes.length;
 
-          return InkWell(
-            onTap: () {
-              setState(() {
-                if (_expandedJobIds.contains(jobId)) {
-                  _expandedJobIds.remove(jobId);
-                } else {
-                  _expandedJobIds.add(jobId!);
-                }
-              });
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: _buildInteractiveTableField(
+                  onTap: () => _toggleExpandedJobBikes(jobId),
+                  maxWidth: constraints.maxWidth,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildBikeGlyph(size: 30),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          '$bikeCount Bicicletas',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              );
             },
-            child: Row(
-              children: [
-                Image.asset(
-                  'assets/icons/mtb_bike_v3.png',
-                  width: 35,
-                  height: 35,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.pedal_bike,
-                    size: 35,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '$bikeCount Bicicletas',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  tooltip: isExpanded ? 'Contraer' : 'Expandir',
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      if (_expandedJobIds.contains(jobId)) {
-                        _expandedJobIds.remove(jobId);
-                      } else {
-                        _expandedJobIds.add(jobId!);
-                      }
-                    });
-                  },
-                ),
-              ],
-            ),
           );
         }
 
@@ -4791,54 +4833,42 @@ class _PegasTablePageState extends State<PegasTablePage>
         final bikeName = bike?.displayName ?? 'N/A';
         final bikeImageUrl = bike?.imageUrl;
 
-        return InkWell(
-          onTap: () => _showBikeProfileDialog(job, customer),
-          child: Row(
-            children: [
-              Image.asset(
-                'assets/icons/mtb_bike_v3.png',
-                width: 35,
-                height: 35,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.pedal_bike,
-                  size: 35,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (bikeImageUrl != null) ...[
-                GestureDetector(
-                  onTap: () => _showBikeImageModal(bikeImageUrl),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      image: DecorationImage(
-                        image: NetworkImage(bikeImageUrl),
-                        fit: BoxFit.cover,
-                      ),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor,
-                        width: 1,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return Row(
+              children: [
+                if (bikeImageUrl != null) ...[
+                  _buildBikePhotoButton(bikeImageUrl),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildInteractiveTableField(
+                      onTap: () => _showBikeProfileDialog(job, customer),
+                      maxWidth: constraints.maxWidth,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildBikeGlyph(size: 30),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              bikeName,
+                              style: const TextStyle(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
-              Expanded(
-                child: Text(
-                  bikeName,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
 
       case 'arrival_date':
@@ -4935,42 +4965,52 @@ class _PegasTablePageState extends State<PegasTablePage>
       case 'priority':
         // Colored priority with icon
         final priorityColor = _getPriorityColor(job.priority);
-        final priorityIcon = job.priority == JobPriority.urgente
-            ? Icons.priority_high
-            : job.priority == JobPriority.alta
-                ? Icons.arrow_upward
-                : job.priority == JobPriority.normal
-                    ? Icons.drag_handle
-                    : Icons.arrow_downward;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          constraints: const BoxConstraints(maxWidth: 96),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: Theme.of(context).dividerColor,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(priorityIcon, size: 14, color: priorityColor),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  job.priority.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w600,
+        final priorityIcon = _priorityIcon(job.priority);
+        return Builder(
+          builder: (cellContext) {
+            return _buildInteractiveTableField(
+              onTap: () => _showPriorityMenu(cellContext, job),
+              accentColor: priorityColor,
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                constraints: const BoxConstraints(maxWidth: 96),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor,
+                    width: 1,
                   ),
                 ),
+                child: Row(
+                  children: [
+                    Icon(priorityIcon, size: 14, color: priorityColor),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        job.priority.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.expand_more,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            );
+          },
         );
 
       case 'diagnosis':
@@ -5227,15 +5267,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         );
 
-        if (!hasPayments) return content;
-
-        // Tooltip with full breakdown
-        return Tooltip(
-          message: 'Total: ${fmt.format(displayTotal)}\n'
-              'Pagado: ${fmt.format(paidAmount)}\n'
-              'Saldo: ${fmt.format(displayTotal - paidAmount)}',
-          child: content,
-        );
+        return content;
 
       case 'invoice':
         // Clickable invoice with full status display
@@ -5301,8 +5333,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                 badgeColor = Colors.orange;
                 break;
             }
-            return InkWell(
+            return _buildInteractiveTableField(
               onTap: () => _createInvoiceForJob(job),
+              accentColor: badgeColor,
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(6),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -5330,8 +5365,11 @@ class _PegasTablePageState extends State<PegasTablePage>
             );
           }
 
-          return InkWell(
+          return _buildInteractiveTableField(
             onTap: () => _createInvoiceForJob(job),
+            accentColor: Theme.of(context).colorScheme.primary,
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.circular(6),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -5420,7 +5458,11 @@ class _PegasTablePageState extends State<PegasTablePage>
         final canOpenInvoice =
             job.invoiceId != null && job.invoiceId!.isNotEmpty;
 
-        return GestureDetector(
+        return _buildInteractiveTableField(
+          onTap: canOpenInvoice ? () => _openInvoice(job.invoiceId!) : null,
+          accentColor: textColor,
+          padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.circular(7),
           onSecondaryTapDown: canOpenInvoice
               ? (details) => _showInvoiceChipContextMenu(
                     details: details,
@@ -5428,46 +5470,39 @@ class _PegasTablePageState extends State<PegasTablePage>
                     invoice: invoice,
                   )
               : null,
-          child: InkWell(
-            onTap: canOpenInvoice ? () => _openInvoice(job.invoiceId!) : null,
-            borderRadius: BorderRadius.circular(7),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              constraints: const BoxConstraints(maxWidth: 110),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(
-                  color: borderColor,
-                  width: 1,
-                ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            constraints: const BoxConstraints(maxWidth: 110),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: borderColor,
+                width: 1,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  Icon(
-                    icon,
-                    size: 14,
-                    color: textColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                        decoration:
-                            canOpenInvoice ? TextDecoration.underline : null,
-                        decorationColor: textColor.withValues(alpha: 0.3),
-                      ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Icon(
+                  icon,
+                  size: 14,
+                  color: textColor,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -5484,9 +5519,10 @@ class _PegasTablePageState extends State<PegasTablePage>
           onDragExited: (_) => setState(() {
             if (_draggingJobId == job.id) _draggingJobId = null;
           }),
-          child: InkWell(
+          child: _buildInteractiveTableField(
             onTap: () => _pickFileForJob(job),
-            borderRadius: BorderRadius.circular(4),
+            padding: const EdgeInsets.all(2),
+            borderRadius: BorderRadius.circular(6),
             child: Container(
               decoration: isDroppingOnThis
                   ? BoxDecoration(
@@ -5563,10 +5599,9 @@ class _PegasTablePageState extends State<PegasTablePage>
           children: [
             IconButton(
               icon: const Icon(Icons.edit, size: 16),
-              onPressed: () => context.push('/taller/pegas/${job.id}'),
+              onPressed: () => _openJobEditor(job),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              tooltip: 'Editar',
             ),
             IconButton(
               icon: const Icon(Icons.phone, size: 16),
@@ -5580,12 +5615,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                   : null,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              tooltip: 'Teléfono',
             ),
             PopupMenuButton(
               icon: const Icon(Icons.more_vert, size: 16),
               padding: EdgeInsets.zero,
-              tooltip: 'Más',
+              tooltip: '',
               iconSize: 16,
               itemBuilder: (context) => [
                 if (job.jobType == JobType.warranty ||
@@ -5653,35 +5687,27 @@ class _PegasTablePageState extends State<PegasTablePage>
     final isSelected = _selectedJob?.id == job.id;
 
     // Use the EXACT same row structure as main row but with distinct background
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedJob = job;
-        });
-        _loadJobDetails(job);
-      },
-      child: Container(
-        width: tableWidth,
-        height: 60,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Color.alphaBlend(
-                  theme.colorScheme.primary.withValues(alpha: 0.08),
-                  theme.colorScheme.surface,
-                )
-              : theme.colorScheme.surface,
-          border: Border(
-            bottom: BorderSide(
-              color: theme.dividerColor.withValues(alpha: 0.5),
-            ),
+    return Container(
+      width: tableWidth,
+      height: 60,
+      decoration: BoxDecoration(
+        color: isSelected
+            ? Color.alphaBlend(
+                theme.colorScheme.primary.withValues(alpha: 0.08),
+                theme.colorScheme.surface,
+              )
+            : theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.5),
           ),
         ),
-        child: Row(
-          // Use the EXACT same _buildDataCell method but with jobBike for per-bike data
-          children: _displayColumns.map((col) {
-            return _buildDataCell(col, job, customer, bike, null, jobBike: jb);
-          }).toList(),
-        ),
+      ),
+      child: Row(
+        // Use the EXACT same _buildDataCell method but with jobBike for per-bike data
+        children: _displayColumns.map((col) {
+          return _buildDataCell(col, job, customer, bike, null, jobBike: jb);
+        }).toList(),
       ),
     );
   }
@@ -6430,6 +6456,121 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   // Interactive cell methods
+  IconData _priorityIcon(JobPriority priority) {
+    return switch (priority) {
+      JobPriority.urgente => Icons.priority_high,
+      JobPriority.alta => Icons.arrow_upward,
+      JobPriority.normal => Icons.drag_handle,
+      JobPriority.baja => Icons.arrow_downward,
+    };
+  }
+
+  Future<void> _showPriorityMenu(
+    BuildContext anchorContext,
+    MechanicJob job,
+  ) async {
+    final overlay =
+        Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
+    final anchor = anchorContext.findRenderObject() as RenderBox?;
+    if (overlay == null || anchor == null) return;
+
+    final offset = anchor.localToGlobal(Offset.zero, ancestor: overlay);
+    final selectedPriority = await showMenu<JobPriority>(
+      context: context,
+      position: RelativeRect.fromRect(
+        offset & anchor.size,
+        Offset.zero & overlay.size,
+      ),
+      items: JobPriority.values.map((priority) {
+        final color = _getPriorityColor(priority);
+        return PopupMenuItem<JobPriority>(
+          value: priority,
+          child: Row(
+            children: [
+              Icon(_priorityIcon(priority), size: 16, color: color),
+              const SizedBox(width: 8),
+              Expanded(child: Text(priority.displayName)),
+              if (priority == job.priority)
+                Icon(Icons.check, size: 16, color: color),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+
+    if (!mounted ||
+        selectedPriority == null ||
+        selectedPriority == job.priority) {
+      return;
+    }
+
+    await _updateJobPriority(job, selectedPriority);
+  }
+
+  Future<void> _updateJobPriority(
+    MechanicJob job,
+    JobPriority newPriority,
+  ) async {
+    final jobId = job.id;
+    if (jobId == null || jobId.isEmpty) return;
+
+    _startLocalOperation();
+
+    MechanicJob? previousJob;
+    late MechanicJob optimisticJob;
+    setState(() {
+      final index = _jobs.indexWhere((j) => j.id == jobId);
+      previousJob = index == -1 ? job : _jobs[index];
+      optimisticJob = previousJob!.copyWith(
+        priority: newPriority,
+        updatedAt: DateTime.now(),
+      );
+
+      if (index != -1) {
+        _jobs[index] = optimisticJob;
+      }
+      if (_selectedJob?.id == jobId) {
+        _selectedJob = optimisticJob;
+      }
+      _applyFiltersAndSort();
+    });
+
+    try {
+      final savedJob = await _bikeshopService.updateJob(optimisticJob);
+      if (!mounted) return;
+      setState(() {
+        final index = _jobs.indexWhere((j) => j.id == jobId);
+        if (index != -1) {
+          _jobs[index] = savedJob;
+        }
+        if (_selectedJob?.id == jobId) {
+          _selectedJob = savedJob;
+        }
+        _applyFiltersAndSort();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final index = _jobs.indexWhere((j) => j.id == jobId);
+        if (index != -1 && previousJob != null) {
+          _jobs[index] = previousJob!;
+        }
+        if (_selectedJob?.id == jobId) {
+          _selectedJob = previousJob;
+        }
+        _applyFiltersAndSort();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo cambiar la prioridad: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      _endLocalOperation();
+    }
+  }
+
   void _showStatusMenu(MechanicJob job) {
     showDialog(
       context: context,
@@ -7134,36 +7275,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       case JobPriority.urgente:
         return Colors.red.shade600;
     }
-  }
-
-  // Column visibility panel
-  Widget _buildColumnVisibilityPanel() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: _columns
-            .where((col) => col.id != 'checkbox' && col.id != 'status')
-            .map((col) {
-          return FilterChip(
-            label: Text(col.label),
-            selected: col.visible,
-            onSelected: (selected) {
-              setState(() {
-                col.visible = selected;
-              });
-            },
-          );
-        }).toList(),
-      ),
-    );
   }
 
   // Export all to CSV
@@ -8184,6 +8295,83 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _InteractiveTableField extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final Color? accentColor;
+  final EdgeInsetsGeometry padding;
+  final BorderRadius borderRadius;
+  final double? maxWidth;
+  final GestureTapDownCallback? onSecondaryTapDown;
+
+  const _InteractiveTableField({
+    required this.child,
+    required this.onTap,
+    required this.padding,
+    required this.borderRadius,
+    this.accentColor,
+    this.maxWidth,
+    this.onSecondaryTapDown,
+  });
+
+  @override
+  State<_InteractiveTableField> createState() => _InteractiveTableFieldState();
+}
+
+class _InteractiveTableFieldState extends State<_InteractiveTableField> {
+  bool _isHovered = false;
+
+  bool get _isEnabled =>
+      widget.onTap != null || widget.onSecondaryTapDown != null;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isEnabled) return widget.child;
+
+    final theme = Theme.of(context);
+    final accent = widget.accentColor ?? theme.colorScheme.primary;
+    final hoverFill = accent.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.12 : 0.055);
+    final idleFill = accent.withValues(alpha: 0);
+    final hoverBorder = accent.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.3 : 0.2);
+    final idleBorder = accent.withValues(alpha: 0);
+
+    Widget content = widget.child;
+    if (widget.maxWidth != null) {
+      content = ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: widget.maxWidth!),
+        child: content,
+      );
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          padding: widget.padding,
+          decoration: BoxDecoration(
+            color: _isHovered ? hoverFill : idleFill,
+            borderRadius: widget.borderRadius,
+            border: Border.all(
+              color: _isHovered ? hoverBorder : idleBorder,
+              width: 1,
+            ),
+          ),
+          child: content,
+        ),
       ),
     );
   }

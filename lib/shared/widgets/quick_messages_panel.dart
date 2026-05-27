@@ -30,7 +30,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   _MessageFilter _filter = _MessageFilter.all;
   String _searchTerm = '';
   String? _selectedConversationId;
+  String? _panelActiveConversationId;
   String? _openingCustomerId;
+  ChatProvider? _chatProvider;
   Set<String> _pinnedConversationIds = {};
   List<Customer> _whatsAppContacts = [];
   bool _isRefreshing = false;
@@ -43,21 +45,39 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     unawaited(_loadPinnedConversations());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        unawaited(context.read<ChatProvider>().loadConversations());
-        unawaited(_loadWhatsAppContacts());
+        unawaited(
+          context
+              .read<ChatProvider>()
+              .loadConversations(refreshContextHints: false),
+        );
       }
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _chatProvider = context.read<ChatProvider>();
+  }
+
+  @override
   void dispose() {
+    final panelActiveConversationId = _panelActiveConversationId;
+    if (panelActiveConversationId != null) {
+      _chatProvider?.clearActiveConversation(
+          conversationId: panelActiveConversationId);
+    }
     _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
   void _handleSearchChanged() {
-    setState(() => _searchTerm = _normalizeSearchText(_searchController.text));
+    final nextSearchTerm = _normalizeSearchText(_searchController.text);
+    setState(() => _searchTerm = nextSearchTerm);
+    if (nextSearchTerm.isNotEmpty && _whatsAppContacts.isEmpty) {
+      unawaited(_loadWhatsAppContacts());
+    }
   }
 
   String _normalizeSearchText(String? value) {
@@ -130,8 +150,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
-    await context.read<ChatProvider>().loadConversations();
-    await _loadWhatsAppContacts();
+    await context
+        .read<ChatProvider>()
+        .loadConversations(refreshContextHints: false);
+    if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
+      await _loadWhatsAppContacts();
+    }
     if (mounted) {
       setState(() => _isRefreshing = false);
     }
@@ -173,6 +197,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       final conversationId = provider.activeConversationId;
       setState(() {
         _selectedConversationId = conversationId;
+        _panelActiveConversationId = conversationId;
         _openingCustomerId = null;
       });
       _searchController.clear();
@@ -205,6 +230,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final selectedConversation = _selectedConversation(provider.conversations);
+    if (_selectedConversationId != null && selectedConversation == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedConversationId == null) return;
+        _returnToInbox(_selectedConversationId!);
+      });
+    }
 
     if (selectedConversation != null) {
       return _buildConversationView(selectedConversation);
@@ -238,9 +269,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               IconButton(
                 icon: const Icon(Icons.arrow_back, size: 20),
                 tooltip: 'Volver a bandeja de entrada',
-                onPressed: () {
-                  setState(() => _selectedConversationId = null);
-                },
+                onPressed: () => _returnToInbox(conversation.id),
               ),
               const Expanded(
                 child: Text(
@@ -518,17 +547,42 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final isPinned = _pinnedConversationIds.contains(conversation.id);
     return ConversationTile(
       conversation: conversation,
-      isActive: conversation.id == provider.activeConversationId,
+      isActive: _selectedConversationId != null &&
+          conversation.id == _selectedConversationId,
       isPinned: isPinned,
       isMobile: false,
       subtitle: _subtitle(conversation),
-      onTap: () {
-        setState(() => _selectedConversationId = conversation.id);
-        context.read<ChatProvider>().setActiveConversation(conversation.id);
-      },
+      onTap: () => _openConversationInPanel(conversation),
       onTogglePinned: () => _togglePinnedConversation(conversation.id),
       onDelete: () => _confirmDelete(provider, conversation),
     );
+  }
+
+  void _openConversationInPanel(Conversation conversation) {
+    setState(() {
+      _selectedConversationId = conversation.id;
+      _panelActiveConversationId = conversation.id;
+    });
+  }
+
+  void _returnToInbox(String conversationId) {
+    final shouldClearActive = _panelActiveConversationId == conversationId;
+    debugPrint(
+      '[InboxSync] panel:returnToInbox conversation=$conversationId '
+      'clearActive=$shouldClearActive',
+    );
+    setState(() {
+      _selectedConversationId = null;
+      if (shouldClearActive) {
+        _panelActiveConversationId = null;
+      }
+    });
+
+    if (shouldClearActive) {
+      context
+          .read<ChatProvider>()
+          .clearActiveConversation(conversationId: conversationId);
+    }
   }
 
   Widget _buildSearchSectionHeader({

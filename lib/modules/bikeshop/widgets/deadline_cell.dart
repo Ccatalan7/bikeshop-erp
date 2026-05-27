@@ -23,24 +23,46 @@ class _DeadlineCellState extends State<DeadlineCell> {
   Widget build(BuildContext context) {
     final job = widget.job;
     final now = DateTime.now();
+    final canEdit = widget.onTap != null;
+    final idleGrey = Colors.grey.withValues(alpha: 0);
+    final hoverGreyFill = Colors.grey.withValues(alpha: 0.08);
+    final hoverGreyBorder = Colors.grey.withValues(alpha: 0.24);
 
     // Check availability
     final hasDiagnostic = job.diagnosticDeadline != null;
     final hasDelivery = job.deliveryDeadline != null;
 
     if (!hasDiagnostic && !hasDelivery) {
-      return InkWell(
-        onTap: widget.onTap,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_busy, size: 14, color: Colors.grey.shade400),
-            const SizedBox(width: 4),
-            Text(
-              'Sin plazo',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+      return MouseRegion(
+        cursor: canEdit ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _isHovering = true),
+        onExit: (_) => setState(() => _isHovering = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _isHovering ? hoverGreyFill : idleGrey,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isHovering ? hoverGreyBorder : idleGrey,
+              ),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_busy, size: 14, color: Colors.grey.shade400),
+                const SizedBox(width: 4),
+                Text(
+                  'Sin plazo',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -62,24 +84,15 @@ class _DeadlineCellState extends State<DeadlineCell> {
         hasDiagnostic && job.diagnosticSentAt == null;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      cursor: SystemMouseCursors.click,
+      cursor: canEdit ? SystemMouseCursors.click : SystemMouseCursors.basic,
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
         child: Align(
           alignment: Alignment.centerLeft,
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            alignment: Alignment.centerLeft,
-            child: _isHovering
-                ? _buildExpandedView(isDiagOverdue, isDeliveryOverdue,
-                    hasDiagnostic, hasDelivery)
-                : _buildCompactView(showDiagnosticAsPrimary, isDiagOverdue,
-                    isDeliveryOverdue, hasDiagnostic, hasDelivery),
-          ),
+          widthFactor: 1,
+          child: _buildCompactView(showDiagnosticAsPrimary, isDiagOverdue,
+              isDeliveryOverdue, hasDiagnostic, hasDelivery),
         ),
       ),
     );
@@ -118,34 +131,6 @@ class _DeadlineCellState extends State<DeadlineCell> {
         showIndicator: hasDiagnostic && hasDelivery,
       );
     }
-  }
-
-  Widget _buildExpandedView(
-    bool isDiagOverdue,
-    bool isDeliveryOverdue,
-    bool hasDiagnostic,
-    bool hasDelivery,
-  ) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (hasDiagnostic)
-          _buildChip(
-            icon: Icons.search,
-            label: DateFormat('dd/MM').format(widget.job.diagnosticDeadline!),
-            isOverdue: isDiagOverdue,
-            color: Colors.blue,
-          ),
-        if (hasDiagnostic && hasDelivery) const SizedBox(width: 4),
-        if (hasDelivery)
-          _buildChip(
-            icon: Icons.local_shipping_outlined,
-            label: DateFormat('dd/MM').format(widget.job.deliveryDeadline!),
-            isOverdue: isDeliveryOverdue,
-            color: Colors.green,
-          ),
-      ],
-    );
   }
 
   Widget _buildChip({

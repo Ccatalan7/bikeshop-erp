@@ -20,7 +20,7 @@ class GlobalErrorNotifier extends ChangeNotifier {
 class ErrorReportingService {
   static final GlobalErrorNotifier notifier = GlobalErrorNotifier();
 
-  /// List of error patterns to suppress (Flutter Web-specific issues)
+  /// List of known non-fatal framework/layout errors to suppress.
   static const List<String> _suppressedErrorPatterns = [
     'disposed',
     'EngineFlutterView',
@@ -28,12 +28,20 @@ class ErrorReportingService {
     'isDisposed',
     'RenderFlex overflowed', // Layout overflow (non-critical visual issue)
     'overflowed by', // Generic overflow pattern
+    'A KeyDownEvent is dispatched',
+    'physical key is already pressed',
+    '!_pressedKeys.containsKey',
     'BindingError', // CanvasKit WebGL issues
     'ColorSpace',
     'Picture',
     'Typeface',
     'Shader',
   ];
+
+  static bool shouldSuppress(dynamic error) {
+    final message = error is String ? error : error.toString();
+    return _shouldSuppressError(message);
+  }
 
   /// Check if an error should be suppressed (web-specific errors)
   static bool _shouldSuppressError(String message) {
@@ -49,11 +57,11 @@ class ErrorReportingService {
   static void report(dynamic error, [StackTrace? stackTrace]) {
     final message = error is String ? error : error.toString();
 
-    // Suppress known Flutter Web-specific errors that don't affect functionality
+    // Suppress known framework/layout errors that don't affect functionality.
     if (_shouldSuppressError(message)) {
       if (kDebugMode) {
         debugPrint(
-            '⚠️ [ErrorReportingService] Suppressed web-specific error: ${message.substring(0, message.length.clamp(0, 80))}...');
+            '⚠️ [ErrorReportingService] Suppressed non-fatal error: ${message.substring(0, message.length.clamp(0, 80))}...');
       }
       return;
     }
@@ -61,9 +69,9 @@ class ErrorReportingService {
     notifier.setError(message, stackTrace?.toString());
 
     // Always log to console for debugging
-    print('🔴 [GLOBAL ERROR CAUGHT] $message');
+    debugPrint('🔴 [GLOBAL ERROR CAUGHT] $message');
     if (stackTrace != null) {
-      print('🔴 [STACK TRACE] $stackTrace');
+      debugPrint('🔴 [STACK TRACE] $stackTrace');
     }
 
     if (kDebugMode) {

@@ -1055,12 +1055,17 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         NotificationService().messageStream.listen((message) {
       if (!mounted) return;
 
+      final notificationService = NotificationService();
       final data = message.data;
       final isMailNotification = data['type'] == 'mail' ||
           data['notification_type'] == 'mail' ||
           data['route'] == '/mail';
 
       if (isMailNotification) {
+        if (!notificationService
+            .notificationsEnabledFor(NotificationCategory.email)) {
+          return;
+        }
         _showMailNotification(
           data['body']?.toString() ?? 'Correo entrante',
           title: data['title']?.toString() ?? 'Nuevo correo',
@@ -1070,6 +1075,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       }
 
       context.read<ChatProvider>().applyIncomingNotification(message);
+      if (!notificationService
+          .notificationsEnabledFor(NotificationCategory.message)) {
+        return;
+      }
 
       final notification = message.notification;
       final title = notification?.title ?? 'Nuevo Mensaje';
@@ -1254,6 +1263,12 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     int? notificationId,
     bool showSystemNotification = false,
   }) {
+    final notificationService = NotificationService();
+    if (!notificationService
+        .notificationsEnabledFor(NotificationCategory.email)) {
+      return;
+    }
+
     final now = DateTime.now();
     final wasShownRecently = _lastMailAlertAt != null &&
         now.difference(_lastMailAlertAt!) < const Duration(seconds: 4);
@@ -1269,11 +1284,14 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     }
 
     if (showSystemNotification && !wasShownRecently && !_isMailLocation()) {
-      NotificationService().playNotificationSound();
-      NotificationService().showLocalNotification(
+      notificationService.playNotificationSound(
+        category: NotificationCategory.email,
+      );
+      notificationService.showLocalNotification(
         title,
         body,
         notificationId: notificationId,
+        category: NotificationCategory.email,
       );
     }
   }
