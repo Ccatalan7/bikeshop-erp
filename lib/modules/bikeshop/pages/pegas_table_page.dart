@@ -23,6 +23,7 @@ import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
+import '../../settings/services/appearance_service.dart';
 
 import '../../../shared/services/image_service.dart';
 import '../services/bikeshop_service.dart';
@@ -41,6 +42,108 @@ class PegasTablePage extends StatefulWidget {
 
   @override
   State<PegasTablePage> createState() => _PegasTablePageState();
+}
+
+class _BicycleStatusBreakdownEntry {
+  _BicycleStatusBreakdownEntry({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+  int count = 0;
+}
+
+class _HoverCardTooltip extends StatefulWidget {
+  const _HoverCardTooltip({
+    required this.child,
+    required this.tooltip,
+    this.offset = const Offset(0, 24),
+    this.showDelay = const Duration(milliseconds: 650),
+  });
+
+  final Widget child;
+  final Widget tooltip;
+  final Offset offset;
+  final Duration showDelay;
+
+  @override
+  State<_HoverCardTooltip> createState() => _HoverCardTooltipState();
+}
+
+class _HoverCardTooltipState extends State<_HoverCardTooltip> {
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _entry;
+  Timer? _showTimer;
+
+  void _show() {
+    if (_entry != null) return;
+    _showTimer?.cancel();
+    _showTimer = Timer(widget.showDelay, () {
+      if (!mounted || _entry != null) return;
+      _insertEntry();
+    });
+  }
+
+  void _insertEntry() {
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+
+    _entry = OverlayEntry(
+      builder: (_) => Positioned.fill(
+        child: IgnorePointer(
+          child: CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            offset: widget.offset,
+            child: Align(
+              alignment: Alignment.topLeft,
+              widthFactor: 1,
+              heightFactor: 1,
+              child: widget.tooltip,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_entry!);
+  }
+
+  void _hide() {
+    _showTimer?.cancel();
+    _showTimer = null;
+    _entry?.remove();
+    _entry = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HoverCardTooltip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_entry != null && widget.tooltip != oldWidget.tooltip) {
+      _entry?.markNeedsBuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    _showTimer?.cancel();
+    _hide();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: MouseRegion(
+        onEnter: (_) => _show(),
+        onExit: (_) => _hide(),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 class _PegasTablePageState extends State<PegasTablePage>
@@ -3062,9 +3165,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Widget _buildJobTypeCounters() {
+    final sidebarPalette = context.watch<AppearanceService>().sidebarPalette;
     final bicycleStatusBreakdown = _buildBicycleStatusBreakdown();
-    final bicycles =
-        bicycleStatusBreakdown.values.fold<int>(0, (sum, count) => sum + count);
+    final bicycles = bicycleStatusBreakdown.fold<int>(
+      0,
+      (sum, status) => sum + status.count,
+    );
 
     final items = _filteredJobs.where((j) {
       if (j.jobType == JobType.itemService) return true;
@@ -3089,10 +3195,11 @@ class _PegasTablePageState extends State<PegasTablePage>
     Widget simpleCount(
       IconData icon,
       String label,
-      int count,
-    ) {
+      int count, {
+      Widget? hoverCard,
+    }) {
       if (count == 0) return const SizedBox.shrink();
-      return Padding(
+      final content = Padding(
         padding: const EdgeInsets.only(right: 16.0),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -3114,12 +3221,27 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         ),
       );
+      if (hoverCard == null) return content;
+      return _HoverCardTooltip(
+        offset: const Offset(0, 22),
+        showDelay: const Duration(milliseconds: 650),
+        tooltip: hoverCard,
+        child: content,
+      );
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        simpleCount(Icons.directions_bike, 'Bicicletas', bicycles),
+        simpleCount(
+          Icons.directions_bike,
+          'Bicicletas',
+          bicycles,
+          hoverCard: _buildBicycleStatusBreakdownCard(
+            bicycleStatusBreakdown,
+            sidebarPalette,
+          ),
+        ),
         simpleCount(Icons.build, 'Ítems', items),
         simpleCount(Icons.shield, 'Garantías', warranties),
         simpleCount(Icons.description, 'Cotizaciones', quotations),
@@ -3127,13 +3249,169 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Map<String, int> _buildBicycleStatusBreakdown() {
-    final breakdown = <String, int>{};
+  Widget _buildBicycleStatusBreakdownCard(
+    List<_BicycleStatusBreakdownEntry> statuses,
+    SidebarPaletteOption sidebarPalette,
+  ) {
+    final total = statuses.fold<int>(0, (sum, status) => sum + status.count);
+    final background = sidebarPalette.background;
+    final border = sidebarPalette.border.withValues(alpha: 0.82);
+    final foreground = sidebarPalette.foreground;
+    final muted = sidebarPalette.mutedForeground;
 
-    void countStatus(String statusName) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 292,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.directions_bike_rounded,
+                  size: 15,
+                  color: sidebarPalette.accent,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Bicicletas por estado',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: sidebarPalette.accent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$total',
+                    style: TextStyle(
+                      color: sidebarPalette.onAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: border.withValues(alpha: 0.7),
+            ),
+            const SizedBox(height: 10),
+            if (statuses.isEmpty)
+              Text(
+                'Sin bicicletas visibles',
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else
+              ...statuses.map(
+                (status) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    children: [
+                      _buildStatusBadge(
+                        label: status.label,
+                        accentColor: status.color,
+                        maxWidth: 178,
+                        compact: true,
+                      ),
+                      const SizedBox(width: 9),
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 30),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            sidebarPalette.accent.withValues(alpha: 0.16),
+                            sidebarPalette.backgroundAlt,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color:
+                                sidebarPalette.accent.withValues(alpha: 0.26),
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${status.count}',
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (statuses.isNotEmpty) const SizedBox(height: 1),
+            Text(
+              'Según los trabajos filtrados en la tabla',
+              style: TextStyle(
+                color: muted,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_BicycleStatusBreakdownEntry> _buildBicycleStatusBreakdown() {
+    final breakdown = <String, _BicycleStatusBreakdownEntry>{};
+
+    void countStatus(String statusName, Color statusColor) {
       final label =
           statusName.trim().isEmpty ? 'Sin estado' : statusName.trim();
-      breakdown[label] = (breakdown[label] ?? 0) + 1;
+      final key = label.toLowerCase();
+      final entry = breakdown.putIfAbsent(
+        key,
+        () => _BicycleStatusBreakdownEntry(
+          label: label,
+          color: statusColor,
+        ),
+      );
+      entry.count += 1;
     }
 
     for (final job in _filteredJobs) {
@@ -3144,14 +3422,22 @@ class _PegasTablePageState extends State<PegasTablePage>
       final jobBikes = _jobBikesMap[job.id ?? ''];
       if (jobBikes != null && jobBikes.isNotEmpty) {
         for (final jobBike in jobBikes) {
-          countStatus(jobBike.customStatus?.name ?? job.statusDisplayName);
+          countStatus(
+            jobBike.customStatus?.name ?? job.statusDisplayName,
+            jobBike.customStatus?.colorValue ?? job.colorValue,
+          );
         }
       } else if (job.bikeId != null) {
-        countStatus(job.statusDisplayName);
+        countStatus(job.statusDisplayName, job.colorValue);
       }
     }
 
-    return breakdown;
+    return breakdown.values.toList()
+      ..sort((a, b) {
+        final countComparison = b.count.compareTo(a.count);
+        if (countComparison != 0) return countComparison;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
   }
 
   Widget _buildDataTable() {
@@ -5210,12 +5496,16 @@ class _PegasTablePageState extends State<PegasTablePage>
       case 'total':
         // Per-bike detail: show per-bike subtotal
         if (isPerBikeDetail) {
-          return Text(
-            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                .format(jobBike.subtotal),
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
+          final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+          return Tooltip(
+            message: 'Subtotal bicicleta: ${fmt.format(jobBike.subtotal)}',
+            waitDuration: const Duration(milliseconds: 350),
+            child: Text(
+              fmt.format(jobBike.subtotal),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
             ),
           );
         }
@@ -5230,6 +5520,13 @@ class _PegasTablePageState extends State<PegasTablePage>
             ? (paidAmount / displayTotal).clamp(0.0, 1.0)
             : 0.0;
         final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+        final dueAmount =
+            (displayTotal - paidAmount).clamp(0.0, double.infinity);
+        final tooltip = [
+          'Total: ${fmt.format(displayTotal)}',
+          'Pagado: ${fmt.format(paidAmount)}',
+          'Por cobrar: ${fmt.format(dueAmount)}',
+        ].join('\n');
 
         final content = Column(
           mainAxisSize: MainAxisSize.min,
@@ -5267,7 +5564,11 @@ class _PegasTablePageState extends State<PegasTablePage>
           ],
         );
 
-        return content;
+        return Tooltip(
+          message: tooltip,
+          waitDuration: const Duration(milliseconds: 350),
+          child: content,
+        );
 
       case 'invoice':
         // Clickable invoice with full status display
