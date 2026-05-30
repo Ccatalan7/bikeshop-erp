@@ -27,6 +27,7 @@ String inferWorkspaceModuleRoot(String route) {
     '/website',
     '/tienda',
     '/mail',
+    '/storage',
     '/chat',
     '/tools',
     '/settings',
@@ -152,6 +153,9 @@ String getRouteTitle(String path) {
 
     // Mail
     '/mail': 'Correo',
+
+    // Storage
+    '/storage': 'Archivos',
 
     // Settings
     '/settings': 'Configuración',
@@ -347,6 +351,7 @@ class WorkspaceManager extends ChangeNotifier {
 
         // Check for ERP routes (not public store routes)
         if (path.startsWith('/mail') ||
+            path.startsWith('/storage') ||
             path.startsWith('/dashboard') ||
             path.startsWith('/accounting') ||
             path.startsWith('/inventory') ||

@@ -1,9 +1,387 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../../shared/services/window_zoom_service.dart';
+import '../../../shared/utils/file_download.dart';
+import '../../storage/models/app_stored_file.dart';
+import '../../storage/services/app_file_storage_service.dart';
 import '../providers/email_provider.dart';
 import 'mail_error_diagnostic_banner.dart';
+
+const int _emailBodyRendererVersion = 7;
+const String _emailReaderBaseUrl = 'https://mail.vinabike.local/';
+const bool _emailReaderDiagnosticsEnabled = false;
+
+const String _emailLinkBridgeJavaScript = r'''
+(function() {
+  if (window.__vinabikeEmailLinkBridgeInstalled) return;
+  window.__vinabikeEmailLinkBridgeInstalled = true;
+
+  var lastSentUrl = '';
+  var lastSentAt = 0;
+  var lastAnchorLogCount = -1;
+
+  function safeText(value, maxLength) {
+    value = value == null ? '' : String(value);
+    value = value.replace(/\s+/g, ' ').trim();
+    if (value.length > maxLength) return value.slice(0, maxLength) + '...';
+    return value;
+  }
+
+  function nodeLabel(node) {
+    if (!node) return 'null';
+    var tag = node.tagName ? String(node.tagName).toLowerCase() : String(node.nodeName || 'node');
+    var id = node.id ? ('#' + node.id) : '';
+    var cls = node.className && typeof node.className === 'string'
+      ? ('.' + safeText(node.className, 60).replace(/\s+/g, '.'))
+      : '';
+    return tag + id + cls;
+  }
+
+  function debug(event, details) {
+    try {
+      var payload = JSON.stringify({
+        event: event,
+        details: details || {},
+        href: window.location.href,
+        base: document.baseURI,
+        ready: document.readyState
+      });
+      try {
+        if (window.EmailDebugBridge && EmailDebugBridge.postMessage) {
+          EmailDebugBridge.postMessage(payload);
+        }
+      } catch (channelError) {}
+      if (window.console && console.info) {
+        console.info('[VinabikeMailReader] ' + payload);
+      }
+    } catch (error) {}
+  }
+
+  debug('bridge-installed', {
+    title: safeText(document.title, 80),
+    bodyLength: document.body && document.body.innerText ? document.body.innerText.length : 0
+  });
+
+  function sendToFlutter(url) {
+    if (!url) {
+      debug('send-ignored-empty', {});
+      return;
+    }
+    url = String(url);
+    if (!url || /^javascript:/i.test(url)) {
+      debug('send-ignored-javascript', { url: safeText(url, 220) });
+      return;
+    }
+
+    var now = Date.now ? Date.now() : new Date().getTime();
+    if (url === lastSentUrl && now - lastSentAt < 900) {
+      debug('send-deduped', { url: safeText(url, 220) });
+      return;
+    }
+    lastSentUrl = url;
+    lastSentAt = now;
+
+    try {
+      if (window.EmailLinkBridge && EmailLinkBridge.postMessage) {
+        debug('send-post-message', { url: safeText(url, 220) });
+        EmailLinkBridge.postMessage(url);
+        return;
+      }
+    } catch (error) {
+      debug('send-post-message-error', { error: safeText(error, 160) });
+    }
+    debug('send-location-fallback', { url: safeText(url, 220) });
+    window.location.href = url;
+  }
+
+  function closestLinkedElement(target) {
+    var node = target;
+    while (node && node !== document) {
+      if (node.getAttribute) {
+        var nativeHref = node.getAttribute('href') ||
+          node.getAttribute('xlink:href');
+        if (nativeHref) {
+          return { node: node, href: nativeHref, nativeLink: true };
+        }
+
+        var href = node.getAttribute('data-href') ||
+          node.getAttribute('data-url') ||
+          node.getAttribute('data-link');
+        if (href) return { node: node, href: href, nativeLink: false };
+      }
+      node = node.parentElement || node.parentNode;
+    }
+    return null;
+  }
+
+  function absoluteUrl(url) {
+    try {
+      return new URL(url, document.baseURI || 'https://mail.vinabike.local/').href;
+    } catch (error) {
+      return url;
+    }
+  }
+
+  function eventPoint(event) {
+    if (event.clientX != null && event.clientY != null) {
+      return { x: event.clientX, y: event.clientY };
+    }
+    var touch = event.changedTouches && event.changedTouches.length
+      ? event.changedTouches[0]
+      : null;
+    if (touch && touch.clientX != null && touch.clientY != null) {
+      return { x: touch.clientX, y: touch.clientY };
+    }
+    return null;
+  }
+
+  function gapToRect(point, rect) {
+    var dx = 0;
+    if (point.x < rect.left) dx = rect.left - point.x;
+    else if (point.x > rect.right) dx = point.x - rect.right;
+
+    var dy = 0;
+    if (point.y < rect.top) dy = rect.top - point.y;
+    else if (point.y > rect.bottom) dy = point.y - rect.bottom;
+
+    return {
+      dx: Math.round(dx * 10) / 10,
+      dy: Math.round(dy * 10) / 10,
+      distance: Math.round(Math.sqrt(dx * dx + dy * dy) * 10) / 10
+    };
+  }
+
+  function anchorRectCandidates(point, limit, maxDistance) {
+    if (!point) return [];
+    var anchors = document.querySelectorAll('a[href], area[href]');
+    var matches = [];
+
+    anchors.forEach(function(anchor) {
+      var rects = anchor.getClientRects ? anchor.getClientRects() : [];
+      if (!rects || !rects.length) {
+        rects = [anchor.getBoundingClientRect()];
+      }
+
+      for (var i = 0; i < rects.length; i++) {
+        var rect = rects[i];
+        if (!rect || rect.width < 1 || rect.height < 1) continue;
+        var gap = gapToRect(point, rect);
+        if (maxDistance != null && gap.distance > maxDistance) continue;
+        matches.push({
+          node: anchor,
+          href: anchor.href || anchor.getAttribute('href'),
+          text: safeText(anchor.innerText, 90),
+          distance: gap.distance,
+          dx: gap.dx,
+          dy: gap.dy,
+          rect: {
+            left: Math.round(rect.left),
+            top: Math.round(rect.top),
+            right: Math.round(rect.right),
+            bottom: Math.round(rect.bottom),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          }
+        });
+      }
+    });
+
+    matches.sort(function(a, b) {
+      return a.distance - b.distance;
+    });
+    return matches.slice(0, limit || 3);
+  }
+
+  function normalizeAnchor(node) {
+    if (!node || !node.setAttribute || !node.tagName) return;
+    var tag = String(node.tagName).toUpperCase();
+    if (tag !== 'A' && tag !== 'AREA') return;
+    node.setAttribute('target', '_self');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+
+  function linkedElementFromEvent(event) {
+    var linked = closestLinkedElement(event.target);
+    if (linked) return linked;
+
+    var point = eventPoint(event);
+    if (document.elementsFromPoint && point) {
+      var elements = document.elementsFromPoint(point.x, point.y);
+      for (var i = 0; i < elements.length; i++) {
+        linked = closestLinkedElement(elements[i]);
+        if (linked) return linked;
+      }
+    }
+    return null;
+  }
+
+  function handlePointer(event) {
+    var linked = linkedElementFromEvent(event);
+    if (!linked) {
+      var point = eventPoint(event);
+      debug('pointer-no-link', {
+        type: event.type,
+        x: point && point.x,
+        y: point && point.y,
+        target: nodeLabel(event.target),
+        text: safeText(event.target && event.target.innerText, 90),
+        nearbyAnchors: anchorRectCandidates(point, 4, 140)
+      });
+      return;
+    }
+
+    var url = linked.node.href || absoluteUrl(linked.href);
+    if (!url) {
+      debug('pointer-link-no-url', {
+        type: event.type,
+        target: nodeLabel(linked.node),
+        rawHref: safeText(linked.href, 220)
+      });
+      return;
+    }
+
+    if (linked.nativeLink) {
+      normalizeAnchor(linked.node);
+      event.preventDefault();
+      event.stopPropagation();
+      debug('pointer-native-link-bridged', {
+        type: event.type,
+        target: nodeLabel(linked.node),
+        url: safeText(url, 220),
+        text: safeText(linked.node && linked.node.innerText, 90)
+      });
+      sendToFlutter(url);
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    debug('pointer-data-link-bridged', {
+      type: event.type,
+      target: nodeLabel(linked.node),
+      url: safeText(url, 220),
+      text: safeText(linked.node && linked.node.innerText, 90)
+    });
+    sendToFlutter(url);
+    return false;
+  }
+
+  ['click', 'auxclick', 'mouseup', 'touchend'].forEach(function(eventName) {
+    document.addEventListener(eventName, handlePointer, true);
+  });
+
+  document.addEventListener('submit', function(event) {
+    var form = event.target;
+    if (!form || !form.action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    debug('form-submit-bridged', { action: safeText(form.action, 220) });
+    sendToFlutter(form.action);
+    return false;
+  }, true);
+
+  var nativeOpen = window.open;
+  window.open = function(url) {
+    if (url) {
+      debug('window-open-bridged', { url: safeText(url, 220) });
+      sendToFlutter(url);
+      return null;
+    }
+    return nativeOpen ? nativeOpen.apply(window, arguments) : null;
+  };
+
+  function normalizeAllAnchors() {
+    var anchors = document.querySelectorAll('a[href], area[href]');
+    var promotedButtons = 0;
+    document.querySelectorAll('a[target], area[target]').forEach(function(anchor) {
+      normalizeAnchor(anchor);
+    });
+    anchors.forEach(function(anchor) {
+      normalizeAnchor(anchor);
+    });
+
+    document.querySelectorAll('button').forEach(function(button) {
+      var childLink = button.querySelector && button.querySelector('a[href]');
+      if (!childLink) return;
+      button.setAttribute('data-href', childLink.href || childLink.getAttribute('href'));
+      button.setAttribute('role', 'link');
+      button.setAttribute('tabindex', '0');
+      promotedButtons += 1;
+    });
+
+    if (anchors.length !== lastAnchorLogCount) {
+      lastAnchorLogCount = anchors.length;
+      var sample = [];
+      for (var i = 0; i < Math.min(anchors.length, 8); i++) {
+        sample.push({
+          node: nodeLabel(anchors[i]),
+          href: safeText(anchors[i].href || anchors[i].getAttribute('href'), 180),
+          text: safeText(anchors[i].innerText, 60)
+        });
+      }
+      debug('anchors-normalized', {
+        count: anchors.length,
+        promotedButtons: promotedButtons,
+        viewport: {
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+          visualScale: window.visualViewport && window.visualViewport.scale,
+          visualOffsetTop: window.visualViewport && window.visualViewport.offsetTop,
+          visualPageTop: window.visualViewport && window.visualViewport.pageTop
+        },
+        sample: sample
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', normalizeAllAnchors);
+  normalizeAllAnchors();
+
+  if (window.MutationObserver) {
+    new MutationObserver(normalizeAllAnchors).observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+  }
+})();
+''';
+
+const String _emailLinkBridgeScript = '''
+<script>
+$_emailLinkBridgeJavaScript
+</script>
+''';
+
+void _mailReaderDebug(String message) {
+  if (!_emailReaderDiagnosticsEnabled) return;
+  debugPrint('📧 [MailReaderDebug] $message');
+}
+
+String _debugShort(String value, [int maxLength = 180]) {
+  final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (compact.length <= maxLength) return compact;
+  return '${compact.substring(0, maxLength)}...';
+}
+
+class _EmailFragmentParts {
+  final String head;
+  final String body;
+
+  const _EmailFragmentParts({
+    required this.head,
+    required this.body,
+  });
+}
 
 /// Email detail view for unified inbox
 class EmailDetailViewUnified extends StatelessWidget {
@@ -61,6 +439,11 @@ class EmailDetailViewUnified extends StatelessWidget {
             _SubjectHeader(email: email),
             // Native sender header - like Outlook
             _SenderHeader(email: email),
+            _AttachmentStrip(
+              email: email,
+              provider: provider,
+              isLoading: isLoading,
+            ),
             // WebView with email body only
             Expanded(
               child: _EmailBodyPane(
@@ -96,6 +479,11 @@ class EmailDetailViewUnified extends StatelessWidget {
               children: [
                 _SubjectHeader(email: email),
                 _SenderHeader(email: email),
+                _AttachmentStrip(
+                  email: email,
+                  provider: provider,
+                  isLoading: isLoading,
+                ),
                 Expanded(
                   child: _EmailBodyPane(
                     email: email,
@@ -362,6 +750,594 @@ class _SenderHeader extends StatelessWidget {
   }
 }
 
+class _AttachmentStrip extends StatelessWidget {
+  final Email email;
+  final EmailProvider? provider;
+  final bool isLoading;
+
+  const _AttachmentStrip({
+    required this.email,
+    required this.provider,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final attachments = email.attachments;
+    if (!email.hasAttachment && attachments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      height: attachments.isEmpty ? 48 : 72,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
+        ),
+      ),
+      child: attachments.isEmpty
+          ? Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: isLoading
+                      ? const CircularProgressIndicator(strokeWidth: 2)
+                      : Icon(
+                          Icons.attach_file,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isLoading
+                      ? 'Cargando adjuntos...'
+                      : 'Adjunto detectado, sin detalles disponibles.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            )
+          : ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: attachments.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final attachment = attachments[index];
+                return _AttachmentChip(
+                  email: email,
+                  provider: provider,
+                  attachment: attachment,
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _AttachmentChip extends StatelessWidget {
+  final Email email;
+  final EmailProvider? provider;
+  final EmailAttachment attachment;
+
+  const _AttachmentChip({
+    required this.email,
+    required this.provider,
+    required this.attachment,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: provider == null
+            ? null
+            : () => _EmailAttachmentPreviewDialog.show(
+                  context,
+                  provider: provider!,
+                  email: email,
+                  attachment: attachment,
+                ),
+        child: Container(
+          width: 260,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.75),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _iconForAttachment(attachment),
+                  size: 19,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      attachment.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (attachment.displaySize.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        attachment.displaySize,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.open_in_full_outlined,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmailAttachmentPreviewDialog extends StatefulWidget {
+  final EmailProvider provider;
+  final Email email;
+  final EmailAttachment attachment;
+
+  const _EmailAttachmentPreviewDialog({
+    required this.provider,
+    required this.email,
+    required this.attachment,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required EmailProvider provider,
+    required Email email,
+    required EmailAttachment attachment,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => _EmailAttachmentPreviewDialog(
+        provider: provider,
+        email: email,
+        attachment: attachment,
+      ),
+    );
+  }
+
+  @override
+  State<_EmailAttachmentPreviewDialog> createState() =>
+      _EmailAttachmentPreviewDialogState();
+}
+
+class _EmailAttachmentPreviewDialogState
+    extends State<_EmailAttachmentPreviewDialog> {
+  late Future<Uint8List> _bytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytesFuture = _loadBytes();
+  }
+
+  Future<Uint8List> _loadBytes() {
+    return widget.provider.downloadAttachment(
+      widget.email,
+      widget.attachment,
+    );
+  }
+
+  Future<void> _download(Uint8List bytes) async {
+    var savedInternally = false;
+    try {
+      await AppFileStorageService.instance.saveFile(
+        bytes: bytes,
+        fileName: _safeFileName(widget.attachment.displayName),
+        mimeType: widget.attachment.mimeType,
+        context: AppFileContext(
+          sourceType: 'email_attachment',
+          sourceId: widget.email.id,
+          sourceProvider: widget.email.providerId,
+          sourceRoute: '/mail',
+          contextType: 'email',
+          contextId: widget.email.id,
+          contextTitle: widget.email.subject,
+          contextSubtitle:
+              '${widget.email.senderName} · ${widget.email.receivedTime.toLocal()}',
+          tags: const ['correo', 'adjunto'],
+          metadata: {
+            'attachment_id': widget.attachment.id,
+            'provider_attachment_id': widget.attachment.attachmentId,
+            'from': widget.email.fromAddress,
+            'to': widget.email.toAddress,
+            'received_at': widget.email.receivedTime.toIso8601String(),
+          },
+        ),
+      );
+      savedInternally = true;
+    } catch (error) {
+      debugPrint('No se pudo guardar adjunto en Archivos: $error');
+    }
+
+    await downloadFile(
+      bytes: bytes,
+      fileName: _safeFileName(widget.attachment.displayName),
+      mimeType: widget.attachment.mimeType,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          savedInternally
+              ? 'Archivo descargado y guardado en Archivos.'
+              : 'Archivo descargado. No se pudo guardar en Archivos.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final horizontalInset = screenSize.width < 720 ? 12.0 : 36.0;
+    final verticalInset = screenSize.height < 720 ? 12.0 : 22.0;
+    final availableWidth = screenSize.width - (horizontalInset * 2);
+    final availableHeight = screenSize.height - (verticalInset * 2);
+    final dialogWidth = availableWidth < 1180 ? availableWidth : 1180.0;
+
+    return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
+      backgroundColor: Colors.transparent,
+      child: SizedBox(
+        width: dialogWidth,
+        height: availableHeight,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Material(
+            color: Theme.of(context).colorScheme.surface,
+            child: FutureBuilder<Uint8List>(
+              future: _bytesFuture,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                return Column(
+                  children: [
+                    _EmailAttachmentPreviewHeader(
+                      attachment: widget.attachment,
+                      isLoading:
+                          snapshot.connectionState == ConnectionState.waiting,
+                      onClose: () => Navigator.of(context).maybePop(),
+                      onRetry: () {
+                        setState(() {
+                          _bytesFuture = _loadBytes();
+                        });
+                      },
+                      onDownload: bytes == null ? null : () => _download(bytes),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(child: _buildPreview(snapshot)),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreview(AsyncSnapshot<Uint8List> snapshot) {
+    final theme = Theme.of(context);
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    if (snapshot.hasError || snapshot.data == null) {
+      return _AttachmentPreviewEmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'No se pudo cargar el adjunto',
+        subtitle: 'El correo indica que existe, pero no se pudo obtener.',
+        actionIcon: Icons.refresh,
+        actionLabel: 'Reintentar',
+        onAction: () {
+          setState(() {
+            _bytesFuture = _loadBytes();
+          });
+        },
+      );
+    }
+
+    final bytes = snapshot.data!;
+    final attachment = widget.attachment;
+
+    if (attachment.isImage) {
+      return ColoredBox(
+        color: const Color(0xFF0F172A),
+        child: InteractiveViewer(
+          minScale: 0.6,
+          maxScale: 5,
+          child: Center(
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const _AttachmentPreviewEmptyState(
+                icon: Icons.broken_image_outlined,
+                title: 'Imagen no compatible',
+                subtitle:
+                    'Puedes descargar el archivo desde el botón superior.',
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (attachment.isPdf) {
+      return PdfPreview(
+        build: (PdfPageFormat _) async => bytes,
+        useActions: false,
+        allowPrinting: false,
+        allowSharing: false,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        canDebug: false,
+        pdfFileName: _safeFileName(attachment.displayName),
+        scrollViewDecoration: const BoxDecoration(
+          color: Color(0xFFE5E7EB),
+        ),
+      );
+    }
+
+    if (attachment.isTextLike) {
+      final text = utf8.decode(bytes, allowMalformed: true);
+      return Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: const Color(0xFFF8FAFC),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: SelectableText(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontFamily: 'monospace',
+              height: 1.45,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return _AttachmentPreviewEmptyState(
+      icon: _iconForAttachment(attachment),
+      title: 'Vista previa no disponible',
+      subtitle:
+          '${attachment.displayName} está listo para descargar desde el botón superior.',
+    );
+  }
+}
+
+class _EmailAttachmentPreviewHeader extends StatelessWidget {
+  final EmailAttachment attachment;
+  final bool isLoading;
+  final VoidCallback onClose;
+  final VoidCallback onRetry;
+  final VoidCallback? onDownload;
+
+  const _EmailAttachmentPreviewHeader({
+    required this.attachment,
+    required this.isLoading,
+    required this.onClose,
+    required this.onRetry,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      color: colorScheme.surface,
+      child: Row(
+        children: [
+          Icon(
+            _iconForAttachment(attachment),
+            size: 22,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attachment.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (attachment.displaySize.isNotEmpty)
+                  Text(
+                    attachment.displaySize,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (isLoading)
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            IconButton(
+              tooltip: 'Reintentar',
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+            ),
+          IconButton(
+            tooltip: 'Descargar',
+            onPressed: onDownload,
+            icon: const Icon(Icons.download_outlined),
+          ),
+          IconButton(
+            tooltip: 'Cerrar',
+            onPressed: onClose,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentPreviewEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final IconData? actionIcon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _AttachmentPreviewEmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.actionIcon,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 44, color: colorScheme.onSurfaceVariant),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (onAction != null && actionIcon != null && actionLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: FilledButton.icon(
+                  onPressed: onAction,
+                  icon: Icon(actionIcon),
+                  label: Text(actionLabel!),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _iconForAttachment(EmailAttachment attachment) {
+  if (attachment.isPdf) return Icons.picture_as_pdf_outlined;
+  if (attachment.isImage) return Icons.image_outlined;
+  switch (attachment.extension) {
+    case 'doc':
+    case 'docx':
+      return Icons.description_outlined;
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return Icons.table_chart_outlined;
+    case 'mp4':
+    case 'mov':
+      return Icons.movie_outlined;
+    case 'mp3':
+    case 'ogg':
+    case 'wav':
+      return Icons.audio_file_outlined;
+    default:
+      return Icons.insert_drive_file_outlined;
+  }
+}
+
+String _safeFileName(String value) {
+  final cleaned = value
+      .trim()
+      .split(RegExp(r'[\\/]'))
+      .last
+      .replaceAll(RegExp(r'[^A-Za-z0-9._ -]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_');
+  return cleaned.isEmpty ? 'archivo' : cleaned;
+}
+
 class _EmailBodyPane extends StatelessWidget {
   final Email email;
   final bool isLoading;
@@ -475,8 +1451,13 @@ class _EmailBodyWebView extends StatefulWidget {
 class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   WebViewController? _controller;
   bool _isReady = false;
+  bool _controllerConfigured = false;
   String _lastLoadedContent = '';
   int _loadGeneration = 0;
+  int _lastLoadedRendererVersion = -1;
+  double _appScale = 1.0;
+  double? _lastAppliedContentScale;
+  double? _pendingContentScale;
 
   bool get _useNativeWebView =>
       !kIsWeb &&
@@ -487,25 +1468,164 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   @override
   void initState() {
     super.initState();
+    _appScale = _readAppScale(context);
     if (_useNativeWebView) {
+      _mailReaderDebug(
+        'init email=${widget.email.id} provider=${widget.email.providerId} '
+        'subject="${_debugShort(widget.email.subject)}"',
+      );
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..addJavaScriptChannel(
+          'EmailLinkBridge',
+          onMessageReceived: (message) {
+            _mailReaderDebug(
+              'js-link-channel url=${_debugShort(message.message, 260)}',
+            );
+            unawaited(_openEmailUrl(message.message));
+          },
+        )
+        ..addJavaScriptChannel(
+          'EmailDebugBridge',
+          onMessageReceived: (message) {
+            _mailReaderDebug('js ${_debugShort(message.message, 500)}');
+          },
+        )
         ..setNavigationDelegate(
           NavigationDelegate(
-            onPageFinished: (_) {
+            onPageStarted: (url) {
+              _mailReaderDebug('page-started url=${_debugShort(url, 260)}');
+            },
+            onPageFinished: (url) {
+              _mailReaderDebug('page-finished url=${_debugShort(url, 260)}');
+              unawaited(_installLinkBridge());
+              unawaited(_applyContentScale(_appScale));
               if (mounted) setState(() => _isReady = true);
             },
-            onNavigationRequest: (request) {
-              // Allow initial about:blank / data loads; block external link navigation
+            onWebResourceError: (error) {
+              _mailReaderDebug(
+                'resource-error code=${error.errorCode} '
+                'type=${error.errorType} '
+                'description="${_debugShort(error.description, 220)}" '
+                'url=${_debugShort(error.url ?? '', 260)}',
+              );
+            },
+            onNavigationRequest: (request) async {
+              _mailReaderDebug(
+                'nav-request url=${_debugShort(request.url, 320)}',
+              );
+              // Allow initial local loads and in-document anchors. Any real
+              // link click is handed to the OS browser like a desktop mail app.
               if (request.url.startsWith('about:') ||
-                  request.url.startsWith('data:')) {
+                  request.url.startsWith('data:') ||
+                  _isReaderInternalNavigation(request.url)) {
+                _mailReaderDebug(
+                  'nav-allow-local url=${_debugShort(request.url, 260)}',
+                );
                 return NavigationDecision.navigate;
               }
-              return NavigationDecision.prevent;
+
+              if (_isSyntheticReaderUrl(request.url)) {
+                _mailReaderDebug(
+                  'nav-prevent-synthetic url=${_debugShort(request.url, 260)}',
+                );
+                return NavigationDecision.prevent;
+              }
+
+              final handled = await _openEmailUrl(request.url);
+              _mailReaderDebug(
+                'nav-external handled=$handled '
+                'url=${_debugShort(request.url, 260)}',
+              );
+              return handled
+                  ? NavigationDecision.prevent
+                  : NavigationDecision.navigate;
             },
           ),
         );
-      _loadContent();
+      unawaited(_configureControllerAndLoad(_controller!));
+    }
+  }
+
+  Future<void> _configureControllerAndLoad(WebViewController controller) async {
+    await _installConsoleDiagnostics(controller);
+    try {
+      await controller.enableZoom(false);
+      _mailReaderDebug('zoom disabled before load');
+    } catch (error) {
+      _mailReaderDebug('zoom disable unavailable: $error');
+    }
+    if (!mounted) return;
+    _controllerConfigured = true;
+    _loadContent();
+  }
+
+  double _readAppScale(BuildContext context) {
+    if (!WindowZoomService.isDesktop) return 1.0;
+    try {
+      return context.read<WindowZoomService>().scale.clamp(0.5, 3.0).toDouble();
+    } on ProviderNotFoundException {
+      return 1.0;
+    }
+  }
+
+  double _watchAppScale(BuildContext context) {
+    if (!WindowZoomService.isDesktop) return 1.0;
+    try {
+      return context
+          .watch<WindowZoomService>()
+          .scale
+          .clamp(0.5, 3.0)
+          .toDouble();
+    } on ProviderNotFoundException {
+      return 1.0;
+    }
+  }
+
+  void _scheduleContentScaleSync(double appScale) {
+    if (!_useNativeWebView || !_controllerConfigured) return;
+    if (_pendingContentScale != null &&
+        (_pendingContentScale! - appScale).abs() < 0.001) {
+      return;
+    }
+    if (_lastAppliedContentScale != null &&
+        (_lastAppliedContentScale! - appScale).abs() < 0.001) {
+      return;
+    }
+
+    _pendingContentScale = appScale;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pending = _pendingContentScale;
+      _pendingContentScale = null;
+      if (pending == null) return;
+      unawaited(_applyContentScale(pending));
+    });
+  }
+
+  Future<void> _applyContentScale(double appScale) async {
+    final controller = _controller;
+    if (controller == null) return;
+    if (_lastAppliedContentScale != null &&
+        (_lastAppliedContentScale! - appScale).abs() < 0.001) {
+      return;
+    }
+
+    final scale = appScale.clamp(0.5, 3.0).toDouble();
+    try {
+      await controller.runJavaScript('''
+(function() {
+  var scale = ${scale.toStringAsFixed(3)};
+  document.documentElement.style.setProperty('--vinabike-email-content-scale', String(scale));
+  if (document.body) {
+    document.body.style.zoom = String(scale);
+  }
+})();
+''');
+      _lastAppliedContentScale = scale;
+      _mailReaderDebug('content-scale-applied scale=$scale');
+    } catch (error) {
+      _mailReaderDebug('content-scale failed: $error');
     }
   }
 
@@ -513,22 +1633,51 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   void didUpdateWidget(covariant _EmailBodyWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final newContent = widget.email.content ?? '';
-    if (newContent != _lastLoadedContent && newContent.isNotEmpty) {
+    final rendererChanged =
+        _lastLoadedRendererVersion != _emailBodyRendererVersion;
+    if (_controllerConfigured &&
+        (newContent != _lastLoadedContent || rendererChanged) &&
+        newContent.isNotEmpty) {
       _loadContent();
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (_useNativeWebView && _controllerConfigured) {
+      _lastLoadedRendererVersion = -1;
+      Future<void>.microtask(_loadContent);
     }
   }
 
   void _loadContent() {
     final generation = ++_loadGeneration;
     _lastLoadedContent = widget.email.content ?? '';
+    _lastLoadedRendererVersion = _emailBodyRendererVersion;
+    final lower = _lastLoadedContent.toLowerCase();
+    _mailReaderDebug(
+      'load generation=$generation renderer=$_emailBodyRendererVersion '
+      'chars=${_lastLoadedContent.length} '
+      'fullDoc=${_looksLikeEmailDocument(_lastLoadedContent)} '
+      'hasAnchor=${lower.contains('<a')} hasHref=${lower.contains('href=')} '
+      'subject="${_debugShort(widget.email.subject)}"',
+    );
     if (_isReady) setState(() => _isReady = false);
-    _controller?.loadHtmlString(_buildBodyHtml());
+    _controller?.loadHtmlString(
+      _buildBodyHtml(),
+      baseUrl: _emailReaderBaseUrl,
+    );
+    _lastAppliedContentScale = null;
+    _scheduleContentScaleSync(_appScale);
 
     // macOS WKWebView doesn't reliably fire onPageFinished for loadHtmlString.
     // Keep a white surface briefly so the native view doesn't flash dark before
     // the email document paints, then reveal the already-loaded content.
     if (defaultTargetPlatform == TargetPlatform.macOS) {
-      Future<void>.delayed(const Duration(milliseconds: 140), () {
+      Future<void>.delayed(const Duration(milliseconds: 140), () async {
+        await _installLinkBridge();
+        await _applyContentScale(_appScale);
         if (mounted && generation == _loadGeneration) {
           setState(() => _isReady = true);
         }
@@ -536,42 +1685,54 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
     }
   }
 
+  Future<void> _installLinkBridge() async {
+    try {
+      await _controller?.runJavaScript(_emailLinkBridgeJavaScript);
+      _mailReaderDebug('js bridge install requested');
+    } catch (error) {
+      _mailReaderDebug('js bridge install failed: $error');
+      debugPrint('No se pudo instalar bridge de links del correo: $error');
+    }
+  }
+
+  Future<void> _installConsoleDiagnostics(WebViewController controller) async {
+    if (!_emailReaderDiagnosticsEnabled) return;
+    try {
+      await controller.setOnConsoleMessage((message) {
+        _mailReaderDebug(
+          'console ${message.level}: ${_debugShort(message.message, 500)}',
+        );
+      });
+      _mailReaderDebug('console diagnostics installed');
+    } catch (error) {
+      _mailReaderDebug('console diagnostics unavailable: $error');
+    }
+  }
+
   String _buildBodyHtml() {
-    final rawContent = widget.email.content ?? 'Sin contenido.';
-
-    // Check if the email already has proper HTML structure
-    final hasHtmlTag = rawContent.toLowerCase().contains('<html');
-    final hasViewport = rawContent.toLowerCase().contains('viewport');
-
-    if (hasHtmlTag && hasViewport) {
-      // Email has its own HTML structure with viewport - use as-is
-      // Inject CSS to fix common issues
-      const injectedCss = '''<style>
-    html{background:#ffffff!important;-webkit-text-size-adjust:100%}
-    body{background:#ffffff!important;-webkit-text-size-adjust:100%}
-    img{max-width:100%!important;height:auto!important}
-</style>''';
-
-      return rawContent.replaceFirstMapped(
-        RegExp(r'</head>', caseSensitive: false),
-        (match) => '$injectedCss${match.group(0)}',
-      );
+    final rawContent = (widget.email.content ?? 'Sin contenido.').trim();
+    if (_looksLikeEmailDocument(rawContent)) {
+      _mailReaderDebug('build using full email document');
+      return _injectReaderAssets(rawContent);
     }
 
-    // Email doesn't have proper structure - wrap minimally
-    final content = _extractBodyInnerHtml(rawContent);
+    _mailReaderDebug('build using fragment wrapper');
+    final parts = _splitFragmentParts(_extractBodyInnerHtml(rawContent));
     return '''
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${_readerHeadAssets(includeCharset: true, includeViewport: true)}
+  ${parts.head}
   <style>
     html, body {
       margin: 0;
       padding: 0;
+      width: 100%;
+      min-width: 0;
       background: #ffffff;
       color: #242424;
+      overflow-x: auto;
       -webkit-text-size-adjust: 100%;
     }
     body {
@@ -588,17 +1749,160 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
     }
     #mail-content {
       width: 100%;
-      max-width: 760px;
       margin: 0 auto;
     }
     img { max-width: 100% !important; height: auto !important; }
     table { max-width: 100%; }
     pre { white-space: pre-wrap; word-wrap: break-word; }
+    a, area, [href], [onclick], [role="button"], button,
+    [data-href], [data-url], [data-link] {
+      cursor: pointer !important;
+      pointer-events: auto !important;
+    }
   </style>
 </head>
-<body><div id="mail-reader"><div id="mail-content">$content</div></div></body>
+<body><div id="mail-reader"><div id="mail-content">${parts.body}</div></div></body>
 </html>
 ''';
+  }
+
+  bool _looksLikeEmailDocument(String html) {
+    final lower = html.toLowerCase();
+    return lower.contains('<!doctype') ||
+        lower.contains('<html') ||
+        lower.contains('<head') ||
+        lower.contains('<body');
+  }
+
+  String _injectReaderAssets(String html) {
+    final htmlWithoutViewport = _removeViewportMeta(html);
+    final lower = htmlWithoutViewport.toLowerCase();
+    final assets = _readerHeadAssets(
+      includeCharset: !lower.contains('charset='),
+      includeViewport: true,
+      includeBase: !lower.contains('<base'),
+    );
+
+    final headClose = RegExp(r'</head\s*>', caseSensitive: false);
+    final withHeadAssets = htmlWithoutViewport.replaceFirstMapped(
+      headClose,
+      (match) => '$assets${match.group(0)}',
+    );
+    if (withHeadAssets != htmlWithoutViewport) return withHeadAssets;
+
+    final headOpen = RegExp(r'<head\b[^>]*>', caseSensitive: false);
+    final withHeadOpen = htmlWithoutViewport.replaceFirstMapped(
+      headOpen,
+      (match) => '${match.group(0)}$assets',
+    );
+    if (withHeadOpen != htmlWithoutViewport) return withHeadOpen;
+
+    final htmlOpen = RegExp(r'<html\b[^>]*>', caseSensitive: false);
+    final withHtmlOpen = htmlWithoutViewport.replaceFirstMapped(
+      htmlOpen,
+      (match) => '${match.group(0)}<head>$assets</head>',
+    );
+    if (withHtmlOpen != htmlWithoutViewport) return withHtmlOpen;
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>$assets</head>
+$htmlWithoutViewport
+</html>
+''';
+  }
+
+  String _readerHeadAssets({
+    bool includeCharset = false,
+    bool includeViewport = false,
+    bool includeBase = true,
+  }) {
+    final charset = includeCharset ? '<meta charset="UTF-8">' : '';
+    final scale = _appScale.clamp(0.5, 3.0).toStringAsFixed(3);
+    final viewport = includeViewport
+        ? '<meta name="viewport" content="width=device-width, initial-scale=$scale, maximum-scale=$scale, user-scalable=no">'
+        : '';
+    final base = includeBase ? '<base href="$_emailReaderBaseUrl">' : '';
+
+    return '''
+$charset
+$viewport
+$base
+<style id="vinabike-email-reader-style">
+  html, body {
+    --vinabike-email-content-scale: $scale;
+    background: #ffffff !important;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    zoom: var(--vinabike-email-content-scale);
+  }
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  a, area, [href], [onclick], [role="button"], button,
+  [data-href], [data-url], [data-link] {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+</style>
+$_emailLinkBridgeScript
+''';
+  }
+
+  _EmailFragmentParts _splitFragmentParts(String html) {
+    final head = StringBuffer();
+    var body = _removeViewportMeta(html);
+
+    body = body.replaceAllMapped(
+      RegExp(r'<meta\b[^>]*>', caseSensitive: false),
+      (match) {
+        head.writeln(match.group(0));
+        return '';
+      },
+    );
+
+    body = body.replaceAllMapped(
+      RegExp(r'<title\b[^>]*>.*?</title\s*>',
+          caseSensitive: false, dotAll: true),
+      (match) {
+        head.writeln(match.group(0));
+        return '';
+      },
+    );
+
+    body = body.replaceAllMapped(
+      RegExp(r'<style\b[^>]*>.*?</style\s*>',
+          caseSensitive: false, dotAll: true),
+      (match) {
+        head.writeln(match.group(0));
+        return '';
+      },
+    );
+
+    body = body
+        .replaceAll(
+          RegExp(r'<p\b[^>]*>\s*(?:&nbsp;|\s)*</p\s*>', caseSensitive: false),
+          '',
+        )
+        .trim();
+
+    return _EmailFragmentParts(head: head.toString(), body: body);
+  }
+
+  String _removeViewportMeta(String html) {
+    return html.replaceAll(
+      RegExp(
+        r'''<meta\b(?=[^>]*\bname\s*=\s*["']?viewport["']?)[^>]*>''',
+        caseSensitive: false,
+      ),
+      '',
+    );
   }
 
   String _extractBodyInnerHtml(String html) {
@@ -614,26 +1918,147 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
     return html
         .replaceAll(RegExp(r'<!doctype[^>]*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<html[^>]*>', caseSensitive: false), '')
-        .replaceAll('</html>', '')
-        .replaceAll(RegExp(r'<head>.*?</head>', dotAll: true), '')
+        .replaceAll(RegExp(r'</html>', caseSensitive: false), '')
+        .replaceAll(
+          RegExp(r'<head\b[^>]*>.*?</head>',
+              caseSensitive: false, dotAll: true),
+          '',
+        )
         .trim();
   }
 
   @override
   Widget build(BuildContext context) {
+    _appScale = _watchAppScale(context);
+    _scheduleContentScaleSync(_appScale);
+
     if (!_useNativeWebView) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: HtmlWidget(widget.email.content ?? ''),
+        child: HtmlWidget(
+          widget.email.content ?? '',
+          onTapUrl: _openEmailUrl,
+        ),
       );
+    }
+
+    if (_controllerConfigured &&
+        _lastLoadedRendererVersion != _emailBodyRendererVersion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _controllerConfigured &&
+            _lastLoadedRendererVersion != _emailBodyRendererVersion) {
+          _loadContent();
+        }
+      });
     }
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        WebViewWidget(controller: _controller!),
+        _NativeEmailWebViewZoomBoundary(
+          appScale: _appScale,
+          child: WebViewWidget(controller: _controller!),
+        ),
         if (!_isReady) const ColoredBox(color: Colors.white),
       ],
     );
+  }
+}
+
+class _NativeEmailWebViewZoomBoundary extends StatelessWidget {
+  const _NativeEmailWebViewZoomBoundary({
+    required this.appScale,
+    required this.child,
+  });
+
+  final double appScale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!WindowZoomService.isDesktop || (appScale - 1.0).abs() < 0.001) {
+      return child;
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) {
+          return child;
+        }
+
+        final nativeWidth = constraints.maxWidth * appScale;
+        final nativeHeight = constraints.maxHeight * appScale;
+
+        return ClipRect(
+          child: SizedBox.expand(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Transform.scale(
+                scale: 1 / appScale,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: nativeWidth,
+                  height: nativeHeight,
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+bool _isReaderInternalNavigation(String rawUrl) {
+  if (rawUrl == _emailReaderBaseUrl) return true;
+  if (rawUrl == '$_emailReaderBaseUrl#') return true;
+  return rawUrl.startsWith('$_emailReaderBaseUrl#');
+}
+
+bool _isSyntheticReaderUrl(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl);
+  final baseUri = Uri.tryParse(_emailReaderBaseUrl);
+  if (uri == null || baseUri == null) return false;
+  return uri.scheme == baseUri.scheme && uri.host == baseUri.host;
+}
+
+Future<bool> _openEmailUrl(String rawUrl) async {
+  final url = rawUrl.trim();
+  _mailReaderDebug('open-request raw=${_debugShort(rawUrl, 320)}');
+  if (url.isEmpty) return false;
+  if (_isSyntheticReaderUrl(url)) {
+    _mailReaderDebug('open-ignore-synthetic url=${_debugShort(url, 260)}');
+    return true;
+  }
+
+  final lower = url.toLowerCase();
+  if (lower.startsWith('javascript:')) {
+    _mailReaderDebug('open-ignore-javascript');
+    return true;
+  }
+
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme) {
+    _mailReaderDebug('open-invalid-url url=${_debugShort(url, 260)}');
+    return false;
+  }
+
+  try {
+    _mailReaderDebug('open-launch-external url=${_debugShort(url, 320)}');
+    debugPrint('📧 [MailLink] opening $url');
+    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      _mailReaderDebug('open-launch-external-success');
+      return true;
+    }
+    final fallbackOpened =
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+    _mailReaderDebug('open-launch-platform-default result=$fallbackOpened');
+    return fallbackOpened;
+  } catch (error) {
+    _mailReaderDebug('open-launch-error $error');
+    debugPrint('No se pudo abrir link de correo: $url ($error)');
+    return false;
   }
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/storage/widgets/app_files_panel.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
@@ -81,6 +82,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Buscador de Bicicletas';
       case ToolbarTool.messages:
         return 'Mensajería';
+      case ToolbarTool.storage:
+        return 'Archivos';
       case ToolbarTool.kiosk:
         return 'Kiosko RRHH';
       case ToolbarTool.quickSale:
@@ -106,6 +109,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.pedal_bike_outlined;
       case ToolbarTool.messages:
         return Icons.chat_bubble_outline;
+      case ToolbarTool.storage:
+        return Icons.folder_open_outlined;
       case ToolbarTool.kiosk:
         return Icons.badge_outlined;
       case ToolbarTool.quickSale:
@@ -131,6 +136,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return const QuickBikeFinderPanel();
       case ToolbarTool.messages:
         return const QuickMessagesPanel();
+      case ToolbarTool.storage:
+        return const AppFilesPanel(compact: true, showHeader: false);
       case ToolbarTool.kiosk:
         return const KioskModePage(
           embedded: true,

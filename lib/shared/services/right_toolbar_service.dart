@@ -6,6 +6,7 @@ enum ToolbarTool {
   newJob,
   bikeFinder,
   messages,
+  storage,
   kiosk,
   quickSale,
   expenses,

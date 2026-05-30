@@ -340,6 +340,7 @@ String _getTitleFromRoute(String route) {
     '/website/orders': 'Órdenes / Notificaciones',
     '/tienda': 'Editor Web',
     '/tienda?edit=true': 'Editor Web',
+    '/storage': 'Archivos',
     '/settings': 'Configuración',
     '/debug': 'Debug',
   };
@@ -417,6 +418,16 @@ const List<MenuSubItem> _chatMenuItems = [
 ];
 
 const String _chatSectionKey = 'chat';
+
+const List<MenuSubItem> _storageMenuItems = [
+  MenuSubItem(
+    icon: Icons.folder_open_outlined,
+    title: 'Archivos',
+    route: '/storage',
+  ),
+];
+
+const String _storageSectionKey = 'storage';
 
 const List<MenuSubItem> _websiteMenuItems = [
   MenuSubItem(
@@ -1691,6 +1702,19 @@ class _AppSidebarState extends State<AppSidebar> {
             );
           },
         );
+      case 'storage':
+        return ExpandableMenuItem(
+          key: ValueKey(moduleKey),
+          icon: Icons.folder_open_outlined,
+          activeIcon: Icons.folder,
+          title: 'Archivos',
+          currentLocation: currentLocation,
+          subItems: _storageMenuItems,
+          isExpanded: expandedSection == _storageSectionKey,
+          onExpansionChanged: (expand) =>
+              _handleExpansionChange(_storageSectionKey, expand, navService),
+          isSingleItem: true,
+        );
       case 'customers':
         return ExpandableMenuItem(
           key: ValueKey(moduleKey),
@@ -1910,6 +1934,9 @@ class _AppSidebarState extends State<AppSidebar> {
     }
     if (_matchesLocation(location, _debugMenuItems)) {
       return _debugSectionKey;
+    }
+    if (_matchesLocation(location, _storageMenuItems)) {
+      return _storageSectionKey;
     }
     if (_matchesLocation(location, _websiteMenuItems)) {
       return _websiteSectionKey;
@@ -2797,6 +2824,19 @@ class _AppDrawerState extends State<AppDrawer> {
                   _handleMobileNavigation(context, route, 'Mensajería');
                 },
               );
+            },
+          ),
+
+          ExpandableMenuItem(
+            icon: Icons.folder_open_outlined,
+            activeIcon: Icons.folder,
+            title: 'Archivos',
+            subItems: _storageMenuItems,
+            currentLocation: currentLocation,
+            isSingleItem: true,
+            onNavigate: (route) {
+              Navigator.pop(context);
+              _handleMobileNavigation(context, route, 'Archivos');
             },
           ),
 

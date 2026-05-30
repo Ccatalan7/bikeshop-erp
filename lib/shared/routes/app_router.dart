@@ -7,6 +7,7 @@ import '../widgets/main_layout.dart';
 import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
+import '../../modules/storage/pages/storage_page.dart' as storage;
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
@@ -2563,6 +2564,17 @@ class AppRouter {
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: const mail.MailInboxPage(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) => child,
+          ),
+        ),
+
+        // Internal File Storage
+        GoRoute(
+          path: '/storage',
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: const storage.StoragePage(),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) => child,
           ),

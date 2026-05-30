@@ -431,6 +431,11 @@ class VeryfiAdapter {
         [];
     final parsedItems = <ParsedLineItem>[];
     final buffer = StringBuffer();
+    final topLevelOcrText = _extractTopLevelOcrText(veryfiJson);
+
+    if (topLevelOcrText != null && topLevelOcrText.isNotEmpty) {
+      buffer.writeln(topLevelOcrText);
+    }
 
     for (final raw in rawLines) {
       if (raw is! Map) continue;
@@ -682,6 +687,36 @@ class VeryfiAdapter {
       lineItems: parsedItems,
       rawText: buffer.toString(),
     );
+  }
+
+  static String? _extractTopLevelOcrText(Map<String, dynamic> veryfiJson) {
+    const directTextKeys = [
+      'ocr_text',
+      'raw_text',
+      'full_text',
+      'document_text',
+      'extracted_text',
+      'text',
+    ];
+
+    for (final key in directTextKeys) {
+      final value = veryfiJson[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+
+    final ocr = veryfiJson['ocr'];
+    if (ocr is Map) {
+      for (final key in directTextKeys) {
+        final value = ocr[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+
+    return null;
   }
 
   static String? _extractLineItemUrl(

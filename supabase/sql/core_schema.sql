@@ -5791,6 +5791,22 @@ begin
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6202');
   v_count := v_count + (case when found then 1 else 0 end);
 
+  insert into accounts (tenant_id, code, name, type, category, description, parent_id, is_active)
+  select p_tenant_id, '6202-01', 'Agua', 'expense', 'operatingExpense',
+    'Pagos de agua potable, alcantarillado y servicios sanitarios',
+    (select id from accounts where tenant_id = p_tenant_id and code = '6202' limit 1),
+    true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6202-01');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into accounts (tenant_id, code, name, type, category, description, parent_id, is_active)
+  select p_tenant_id, '6202-02', 'Luz', 'expense', 'operatingExpense',
+    'Pagos de electricidad y servicios de energía eléctrica',
+    (select id from accounts where tenant_id = p_tenant_id and code = '6202' limit 1),
+    true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6202-02');
+  v_count := v_count + (case when found then 1 else 0 end);
+
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6203', 'Telefonía e Internet', 'expense', 'operatingExpense',
     'Planes de telefonía fija, móvil y servicios de internet', true
@@ -8287,7 +8303,7 @@ begin
   if v_name like '%internet%' or v_name like '%telefon%' then
     return 'Telefonía e Internet';
   end if;
-  if v_name like '%luz%' or v_name like '%agua%' or v_name like '%gas%' or v_name like '%servicio básico%' or v_name like '%servicios básicos%' then
+  if v_name like '%agua%' or v_name like '%esval%' or v_name like '%aguas%' or v_name like '%luz%' or v_name like '%electric%' or v_name like '%energía%' or v_name like '%energia%' or v_name like '%gas%' or v_name like '%servicio básico%' or v_name like '%servicios básicos%' then
     return 'Servicios Básicos';
   end if;
   if v_name like '%transporte%' or v_name like '%flete%' or v_name like '%envío%' or v_name like '%envio%' or v_name like '%encomienda%' then
@@ -8340,6 +8356,47 @@ begin
   return v_id;
 end;
 $$;
+
+-- Keep categories broad: Agua/Luz are ledger subaccounts, while
+-- Servicios Básicos is the operational reporting category.
+insert into public.expense_categories (
+  tenant_id,
+  name,
+  description,
+  default_account_id,
+  default_tax_rate
+)
+select
+  parent_account.tenant_id,
+  'Servicios Básicos',
+  'Electricidad, agua, gas y otros servicios básicos',
+  parent_account.id,
+  0
+from public.accounts parent_account
+where parent_account.code = '6202'
+  and not exists (
+    select 1
+    from public.expense_categories existing
+    where existing.tenant_id = parent_account.tenant_id
+      and lower(existing.name) = lower('Servicios Básicos')
+  );
+
+update public.expense_categories ec
+set
+  default_account_id = parent_account.id,
+  description = coalesce(
+    nullif(ec.description, ''),
+    'Electricidad, agua, gas y otros servicios básicos'
+  ),
+  updated_at = now()
+from public.accounts parent_account
+where parent_account.tenant_id = ec.tenant_id
+  and parent_account.code = '6202'
+  and lower(ec.name) = lower('Servicios Básicos')
+  and (
+    ec.default_account_id is distinct from parent_account.id
+    or coalesce(ec.description, '') = ''
+  );
 
 -- Add composite FK for expense_categories.default_account_id (tenant-scoped)
 do $$ begin
@@ -8792,6 +8849,80 @@ exception
   when undefined_column then null;
   when others then raise notice '⚠️  expense_templates FKs: %', sqlerrm;
 end $$;
+
+with utility_categories as (
+  select
+    ec.id,
+    ec.tenant_id,
+    services.id as services_category_id
+  from public.expense_categories ec
+  join public.accounts utility_account
+    on utility_account.id = ec.default_account_id
+   and utility_account.tenant_id = ec.tenant_id
+   and utility_account.code in ('6202-01', '6202-02')
+  join public.expense_categories services
+    on services.tenant_id = ec.tenant_id
+   and lower(services.name) = lower('Servicios Básicos')
+  where lower(ec.name) in (lower('Agua'), lower('Luz'))
+)
+update public.expenses e
+set category_id = utility_categories.services_category_id
+from utility_categories
+where e.category_id = utility_categories.id;
+
+with utility_categories as (
+  select
+    ec.id,
+    ec.tenant_id,
+    services.id as services_category_id
+  from public.expense_categories ec
+  join public.accounts utility_account
+    on utility_account.id = ec.default_account_id
+   and utility_account.tenant_id = ec.tenant_id
+   and utility_account.code in ('6202-01', '6202-02')
+  join public.expense_categories services
+    on services.tenant_id = ec.tenant_id
+   and lower(services.name) = lower('Servicios Básicos')
+  where lower(ec.name) in (lower('Agua'), lower('Luz'))
+)
+update public.expense_templates template
+set
+  default_category_id = case
+    when template.default_category_id = utility_categories.id
+      then utility_categories.services_category_id
+    else template.default_category_id
+  end,
+  trigger_category_id = case
+    when template.trigger_category_id = utility_categories.id
+      then utility_categories.services_category_id
+    else template.trigger_category_id
+  end,
+  updated_at = now()
+from utility_categories
+where template.tenant_id = utility_categories.tenant_id
+  and (
+    template.default_category_id = utility_categories.id
+    or template.trigger_category_id = utility_categories.id
+  );
+
+delete from public.expense_categories ec
+using public.accounts utility_account
+where utility_account.id = ec.default_account_id
+  and utility_account.tenant_id = ec.tenant_id
+  and utility_account.code in ('6202-01', '6202-02')
+  and lower(ec.name) in (lower('Agua'), lower('Luz'))
+  and ec.created_at >= timestamp with time zone '2026-05-27 00:00:00+00'
+  and not exists (
+    select 1
+    from public.expenses e
+    where e.category_id = ec.id
+  )
+  and not exists (
+    select 1
+    from public.expense_templates template
+    where template.default_category_id = ec.id
+       or template.trigger_category_id = ec.id
+  );
 
 create unique index if not exists expense_templates_tenant_name_key
   on expense_templates(tenant_id, lower(name));
@@ -28886,6 +29017,137 @@ set is_required = excluded.is_required,
     sort_order = excluded.sort_order,
     helper_text = excluded.helper_text,
     updated_at = now();
+
+--------------------------------------------------------------------------------
+-- Internal app file library with tenant-scoped Supabase Storage objects.
+--------------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('vinabike-files', 'vinabike-files', false, 52428800, null)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+create table if not exists public.app_files (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  uploaded_by uuid references auth.users(id) on delete set null default auth.uid(),
+  file_name text not null,
+  storage_bucket text not null default 'vinabike-files',
+  storage_path text not null,
+  mime_type text not null default 'application/octet-stream',
+  size_bytes bigint not null default 0,
+  source_type text not null default 'manual',
+  source_id text,
+  source_provider text,
+  source_route text,
+  context_type text,
+  context_id text,
+  context_title text,
+  context_subtitle text,
+  tags text[] not null default '{}',
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  deleted_at timestamp with time zone,
+  constraint app_files_storage_object_unique unique (storage_bucket, storage_path),
+  constraint app_files_size_nonnegative check (size_bytes >= 0)
+);
+
+create index if not exists idx_app_files_tenant_created
+  on public.app_files(tenant_id, created_at desc)
+  where deleted_at is null;
+
+create index if not exists idx_app_files_source
+  on public.app_files(tenant_id, source_type, created_at desc)
+  where deleted_at is null;
+
+create index if not exists idx_app_files_context
+  on public.app_files(tenant_id, context_type, context_id)
+  where deleted_at is null;
+
+create index if not exists idx_app_files_tags
+  on public.app_files using gin(tags);
+
+create index if not exists idx_app_files_metadata
+  on public.app_files using gin(metadata);
+
+drop trigger if exists trg_app_files_updated_at on public.app_files;
+create trigger trg_app_files_updated_at
+  before update on public.app_files
+  for each row execute procedure public.set_updated_at();
+
+alter table public.app_files enable row level security;
+
+drop policy if exists "app_files_select" on public.app_files;
+drop policy if exists "app_files_insert" on public.app_files;
+drop policy if exists "app_files_update" on public.app_files;
+drop policy if exists "app_files_delete" on public.app_files;
+
+create policy "app_files_select" on public.app_files
+  for select
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+create policy "app_files_insert" on public.app_files
+  for insert
+  to authenticated
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "app_files_update" on public.app_files
+  for update
+  to authenticated
+  using (tenant_id = public.user_tenant_id())
+  with check (tenant_id = public.user_tenant_id());
+
+create policy "app_files_delete" on public.app_files
+  for delete
+  to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+drop policy if exists "vinabike_files_select" on storage.objects;
+drop policy if exists "vinabike_files_insert" on storage.objects;
+drop policy if exists "vinabike_files_update" on storage.objects;
+drop policy if exists "vinabike_files_delete" on storage.objects;
+
+create policy "vinabike_files_select" on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'vinabike-files'
+    and split_part(name, '/', 1) = public.user_tenant_id()::text
+  );
+
+create policy "vinabike_files_insert" on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'vinabike-files'
+    and split_part(name, '/', 1) = public.user_tenant_id()::text
+  );
+
+create policy "vinabike_files_update" on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'vinabike-files'
+    and split_part(name, '/', 1) = public.user_tenant_id()::text
+  )
+  with check (
+    bucket_id = 'vinabike-files'
+    and split_part(name, '/', 1) = public.user_tenant_id()::text
+  );
+
+create policy "vinabike_files_delete" on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'vinabike-files'
+    and split_part(name, '/', 1) = public.user_tenant_id()::text
+  );
+
+notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------------
 -- 4. Existing tenant category mappings

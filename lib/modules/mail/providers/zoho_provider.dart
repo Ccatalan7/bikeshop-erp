@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -219,6 +221,8 @@ class ZohoProvider extends EmailProvider {
     required String method,
     required String url,
     Map<String, dynamic>? body,
+    String? accept,
+    String? responseType,
   }) async {
     if (!isAuthenticated) throw Exception('Zoho account is not connected');
 
@@ -228,6 +232,8 @@ class ZohoProvider extends EmailProvider {
         'proxy_url': url,
         'method': method,
         'body': body,
+        if (accept != null) 'accept': accept,
+        if (responseType != null) 'response_type': responseType,
       },
     );
 
@@ -365,10 +371,19 @@ class ZohoProvider extends EmailProvider {
   }
 
   Email _parseZohoMessage(Map<String, dynamic> json) {
+    final messageId = json['messageId']?.toString() ?? '';
+    final folderId = json['folderId']?.toString() ?? _inboxFolderId ?? '';
+    final attachments = _extractZohoAttachments(json, messageId: messageId);
+    final hasAttachment = attachments.isNotEmpty ||
+        _isTruthyAttachmentFlag(json['hasAttachment']) ||
+        _isTruthyAttachmentFlag(json['attachment']) ||
+        _isTruthyAttachmentFlag(json['isAttachmentAvailable']) ||
+        (int.tryParse(json['attachmentCount']?.toString() ?? '0') ?? 0) > 0;
+
     return Email(
-      id: json['messageId']?.toString() ?? '',
+      id: messageId,
       providerId: _providerId,
-      folderId: json['folderId']?.toString() ?? _inboxFolderId ?? '',
+      folderId: folderId,
       subject: json['subject'] ?? '(Sin asunto)',
       fromAddress: json['fromAddress'] ?? json['sender'] ?? '',
       toAddress: json['toAddress'] ?? '',
@@ -379,10 +394,9 @@ class ZohoProvider extends EmailProvider {
       // status: 0=Unread, 1=Read (Zoho API v1 usually)
       // Check for explicit "Unread" indicators, default to true if ambiguous to avoid noise
       isRead: json['status']?.toString() != '0' && json['status'] != 'UNREAD',
-      hasAttachment: json['hasAttachment'] == true ||
-          json['hasAttachment'] == 1 ||
-          json['hasAttachment'] == '1',
+      hasAttachment: hasAttachment,
       summary: json['summary'],
+      attachments: attachments,
     );
   }
 
@@ -397,8 +411,19 @@ class ZohoProvider extends EmailProvider {
       final data = await _proxyRequest(method: 'GET', url: url);
       final emailData = data['data'] as Map<String, dynamic>? ?? {};
       final content = emailData['content'] as String? ?? email.summary ?? '';
+      final contentAttachments =
+          _extractZohoAttachments(emailData, messageId: email.id);
+      final attachments = contentAttachments.isNotEmpty
+          ? contentAttachments
+          : (email.hasAttachment
+              ? await _fetchAttachmentInfo(email)
+              : const <EmailAttachment>[]);
 
-      _selectedEmail = email.copyWith(content: content);
+      _selectedEmail = email.copyWith(
+        content: content,
+        hasAttachment: email.hasAttachment || attachments.isNotEmpty,
+        attachments: attachments,
+      );
       return _selectedEmail!;
     } catch (e) {
       debugPrint('getEmailContent error: $e');
@@ -408,6 +433,132 @@ class ZohoProvider extends EmailProvider {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<List<EmailAttachment>> _fetchAttachmentInfo(Email email) async {
+    try {
+      final url =
+          '$_accountUrl/folders/${email.folderId}/messages/${email.id}/attachmentinfo?includeInline=false';
+      final data = await _proxyRequest(method: 'GET', url: url);
+      final root = data is Map ? data['data'] : null;
+      if (root is! Map) return const [];
+      return _extractZohoAttachments(
+        Map<String, dynamic>.from(root),
+        messageId: email.id,
+      );
+    } catch (e) {
+      debugPrint('📬 [Zoho] Could not load attachment info: $e');
+      return const [];
+    }
+  }
+
+  List<EmailAttachment> _extractZohoAttachments(
+    Map<String, dynamic> json, {
+    required String messageId,
+  }) {
+    final rawAttachments = <dynamic>[];
+
+    void addFrom(dynamic value) {
+      if (value is List) rawAttachments.addAll(value);
+    }
+
+    addFrom(json['attachments']);
+    addFrom(json['attachmentInfo']);
+    addFrom(json['attachmentList']);
+
+    final data = json['data'];
+    if (data is Map) {
+      addFrom(data['attachments']);
+      addFrom(data['attachmentInfo']);
+      addFrom(data['attachmentList']);
+    }
+
+    final attachments = <EmailAttachment>[];
+    for (final raw in rawAttachments.whereType<Map>()) {
+      final item = Map<String, dynamic>.from(raw);
+      final fileName = (item['attachmentName'] ??
+              item['fileName'] ??
+              item['name'] ??
+              item['filename'] ??
+              '')
+          .toString()
+          .trim();
+      final id = (item['attachmentId'] ?? item['id'] ?? '').toString().trim();
+      if (fileName.isEmpty && id.isEmpty) continue;
+
+      final size = int.tryParse(
+        (item['attachmentSize'] ?? item['size'] ?? item['fileSize'] ?? '')
+            .toString(),
+      );
+      final mimeType = (item['contentType'] ??
+              item['mimeType'] ??
+              _mimeTypeForFileName(fileName))
+          .toString();
+
+      attachments.add(
+        EmailAttachment(
+          id: id.isEmpty ? '${messageId}_${attachments.length}' : id,
+          fileName:
+              fileName.isEmpty ? 'adjunto-${attachments.length + 1}' : fileName,
+          mimeType: mimeType,
+          sizeBytes: size,
+          attachmentId: id.isEmpty ? null : id,
+          isInline: false,
+        ),
+      );
+    }
+
+    return attachments;
+  }
+
+  bool _isTruthyAttachmentFlag(dynamic value) {
+    if (value == true) return true;
+    if (value is num) return value > 0;
+    final normalized = value?.toString().toLowerCase().trim();
+    return normalized == '1' ||
+        normalized == 'true' ||
+        normalized == 'yes' ||
+        normalized == 'y';
+  }
+
+  String _mimeTypeForFileName(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.csv')) return 'text/csv';
+    if (lower.endsWith('.txt') || lower.endsWith('.log')) {
+      return 'text/plain';
+    }
+    if (lower.endsWith('.json')) return 'application/json';
+    return 'application/octet-stream';
+  }
+
+  @override
+  Future<Uint8List> downloadAttachment(
+    Email email,
+    EmailAttachment attachment,
+  ) async {
+    final attachmentId = attachment.attachmentId;
+    if (attachmentId == null || attachmentId.isEmpty) {
+      throw Exception('Este adjunto de Zoho no tiene ID descargable.');
+    }
+
+    final url =
+        '$_accountUrl/folders/${email.folderId}/messages/${email.id}/attachments/$attachmentId';
+    final data = await _proxyRequest(
+      method: 'GET',
+      url: url,
+      accept: 'application/octet-stream',
+      responseType: 'base64',
+    );
+    if (data is! Map || data['base64'] == null) {
+      throw Exception('Zoho no devolvió el archivo adjunto.');
+    }
+
+    return base64Decode(data['base64'].toString());
   }
 
   @override

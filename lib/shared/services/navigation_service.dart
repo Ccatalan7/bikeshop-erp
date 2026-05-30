@@ -9,6 +9,7 @@ const List<String> defaultModuleOrder = [
   'tax_reports',
   'customers',
   'chat',
+  'storage',
   'workshop',
   'smart_features',
   'inventory',
@@ -83,11 +84,26 @@ class NavigationService extends ChangeNotifier {
         result.add(item);
       }
     }
-    // Add any new modules that weren't in saved order
-    for (final item in defaultModuleOrder) {
-      if (!result.contains(item)) {
-        result.add(item);
+    // Add new modules near their default neighbors without disturbing the
+    // user's saved order for modules that already existed.
+    for (var defaultIndex = 0;
+        defaultIndex < defaultModuleOrder.length;
+        defaultIndex++) {
+      final item = defaultModuleOrder[defaultIndex];
+      if (result.contains(item)) continue;
+
+      var insertAt = result.length;
+      for (var previousIndex = defaultIndex - 1;
+          previousIndex >= 0;
+          previousIndex--) {
+        final previousDefault = defaultModuleOrder[previousIndex];
+        final previousSavedIndex = result.indexOf(previousDefault);
+        if (previousSavedIndex != -1) {
+          insertAt = previousSavedIndex + 1;
+          break;
+        }
       }
+      result.insert(insertAt, item);
     }
     return result;
   }

@@ -14,6 +14,8 @@ class GmailProvider extends EmailProvider {
       'https://www.googleapis.com/auth/gmail.modify';
 
   static const String _apiBase = 'https://www.googleapis.com/gmail/v1/users/me';
+  static const String _attachmentMetadataMigrationKey =
+      'gmail_attachment_metadata_v2_checked';
 
   String? _email;
 
@@ -355,6 +357,11 @@ class GmailProvider extends EmailProvider {
       );
       final effectivePageToken =
           pageToken ?? (start > 0 ? _nextPageToken : null);
+      final prefs = await SharedPreferences.getInstance();
+      final refreshAttachmentMetadata = start == 0 &&
+          effectiveSearch == null &&
+          knownById.isNotEmpty &&
+          !(prefs.getBool(_attachmentMetadataMigrationKey) ?? false);
       final response = await _supabase.functions.invoke(
         'gmail-oauth',
         body: {
@@ -364,7 +371,8 @@ class GmailProvider extends EmailProvider {
           if (effectiveSearch != null) 'search_query': effectiveSearch,
           if (effectivePageToken != null && effectivePageToken.isNotEmpty)
             'page_token': effectivePageToken,
-          if (knownById.isNotEmpty) 'known_ids': knownById.keys.toList(),
+          if (knownById.isNotEmpty && !refreshAttachmentMetadata)
+            'known_ids': knownById.keys.toList(),
         },
       );
 
@@ -384,6 +392,10 @@ class GmailProvider extends EmailProvider {
         }
         return _parseGmailMessage(typedMessage);
       }).toList();
+
+      if (refreshAttachmentMetadata) {
+        await prefs.setBool(_attachmentMetadataMigrationKey, true);
+      }
 
       return _emails;
     } catch (e) {
@@ -408,6 +420,10 @@ class GmailProvider extends EmailProvider {
 
     final labelIds = data['labelIds'] as List? ?? [];
     final isUnread = labelIds.contains('UNREAD');
+    final payload = _asStringMap(data['payload']);
+    final attachments = payload == null
+        ? const <EmailAttachment>[]
+        : _collectAttachmentsFromPayload(payload, data['id']?.toString() ?? '');
 
     return Email(
       id: data['id'] ?? '',
@@ -421,12 +437,10 @@ class GmailProvider extends EmailProvider {
         int.tryParse(data['internalDate'] ?? '0') ?? 0,
       ),
       isRead: !isUnread,
-      hasAttachment: (data['payload']?['parts'] as List?)?.any(
-            (p) => p['filename'] != null && p['filename'].toString().isNotEmpty,
-          ) ??
-          false,
+      hasAttachment: attachments.isNotEmpty,
       summary: data['snippet'],
       threadId: data['threadId'],
+      attachments: attachments,
     );
   }
 
@@ -445,10 +459,24 @@ class GmailProvider extends EmailProvider {
       if (payload != null) {
         // 1. Extract HTML body
         content = _extractBody(payload);
+        final attachments = _collectAttachmentsFromPayload(payload, email.id);
 
         // Inline CID images are hydrated after first paint by MailAccountManager.
         // Blocking on every image here makes rich emails feel much slower than
         // native mail clients.
+        if (content.trim().isEmpty) {
+          final summary = email.summary?.trim();
+          if (summary != null && summary.isNotEmpty) {
+            content = _plainTextToHtml(summary);
+          }
+        }
+
+        _selectedEmail = email.copyWith(
+          content: content,
+          hasAttachment: email.hasAttachment || attachments.isNotEmpty,
+          attachments: attachments,
+        );
+        return _selectedEmail!;
       }
 
       if (content.trim().isEmpty) {
@@ -597,6 +625,24 @@ class GmailProvider extends EmailProvider {
     }
   }
 
+  @override
+  Future<Uint8List> downloadAttachment(
+    Email email,
+    EmailAttachment attachment,
+  ) async {
+    final attachmentId = attachment.attachmentId;
+    if (attachmentId == null || attachmentId.isEmpty) {
+      throw Exception('Este adjunto de Gmail no tiene ID descargable.');
+    }
+
+    final data = await _fetchAttachment(email.id, attachmentId);
+    if (data == null || data.isEmpty) {
+      throw Exception('Gmail no devolvió el archivo adjunto.');
+    }
+
+    return _decodeBase64UrlBytes(data);
+  }
+
   void _collectInlineParts(
     Map<String, dynamic> part,
     List<Map<String, dynamic>> collected,
@@ -617,6 +663,95 @@ class GmailProvider extends EmailProvider {
         }
       }
     }
+  }
+
+  List<EmailAttachment> _collectAttachmentsFromPayload(
+    Map<String, dynamic> payload,
+    String messageId,
+  ) {
+    final attachments = <EmailAttachment>[];
+    _collectAttachmentParts(payload, messageId, attachments);
+    return attachments;
+  }
+
+  void _collectAttachmentParts(
+    Map<String, dynamic> part,
+    String messageId,
+    List<EmailAttachment> collected,
+  ) {
+    final fileName = part['filename']?.toString().trim() ?? '';
+    final mimeType = part['mimeType']?.toString() ?? 'application/octet-stream';
+    final body = _asStringMap(part['body']);
+    final attachmentId = body?['attachmentId']?.toString();
+    final size = int.tryParse(body?['size']?.toString() ?? '');
+    final contentDisposition = _headerValue(part, 'Content-Disposition');
+    final contentId = _headerValue(part, 'Content-ID')
+        .replaceAll('<', '')
+        .replaceAll('>', '')
+        .trim();
+    final isInline = contentDisposition.toLowerCase().contains('inline') ||
+        (contentId.isNotEmpty &&
+            !contentDisposition.toLowerCase().contains('attachment'));
+
+    if (_shouldShowAttachment(
+      fileName: fileName,
+      mimeType: mimeType,
+      contentDisposition: contentDisposition,
+      isInline: isInline,
+    )) {
+      final resolvedId = attachmentId ??
+          '${messageId}_${collected.length}_${fileName.hashCode}';
+      collected.add(
+        EmailAttachment(
+          id: resolvedId,
+          fileName:
+              fileName.isEmpty ? 'adjunto-${collected.length + 1}' : fileName,
+          mimeType: mimeType,
+          sizeBytes: size,
+          attachmentId: attachmentId,
+          contentId: contentId.isEmpty ? null : contentId,
+          isInline: isInline,
+        ),
+      );
+    }
+
+    final nestedParts = part['parts'];
+    if (nestedParts is List) {
+      for (final nestedPart in nestedParts) {
+        final typedPart = _asStringMap(nestedPart);
+        if (typedPart != null) {
+          _collectAttachmentParts(typedPart, messageId, collected);
+        }
+      }
+    }
+  }
+
+  bool _shouldShowAttachment({
+    required String fileName,
+    required String mimeType,
+    required String contentDisposition,
+    required bool isInline,
+  }) {
+    final lowerDisposition = contentDisposition.toLowerCase();
+    final lowerMimeType = mimeType.toLowerCase();
+    final hasFileName = fileName.trim().isNotEmpty;
+    final explicitAttachment = lowerDisposition.contains('attachment');
+    final inlineImage = isInline && lowerMimeType.startsWith('image/');
+
+    return (hasFileName || explicitAttachment) && !inlineImage;
+  }
+
+  String _headerValue(Map<String, dynamic> part, String headerName) {
+    final headers = part['headers'];
+    if (headers is! List) return '';
+
+    for (final header in headers.whereType<Map>()) {
+      final name = header['name']?.toString().toLowerCase();
+      if (name == headerName.toLowerCase()) {
+        return header['value']?.toString() ?? '';
+      }
+    }
+    return '';
   }
 
   String _extractBody(Map<String, dynamic> payload) {
@@ -709,6 +844,15 @@ class GmailProvider extends EmailProvider {
     } catch (e) {
       return data;
     }
+  }
+
+  Uint8List _decodeBase64UrlBytes(String data) {
+    var normalized = data.replaceAll('-', '+').replaceAll('_', '/');
+    final padding = normalized.length % 4;
+    if (padding > 0) {
+      normalized = normalized.padRight(normalized.length + 4 - padding, '=');
+    }
+    return base64.decode(normalized);
   }
 
   @override

@@ -236,6 +236,7 @@ async function fetchWithToken(proxyUrl: string, body: Record<string, unknown>, a
     method: cleanText(body.method) || 'GET',
     headers: {
       'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      'Accept': cleanText(body.accept) || 'application/json',
       'Content-Type': 'application/json',
     },
   }
@@ -243,6 +244,18 @@ async function fetchWithToken(proxyUrl: string, body: Record<string, unknown>, a
   if (body.body) fetchOptions.body = JSON.stringify(body.body)
 
   const response = await fetch(proxyUrl, fetchOptions)
+  if (cleanText(body.response_type).toLowerCase() === 'base64') {
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    return new Response(JSON.stringify({
+      base64: bytesToBase64(bytes),
+      contentType: response.headers.get('content-type') ?? null,
+      contentLength: response.headers.get('content-length') ?? null,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: response.status,
+    })
+  }
+
   const responseText = await response.text()
   let responseData: unknown
   try {
@@ -255,6 +268,15 @@ async function fetchWithToken(proxyUrl: string, body: Record<string, unknown>, a
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     status: response.status,
   })
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
+  return btoa(binary)
 }
 
 async function exchangeCode(code: string, redirectUriValue: string) {

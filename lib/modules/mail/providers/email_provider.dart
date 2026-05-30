@@ -1,5 +1,58 @@
 import 'package:flutter/foundation.dart';
 
+/// Provider-neutral attachment metadata for an email.
+class EmailAttachment {
+  final String id;
+  final String fileName;
+  final String mimeType;
+  final int? sizeBytes;
+  final String? attachmentId;
+  final String? contentId;
+  final bool isInline;
+
+  const EmailAttachment({
+    required this.id,
+    required this.fileName,
+    required this.mimeType,
+    this.sizeBytes,
+    this.attachmentId,
+    this.contentId,
+    this.isInline = false,
+  });
+
+  String get displayName => fileName.trim().isEmpty ? 'archivo' : fileName;
+
+  String get extension {
+    final name = displayName;
+    final dot = name.lastIndexOf('.');
+    if (dot == -1 || dot == name.length - 1) return '';
+    return name.substring(dot + 1).toLowerCase();
+  }
+
+  String get displaySize {
+    final bytes = sizeBytes;
+    if (bytes == null || bytes <= 0) return '';
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+
+  bool get isPdf =>
+      extension == 'pdf' || mimeType.toLowerCase().contains('application/pdf');
+
+  bool get isImage =>
+      mimeType.toLowerCase().startsWith('image/') ||
+      const {'jpg', 'jpeg', 'png', 'gif', 'webp'}.contains(extension);
+
+  bool get isTextLike {
+    final lowerMime = mimeType.toLowerCase();
+    return lowerMime.startsWith('text/') ||
+        const {'txt', 'csv', 'json', 'log', 'xml'}.contains(extension);
+  }
+}
+
 /// Unified email model for all providers
 class Email {
   final String id;
@@ -16,6 +69,7 @@ class Email {
   final String? summary;
   final String? content;
   final String? threadId; // Gmail specific
+  final List<EmailAttachment> attachments;
 
   Email({
     required this.id,
@@ -32,7 +86,10 @@ class Email {
     this.summary,
     this.content,
     this.threadId,
+    this.attachments = const [],
   });
+
+  int get attachmentCount => attachments.length;
 
   /// Get sender display name (extract from "Name <email>" format)
   String get senderName {
@@ -67,6 +124,7 @@ class Email {
     String? summary,
     String? content,
     String? threadId,
+    List<EmailAttachment>? attachments,
   }) {
     return Email(
       id: id ?? this.id,
@@ -83,6 +141,7 @@ class Email {
       summary: summary ?? this.summary,
       content: content ?? this.content,
       threadId: threadId ?? this.threadId,
+      attachments: attachments ?? this.attachments,
     );
   }
 }
@@ -154,6 +213,12 @@ abstract class EmailProvider with ChangeNotifier {
 
   /// Get full email content
   Future<Email> getEmailContent(Email email);
+
+  /// Download an email attachment into memory for preview or saving.
+  Future<Uint8List> downloadAttachment(
+    Email email,
+    EmailAttachment attachment,
+  );
 
   /// Send a new email
   Future<bool> sendEmail({

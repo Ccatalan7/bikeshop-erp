@@ -470,7 +470,13 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   Email _mergeEmail(Email existing, Email incoming) {
-    return incoming.copyWith(content: incoming.content ?? existing.content);
+    return incoming.copyWith(
+      content: incoming.content ?? existing.content,
+      hasAttachment: incoming.hasAttachment || existing.hasAttachment,
+      attachments: incoming.attachments.isNotEmpty
+          ? incoming.attachments
+          : existing.attachments,
+    );
   }
 
   String _emailKey(Email email) => '${email.providerId}:${email.id}';
@@ -541,6 +547,7 @@ class MailAccountManager extends ChangeNotifier {
 
       _selectedEmail = loadedEmail;
       _isLoadingSelectedEmail = false;
+      await _mergeLoadedEmailMetadata(loadedEmail);
 
       final loadedContent = loadedEmail.content;
       if (loadedContent != null && loadedContent.trim().isNotEmpty) {
@@ -624,6 +631,25 @@ class MailAccountManager extends ChangeNotifier {
 
   bool _isCurrentSelection(int requestId, String emailId) {
     return requestId == _selectionRequestId && _selectedEmail?.id == emailId;
+  }
+
+  Future<void> _mergeLoadedEmailMetadata(Email loadedEmail) async {
+    final index = _unifiedEmails.indexWhere(
+      (email) =>
+          email.id == loadedEmail.id &&
+          email.providerId == loadedEmail.providerId,
+    );
+    if (index == -1) return;
+
+    final existing = _unifiedEmails[index];
+    final merged = existing.copyWith(
+      hasAttachment: existing.hasAttachment || loadedEmail.hasAttachment,
+      attachments: loadedEmail.attachments.isNotEmpty
+          ? loadedEmail.attachments
+          : existing.attachments,
+    );
+    _unifiedEmails[index] = merged;
+    await _cache.cacheEmails([merged]);
   }
 
   String? _fallbackContentForEmail(

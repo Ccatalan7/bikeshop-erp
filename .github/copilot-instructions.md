@@ -48,6 +48,25 @@ When a task changes UI, UX, integrations, build behavior, routing, auth, notific
 
 Do not mark a feature complete just because it works on macOS if the same code path obviously affects Windows, mobile, ERP web, or public store web.
 
+## Native WebViews And App Zoom
+
+The ERP uses `WindowZoomScope` to implement browser-style app zoom. The default desktop scale is currently `0.8`, so native platform views are usually rendered inside a transformed Flutter tree.
+
+Native WebViews do **not** automatically inherit Flutter's transformed coordinate space in a trustworthy way. If a `WebViewWidget`, `InAppWebView`, WebView2 surface, or similar native platform view is placed directly inside the zoomed tree, the content can look correct while hit testing is wrong. The symptom is classic: links/buttons work at 100% zoom but click targets are offset at 80%.
+
+Required pattern for native WebViews inside the zoomed app:
+
+- Read `WindowZoomService.scale` on desktop.
+- Wrap the native WebView in a zoom boundary like `_NativeBrowserZoomBoundary`: lay the native view out at `constraints * appScale`, then apply `Transform.scale(scale: 1 / appScale, alignment: Alignment.topLeft)` inside a clipped, top-left aligned box.
+- Also sync the web content zoom to the app scale when the WebView API supports it (`pageZoom`, `textZoom`, `initialScale`, or equivalent). For simple HTML mail/content WebViews, inject a CSS/JS content scale when no native page zoom API exists.
+- Do not fix this class of bug by adding click-coordinate offsets, nearby-link guessing, enlarged invisible hit targets, or JS "rescue" clicks. Those are fragile and will break again at another scale or layout.
+- Verify native WebView interactions at both `100%` and the default `80%` app zoom before calling the fix complete.
+
+Current reference implementations:
+
+- Browser workspaces: `lib/shared/widgets/webview_module_page.dart`
+- Mail reader WebView: `lib/modules/mail/widgets/email_detail_view_unified.dart`
+
 ---
 
 # Build And Dependency Hygiene
@@ -4878,6 +4897,14 @@ The app supports **3 types of barcode scanners**:
 ---
 
 # 🔄 Key Business Logic Patterns
+
+## Expense Account vs Expense Category
+
+- Expense accounts are ledger-level posting destinations. They may be specific, for example `Agua` and `Luz` as subaccounts under `Servicios Básicos`.
+- Expense categories are operational/reporting buckets for UI filters, templates, OCR defaults, and expense review. They should encompass a broader set of related accounts, not mirror every account one-to-one.
+- Do not create a new expense category every time a new account is added. Add a category only when it creates a useful reporting/review bucket that users would naturally filter by.
+- Utility subaccounts such as water, electricity, gas, sanitation, or provider-specific accounts like Esval should normally categorize as `Servicios Básicos` while posting to the precise account.
+- When adding OCR or quick-expense automation, prefer broad categories first and precise accounts second. Example: Esval receipt → category `Servicios Básicos`, account `Agua`.
 
 ## Invoice → Journal Entry Flow
 

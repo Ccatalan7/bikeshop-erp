@@ -284,11 +284,18 @@ async function fetchInboxMetadata(accessToken: string, body: Record<string, unkn
     }
 
     const detailUrl = new URL(`${gmailApiOrigin}/gmail/v1/users/me/messages/${encodeURIComponent(id)}`)
-    detailUrl.searchParams.set('format', 'metadata')
-    detailUrl.searchParams.append('metadataHeaders', 'From')
-    detailUrl.searchParams.append('metadataHeaders', 'To')
-    detailUrl.searchParams.append('metadataHeaders', 'Subject')
-    detailUrl.searchParams.append('metadataHeaders', 'Date')
+    detailUrl.searchParams.set('format', 'full')
+    detailUrl.searchParams.set(
+      'fields',
+      [
+        'id',
+        'threadId',
+        'labelIds',
+        'snippet',
+        'internalDate',
+        'payload(headers(name,value),filename,mimeType,body(attachmentId,size),parts(filename,mimeType,headers(name,value),body(attachmentId,size),parts(filename,mimeType,headers(name,value),body(attachmentId,size),parts(filename,mimeType,headers(name,value),body(attachmentId,size)))))',
+      ].join(','),
+    )
 
     const detailResponse = await fetch(detailUrl, {
       headers: { 'Authorization': `Bearer ${accessToken}` },
