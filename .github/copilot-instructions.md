@@ -67,6 +67,16 @@ Current reference implementations:
 - Browser workspaces: `lib/shared/widgets/webview_module_page.dart`
 - Mail reader WebView: `lib/modules/mail/widgets/email_detail_view_unified.dart`
 
+Email body `http` / `https` links should open in the ERP browser workspace (`/tools/web?url=...`) instead of the OS browser. Keep users inside the app unless the URL scheme is not a web page (`mailto:`, `tel:`, etc.) or the embedded site refuses to load and the browser workspace itself offers an external-open fallback.
+
+## Browser Workspace Engine Strategy
+
+The current ERP browser workspace uses `flutter_inappwebview`, which maps to native WebView engines: WKWebView on macOS/iOS, Android WebView on Android, and WebView2 on Windows. It is not the user's installed Google Chrome app, even when a Chromium-based engine is used.
+
+Do not promise that an embedded browser can reuse the user's real Chrome profile, Chrome extensions, saved Chrome passwords, or Google Chrome Sync. Those belong to the Chrome app/profile and are not safely or normally embeddable inside the ERP. Browser-like memory must be implemented through the embedded engine's own profile/cache/cookies plus app-owned history, bookmarks, downloads, and file storage.
+
+CEF/Chromium is a valid future desktop-browser engine experiment, but treat it as a separate prototype before replacing the current browser. It increases bundle size, native setup complexity, release risk, and maintenance ownership. Before making CEF the default, verify at least: app zoom hit testing at 80% and 100%, keyboard/input behavior, Google login persistence, cookies/cache across restarts, downloads, popups/new windows, internal workspace routing, memory use, macOS and Windows packaging, and fallback behavior for sites that block embedded browsers.
+
 ---
 
 # Build And Dependency Hygiene

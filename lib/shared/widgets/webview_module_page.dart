@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../modules/storage/models/app_stored_file.dart';
+import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/window_zoom_service.dart';
+import '../utils/file_download.dart';
 
 /// Persistent browser workspace - loads a website as a first-class workspace.
 ///
@@ -52,12 +59,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
   static const _windowsRuntimeUrl =
       'https://developer.microsoft.com/en-us/microsoft-edge/webview2/';
+  static const _historyPrefsKey = 'vinabike_browser_history_v1';
+  static const _bookmarkPrefsKey = 'vinabike_browser_bookmarks_v1';
+  static const _pageInteractionHandlerName = 'VinabikeBrowserPageInteraction';
+  static const _maxHistoryEntries = 120;
+  static const _maxBookmarkEntries = 80;
+  static const _suggestionDelay = Duration(milliseconds: 180);
+  static const _suggestionTimeout = Duration(milliseconds: 1200);
+  static const _downloadTimeout = Duration(seconds: 45);
 
   InAppWebViewController? _controller;
   WebViewEnvironment? _webViewEnvironment;
   final TextEditingController _addressController = TextEditingController();
   final FocusNode _addressFocusNode = FocusNode();
-  bool _selectAllOnNextFocus = false;
+  bool _didSelectAddressForFocus = false;
 
   Uri? _initialUri;
   bool _isInitializing = true;
@@ -69,11 +84,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   String? _lastErrorMessage;
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _isDownloading = false;
   double? _lastAppliedBrowserZoom;
   double? _pendingBrowserZoom;
   Offset _pendingWindowsTrackpadScroll = Offset.zero;
   Offset? _lastWindowsTrackpadPosition;
   Timer? _windowsTrackpadScrollTimer;
+  Timer? _suggestionTimer;
+  Timer? _hideSuggestionsTimer;
+  List<_BrowserHistoryEntry> _historyEntries = const [];
+  List<_BrowserBookmarkEntry> _bookmarkEntries = const [];
+  List<String> _searchSuggestions = const [];
+  String _activeSuggestionQuery = '';
+  bool _isFetchingSuggestions = false;
+  bool _showAddressSuggestions = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -120,6 +144,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         allowsBackForwardNavigationGestures: true,
         allowsLinkPreview: true,
         cacheEnabled: true,
+        cacheMode: CacheMode.LOAD_DEFAULT,
+        clearCache: false,
+        clearSessionCache: false,
         databaseEnabled: true,
         domStorageEnabled: true,
         geolocationEnabled: true,
@@ -128,6 +155,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         iframeAllow:
             'camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; payment',
         iframeAllowFullscreen: true,
+        incognito: false,
         isInspectable: kDebugMode,
         initialScale: (browserZoom * 100).round(),
         mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
@@ -204,13 +232,21 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   @override
   void initState() {
     super.initState();
+    _addressController.addListener(_handleAddressTextChanged);
+    _addressFocusNode.addListener(_handleAddressFocusChanged);
+    unawaited(_loadBrowserHistory());
+    unawaited(_loadBrowserBookmarks());
     unawaited(_prepareBrowser());
   }
 
   @override
   void dispose() {
+    _suggestionTimer?.cancel();
+    _hideSuggestionsTimer?.cancel();
     _windowsTrackpadScrollTimer?.cancel();
     unawaited(_webViewEnvironment?.dispose());
+    _addressController.removeListener(_handleAddressTextChanged);
+    _addressFocusNode.removeListener(_handleAddressFocusChanged);
     _addressController.dispose();
     _addressFocusNode.dispose();
     super.dispose();
@@ -253,7 +289,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           return;
         }
 
-        _webViewEnvironment = await WebViewEnvironment.create();
+        _webViewEnvironment = await WebViewEnvironment.create(
+          settings: WebViewEnvironmentSettings(
+            allowSingleSignOnUsingOSPrimaryAccount: true,
+          ),
+        );
       }
 
       _finishInitialization(loading: true);
@@ -301,6 +341,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   }
 
   Future<void> _loadAddress(String input) async {
+    _hideAddressSuggestions();
+
     final uri = _normalizeAddress(input);
     if (uri == null) {
       setState(() {
@@ -341,6 +383,42 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  Future<void> _openCurrentInChrome() async {
+    final url = _currentUrl.isEmpty ? widget.url : _currentUrl;
+    final chromeUri = _chromeUriFor(url);
+    if (chromeUri != null && await canLaunchUrl(chromeUri)) {
+      await launchUrl(chromeUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    await _openExternalUrl(url);
+  }
+
+  Uri? _chromeUriFor(String url) {
+    if (url.startsWith('https://')) {
+      return Uri.tryParse(url.replaceFirst('https://', 'googlechromes://'));
+    }
+    if (url.startsWith('http://')) {
+      return Uri.tryParse(url.replaceFirst('http://', 'googlechrome://'));
+    }
+    return null;
+  }
+
+  Future<void> _handleBrowserMenuAction(_BrowserMenuAction action) async {
+    switch (action) {
+      case _BrowserMenuAction.recent:
+        await _showBrowserLibraryDialog(_BrowserLibraryKind.recent);
+      case _BrowserMenuAction.bookmarks:
+        await _showBrowserLibraryDialog(_BrowserLibraryKind.bookmarks);
+      case _BrowserMenuAction.clearData:
+        await _confirmClearBrowserData();
+      case _BrowserMenuAction.openInChrome:
+        await _openCurrentInChrome();
+      case _BrowserMenuAction.openExternal:
+        await _openCurrentExternal();
+    }
+  }
+
   Future<void> _refreshNavigationState() async {
     final controller = _controller;
     if (controller == null) return;
@@ -358,6 +436,791 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     if (_addressFocusNode.hasFocus) return;
     if (_addressController.text == url) return;
     _addressController.text = url;
+  }
+
+  void _handleAddressFocusChanged() {
+    if (!mounted) return;
+    if (_addressFocusNode.hasFocus) {
+      _hideSuggestionsTimer?.cancel();
+      _didSelectAddressForFocus = false;
+      _queueAddressSuggestions(_addressController.text);
+      _selectAddressTextAfterFocus();
+      setState(() => _showAddressSuggestions = true);
+    } else {
+      _suggestionTimer?.cancel();
+      _hideSuggestionsTimer?.cancel();
+      _hideSuggestionsTimer = Timer(const Duration(milliseconds: 160), () {
+        if (!mounted || _addressFocusNode.hasFocus) return;
+        setState(() => _showAddressSuggestions = false);
+      });
+      setState(() {});
+    }
+  }
+
+  void _handleAddressTextChanged() {
+    if (!_addressFocusNode.hasFocus) return;
+    _queueAddressSuggestions(_addressController.text);
+    if (mounted) {
+      setState(() => _showAddressSuggestions = true);
+    }
+  }
+
+  void _selectAddressTextAfterFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_addressFocusNode.hasFocus ||
+          _didSelectAddressForFocus) {
+        return;
+      }
+
+      _addressController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _addressController.text.length,
+      );
+      _didSelectAddressForFocus = true;
+    });
+  }
+
+  void _queueAddressSuggestions(String input) {
+    _suggestionTimer?.cancel();
+
+    final query = input.trim();
+    if (query.length < 2 || _looksLikeDirectAddress(query)) {
+      if (_searchSuggestions.isNotEmpty || _activeSuggestionQuery.isNotEmpty) {
+        setState(() {
+          _searchSuggestions = const [];
+          _activeSuggestionQuery = '';
+          _isFetchingSuggestions = false;
+        });
+      }
+      return;
+    }
+
+    _suggestionTimer = Timer(_suggestionDelay, () {
+      unawaited(_fetchSearchSuggestions(query));
+    });
+  }
+
+  bool _looksLikeDirectAddress(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return true;
+    }
+    if (trimmed.contains('://')) return true;
+    if (trimmed.startsWith('localhost') ||
+        trimmed.startsWith('127.0.0.1') ||
+        trimmed.startsWith('[::1]')) {
+      return true;
+    }
+    return !trimmed.contains(' ') && trimmed.contains('.');
+  }
+
+  Future<void> _fetchSearchSuggestions(String query) async {
+    if (!mounted || !_addressFocusNode.hasFocus) return;
+    if (_activeSuggestionQuery == query && _searchSuggestions.isNotEmpty) {
+      return;
+    }
+
+    setState(() => _isFetchingSuggestions = true);
+
+    try {
+      final uri = Uri.https(
+        'suggestqueries.google.com',
+        '/complete/search',
+        {
+          'client': 'firefox',
+          'q': query,
+        },
+      );
+      final response = await http.get(uri).timeout(_suggestionTimeout);
+      if (!mounted ||
+          !_addressFocusNode.hasFocus ||
+          _addressController.text.trim() != query) {
+        return;
+      }
+
+      final decoded = jsonDecode(response.body);
+      final rawSuggestions =
+          decoded is List && decoded.length > 1 ? decoded[1] : null;
+      final suggestions = rawSuggestions is List
+          ? rawSuggestions
+              .whereType<String>()
+              .where((value) => value.trim().isNotEmpty)
+              .take(6)
+              .toList(growable: false)
+          : const <String>[];
+
+      setState(() {
+        _activeSuggestionQuery = query;
+        _searchSuggestions = suggestions;
+        _isFetchingSuggestions = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      if (kDebugMode) {
+        debugPrint('🌐 Browser suggestions skipped: $error');
+      }
+      setState(() {
+        _activeSuggestionQuery = query;
+        _searchSuggestions = const [];
+        _isFetchingSuggestions = false;
+      });
+    }
+  }
+
+  void _hideAddressSuggestions() {
+    _suggestionTimer?.cancel();
+    _hideSuggestionsTimer?.cancel();
+    if (!_showAddressSuggestions &&
+        _searchSuggestions.isEmpty &&
+        _activeSuggestionQuery.isEmpty) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _showAddressSuggestions = false;
+      _searchSuggestions = const [];
+      _activeSuggestionQuery = '';
+      _isFetchingSuggestions = false;
+    });
+  }
+
+  Future<void> _loadBrowserHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = prefs.getStringList(_historyPrefsKey) ?? const [];
+      final entries = <_BrowserHistoryEntry>[];
+      for (final item in encoded) {
+        final entry = _BrowserHistoryEntry.tryDecode(item);
+        if (entry != null) entries.add(entry);
+      }
+      entries.sort((a, b) => b.visitedAt.compareTo(a.visitedAt));
+      if (!mounted) return;
+      setState(() {
+        _historyEntries = entries.take(_maxHistoryEntries).toList();
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser history load skipped: $error');
+      }
+    }
+  }
+
+  Future<void> _recordBrowserHistory(WebUri? url, {String? title}) async {
+    if (url == null) return;
+    final uri = Uri.tryParse(url.toString());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return;
+    }
+
+    final value = uri.toString();
+    final cleanTitle = title?.trim() ?? '';
+    final entry = _BrowserHistoryEntry(
+      url: value,
+      title: cleanTitle.isEmpty ? uri.host : cleanTitle,
+      visitedAt: DateTime.now(),
+    );
+
+    final nextEntries = <_BrowserHistoryEntry>[
+      entry,
+      ..._historyEntries.where((candidate) => candidate.url != value),
+    ].take(_maxHistoryEntries).toList(growable: false);
+
+    if (mounted) {
+      setState(() => _historyEntries = nextEntries);
+    } else {
+      _historyEntries = nextEntries;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _historyPrefsKey,
+        nextEntries.map((entry) => entry.encode()).toList(growable: false),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser history save skipped: $error');
+      }
+    }
+  }
+
+  Future<void> _loadBrowserBookmarks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = prefs.getStringList(_bookmarkPrefsKey) ?? const [];
+      final entries = <_BrowserBookmarkEntry>[];
+      for (final item in encoded) {
+        final entry = _BrowserBookmarkEntry.tryDecode(item);
+        if (entry != null) entries.add(entry);
+      }
+      entries.sort((a, b) => b.savedAt.compareTo(a.savedAt));
+      if (!mounted) return;
+      setState(() {
+        _bookmarkEntries = entries.take(_maxBookmarkEntries).toList();
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser bookmarks load skipped: $error');
+      }
+    }
+  }
+
+  Future<void> _saveBrowserBookmarks(
+    List<_BrowserBookmarkEntry> entries,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _bookmarkPrefsKey,
+        entries.map((entry) => entry.encode()).toList(growable: false),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser bookmarks save skipped: $error');
+      }
+    }
+  }
+
+  bool get _isCurrentBookmarked {
+    final url = _currentBookmarkableUrl();
+    if (url == null) return false;
+    return _bookmarkEntries.any((entry) => entry.url == url);
+  }
+
+  String? _currentBookmarkableUrl() {
+    final uri = Uri.tryParse(_currentUrl.isEmpty ? widget.url : _currentUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return uri.toString();
+  }
+
+  Future<void> _toggleCurrentBookmark() async {
+    final value = _currentBookmarkableUrl();
+    if (value == null) return;
+
+    final existingIndex =
+        _bookmarkEntries.indexWhere((entry) => entry.url == value);
+    late final List<_BrowserBookmarkEntry> nextEntries;
+    late final String message;
+
+    if (existingIndex >= 0) {
+      nextEntries = [
+        for (var i = 0; i < _bookmarkEntries.length; i++)
+          if (i != existingIndex) _bookmarkEntries[i],
+      ];
+      message = 'Marcador eliminado.';
+    } else {
+      final uri = Uri.parse(value);
+      final title = (_pageTitle?.trim().isNotEmpty == true)
+          ? _pageTitle!.trim()
+          : uri.host;
+      nextEntries = [
+        _BrowserBookmarkEntry(
+          url: value,
+          title: title,
+          savedAt: DateTime.now(),
+        ),
+        ..._bookmarkEntries.where((entry) => entry.url != value),
+      ].take(_maxBookmarkEntries).toList(growable: false);
+      message = 'Marcador guardado.';
+    }
+
+    if (mounted) {
+      setState(() => _bookmarkEntries = nextEntries);
+      _showBrowserSnack(message);
+    } else {
+      _bookmarkEntries = nextEntries;
+    }
+    await _saveBrowserBookmarks(nextEntries);
+  }
+
+  Future<void> _showBrowserLibraryDialog(_BrowserLibraryKind kind) async {
+    final isBookmarks = kind == _BrowserLibraryKind.bookmarks;
+    final entries = isBookmarks
+        ? _bookmarkEntries
+            .map(
+              (entry) => _BrowserPlaceEntry(
+                url: entry.url,
+                title: entry.title,
+                subtitle: entry.host,
+                icon: Icons.star,
+              ),
+            )
+            .toList(growable: false)
+        : _historyEntries
+            .map(
+              (entry) => _BrowserPlaceEntry(
+                url: entry.url,
+                title: entry.title,
+                subtitle: entry.host,
+                icon: Icons.history,
+              ),
+            )
+            .toList(growable: false);
+
+    final selected = await showDialog<_BrowserPlaceEntry>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return Dialog(
+          insetPadding: const EdgeInsets.all(28),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isBookmarks ? Icons.star : Icons.history,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isBookmarks ? 'Marcadores' : 'Recientes',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Cerrar',
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                if (entries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Text(
+                      isBookmarks
+                          ? 'Todavía no hay marcadores.'
+                          : 'Todavía no hay páginas recientes.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: entries.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: theme.dividerColor.withValues(alpha: 0.55),
+                      ),
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        return ListTile(
+                          leading: Icon(entry.icon),
+                          title: Text(
+                            entry.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            entry.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => Navigator.of(dialogContext).pop(entry),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    final uri = _normalizeAddress(selected.url);
+    if (uri != null) await _loadUri(uri);
+  }
+
+  Future<void> _confirmClearBrowserData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Limpiar datos del navegador'),
+          content: const Text(
+            'Esto borra cache, cookies e inicios de sesión del navegador interno. '
+            'Tus marcadores y recientes se mantienen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Limpiar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+    await _clearBrowserData();
+  }
+
+  Future<void> _clearBrowserData() async {
+    try {
+      await InAppWebViewController.clearAllCache(includeDiskFiles: true);
+      await CookieManager.instance().deleteAllCookies();
+      await WebStorageManager.instance().deleteAllData();
+      await _controller?.reload();
+      _showBrowserSnack('Datos del navegador interno limpiados.');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser clear data skipped: $error');
+      }
+      _showBrowserSnack('No pude limpiar todos los datos del navegador.');
+    }
+  }
+
+  Future<void> _handleDownloadStart(DownloadStartRequest request) async {
+    final url = request.url.toString();
+    if (_isDownloading) {
+      _showBrowserSnack('Ya hay una descarga en curso.');
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      await _openExternalUrl(url);
+      return;
+    }
+
+    final fileName = _downloadFileName(request);
+    final mimeType = _cleanMimeType(request.mimeType) ??
+        _mimeTypeFromFileName(fileName) ??
+        'application/octet-stream';
+
+    if (mounted) {
+      setState(() => _isDownloading = true);
+      _showBrowserSnack('Descargando $fileName...');
+    }
+
+    try {
+      final bytes = await _downloadUrlBytes(uri, request);
+      var savedInternally = false;
+      var savedLocalCopy = false;
+
+      try {
+        await AppFileStorageService.instance.saveFile(
+          bytes: bytes,
+          fileName: fileName,
+          mimeType: mimeType,
+          context: AppFileContext(
+            sourceType: 'browser_download',
+            sourceProvider: uri.host,
+            sourceRoute: '/tools/web',
+            contextType: 'browser',
+            contextTitle: _pageTitle?.trim().isNotEmpty == true
+                ? _pageTitle!.trim()
+                : uri.host,
+            contextSubtitle: uri.toString(),
+            tags: const ['navegador', 'descarga'],
+            metadata: {
+              'url': uri.toString(),
+              'current_page': _currentUrl,
+              'content_disposition': request.contentDisposition,
+              'suggested_filename': request.suggestedFilename,
+              'reported_size_bytes': request.contentLength,
+            },
+          ),
+        );
+        savedInternally = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('🌐 Browser internal file save skipped: $error');
+        }
+      }
+
+      try {
+        await downloadFile(
+          bytes: bytes,
+          fileName: fileName,
+          mimeType: mimeType,
+        );
+        savedLocalCopy = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('🌐 Browser local file copy skipped: $error');
+        }
+      }
+
+      if (!savedInternally && !savedLocalCopy) {
+        throw StateError('Download bytes loaded but no save target succeeded.');
+      }
+
+      if (savedInternally && savedLocalCopy) {
+        _showBrowserSnack('Descarga guardada en Archivos.');
+      } else if (savedInternally) {
+        _showBrowserSnack(
+          'Descarga guardada en Archivos. No pude crear copia local.',
+        );
+      } else {
+        _showBrowserSnack('Descarga guardada como copia local.');
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser download fallback: $error');
+      }
+      _showBrowserSnack('No pude guardar esa descarga aquí; la abrí afuera.');
+      await _openExternalUrl(url);
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  Future<Uint8List> _downloadUrlBytes(
+    Uri uri,
+    DownloadStartRequest request,
+  ) async {
+    final headers = <String, String>{
+      'User-Agent': request.userAgent?.trim().isNotEmpty == true
+          ? request.userAgent!.trim()
+          : _userAgent,
+    };
+
+    final cookieHeader = await _cookieHeaderFor(WebUri.uri(uri));
+    if (cookieHeader.isNotEmpty) {
+      headers['Cookie'] = cookieHeader;
+    }
+
+    final response = await http.get(uri, headers: headers).timeout(
+          _downloadTimeout,
+        );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Download returned HTTP ${response.statusCode}');
+    }
+    return response.bodyBytes;
+  }
+
+  Future<String> _cookieHeaderFor(WebUri url) async {
+    try {
+      final cookies = await CookieManager.instance().getCookies(
+        url: url,
+        webViewController: _controller,
+      );
+      return cookies
+          .where((cookie) => cookie.name.trim().isNotEmpty)
+          .map((cookie) => '${cookie.name}=${cookie.value}')
+          .join('; ');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser download cookies skipped: $error');
+      }
+      return '';
+    }
+  }
+
+  String _downloadFileName(DownloadStartRequest request) {
+    final dispositionName =
+        _fileNameFromContentDisposition(request.contentDisposition);
+    final suggested = request.suggestedFilename?.trim();
+    final urlPathName = _lastUrlPathSegment(request.url.toString());
+    final rawName = dispositionName ??
+        (suggested?.isNotEmpty == true ? suggested : null) ??
+        urlPathName ??
+        'descarga';
+
+    final cleanName = rawName
+        .split(RegExp(r'[\\/]'))
+        .last
+        .replaceAll(RegExp(r'[^A-Za-z0-9._ -]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .trim();
+    return cleanName.isEmpty ? 'descarga' : cleanName;
+  }
+
+  String? _lastUrlPathSegment(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.pathSegments.isEmpty) return null;
+    for (final segment in uri.pathSegments.reversed) {
+      if (segment.trim().isNotEmpty) return segment.trim();
+    }
+    return null;
+  }
+
+  String? _fileNameFromContentDisposition(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final utfMatch = RegExp(
+      r'''filename\*=UTF-8''([^;]+)''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (utfMatch != null) {
+      return Uri.decodeFull(utfMatch.group(1)!.replaceAll('"', '').trim());
+    }
+    final match = RegExp(
+      r'''filename="?([^";]+)"?''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    return match?.group(1)?.trim();
+  }
+
+  String? _cleanMimeType(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed.split(';').first.trim();
+  }
+
+  String? _mimeTypeFromFileName(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'csv':
+        return 'text/csv';
+      case 'txt':
+        return 'text/plain';
+      case 'json':
+        return 'application/json';
+      case 'zip':
+        return 'application/zip';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      default:
+        return null;
+    }
+  }
+
+  void _showBrowserSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  List<_BrowserAddressSuggestion> _addressSuggestions() {
+    if (!_showAddressSuggestions) return const [];
+
+    final query = _addressController.text.trim();
+    final normalizedQuery = query.toLowerCase();
+    final suggestions = <_BrowserAddressSuggestion>[];
+    final seen = <String>{};
+
+    void add(_BrowserAddressSuggestion suggestion) {
+      final key = suggestion.value.toLowerCase();
+      if (seen.add(key)) suggestions.add(suggestion);
+    }
+
+    if (query.isEmpty) {
+      for (final entry in _historyEntries.take(8)) {
+        add(_BrowserAddressSuggestion.history(entry));
+      }
+      return suggestions;
+    }
+
+    if (!_looksLikeDirectAddress(query)) {
+      add(_BrowserAddressSuggestion.search(query));
+      for (final suggestion in _searchSuggestions) {
+        add(_BrowserAddressSuggestion.search(suggestion));
+      }
+    }
+
+    final historyMatches = _historyEntries.where((entry) {
+      return entry.title.toLowerCase().contains(normalizedQuery) ||
+          entry.host.toLowerCase().contains(normalizedQuery) ||
+          entry.url.toLowerCase().contains(normalizedQuery);
+    });
+
+    for (final entry in historyMatches.take(8)) {
+      add(_BrowserAddressSuggestion.history(entry));
+    }
+
+    return suggestions.take(10).toList(growable: false);
+  }
+
+  Future<void> _openAddressSuggestion(
+    _BrowserAddressSuggestion suggestion,
+  ) async {
+    _suggestionTimer?.cancel();
+    _hideSuggestionsTimer?.cancel();
+    FocusScope.of(context).unfocus();
+    _hideAddressSuggestions();
+    _addressController.text = suggestion.value;
+    _addressController.selection = TextSelection.collapsed(
+      offset: suggestion.value.length,
+    );
+
+    final uri = _normalizeAddress(suggestion.value);
+    if (uri == null) {
+      setState(() {
+        _lastErrorMessage = 'No pude entender esa dirección web.';
+      });
+      return;
+    }
+
+    await _loadUri(uri);
+  }
+
+  void _clearAddressFocusFromPageInteraction() {
+    if (!mounted) return;
+    if (!_addressFocusNode.hasFocus && !_showAddressSuggestions) return;
+
+    _addressFocusNode.unfocus();
+    _hideAddressSuggestions();
+  }
+
+  Future<void> _installPageInteractionBridge(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      await controller.evaluateJavascript(source: '''
+(() => {
+  if (window.__vinabikeBrowserPageInteractionBridge) return;
+  window.__vinabikeBrowserPageInteractionBridge = true;
+
+  let lastSentAt = 0;
+  const notifyFlutter = () => {
+    const now = Date.now();
+    if (now - lastSentAt < 120) return;
+    lastSentAt = now;
+    if (!window.flutter_inappwebview ||
+        !window.flutter_inappwebview.callHandler) {
+      return;
+    }
+    window.flutter_inappwebview.callHandler('$_pageInteractionHandlerName');
+  };
+
+  document.addEventListener('pointerdown', notifyFlutter, true);
+  document.addEventListener('mousedown', notifyFlutter, true);
+  document.addEventListener('touchstart', notifyFlutter, true);
+})();
+''');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser page focus bridge skipped: $error');
+      }
+    }
   }
 
   void _setCurrentUrl(WebUri? url) {
@@ -417,7 +1280,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   bool _isBenignNavigationError(WebResourceError error) {
     final description = error.description.toLowerCase();
     return description.contains('nsurlerrordomain error -999') ||
-        description.contains('error -999');
+        description.contains('error -999') ||
+        (description.contains('webkiterrordomain') &&
+            description.contains('code=102') &&
+            description.contains('frame load interrupted')) ||
+        (description.contains('frame load interrupted') && _isDownloading);
   }
 
   Future<NavigationActionPolicy> _handleNavigation(
@@ -499,91 +1366,111 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
     return _buildEmbeddedView(
       context,
-      child: _buildWindowsTrackpadScrollBridge(
-        child: _NativeBrowserZoomBoundary(
-          appScale: browserZoom,
-          child: InAppWebView(
-            key: ValueKey('browser-${widget.url}'),
-            webViewEnvironment: _webViewEnvironment,
-            initialUrlRequest: _urlRequest(initialUri),
-            initialSettings: _browserSettings(browserZoom),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-              unawaited(_applyBrowserZoom(browserZoom));
-              unawaited(_refreshNavigationState());
-            },
-            onLoadStart: (controller, url) {
-              if (!mounted) return;
-              setState(() {
-                _isLoading = true;
-                _loadingProgress = 0;
-                _lastErrorMessage = null;
-              });
-              _setCurrentUrl(url);
-            },
-            onLoadStop: (controller, url) async {
-              if (!mounted) return;
-              setState(() {
-                _isLoading = false;
-                _loadingProgress = 100;
-              });
-              _setCurrentUrl(url);
-              _pageTitle = await controller.getTitle();
-              if (mounted) setState(() {});
-              unawaited(_applyBrowserZoom(browserZoom));
-              unawaited(_refreshNavigationState());
-            },
-            onProgressChanged: (controller, progress) {
-              if (!mounted) return;
-              setState(() {
-                _loadingProgress = progress;
-                _isLoading = progress < 100;
-              });
-            },
-            onTitleChanged: (controller, title) {
-              if (!mounted) return;
-              setState(() {
-                _pageTitle = title;
-              });
-            },
-            onUpdateVisitedHistory: (controller, url, isReload) {
-              if (!mounted) return;
-              _setCurrentUrl(url);
-              unawaited(_refreshNavigationState());
-            },
-            onReceivedError: (controller, request, error) {
-              if (!mounted || request.isForMainFrame == false) return;
-              if (_isBenignNavigationError(error)) {
-                if (kDebugMode) {
-                  debugPrint(
-                    '🌐 Web workspace ignored cancelled navigation: '
-                    '${error.description}',
-                  );
+      child: _buildPageInteractionFocusBridge(
+        child: _buildWindowsTrackpadScrollBridge(
+          child: _NativeBrowserZoomBoundary(
+            appScale: browserZoom,
+            child: InAppWebView(
+              key: ValueKey('browser-${widget.url}'),
+              webViewEnvironment: _webViewEnvironment,
+              initialUrlRequest: _urlRequest(initialUri),
+              initialSettings: _browserSettings(browserZoom),
+              onWebViewCreated: (controller) {
+                _controller = controller;
+                controller.addJavaScriptHandler(
+                  handlerName: _pageInteractionHandlerName,
+                  callback: (_) {
+                    _clearAddressFocusFromPageInteraction();
+                    return null;
+                  },
+                );
+                unawaited(_installPageInteractionBridge(controller));
+                unawaited(_applyBrowserZoom(browserZoom));
+                unawaited(_refreshNavigationState());
+              },
+              onLoadStart: (controller, url) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = true;
+                  _loadingProgress = 0;
+                  _lastErrorMessage = null;
+                });
+                _setCurrentUrl(url);
+              },
+              onLoadStop: (controller, url) async {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                  _loadingProgress = 100;
+                });
+                _setCurrentUrl(url);
+                _pageTitle = await controller.getTitle();
+                unawaited(_recordBrowserHistory(url, title: _pageTitle));
+                if (mounted) setState(() {});
+                unawaited(_installPageInteractionBridge(controller));
+                unawaited(_applyBrowserZoom(browserZoom));
+                unawaited(_refreshNavigationState());
+              },
+              onProgressChanged: (controller, progress) {
+                if (!mounted) return;
+                setState(() {
+                  _loadingProgress = progress;
+                  _isLoading = progress < 100;
+                });
+              },
+              onTitleChanged: (controller, title) {
+                if (!mounted) return;
+                setState(() {
+                  _pageTitle = title;
+                });
+              },
+              onUpdateVisitedHistory: (controller, url, isReload) {
+                if (!mounted) return;
+                _setCurrentUrl(url);
+                unawaited(_refreshNavigationState());
+              },
+              onReceivedError: (controller, request, error) {
+                if (!mounted || request.isForMainFrame == false) return;
+                if (_isBenignNavigationError(error)) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      '🌐 Web workspace ignored cancelled navigation: '
+                      '${error.description}',
+                    );
+                  }
+                  return;
                 }
-                return;
-              }
-              setState(() {
-                _lastErrorMessage = error.description;
-                _isLoading = false;
-              });
-            },
-            onPermissionRequest: (controller, request) async {
-              return PermissionResponse(
-                resources: request.resources,
-                action: PermissionResponseAction.GRANT,
-              );
-            },
-            shouldOverrideUrlLoading: _handleNavigation,
-            onCreateWindow: _handleCreateWindow,
-            onDownloadStartRequest: (controller, request) {
-              unawaited(_openExternalUrl(request.url.toString()));
-            },
-            onConsoleMessage: (controller, consoleMessage) {
-              debugPrint('🌐 Web workspace: ${consoleMessage.message}');
-            },
+                setState(() {
+                  _lastErrorMessage = error.description;
+                  _isLoading = false;
+                });
+              },
+              onPermissionRequest: (controller, request) async {
+                return PermissionResponse(
+                  resources: request.resources,
+                  action: PermissionResponseAction.GRANT,
+                );
+              },
+              shouldOverrideUrlLoading: _handleNavigation,
+              onCreateWindow: _handleCreateWindow,
+              onDownloadStartRequest: (controller, request) {
+                unawaited(_handleDownloadStart(request));
+              },
+              onConsoleMessage: (controller, consoleMessage) {
+                debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+              },
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPageInteractionFocusBridge({required Widget child}) {
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      onPointerDown: (_) => _clearAddressFocusFromPageInteraction(),
+      child: child,
     );
   }
 
@@ -876,6 +1763,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final progressValue = _loadingProgress <= 0
         ? null
         : (_loadingProgress / 100).clamp(0.0, 1.0).toDouble();
+    final addressSuggestions = _addressSuggestions();
+    final isBookmarked = _isCurrentBookmarked;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -947,102 +1836,66 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 Expanded(
                   child: SizedBox(
                     height: 38,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTapDown: (details) {
-                        // If field not focused, request focus and mark to select-all
-                        if (!_addressFocusNode.hasFocus) {
-                          _selectAllOnNextFocus = true;
-                          _addressFocusNode.requestFocus();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (_selectAllOnNextFocus &&
-                                _addressFocusNode.hasFocus) {
-                              _addressController.selection = TextSelection(
-                                baseOffset: 0,
-                                extentOffset: _addressController.text.length,
-                              );
-                              _selectAllOnNextFocus = false;
-                            }
-                          });
-                        }
-                      },
-                      child: TextField(
-                        controller: _addressController,
-                        focusNode: _addressFocusNode,
-                        enabled: canUseWebView,
-                        selectAllOnFocus: true,
-                        textInputAction: TextInputAction.go,
-                        keyboardType: TextInputType.url,
-                        onTap: () {
-                          // Ensure select-all wins if focus was just given
-                          if (_selectAllOnNextFocus) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (_addressFocusNode.hasFocus) {
-                                _addressController.selection = TextSelection(
-                                  baseOffset: 0,
-                                  extentOffset: _addressController.text.length,
-                                );
-                              }
-                              _selectAllOnNextFocus = false;
-                            });
-                          }
-                        },
-                        onSubmitted: _loadAddress,
-                        style: theme.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest,
-                          prefixIcon: Icon(
-                            Icons.language,
-                            size: 18,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          suffixIcon: _isLoading
-                              ? Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      value: progressValue,
-                                    ),
+                    child: TextField(
+                      controller: _addressController,
+                      focusNode: _addressFocusNode,
+                      enabled: canUseWebView,
+                      textInputAction: TextInputAction.go,
+                      keyboardType: TextInputType.url,
+                      onSubmitted: _loadAddress,
+                      style: theme.textTheme.bodyMedium,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest,
+                        prefixIcon: Icon(
+                          Icons.language,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        suffixIcon: _isLoading
+                            ? Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: progressValue,
                                   ),
-                                )
-                              : IconButton(
-                                  tooltip: 'Ir',
-                                  icon:
-                                      const Icon(Icons.arrow_forward, size: 18),
-                                  onPressed: canUseWebView
-                                      ? () => _loadAddress(
-                                            _addressController.text,
-                                          )
-                                      : null,
                                 ),
-                          hintText: 'Buscar o escribir URL',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
+                              )
+                            : IconButton(
+                                tooltip: 'Ir',
+                                icon: const Icon(Icons.arrow_forward, size: 18),
+                                onPressed: canUseWebView
+                                    ? () => _loadAddress(
+                                          _addressController.text,
+                                        )
+                                    : null,
+                              ),
+                        hintText: 'Buscar o escribir URL',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: theme.dividerColor,
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: theme.dividerColor,
-                            ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: theme.dividerColor,
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: theme.dividerColor,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.primary,
-                              width: 1.3,
-                            ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.primary,
+                            width: 1.3,
                           ),
                         ),
                       ),
@@ -1050,6 +1903,74 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                   ),
                 ),
                 const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(
+                    isBookmarked ? Icons.star : Icons.star_border,
+                    size: 20,
+                  ),
+                  color: isBookmarked
+                      ? Colors.amber.shade700
+                      : theme.colorScheme.onSurfaceVariant,
+                  onPressed: canUseWebView ? _toggleCurrentBookmark : null,
+                  tooltip:
+                      isBookmarked ? 'Quitar marcador' : 'Guardar marcador',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                ),
+                PopupMenuButton<_BrowserMenuAction>(
+                  enabled: canUseWebView,
+                  tooltip: 'Opciones del navegador',
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  onSelected: (action) {
+                    unawaited(_handleBrowserMenuAction(action));
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: _BrowserMenuAction.recent,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.history),
+                        title: Text('Recientes'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _BrowserMenuAction.bookmarks,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.star_border),
+                        title: Text('Marcadores'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _BrowserMenuAction.clearData,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.cleaning_services_outlined),
+                        title: Text('Limpiar datos'),
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: _BrowserMenuAction.openInChrome,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.person_outline),
+                        title: Text('Abrir en Chrome'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _BrowserMenuAction.openExternal,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.open_in_new),
+                        title: Text('Abrir afuera'),
+                      ),
+                    ),
+                  ],
+                ),
                 Tooltip(
                   message: _displayHost().isEmpty
                       ? 'Abrir en navegador externo'
@@ -1068,6 +1989,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               ],
             ),
           ),
+          if (addressSuggestions.isNotEmpty)
+            _buildAddressSuggestions(context, addressSuggestions),
           if (_isLoading)
             LinearProgressIndicator(
               value: progressValue,
@@ -1077,6 +2000,251 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAddressSuggestions(
+    BuildContext context,
+    List<_BrowserAddressSuggestion> suggestions,
+  ) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: suggestions.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 2),
+        itemBuilder: (context, index) {
+          final suggestion = suggestions[index];
+          return MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (_) => unawaited(_openAddressSuggestion(suggestion)),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SizedBox(
+                  height: 44,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 36,
+                        child: Icon(
+                          suggestion.icon,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              suggestion.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (suggestion.subtitle.isNotEmpty)
+                              Text(
+                                suggestion.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (suggestion.badge != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12, right: 8),
+                          child: Text(
+                            suggestion.badge!,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else if (_isFetchingSuggestions && index == 0)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BrowserHistoryEntry {
+  const _BrowserHistoryEntry({
+    required this.url,
+    required this.title,
+    required this.visitedAt,
+  });
+
+  final String url;
+  final String title;
+  final DateTime visitedAt;
+
+  String get host {
+    final uri = Uri.tryParse(url);
+    return uri?.host.isNotEmpty == true ? uri!.host : url;
+  }
+
+  String encode() => jsonEncode({
+        'url': url,
+        'title': title,
+        'visitedAt': visitedAt.toIso8601String(),
+      });
+
+  static _BrowserHistoryEntry? tryDecode(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! Map<String, dynamic>) return null;
+      final url = decoded['url'];
+      if (url is! String || url.trim().isEmpty) return null;
+      final title = decoded['title'];
+      final visitedAt = DateTime.tryParse('${decoded['visitedAt']}');
+      return _BrowserHistoryEntry(
+        url: url,
+        title: title is String && title.trim().isNotEmpty ? title : url,
+        visitedAt: visitedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _BrowserBookmarkEntry {
+  const _BrowserBookmarkEntry({
+    required this.url,
+    required this.title,
+    required this.savedAt,
+  });
+
+  final String url;
+  final String title;
+  final DateTime savedAt;
+
+  String get host {
+    final uri = Uri.tryParse(url);
+    return uri?.host.isNotEmpty == true ? uri!.host : url;
+  }
+
+  String encode() => jsonEncode({
+        'url': url,
+        'title': title,
+        'savedAt': savedAt.toIso8601String(),
+      });
+
+  static _BrowserBookmarkEntry? tryDecode(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! Map<String, dynamic>) return null;
+      final url = decoded['url'];
+      if (url is! String || url.trim().isEmpty) return null;
+      final title = decoded['title'];
+      final savedAt = DateTime.tryParse('${decoded['savedAt']}');
+      return _BrowserBookmarkEntry(
+        url: url,
+        title: title is String && title.trim().isNotEmpty ? title : url,
+        savedAt: savedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _BrowserPlaceEntry {
+  const _BrowserPlaceEntry({
+    required this.url,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final String url;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+}
+
+enum _BrowserLibraryKind { recent, bookmarks }
+
+enum _BrowserMenuAction {
+  recent,
+  bookmarks,
+  clearData,
+  openInChrome,
+  openExternal,
+}
+
+class _BrowserAddressSuggestion {
+  const _BrowserAddressSuggestion._({
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.icon,
+    this.badge,
+  });
+
+  final String label;
+  final String subtitle;
+  final String value;
+  final IconData icon;
+  final String? badge;
+
+  factory _BrowserAddressSuggestion.search(String query) {
+    return _BrowserAddressSuggestion._(
+      label: query,
+      subtitle: 'Buscar en Google',
+      value: query,
+      icon: Icons.search,
+      badge: 'Google',
+    );
+  }
+
+  factory _BrowserAddressSuggestion.history(_BrowserHistoryEntry entry) {
+    return _BrowserAddressSuggestion._(
+      label: entry.title,
+      subtitle: entry.host,
+      value: entry.url,
+      icon: Icons.history,
     );
   }
 }

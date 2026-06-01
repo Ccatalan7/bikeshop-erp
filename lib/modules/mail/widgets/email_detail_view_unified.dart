@@ -4,11 +4,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import '../../../shared/utils/file_download.dart';
 import '../../storage/models/app_stored_file.dart';
@@ -1482,7 +1484,7 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
             _mailReaderDebug(
               'js-link-channel url=${_debugShort(message.message, 260)}',
             );
-            unawaited(_openEmailUrl(message.message));
+            unawaited(_openEmailUrl(context, message.message));
           },
         )
         ..addJavaScriptChannel(
@@ -1532,7 +1534,7 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
                 return NavigationDecision.prevent;
               }
 
-              final handled = await _openEmailUrl(request.url);
+              final handled = await _openEmailUrl(context, request.url);
               _mailReaderDebug(
                 'nav-external handled=$handled '
                 'url=${_debugShort(request.url, 260)}',
@@ -1937,7 +1939,7 @@ $_emailLinkBridgeScript
         padding: const EdgeInsets.all(16),
         child: HtmlWidget(
           widget.email.content ?? '',
-          onTapUrl: _openEmailUrl,
+          onTapUrl: (url) => _openEmailUrl(context, url),
         ),
       );
     }
@@ -2024,7 +2026,7 @@ bool _isSyntheticReaderUrl(String rawUrl) {
   return uri.scheme == baseUri.scheme && uri.host == baseUri.host;
 }
 
-Future<bool> _openEmailUrl(String rawUrl) async {
+Future<bool> _openEmailUrl(BuildContext context, String rawUrl) async {
   final url = rawUrl.trim();
   _mailReaderDebug('open-request raw=${_debugShort(rawUrl, 320)}');
   if (url.isEmpty) return false;
@@ -2045,9 +2047,32 @@ Future<bool> _openEmailUrl(String rawUrl) async {
     return false;
   }
 
+  if (uri.scheme == 'http' || uri.scheme == 'https') {
+    final route = _webWorkspaceRouteForEmailLink(uri);
+    _mailReaderDebug('open-workspace route=${_debugShort(route, 320)}');
+
+    try {
+      final isSmallScreen =
+          (MediaQuery.maybeOf(context)?.size.width ?? 1000) < 800;
+      if (isSmallScreen) {
+        if (context.mounted) context.push(route);
+        return true;
+      }
+
+      context.read<WorkspaceManager>().openRouteInWorkspace(route);
+      return true;
+    } catch (error) {
+      _mailReaderDebug('open-workspace-fallback $error');
+      if (context.mounted) {
+        context.go(route);
+        return true;
+      }
+      return false;
+    }
+  }
+
   try {
-    _mailReaderDebug('open-launch-external url=${_debugShort(url, 320)}');
-    debugPrint('📧 [MailLink] opening $url');
+    _mailReaderDebug('open-non-web-external url=${_debugShort(url, 320)}');
     if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       _mailReaderDebug('open-launch-external-success');
       return true;
@@ -2061,4 +2086,30 @@ Future<bool> _openEmailUrl(String rawUrl) async {
     debugPrint('No se pudo abrir link de correo: $url ($error)');
     return false;
   }
+}
+
+String _webWorkspaceRouteForEmailLink(Uri uri) {
+  return Uri(
+    path: '/tools/web',
+    queryParameters: {
+      'url': uri.toString(),
+      'name': _emailLinkWorkspaceTitle(uri),
+    },
+  ).toString();
+}
+
+String _emailLinkWorkspaceTitle(Uri uri) {
+  final host = uri.host.trim();
+  if (host.isEmpty) return 'Navegador web';
+
+  if (RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)) {
+    return 'Documento web';
+  }
+
+  final normalizedHost = host.replaceFirst(RegExp(r'^www\.'), '');
+  final parts = normalizedHost.split('.');
+  final base = parts.length >= 2 ? parts[parts.length - 2] : parts.first;
+  if (base.isEmpty) return normalizedHost;
+
+  return base[0].toUpperCase() + base.substring(1);
 }
