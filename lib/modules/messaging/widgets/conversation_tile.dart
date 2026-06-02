@@ -341,6 +341,30 @@ class _ConversationTileState extends State<ConversationTile> {
       );
     }
 
+    if (hint?.hasPurchaseInvoice == true) {
+      items.add(
+        _buildMiniContextPill(
+          label: [
+            hint!.purchaseInvoiceNumber?.trim().isNotEmpty == true
+                ? hint.purchaseInvoiceNumber!.trim()
+                : 'Compra',
+            if (hint.purchaseInvoiceStatus?.trim().isNotEmpty == true)
+              hint.purchaseInvoiceStatus!.trim(),
+          ].join(' · '),
+          color: _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus),
+          prominent: true,
+        ),
+      );
+    } else if (hint?.hasSupplier == true && items.isEmpty) {
+      items.add(
+        _buildMiniContextPill(
+          label: 'Proveedor',
+          color: const Color(0xFF7C3AED),
+          prominent: prominent,
+        ),
+      );
+    }
+
     if (items.isNotEmpty) {
       return Wrap(
         spacing: 5,
@@ -384,6 +408,18 @@ class _ConversationTileState extends State<ConversationTile> {
     final normalized = raw.replaceFirst('#', '');
     final parsed = int.tryParse('ff$normalized', radix: 16);
     return parsed == null ? fallback : Color(parsed);
+  }
+
+  Color _purchaseInvoiceStatusColor(String? status) {
+    final normalized = status?.trim().toLowerCase();
+    return switch (normalized) {
+      'pagada' || 'paid' => const Color(0xFF2563EB),
+      'recibida' || 'received' => const Color(0xFF16A34A),
+      'confirmada' || 'confirmed' => const Color(0xFF7C3AED),
+      'enviada' || 'sent' => const Color(0xFF0EA5E9),
+      'anulada' || 'cancelled' || 'canceled' => const Color(0xFFDC2626),
+      _ => const Color(0xFF64748B),
+    };
   }
 
   Widget _buildTrailing(

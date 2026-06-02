@@ -25565,7 +25565,7 @@ create table if not exists messages (
 create table if not exists conversation_contexts (
   id uuid default gen_random_uuid() primary key,
   conversation_id uuid references public.conversations(id) on delete cascade,
-  context_type text not null check (context_type in ('job', 'invoice', 'bike', 'product', 'order', 'customer')),
+  context_type text not null check (context_type in ('job', 'invoice', 'bike', 'product', 'order', 'customer', 'supplier', 'purchase_invoice')),
   context_id uuid not null,
   is_primary boolean default false,
   added_by uuid references auth.users(id),

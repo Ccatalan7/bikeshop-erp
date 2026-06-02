@@ -18,17 +18,20 @@ import '../../../shared/utils/file_download.dart';
 import '../models/app_stored_file.dart';
 import '../services/app_file_storage_service.dart';
 
-enum AppFilesFilter {
-  all('all', 'Todos'),
-  email('email', 'Correo'),
-  manual('manual', 'Manual'),
-  chat('chat', 'Chat'),
-  expense('expense', 'Gastos');
+enum _StorageSort {
+  newest('Recientes primero'),
+  oldest('Antiguos primero'),
+  nameAsc('Nombre A-Z'),
+  sizeDesc('Más pesados');
 
-  const AppFilesFilter(this.value, this.label);
+  const _StorageSort(this.label);
 
-  final String value;
   final String label;
+}
+
+enum _StorageCompactTab {
+  folders,
+  recent,
 }
 
 class AppFilesPanel extends StatefulWidget {
@@ -50,8 +53,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   final _searchController = TextEditingController();
   final _dateFormat = DateFormat('dd/MM HH:mm');
 
+  List<AppStoredFile> _allFiles = const [];
   List<AppStoredFile> _files = const [];
-  AppFilesFilter _filter = AppFilesFilter.all;
+  String _selectedFolderId = 'all';
+  final Set<String> _expandedFolderIds = <String>{};
+  _StorageSort _sort = _StorageSort.newest;
+  _StorageCompactTab _compactTab = _StorageCompactTab.recent;
   Timer? _searchDebounce;
   String _query = '';
   String? _error;
@@ -92,19 +99,73 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     });
 
     try {
-      final files = await _service.listFiles(
+      var files = await _service.listFiles(
         query: _query,
-        sourceType: _filter.value,
-        limit: widget.compact ? 80 : 180,
+        limit: widget.compact ? 120 : 360,
       );
+      files = await _autoTagSupplierDownloads(files);
       if (!mounted) return;
-      setState(() => _files = files);
+      setState(() {
+        _allFiles = files;
+        _applyCurrentView();
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<List<AppStoredFile>> _autoTagSupplierDownloads(
+    List<AppStoredFile> files,
+  ) async {
+    final enriched = <AppStoredFile>[];
+
+    for (final file in files) {
+      if (_sourceBucket(file.sourceType) != 'browser' ||
+          _supplierId(file) != null) {
+        enriched.add(file);
+        continue;
+      }
+
+      final url = _downloadUrl(file);
+      if (url == null) {
+        enriched.add(file);
+        continue;
+      }
+
+      try {
+        final match = await _service.matchSupplierForUrl(url);
+        if (match == null) {
+          enriched.add(file);
+          continue;
+        }
+        enriched.add(
+          await _service.attachSupplierContext(
+            file: file,
+            supplier: match,
+          ),
+        );
+      } catch (_) {
+        enriched.add(file);
+      }
+    }
+
+    return enriched;
+  }
+
+  String? _downloadUrl(AppStoredFile file) {
+    final metadataUrl = file.metadata['url']?.toString().trim();
+    if (metadataUrl != null && metadataUrl.isNotEmpty) return metadataUrl;
+
+    final subtitle = file.contextSubtitle?.trim();
+    if (subtitle == null || subtitle.isEmpty) return null;
+    final uri = Uri.tryParse(subtitle);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return uri.toString();
   }
 
   Future<void> _pickFiles() async {
@@ -205,6 +266,201 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     }
   }
 
+  void _selectFolder(String folderId, {bool showRecent = false}) {
+    setState(() {
+      _selectedFolderId = folderId;
+      _applyCurrentView();
+      if (showRecent) _compactTab = _StorageCompactTab.recent;
+    });
+  }
+
+  void _setSort(_StorageSort sort) {
+    setState(() {
+      _sort = sort;
+      _applyCurrentView();
+    });
+  }
+
+  void _applyCurrentView() {
+    final files = _allFiles.where(_matchesSelectedFolder).toList();
+    files.sort((a, b) {
+      switch (_sort) {
+        case _StorageSort.newest:
+          return b.createdAt.compareTo(a.createdAt);
+        case _StorageSort.oldest:
+          return a.createdAt.compareTo(b.createdAt);
+        case _StorageSort.nameAsc:
+          return a.fileName.toLowerCase().compareTo(b.fileName.toLowerCase());
+        case _StorageSort.sizeDesc:
+          return b.sizeBytes.compareTo(a.sizeBytes);
+      }
+    });
+    _files = files;
+  }
+
+  bool _matchesSelectedFolder(AppStoredFile file) {
+    final folderId = _selectedFolderId;
+    if (folderId == 'all') return true;
+    if (folderId == 'suppliers') return _supplierId(file) != null;
+    if (folderId == 'type:pdf') return file.isPdf;
+    if (folderId == 'type:image') return file.isImage;
+    if (folderId.startsWith('source:')) {
+      return _sourceBucket(file.sourceType) == folderId.substring(7);
+    }
+    if (folderId.startsWith('supplier:')) {
+      return _supplierId(file) == folderId.substring(9);
+    }
+    return true;
+  }
+
+  List<_StorageFolder> _folders() {
+    final supplierFolders = <String, _SupplierFolderAccumulator>{};
+    for (final file in _allFiles) {
+      final supplierId = _supplierId(file);
+      final supplierName = _supplierName(file);
+      if (supplierId == null || supplierName == null) continue;
+      final accumulator = supplierFolders.putIfAbsent(
+        supplierId,
+        () => _SupplierFolderAccumulator(supplierId, supplierName),
+      );
+      accumulator.count++;
+    }
+
+    final suppliers = supplierFolders.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return <_StorageFolder>[
+      _StorageFolder(
+        id: 'all',
+        label: 'Todos',
+        subtitle: 'Biblioteca completa',
+        glyph: '🗃️',
+        color: const Color(0xFF2563EB),
+        count: _allFiles.length,
+      ),
+      _StorageFolder(
+        id: 'suppliers',
+        label: 'Proveedores',
+        subtitle: 'Archivos por proveedor',
+        glyph: '🏬',
+        color: const Color(0xFFD97706),
+        count: _allFiles.where((file) => _supplierId(file) != null).length,
+      ),
+      for (final supplier in suppliers)
+        _StorageFolder(
+          id: 'supplier:${supplier.id}',
+          label: supplier.name,
+          subtitle: 'Proveedor',
+          glyph: '📂',
+          color: const Color(0xFF4F46E5),
+          count: supplier.count,
+          parentId: 'suppliers',
+          depth: 1,
+        ),
+      _StorageFolder(
+        id: 'source:browser',
+        label: 'Navegador',
+        subtitle: 'Descargas web',
+        glyph: '🌐',
+        color: const Color(0xFF0F766E),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'browser')
+            .length,
+      ),
+      _StorageFolder(
+        id: 'source:email',
+        label: 'Correo',
+        subtitle: 'Adjuntos guardados',
+        glyph: '📧',
+        color: const Color(0xFF2563EB),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'email')
+            .length,
+      ),
+      _StorageFolder(
+        id: 'source:manual',
+        label: 'Manual',
+        subtitle: 'Cargas manuales',
+        glyph: '📤',
+        color: const Color(0xFF475569),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'manual')
+            .length,
+      ),
+      _StorageFolder(
+        id: 'source:chat',
+        label: 'Chat',
+        subtitle: 'Archivos de mensajes',
+        glyph: '💬',
+        color: const Color(0xFF059669),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'chat')
+            .length,
+      ),
+      _StorageFolder(
+        id: 'source:expense',
+        label: 'Gastos',
+        subtitle: 'Comprobantes y OCR',
+        glyph: '🧾',
+        color: const Color(0xFFB45309),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'expense')
+            .length,
+      ),
+      _StorageFolder(
+        id: 'type:pdf',
+        label: 'PDF',
+        subtitle: 'Documentos PDF',
+        glyph: '📄',
+        color: const Color(0xFFDC2626),
+        count: _allFiles.where((file) => file.isPdf).length,
+      ),
+      _StorageFolder(
+        id: 'type:image',
+        label: 'Imágenes',
+        subtitle: 'Fotos y capturas',
+        glyph: '🖼️',
+        color: const Color(0xFF7C3AED),
+        count: _allFiles.where((file) => file.isImage).length,
+      ),
+    ];
+  }
+
+  String _sourceBucket(String sourceType) {
+    final source = sourceType.toLowerCase();
+    if (source.startsWith('email')) return 'email';
+    if (source.startsWith('chat')) return 'chat';
+    if (source.startsWith('expense')) return 'expense';
+    if (source.startsWith('browser')) return 'browser';
+    if (source == 'manual') return 'manual';
+    return source;
+  }
+
+  String? _supplierId(AppStoredFile file) {
+    if (file.contextType == 'supplier' &&
+        file.contextId != null &&
+        file.contextId!.trim().isNotEmpty) {
+      return file.contextId!.trim();
+    }
+    final metadataValue = file.metadata['supplier_id']?.toString().trim();
+    return metadataValue == null || metadataValue.isEmpty
+        ? null
+        : metadataValue;
+  }
+
+  String? _supplierName(AppStoredFile file) {
+    final metadataValue = file.metadata['supplier_name']?.toString().trim();
+    if (metadataValue != null && metadataValue.isNotEmpty) {
+      return metadataValue;
+    }
+    if (file.contextType == 'supplier' &&
+        file.contextTitle != null &&
+        file.contextTitle!.trim().isNotEmpty) {
+      return file.contextTitle!.trim();
+    }
+    return null;
+  }
+
   Future<void> _deleteFile(AppStoredFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -280,6 +536,16 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     } catch (_) {
       context.go('/storage');
     }
+  }
+
+  void _toggleFolderExpansion(String folderId) {
+    setState(() {
+      if (_expandedFolderIds.contains(folderId)) {
+        _expandedFolderIds.remove(folderId);
+      } else {
+        _expandedFolderIds.add(folderId);
+      }
+    });
   }
 
   @override
@@ -386,6 +652,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   Widget _buildControls(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final folders = _folders();
 
     return Padding(
       padding: EdgeInsets.fromLTRB(12, widget.compact ? 10 : 14, 12, 10),
@@ -453,42 +720,130 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Wrap(
-                spacing: 6,
-                children: [
-                  for (final filter in AppFilesFilter.values)
-                    ChoiceChip(
-                      label: Text(filter.label),
-                      selected: _filter == filter,
-                      onSelected: (_) {
-                        setState(() => _filter = filter);
-                        _loadFiles();
-                      },
-                      labelStyle: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+          if (widget.compact) ...[
+            const SizedBox(height: 10),
+            _buildCompactTabs(context),
+          ],
+          if (!widget.compact || _compactTab == _StorageCompactTab.recent) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _selectedFolderLabel(folders),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
                     ),
-                ],
-              ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<_StorageSort>(
+                    value: _sort,
+                    isDense: true,
+                    borderRadius: BorderRadius.circular(8),
+                    items: [
+                      for (final sort in _StorageSort.values)
+                        DropdownMenuItem(
+                          value: sort,
+                          child: Text(sort.label),
+                        ),
+                    ],
+                    onChanged: (sort) {
+                      if (sort != null) _setSort(sort);
+                    },
+                  ),
+                ),
+              ],
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTabs(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      height: 34,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          _StorageCompactTabButton(
+            selected: _compactTab == _StorageCompactTab.folders,
+            glyph: '🗂️',
+            label: 'Carpetas',
+            theme: theme,
+            onTap: () =>
+                setState(() => _compactTab = _StorageCompactTab.folders),
+          ),
+          _StorageCompactTabButton(
+            selected: _compactTab == _StorageCompactTab.recent,
+            glyph: '🕘',
+            label: 'Recientes',
+            theme: theme,
+            onTap: () =>
+                setState(() => _compactTab = _StorageCompactTab.recent),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  String _selectedFolderLabel(List<_StorageFolder> folders) {
+    _StorageFolder? selected;
+    for (final folder in folders) {
+      if (folder.id == _selectedFolderId) {
+        selected = folder;
+        break;
+      }
+    }
+    final label = selected?.label ?? 'Todos';
+    return '$label · ${_files.length} visibles';
+  }
 
-    if (_error != null && _files.isEmpty) {
+  Widget _buildBody(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (!widget.compact) {
+      return Row(
+        children: [
+          SizedBox(
+            width: 248,
+            child: _buildFolderSidebar(context, _folders()),
+          ),
+          VerticalDivider(
+            width: 1,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.65),
+          ),
+          Expanded(child: _buildFileList(context)),
+        ],
+      );
+    }
+
+    if (_compactTab == _StorageCompactTab.folders) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: _buildCompactFolderTree(context, _folders()),
+      );
+    }
+
+    return _buildFileList(context);
+  }
+
+  Widget _buildFileList(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (_error != null && _allFiles.isEmpty) {
       return _StorageEmptyState(
         icon: Icons.cloud_off_outlined,
         title: 'No se pudieron cargar los archivos',
@@ -500,12 +855,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
 
     if (_files.isEmpty && !_isLoading) {
       return _StorageEmptyState(
-        icon: Icons.folder_open_outlined,
-        title: 'Sin archivos guardados',
-        subtitle:
-            'Arrastra archivos aquí o guarda adjuntos desde el correo para encontrarlos después.',
-        actionLabel: 'Subir archivos',
-        onAction: _pickFiles,
+        title: _allFiles.isEmpty ? 'Sin archivos guardados' : 'Carpeta vacía',
+        subtitle: _allFiles.isEmpty
+            ? 'Arrastra archivos aquí o guarda adjuntos desde el correo para encontrarlos después.'
+            : 'No hay archivos que coincidan con esta carpeta o búsqueda.',
+        actionLabel: _allFiles.isEmpty ? 'Subir archivos' : null,
+        onAction: _allFiles.isEmpty ? _pickFiles : null,
       );
     }
 
@@ -529,6 +884,108 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
               file.sourceRoute == null ? null : () => _openOrigin(file),
         );
       },
+    );
+  }
+
+  Widget _buildCompactFolderTree(
+    BuildContext context,
+    List<_StorageFolder> folders,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final visibleFolders = _visibleFolders(folders);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.78),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Column(
+            children: [
+              for (final folder in visibleFolders)
+                Builder(
+                  builder: (context) {
+                    final expandable = _hasVisibleChildren(folder.id, folders);
+                    return _StorageFolderTile(
+                      folder: folder,
+                      selected: _selectedFolderId == folder.id,
+                      dense: true,
+                      expandable: expandable,
+                      expanded: _expandedFolderIds.contains(folder.id),
+                      onTap: expandable
+                          ? () => _toggleFolderExpansion(folder.id)
+                          : () => _selectFolder(folder.id, showRecent: true),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFolderSidebar(
+    BuildContext context,
+    List<_StorageFolder> folders,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final visibleFolders = _visibleFolders(folders);
+
+    return Container(
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.22),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 18),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+            child: Text(
+              'Carpetas inteligentes',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          for (final folder in visibleFolders)
+            Builder(
+              builder: (context) {
+                final expandable = _hasVisibleChildren(folder.id, folders);
+                return _StorageFolderTile(
+                  folder: folder,
+                  selected: _selectedFolderId == folder.id,
+                  expandable: expandable,
+                  expanded: _expandedFolderIds.contains(folder.id),
+                  onTap: expandable
+                      ? () => _toggleFolderExpansion(folder.id)
+                      : () => _selectFolder(folder.id),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<_StorageFolder> _visibleFolders(List<_StorageFolder> folders) {
+    return folders.where((folder) {
+      final parentId = folder.parentId;
+      return parentId == null ||
+          (_expandedFolderIds.contains(parentId) && folder.count > 0);
+    }).toList(growable: false);
+  }
+
+  bool _hasVisibleChildren(String folderId, List<_StorageFolder> folders) {
+    return folders.any(
+      (folder) => folder.parentId == folderId && folder.count > 0,
     );
   }
 
@@ -585,6 +1042,254 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StorageFolder {
+  final String id;
+  final String label;
+  final String subtitle;
+  final String glyph;
+  final Color color;
+  final int count;
+  final String? parentId;
+  final int depth;
+
+  const _StorageFolder({
+    required this.id,
+    required this.label,
+    required this.subtitle,
+    required this.glyph,
+    required this.color,
+    required this.count,
+    this.parentId,
+    this.depth = 0,
+  });
+}
+
+class _SupplierFolderAccumulator {
+  final String id;
+  final String name;
+  int count = 0;
+
+  _SupplierFolderAccumulator(this.id, this.name);
+}
+
+class _StorageCompactTabButton extends StatelessWidget {
+  final bool selected;
+  final String glyph;
+  final String label;
+  final ThemeData theme;
+  final VoidCallback onTap;
+
+  const _StorageCompactTabButton({
+    required this.selected,
+    required this.glyph,
+    required this.label,
+    required this.theme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = theme.colorScheme;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Material(
+          color: selected ? colorScheme.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: onTap,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _StorageGlyph(glyph, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: selected
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StorageGlyph extends StatelessWidget {
+  final String glyph;
+  final double size;
+
+  const _StorageGlyph(this.glyph, {this.size = 17});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Center(
+        child: Text(
+          glyph,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: size,
+            height: 1,
+            fontFamilyFallback: const [
+              'Apple Color Emoji',
+              'Noto Color Emoji',
+              'Segoe UI Emoji',
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StorageFolderTile extends StatelessWidget {
+  final _StorageFolder folder;
+  final bool selected;
+  final bool dense;
+  final bool expandable;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  const _StorageFolderTile({
+    required this.folder,
+    required this.selected,
+    this.dense = false,
+    this.expandable = false,
+    this.expanded = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accent = folder.color;
+    final textColor = selected ? accent : colorScheme.onSurface;
+    final isChild = folder.depth > 0;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: isChild ? (dense ? 12 : 16) : 0,
+        bottom: dense ? 2 : 3,
+      ),
+      child: Material(
+        color: selected ? accent.withValues(alpha: 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: dense ? 7 : 9,
+              vertical: dense ? 6 : 8,
+            ),
+            child: Row(
+              children: [
+                if (isChild) ...[
+                  SizedBox(
+                    width: 17,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: 10,
+                        height: 1.4,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? accent.withValues(alpha: 0.7)
+                              : colorScheme.outline.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                _StorageGlyph(folder.glyph, size: dense ? 18 : 19),
+                SizedBox(width: dense ? 7 : 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        folder.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: textColor,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w700,
+                          height: dense ? 1.05 : null,
+                        ),
+                      ),
+                      if (!dense || !isChild)
+                        Text(
+                          folder.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: dense ? 1.1 : null,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: dense ? 6 : 8),
+                if (expandable) ...[
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_down
+                        : Icons.keyboard_arrow_right,
+                    size: dense ? 16 : 18,
+                    color: selected ? accent : colorScheme.onSurfaceVariant,
+                  ),
+                  SizedBox(width: dense ? 3 : 4),
+                ],
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: dense ? 5 : 6,
+                    vertical: dense ? 1 : 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? accent.withValues(alpha: 0.14)
+                        : colorScheme.surface,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? accent.withValues(alpha: 0.35)
+                          : colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Text(
+                    '${folder.count}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: selected ? accent : colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -662,6 +1367,8 @@ class _FileListTile extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _SourceChip(file: file),
+                        if (_fileSupplierName(file) != null)
+                          _SupplierChip(label: _fileSupplierName(file)!),
                         Text(
                           '${file.displaySize} · $dateLabel',
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -769,6 +1476,40 @@ class _SourceChip extends StatelessWidget {
               fontWeight: FontWeight.w700,
               height: 1,
             ),
+      ),
+    );
+  }
+}
+
+class _SupplierChip extends StatelessWidget {
+  final String label;
+
+  const _SupplierChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF4F46E5);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.storefront_outlined, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -1040,7 +1781,7 @@ class _StorageEmptyState extends StatelessWidget {
   final VoidCallback? onAction;
 
   const _StorageEmptyState({
-    required this.icon,
+    this.icon = Icons.folder_open_outlined,
     required this.title,
     required this.subtitle,
     this.actionLabel,
@@ -1136,8 +1877,20 @@ String _sourceLabel(String sourceType) {
   if (sourceType.startsWith('email')) return 'Correo';
   if (sourceType.startsWith('chat')) return 'Chat';
   if (sourceType.startsWith('expense')) return 'Gastos';
+  if (sourceType.startsWith('browser')) return 'Navegador';
   if (sourceType == 'manual') return 'Manual';
   return 'Archivo';
+}
+
+String? _fileSupplierName(AppStoredFile file) {
+  final metadataValue = file.metadata['supplier_name']?.toString().trim();
+  if (metadataValue != null && metadataValue.isNotEmpty) return metadataValue;
+  if (file.contextType == 'supplier' &&
+      file.contextTitle != null &&
+      file.contextTitle!.trim().isNotEmpty) {
+    return file.contextTitle!.trim();
+  }
+  return null;
 }
 
 Color _sourceColor(AppStoredFile file) {
@@ -1145,6 +1898,7 @@ Color _sourceColor(AppStoredFile file) {
   if (sourceType.startsWith('email')) return const Color(0xFF2563EB);
   if (sourceType.startsWith('chat')) return const Color(0xFF059669);
   if (sourceType.startsWith('expense')) return const Color(0xFFB45309);
+  if (sourceType.startsWith('browser')) return const Color(0xFF0F766E);
   if (sourceType == 'manual') return const Color(0xFF475569);
   return const Color(0xFF64748B);
 }

@@ -539,6 +539,12 @@ class ChatProvider extends ChangeNotifier {
   String getChatTitle(Conversation c) {
     // For support chats, use customer name
     if (c.type == 'support') {
+      final hintedSupplier = c.contextHint?.supplierLabel;
+      if (c.isSupplierConversation &&
+          hintedSupplier != null &&
+          hintedSupplier.isNotEmpty) {
+        return hintedSupplier;
+      }
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
         return c.creatorName ?? 'Cliente';
       }
@@ -1297,7 +1303,7 @@ class ChatProvider extends ChangeNotifier {
         contextId: contextId,
       );
 
-      await loadConversations(refreshContextHints: false);
+      await loadConversations(refreshContextHints: true);
       setActiveConversation(conversationId);
     } catch (e) {
       debugPrint('❌ Error opening WhatsApp customer chat: $e');

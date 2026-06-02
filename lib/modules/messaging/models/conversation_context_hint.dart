@@ -16,6 +16,14 @@ class ConversationContextHint {
   final String? invoiceStatus;
   final double? invoiceBalance;
   final double? invoiceTotal;
+  final String? supplierId;
+  final String? supplierName;
+  final String? supplierPhone;
+  final String? purchaseInvoiceId;
+  final String? purchaseInvoiceNumber;
+  final String? purchaseInvoiceStatus;
+  final double? purchaseInvoiceBalance;
+  final double? purchaseInvoiceTotal;
 
   const ConversationContextHint({
     this.customerId,
@@ -35,6 +43,14 @@ class ConversationContextHint {
     this.invoiceStatus,
     this.invoiceBalance,
     this.invoiceTotal,
+    this.supplierId,
+    this.supplierName,
+    this.supplierPhone,
+    this.purchaseInvoiceId,
+    this.purchaseInvoiceNumber,
+    this.purchaseInvoiceStatus,
+    this.purchaseInvoiceBalance,
+    this.purchaseInvoiceTotal,
   });
 
   factory ConversationContextHint.fromJson(Map<String, dynamic>? json) {
@@ -64,6 +80,14 @@ class ConversationContextHint {
       invoiceStatus: json['invoice_status']?.toString(),
       invoiceBalance: parseDouble(json['invoice_balance']),
       invoiceTotal: parseDouble(json['invoice_total']),
+      supplierId: json['supplier_id']?.toString(),
+      supplierName: json['supplier_name']?.toString(),
+      supplierPhone: json['supplier_phone']?.toString(),
+      purchaseInvoiceId: json['purchase_invoice_id']?.toString(),
+      purchaseInvoiceNumber: json['purchase_invoice_number']?.toString(),
+      purchaseInvoiceStatus: json['purchase_invoice_status']?.toString(),
+      purchaseInvoiceBalance: parseDouble(json['purchase_invoice_balance']),
+      purchaseInvoiceTotal: parseDouble(json['purchase_invoice_total']),
     );
   }
 
@@ -87,13 +111,28 @@ class ConversationContextHint {
       if (invoiceStatus != null) 'invoice_status': invoiceStatus,
       if (invoiceBalance != null) 'invoice_balance': invoiceBalance,
       if (invoiceTotal != null) 'invoice_total': invoiceTotal,
+      if (supplierId != null) 'supplier_id': supplierId,
+      if (supplierName != null) 'supplier_name': supplierName,
+      if (supplierPhone != null) 'supplier_phone': supplierPhone,
+      if (purchaseInvoiceId != null) 'purchase_invoice_id': purchaseInvoiceId,
+      if (purchaseInvoiceNumber != null)
+        'purchase_invoice_number': purchaseInvoiceNumber,
+      if (purchaseInvoiceStatus != null)
+        'purchase_invoice_status': purchaseInvoiceStatus,
+      if (purchaseInvoiceBalance != null)
+        'purchase_invoice_balance': purchaseInvoiceBalance,
+      if (purchaseInvoiceTotal != null)
+        'purchase_invoice_total': purchaseInvoiceTotal,
     };
   }
 
   bool get hasCustomer => customerId != null && customerId!.isNotEmpty;
+  bool get hasSupplier => supplierId != null && supplierId!.isNotEmpty;
   bool get hasJob => jobId != null && jobId!.isNotEmpty;
   bool get hasInvoice => invoiceId != null && invoiceId!.isNotEmpty;
-  bool get hasOperationalContext => hasJob || hasInvoice;
+  bool get hasPurchaseInvoice =>
+      purchaseInvoiceId != null && purchaseInvoiceId!.isNotEmpty;
+  bool get hasOperationalContext => hasJob || hasInvoice || hasPurchaseInvoice;
 
   String? get customerLabel {
     final name = customerName?.trim();
@@ -115,12 +154,28 @@ class ConversationContextHint {
     return hasInvoice ? 'Factura vinculada' : null;
   }
 
+  String? get supplierLabel {
+    final name = supplierName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final phoneValue = supplierPhone?.trim() ?? phone?.trim();
+    if (phoneValue != null && phoneValue.isNotEmpty) return phoneValue;
+    return null;
+  }
+
+  String? get purchaseInvoiceLabel {
+    final number = purchaseInvoiceNumber?.trim();
+    if (number != null && number.isNotEmpty) return 'Compra $number';
+    return hasPurchaseInvoice ? 'Compra vinculada' : null;
+  }
+
   String? get effectiveContextType {
     if (primaryContextType != null && primaryContextType!.isNotEmpty) {
       return primaryContextType;
     }
     if (hasJob) return 'job';
     if (hasInvoice) return 'invoice';
+    if (hasPurchaseInvoice) return 'purchase_invoice';
+    if (hasSupplier) return 'supplier';
     if (hasCustomer) return 'customer';
     return null;
   }
@@ -131,6 +186,8 @@ class ConversationContextHint {
     }
     if (hasJob) return jobId;
     if (hasInvoice) return invoiceId;
+    if (hasPurchaseInvoice) return purchaseInvoiceId;
+    if (hasSupplier) return supplierId;
     if (hasCustomer) return customerId;
     return null;
   }

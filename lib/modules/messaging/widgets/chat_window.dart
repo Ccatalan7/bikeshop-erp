@@ -29,6 +29,7 @@ import '../../../shared/services/route_share_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../../shared/utils/file_download.dart';
+import '../models/conversation_context_hint.dart';
 
 class _EmojiGroup {
   final String label;
@@ -2511,8 +2512,13 @@ class _ChatWindowState extends State<ChatWindow> {
         hint?.hasJob == true || conversation.effectiveContextType == 'job';
     final bikeName = hint?.bikeName?.trim();
     final hasBike = bikeName != null && bikeName.isNotEmpty;
+    final invoiceLabel = _headerInvoiceLabel(hint);
+    final purchaseInvoiceLabel = _headerPurchaseInvoiceLabel(hint);
 
-    if (!hasJob && !hasBike) {
+    if (!hasJob &&
+        !hasBike &&
+        invoiceLabel == null &&
+        purchaseInvoiceLabel == null) {
       return Text(
         fallback,
         maxLines: 1,
@@ -2545,15 +2551,101 @@ class _ChatWindowState extends State<ChatWindow> {
               color: jobColor,
               prominent: true,
             ),
-          if (jobLabel.isNotEmpty && hasBike) const SizedBox(width: 6),
+          if (jobLabel.isNotEmpty &&
+              (hasBike || invoiceLabel != null || purchaseInvoiceLabel != null))
+            const SizedBox(width: 6),
           if (hasBike)
             _buildHeaderContextChip(
               label: bikeName,
               color: colorScheme.onSurfaceVariant,
             ),
+          if (hasBike && (invoiceLabel != null || purchaseInvoiceLabel != null))
+            const SizedBox(width: 6),
+          if (invoiceLabel != null)
+            _buildHeaderContextChip(
+              label: invoiceLabel,
+              color: _invoiceStatusColor(hint?.invoiceStatus),
+              prominent: true,
+            ),
+          if (invoiceLabel != null && purchaseInvoiceLabel != null)
+            const SizedBox(width: 6),
+          if (purchaseInvoiceLabel != null)
+            _buildHeaderContextChip(
+              label: purchaseInvoiceLabel,
+              color: _purchaseInvoiceStatusColor(hint?.purchaseInvoiceStatus),
+              prominent: true,
+            ),
         ],
       ),
     );
+  }
+
+  String? _headerInvoiceLabel(ConversationContextHint? hint) {
+    if (hint?.hasInvoice != true) return null;
+    final amountLabel = _headerCurrencyValue(
+      balance: hint!.invoiceBalance,
+      total: hint.invoiceTotal,
+    );
+    final parts = <String>[
+      hint.invoiceNumber?.trim().isNotEmpty == true
+          ? hint.invoiceNumber!.trim()
+          : 'Factura',
+      if (hint.invoiceStatus?.trim().isNotEmpty == true)
+        hint.invoiceStatus!.trim(),
+      if (amountLabel != null) amountLabel,
+    ];
+    return parts.join(' · ');
+  }
+
+  String? _headerPurchaseInvoiceLabel(ConversationContextHint? hint) {
+    if (hint?.hasPurchaseInvoice != true) return null;
+    final amountLabel = _headerCurrencyValue(
+      balance: hint!.purchaseInvoiceBalance,
+      total: hint.purchaseInvoiceTotal,
+    );
+    final parts = <String>[
+      hint.purchaseInvoiceNumber?.trim().isNotEmpty == true
+          ? hint.purchaseInvoiceNumber!.trim()
+          : 'Compra',
+      if (hint.purchaseInvoiceStatus?.trim().isNotEmpty == true)
+        hint.purchaseInvoiceStatus!.trim(),
+      if (amountLabel != null) amountLabel,
+    ];
+    return parts.join(' · ');
+  }
+
+  String? _headerCurrencyValue({
+    required double? balance,
+    required double? total,
+  }) {
+    final amount = balance != null && balance > 0 ? balance : total;
+    if (amount == null || amount <= 0) return null;
+    return _formatPanelCurrency(amount);
+  }
+
+  Color _invoiceStatusColor(String? status) {
+    final normalized = status?.trim().toLowerCase();
+    return switch (normalized) {
+      'pagada' || 'paid' => const Color(0xFF16A34A),
+      'vencida' || 'overdue' => const Color(0xFFDC2626),
+      'confirmada' || 'confirmed' => const Color(0xFF7C3AED),
+      'enviada' || 'sent' => const Color(0xFF0EA5E9),
+      'entregada' || 'delivered' => const Color(0xFF16A34A),
+      'anulada' || 'cancelled' || 'canceled' => const Color(0xFFDC2626),
+      _ => const Color(0xFF64748B),
+    };
+  }
+
+  Color _purchaseInvoiceStatusColor(String? status) {
+    final normalized = status?.trim().toLowerCase();
+    return switch (normalized) {
+      'pagada' || 'paid' => const Color(0xFF2563EB),
+      'recibida' || 'received' => const Color(0xFF16A34A),
+      'confirmada' || 'confirmed' => const Color(0xFF7C3AED),
+      'enviada' || 'sent' => const Color(0xFF0EA5E9),
+      'anulada' || 'cancelled' || 'canceled' => const Color(0xFFDC2626),
+      _ => const Color(0xFF64748B),
+    };
   }
 
   Widget _buildHeaderContextChip({

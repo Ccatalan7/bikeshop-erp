@@ -68,6 +68,11 @@ class Conversation {
   bool get isSupport => type == 'support';
   bool get isWhatsApp => channel == 'whatsapp';
   bool get isWebsitePortal => channel == 'website_portal';
+  bool get isSupplierConversation =>
+      contextType == 'supplier' ||
+      contextType == 'purchase_invoice' ||
+      contextHint?.hasSupplier == true ||
+      contextHint?.hasPurchaseInvoice == true;
   bool get hasLinkedContext => contextType != null && contextId != null;
   bool get hasDetectedContext => contextHint?.hasOperationalContext ?? false;
   bool get hasAnyContext =>
@@ -98,7 +103,9 @@ class Conversation {
       effectiveContextId != null && supportsContextPanel(effectiveContextType);
 
   String get channelLabel {
-    if (isWhatsApp) return 'Cliente WhatsApp';
+    if (isWhatsApp) {
+      return isSupplierConversation ? 'Proveedor WhatsApp' : 'Cliente WhatsApp';
+    }
     if (isWebsitePortal) return 'Cliente web';
     return 'Chat interno';
   }

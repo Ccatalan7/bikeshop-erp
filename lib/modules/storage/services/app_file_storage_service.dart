@@ -16,6 +16,9 @@ class AppFileStorageService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final Uuid _uuid = const Uuid();
+  List<_SupplierUrlCandidate>? _supplierUrlCandidates;
+  DateTime? _supplierUrlCandidatesLoadedAt;
+  static const Duration _supplierUrlCacheMaxAge = Duration(minutes: 5);
 
   Future<List<AppStoredFile>> listFiles({
     String? query,
@@ -115,6 +118,64 @@ class AppFileStorageService {
     }
   }
 
+  Future<AppFileSupplierMatch?> matchSupplierForUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+
+    final candidates = await _loadSupplierUrlCandidates();
+    _SupplierUrlCandidate? best;
+    for (final candidate in candidates) {
+      if (!candidate.matches(uri)) continue;
+      if (best == null || candidate.score > best.score) {
+        best = candidate;
+      }
+    }
+
+    final match = best;
+    if (match == null) return null;
+    return AppFileSupplierMatch(
+      id: match.id,
+      name: match.name,
+      website: match.website,
+    );
+  }
+
+  Future<AppStoredFile> attachSupplierContext({
+    required AppStoredFile file,
+    required AppFileSupplierMatch supplier,
+  }) async {
+    final metadata = Map<String, dynamic>.from(file.metadata)
+      ..addAll({
+        'supplier_id': supplier.id,
+        'supplier_name': supplier.name,
+        'supplier_website': supplier.website,
+        'smart_folder': 'supplier:${supplier.id}',
+      });
+    final tags = <String>{
+      ...file.tags,
+      'proveedor',
+    }.toList(growable: false);
+
+    final row = await _supabase
+        .from('app_files')
+        .update({
+          'source_id': supplier.id,
+          'context_type': 'supplier',
+          'context_id': supplier.id,
+          'context_title': supplier.name,
+          'context_subtitle': 'Portal proveedor',
+          'tags': tags,
+          'metadata': metadata,
+        })
+        .eq('id', file.id)
+        .select()
+        .single();
+
+    return AppStoredFile.fromJson(row);
+  }
+
   Future<Uint8List> downloadFile(AppStoredFile file) {
     return _supabase.storage
         .from(file.storageBucket)
@@ -134,6 +195,52 @@ class AppFileStorageService {
     } catch (_) {
       // The metadata is already hidden. A storage cleanup retry can happen later.
     }
+  }
+
+  Future<List<_SupplierUrlCandidate>> _loadSupplierUrlCandidates() async {
+    final now = DateTime.now();
+    final cached = _supplierUrlCandidates;
+    if (cached != null &&
+        _supplierUrlCandidatesLoadedAt != null &&
+        now.difference(_supplierUrlCandidatesLoadedAt!) <
+            _supplierUrlCacheMaxAge) {
+      return cached;
+    }
+
+    final tenantId = await _requireTenantId();
+    final rows = await _supabase
+        .from('suppliers')
+        .select('id, name, website, is_active')
+        .eq('tenant_id', tenantId);
+
+    final candidates = <_SupplierUrlCandidate>[];
+    for (final row in rows as List<dynamic>) {
+      final map = row as Map<String, dynamic>;
+      if (map['is_active'] == false) continue;
+      final id = map['id']?.toString();
+      final name = map['name']?.toString();
+      final website = map['website']?.toString();
+      if (id == null ||
+          id.trim().isEmpty ||
+          name == null ||
+          name.trim().isEmpty ||
+          website == null ||
+          website.trim().isEmpty) {
+        continue;
+      }
+
+      final candidate = _SupplierUrlCandidate.tryCreate(
+        id: id,
+        name: name,
+        website: website,
+      );
+      if (candidate != null) candidates.add(candidate);
+    }
+
+    candidates.sort((a, b) => b.score.compareTo(a.score));
+    _supplierUrlCandidates = candidates;
+    _supplierUrlCandidatesLoadedAt = now;
+    return candidates;
   }
 
   Future<String> _requireTenantId() async {
@@ -156,4 +263,82 @@ class AppFileStorageService {
   }
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');
+}
+
+class AppFileSupplierMatch {
+  final String id;
+  final String name;
+  final String website;
+
+  const AppFileSupplierMatch({
+    required this.id,
+    required this.name,
+    required this.website,
+  });
+}
+
+class _SupplierUrlCandidate {
+  final String id;
+  final String name;
+  final String website;
+  final String host;
+  final String pathPrefix;
+  final int score;
+
+  const _SupplierUrlCandidate({
+    required this.id,
+    required this.name,
+    required this.website,
+    required this.host,
+    required this.pathPrefix,
+    required this.score,
+  });
+
+  static _SupplierUrlCandidate? tryCreate({
+    required String id,
+    required String name,
+    required String website,
+  }) {
+    final uri = _normalizeWebsite(website);
+    if (uri == null || uri.host.isEmpty) return null;
+    final host = _normalizeHost(uri.host);
+    if (host.isEmpty) return null;
+    final pathPrefix = _normalizePathPrefix(uri.path);
+    return _SupplierUrlCandidate(
+      id: id,
+      name: name.trim(),
+      website: website.trim(),
+      host: host,
+      pathPrefix: pathPrefix,
+      score: host.length + pathPrefix.length,
+    );
+  }
+
+  bool matches(Uri target) {
+    final targetHost = _normalizeHost(target.host);
+    if (targetHost != host && !targetHost.endsWith('.$host')) {
+      return false;
+    }
+    if (pathPrefix.isEmpty) return true;
+    final targetPath = _normalizePathPrefix(target.path);
+    return targetPath == pathPrefix || targetPath.startsWith('$pathPrefix/');
+  }
+
+  static Uri? _normalizeWebsite(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final withScheme = trimmed.contains('://') ? trimmed : 'https://$trimmed';
+    return Uri.tryParse(withScheme);
+  }
+
+  static String _normalizeHost(String value) {
+    final lower = value.trim().toLowerCase();
+    return lower.startsWith('www.') ? lower.substring(4) : lower;
+  }
+
+  static String _normalizePathPrefix(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == '/') return '';
+    return trimmed.replaceAll(RegExp(r'/+$'), '');
+  }
 }

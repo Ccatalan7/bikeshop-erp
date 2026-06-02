@@ -4,6 +4,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../utils/conversation_activity.dart';
 // For VoidCallback
 
 class MessagingService {
@@ -34,9 +35,11 @@ class MessagingService {
       'online_order' || 'website_order' || 'web_order' => 'order',
       'job' ||
       'invoice' ||
+      'purchase_invoice' ||
       'bike' ||
       'product' ||
       'order' ||
+      'supplier' ||
       'customer' =>
         normalized,
       _ => throw Exception('Tipo de contexto no permitido: $contextType'),
@@ -184,6 +187,25 @@ class MessagingService {
     };
   }
 
+  String? _purchaseInvoiceStatusLabel(dynamic rawStatus) {
+    final status = _text(rawStatus)?.toLowerCase();
+    return switch (status) {
+      'draft' => 'Borrador',
+      'sent' => 'Enviada',
+      'confirmed' => 'Confirmada',
+      'received' => 'Recibida',
+      'paid' => 'Pagada',
+      'cancelled' || 'canceled' => 'Anulada',
+      _ => _text(rawStatus),
+    };
+  }
+
+  bool _isActivePurchaseInvoice(Map<String, dynamic> invoice) {
+    return ConversationActivity.isActivePurchaseInvoiceStatus(
+      _text(invoice['status']),
+    );
+  }
+
   Set<String> _phoneLookupCandidates(String phone) {
     final trimmed = phone.trim();
     final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
@@ -217,6 +239,8 @@ class MessagingService {
     final phoneByConversation = <String, String>{};
     final explicitJobIds = <String>{};
     final explicitInvoiceIds = <String>{};
+    final explicitPurchaseInvoiceIds = <String>{};
+    final supplierIdByConversation = <String, String>{};
     final orderIds = <String>{};
     final creatorIds = <String>{};
 
@@ -236,6 +260,10 @@ class MessagingService {
         explicitJobIds.add(contextId);
       } else if (contextType == 'invoice' && contextId != null) {
         explicitInvoiceIds.add(contextId);
+      } else if (contextType == 'purchase_invoice' && contextId != null) {
+        explicitPurchaseInvoiceIds.add(contextId);
+      } else if (contextType == 'supplier' && contextId != null) {
+        supplierIdByConversation[conversationId] = contextId;
       } else if (contextType == 'order' && contextId != null) {
         orderIds.add(contextId);
       }
@@ -339,6 +367,55 @@ class MessagingService {
       debugPrint('⚠️ Error loading WhatsApp context hints: $e');
     }
 
+    final supplierRowsById = <String, Map<String, dynamic>>{};
+    final supplierPhoneCandidatesById = <String, Set<String>>{};
+    try {
+      dynamic query = _client.from('suppliers').select(
+            'id, name, phone, sales_rep_phone, is_active',
+          );
+      if (tenantId != null && tenantId.isNotEmpty) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      final rows = await query;
+      for (final rawSupplier in rows as List) {
+        final supplier = _rowMap(rawSupplier);
+        final supplierId = _text(supplier['id']);
+        if (supplierId == null) continue;
+        supplierRowsById[supplierId] = supplier;
+
+        final candidates = <String>{};
+        final phone =
+            _text(supplier['sales_rep_phone']) ?? _text(supplier['phone']);
+        final primaryPhone = _text(supplier['phone']);
+        final salesRepPhone = _text(supplier['sales_rep_phone']);
+        if (phone != null) candidates.addAll(_phoneLookupCandidates(phone));
+        if (primaryPhone != null) {
+          candidates.addAll(_phoneLookupCandidates(primaryPhone));
+        }
+        if (salesRepPhone != null) {
+          candidates.addAll(_phoneLookupCandidates(salesRepPhone));
+        }
+        if (candidates.isNotEmpty) {
+          supplierPhoneCandidatesById[supplierId] = candidates;
+        }
+      }
+
+      for (final phoneEntry in phoneByConversation.entries) {
+        final phoneCandidates = _phoneLookupCandidates(phoneEntry.value);
+        for (final supplierEntry in supplierPhoneCandidatesById.entries) {
+          if (phoneCandidates.intersection(supplierEntry.value).isNotEmpty) {
+            supplierIdByConversation.putIfAbsent(
+              phoneEntry.key,
+              () => supplierEntry.key,
+            );
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error loading supplier context hints: $e');
+    }
+
     if (creatorIds.isNotEmpty) {
       try {
         dynamic query = _client.from('customers').select(
@@ -388,6 +465,38 @@ class MessagingService {
     }
 
     await loadInvoicesByIds(explicitInvoiceIds);
+
+    final purchaseInvoiceRowsById = <String, Map<String, dynamic>>{};
+    Future<void> loadPurchaseInvoicesByIds(Set<String> ids) async {
+      final missingIds =
+          ids.where((id) => !purchaseInvoiceRowsById.containsKey(id));
+      if (missingIds.isEmpty) return;
+      try {
+        dynamic query = _client.from('purchase_invoices').select(
+              'id, supplier_id, supplier_name, invoice_number, status, total, balance, date, due_date, updated_at',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query.inFilter('id', missingIds.toList());
+        for (final row in rows as List) {
+          final invoice = _rowMap(row);
+          final id = _text(invoice['id']);
+          if (id != null) purchaseInvoiceRowsById[id] = invoice;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error loading context purchase invoices: $e');
+      }
+    }
+
+    await loadPurchaseInvoicesByIds(explicitPurchaseInvoiceIds);
+    for (final entry in contextIdByConversation.entries) {
+      if (contextTypeByConversation[entry.key] != 'purchase_invoice') continue;
+      final invoice = purchaseInvoiceRowsById[entry.value];
+      final supplierId = invoice == null ? null : _text(invoice['supplier_id']);
+      if (supplierId != null) supplierIdByConversation[entry.key] = supplierId;
+    }
+
     for (final entry in contextIdByConversation.entries) {
       if (contextTypeByConversation[entry.key] != 'invoice') continue;
       final invoice = invoiceRowsById[entry.value];
@@ -432,6 +541,45 @@ class MessagingService {
         }
       } catch (e) {
         debugPrint('⚠️ Error loading order context hints: $e');
+      }
+    }
+
+    final activePurchaseInvoiceBySupplierId = <String, Map<String, dynamic>>{};
+    final latestPurchaseInvoiceBySupplierId = <String, Map<String, dynamic>>{};
+    final supplierIds = supplierIdByConversation.values.toSet();
+    if (supplierIds.isNotEmpty) {
+      try {
+        dynamic query = _client.from('purchase_invoices').select(
+              'id, supplier_id, supplier_name, invoice_number, status, total, balance, date, due_date, updated_at',
+            );
+        if (tenantId != null && tenantId.isNotEmpty) {
+          query = query.eq('tenant_id', tenantId);
+        }
+        final rows = await query
+            .inFilter('supplier_id', supplierIds.toList())
+            .order('date', ascending: false)
+            .limit(500);
+        for (final rawInvoice in rows as List) {
+          final invoice = _rowMap(rawInvoice);
+          final invoiceId = _text(invoice['id']);
+          if (invoiceId != null) purchaseInvoiceRowsById[invoiceId] = invoice;
+
+          final supplierId = _text(invoice['supplier_id']);
+          if (supplierId == null) continue;
+          latestPurchaseInvoiceBySupplierId.putIfAbsent(
+            supplierId,
+            () => invoice,
+          );
+          if (_isActivePurchaseInvoice(invoice)) {
+            activePurchaseInvoiceBySupplierId.putIfAbsent(
+              supplierId,
+              () => invoice,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint(
+            '⚠️ Error loading active supplier purchase context hints: $e');
       }
     }
 
@@ -620,9 +768,19 @@ class MessagingService {
       final contextType = contextTypeByConversation[conversationId];
       final contextId = contextIdByConversation[conversationId];
       final explicitInvoiceId = contextType == 'invoice' ? contextId : null;
+      final explicitPurchaseInvoiceId =
+          contextType == 'purchase_invoice' ? contextId : null;
       final jobInvoiceId = job == null ? null : _text(job['invoice_id']);
       final invoiceId = explicitInvoiceId ?? jobInvoiceId;
       final invoice = invoiceId == null ? null : invoiceRowsById[invoiceId];
+      final supplierId = supplierIdByConversation[conversationId];
+      final supplier = supplierId == null ? null : supplierRowsById[supplierId];
+      final purchaseInvoice = explicitPurchaseInvoiceId == null
+          ? (supplierId == null
+              ? null
+              : activePurchaseInvoiceBySupplierId[supplierId] ??
+                  latestPurchaseInvoiceBySupplierId[supplierId])
+          : purchaseInvoiceRowsById[explicitPurchaseInvoiceId];
       final jobId = job == null ? null : _text(job['id']);
       final jobBikeId = jobId == null ? null : bikeIdByJobId[jobId];
       final directBikeId = job == null ? null : _text(job['bike_id']);
@@ -638,6 +796,8 @@ class MessagingService {
         customerImageUrl:
             _text(customer == null ? null : customer['image_url']),
         phone: _text(customer == null ? null : customer['phone']) ??
+            _text(supplier == null ? null : supplier['sales_rep_phone']) ??
+            _text(supplier == null ? null : supplier['phone']) ??
             phoneByConversation[conversationId],
         primaryContextType: contextType,
         primaryContextId: contextId,
@@ -660,9 +820,32 @@ class MessagingService {
         invoiceBalance:
             invoice == null ? null : _doubleValue(invoice['balance']),
         invoiceTotal: invoice == null ? null : _doubleValue(invoice['total']),
+        supplierId: supplierId,
+        supplierName: _text(supplier == null ? null : supplier['name']) ??
+            (purchaseInvoice == null
+                ? null
+                : _text(purchaseInvoice['supplier_name'])),
+        supplierPhone:
+            _text(supplier == null ? null : supplier['sales_rep_phone']) ??
+                _text(supplier == null ? null : supplier['phone']) ??
+                phoneByConversation[conversationId],
+        purchaseInvoiceId:
+            purchaseInvoice == null ? null : _text(purchaseInvoice['id']),
+        purchaseInvoiceNumber: purchaseInvoice == null
+            ? null
+            : _text(purchaseInvoice['invoice_number']),
+        purchaseInvoiceStatus: purchaseInvoice == null
+            ? null
+            : _purchaseInvoiceStatusLabel(purchaseInvoice['status']),
+        purchaseInvoiceBalance: purchaseInvoice == null
+            ? null
+            : _doubleValue(purchaseInvoice['balance']),
+        purchaseInvoiceTotal: purchaseInvoice == null
+            ? null
+            : _doubleValue(purchaseInvoice['total']),
       );
 
-      if (hint.hasCustomer || hint.hasOperationalContext) {
+      if (hint.hasCustomer || hint.hasSupplier || hint.hasOperationalContext) {
         result[conversationId] = hint;
       }
     }

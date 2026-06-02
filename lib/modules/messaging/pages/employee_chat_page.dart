@@ -1,14 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../messaging/models/conversation.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../../messaging/widgets/chat_window.dart';
 import '../../messaging/widgets/new_chat_dialog.dart';
 import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
+import '../../messaging/utils/conversation_activity.dart';
 import '../../messaging/utils/message_parser.dart';
 import '../../messaging/widgets/conversation_tile.dart';
+import '../../purchases/models/purchase_invoice.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../../settings/services/appearance_service.dart';
 
 // Track last handled deep link with timestamp to prevent rapid re-processing
@@ -32,18 +39,31 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   ReferenceSegment? _activeReference;
   bool _isSidePanelExpanded = false;
   String? _closedContextConversationId;
+  List<shared_supplier.Supplier> _supplierChatSuppliers = [];
+  List<PurchaseInvoice> _supplierChatInvoices = [];
+  bool _isLoadingSupplierChats = false;
+  bool _showOnlyActiveChats = true;
+  String? _openingSupplierId;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    ConversationActivity.showOnlyActiveChats.addListener(
+      _handleActiveModeChanged,
+    );
+    unawaited(_loadMessagingPreferences());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadConversations();
+      unawaited(_loadSupplierChatData());
     });
   }
 
   @override
   void dispose() {
+    ConversationActivity.showOnlyActiveChats.removeListener(
+      _handleActiveModeChanged,
+    );
     _tabController.dispose();
     super.dispose();
   }
@@ -51,7 +71,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   void _loadConversations() {
     // Load all once - filter client-side
     final provider = context.read<ChatProvider>();
-    provider.loadConversations().then((_) {
+    unawaited(_loadSupplierChatData());
+    provider.loadConversations(refreshContextHints: true).then((_) {
       // If opened from notification with a specific conversation, select it
       // Use time-based deduplication: skip if same conversation handled within 2 seconds
       final now = DateTime.now();
@@ -84,12 +105,15 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
           // Switch to correct tab (0 = Clients, 1 = Internal)
           if (targetConv.type == 'support') {
-            _tabController.animateTo(0); // Clients tab
+            _tabController.animateTo(
+              targetConv.isSupplierConversation ? 1 : 0,
+            );
           } else {
-            _tabController.animateTo(1); // Internal tab
+            _tabController.animateTo(2); // Internal tab
           }
 
           // On mobile, navigate directly to the chat
+          if (!mounted) return;
           final isMobile = MediaQuery.of(context).size.width < 900;
           if (isMobile) {
             Navigator.push(
@@ -104,9 +128,65 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     });
   }
 
+  Future<void> _loadSupplierChatData() async {
+    if (_isLoadingSupplierChats || !mounted) return;
+    setState(() => _isLoadingSupplierChats = true);
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final suppliers = await purchaseService.getSuppliers(activeOnly: true);
+      final invoices = await purchaseService.getPurchaseInvoicesForList();
+
+      if (!mounted) return;
+      setState(() {
+        _supplierChatSuppliers = suppliers
+            .where((supplier) => _supplierChatPhone(supplier) != null)
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+        _supplierChatInvoices = invoices;
+        _isLoadingSupplierChats = false;
+      });
+    } catch (error) {
+      debugPrint('Error loading supplier chat data: $error');
+      if (mounted) setState(() => _isLoadingSupplierChats = false);
+    }
+  }
+
+  Future<void> _loadMessagingPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final showOnlyActive =
+        prefs.getBool(ConversationActivity.activeOnlyPreferenceKey) ?? true;
+    if (!mounted) return;
+    if (ConversationActivity.showOnlyActiveChats.value != showOnlyActive) {
+      ConversationActivity.showOnlyActiveChats.value = showOnlyActive;
+    } else {
+      setState(() => _showOnlyActiveChats = showOnlyActive);
+    }
+  }
+
+  Future<void> _setShowOnlyActiveChats(bool value) async {
+    if (ConversationActivity.showOnlyActiveChats.value != value) {
+      ConversationActivity.showOnlyActiveChats.value = value;
+    } else if (mounted) {
+      setState(() => _showOnlyActiveChats = value);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(ConversationActivity.activeOnlyPreferenceKey, value);
+  }
+
+  void _handleActiveModeChanged() {
+    if (!mounted) return;
+    final value = ConversationActivity.showOnlyActiveChats.value;
+    if (_showOnlyActiveChats == value) return;
+    setState(() => _showOnlyActiveChats = value);
+  }
+
   void _syncTabToActiveConversation(Conversation? conversation) {
     if (conversation == null) return;
-    final targetIndex = conversation.type == 'support' ? 0 : 1;
+    final targetIndex = conversation.type == 'support'
+        ? (conversation.isSupplierConversation ? 1 : 0)
+        : 2;
     if (_tabController.index == targetIndex) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -145,7 +225,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   /// Count pending customer requests
   int _getPendingCount(List<Conversation> all) {
     return all
-        .where((c) => c.type == 'support' && c.status == 'pending')
+        .where((c) =>
+            c.type == 'support' &&
+            c.status == 'pending' &&
+            !c.isSupplierConversation)
         .length;
   }
 
@@ -175,14 +258,22 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
     final supportConversations =
         allConversations.where((c) => c.type == 'support').toList();
+    final supplierConversations =
+        supportConversations.where((c) => c.isSupplierConversation).toList();
+    final customerConversations =
+        supportConversations.where((c) => !c.isSupplierConversation).toList();
     final internalConversations =
         allConversations.where((c) => c.type == 'internal').toList();
     final pendingCount = _getPendingCount(allConversations);
-    final activeSupportCount = supportConversations
+    final visibleCustomerCount = customerConversations
         .where((conversation) =>
-            conversation.status != 'pending' &&
-            conversation.status != 'resolved')
+            !_showOnlyActiveChats ||
+            ConversationActivity.isActiveConversation(conversation))
         .length;
+    final supplierEntryCount = _supplierChatEntries(
+      supplierConversations,
+      includeInactive: !_showOnlyActiveChats,
+    ).length;
 
     // Find active conversation object
     Conversation? activeConversation;
@@ -210,7 +301,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       activeConversation,
       allConversations,
       pendingCount,
-      activeSupportCount,
+      visibleCustomerCount,
+      supplierEntryCount,
       internalConversations.length,
     );
   }
@@ -235,6 +327,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         foregroundColor: colorScheme.onSurface,
         elevation: 1,
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _buildActiveModeToggleButton(),
+          ),
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
             onPressed: () {
@@ -269,6 +365,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 ],
               ),
             ),
+            const Tab(
+              icon: Icon(Icons.storefront_outlined),
+              text: 'Proveedores',
+            ),
             const Tab(icon: Icon(Icons.people), text: 'Equipo'),
           ],
         ),
@@ -278,6 +378,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         children: [
           // Customer Tab
           _buildCustomerList(provider, activeId, allConversations),
+          _buildSupplierList(provider, activeId, allConversations),
           // Internal Tab
           _buildInternalList(provider, activeId, allConversations),
         ],
@@ -291,7 +392,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     Conversation? activeConversation,
     List<Conversation> allConversations,
     int pendingCount,
-    int activeSupportCount,
+    int activeCustomerCount,
+    int supplierCount,
     int internalCount,
   ) {
     final theme = Theme.of(context);
@@ -320,7 +422,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                 // Header
                 _buildMessagingHeader(
                   pendingCount: pendingCount,
-                  activeSupportCount: activeSupportCount,
+                  activeCustomerCount: activeCustomerCount,
+                  supplierCount: supplierCount,
                   internalCount: internalCount,
                 ),
                 // Tab Bar
@@ -340,7 +443,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Clientes ($activeSupportCount)'),
+                            Text('Clientes ($activeCustomerCount)'),
                             if (pendingCount > 0) ...[
                               const SizedBox(width: 8),
                               _buildBadge(pendingCount),
@@ -348,6 +451,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                           ],
                         ),
                       ),
+                      Tab(text: 'Proveedores ($supplierCount)'),
                       Tab(text: 'Equipo ($internalCount)'),
                     ],
                   ),
@@ -358,6 +462,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     controller: _tabController,
                     children: [
                       _buildCustomerList(provider, activeId, allConversations),
+                      _buildSupplierList(provider, activeId, allConversations),
                       _buildInternalList(provider, activeId, allConversations),
                     ],
                   ),
@@ -426,7 +531,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
 
   Widget _buildMessagingHeader({
     required int pendingCount,
-    required int activeSupportCount,
+    required int activeCustomerCount,
+    required int supplierCount,
     required int internalCount,
   }) {
     final theme = Theme.of(context);
@@ -451,6 +557,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: _buildActiveModeToggleButton(),
               ),
               IconButton(
                 icon: const Icon(Icons.add_comment_outlined),
@@ -491,12 +601,24 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               const SizedBox(width: 8),
               Expanded(
                 child: _buildHeaderMetric(
-                  'Activos',
-                  activeSupportCount,
+                  'Clientes',
+                  activeCustomerCount,
                   Icons.support_agent_outlined,
                 ),
               ),
               const SizedBox(width: 8),
+              Expanded(
+                child: _buildHeaderMetric(
+                  'Proveedores',
+                  supplierCount,
+                  Icons.storefront_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Expanded(
                 child: _buildHeaderMetric(
                   'Solicitudes',
@@ -508,6 +630,65 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActiveModeToggleButton() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final active = _showOnlyActiveChats;
+
+    return Tooltip(
+      waitDuration: const Duration(milliseconds: 1500),
+      message: active
+          ? 'Solo activos: muestra clientes y proveedores con trabajos, facturas o compras abiertas.'
+          : 'Historial completo: muestra también conversaciones y documentos cerrados.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => unawaited(_setShowOnlyActiveChats(!active)),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 24,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: active
+                ? colorScheme.primary.withValues(alpha: 0.18)
+                : colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active
+                  ? colorScheme.primary.withValues(alpha: 0.45)
+                  : colorScheme.outlineVariant,
+            ),
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            alignment: active ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: active ? colorScheme.primary : colorScheme.surface,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Icon(
+                active ? Icons.filter_alt : Icons.history,
+                size: 12,
+                color: active ? colorScheme.onPrimary : colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -606,7 +787,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   Widget _buildCustomerList(ChatProvider provider, String? activeId,
       List<Conversation> conversations) {
     final customerConvs = conversations
-        .where((c) => c.type == 'support')
+        .where((c) =>
+            c.type == 'support' &&
+            !c.isSupplierConversation &&
+            (!_showOnlyActiveChats ||
+                ConversationActivity.isActiveConversation(c)))
         .toList()
       ..sort(_compareConversations);
 
@@ -614,7 +799,9 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       return _buildEmptyState(
         icon: Icons.support_agent_outlined,
         title: 'Sin conversaciones de clientes',
-        subtitle: 'Los contactos con clientes aparecerán aquí',
+        subtitle: _showOnlyActiveChats
+            ? 'No hay clientes con trabajos, facturas o solicitudes abiertas'
+            : 'Los contactos con clientes aparecerán aquí',
       );
     }
 
@@ -681,7 +868,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ),
 
         // Resolved Section
-        if (resolvedConvs.isNotEmpty)
+        if (!_showOnlyActiveChats && resolvedConvs.isNotEmpty)
           _buildSection(
             icon: Icons.check_circle,
             title: 'Resueltas',
@@ -694,6 +881,496 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
           ),
       ],
     );
+  }
+
+  Widget _buildSupplierList(ChatProvider provider, String? activeId,
+      List<Conversation> conversations) {
+    final supplierConvs = conversations
+        .where((c) => c.type == 'support' && c.isSupplierConversation)
+        .toList()
+      ..sort(_compareConversations);
+    final entries = _supplierChatEntries(
+      supplierConvs,
+      includeInactive: !_showOnlyActiveChats,
+    );
+
+    if (_isLoadingSupplierChats && entries.isEmpty) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    if (entries.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.storefront_outlined,
+        title: 'Sin chats de proveedores',
+        subtitle: _showOnlyActiveChats
+            ? 'No hay proveedores con chats o compras activas'
+            : 'Los proveedores con WhatsApp aparecerán aquí',
+      );
+    }
+
+    return ListView(
+      children: [
+        _buildSupplierOverview(entries),
+        for (final entry in entries) _buildSupplierChatTile(entry, activeId),
+      ],
+    );
+  }
+
+  Widget _buildSupplierOverview(List<_SupplierChatEntry> entries) {
+    final activeInvoices = entries.fold<int>(
+      0,
+      (total, entry) => total + entry.activeInvoices.length,
+    );
+    final chats = entries.where((entry) => entry.conversation != null).length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          Theme.of(context).colorScheme.primary.withValues(alpha: 0.035),
+          Theme.of(context).colorScheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bandeja de proveedores',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'WhatsApp de proveedores con compras activas y estado visible.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMiniMetric(
+                  'Proveedores',
+                  entries.length,
+                  Icons.storefront_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMiniMetric(
+                  'Chats',
+                  chats,
+                  Icons.phone_in_talk_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMiniMetric(
+                  'Compras',
+                  activeInvoices,
+                  Icons.receipt_long_outlined,
+                  alert: activeInvoices > 0,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupplierChatTile(
+    _SupplierChatEntry entry,
+    String? activeId,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final conversation = entry.conversation;
+    final isSelected = conversation?.id == activeId;
+    final isOpening = _openingSupplierId == entry.supplier.id;
+    final preview = conversation?.lastMessageContent?.trim();
+    final relevantInvoices =
+        _showOnlyActiveChats ? entry.activeInvoices : entry.invoices;
+    final visibleInvoice =
+        relevantInvoices.isEmpty ? null : relevantInvoices.first;
+
+    return Material(
+      color: isSelected
+          ? colorScheme.primary.withValues(alpha: 0.1)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: isOpening ? null : () => _openSupplierChat(entry),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                child: Text(
+                  _supplierInitials(entry.supplier.name),
+                  style: const TextStyle(
+                    color: Color(0xFF7C3AED),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.supplier.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        if (conversation?.unreadCount != null &&
+                            conversation!.unreadCount > 0)
+                          _buildBadge(conversation.unreadCount),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      preview?.isNotEmpty == true
+                          ? preview!
+                          : '${entry.phone} · Proveedor WhatsApp',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    if (visibleInvoice != null) ...[
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 5,
+                        children: [_buildSupplierInvoiceChip(visibleInvoice)],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isOpening)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  conversation == null
+                      ? Icons.add_comment_outlined
+                      : Icons.chevron_right,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplierInvoiceChip(PurchaseInvoice invoice) {
+    final color = _purchaseInvoiceStatusColor(invoice.status);
+    final label = [
+      invoice.invoiceNumber.isEmpty ? 'Compra' : invoice.invoiceNumber,
+      invoice.status.displayName,
+    ].join(' · ');
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        '$label · ${_formatCLP(invoice.balance > 0 ? invoice.balance : invoice.total)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSupplierChat(_SupplierChatEntry entry) async {
+    final conversation = entry.conversation;
+    if (conversation != null) {
+      setState(() {
+        _closedContextConversationId = null;
+        _activeReference = null;
+        _isSidePanelExpanded = false;
+      });
+      context.read<ChatProvider>().setActiveConversation(conversation.id);
+      if (MediaQuery.of(context).size.width < 900) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatWindow(conversation: conversation),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _openingSupplierId = entry.supplier.id);
+    try {
+      final provider = context.read<ChatProvider>();
+      await provider.openWhatsAppCustomerChat(
+        phoneNumber: entry.phone,
+        contactName: entry.supplier.name,
+        contextType: 'supplier',
+        contextId: entry.supplier.id,
+      );
+      if (!mounted) return;
+      _tabController.animateTo(1);
+      setState(() => _openingSupplierId = null);
+    } catch (error) {
+      debugPrint('Error opening WhatsApp supplier chat: $error');
+      if (!mounted) return;
+      setState(() => _openingSupplierId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo iniciar el chat del proveedor'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  List<_SupplierChatEntry> _supplierChatEntries(
+    List<Conversation> supplierConversations, {
+    required bool includeInactive,
+  }) {
+    final entries = <_SupplierChatEntry>[];
+    final usedConversationIds = <String>{};
+
+    for (final supplier in _supplierChatSuppliers) {
+      final phone = _supplierChatPhone(supplier);
+      if (phone == null) continue;
+      final conversation = _findSupplierConversation(
+        supplier,
+        supplierConversations,
+      );
+      if (conversation != null) usedConversationIds.add(conversation.id);
+
+      final invoices = _supplierInvoices(supplier.id);
+      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
+      final hasStandaloneActiveConversation = invoices.isEmpty &&
+          conversation != null &&
+          ConversationActivity.isActiveConversation(conversation);
+      final hasActiveWork =
+          hasActiveInvoices || hasStandaloneActiveConversation;
+      if (!includeInactive && !hasActiveWork) continue;
+
+      entries.add(
+        _SupplierChatEntry(
+          supplier: supplier,
+          phone: phone,
+          conversation: conversation,
+          invoices: invoices,
+        ),
+      );
+    }
+
+    for (final conversation in supplierConversations) {
+      if (usedConversationIds.contains(conversation.id)) continue;
+      final phone = conversation.contextHint?.supplierPhone ??
+          conversation.contextHint?.phone ??
+          '';
+      if (!_hasWhatsAppLikePhone(phone)) continue;
+      final supplier = _supplierFromConversation(conversation, phone);
+      final invoices = supplier.id.isEmpty
+          ? <PurchaseInvoice>[]
+          : _supplierInvoices(supplier.id);
+      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
+      final hasActiveWork = hasActiveInvoices ||
+          (invoices.isEmpty &&
+              ConversationActivity.isActiveConversation(conversation));
+      if (!includeInactive && !hasActiveWork) continue;
+
+      entries.add(
+        _SupplierChatEntry(
+          supplier: supplier,
+          phone: phone,
+          conversation: conversation,
+          invoices: invoices,
+        ),
+      );
+    }
+
+    entries.sort((a, b) {
+      final aDate = a.lastActivityAt;
+      final bDate = b.lastActivityAt;
+      if (aDate != null && bDate != null) {
+        final dateCompare = bDate.compareTo(aDate);
+        if (dateCompare != 0) return dateCompare;
+      }
+      if (aDate != null) return -1;
+      if (bDate != null) return 1;
+      return a.supplier.name.toLowerCase().compareTo(
+            b.supplier.name.toLowerCase(),
+          );
+    });
+
+    return entries;
+  }
+
+  Conversation? _findSupplierConversation(
+    shared_supplier.Supplier supplier,
+    List<Conversation> conversations,
+  ) {
+    for (final conversation in conversations) {
+      if (conversation.contextHint?.supplierId == supplier.id ||
+          (conversation.contextType == 'supplier' &&
+              conversation.contextId == supplier.id)) {
+        return conversation;
+      }
+    }
+
+    final supplierPhones = _phoneCandidates(_supplierChatPhone(supplier));
+    if (supplierPhones.isEmpty) return null;
+    for (final conversation in conversations) {
+      final conversationPhones = _phoneCandidates(
+        conversation.contextHint?.supplierPhone ??
+            conversation.contextHint?.phone,
+      );
+      if (supplierPhones.intersection(conversationPhones).isNotEmpty) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  shared_supplier.Supplier _supplierFromConversation(
+    Conversation conversation,
+    String phone,
+  ) {
+    final now = DateTime.now();
+    return shared_supplier.Supplier(
+      id: conversation.contextHint?.supplierId ?? conversation.contextId ?? '',
+      tenantId: '',
+      name: conversation.contextHint?.supplierLabel ??
+          conversation.creatorName ??
+          conversation.title ??
+          phone,
+      phone: phone,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  List<PurchaseInvoice> _supplierInvoices(String supplierId) {
+    if (supplierId.isEmpty) return const [];
+    final invoices = _supplierChatInvoices
+        .where((invoice) => invoice.supplierId == supplierId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return invoices;
+  }
+
+  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
+    return ConversationActivity.isActivePurchaseInvoiceStatus(
+      invoice.status.name,
+    );
+  }
+
+  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
+    final salesRepPhone = supplier.salesRepPhone?.trim();
+    if (_hasWhatsAppLikePhone(salesRepPhone)) return salesRepPhone;
+    final phone = supplier.phone?.trim();
+    if (_hasWhatsAppLikePhone(phone)) return phone;
+    return null;
+  }
+
+  bool _hasWhatsAppLikePhone(String? phone) {
+    return _normalizedPhone(phone).length >= 8;
+  }
+
+  String _normalizedPhone(String? phone) {
+    return phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+  }
+
+  Set<String> _phoneCandidates(String? phone) {
+    final digits = _normalizedPhone(phone);
+    if (digits.isEmpty) return {};
+    final candidates = <String>{digits};
+    if (digits.startsWith('56') && digits.length > 2) {
+      candidates.add(digits.substring(2));
+    }
+    if (digits.startsWith('9') && digits.length == 9) {
+      candidates.add('56$digits');
+    }
+    if (digits.length >= 8) {
+      candidates.add(digits.substring(digits.length - 8));
+    }
+    return candidates;
+  }
+
+  String _supplierInitials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'P';
+    if (parts.length == 1) {
+      return parts.first.characters.take(2).toString().toUpperCase();
+    }
+    return '${parts.first.characters.first}${parts.last.characters.first}'
+        .toUpperCase();
+  }
+
+  Color _purchaseInvoiceStatusColor(PurchaseInvoiceStatus status) {
+    return switch (status) {
+      PurchaseInvoiceStatus.paid => const Color(0xFF2563EB),
+      PurchaseInvoiceStatus.received => const Color(0xFF16A34A),
+      PurchaseInvoiceStatus.confirmed => const Color(0xFF7C3AED),
+      PurchaseInvoiceStatus.sent => const Color(0xFF0EA5E9),
+      PurchaseInvoiceStatus.cancelled => const Color(0xFFDC2626),
+      PurchaseInvoiceStatus.draft => const Color(0xFF64748B),
+    };
+  }
+
+  String _formatCLP(double value) {
+    final rounded = value.round().toString();
+    final formatted = rounded.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => '.',
+    );
+    return '\$$formatted';
   }
 
   Widget _buildListIntro({
@@ -1071,9 +1748,13 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       case 'order':
         return 'Pedido web';
       case 'job':
-        return 'Servicio técnico';
+        return 'Trabajo';
       case 'invoice':
         return 'Factura';
+      case 'purchase_invoice':
+        return 'Compra';
+      case 'supplier':
+        return 'Proveedor';
       case 'bike':
         return 'Bicicleta';
       case 'customer':
@@ -1133,5 +1814,35 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         ],
       ),
     );
+  }
+}
+
+class _SupplierChatEntry {
+  final shared_supplier.Supplier supplier;
+  final String phone;
+  final Conversation? conversation;
+  final List<PurchaseInvoice> invoices;
+
+  const _SupplierChatEntry({
+    required this.supplier,
+    required this.phone,
+    required this.conversation,
+    required this.invoices,
+  });
+
+  List<PurchaseInvoice> get activeInvoices => invoices
+      .where(
+        (invoice) => ConversationActivity.isActivePurchaseInvoiceStatus(
+          invoice.status.name,
+        ),
+      )
+      .toList();
+
+  DateTime? get lastActivityAt {
+    final conversationDate =
+        conversation?.lastMessageAt ?? conversation?.updatedAt;
+    if (conversationDate != null) return conversationDate;
+    if (invoices.isEmpty) return null;
+    return invoices.first.date;
   }
 }

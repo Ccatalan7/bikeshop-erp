@@ -918,6 +918,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
     try {
       final bytes = await _downloadUrlBytes(uri, request);
+      final supplierMatch = await AppFileStorageService.instance
+          .matchSupplierForUrl(uri.toString());
       var savedInternally = false;
       var savedLocalCopy = false;
 
@@ -928,20 +930,34 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           mimeType: mimeType,
           context: AppFileContext(
             sourceType: 'browser_download',
+            sourceId: supplierMatch?.id,
             sourceProvider: uri.host,
             sourceRoute: '/tools/web',
-            contextType: 'browser',
-            contextTitle: _pageTitle?.trim().isNotEmpty == true
-                ? _pageTitle!.trim()
-                : uri.host,
-            contextSubtitle: uri.toString(),
-            tags: const ['navegador', 'descarga'],
+            contextType: supplierMatch == null ? 'browser' : 'supplier',
+            contextId: supplierMatch?.id,
+            contextTitle: supplierMatch?.name ??
+                (_pageTitle?.trim().isNotEmpty == true
+                    ? _pageTitle!.trim()
+                    : uri.host),
+            contextSubtitle:
+                supplierMatch == null ? uri.toString() : 'Portal proveedor',
+            tags: [
+              'navegador',
+              'descarga',
+              if (supplierMatch != null) 'proveedor',
+            ],
             metadata: {
               'url': uri.toString(),
               'current_page': _currentUrl,
               'content_disposition': request.contentDisposition,
               'suggested_filename': request.suggestedFilename,
               'reported_size_bytes': request.contentLength,
+              if (supplierMatch != null) ...{
+                'supplier_id': supplierMatch.id,
+                'supplier_name': supplierMatch.name,
+                'supplier_website': supplierMatch.website,
+                'smart_folder': 'supplier:${supplierMatch.id}',
+              },
             },
           ),
         );

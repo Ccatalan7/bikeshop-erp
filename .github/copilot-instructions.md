@@ -2588,6 +2588,12 @@ Use Supabase Auth with OAuth2 (Google, GitHub, etc.) for secure login. Supports:
 
 **Desired tone:** serious ERP clarity first, with a restrained premium/performance edge. The app may feel modern, technical, and polished, but it must not feel playful, childish, or visually noisy.
 
+**Functional colored icons:**
+- Dense filter menus, folder trees, status selectors, and table/tool dropdowns may use the compact emoji-glyph pattern from the trabajos table filters (`_buildDropdownGlyph` in `lib/modules/bikeshop/pages/pegas_table_page.dart`): a fixed 24px box, centered glyph, 17px font, and emoji font fallbacks (`Apple Color Emoji`, `Noto Color Emoji`, `Segoe UI Emoji`).
+- Use this pattern when the colored glyph improves scan speed in a tight operational menu. Keep labels and counts visible; the glyph supports recognition but never replaces text.
+- Reuse glyph meanings consistently within a feature (for example, `⚡` active, `✅` completed, `📦` delivered, `🗃️` all) instead of inventing random icons per row.
+- Keep the surrounding surface neutral and restrained. Avoid rainbow decoration, gradients, large saturated blocks, and color-only meaning.
+
 **⚠️ CRITICAL: Avoid "AI-ish" UI Redesigns**
 
 For ERP/admin screens, default to a restrained business application aesthetic.

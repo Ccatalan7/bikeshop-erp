@@ -9,13 +9,17 @@ import '../../modules/crm/models/crm_models.dart';
 import '../../modules/crm/services/customer_service.dart';
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/messaging/utils/conversation_activity.dart';
 import '../../modules/messaging/widgets/chat_window.dart';
 import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/messaging/widgets/new_chat_dialog.dart';
+import '../../modules/purchases/models/purchase_invoice.dart';
+import '../../modules/purchases/services/purchase_service.dart';
+import '../models/supplier.dart' as shared_supplier;
 import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
 
-enum _MessageFilter { all, unread, whatsapp, clients, team }
+enum _MessageFilter { all, unread, whatsapp, clients, suppliers, team }
 
 class QuickMessagesPanel extends StatefulWidget {
   const QuickMessagesPanel({super.key});
@@ -35,14 +39,22 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   ChatProvider? _chatProvider;
   Set<String> _pinnedConversationIds = {};
   List<Customer> _whatsAppContacts = [];
+  List<shared_supplier.Supplier> _supplierChatSuppliers = [];
+  List<PurchaseInvoice> _supplierChatInvoices = [];
   bool _isRefreshing = false;
   bool _isLoadingWhatsAppContacts = false;
+  bool _isLoadingSupplierChats = false;
+  bool _showOnlyActiveChats = true;
+  String? _openingSupplierId;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChanged);
-    unawaited(_loadPinnedConversations());
+    ConversationActivity.showOnlyActiveChats.addListener(
+      _handleActiveModeChanged,
+    );
+    unawaited(_loadPreferences());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(
@@ -50,6 +62,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               .read<ChatProvider>()
               .loadConversations(refreshContextHints: true),
         );
+        unawaited(_loadSupplierChatData());
       }
     });
   }
@@ -68,6 +81,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           conversationId: panelActiveConversationId);
     }
     _searchController.removeListener(_handleSearchChanged);
+    ConversationActivity.showOnlyActiveChats.removeListener(
+      _handleActiveModeChanged,
+    );
     _searchController.dispose();
     super.dispose();
   }
@@ -92,11 +108,36 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         .replaceAll('ç', 'c');
   }
 
-  Future<void> _loadPinnedConversations() async {
+  Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final pinned = prefs.getStringList('quick_messages_pinned_conversations');
-    if (!mounted || pinned == null) return;
-    setState(() => _pinnedConversationIds = pinned.toSet());
+    final showOnlyActive =
+        prefs.getBool(ConversationActivity.activeOnlyPreferenceKey) ?? true;
+    if (!mounted) return;
+    if (ConversationActivity.showOnlyActiveChats.value != showOnlyActive) {
+      ConversationActivity.showOnlyActiveChats.value = showOnlyActive;
+    }
+    setState(() {
+      _pinnedConversationIds = pinned?.toSet() ?? {};
+      _showOnlyActiveChats = ConversationActivity.showOnlyActiveChats.value;
+    });
+  }
+
+  Future<void> _setShowOnlyActiveChats(bool value) async {
+    if (ConversationActivity.showOnlyActiveChats.value != value) {
+      ConversationActivity.showOnlyActiveChats.value = value;
+    } else if (mounted) {
+      setState(() => _showOnlyActiveChats = value);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(ConversationActivity.activeOnlyPreferenceKey, value);
+  }
+
+  void _handleActiveModeChanged() {
+    if (!mounted) return;
+    final value = ConversationActivity.showOnlyActiveChats.value;
+    if (_showOnlyActiveChats == value) return;
+    setState(() => _showOnlyActiveChats = value);
   }
 
   Future<void> _loadWhatsAppContacts() async {
@@ -122,6 +163,33 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       debugPrint('Error loading WhatsApp contact search candidates: $error');
       if (mounted) {
         setState(() => _isLoadingWhatsAppContacts = false);
+      }
+    }
+  }
+
+  Future<void> _loadSupplierChatData() async {
+    if (_isLoadingSupplierChats) return;
+    setState(() => _isLoadingSupplierChats = true);
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final suppliers = await purchaseService.getSuppliers(activeOnly: true);
+      final invoices = await purchaseService.getPurchaseInvoicesForList();
+
+      if (!mounted) return;
+      setState(() {
+        _supplierChatSuppliers = suppliers
+            .where((supplier) => _supplierChatPhone(supplier) != null)
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+        _supplierChatInvoices = invoices;
+        _isLoadingSupplierChats = false;
+      });
+    } catch (error) {
+      debugPrint('Error loading supplier chats in quick panel: $error');
+      if (mounted) {
+        setState(() => _isLoadingSupplierChats = false);
       }
     }
   }
@@ -153,6 +221,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     await context
         .read<ChatProvider>()
         .loadConversations(refreshContextHints: true);
+    await _loadSupplierChatData();
     if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
       await _loadWhatsAppContacts();
     }
@@ -315,6 +384,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                 ),
               ),
               const SizedBox(width: 8),
+              _buildActiveModeToggleButton(),
+              const SizedBox(width: 8),
               IconButton.outlined(
                 tooltip: 'Recargar',
                 onPressed: _isRefreshing ? null : _refresh,
@@ -363,7 +434,84 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
+  Widget _buildActiveModeToggleButton() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final active = _showOnlyActiveChats;
+
+    return Tooltip(
+      waitDuration: const Duration(milliseconds: 1500),
+      message: active
+          ? 'Solo activos: muestra clientes y proveedores con trabajos, facturas o compras abiertas.'
+          : 'Historial completo: muestra también conversaciones y documentos cerrados.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => unawaited(_setShowOnlyActiveChats(!active)),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 24,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: active
+                ? colorScheme.primary.withValues(alpha: 0.18)
+                : colorScheme.onSurfaceVariant.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active
+                  ? colorScheme.primary.withValues(alpha: 0.45)
+                  : colorScheme.outlineVariant,
+            ),
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            alignment: active ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: active ? colorScheme.primary : colorScheme.surface,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Icon(
+                active ? Icons.filter_alt : Icons.history,
+                size: 12,
+                color: active ? colorScheme.onPrimary : colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterStrip(ChatProvider provider) {
+    final visibleConversations =
+        provider.conversations.where(_matchesActivityMode).toList();
+    final supplierEntries = _quickSupplierEntries(
+      provider.conversations
+          .where((conversation) => conversation.isSupplierConversation)
+          .toList(),
+      includeInactive: !_showOnlyActiveChats,
+    );
+    final supplierConversationIds = supplierEntries
+        .map((entry) => entry.conversation?.id)
+        .whereType<String>()
+        .toSet();
+    final visibleNonSupplierConversations = visibleConversations
+        .where(
+          (conversation) => !supplierConversationIds.contains(conversation.id),
+        )
+        .toList();
+
     return SizedBox(
       height: 40,
       child: ListView(
@@ -371,23 +519,41 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         scrollDirection: Axis.horizontal,
         children: [
           _buildFilterChip(
-              _MessageFilter.all, 'Todos', provider.conversations.length),
+            _MessageFilter.all,
+            'Todos',
+            visibleNonSupplierConversations.length + supplierEntries.length,
+          ),
           _buildFilterChip(
-              _MessageFilter.unread, 'Sin leer', provider.totalUnreadCount),
+            _MessageFilter.unread,
+            'Sin leer',
+            visibleNonSupplierConversations
+                .where((conversation) =>
+                    conversation.unreadCount > 0 ||
+                    (conversation.isSupport &&
+                        conversation.status == 'pending'))
+                .length,
+          ),
           _buildFilterChip(
             _MessageFilter.whatsapp,
             'WhatsApp',
-            provider.conversations.where((c) => c.isWhatsApp).length,
+            visibleNonSupplierConversations.where((c) => c.isWhatsApp).length,
           ),
           _buildFilterChip(
             _MessageFilter.clients,
             'Clientes',
-            provider.conversations.where((c) => c.isSupport).length,
+            visibleNonSupplierConversations
+                .where((c) => c.isSupport && !c.isSupplierConversation)
+                .length,
+          ),
+          _buildFilterChip(
+            _MessageFilter.suppliers,
+            'Proveedores',
+            supplierEntries.length,
           ),
           _buildFilterChip(
             _MessageFilter.team,
             'Equipo',
-            provider.conversations.where((c) => c.isInternal).length,
+            visibleNonSupplierConversations.where((c) => c.isInternal).length,
           ),
         ],
       ),
@@ -402,6 +568,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       _MessageFilter.unread => const Color(0xFF16A34A),
       _MessageFilter.whatsapp => const Color(0xFF047857),
       _MessageFilter.clients => const Color(0xFF0F4C81),
+      _MessageFilter.suppliers => const Color(0xFF7C3AED),
       _MessageFilter.team => const Color(0xFF475569),
       _MessageFilter.all => colorScheme.primary,
     };
@@ -487,7 +654,22 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Widget _buildConversationList(ChatProvider provider) {
     final isSearching = _searchTerm.isNotEmpty;
+    final supplierEntries = _quickSupplierEntries(
+      provider.conversations
+          .where((conversation) => conversation.isSupplierConversation)
+          .toList(),
+      includeInactive: !_showOnlyActiveChats,
+    ).where((entry) => _matchesSupplierEntryFilter(entry, isSearching)).toList()
+      ..sort(_compareSupplierEntries);
+    final supplierConversationIds = supplierEntries
+        .map((entry) => entry.conversation?.id)
+        .whereType<String>()
+        .toSet();
     final conversations = provider.conversations
+        .where(_matchesActivityMode)
+        .where(
+          (conversation) => !supplierConversationIds.contains(conversation.id),
+        )
         .where((conversation) => isSearching || _matchesFilter(conversation))
         .where((conversation) => _matchesSearch(provider, conversation))
         .toList()
@@ -497,9 +679,15 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         : <Customer>[];
 
     if (conversations.isEmpty &&
+        supplierEntries.isEmpty &&
         contactMatches.isEmpty &&
         !(isSearching && _isLoadingWhatsAppContacts)) {
-      return _buildEmptyState(provider.conversations.isEmpty);
+      return _buildEmptyState(
+        provider.conversations.isEmpty,
+        activeModeEmpty: _showOnlyActiveChats &&
+            provider.conversations.isNotEmpty &&
+            !provider.conversations.any(_matchesActivityMode),
+      );
     }
 
     return RefreshIndicator(
@@ -517,6 +705,18 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           for (final conversation in conversations) ...[
             _buildConversationResult(provider, conversation),
             const Divider(height: 1),
+          ],
+          if (supplierEntries.isNotEmpty) ...[
+            if (isSearching || _filter != _MessageFilter.suppliers)
+              _buildSearchSectionHeader(
+                icon: Icons.storefront_outlined,
+                title: 'Proveedores',
+                count: supplierEntries.length,
+              ),
+            for (final entry in supplierEntries) ...[
+              _buildSupplierResult(entry),
+              const Divider(height: 1),
+            ],
           ],
           if (isSearching &&
               (contactMatches.isNotEmpty || _isLoadingWhatsAppContacts)) ...[
@@ -556,6 +756,160 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       onTogglePinned: () => _togglePinnedConversation(conversation.id),
       onDelete: () => _confirmDelete(provider, conversation),
     );
+  }
+
+  Widget _buildSupplierResult(_QuickSupplierChatEntry entry) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final conversation = entry.conversation;
+    final isSelected = conversation != null &&
+        _selectedConversationId != null &&
+        conversation.id == _selectedConversationId;
+    final isOpening = _openingSupplierId == entry.supplier.id;
+    final preview = conversation?.lastMessageContent?.trim();
+    final invoice = entry.relevantInvoice(_showOnlyActiveChats);
+
+    return Material(
+      color: isSelected
+          ? colorScheme.primary.withValues(alpha: 0.1)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: isOpening ? null : () => _openSupplierChat(entry),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                child: Text(
+                  _supplierInitials(entry.supplier.name),
+                  style: const TextStyle(
+                    color: Color(0xFF7C3AED),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.supplier.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      preview?.isNotEmpty == true
+                          ? preview!
+                          : '${entry.phone} · Proveedor WhatsApp',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    if (invoice != null) ...[
+                      const SizedBox(height: 6),
+                      _buildSupplierInvoiceChip(invoice),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isOpening)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  conversation == null
+                      ? Icons.add_comment_outlined
+                      : Icons.chevron_right,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplierInvoiceChip(PurchaseInvoice invoice) {
+    final color = _purchaseInvoiceStatusColor(invoice.status);
+    final number = invoice.invoiceNumber.isEmpty
+        ? invoice.supplierInvoiceNumber ?? 'Compra'
+        : invoice.invoiceNumber;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        '$number · ${invoice.status.displayName} · ${_formatCLP(invoice.balance > 0 ? invoice.balance : invoice.total)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSupplierChat(_QuickSupplierChatEntry entry) async {
+    final conversation = entry.conversation;
+    if (conversation != null) {
+      _openConversationInPanel(conversation);
+      return;
+    }
+
+    setState(() => _openingSupplierId = entry.supplier.id);
+    try {
+      final provider = context.read<ChatProvider>();
+      await provider.openWhatsAppCustomerChat(
+        phoneNumber: entry.phone,
+        contactName: entry.supplier.name,
+        contextType: 'supplier',
+        contextId: entry.supplier.id,
+      );
+      if (!mounted) return;
+      final conversationId = provider.activeConversationId;
+      setState(() {
+        _selectedConversationId = conversationId;
+        _panelActiveConversationId = conversationId;
+        _openingSupplierId = null;
+      });
+      _searchController.clear();
+    } catch (error) {
+      debugPrint('Error opening WhatsApp supplier from quick panel: $error');
+      if (!mounted) return;
+      setState(() => _openingSupplierId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo iniciar el chat del proveedor'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _openConversationInPanel(Conversation conversation) {
@@ -712,15 +1066,262 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
+  List<_QuickSupplierChatEntry> _quickSupplierEntries(
+    List<Conversation> supplierConversations, {
+    required bool includeInactive,
+  }) {
+    final entries = <_QuickSupplierChatEntry>[];
+    final usedConversationIds = <String>{};
+
+    for (final supplier in _supplierChatSuppliers) {
+      final phone = _supplierChatPhone(supplier);
+      if (phone == null) continue;
+      final conversation = _findSupplierConversation(
+        supplier,
+        supplierConversations,
+      );
+      if (conversation != null) usedConversationIds.add(conversation.id);
+
+      final invoices = _supplierInvoices(supplier.id);
+      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
+      final hasStandaloneActiveConversation = invoices.isEmpty &&
+          conversation != null &&
+          ConversationActivity.isActiveConversation(conversation);
+      if (!includeInactive &&
+          !hasActiveInvoices &&
+          !hasStandaloneActiveConversation) {
+        continue;
+      }
+
+      entries.add(
+        _QuickSupplierChatEntry(
+          supplier: supplier,
+          phone: phone,
+          conversation: conversation,
+          invoices: invoices,
+        ),
+      );
+    }
+
+    for (final conversation in supplierConversations) {
+      if (usedConversationIds.contains(conversation.id)) continue;
+      final phone = conversation.contextHint?.supplierPhone ??
+          conversation.contextHint?.phone ??
+          '';
+      if (!_hasWhatsAppPhone(phone)) continue;
+      final supplier = _supplierFromConversation(conversation, phone);
+      final invoices = supplier.id.isEmpty
+          ? <PurchaseInvoice>[]
+          : _supplierInvoices(supplier.id);
+      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
+      final hasActiveWork = hasActiveInvoices ||
+          (invoices.isEmpty &&
+              ConversationActivity.isActiveConversation(conversation));
+      if (!includeInactive && !hasActiveWork) continue;
+
+      entries.add(
+        _QuickSupplierChatEntry(
+          supplier: supplier,
+          phone: phone,
+          conversation: conversation,
+          invoices: invoices,
+        ),
+      );
+    }
+
+    return entries;
+  }
+
+  Conversation? _findSupplierConversation(
+    shared_supplier.Supplier supplier,
+    List<Conversation> conversations,
+  ) {
+    for (final conversation in conversations) {
+      if (conversation.contextHint?.supplierId == supplier.id ||
+          (conversation.contextType == 'supplier' &&
+              conversation.contextId == supplier.id)) {
+        return conversation;
+      }
+    }
+
+    final supplierPhones = _phoneCandidates(_supplierChatPhone(supplier));
+    if (supplierPhones.isEmpty) return null;
+    for (final conversation in conversations) {
+      final conversationPhones = _phoneCandidates(
+        conversation.contextHint?.supplierPhone ??
+            conversation.contextHint?.phone,
+      );
+      if (supplierPhones.intersection(conversationPhones).isNotEmpty) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  shared_supplier.Supplier _supplierFromConversation(
+    Conversation conversation,
+    String phone,
+  ) {
+    final now = DateTime.now();
+    return shared_supplier.Supplier(
+      id: conversation.contextHint?.supplierId ?? conversation.contextId ?? '',
+      tenantId: '',
+      name: conversation.contextHint?.supplierLabel ??
+          conversation.creatorName ??
+          conversation.title ??
+          phone,
+      phone: phone,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  List<PurchaseInvoice> _supplierInvoices(String supplierId) {
+    if (supplierId.isEmpty) return const [];
+    final invoices = _supplierChatInvoices
+        .where((invoice) => invoice.supplierId == supplierId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return invoices;
+  }
+
+  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
+    return ConversationActivity.isActivePurchaseInvoiceStatus(
+      invoice.status.name,
+    );
+  }
+
+  bool _matchesSupplierEntryFilter(
+    _QuickSupplierChatEntry entry,
+    bool isSearching,
+  ) {
+    if (!_matchesSupplierSearch(entry)) return false;
+
+    if (isSearching) {
+      return switch (_filter) {
+        _MessageFilter.all ||
+        _MessageFilter.whatsapp ||
+        _MessageFilter.suppliers =>
+          true,
+        _MessageFilter.unread => (entry.conversation?.unreadCount ?? 0) > 0,
+        _MessageFilter.clients || _MessageFilter.team => false,
+      };
+    }
+
+    return switch (_filter) {
+      _MessageFilter.all || _MessageFilter.suppliers => true,
+      _MessageFilter.unread => (entry.conversation?.unreadCount ?? 0) > 0,
+      _MessageFilter.whatsapp ||
+      _MessageFilter.clients ||
+      _MessageFilter.team =>
+        false,
+    };
+  }
+
+  bool _matchesSupplierSearch(_QuickSupplierChatEntry entry) {
+    if (_searchTerm.isEmpty) return true;
+    final haystack = _normalizeSearchText([
+      entry.supplier.name,
+      entry.phone,
+      entry.conversation?.lastMessageContent ?? '',
+      for (final invoice in entry.invoices)
+        '${invoice.invoiceNumber} ${invoice.supplierInvoiceNumber ?? ''} ${invoice.status.displayName}',
+    ].join(' '));
+    return haystack.contains(_searchTerm);
+  }
+
+  int _compareSupplierEntries(
+    _QuickSupplierChatEntry a,
+    _QuickSupplierChatEntry b,
+  ) {
+    final aDate = a.lastActivityAt;
+    final bDate = b.lastActivityAt;
+    if (aDate != null && bDate != null) {
+      final dateCompare = bDate.compareTo(aDate);
+      if (dateCompare != 0) return dateCompare;
+    }
+    if (aDate != null) return -1;
+    if (bDate != null) return 1;
+    return a.supplier.name.toLowerCase().compareTo(
+          b.supplier.name.toLowerCase(),
+        );
+  }
+
+  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
+    final salesRepPhone = supplier.salesRepPhone?.trim();
+    if (_hasWhatsAppPhone(salesRepPhone)) return salesRepPhone;
+    final phone = supplier.phone?.trim();
+    if (_hasWhatsAppPhone(phone)) return phone;
+    return null;
+  }
+
+  Set<String> _phoneCandidates(String? phone) {
+    final digits = _normalizedPhone(phone);
+    if (digits.isEmpty) return {};
+    final candidates = <String>{digits};
+    if (digits.startsWith('56') && digits.length > 2) {
+      candidates.add(digits.substring(2));
+    }
+    if (digits.startsWith('9') && digits.length == 9) {
+      candidates.add('56$digits');
+    }
+    if (digits.length >= 8) {
+      candidates.add(digits.substring(digits.length - 8));
+    }
+    return candidates;
+  }
+
+  String _supplierInitials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'P';
+    if (parts.length == 1) {
+      return parts.first.characters.take(2).toString().toUpperCase();
+    }
+    return '${parts.first.characters.first}${parts.last.characters.first}'
+        .toUpperCase();
+  }
+
+  Color _purchaseInvoiceStatusColor(PurchaseInvoiceStatus status) {
+    return switch (status) {
+      PurchaseInvoiceStatus.paid => const Color(0xFF2563EB),
+      PurchaseInvoiceStatus.received => const Color(0xFF16A34A),
+      PurchaseInvoiceStatus.confirmed => const Color(0xFF7C3AED),
+      PurchaseInvoiceStatus.sent => const Color(0xFF0EA5E9),
+      PurchaseInvoiceStatus.cancelled => const Color(0xFFDC2626),
+      PurchaseInvoiceStatus.draft => const Color(0xFF64748B),
+    };
+  }
+
+  String _formatCLP(double value) {
+    final rounded = value.round().toString();
+    final formatted = rounded.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => '.',
+    );
+    return '\$$formatted';
+  }
+
   bool _matchesFilter(Conversation conversation) {
     return switch (_filter) {
       _MessageFilter.all => true,
       _MessageFilter.unread => conversation.unreadCount > 0 ||
           (conversation.isSupport && conversation.status == 'pending'),
       _MessageFilter.whatsapp => conversation.isWhatsApp,
-      _MessageFilter.clients => conversation.isSupport,
+      _MessageFilter.clients =>
+        conversation.isSupport && !conversation.isSupplierConversation,
+      _MessageFilter.suppliers => conversation.isSupplierConversation,
       _MessageFilter.team => conversation.isInternal,
     };
+  }
+
+  bool _matchesActivityMode(Conversation conversation) {
+    return !_showOnlyActiveChats ||
+        conversation.isInternal ||
+        ConversationActivity.isActiveConversation(conversation);
   }
 
   bool _matchesSearch(ChatProvider provider, Conversation conversation) {
@@ -731,9 +1332,13 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       conversation.title ?? '',
       conversation.creatorName ?? '',
       conversation.contextHint?.customerLabel ?? '',
+      conversation.contextHint?.supplierLabel ?? '',
       conversation.contextHint?.phone ?? '',
+      conversation.contextHint?.supplierPhone ?? '',
       conversation.contextHint?.jobNumber ?? '',
       conversation.contextHint?.jobStatus ?? '',
+      conversation.contextHint?.purchaseInvoiceNumber ?? '',
+      conversation.contextHint?.purchaseInvoiceStatus ?? '',
       conversation.contextHint?.bikeName ?? '',
       conversation.channelLabel,
       conversation.lastMessageContent ?? '',
@@ -847,6 +1452,10 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         return 'Trabajo';
       case 'invoice':
         return 'Factura';
+      case 'purchase_invoice':
+        return 'Compra';
+      case 'supplier':
+        return 'Proveedor';
       case 'bike':
         return 'Bicicleta';
       case 'customer':
@@ -897,14 +1506,21 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     return success;
   }
 
-  Widget _buildEmptyState(bool isTotallyEmpty) {
+  Widget _buildEmptyState(
+    bool isTotallyEmpty, {
+    bool activeModeEmpty = false,
+  }) {
     final theme = Theme.of(context);
-    final title = isTotallyEmpty
-        ? 'Sin conversaciones'
-        : 'No hay mensajes para este filtro';
-    final subtitle = isTotallyEmpty
-        ? 'Los chats internos, web y WhatsApp aparecerán aquí.'
-        : 'Prueba con otro filtro o limpia la búsqueda.';
+    final title = activeModeEmpty
+        ? 'Sin chats activos'
+        : isTotallyEmpty
+            ? 'Sin conversaciones'
+            : 'No hay mensajes para este filtro';
+    final subtitle = activeModeEmpty
+        ? 'Desactiva "Solo activos" para ver el historial completo.'
+        : isTotallyEmpty
+            ? 'Los chats internos, web y WhatsApp aparecerán aquí.'
+            : 'Prueba con otro filtro o limpia la búsqueda.';
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -936,5 +1552,41 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         ),
       ],
     );
+  }
+}
+
+class _QuickSupplierChatEntry {
+  final shared_supplier.Supplier supplier;
+  final String phone;
+  final Conversation? conversation;
+  final List<PurchaseInvoice> invoices;
+
+  const _QuickSupplierChatEntry({
+    required this.supplier,
+    required this.phone,
+    required this.conversation,
+    required this.invoices,
+  });
+
+  List<PurchaseInvoice> get activeInvoices => invoices
+      .where(
+        (invoice) => ConversationActivity.isActivePurchaseInvoiceStatus(
+          invoice.status.name,
+        ),
+      )
+      .toList();
+
+  PurchaseInvoice? relevantInvoice(bool showOnlyActive) {
+    final relevantInvoices = showOnlyActive ? activeInvoices : invoices;
+    if (relevantInvoices.isEmpty) return null;
+    return relevantInvoices.first;
+  }
+
+  DateTime? get lastActivityAt {
+    final conversationDate =
+        conversation?.lastMessageAt ?? conversation?.updatedAt;
+    if (conversationDate != null) return conversationDate;
+    if (invoices.isEmpty) return null;
+    return invoices.first.date;
   }
 }
