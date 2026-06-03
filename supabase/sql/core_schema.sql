@@ -22310,23 +22310,117 @@ create table if not exists companies (
   tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
   legal_name text,
+  fantasy_name text,
   tax_id text,
+  rut text,
+  business_activity text,
   address text,
+  comuna text,
   city text,
+  region text,
+  postal_code text,
   country text default 'Chile',
   phone text,
+  whatsapp_phone text,
+  whatsapp_api_phone text,
+  support_phone text,
   email text,
+  billing_email text,
+  public_email text,
+  website_url text,
   is_default boolean default false,
+  metadata jsonb not null default '{}'::jsonb,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
   unique(tenant_id, tax_id)
 );
 
+alter table companies
+  add column if not exists legal_name text,
+  add column if not exists fantasy_name text,
+  add column if not exists tax_id text,
+  add column if not exists rut text,
+  add column if not exists business_activity text,
+  add column if not exists address text,
+  add column if not exists comuna text,
+  add column if not exists city text,
+  add column if not exists region text,
+  add column if not exists postal_code text,
+  add column if not exists country text default 'Chile',
+  add column if not exists phone text,
+  add column if not exists whatsapp_phone text,
+  add column if not exists whatsapp_api_phone text,
+  add column if not exists support_phone text,
+  add column if not exists email text,
+  add column if not exists billing_email text,
+  add column if not exists public_email text,
+  add column if not exists website_url text,
+  add column if not exists is_default boolean default false,
+  add column if not exists updated_at timestamp with time zone not null default now(),
+  add column if not exists metadata jsonb not null default '{}'::jsonb;
+
 do $$ begin
   create index if not exists idx_companies_tenant on companies(tenant_id);
+  create index if not exists idx_companies_default on companies(tenant_id, is_default);
+  create index if not exists idx_companies_identity_search on companies using gin (
+    to_tsvector(
+      'spanish',
+      coalesce(name, '') || ' ' ||
+      coalesce(legal_name, '') || ' ' ||
+      coalesce(fantasy_name, '') || ' ' ||
+      coalesce(tax_id, '') || ' ' ||
+      coalesce(business_activity, '')
+    )
+  );
 exception
   when undefined_table then raise notice '⚠ Table companies does not exist';
   when undefined_column then raise notice '⚠ Column tenant_id does not exist in companies';
+end $$;
+
+-- Company bank accounts (Chilean transfer destinations)
+create table if not exists company_bank_accounts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  company_id uuid references companies(id) on delete cascade not null,
+  label text not null default 'Cuenta principal',
+  bank_name text not null,
+  account_type text not null default 'Cuenta corriente',
+  account_number text not null,
+  account_holder_name text not null,
+  account_holder_rut text not null,
+  contact_email text,
+  currency text not null default 'CLP',
+  is_default boolean not null default false,
+  is_active boolean not null default true,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+alter table company_bank_accounts
+  add column if not exists label text not null default 'Cuenta principal',
+  add column if not exists bank_name text,
+  add column if not exists account_type text not null default 'Cuenta corriente',
+  add column if not exists account_number text,
+  add column if not exists account_holder_name text,
+  add column if not exists account_holder_rut text,
+  add column if not exists contact_email text,
+  add column if not exists currency text not null default 'CLP',
+  add column if not exists is_default boolean not null default false,
+  add column if not exists is_active boolean not null default true,
+  add column if not exists notes text,
+  add column if not exists updated_at timestamp with time zone not null default now();
+
+do $$ begin
+  create index if not exists idx_company_bank_accounts_tenant
+    on company_bank_accounts(tenant_id);
+  create index if not exists idx_company_bank_accounts_company
+    on company_bank_accounts(company_id);
+  create index if not exists idx_company_bank_accounts_default
+    on company_bank_accounts(tenant_id, company_id, is_default);
+exception
+  when undefined_table then raise notice '⚠ Table company_bank_accounts does not exist';
+  when undefined_column then raise notice '⚠ Column tenant_id does not exist in company_bank_accounts';
 end $$;
 
 -- Content items (for website builder CMS)
@@ -22711,6 +22805,16 @@ do $$ begin
   drop policy if exists companies_tenant_isolation on companies;
   create policy companies_tenant_isolation on companies
     for all using (tenant_id = public.user_tenant_id());
+exception when others then null; end $$;
+
+-- company_bank_accounts
+do $$ begin
+  alter table company_bank_accounts enable row level security;
+  drop policy if exists company_bank_accounts_tenant_isolation
+    on company_bank_accounts;
+  create policy company_bank_accounts_tenant_isolation on company_bank_accounts
+    for all using (tenant_id = public.user_tenant_id())
+    with check (tenant_id = public.user_tenant_id());
 exception when others then null; end $$;
 
 -- content_items

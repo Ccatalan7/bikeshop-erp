@@ -81,6 +81,12 @@ class _SettingsPageState extends State<SettingsPage> {
         color: colorScheme.primary,
         entries: const [
           _SettingsEntry(
+            icon: Icons.business_center_outlined,
+            title: 'Datos de empresa',
+            subtitle: 'Razon social, RUT, giro, contacto y direccion',
+            route: '/settings/company',
+          ),
+          _SettingsEntry(
             icon: Icons.people_outline,
             title: 'Usuarios y roles',
             subtitle: 'Invitaciones, permisos y estado de acceso',

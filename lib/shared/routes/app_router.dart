@@ -30,6 +30,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         CategoryFormPage,
         ClientLogbookPage,
         ContentManagementPage,
+        CompanySettingsPage,
         CustomerBikeDirectoryPage,
         CustomerFormPage,
         CustomerListPage,
@@ -2268,6 +2269,17 @@ class AppRouter {
             erp.loadLibrary(),
             () => MainLayout(
               child: erp.AppearanceSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/company',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.CompanySettingsPage(),
             ),
           ),
         ),
