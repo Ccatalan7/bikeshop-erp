@@ -6,6 +6,10 @@ class Supplier {
   final String id;
   final String tenantId; // MULTI-TENANT ISOLATION
   final String name;
+  final String? legalName;
+  final String? tradeName;
+  final String? ownerName;
+  final List<String> aliases;
   final String? email;
   final String? phone;
   final String? rut; // Chilean RUT for businesses
@@ -37,6 +41,10 @@ class Supplier {
     required this.id,
     required this.tenantId,
     required this.name,
+    this.legalName,
+    this.tradeName,
+    this.ownerName,
+    this.aliases = const [],
     this.email,
     this.phone,
     this.rut,
@@ -69,6 +77,10 @@ class Supplier {
       id: json['id'] as String,
       tenantId: json['tenant_id'] as String,
       name: json['name'] as String,
+      legalName: json['legal_name'] as String?,
+      tradeName: json['trade_name'] as String?,
+      ownerName: json['owner_name'] as String?,
+      aliases: _stringListFromJson(json['aliases']),
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       rut: json['rut'] as String?,
@@ -109,6 +121,10 @@ class Supplier {
       'id': id,
       'tenant_id': tenantId,
       'name': name,
+      'legal_name': legalName,
+      'trade_name': tradeName,
+      'owner_name': ownerName,
+      'aliases': aliases,
       'email': email,
       'phone': phone,
       'rut': rut,
@@ -141,6 +157,10 @@ class Supplier {
     String? id,
     String? tenantId,
     String? name,
+    String? legalName,
+    String? tradeName,
+    String? ownerName,
+    List<String>? aliases,
     String? email,
     String? phone,
     String? rut,
@@ -171,6 +191,10 @@ class Supplier {
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
       name: name ?? this.name,
+      legalName: legalName ?? this.legalName,
+      tradeName: tradeName ?? this.tradeName,
+      ownerName: ownerName ?? this.ownerName,
+      aliases: aliases ?? this.aliases,
       email: email ?? this.email,
       phone: phone ?? this.phone,
       rut: rut ?? this.rut,
@@ -209,7 +233,45 @@ class Supplier {
 
   String get formattedRut => rut != null ? ChileanUtils.formatRut(rut!) : '';
 
-  String get displayName => name;
+  String get displayName {
+    final commercial = tradeName?.trim();
+    return commercial == null || commercial.isEmpty ? name : commercial;
+  }
+
+  List<String> get identityNames {
+    final values = <String>[
+      name,
+      if ((legalName ?? '').trim().isNotEmpty) legalName!.trim(),
+      if ((tradeName ?? '').trim().isNotEmpty) tradeName!.trim(),
+      if ((ownerName ?? '').trim().isNotEmpty) ownerName!.trim(),
+      ...aliases.map((alias) => alias.trim()),
+    ];
+    final seen = <String>{};
+    return values.where((value) {
+      if (value.isEmpty) return false;
+      final key = value.toLowerCase();
+      if (seen.contains(key)) return false;
+      seen.add(key);
+      return true;
+    }).toList(growable: false);
+  }
+
+  static List<String> _stringListFromJson(dynamic value) {
+    if (value == null) return const [];
+    if (value is List) {
+      return value
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+    final text = value.toString().trim();
+    if (text.isEmpty) return const [];
+    return text
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
 
   String get fullAddress {
     final parts = <String>[];

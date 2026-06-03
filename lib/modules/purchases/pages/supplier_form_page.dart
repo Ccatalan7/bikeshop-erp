@@ -30,6 +30,10 @@ class _SupplierFormPageState extends State<SupplierFormPage>
 
   // Controllers
   final _nameController = TextEditingController();
+  final _legalNameController = TextEditingController();
+  final _tradeNameController = TextEditingController();
+  final _ownerNameController = TextEditingController();
+  final _aliasesController = TextEditingController();
   final _rutController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -73,6 +77,10 @@ class _SupplierFormPageState extends State<SupplierFormPage>
   @override
   void dispose() {
     _nameController.dispose();
+    _legalNameController.dispose();
+    _tradeNameController.dispose();
+    _ownerNameController.dispose();
+    _aliasesController.dispose();
     _rutController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -157,6 +165,10 @@ class _SupplierFormPageState extends State<SupplierFormPage>
       if (supplier != null) {
         _existing = supplier;
         _nameController.text = supplier.name;
+        _legalNameController.text = supplier.legalName ?? '';
+        _tradeNameController.text = supplier.tradeName ?? '';
+        _ownerNameController.text = supplier.ownerName ?? '';
+        _aliasesController.text = supplier.aliases.join(', ');
         _rutController.text = supplier.rut ?? '';
         _emailController.text = supplier.email ?? '';
         _phoneController.text = supplier.phone ?? '';
@@ -212,6 +224,10 @@ class _SupplierFormPageState extends State<SupplierFormPage>
       id: _existing?.id ?? '',
       tenantId: _existing?.tenantId ?? '',
       name: _nameController.text.trim(),
+      legalName: _emptyToNull(_legalNameController.text),
+      tradeName: _emptyToNull(_tradeNameController.text),
+      ownerName: _emptyToNull(_ownerNameController.text),
+      aliases: _parseAliases(_aliasesController.text),
       email: _emailController.text.trim().isEmpty
           ? null
           : _emailController.text.trim(),
@@ -304,6 +320,25 @@ class _SupplierFormPageState extends State<SupplierFormPage>
           content: Text('$label copiado al portapapeles'),
           duration: const Duration(seconds: 2)),
     );
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  List<String> _parseAliases(String value) {
+    final aliases = value
+        .split(RegExp(r'[,;\n]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty);
+    final seen = <String>{};
+    return aliases.where((alias) {
+      final key = alias.toLowerCase();
+      if (seen.contains(key)) return false;
+      seen.add(key);
+      return true;
+    }).toList(growable: false);
   }
 
   @override
@@ -505,6 +540,14 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             const Divider(),
             const SizedBox(height: 16),
             _buildInfoRow(Icons.badge_outlined, 'RUT', _rutController.text),
+            _buildInfoRow(Icons.apartment_outlined, 'Razón social',
+                _legalNameController.text),
+            _buildInfoRow(Icons.storefront_outlined, 'Nombre comercial',
+                _tradeNameController.text),
+            _buildInfoRow(Icons.hub_outlined, 'Dueño / matriz',
+                _ownerNameController.text),
+            _buildInfoRow(
+                Icons.label_outline, 'Alias OCR', _aliasesController.text),
             _buildInfoRow(Icons.email_outlined, 'Email', _emailController.text),
             _buildInfoRow(
                 Icons.phone_outlined, 'Teléfono', _phoneController.text),
@@ -845,7 +888,9 @@ class _SupplierFormPageState extends State<SupplierFormPage>
               child: TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                    labelText: 'Nombre legal / Empresa *'),
+                  labelText: 'Nombre interno / proveedor *',
+                  hintText: 'Ej: Starken',
+                ),
                 validator: (val) =>
                     (val == null || val.trim().isEmpty) ? 'Requerido' : null,
               ),
@@ -861,6 +906,56 @@ class _SupplierFormPageState extends State<SupplierFormPage>
                         !ChileanUtils.isValidRut(val.trim()))
                     ? 'RUT inválido'
                     : null,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _legalNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Razón social / emisor legal',
+                  hintText: 'Ej: Kaudat SpA',
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _tradeNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre comercial / marca',
+                  hintText: 'Ej: Starken',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _ownerNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Dueño / matriz',
+                  hintText: 'Ej: Kaudat SpA',
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _aliasesController,
+                decoration: const InputDecoration(
+                  labelText: 'Alias OCR / nombres equivalentes',
+                  hintText: 'Kaudat, Kaudat SpA, Starken',
+                ),
               ),
             ),
           ],

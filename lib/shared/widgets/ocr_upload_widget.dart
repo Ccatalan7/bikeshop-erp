@@ -1578,15 +1578,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                           ),
                           onChanged: (value) {
                             setState(() {
-                              searchQuery = value.toLowerCase();
+                              searchQuery = _normalizeSimilarityText(value);
                               filteredSuppliers = allSuppliers
                                   .where((s) =>
-                                      s.name
-                                          .toLowerCase()
+                                      _supplierSearchText(s)
                                           .contains(searchQuery) ||
                                       (s.rut != null &&
-                                          s.rut!
-                                              .toLowerCase()
+                                          _normalizeSimilarityText(s.rut!)
                                               .contains(searchQuery)))
                                   .toList();
                             });
@@ -1604,10 +1602,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   itemBuilder: (context, index) {
                                     final supplier = filteredSuppliers[index];
                                     return ListTile(
-                                      title: Text(supplier.name),
-                                      subtitle: supplier.rut != null
-                                          ? Text(supplier.rut!)
-                                          : null,
+                                      title: Text(supplier.displayName),
+                                      subtitle: Text(
+                                        _supplierSubtitle(supplier),
+                                      ),
                                       onTap: () {
                                         this.setState(() {
                                           _ocrSupplier = supplier;
@@ -3359,7 +3357,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   ) {
     if (suppliers.isEmpty) return null;
 
-    final normalizedRaw = rawName.toLowerCase().trim();
+    final normalizedRaw = _normalizeSimilarityText(rawName);
     if (normalizedRaw.isEmpty) return null;
 
     if (_isAliExpressSupplierName(normalizedRaw)) {
@@ -3368,25 +3366,62 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       } catch (_) {}
     }
 
+    if (normalizedRaw.contains('kaudat')) {
+      try {
+        return suppliers.firstWhere((s) {
+          final supplierText = _supplierSearchText(s);
+          return supplierText.contains('starken') ||
+              supplierText.contains('kaudat');
+        });
+      } catch (_) {}
+    }
+
     // 1. Exact match
     try {
       return suppliers
-          .firstWhere((s) => s.name.toLowerCase().trim() == normalizedRaw);
+          .firstWhere((s) => _supplierIdentityTerms(s).contains(normalizedRaw));
     } catch (_) {}
 
     // 2. Database name contains OCR name (e.g. DB: "Big Supplier Inc", OCR: "Supplier")
     try {
-      return suppliers
-          .firstWhere((s) => s.name.toLowerCase().contains(normalizedRaw));
+      return suppliers.firstWhere((s) => _supplierIdentityTerms(s).any(
+            (term) => term.contains(normalizedRaw),
+          ));
     } catch (_) {}
 
     // 3. OCR name contains Database name (e.g. OCR: "DERMAN CICLISMO...", DB: "Derman")
     try {
       return suppliers.firstWhere(
-          (s) => normalizedRaw.contains(s.name.toLowerCase().trim()));
+        (s) => _supplierIdentityTerms(s).any(normalizedRaw.contains),
+      );
     } catch (_) {}
 
     return null;
+  }
+
+  List<String> _supplierIdentityTerms(shared_supplier.Supplier supplier) {
+    return supplier.identityNames
+        .map(_normalizeSimilarityText)
+        .where((term) => term.length >= 3)
+        .toList(growable: false);
+  }
+
+  String _supplierSearchText(shared_supplier.Supplier supplier) {
+    return _normalizeSimilarityText([
+      ...supplier.identityNames,
+      supplier.rut ?? '',
+      supplier.phone ?? '',
+    ].join(' '));
+  }
+
+  String _supplierSubtitle(shared_supplier.Supplier supplier) {
+    final parts = <String>[
+      if ((supplier.legalName ?? '').trim().isNotEmpty)
+        supplier.legalName!.trim(),
+      if ((supplier.rut ?? '').trim().isNotEmpty) supplier.rut!.trim(),
+      if (supplier.aliases.isNotEmpty) supplier.aliases.take(3).join(', '),
+    ];
+    return parts.isEmpty ? 'Sin RUT' : parts.join(' · ');
   }
 
   ParsedInvoice _applySupplierTemplate(

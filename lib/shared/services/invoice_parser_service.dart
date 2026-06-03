@@ -360,14 +360,20 @@ class InvoiceParserService {
     for (var i = 0; i < lines.length - 1; i++) {
       final currentLine = lines[i].trim().toUpperCase();
       final nextLine = lines[i + 1].trim();
+      final normalizedLabel = currentLine
+          .replaceAll(RegExp(r'[:：]+$'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
 
       // If current line is exactly "TOTAL" (or "Total neto", "TOTAL GENERAL", etc.)
-      if (currentLine == 'TOTAL' ||
-          currentLine.startsWith('TOTAL ') ||
-          currentLine == 'MONTO TOTAL' ||
-          currentLine == 'MONTO') {
+      if (normalizedLabel == 'TOTAL' ||
+          normalizedLabel.startsWith('TOTAL ') ||
+          normalizedLabel == 'MONTO TOTAL' ||
+          normalizedLabel == 'TOTAL A PAGAR') {
         // Check if next line has a currency amount
-        final amountPattern = RegExp(r'\$\s*([\d.,]+)');
+        final amountPattern = RegExp(
+          r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,})(?!\d)',
+        );
         final match = amountPattern.firstMatch(nextLine);
         if (match != null) {
           final amountStr = match.group(1)!;
@@ -505,12 +511,19 @@ class InvoiceParserService {
     // Strategy 1: Look for "Mauricio Kishinevsky" or company patterns at bottom
     for (var i = lines.length - 1; i >= 0 && i > lines.length - 20; i--) {
       final text = lines[i].trim();
+      if (_isKnownRecipientLine(text)) {
+        continue;
+      }
 
       // Check for company indicators (S.A., Ltda., SpA, etc.)
       if (RegExp(r'\b(S\.A\.|Ltda\.|SpA|SPA|LTDA)\b', caseSensitive: false)
           .hasMatch(text)) {
         // Clean up the company name
         var companyName = text
+            .replaceAll(
+                RegExp(r'^(?:NOMBRE|Nombre|Raz[oó]n Social)\s*:\s*',
+                    caseSensitive: false),
+                '')
             .replaceAll(
                 RegExp(r'(Importaciones|Exportación|Casa Matriz|Fonos).*',
                     caseSensitive: false),
@@ -536,7 +549,7 @@ class InvoiceParserService {
       var text = lines[i].trim();
 
       // Skip recipient lines (those with your company RUT/name)
-      if (text.contains('77541999-7') || text.toUpperCase().contains('NEWEN')) {
+      if (_isKnownRecipientLine(text)) {
         continue;
       }
 
@@ -559,6 +572,9 @@ class InvoiceParserService {
             RegExp(r'^\[\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\]\s*'), '');
         text =
             text.replaceAll(RegExp(r'^\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\s+'), '');
+        text = text
+            .replaceAll(RegExp(r'\s*Giro:.*$', caseSensitive: false), '')
+            .trim();
 
         // If still has content after RUT removal
         if (text.length > 3) {
@@ -570,6 +586,14 @@ class InvoiceParserService {
 
     print('⚠️ Supplier name not found');
     return null;
+  }
+
+  bool _isKnownRecipientLine(String value) {
+    final normalized =
+        value.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9K]+'), '');
+    return normalized.contains('NEWEN') ||
+        normalized.contains('775419997') ||
+        normalized.contains('RUT775419997');
   }
 
   /// Extract line items from invoice table
