@@ -1,0 +1,12 @@
+{
+  "name": "vinabike-chile-document-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small Vinabike document relay for Chile-only supplier PDF links.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -66,6 +66,7 @@ import 'shared/services/backup_service.dart';
 import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
+import 'shared/services/ocr_file_handoff_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -320,6 +321,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
+        ChangeNotifierProvider(create: (_) => OcrFileHandoffService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();

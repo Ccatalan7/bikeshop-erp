@@ -12,6 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/ocr_service.dart';
+import '../services/ocr_file_handoff_service.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/veryfi_proxy_service.dart';
@@ -97,6 +98,9 @@ class OCRUploadWidget extends StatefulWidget {
   /// Optional title override for non-purchase invoice workflows.
   final String? title;
 
+  /// Optional stored file to process immediately when the OCR widget opens.
+  final OcrFileHandoffPayload? initialFile;
+
   const OCRUploadWidget({
     super.key,
     required this.onComplete,
@@ -108,6 +112,7 @@ class OCRUploadWidget extends StatefulWidget {
     this.supplierName,
     this.showLineItemReview = true,
     this.title,
+    this.initialFile,
   });
 
   @override
@@ -190,6 +195,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _isSavingSupplierTemplate = false;
   bool _isCheckingSimilarProducts = false;
   String? _similarProductMessage;
+  String? _processedInitialFileId;
   final AIAssistantService _aiAssistantService = AIAssistantService();
 
   @override
@@ -250,8 +256,36 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (mounted) {
         setState(() => _initialized = true);
       }
+      unawaited(_processInitialFileIfNeeded());
       debugPrint(
           '🔍 OCR initialized: useVeryfi=$_useVeryfi, veryfiAvailable=$_veryfiAvailable');
+    }
+  }
+
+  Future<void> _processInitialFileIfNeeded() async {
+    final file = widget.initialFile;
+    if (file == null ||
+        _processedInitialFileId == file.id ||
+        _isProcessing ||
+        !mounted) {
+      return;
+    }
+
+    _processedInitialFileId = file.id;
+    setState(() {
+      _isProcessing = true;
+      _errorMessage = null;
+      _isDraggingInvoiceFile = false;
+    });
+
+    try {
+      await _processInvoiceBytes(
+        fileName: file.fileName,
+        fileBytes: file.bytes,
+        extension: file.extension,
+      );
+    } catch (error) {
+      _handleInvoiceFileProcessingError(error);
     }
   }
 

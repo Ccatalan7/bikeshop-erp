@@ -14,6 +14,8 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/services/ocr_file_handoff_service.dart';
+import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/utils/file_download.dart';
 import '../models/app_stored_file.dart';
 import '../services/app_file_storage_service.dart';
@@ -519,6 +521,82 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     }
   }
 
+  bool _canProcessAsQuickExpense(AppStoredFile file) {
+    return file.isPdf || file.isImage;
+  }
+
+  bool _canProcessAsPurchaseInvoice(AppStoredFile file) {
+    return file.isPdf ||
+        file.isImage ||
+        const {'json', 'html', 'htm'}.contains(file.extension);
+  }
+
+  Future<void> _sendFileToOcr(
+    AppStoredFile file,
+    OcrFileHandoffTarget target,
+  ) async {
+    final isSupported = target == OcrFileHandoffTarget.quickExpense
+        ? _canProcessAsQuickExpense(file)
+        : _canProcessAsPurchaseInvoice(file);
+    if (!isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este archivo no es compatible con OCR.')),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Preparando OCR para ${file.fileName}...')),
+    );
+
+    try {
+      final bytes = await _service.downloadFile(file);
+      if (bytes.isEmpty) {
+        throw Exception('El archivo está vacío.');
+      }
+      if (!mounted) return;
+
+      context.read<OcrFileHandoffService>().queue(
+            target: target,
+            fileName: file.fileName,
+            mimeType: file.mimeType,
+            bytes: bytes,
+            extension: file.extension,
+            sourceFileId: file.id,
+            sourceLabel: file.contextTitle ?? file.sourceProvider,
+          );
+
+      if (target == OcrFileHandoffTarget.quickExpense) {
+        context.read<RightToolbarService>().openTool(ToolbarTool.expenses);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Archivo enviado a Gastos Rápidos.')),
+        );
+      } else {
+        try {
+          context.read<WorkspaceManager>().navigateActiveWorkspace(
+                '/purchases/new',
+              );
+        } catch (_) {
+          context.go('/purchases/new');
+        }
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Archivo enviado a factura de compra.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo preparar OCR: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   void _openOrigin(AppStoredFile file) {
     final route = file.sourceRoute;
     if (route == null || route.trim().isEmpty) return;
@@ -882,6 +960,12 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
           onDelete: () => _deleteFile(file),
           onOpenOrigin:
               file.sourceRoute == null ? null : () => _openOrigin(file),
+          onQuickExpenseOcr: _canProcessAsQuickExpense(file)
+              ? () => _sendFileToOcr(file, OcrFileHandoffTarget.quickExpense)
+              : null,
+          onPurchaseInvoiceOcr: _canProcessAsPurchaseInvoice(file)
+              ? () => _sendFileToOcr(file, OcrFileHandoffTarget.purchaseInvoice)
+              : null,
         );
       },
     );
@@ -1306,6 +1390,8 @@ class _FileListTile extends StatelessWidget {
   final VoidCallback onDownload;
   final VoidCallback onDelete;
   final VoidCallback? onOpenOrigin;
+  final VoidCallback? onQuickExpenseOcr;
+  final VoidCallback? onPurchaseInvoiceOcr;
 
   const _FileListTile({
     required this.file,
@@ -1315,6 +1401,8 @@ class _FileListTile extends StatelessWidget {
     required this.onDownload,
     required this.onDelete,
     required this.onOpenOrigin,
+    required this.onQuickExpenseOcr,
+    required this.onPurchaseInvoiceOcr,
   });
 
   @override
@@ -1410,24 +1498,55 @@ class _FileListTile extends StatelessWidget {
               PopupMenuButton<String>(
                 tooltip: 'Más acciones',
                 onSelected: (value) {
+                  if (value == 'quick_expense_ocr') onQuickExpenseOcr?.call();
+                  if (value == 'purchase_invoice_ocr') {
+                    onPurchaseInvoiceOcr?.call();
+                  }
                   if (value == 'download') onDownload();
                   if (value == 'origin') onOpenOrigin?.call();
                   if (value == 'delete') onDelete();
                 },
                 itemBuilder: (context) => [
+                  if (onQuickExpenseOcr != null)
+                    const PopupMenuItem(
+                      value: 'quick_expense_ocr',
+                      child: _FileActionMenuItem(
+                        icon: Icons.receipt_long_outlined,
+                        label: 'OCR como gasto',
+                      ),
+                    ),
+                  if (onPurchaseInvoiceOcr != null)
+                    const PopupMenuItem(
+                      value: 'purchase_invoice_ocr',
+                      child: _FileActionMenuItem(
+                        icon: Icons.document_scanner_outlined,
+                        label: 'OCR factura compra',
+                      ),
+                    ),
+                  if (onQuickExpenseOcr != null || onPurchaseInvoiceOcr != null)
+                    const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: 'download',
-                    child: Text('Descargar'),
+                    child: _FileActionMenuItem(
+                      icon: Icons.download_outlined,
+                      label: 'Descargar',
+                    ),
                   ),
                   if (onOpenOrigin != null)
                     const PopupMenuItem(
                       value: 'origin',
-                      child: Text('Abrir origen'),
+                      child: _FileActionMenuItem(
+                        icon: Icons.open_in_new_outlined,
+                        label: 'Abrir origen',
+                      ),
                     ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: 'delete',
-                    child: Text('Eliminar'),
+                    child: _FileActionMenuItem(
+                      icon: Icons.delete_outline,
+                      label: 'Eliminar',
+                    ),
                   ),
                 ],
                 icon: const Icon(Icons.more_vert, size: 18),
@@ -1511,6 +1630,28 @@ class _SupplierChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FileActionMenuItem extends StatelessWidget {
+  const _FileActionMenuItem({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 10),
+        Text(label),
+      ],
     );
   }
 }

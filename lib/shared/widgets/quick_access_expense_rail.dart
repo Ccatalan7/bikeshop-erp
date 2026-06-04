@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +21,7 @@ import '../../modules/purchases/services/purchase_service.dart';
 import '../models/payment_method.dart';
 import '../models/supplier.dart' as shared_supplier;
 import '../services/number_generation_service.dart';
+import '../services/ocr_file_handoff_service.dart';
 import '../services/payment_method_service.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
@@ -113,6 +116,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   final TextEditingController _purchaseInvoiceSearchController =
       TextEditingController();
   final FocusNode _purchaseInvoiceSearchFocusNode = FocusNode();
+  late final OcrFileHandoffService _ocrFileHandoffService;
   final PDFParserService _pdfParserService = PDFParserService();
   final VeryfiProxyService _veryfiProxyService = VeryfiProxyService();
 
@@ -153,6 +157,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   @override
   void initState() {
     super.initState();
+    _ocrFileHandoffService = context.read<OcrFileHandoffService>();
+    _ocrFileHandoffService.addListener(_handleOcrFileHandoffChanged);
     _amountController.addListener(_handleFormValueChanged);
     _descriptionController.addListener(_handleDescriptionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -162,6 +168,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   @override
   void dispose() {
+    _ocrFileHandoffService.removeListener(_handleOcrFileHandoffChanged);
     _amountController.removeListener(_handleFormValueChanged);
     _descriptionController.removeListener(_handleDescriptionChanged);
     _amountController.dispose();
@@ -171,6 +178,10 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     _purchaseInvoiceSearchController.dispose();
     _purchaseInvoiceSearchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _handleOcrFileHandoffChanged() {
+    unawaited(_consumePendingQuickExpenseOcrFile());
   }
 
   bool get _hasIva => _documentType == ExpenseDocumentType.invoice;
@@ -384,6 +395,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         _bannerMessage = 'Próximo folio: $nextNumber';
         _isLoading = false;
       });
+      unawaited(_consumePendingQuickExpenseOcrFile());
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -391,6 +403,29 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         _loadError = error.toString();
       });
     }
+  }
+
+  Future<void> _consumePendingQuickExpenseOcrFile() async {
+    if (!mounted ||
+        _isLoading ||
+        _isSaving ||
+        _isProcessingOcrFile ||
+        !_ocrFileHandoffService.hasPendingFor(
+          OcrFileHandoffTarget.quickExpense,
+        )) {
+      return;
+    }
+
+    final payload =
+        _ocrFileHandoffService.take(OcrFileHandoffTarget.quickExpense);
+    if (payload == null || !mounted) return;
+
+    setState(() => _activeTab = _QuickExpenseTab.capture);
+    await _processQuickExpenseOcrFile(
+      fileName: payload.fileName,
+      bytes: payload.bytes,
+      extension: payload.extension,
+    );
   }
 
   Account? _resolveDefaultAccount(List<Account> accounts) {

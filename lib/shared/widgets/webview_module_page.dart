@@ -8,12 +8,15 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
+import '../services/document_relay_service.dart';
 import '../services/window_zoom_service.dart';
 import '../utils/file_download.dart';
 
@@ -70,6 +73,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   InAppWebViewController? _controller;
   WebViewEnvironment? _webViewEnvironment;
+  final DocumentRelayService _documentRelayService = DocumentRelayService();
   final TextEditingController _addressController = TextEditingController();
   final FocusNode _addressFocusNode = FocusNode();
   bool _didSelectAddressForFocus = false;
@@ -82,9 +86,13 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   String? _pageTitle;
   String? _platformMessage;
   String? _lastErrorMessage;
+  String? _relayPreviewSourceUrl;
+  _RelayDocumentPreview? _relayDocumentPreview;
   bool _canGoBack = false;
   bool _canGoForward = false;
   bool _isDownloading = false;
+  bool _isFetchingDocumentViaRelay = false;
+  bool _documentRelayAvailable = false;
   double? _lastAppliedBrowserZoom;
   double? _pendingBrowserZoom;
   Offset _pendingWindowsTrackpadScroll = Offset.zero;
@@ -236,6 +244,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _addressFocusNode.addListener(_handleAddressFocusChanged);
     unawaited(_loadBrowserHistory());
     unawaited(_loadBrowserBookmarks());
+    unawaited(_loadDocumentRelayAvailability());
     unawaited(_prepareBrowser());
   }
 
@@ -316,9 +325,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   URLRequest _urlRequest(Uri uri) => URLRequest(url: WebUri.uri(uri));
 
+  Future<void> _loadDocumentRelayAvailability() async {
+    try {
+      final config = await _documentRelayService.loadConfig();
+      if (!mounted) return;
+      setState(() => _documentRelayAvailable = config.isConfigured);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Document relay availability skipped: $error');
+      }
+    }
+  }
+
   Future<void> _goBack() async {
     final controller = _controller;
     if (controller != null && await controller.canGoBack()) {
+      if (mounted) {
+        setState(_clearRelayPreviewState);
+      } else {
+        _clearRelayPreviewState();
+      }
       await controller.goBack();
     }
   }
@@ -326,11 +352,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Future<void> _goForward() async {
     final controller = _controller;
     if (controller != null && await controller.canGoForward()) {
+      if (mounted) {
+        setState(_clearRelayPreviewState);
+      } else {
+        _clearRelayPreviewState();
+      }
       await controller.goForward();
     }
   }
 
   Future<void> _reload() async {
+    if (_relayDocumentPreview != null) {
+      await _fetchCurrentDocumentThroughRelay();
+      return;
+    }
     await _controller?.reload();
   }
 
@@ -365,6 +400,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _isLoading = true;
       _loadingProgress = 0;
       _lastErrorMessage = null;
+      _relayPreviewSourceUrl = null;
+      _relayDocumentPreview = null;
     });
 
     await _controller?.loadUrl(urlRequest: _urlRequest(uri));
@@ -1005,6 +1042,174 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  bool get _canOfferDocumentRelay {
+    final sourceUrl = _documentRelaySourceUrl();
+    return _documentRelayAvailable &&
+        DocumentRelayService.isLikelyRelayCandidate(
+          Uri.tryParse(sourceUrl),
+        );
+  }
+
+  String _documentRelaySourceUrl() {
+    final previewSource = _relayPreviewSourceUrl;
+    if (previewSource != null && previewSource.trim().isNotEmpty) {
+      return previewSource;
+    }
+    return _currentUrl.isNotEmpty ? _currentUrl : widget.url;
+  }
+
+  void _clearRelayPreviewState() {
+    _relayPreviewSourceUrl = null;
+    _relayDocumentPreview = null;
+  }
+
+  Future<void> _fetchCurrentDocumentThroughRelay({
+    String? sourceUrlOverride,
+  }) async {
+    if (_isFetchingDocumentViaRelay) return;
+
+    final sourceUrl = sourceUrlOverride ?? _documentRelaySourceUrl();
+    final sourceUri = Uri.tryParse(sourceUrl);
+    if (!DocumentRelayService.isLikelyRelayCandidate(sourceUri)) {
+      _showBrowserSnack('Este enlace no parece ser un documento compatible.');
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isFetchingDocumentViaRelay = true;
+        _lastErrorMessage = null;
+      });
+      _showBrowserSnack('Trayendo documento desde Chile...');
+    }
+
+    try {
+      final result = await _documentRelayService.fetchDocument(sourceUrl);
+      final supplierMatch = await AppFileStorageService.instance
+          .matchSupplierForUrl(result.sourceUrl);
+      var savedInternally = false;
+
+      try {
+        await AppFileStorageService.instance.saveFile(
+          bytes: result.bytes,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+          context: AppFileContext(
+            sourceType: 'browser_document_relay',
+            sourceId: supplierMatch?.id,
+            sourceProvider: sourceUri?.host,
+            sourceRoute: '/tools/web',
+            contextType: supplierMatch == null ? 'browser' : 'supplier',
+            contextId: supplierMatch?.id,
+            contextTitle: supplierMatch?.name ?? 'Documento web',
+            contextSubtitle:
+                supplierMatch == null ? result.sourceUrl : 'Portal proveedor',
+            tags: [
+              'navegador',
+              'documento',
+              'relay-chile',
+              if (supplierMatch != null) 'proveedor',
+            ],
+            metadata: {
+              'url': result.sourceUrl,
+              'relay': 'chile-document-relay',
+              'remote_status_code': result.remoteStatusCode,
+              if (supplierMatch != null) ...{
+                'supplier_id': supplierMatch.id,
+                'supplier_name': supplierMatch.name,
+                'supplier_website': supplierMatch.website,
+                'smart_folder': 'supplier:${supplierMatch.id}',
+              },
+            },
+          ),
+        );
+        savedInternally = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('🌐 Relay document internal save skipped: $error');
+        }
+      }
+
+      final previewMime = _cleanMimeType(result.mimeType) ?? 'application/pdf';
+      if (!_isPdfDocument(previewMime, result.fileName)) {
+        await downloadFile(
+          bytes: result.bytes,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+        );
+        if (mounted) {
+          _showBrowserSnack('Documento guardado en Archivos.');
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _relayPreviewSourceUrl = result.sourceUrl;
+          _relayDocumentPreview = _RelayDocumentPreview(
+            bytes: result.bytes,
+            fileName: result.fileName,
+            sourceUrl: result.sourceUrl,
+            savedInternally: savedInternally,
+          );
+          _currentUrl = result.sourceUrl;
+          _pageTitle = result.fileName;
+          _lastErrorMessage = null;
+          _isLoading = false;
+          _loadingProgress = 100;
+        });
+        _syncAddressField(result.sourceUrl);
+        unawaited(
+          _recordBrowserHistory(
+            WebUri(result.sourceUrl),
+            title: result.fileName,
+          ),
+        );
+        _showBrowserSnack(
+          savedInternally
+              ? 'Documento abierto y guardado en Archivos.'
+              : 'Documento abierto; no pude guardarlo en Archivos.',
+        );
+      }
+    } on DocumentRelayNotConfiguredException {
+      if (mounted) {
+        const message =
+            'El servicio chileno para rescatar este PDF todavia no esta activo.';
+        setState(() {
+          _documentRelayAvailable = false;
+          _lastErrorMessage = message;
+        });
+        _showBrowserSnack(message);
+      }
+    } catch (error) {
+      final message = _documentRelayErrorMessage(error);
+      if (mounted) {
+        setState(() => _lastErrorMessage = message);
+        _showBrowserSnack(message);
+      }
+    } finally {
+      if (mounted) setState(() => _isFetchingDocumentViaRelay = false);
+    }
+  }
+
+  Future<void> _recoverCurrentDocumentThroughRelay(String sourceUrl) async {
+    if (_isFetchingDocumentViaRelay || _relayDocumentPreview != null) return;
+
+    if (!_documentRelayAvailable) {
+      await _loadDocumentRelayAvailability();
+    }
+    if (!mounted || !_documentRelayAvailable) return;
+
+    await _fetchCurrentDocumentThroughRelay(sourceUrlOverride: sourceUrl);
+  }
+
+  String _documentRelayErrorMessage(Object error) {
+    if (error is DocumentRelayException) {
+      return error.message;
+    }
+    return 'No pude traer el documento desde Chile.';
+  }
+
   Future<Uint8List> _downloadUrlBytes(
     Uri uri,
     DownloadStartRequest request,
@@ -1095,6 +1300,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed.split(';').first.trim();
+  }
+
+  bool _isPdfDocument(String mimeType, String fileName) {
+    return mimeType.toLowerCase().contains('pdf') ||
+        fileName.toLowerCase().endsWith('.pdf');
   }
 
   String? _mimeTypeFromFileName(String fileName) {
@@ -1243,10 +1453,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     if (url == null) return;
     final value = url.toString();
     if (value.isEmpty) return;
+    final displayValue =
+        value.startsWith('data:') && _relayPreviewSourceUrl != null
+            ? _relayPreviewSourceUrl!
+            : value;
     setState(() {
-      _currentUrl = value;
+      _currentUrl = displayValue;
     });
-    _syncAddressField(value);
+    _syncAddressField(displayValue);
   }
 
   Uri? _normalizeAddress(String input, {String? baseUrl}) {
@@ -1380,104 +1594,128 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final browserZoom = _browserZoom(context);
     _scheduleBrowserZoom(browserZoom);
 
-    return _buildEmbeddedView(
-      context,
-      child: _buildPageInteractionFocusBridge(
-        child: _buildWindowsTrackpadScrollBridge(
-          child: _NativeBrowserZoomBoundary(
-            appScale: browserZoom,
-            child: InAppWebView(
-              key: ValueKey('browser-${widget.url}'),
-              webViewEnvironment: _webViewEnvironment,
-              initialUrlRequest: _urlRequest(initialUri),
-              initialSettings: _browserSettings(browserZoom),
-              onWebViewCreated: (controller) {
-                _controller = controller;
-                controller.addJavaScriptHandler(
-                  handlerName: _pageInteractionHandlerName,
-                  callback: (_) {
-                    _clearAddressFocusFromPageInteraction();
-                    return null;
-                  },
-                );
-                unawaited(_installPageInteractionBridge(controller));
-                unawaited(_applyBrowserZoom(browserZoom));
-                unawaited(_refreshNavigationState());
-              },
-              onLoadStart: (controller, url) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = true;
-                  _loadingProgress = 0;
-                  _lastErrorMessage = null;
-                });
-                _setCurrentUrl(url);
-              },
-              onLoadStop: (controller, url) async {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                  _loadingProgress = 100;
-                });
-                _setCurrentUrl(url);
-                _pageTitle = await controller.getTitle();
-                unawaited(_recordBrowserHistory(url, title: _pageTitle));
-                if (mounted) setState(() {});
-                unawaited(_installPageInteractionBridge(controller));
-                unawaited(_applyBrowserZoom(browserZoom));
-                unawaited(_refreshNavigationState());
-              },
-              onProgressChanged: (controller, progress) {
-                if (!mounted) return;
-                setState(() {
-                  _loadingProgress = progress;
-                  _isLoading = progress < 100;
-                });
-              },
-              onTitleChanged: (controller, title) {
-                if (!mounted) return;
-                setState(() {
-                  _pageTitle = title;
-                });
-              },
-              onUpdateVisitedHistory: (controller, url, isReload) {
-                if (!mounted) return;
-                _setCurrentUrl(url);
-                unawaited(_refreshNavigationState());
-              },
-              onReceivedError: (controller, request, error) {
-                if (!mounted || request.isForMainFrame == false) return;
-                if (_isBenignNavigationError(error)) {
-                  if (kDebugMode) {
-                    debugPrint(
-                      '🌐 Web workspace ignored cancelled navigation: '
-                      '${error.description}',
-                    );
-                  }
-                  return;
+    final webViewContent = _buildPageInteractionFocusBridge(
+      child: _buildWindowsTrackpadScrollBridge(
+        child: _NativeBrowserZoomBoundary(
+          appScale: browserZoom,
+          child: InAppWebView(
+            key: ValueKey('browser-${widget.url}'),
+            webViewEnvironment: _webViewEnvironment,
+            initialUrlRequest: _urlRequest(initialUri),
+            initialSettings: _browserSettings(browserZoom),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+              controller.addJavaScriptHandler(
+                handlerName: _pageInteractionHandlerName,
+                callback: (_) {
+                  _clearAddressFocusFromPageInteraction();
+                  return null;
+                },
+              );
+              unawaited(_installPageInteractionBridge(controller));
+              unawaited(_applyBrowserZoom(browserZoom));
+              unawaited(_refreshNavigationState());
+            },
+            onLoadStart: (controller, url) {
+              if (!mounted) return;
+              final loadingUrl = url?.toString() ?? '';
+              setState(() {
+                _isLoading = true;
+                _loadingProgress = 0;
+                _lastErrorMessage = null;
+                if (!loadingUrl.startsWith('data:')) {
+                  _relayPreviewSourceUrl = null;
+                  _relayDocumentPreview = null;
                 }
-                setState(() {
-                  _lastErrorMessage = error.description;
-                  _isLoading = false;
-                });
-              },
-              onPermissionRequest: (controller, request) async {
-                return PermissionResponse(
-                  resources: request.resources,
-                  action: PermissionResponseAction.GRANT,
-                );
-              },
-              shouldOverrideUrlLoading: _handleNavigation,
-              onCreateWindow: _handleCreateWindow,
-              onDownloadStartRequest: (controller, request) {
-                unawaited(_handleDownloadStart(request));
-              },
-              onConsoleMessage: (controller, consoleMessage) {
-                debugPrint('🌐 Web workspace: ${consoleMessage.message}');
-              },
-            ),
+              });
+              _setCurrentUrl(url);
+            },
+            onLoadStop: (controller, url) async {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+                _loadingProgress = 100;
+              });
+              _setCurrentUrl(url);
+              _pageTitle = await controller.getTitle();
+              unawaited(_recordBrowserHistory(url, title: _pageTitle));
+              if (mounted) setState(() {});
+              unawaited(_installPageInteractionBridge(controller));
+              unawaited(_applyBrowserZoom(browserZoom));
+              unawaited(_refreshNavigationState());
+            },
+            onProgressChanged: (controller, progress) {
+              if (!mounted) return;
+              setState(() {
+                _loadingProgress = progress;
+                _isLoading = progress < 100;
+              });
+            },
+            onTitleChanged: (controller, title) {
+              if (!mounted) return;
+              setState(() {
+                _pageTitle = title;
+              });
+            },
+            onUpdateVisitedHistory: (controller, url, isReload) {
+              if (!mounted) return;
+              _setCurrentUrl(url);
+              unawaited(_refreshNavigationState());
+            },
+            onReceivedError: (controller, request, error) {
+              if (!mounted || request.isForMainFrame == false) return;
+              final failedUrl = request.url.toString();
+              final canRecoverThroughRelay =
+                  DocumentRelayService.isLikelyRelayCandidate(
+                Uri.tryParse(failedUrl),
+              );
+              if (_isBenignNavigationError(error)) {
+                if (kDebugMode) {
+                  debugPrint(
+                    '🌐 Web workspace ignored cancelled navigation: '
+                    '${error.description}',
+                  );
+                }
+                return;
+              }
+              setState(() {
+                _lastErrorMessage = error.description;
+                _isLoading = false;
+              });
+              if (canRecoverThroughRelay) {
+                unawaited(_recoverCurrentDocumentThroughRelay(failedUrl));
+              }
+            },
+            onPermissionRequest: (controller, request) async {
+              return PermissionResponse(
+                resources: request.resources,
+                action: PermissionResponseAction.GRANT,
+              );
+            },
+            shouldOverrideUrlLoading: _handleNavigation,
+            onCreateWindow: _handleCreateWindow,
+            onDownloadStartRequest: (controller, request) {
+              unawaited(_handleDownloadStart(request));
+            },
+            onConsoleMessage: (controller, consoleMessage) {
+              debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+            },
           ),
         ),
+      ),
+    );
+
+    final relayPreview = _relayDocumentPreview;
+    return _buildEmbeddedView(
+      context,
+      child: Stack(
+        children: [
+          Positioned.fill(child: webViewContent),
+          if (relayPreview != null)
+            Positioned.fill(
+              child: _buildRelayDocumentPreview(context, relayPreview),
+            ),
+        ],
       ),
     );
   }
@@ -1487,6 +1725,139 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       behavior: HitTestBehavior.deferToChild,
       onPointerDown: (_) => _clearAddressFocusFromPageInteraction(),
       child: child,
+    );
+  }
+
+  Widget _buildRelayDocumentPreview(
+    BuildContext context,
+    _RelayDocumentPreview preview,
+  ) {
+    final theme = Theme.of(context);
+    final sourceHost =
+        Uri.tryParse(preview.sourceUrl)?.host.trim().isNotEmpty == true
+            ? Uri.parse(preview.sourceUrl).host
+            : preview.sourceUrl;
+
+    return ColoredBox(
+      color: const Color(0xFFE5E7EB),
+      child: Column(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(color: theme.dividerColor),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.picture_as_pdf_outlined,
+                      size: 19,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          preview.fileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          sourceHost,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (preview.savedInternally)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Text(
+                        'Archivos',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF1D4ED8),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  IconButton(
+                    tooltip: 'Recargar documento',
+                    onPressed: _isFetchingDocumentViaRelay
+                        ? null
+                        : _fetchCurrentDocumentThroughRelay,
+                    icon: _isFetchingDocumentViaRelay
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Abrir afuera',
+                    onPressed: _openCurrentExternal,
+                    icon: const Icon(Icons.open_in_new_outlined, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar vista previa',
+                    onPressed: () {
+                      setState(_clearRelayPreviewState);
+                    },
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: PdfPreview(
+              build: (PdfPageFormat _) async => preview.bytes,
+              useActions: false,
+              allowPrinting: false,
+              allowSharing: false,
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+              pdfFileName: preview.fileName,
+              scrollViewDecoration: const BoxDecoration(
+                color: Color(0xFFE5E7EB),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1611,10 +1982,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     return Column(
       children: [
         _buildTopBar(context),
-        if (_lastErrorMessage != null) _buildErrorBanner(context),
+        _buildErrorBannerSlot(context),
         Expanded(child: child),
       ],
     );
+  }
+
+  Widget _buildErrorBannerSlot(BuildContext context) {
+    if (_lastErrorMessage == null) return const SizedBox.shrink();
+    return _buildErrorBanner(context);
   }
 
   Widget _buildLoadingPlaceholder(BuildContext context, String label) {
@@ -1731,6 +2107,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   Widget _buildErrorBanner(BuildContext context) {
     final theme = Theme.of(context);
+    final canOfferRelay = _canOfferDocumentRelay;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1758,6 +2135,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               ),
             ),
           ),
+          if (canOfferRelay)
+            TextButton.icon(
+              onPressed: _isFetchingDocumentViaRelay
+                  ? null
+                  : _fetchCurrentDocumentThroughRelay,
+              icon: _isFetchingDocumentViaRelay
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_download_outlined, size: 16),
+              label: Text(
+                _isFetchingDocumentViaRelay
+                    ? 'Trayendo...'
+                    : 'Traer desde Chile',
+              ),
+            ),
           TextButton.icon(
             onPressed: _openCurrentExternal,
             icon: const Icon(Icons.open_in_new, size: 16),
@@ -2204,6 +2599,20 @@ class _BrowserBookmarkEntry {
       return null;
     }
   }
+}
+
+class _RelayDocumentPreview {
+  const _RelayDocumentPreview({
+    required this.bytes,
+    required this.fileName,
+    required this.sourceUrl,
+    required this.savedInternally,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String sourceUrl;
+  final bool savedInternally;
 }
 
 class _BrowserPlaceEntry {

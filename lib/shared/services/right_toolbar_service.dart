@@ -48,6 +48,12 @@ class RightToolbarService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void openTool(ToolbarTool tool) {
+    if (_activeTool == tool) return;
+    _activeTool = tool;
+    notifyListeners();
+  }
+
   void close() {
     _activeTool = null;
     notifyListeners();

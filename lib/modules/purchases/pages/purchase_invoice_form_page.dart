@@ -15,6 +15,7 @@ import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/invoice_parser_service.dart';
+import '../../../shared/services/ocr_file_handoff_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -436,7 +437,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   /// Open OCR scanner to extract invoice data from image
-  Future<void> _openOCRScanner() async {
+  Future<void> _openOCRScanner({
+    OcrFileHandoffPayload? initialFile,
+  }) async {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -495,6 +498,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       child: OCRUploadWidget(
                         documentType: OCRDocumentType.invoice,
                         showPreview: true,
+                        initialFile: initialFile,
                         supplierId: _selectedSupplier?.id,
                         supplierName: _selectedSupplier?.name,
                         onComplete: (parsedInvoice) async {
@@ -1001,8 +1005,25 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(_consumePendingPurchaseInvoiceOcrFile());
+          }
+        });
       }
     }
+  }
+
+  Future<void> _consumePendingPurchaseInvoiceOcrFile() async {
+    if (!mounted || widget.invoiceId != null || _isLoading || !_canEditFields) {
+      return;
+    }
+
+    final handoffService = context.read<OcrFileHandoffService>();
+    final payload = handoffService.take(OcrFileHandoffTarget.purchaseInvoice);
+    if (payload == null || !mounted) return;
+
+    await _openOCRScanner(initialFile: payload);
   }
 
   void _applyInvoice(PurchaseInvoice invoice) {
