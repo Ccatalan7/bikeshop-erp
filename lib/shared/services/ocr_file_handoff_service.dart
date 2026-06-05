@@ -15,6 +15,9 @@ class OcrFileHandoffPayload {
     required this.extension,
     this.sourceFileId,
     this.sourceLabel,
+    this.sourceSupplierId,
+    this.sourceSupplierName,
+    this.sourceSupplierWebsite,
   });
 
   final String id;
@@ -25,6 +28,9 @@ class OcrFileHandoffPayload {
   final String extension;
   final String? sourceFileId;
   final String? sourceLabel;
+  final String? sourceSupplierId;
+  final String? sourceSupplierName;
+  final String? sourceSupplierWebsite;
 }
 
 class OcrFileHandoffService extends ChangeNotifier {
@@ -41,6 +47,9 @@ class OcrFileHandoffService extends ChangeNotifier {
     required String extension,
     String? sourceFileId,
     String? sourceLabel,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
+    String? sourceSupplierWebsite,
   }) {
     _pending = OcrFileHandoffPayload(
       id: '${DateTime.now().microsecondsSinceEpoch}-${_sequence++}',
@@ -51,6 +60,9 @@ class OcrFileHandoffService extends ChangeNotifier {
       extension: extension,
       sourceFileId: sourceFileId,
       sourceLabel: sourceLabel,
+      sourceSupplierId: sourceSupplierId,
+      sourceSupplierName: sourceSupplierName,
+      sourceSupplierWebsite: sourceSupplierWebsite,
     );
     notifyListeners();
   }

@@ -9,6 +9,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../storage/models/app_stored_file.dart';
+import '../../storage/services/app_file_storage_service.dart';
 import '../../../shared/utils/file_download.dart';
 
 class ChatAttachmentViewer extends StatefulWidget {
@@ -17,6 +19,7 @@ class ChatAttachmentViewer extends StatefulWidget {
   final String extension;
   final String contentType;
   final bool isImage;
+  final AppFileContext? fileContext;
 
   const ChatAttachmentViewer({
     super.key,
@@ -25,6 +28,7 @@ class ChatAttachmentViewer extends StatefulWidget {
     required this.extension,
     required this.contentType,
     required this.isImage,
+    this.fileContext,
   });
 
   static Future<void> show(
@@ -34,6 +38,7 @@ class ChatAttachmentViewer extends StatefulWidget {
     required String extension,
     required String contentType,
     required bool isImage,
+    AppFileContext? fileContext,
   }) {
     return showDialog<void>(
       context: context,
@@ -43,6 +48,7 @@ class ChatAttachmentViewer extends StatefulWidget {
         extension: extension,
         contentType: contentType,
         isImage: isImage,
+        fileContext: fileContext,
       ),
     );
   }
@@ -136,15 +142,55 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
   }
 
   Future<void> _download(_AttachmentPayload payload) async {
-    await downloadFile(
-      bytes: payload.bytes,
-      fileName: _safeFileName(widget.fileName),
-      mimeType: payload.contentType,
-    );
+    final safeName = _safeFileName(widget.fileName);
+    var savedInFiles = false;
+    var downloadedLocalCopy = false;
+    Object? internalSaveError;
+    Object? localDownloadError;
+
+    if (widget.fileContext != null) {
+      try {
+        await AppFileStorageService.instance.saveFile(
+          bytes: payload.bytes,
+          fileName: safeName,
+          mimeType: payload.contentType,
+          context: widget.fileContext!,
+        );
+        savedInFiles = true;
+      } catch (error) {
+        internalSaveError = error;
+        debugPrint('💬 Chat attachment file-module save skipped: $error');
+      }
+    }
+
+    try {
+      await downloadFile(
+        bytes: payload.bytes,
+        fileName: safeName,
+        mimeType: payload.contentType,
+      );
+      downloadedLocalCopy = true;
+    } catch (error) {
+      localDownloadError = error;
+      debugPrint('💬 Chat attachment local download skipped: $error');
+    }
 
     if (!mounted) return;
+    if (!savedInFiles && !downloadedLocalCopy) {
+      final reason = internalSaveError ?? localDownloadError ?? 'error';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar el archivo: $reason')),
+      );
+      return;
+    }
+
+    final message = savedInFiles && downloadedLocalCopy
+        ? 'Guardado en Archivos y descargado.'
+        : savedInFiles
+            ? 'Guardado en Archivos.'
+            : 'Archivo descargado. No se pudo guardar en Archivos.';
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Archivo descargado.')),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -628,7 +674,7 @@ class _AttachmentHeader extends StatelessWidget {
             ),
           ],
           IconButton(
-            tooltip: 'Descargar',
+            tooltip: 'Guardar en Archivos y descargar',
             onPressed: onDownload,
             icon: const Icon(Icons.download_outlined),
           ),

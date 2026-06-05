@@ -27045,6 +27045,18 @@ begin
     );
   end if;
 
+  if lower(coalesce(p_message_type, '')) = 'unsupported' then
+    return jsonb_build_object(
+      'duplicate', false,
+      'ignored', true,
+      'ignored_reason', 'unsupported_whatsapp_message_type',
+      'event_key', v_event_key,
+      'external_message_id', p_external_message_id,
+      'tenant_id', v_channel.tenant_id,
+      'channel_id', v_channel.id
+    );
+  end if;
+
   v_binding := public.ensure_whatsapp_conversation_binding(
     v_channel.tenant_id,
     v_channel.id,

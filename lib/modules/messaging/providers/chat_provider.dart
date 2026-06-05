@@ -791,7 +791,10 @@ class ChatProvider extends ChangeNotifier {
     _subscribeToActiveMessages(conversationId);
   }
 
-  void clearActiveConversation({String? conversationId}) {
+  void clearActiveConversation({
+    String? conversationId,
+    bool notify = true,
+  }) {
     if (_activeConversationId == null) return;
     if (conversationId != null && _activeConversationId != conversationId) {
       return;
@@ -806,7 +809,9 @@ class ChatProvider extends ChangeNotifier {
     _activeMessages = [];
     _optimisticMessages.clear();
     _isLoading = false;
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void _subscribeToActiveMessages(String conversationId) {

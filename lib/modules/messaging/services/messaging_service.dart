@@ -5,6 +5,7 @@ import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
 import '../utils/conversation_activity.dart';
+import '../utils/whatsapp_message_filters.dart';
 // For VoidCallback
 
 class MessagingService {
@@ -1250,6 +1251,8 @@ class MessagingService {
       final latestByConversation = <String, Map<String, dynamic>>{};
       for (final row in rows) {
         final message = Map<String, dynamic>.from(row as Map);
+        if (isUnsupportedWhatsAppCompanionRow(message)) continue;
+
         final conversationId = message['conversation_id']?.toString();
         if (conversationId == null) continue;
         latestByConversation.putIfAbsent(conversationId, () => message);
@@ -1544,6 +1547,7 @@ class MessagingService {
         .order('created_at', ascending: true)
         .map((data) => data
             .map((json) => Message.fromJson(json, currentUserId: currentUserId))
+            .where((message) => !isUnsupportedWhatsAppCompanionMessage(message))
             .toList());
   }
 

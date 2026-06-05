@@ -283,6 +283,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         fileName: file.fileName,
         fileBytes: file.bytes,
         extension: file.extension,
+        sourceSupplierId: file.sourceSupplierId,
+        sourceSupplierName: file.sourceSupplierName,
+        sourceSupplierWebsite: file.sourceSupplierWebsite,
       );
     } catch (error) {
       _handleInvoiceFileProcessingError(error);
@@ -3353,9 +3356,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<shared_supplier.Supplier?> _matchSupplierForInvoice(
     ParsedInvoice invoice, {
     String? fileName,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
+    String? sourceSupplierWebsite,
   }) async {
     final supplierProbe = invoice.supplierName?.trim();
     final widgetSupplierId = widget.supplierId?.trim();
+    final sourceSupplierIdProbe = sourceSupplierId?.trim();
+    final sourceSupplierNameProbe = sourceSupplierName?.trim();
+    final sourceSupplierWebsiteProbe = sourceSupplierWebsite?.trim();
 
     try {
       final purchaseService = context.read<PurchaseService>();
@@ -3377,12 +3386,72 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         } catch (_) {}
       }
 
+      if (sourceSupplierIdProbe != null && sourceSupplierIdProbe.isNotEmpty) {
+        try {
+          return suppliers.firstWhere((s) => s.id == sourceSupplierIdProbe);
+        } catch (_) {}
+      }
+
+      if (sourceSupplierWebsiteProbe != null &&
+          sourceSupplierWebsiteProbe.isNotEmpty) {
+        final websiteMatch =
+            _matchSupplierByWebsite(sourceSupplierWebsiteProbe, suppliers);
+        if (websiteMatch != null) return websiteMatch;
+      }
+
+      if (sourceSupplierNameProbe != null &&
+          sourceSupplierNameProbe.isNotEmpty) {
+        final sourceMatch =
+            _matchSupplierFromList(sourceSupplierNameProbe, suppliers);
+        if (sourceMatch != null) return sourceMatch;
+      }
+
       if (supplierProbe == null || supplierProbe.isEmpty) return null;
       return _matchSupplierFromList(supplierProbe, suppliers);
     } catch (e) {
       debugPrint('Error matching supplier: $e');
     }
     return null;
+  }
+
+  shared_supplier.Supplier? _matchSupplierByWebsite(
+    String rawWebsite,
+    List<shared_supplier.Supplier> suppliers,
+  ) {
+    final sourceUri = _normalizeSupplierWebsiteUri(rawWebsite);
+    if (sourceUri == null) return null;
+    final sourceHost = _normalizeSupplierWebsiteHost(sourceUri.host);
+    if (sourceHost.isEmpty) return null;
+
+    for (final supplier in suppliers) {
+      final website = supplier.website?.trim();
+      if (website == null || website.isEmpty) continue;
+      final supplierUri = _normalizeSupplierWebsiteUri(website);
+      if (supplierUri == null) continue;
+      final supplierHost = _normalizeSupplierWebsiteHost(supplierUri.host);
+      if (supplierHost.isEmpty) continue;
+      if (sourceHost == supplierHost ||
+          sourceHost.endsWith('.$supplierHost') ||
+          supplierHost.endsWith('.$sourceHost')) {
+        return supplier;
+      }
+    }
+
+    return null;
+  }
+
+  Uri? _normalizeSupplierWebsiteUri(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final hasScheme = RegExp(r'^[a-z][a-z0-9+\-.]*://', caseSensitive: false)
+        .hasMatch(trimmed);
+    return Uri.tryParse(hasScheme ? trimmed : 'https://$trimmed');
+  }
+
+  String _normalizeSupplierWebsiteHost(String host) {
+    final lower = host.toLowerCase().trim();
+    if (lower.startsWith('www.')) return lower.substring(4);
+    return lower;
   }
 
   shared_supplier.Supplier? _matchSupplierFromList(
@@ -3820,6 +3889,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         matchedSupplierName = matchedSupplier.name;
         matchedSupplierId = matchedSupplier.id;
         parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+        parsedData = parsedData.copyWith(supplierName: matchedSupplier.name);
         debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
       } else if (parsedData.supplierName != null) {
         // If supplier not found in DB, clear it to avoid phantom suppliers
@@ -3941,6 +4011,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     required Uint8List fileBytes,
     required String extension,
     String? filePath,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
+    String? sourceSupplierWebsite,
   }) async {
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
@@ -4022,11 +4095,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     matchedSupplier = await _matchSupplierForInvoice(
       parsedData,
       fileName: fileName,
+      sourceSupplierId: sourceSupplierId,
+      sourceSupplierName: sourceSupplierName,
+      sourceSupplierWebsite: sourceSupplierWebsite,
     );
     if (matchedSupplier != null) {
       matchedSupplierName = matchedSupplier.name;
       matchedSupplierId = matchedSupplier.id;
       parsedData = _applySupplierTemplate(parsedData, matchedSupplier);
+      parsedData = parsedData.copyWith(supplierName: matchedSupplier.name);
       debugPrint('✅ OCR matched supplier: ${matchedSupplier.name}');
     } else if (parsedData.supplierName != null) {
       // If supplier not found in DB, clear it to avoid phantom suppliers

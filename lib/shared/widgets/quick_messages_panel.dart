@@ -78,7 +78,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final panelActiveConversationId = _panelActiveConversationId;
     if (panelActiveConversationId != null) {
       _chatProvider?.clearActiveConversation(
-          conversationId: panelActiveConversationId);
+        conversationId: panelActiveConversationId,
+        notify: false,
+      );
     }
     _searchController.removeListener(_handleSearchChanged);
     ConversationActivity.showOnlyActiveChats.removeListener(

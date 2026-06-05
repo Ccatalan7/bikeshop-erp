@@ -125,6 +125,56 @@ class AppFileStorageService {
     }
   }
 
+  Future<AppStoredFile> replaceFileBytes({
+    required AppStoredFile file,
+    required Uint8List bytes,
+    String? mimeType,
+    List<String> addTags = const [],
+    Map<String, dynamic> metadataPatch = const {},
+  }) async {
+    final tenantId = await _requireTenantId();
+    if (file.tenantId != tenantId) {
+      throw StateError('El archivo pertenece a otro tenant.');
+    }
+
+    final resolvedMime = mimeType?.trim().isNotEmpty == true
+        ? mimeType!.trim()
+        : lookupMimeType(file.fileName, headerBytes: bytes) ?? file.mimeType;
+
+    await _supabase.storage.from(file.storageBucket).uploadBinary(
+          file.storagePath,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: resolvedMime,
+            upsert: true,
+          ),
+        );
+
+    final tags = <String>{
+      ...file.tags,
+      ...addTags,
+    }.toList(growable: false);
+    final metadata = Map<String, dynamic>.from(file.metadata)
+      ..addAll(metadataPatch);
+
+    final row = await _supabase
+        .from('app_files')
+        .update({
+          'mime_type': resolvedMime,
+          'size_bytes': bytes.length,
+          'tags': tags,
+          'metadata': metadata,
+        })
+        .eq('tenant_id', tenantId)
+        .eq('id', file.id)
+        .select()
+        .single();
+
+    final updatedFile = AppStoredFile.fromJson(row);
+    _savedFileController.add(updatedFile);
+    return updatedFile;
+  }
+
   Future<AppFileSupplierMatch?> matchSupplierForUrl(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {

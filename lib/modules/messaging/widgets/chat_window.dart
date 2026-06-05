@@ -23,6 +23,7 @@ import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import 'assign_context_dialog.dart';
 import 'chat_attachment_viewer.dart';
+import '../../storage/models/app_stored_file.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/route_share_service.dart';
@@ -464,7 +465,9 @@ class _ChatWindowState extends State<ChatWindow> {
   @override
   void dispose() {
     _chatProvider?.clearActiveConversation(
-        conversationId: widget.conversation.id);
+      conversationId: widget.conversation.id,
+      notify: false,
+    );
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
     _removeOverlay();
@@ -1553,17 +1556,12 @@ class _ChatWindowState extends State<ChatWindow> {
         final picker = ImagePicker();
         final XFile? pickedFile = await picker.pickImage(
           source: ImageSource.camera,
-          maxWidth: 1200,
-          imageQuality: 85,
         );
         if (pickedFile == null) return;
         await _queueXFiles([pickedFile]);
       } else if (choice == 'gallery') {
         final picker = ImagePicker();
-        final pickedFiles = await picker.pickMultiImage(
-          maxWidth: 1200,
-          imageQuality: 85,
-        );
+        final pickedFiles = await picker.pickMultiImage();
         if (pickedFiles.isEmpty) return;
         await _queueXFiles(pickedFiles);
       } else {
@@ -4463,6 +4461,14 @@ class _ChatWindowState extends State<ChatWindow> {
       extension: attachment.extension,
       contentType: _messageAttachmentContentType(attachment.message),
       isImage: attachment.isImage,
+      fileContext: _attachmentFileContext(
+        attachment.message,
+        url: attachment.url,
+        fileName: attachment.name,
+        extension: attachment.extension,
+        contentType: _messageAttachmentContentType(attachment.message),
+        isImage: attachment.isImage,
+      ),
     );
   }
 
@@ -4482,6 +4488,97 @@ class _ChatWindowState extends State<ChatWindow> {
       extension: extension,
       contentType: contentType,
       isImage: isImage,
+      fileContext: _attachmentFileContext(
+        message,
+        url: url,
+        fileName: _messageAttachmentName(message, extension),
+        extension: extension,
+        contentType: contentType,
+        isImage: isImage,
+      ),
+    );
+  }
+
+  AppFileContext _attachmentFileContext(
+    Message message, {
+    required String url,
+    required String fileName,
+    required String extension,
+    required String contentType,
+    required bool isImage,
+  }) {
+    final metadata = message.metadata;
+    final provider = metadata['provider']?.toString().trim().isNotEmpty == true
+        ? metadata['provider'].toString().trim()
+        : metadata['external_provider']?.toString().trim();
+    final isWhatsApp = widget.conversation.isWhatsApp ||
+        provider == 'whatsapp' ||
+        metadata['channel'] == 'whatsapp';
+    final contactName = message.isMe
+        ? 'Tú'
+        : (metadata['contact_name']?.toString().trim().isNotEmpty == true
+            ? metadata['contact_name'].toString().trim()
+            : widget.conversation.creatorName?.trim());
+    final conversationTitle = widget.conversation.title?.trim();
+    final contextTitle = contactName?.isNotEmpty == true
+        ? contactName!
+        : conversationTitle?.isNotEmpty == true
+            ? conversationTitle!
+            : widget.conversation.channelLabel;
+    final effectiveContextType = _effectiveContextType;
+    final effectiveContextId = _effectiveContextId;
+    final hasLinkedContext = effectiveContextType != null &&
+        effectiveContextId != null &&
+        effectiveContextId.isNotEmpty;
+    final contextType =
+        hasLinkedContext ? effectiveContextType : 'conversation';
+    final contextId =
+        hasLinkedContext ? effectiveContextId : widget.conversation.id;
+    final safeContentType =
+        contentType.trim().isNotEmpty ? contentType.trim() : null;
+    final safeExtension = extension.trim().isNotEmpty ? extension.trim() : null;
+    final sourceStorageBucket =
+        metadata['storageBucket'] ?? metadata['storage_bucket'];
+    final sourceStoragePath =
+        metadata['storagePath'] ?? metadata['storage_path'];
+
+    return AppFileContext(
+      sourceType: isWhatsApp ? 'chat_whatsapp' : 'chat',
+      sourceId: message.id,
+      sourceProvider:
+          isWhatsApp ? 'WhatsApp' : widget.conversation.channelLabel,
+      sourceRoute: '/messaging/conversations/${widget.conversation.id}',
+      contextType: contextType,
+      contextId: contextId,
+      contextTitle: contextTitle,
+      contextSubtitle:
+          '${widget.conversation.channelLabel} · ${DateFormat('dd/MM/yyyy HH:mm').format(message.createdAt)}',
+      tags: [
+        'chat',
+        'mensaje',
+        if (isWhatsApp) 'whatsapp',
+        if (isImage) 'imagen' else 'archivo',
+      ],
+      metadata: {
+        'message_id': message.id,
+        'conversation_id': widget.conversation.id,
+        'message_type': message.type,
+        'message_created_at': message.createdAt.toIso8601String(),
+        'url': url,
+        'filename': fileName,
+        if (safeExtension != null) 'extension': safeExtension,
+        if (safeContentType != null) 'content_type': safeContentType,
+        if (safeContentType != null) 'contentType': safeContentType,
+        if (metadata['external_message_id'] != null)
+          'external_message_id': metadata['external_message_id'],
+        if (metadata['whatsapp_media_id'] != null)
+          'whatsapp_media_id': metadata['whatsapp_media_id'],
+        if (metadata['media_id'] != null) 'media_id': metadata['media_id'],
+        if (sourceStorageBucket != null)
+          'source_storage_bucket': sourceStorageBucket,
+        if (sourceStoragePath != null) 'source_storage_path': sourceStoragePath,
+        if (provider != null && provider.isNotEmpty) 'provider': provider,
+      },
     );
   }
 

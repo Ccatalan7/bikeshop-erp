@@ -336,7 +336,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final box = context?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return null;
     final topLeft = box.localToGlobal(Offset.zero);
-    return topLeft & box.size;
+    final bottomRight = box.localToGlobal(
+      Offset(box.size.width, box.size.height),
+    );
+    return Rect.fromPoints(topLeft, bottomRight);
   }
 
   Future<void> _prepareBrowser() async {

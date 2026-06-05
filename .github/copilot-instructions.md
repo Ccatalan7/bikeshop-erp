@@ -60,6 +60,7 @@ Required pattern for native WebViews inside the zoomed app:
 - Wrap the native WebView in a zoom boundary like `_NativeBrowserZoomBoundary`: lay the native view out at `constraints * appScale`, then apply `Transform.scale(scale: 1 / appScale, alignment: Alignment.topLeft)` inside a clipped, top-left aligned box.
 - Also sync the web content zoom to the app scale when the WebView API supports it (`pageZoom`, `textZoom`, `initialScale`, or equivalent). For simple HTML mail/content WebViews, inject a CSS/JS content scale when no native page zoom API exists.
 - Do not fix this class of bug by adding click-coordinate offsets, nearby-link guessing, enlarged invisible hit targets, or JS "rescue" clicks. Those are fragile and will break again at another scale or layout.
+- Any feature that maps user selection rectangles, screenshots, overlays, or hit-test bounds over a native WebView must keep coordinates in one space. When building a global viewport rect, transform both corners with `localToGlobal`; do not combine a transformed origin with raw `box.size`, because that mixes scaled and unscaled coordinates at 80% zoom.
 - Verify native WebView interactions at both `100%` and the default `80%` app zoom before calling the fix complete.
 
 Current reference implementations:

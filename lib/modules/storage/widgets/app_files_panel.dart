@@ -19,6 +19,7 @@ import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/utils/file_download.dart';
 import '../models/app_stored_file.dart';
 import '../services/app_file_storage_service.dart';
+import 'storage_image_crop_dialog.dart';
 
 enum _StorageSort {
   newest('Recientes primero'),
@@ -493,6 +494,13 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     return null;
   }
 
+  String? _supplierWebsite(AppStoredFile file) {
+    final metadataValue = file.metadata['supplier_website']?.toString().trim();
+    return metadataValue == null || metadataValue.isEmpty
+        ? null
+        : metadataValue;
+  }
+
   Future<void> _deleteFile(AppStoredFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -595,6 +603,9 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
             extension: file.extension,
             sourceFileId: file.id,
             sourceLabel: file.contextTitle ?? file.sourceProvider,
+            sourceSupplierId: _supplierId(file),
+            sourceSupplierName: _supplierName(file),
+            sourceSupplierWebsite: _supplierWebsite(file),
           );
 
       if (target == OcrFileHandoffTarget.quickExpense) {
@@ -1712,27 +1723,46 @@ class StorageFilePreviewDialog extends StatefulWidget {
 
 class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
   late Future<Uint8List> _bytesFuture;
+  late AppStoredFile _file;
 
   @override
   void initState() {
     super.initState();
+    _file = widget.file;
     _bytesFuture = _loadBytes();
   }
 
   Future<Uint8List> _loadBytes() {
-    return AppFileStorageService.instance.downloadFile(widget.file);
+    return AppFileStorageService.instance.downloadFile(_file);
   }
 
   Future<void> _download(Uint8List bytes) async {
     await downloadFile(
       bytes: bytes,
-      fileName: widget.file.fileName,
-      mimeType: widget.file.mimeType,
+      fileName: _file.fileName,
+      mimeType: _file.mimeType,
     );
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Archivo descargado.')),
+    );
+  }
+
+  Future<void> _editImage(Uint8List bytes) async {
+    final updatedFile = await StorageImageCropDialog.show(
+      context,
+      file: _file,
+      bytes: bytes,
+    );
+    if (updatedFile == null || !mounted) return;
+
+    setState(() {
+      _file = updatedFile;
+      _bytesFuture = _loadBytes();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Captura recortada y reemplazada.')),
     );
   }
 
@@ -1766,12 +1796,15 @@ class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
                 return Column(
                   children: [
                     _StoragePreviewHeader(
-                      file: widget.file,
+                      file: _file,
                       isLoading:
                           snapshot.connectionState == ConnectionState.waiting,
                       onRetry: () {
                         setState(() => _bytesFuture = _loadBytes());
                       },
+                      onEditImage: bytes == null || !_file.isImage
+                          ? null
+                          : () => _editImage(bytes),
                       onDownload: bytes == null ? null : () => _download(bytes),
                       onClose: () => Navigator.of(context).maybePop(),
                     ),
@@ -1805,7 +1838,7 @@ class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
     }
 
     final bytes = snapshot.data!;
-    final file = widget.file;
+    final file = _file;
 
     if (file.isImage) {
       return ColoredBox(
@@ -1877,6 +1910,7 @@ class _StoragePreviewHeader extends StatelessWidget {
   final AppStoredFile file;
   final bool isLoading;
   final VoidCallback onRetry;
+  final VoidCallback? onEditImage;
   final VoidCallback? onDownload;
   final VoidCallback onClose;
 
@@ -1884,6 +1918,7 @@ class _StoragePreviewHeader extends StatelessWidget {
     required this.file,
     required this.isLoading,
     required this.onRetry,
+    required this.onEditImage,
     required this.onDownload,
     required this.onClose,
   });
@@ -1934,6 +1969,12 @@ class _StoragePreviewHeader extends StatelessWidget {
               tooltip: 'Reintentar',
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
+            ),
+          if (file.isImage)
+            IconButton(
+              tooltip: 'Recortar',
+              onPressed: onEditImage,
+              icon: const Icon(Icons.crop_outlined),
             ),
           IconButton(
             tooltip: 'Descargar',

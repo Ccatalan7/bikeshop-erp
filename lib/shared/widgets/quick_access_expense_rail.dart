@@ -49,6 +49,8 @@ class _QuickExpenseOcrResult {
     this.utilityKind,
     this.isTransportExpense = false,
     this.paymentMethodHint,
+    this.sourceSupplierId,
+    this.sourceSupplierName,
   });
 
   final ParsedInvoice parsedInvoice;
@@ -58,6 +60,8 @@ class _QuickExpenseOcrResult {
   final _UtilityExpenseKind? utilityKind;
   final bool isTransportExpense;
   final String? paymentMethodHint;
+  final String? sourceSupplierId;
+  final String? sourceSupplierName;
 }
 
 class _ParsedPaymentReceipt {
@@ -425,6 +429,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       fileName: payload.fileName,
       bytes: payload.bytes,
       extension: payload.extension,
+      sourceSupplierId: payload.sourceSupplierId,
+      sourceSupplierName: payload.sourceSupplierName,
     );
   }
 
@@ -1549,6 +1555,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     required String fileName,
     required Uint8List bytes,
     required String extension,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
   }) async {
     if (bytes.isEmpty) {
       throw Exception('El archivo está vacío.');
@@ -1583,6 +1591,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       final ocrResult = _buildQuickExpenseOcrResult(
         parsedInvoice,
         fileName: fileName,
+        sourceSupplierId: sourceSupplierId,
+        sourceSupplierName: sourceSupplierName,
       );
       _applyQuickExpenseOcrResult(ocrResult);
     } catch (error) {
@@ -1611,6 +1621,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   _QuickExpenseOcrResult _buildQuickExpenseOcrResult(
     ParsedInvoice parsedInvoice, {
     required String fileName,
+    String? sourceSupplierId,
+    String? sourceSupplierName,
   }) {
     final rawText = parsedInvoice.rawText;
     if (_looksLikePaymentReceipt(rawText)) {
@@ -1649,6 +1661,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         utilityKind: utilityKind,
         isTransportExpense: isTransportExpense,
         paymentMethodHint: receipt.paymentMethod,
+        sourceSupplierId: sourceSupplierId,
+        sourceSupplierName: sourceSupplierName,
       );
     }
 
@@ -1660,6 +1674,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       description: _defaultOcrDescription(parsedInvoice),
       utilityKind: _inferUtilityKind(documentText),
       isTransportExpense: _looksLikeTransportExpense(documentText),
+      sourceSupplierId: sourceSupplierId,
+      sourceSupplierName: sourceSupplierName,
     );
   }
 
@@ -1886,7 +1902,11 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   void _applyQuickExpenseOcrResult(_QuickExpenseOcrResult ocrResult) {
     final parsedInvoice = ocrResult.parsedInvoice;
-    final supplier = _matchSupplierFromOcr(parsedInvoice);
+    final supplier = _matchSupplierFromOcr(
+      parsedInvoice,
+      sourceSupplierId: ocrResult.sourceSupplierId,
+      sourceSupplierName: ocrResult.sourceSupplierName,
+    );
     final template = supplier == null
         ? _findTemplateForText(parsedInvoice.rawText)
         : _findTemplateForSupplier(supplier) ??
@@ -2249,7 +2269,34 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     return null;
   }
 
-  shared_supplier.Supplier? _matchSupplierFromOcr(ParsedInvoice parsedInvoice) {
+  shared_supplier.Supplier? _matchSupplierFromOcr(
+    ParsedInvoice parsedInvoice, {
+    String? sourceSupplierId,
+    String? sourceSupplierName,
+  }) {
+    final sourceId = sourceSupplierId?.trim();
+    if (sourceId != null && sourceId.isNotEmpty) {
+      for (final supplier in _suppliers) {
+        if (supplier.id == sourceId) return supplier;
+      }
+    }
+
+    final sourceName = _normalizeSearchText(sourceSupplierName ?? '');
+    if (sourceName.isNotEmpty) {
+      for (final supplier in _suppliers) {
+        final identityTerms = supplier.identityNames
+            .map(_normalizeSearchText)
+            .where((term) => term.length >= 3);
+        for (final term in identityTerms) {
+          if (term == sourceName ||
+              term.contains(sourceName) ||
+              sourceName.contains(term)) {
+            return supplier;
+          }
+        }
+      }
+    }
+
     final parsedRut = _normalizeRut(parsedInvoice.rut);
     if (parsedRut.isNotEmpty) {
       for (final supplier in _suppliers) {
