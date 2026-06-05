@@ -518,12 +518,20 @@ class MailAccountManager extends ChangeNotifier {
     if (provider == null) return;
 
     final requestId = ++_selectionRequestId;
+    final shouldMarkReadOnOpen = !email.isRead;
+    final visibleEmail =
+        shouldMarkReadOnOpen ? email.copyWith(isRead: true) : email;
     String? cachedContent;
 
     _selectedProvider = provider;
-    _selectedEmail = email;
+    _selectedEmail = visibleEmail;
     _selectedEmailError = null;
     _isLoadingSelectedEmail = email.content == null;
+    if (shouldMarkReadOnOpen) {
+      _applyReadStatusLocally(email, true);
+      unawaited(_cache.updateReadStatus(email.id, true));
+      unawaited(_syncReadStatusForOpenedEmail(provider, email, requestId));
+    }
     notifyListeners();
 
     try {
@@ -537,7 +545,7 @@ class MailAccountManager extends ChangeNotifier {
           _isPlainTextFallback(cachedContent);
 
       if (hasCachedContent) {
-        _selectedEmail = email.copyWith(content: cachedContent);
+        _selectedEmail = visibleEmail.copyWith(content: cachedContent);
         _isLoadingSelectedEmail = isPlainGmailFallback;
         notifyListeners();
       }
@@ -545,9 +553,12 @@ class MailAccountManager extends ChangeNotifier {
       final loadedEmail = await provider.getEmailContent(email);
       if (!_isCurrentSelection(requestId, email.id)) return;
 
-      _selectedEmail = loadedEmail;
+      final loadedVisibleEmail = shouldMarkReadOnOpen
+          ? loadedEmail.copyWith(isRead: true)
+          : loadedEmail;
+      _selectedEmail = loadedVisibleEmail;
       _isLoadingSelectedEmail = false;
-      await _mergeLoadedEmailMetadata(loadedEmail);
+      await _mergeLoadedEmailMetadata(loadedVisibleEmail);
 
       final loadedContent = loadedEmail.content;
       if (loadedContent != null && loadedContent.trim().isNotEmpty) {
@@ -560,22 +571,9 @@ class MailAccountManager extends ChangeNotifier {
         notifyListeners();
         unawaited(_hydrateSelectedGmailInlineImages(
           provider: provider,
-          email: loadedEmail,
+          email: loadedVisibleEmail,
           requestId: requestId,
         ));
-      }
-
-      // Mark as read
-      if (!email.isRead) {
-        await provider.markAsRead(email.id);
-        await _cache.updateReadStatus(email.id, true);
-        // Update the email in the list
-        final index = _unifiedEmails.indexWhere(
-          (e) => e.id == email.id && e.providerId == email.providerId,
-        );
-        if (index != -1) {
-          _unifiedEmails[index] = _unifiedEmails[index].copyWith(isRead: true);
-        }
       }
     } catch (e) {
       if (!_isCurrentSelection(requestId, email.id)) return;
@@ -631,6 +629,44 @@ class MailAccountManager extends ChangeNotifier {
 
   bool _isCurrentSelection(int requestId, String emailId) {
     return requestId == _selectionRequestId && _selectedEmail?.id == emailId;
+  }
+
+  Future<void> _syncReadStatusForOpenedEmail(
+    EmailProvider provider,
+    Email email,
+    int requestId,
+  ) async {
+    final success = await provider.markAsRead(email.id);
+    if (!success) {
+      debugPrint(
+        '📧 [MailManager] Could not sync read status for ${email.providerId}:${email.id}',
+      );
+      return;
+    }
+    if (!_isCurrentSelection(requestId, email.id)) return;
+    notifyListeners();
+  }
+
+  void _applyReadStatusLocally(Email email, bool read) {
+    _replaceEmailReadStatus(_unifiedEmails, email, read);
+    _replaceEmailReadStatus(_searchResults, email, read);
+
+    final selected = _selectedEmail;
+    if (selected != null &&
+        selected.id == email.id &&
+        selected.providerId == email.providerId) {
+      _selectedEmail = selected.copyWith(isRead: read);
+    }
+  }
+
+  bool _replaceEmailReadStatus(List<Email> emails, Email email, bool read) {
+    final index = emails.indexWhere(
+      (candidate) =>
+          candidate.id == email.id && candidate.providerId == email.providerId,
+    );
+    if (index == -1 || emails[index].isRead == read) return false;
+    emails[index] = emails[index].copyWith(isRead: read);
+    return true;
   }
 
   Future<void> _mergeLoadedEmailMetadata(Email loadedEmail) async {
@@ -848,13 +884,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
 
     final success = await provider.markAsRead(email.id, read: read);
     if (success) {
-      final index = _unifiedEmails.indexWhere(
-        (e) => e.id == email.id && e.providerId == email.providerId,
-      );
-      if (index != -1) {
-        _unifiedEmails[index] = _unifiedEmails[index].copyWith(isRead: read);
-        notifyListeners();
-      }
+      _applyReadStatusLocally(email, read);
+      await _cache.updateReadStatus(email.id, read);
+      notifyListeners();
     }
     return success;
   }

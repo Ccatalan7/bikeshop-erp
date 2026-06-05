@@ -23,7 +23,6 @@ import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/utils/web_url.dart';
-import 'modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
 import 'modules/inventory/services/brand_service.dart';
@@ -67,6 +66,7 @@ import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
+import 'shared/services/smart_screenshot_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -322,6 +322,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) => OcrFileHandoffService()),
+        ChangeNotifierProvider(create: (_) => SmartScreenshotService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();
@@ -687,7 +688,11 @@ class VinabikeApp extends StatelessWidget {
             locale: const Locale('es', ''),
             builder: (context, child) => WindowZoomScope(
               child: ScannerBridgeScope(
-                child: child ?? const SizedBox.shrink(),
+                child: RepaintBoundary(
+                  key:
+                      context.read<SmartScreenshotService>().captureBoundaryKey,
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
             home: _WorkspaceDeepLinkBridge(
@@ -717,57 +722,28 @@ class VinabikeApp extends StatelessWidget {
                               const WorkspaceTabBar(),
                               // Only this part needs to rebuild on workspace changes
                               Expanded(
-                                child: Selector<WorkspaceManager,
-                                    (int, String, bool)>(
+                                child:
+                                    Selector<WorkspaceManager, (int, String)>(
                                   selector: (_, wm) => (
                                     wm.activeStackIndex,
                                     wm.workspaceStackSignature,
-                                    wm.isAIPanelOpen,
                                   ),
                                   builder: (context, data, _) {
                                     final workspaceManager =
                                         context.read<WorkspaceManager>();
 
-                                    // Use a Row so the workspace pane stays at
-                                    // index 0 regardless of AI panel state. This
-                                    // prevents the IndexedStack (and its child
-                                    // Routers) from being destroyed and recreated
-                                    // every time the AI panel is toggled.
-                                    return Row(
-                                      children: [
-                                        Expanded(
-                                          child: IndexedStack(
-                                            index: data.$1,
-                                            sizing: StackFit.expand,
-                                            children: workspaceManager
-                                                .workspaceStackOrder
-                                                .map((workspace) {
-                                              return _WorkspaceRouterView(
-                                                key: ValueKey(workspace.id),
-                                                workspace: workspace,
-                                                authService: authService,
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                        // Right panel – only mounted when open, but
-                                        // its addition/removal never shifts the
-                                        // workspace pane above.
-                                        if (data.$3)
-                                          Container(
-                                            width: 400,
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context)
-                                                  .scaffoldBackgroundColor,
-                                              border: Border(
-                                                left: BorderSide(
-                                                    color: Theme.of(context)
-                                                        .dividerColor),
-                                              ),
-                                            ),
-                                            child: const AIChatPanel(jobs: []),
-                                          ),
-                                      ],
+                                    return IndexedStack(
+                                      index: data.$1,
+                                      sizing: StackFit.expand,
+                                      children: workspaceManager
+                                          .workspaceStackOrder
+                                          .map((workspace) {
+                                        return _WorkspaceRouterView(
+                                          key: ValueKey(workspace.id),
+                                          workspace: workspace,
+                                          authService: authService,
+                                        );
+                                      }).toList(),
                                     );
                                   },
                                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../../modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/storage/widgets/app_files_panel.dart';
 import '../../modules/settings/services/appearance_service.dart';
@@ -80,6 +81,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Nuevo Trabajo';
       case ToolbarTool.bikeFinder:
         return 'Buscador de Bicicletas';
+      case ToolbarTool.aiAssistant:
+        return 'Asistente IA';
       case ToolbarTool.messages:
         return 'Mensajería';
       case ToolbarTool.storage:
@@ -107,6 +110,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.build_circle_outlined;
       case ToolbarTool.bikeFinder:
         return Icons.pedal_bike_outlined;
+      case ToolbarTool.aiAssistant:
+        return Icons.auto_awesome;
       case ToolbarTool.messages:
         return Icons.chat_bubble_outline;
       case ToolbarTool.storage:
@@ -134,6 +139,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return const SizedBox.shrink();
       case ToolbarTool.bikeFinder:
         return const QuickBikeFinderPanel();
+      case ToolbarTool.aiAssistant:
+        return const AIChatPanel(jobs: [], embedded: true);
       case ToolbarTool.messages:
         return const QuickMessagesPanel();
       case ToolbarTool.storage:

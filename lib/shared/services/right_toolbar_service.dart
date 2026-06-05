@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum ToolbarTool {
   newJob,
   bikeFinder,
+  aiAssistant,
   messages,
   storage,
   kiosk,

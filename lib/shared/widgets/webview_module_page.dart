@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
@@ -17,7 +18,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/document_relay_service.dart';
+import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
+import '../services/workspace_manager.dart';
 import '../utils/file_download.dart';
 
 /// Persistent browser workspace - loads a website as a first-class workspace.
@@ -73,12 +76,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   InAppWebViewController? _controller;
   WebViewEnvironment? _webViewEnvironment;
+  final GlobalKey _browserViewportKey =
+      GlobalKey(debugLabel: 'browser viewport');
   final DocumentRelayService _documentRelayService = DocumentRelayService();
   final TextEditingController _addressController = TextEditingController();
   final FocusNode _addressFocusNode = FocusNode();
   bool _didSelectAddressForFocus = false;
 
   Uri? _initialUri;
+  Uri? _nativeInitialUri;
   bool _isInitializing = true;
   bool _isLoading = true;
   int _loadingProgress = 0;
@@ -92,7 +98,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   bool _canGoForward = false;
   bool _isDownloading = false;
   bool _isFetchingDocumentViaRelay = false;
+  bool _isPrintingRelayPreview = false;
   bool _documentRelayAvailable = false;
+  double _relayPreviewZoom = 1.0;
   double? _lastAppliedBrowserZoom;
   double? _pendingBrowserZoom;
   Offset _pendingWindowsTrackpadScroll = Offset.zero;
@@ -106,6 +114,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   String _activeSuggestionQuery = '';
   bool _isFetchingSuggestions = false;
   bool _showAddressSuggestions = false;
+  String? _registeredScreenshotWorkspaceId;
 
   @override
   bool get wantKeepAlive => true;
@@ -249,7 +258,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _registerScreenshotContext();
+  }
+
+  @override
   void dispose() {
+    _unregisterScreenshotContext();
     _suggestionTimer?.cancel();
     _hideSuggestionsTimer?.cancel();
     _windowsTrackpadScrollTimer?.cancel();
@@ -259,6 +275,68 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _addressController.dispose();
     _addressFocusNode.dispose();
     super.dispose();
+  }
+
+  void _registerScreenshotContext() {
+    Workspace? workspace;
+    try {
+      workspace = Provider.of<Workspace>(context, listen: false);
+    } catch (_) {
+      return;
+    }
+
+    if (_registeredScreenshotWorkspaceId != null &&
+        _registeredScreenshotWorkspaceId != workspace.id) {
+      context
+          .read<SmartScreenshotService>()
+          .unregisterBrowserContext(_registeredScreenshotWorkspaceId!);
+    }
+
+    _registeredScreenshotWorkspaceId = workspace.id;
+    context.read<SmartScreenshotService>().registerBrowserContext(
+          workspace.id,
+          BrowserScreenshotContext(
+            capturePng: _takeBrowserScreenshot,
+            currentUrl: () => _currentUrl.isEmpty ? widget.url : _currentUrl,
+            pageTitle: () => _pageTitle ?? widget.title,
+            viewportGlobalRect: _browserViewportGlobalRect,
+          ),
+        );
+  }
+
+  void _unregisterScreenshotContext() {
+    final workspaceId = _registeredScreenshotWorkspaceId;
+    if (workspaceId == null) return;
+    try {
+      context.read<SmartScreenshotService>().unregisterBrowserContext(
+            workspaceId,
+          );
+    } catch (_) {
+      // The provider tree can be gone during app shutdown.
+    }
+    _registeredScreenshotWorkspaceId = null;
+  }
+
+  Future<Uint8List?> _takeBrowserScreenshot() async {
+    if (_relayDocumentPreview != null) return null;
+    final controller = _controller;
+    if (controller == null) return null;
+    try {
+      return controller.takeScreenshot();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser screenshot skipped: $error');
+      }
+      return null;
+    }
+  }
+
+  Rect? _browserViewportGlobalRect() {
+    final context = _browserViewportKey.currentContext;
+    final box = context?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    final topLeft = box.localToGlobal(Offset.zero);
+    return topLeft & box.size;
   }
 
   Future<void> _prepareBrowser() async {
@@ -274,9 +352,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _initialUri = initialUri;
     _currentUrl = initialUri.toString();
     _syncAddressField(_currentUrl);
+    final shouldLoadThroughRelay =
+        await _shouldOpenDocumentThroughRelay(initialUri);
+    _nativeInitialUri =
+        shouldLoadThroughRelay ? Uri.parse('about:blank') : initialUri;
 
     if (!_usesNativeBrowser) {
       _finishInitialization(loading: false);
+      if (shouldLoadThroughRelay) {
+        unawaited(_startDocumentRelayForUrl(initialUri.toString()));
+      }
       return;
     }
 
@@ -305,7 +390,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         );
       }
 
-      _finishInitialization(loading: true);
+      _finishInitialization(loading: !shouldLoadThroughRelay);
+      if (shouldLoadThroughRelay) {
+        unawaited(_startDocumentRelayForUrl(initialUri.toString()));
+      }
     } catch (error) {
       _finishInitialization(
         message: 'No se pudo inicializar el navegador embebido: $error',
@@ -325,16 +413,53 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   URLRequest _urlRequest(Uri uri) => URLRequest(url: WebUri.uri(uri));
 
-  Future<void> _loadDocumentRelayAvailability() async {
+  Future<bool> _loadDocumentRelayAvailability() async {
     try {
       final config = await _documentRelayService.loadConfig();
-      if (!mounted) return;
-      setState(() => _documentRelayAvailable = config.isConfigured);
+      final isConfigured = config.isConfigured;
+      if (!mounted) return isConfigured;
+      setState(() => _documentRelayAvailable = isConfigured);
+      return isConfigured;
     } catch (error) {
       if (kDebugMode) {
         debugPrint('🌐 Document relay availability skipped: $error');
       }
+      return false;
     }
+  }
+
+  Future<bool> _shouldOpenDocumentThroughRelay(Uri uri) async {
+    if (!DocumentRelayService.isLikelyRelayCandidate(uri)) return false;
+    if (_documentRelayAvailable) return true;
+    return _loadDocumentRelayAvailability();
+  }
+
+  Future<bool> _tryOpenDocumentThroughRelay(String sourceUrl) async {
+    final uri = Uri.tryParse(sourceUrl);
+    if (uri == null || !await _shouldOpenDocumentThroughRelay(uri)) {
+      return false;
+    }
+
+    unawaited(_startDocumentRelayForUrl(sourceUrl));
+    return true;
+  }
+
+  Future<void> _startDocumentRelayForUrl(String sourceUrl) async {
+    if (_isFetchingDocumentViaRelay) return;
+    if (!mounted) return;
+
+    setState(() {
+      _relayPreviewSourceUrl = sourceUrl;
+      _relayDocumentPreview = null;
+      _currentUrl = sourceUrl;
+      _pageTitle = 'Documento web';
+      _lastErrorMessage = null;
+      _isLoading = false;
+      _loadingProgress = 100;
+    });
+    _syncAddressField(sourceUrl);
+
+    await _fetchCurrentDocumentThroughRelay(sourceUrlOverride: sourceUrl);
   }
 
   Future<void> _goBack() async {
@@ -391,6 +516,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   }
 
   Future<void> _loadUri(Uri uri) async {
+    if (await _tryOpenDocumentThroughRelay(uri.toString())) {
+      return;
+    }
+
     if (!_canLoadInsideWebView(uri)) {
       await _openExternalUrl(uri.toString());
       return;
@@ -1152,6 +1281,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             sourceUrl: result.sourceUrl,
             savedInternally: savedInternally,
           );
+          _relayPreviewZoom = 1.0;
           _currentUrl = result.sourceUrl;
           _pageTitle = result.fileName;
           _lastErrorMessage = null;
@@ -1190,6 +1320,72 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     } finally {
       if (mounted) setState(() => _isFetchingDocumentViaRelay = false);
     }
+  }
+
+  Future<void> _downloadRelayPreviewDocument(
+    _RelayDocumentPreview preview,
+  ) async {
+    if (_isDownloading) {
+      _showBrowserSnack('Ya hay una descarga en curso.');
+      return;
+    }
+
+    if (mounted) setState(() => _isDownloading = true);
+    try {
+      await downloadFile(
+        bytes: preview.bytes,
+        fileName: preview.fileName,
+        mimeType: 'application/pdf',
+      );
+      _showBrowserSnack('Documento descargado.');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Relay preview download skipped: $error');
+      }
+      _showBrowserSnack('No pude descargar el documento.');
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  Future<void> _printRelayPreviewDocument(
+    _RelayDocumentPreview preview,
+  ) async {
+    if (_isPrintingRelayPreview) return;
+
+    if (mounted) setState(() => _isPrintingRelayPreview = true);
+    try {
+      final printed = await Printing.layoutPdf(
+        name: preview.fileName,
+        dynamicLayout: false,
+        onLayout: (_) async => preview.bytes,
+      );
+      if (printed) {
+        _showBrowserSnack('Documento enviado a impresión.');
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Relay preview print skipped: $error');
+      }
+      _showBrowserSnack('No pude imprimir el documento.');
+    } finally {
+      if (mounted) setState(() => _isPrintingRelayPreview = false);
+    }
+  }
+
+  void _setRelayPreviewZoom(double zoom) {
+    final nextZoom = zoom.clamp(0.65, 2.0).toDouble();
+    if (!mounted) return;
+    setState(() => _relayPreviewZoom = nextZoom);
+  }
+
+  void _resetRelayPreviewZoom() {
+    if (!mounted) return;
+    setState(() => _relayPreviewZoom = 1.0);
+  }
+
+  Future<Uint8List> _buildCurrentRelayPreviewPdf(PdfPageFormat _) async {
+    return _relayDocumentPreview?.bytes ?? Uint8List(0);
   }
 
   Future<void> _recoverCurrentDocumentThroughRelay(String sourceUrl) async {
@@ -1522,6 +1718,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     NavigationAction navigationAction,
   ) async {
     final url = navigationAction.request.url;
+    if (url != null && await _tryOpenDocumentThroughRelay(url.toString())) {
+      return NavigationActionPolicy.CANCEL;
+    }
+
     if (url == null || _canLoadInsideWebView(url)) {
       return NavigationActionPolicy.ALLOW;
     }
@@ -1581,7 +1781,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       );
     }
 
-    final initialUri = _initialUri;
+    final initialUri = _nativeInitialUri ?? _initialUri;
     if (initialUri == null) {
       return _buildFallbackView(
         context,
@@ -1594,112 +1794,115 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final browserZoom = _browserZoom(context);
     _scheduleBrowserZoom(browserZoom);
 
-    final webViewContent = _buildPageInteractionFocusBridge(
-      child: _buildWindowsTrackpadScrollBridge(
-        child: _NativeBrowserZoomBoundary(
-          appScale: browserZoom,
-          child: InAppWebView(
-            key: ValueKey('browser-${widget.url}'),
-            webViewEnvironment: _webViewEnvironment,
-            initialUrlRequest: _urlRequest(initialUri),
-            initialSettings: _browserSettings(browserZoom),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-              controller.addJavaScriptHandler(
-                handlerName: _pageInteractionHandlerName,
-                callback: (_) {
-                  _clearAddressFocusFromPageInteraction();
-                  return null;
-                },
-              );
-              unawaited(_installPageInteractionBridge(controller));
-              unawaited(_applyBrowserZoom(browserZoom));
-              unawaited(_refreshNavigationState());
-            },
-            onLoadStart: (controller, url) {
-              if (!mounted) return;
-              final loadingUrl = url?.toString() ?? '';
-              setState(() {
-                _isLoading = true;
-                _loadingProgress = 0;
-                _lastErrorMessage = null;
-                if (!loadingUrl.startsWith('data:')) {
-                  _relayPreviewSourceUrl = null;
-                  _relayDocumentPreview = null;
+    final webViewContent = KeyedSubtree(
+      key: _browserViewportKey,
+      child: _buildPageInteractionFocusBridge(
+        child: _buildWindowsTrackpadScrollBridge(
+          child: _NativeBrowserZoomBoundary(
+            appScale: browserZoom,
+            child: InAppWebView(
+              key: ValueKey('browser-${widget.url}'),
+              webViewEnvironment: _webViewEnvironment,
+              initialUrlRequest: _urlRequest(initialUri),
+              initialSettings: _browserSettings(browserZoom),
+              onWebViewCreated: (controller) {
+                _controller = controller;
+                controller.addJavaScriptHandler(
+                  handlerName: _pageInteractionHandlerName,
+                  callback: (_) {
+                    _clearAddressFocusFromPageInteraction();
+                    return null;
+                  },
+                );
+                unawaited(_installPageInteractionBridge(controller));
+                unawaited(_applyBrowserZoom(browserZoom));
+                unawaited(_refreshNavigationState());
+              },
+              onLoadStart: (controller, url) {
+                if (!mounted) return;
+                final loadingUrl = url?.toString() ?? '';
+                setState(() {
+                  _isLoading = true;
+                  _loadingProgress = 0;
+                  _lastErrorMessage = null;
+                  if (!loadingUrl.startsWith('data:')) {
+                    _relayPreviewSourceUrl = null;
+                    _relayDocumentPreview = null;
+                  }
+                });
+                _setCurrentUrl(url);
+              },
+              onLoadStop: (controller, url) async {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                  _loadingProgress = 100;
+                });
+                _setCurrentUrl(url);
+                _pageTitle = await controller.getTitle();
+                unawaited(_recordBrowserHistory(url, title: _pageTitle));
+                if (mounted) setState(() {});
+                unawaited(_installPageInteractionBridge(controller));
+                unawaited(_applyBrowserZoom(browserZoom));
+                unawaited(_refreshNavigationState());
+              },
+              onProgressChanged: (controller, progress) {
+                if (!mounted) return;
+                setState(() {
+                  _loadingProgress = progress;
+                  _isLoading = progress < 100;
+                });
+              },
+              onTitleChanged: (controller, title) {
+                if (!mounted) return;
+                setState(() {
+                  _pageTitle = title;
+                });
+              },
+              onUpdateVisitedHistory: (controller, url, isReload) {
+                if (!mounted) return;
+                _setCurrentUrl(url);
+                unawaited(_refreshNavigationState());
+              },
+              onReceivedError: (controller, request, error) {
+                if (!mounted || request.isForMainFrame == false) return;
+                final failedUrl = request.url.toString();
+                final canRecoverThroughRelay =
+                    DocumentRelayService.isLikelyRelayCandidate(
+                  Uri.tryParse(failedUrl),
+                );
+                if (_isBenignNavigationError(error)) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      '🌐 Web workspace ignored cancelled navigation: '
+                      '${error.description}',
+                    );
+                  }
+                  return;
                 }
-              });
-              _setCurrentUrl(url);
-            },
-            onLoadStop: (controller, url) async {
-              if (!mounted) return;
-              setState(() {
-                _isLoading = false;
-                _loadingProgress = 100;
-              });
-              _setCurrentUrl(url);
-              _pageTitle = await controller.getTitle();
-              unawaited(_recordBrowserHistory(url, title: _pageTitle));
-              if (mounted) setState(() {});
-              unawaited(_installPageInteractionBridge(controller));
-              unawaited(_applyBrowserZoom(browserZoom));
-              unawaited(_refreshNavigationState());
-            },
-            onProgressChanged: (controller, progress) {
-              if (!mounted) return;
-              setState(() {
-                _loadingProgress = progress;
-                _isLoading = progress < 100;
-              });
-            },
-            onTitleChanged: (controller, title) {
-              if (!mounted) return;
-              setState(() {
-                _pageTitle = title;
-              });
-            },
-            onUpdateVisitedHistory: (controller, url, isReload) {
-              if (!mounted) return;
-              _setCurrentUrl(url);
-              unawaited(_refreshNavigationState());
-            },
-            onReceivedError: (controller, request, error) {
-              if (!mounted || request.isForMainFrame == false) return;
-              final failedUrl = request.url.toString();
-              final canRecoverThroughRelay =
-                  DocumentRelayService.isLikelyRelayCandidate(
-                Uri.tryParse(failedUrl),
-              );
-              if (_isBenignNavigationError(error)) {
-                if (kDebugMode) {
-                  debugPrint(
-                    '🌐 Web workspace ignored cancelled navigation: '
-                    '${error.description}',
-                  );
+                setState(() {
+                  _lastErrorMessage = error.description;
+                  _isLoading = false;
+                });
+                if (canRecoverThroughRelay) {
+                  unawaited(_recoverCurrentDocumentThroughRelay(failedUrl));
                 }
-                return;
-              }
-              setState(() {
-                _lastErrorMessage = error.description;
-                _isLoading = false;
-              });
-              if (canRecoverThroughRelay) {
-                unawaited(_recoverCurrentDocumentThroughRelay(failedUrl));
-              }
-            },
-            onPermissionRequest: (controller, request) async {
-              return PermissionResponse(
-                resources: request.resources,
-                action: PermissionResponseAction.GRANT,
-              );
-            },
-            shouldOverrideUrlLoading: _handleNavigation,
-            onCreateWindow: _handleCreateWindow,
-            onDownloadStartRequest: (controller, request) {
-              unawaited(_handleDownloadStart(request));
-            },
-            onConsoleMessage: (controller, consoleMessage) {
-              debugPrint('🌐 Web workspace: ${consoleMessage.message}');
-            },
+              },
+              onPermissionRequest: (controller, request) async {
+                return PermissionResponse(
+                  resources: request.resources,
+                  action: PermissionResponseAction.GRANT,
+                );
+              },
+              shouldOverrideUrlLoading: _handleNavigation,
+              onCreateWindow: _handleCreateWindow,
+              onDownloadStartRequest: (controller, request) {
+                unawaited(_handleDownloadStart(request));
+              },
+              onConsoleMessage: (controller, consoleMessage) {
+                debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+              },
+            ),
           ),
         ),
       ),
@@ -1711,6 +1914,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       child: Stack(
         children: [
           Positioned.fill(child: webViewContent),
+          if (_isFetchingDocumentViaRelay && relayPreview == null)
+            Positioned.fill(child: _buildRelayLoadingOverlay(context)),
           if (relayPreview != null)
             Positioned.fill(
               child: _buildRelayDocumentPreview(context, relayPreview),
@@ -1725,6 +1930,42 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       behavior: HitTestBehavior.deferToChild,
       onPointerDown: (_) => _clearAddressFocusFromPageInteraction(),
       child: child,
+    );
+  }
+
+  Widget _buildRelayLoadingOverlay(BuildContext context) {
+    final theme = Theme.of(context);
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Trayendo documento desde Chile...',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1813,6 +2054,64 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       ),
                     ),
                   IconButton(
+                    tooltip: 'Alejar',
+                    onPressed: _relayPreviewZoom <= 0.65
+                        ? null
+                        : () => _setRelayPreviewZoom(_relayPreviewZoom - 0.15),
+                    icon: const Icon(Icons.zoom_out_outlined, size: 18),
+                  ),
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      '${(_relayPreviewZoom * 100).round()}%',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Acercar',
+                    onPressed: _relayPreviewZoom >= 2.0
+                        ? null
+                        : () => _setRelayPreviewZoom(_relayPreviewZoom + 0.15),
+                    icon: const Icon(Icons.zoom_in_outlined, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Ajustar',
+                    onPressed: (_relayPreviewZoom - 1.0).abs() < 0.01
+                        ? null
+                        : _resetRelayPreviewZoom,
+                    icon: const Icon(Icons.fit_screen_outlined, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Imprimir',
+                    onPressed: _isPrintingRelayPreview
+                        ? null
+                        : () => _printRelayPreviewDocument(preview),
+                    icon: _isPrintingRelayPreview
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.print_outlined, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: 'Descargar',
+                    onPressed: _isDownloading
+                        ? null
+                        : () => _downloadRelayPreviewDocument(preview),
+                    icon: _isDownloading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined, size: 18),
+                  ),
+                  IconButton(
                     tooltip: 'Recargar documento',
                     onPressed: _isFetchingDocumentViaRelay
                         ? null
@@ -1842,22 +2141,75 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             ),
           ),
           Expanded(
-            child: PdfPreview(
-              build: (PdfPageFormat _) async => preview.bytes,
+            child: PdfPreview.builder(
+              key: ValueKey(preview.sourceUrl),
+              build: _buildCurrentRelayPreviewPdf,
+              pagesBuilder: _buildRelayPdfPages,
               useActions: false,
               allowPrinting: false,
               allowSharing: false,
               canChangeOrientation: false,
               canChangePageFormat: false,
               canDebug: false,
+              maxPageWidth: 1600,
               pdfFileName: preview.fileName,
               scrollViewDecoration: const BoxDecoration(
                 color: Color(0xFFE5E7EB),
+              ),
+              loadingWidget: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRelayPdfPages(
+    BuildContext context,
+    List<PdfPreviewPageData> pages,
+  ) {
+    if (pages.isEmpty) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final baseWidth = (availableWidth - 96).clamp(560.0, 1080.0);
+        final pageWidth = (baseWidth * _relayPreviewZoom).clamp(360.0, 1900.0);
+        final contentWidth = math.max(availableWidth, pageWidth + 72);
+
+        return ColoredBox(
+          color: const Color(0xFFE5E7EB),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: contentWidth,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final page in pages)
+                        _RelayPreviewPage(
+                          page: page,
+                          width: pageWidth,
+                          shadowColor: theme.shadowColor,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2613,6 +2965,44 @@ class _RelayDocumentPreview {
   final String fileName;
   final String sourceUrl;
   final bool savedInternally;
+}
+
+class _RelayPreviewPage extends StatelessWidget {
+  const _RelayPreviewPage({
+    required this.page,
+    required this.width,
+    required this.shadowColor,
+  });
+
+  final PdfPreviewPageData page;
+  final double width;
+  final Color shadowColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD1D5DB)),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: AspectRatio(
+        aspectRatio: page.aspectRatio,
+        child: Image(
+          image: page.image,
+          fit: BoxFit.fill,
+        ),
+      ),
+    );
+  }
 }
 
 class _BrowserPlaceEntry {

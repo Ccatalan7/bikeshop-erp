@@ -14,6 +14,7 @@ import '../../inventory/services/inventory_service.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/services/right_toolbar_service.dart';
 import '../services/ai_service.dart';
 
 class _AIChatMessage {
@@ -37,7 +38,7 @@ class AIAssistantButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton(
       onPressed: () {
-        context.read<WorkspaceManager>().toggleAIPanel();
+        context.read<RightToolbarService>().openTool(ToolbarTool.aiAssistant);
       },
       tooltip: 'Asistente IA',
       child: const Icon(Icons.smart_toy),
@@ -47,8 +48,13 @@ class AIAssistantButton extends StatelessWidget {
 
 class AIChatPanel extends StatefulWidget {
   final List<MechanicJob> jobs;
+  final bool embedded;
 
-  const AIChatPanel({super.key, required this.jobs});
+  const AIChatPanel({
+    super.key,
+    required this.jobs,
+    this.embedded = false,
+  });
 
   @override
   State<AIChatPanel> createState() => _AIChatPanelState();
@@ -124,6 +130,7 @@ class _AIChatPanelState extends State<AIChatPanel> {
     if (text.isEmpty) return;
 
     await _stopListening(sendTranscript: false);
+    if (!mounted) return;
 
     setState(() {
       _messages.add(_AIChatMessage(role: 'user', text: text));
@@ -213,12 +220,14 @@ class _AIChatPanelState extends State<AIChatPanel> {
 
     final started = await _speechToText.listen(
       onResult: _handleSpeechResult,
-      listenMode: ListenMode.dictation,
-      partialResults: true,
-      cancelOnError: true,
       pauseFor: const Duration(seconds: 3),
       listenFor: const Duration(minutes: 1),
       localeId: _speechLocaleId,
+      listenOptions: SpeechListenOptions(
+        listenMode: ListenMode.dictation,
+        partialResults: true,
+        cancelOnError: true,
+      ),
     );
 
     if (!started) {
@@ -371,45 +380,55 @@ class _AIChatPanelState extends State<AIChatPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      width: 400, // Fixed width for the side panel
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          left: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            offset: const Offset(-2, 0),
-            blurRadius: 10,
-          )
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
+      width: widget.embedded ? double.infinity : 400,
+      decoration: widget.embedded
+          ? null
+          : BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              border: Border(
+                left: BorderSide(color: theme.dividerColor),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  offset: const Offset(-2, 0),
+                  blurRadius: 10,
+                )
+              ],
+            ),
+      padding: EdgeInsets.all(widget.embedded ? 12 : 16),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.smart_toy, color: Theme.of(context).primaryColor),
-                  const SizedBox(width: 8),
-                  const Text('Asistente Taller',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  context.read<WorkspaceManager>().toggleAIPanel();
-                },
-              ),
-            ],
-          ),
-          const Divider(),
+          if (!widget.embedded) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.smart_toy, color: theme.primaryColor),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Asistente Taller',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    context.read<RightToolbarService>().close();
+                  },
+                ),
+              ],
+            ),
+            const Divider(),
+          ],
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -456,12 +475,16 @@ class _AIChatPanelState extends State<AIChatPanel> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color:
-                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.18),
                   ),
                 ),
                 child: Row(
@@ -669,7 +692,8 @@ class _AssistantActionCard extends StatelessWidget {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
-                                          color: accent.withValues(alpha: 0.14)),
+                                          color:
+                                              accent.withValues(alpha: 0.14)),
                                     ),
                                     child: Text(
                                       chip,

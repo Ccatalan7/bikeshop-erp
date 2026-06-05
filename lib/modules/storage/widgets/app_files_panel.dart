@@ -34,6 +34,7 @@ enum _StorageSort {
 enum _StorageCompactTab {
   folders,
   recent,
+  screenshots,
 }
 
 class AppFilesPanel extends StatefulWidget {
@@ -62,6 +63,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   _StorageSort _sort = _StorageSort.newest;
   _StorageCompactTab _compactTab = _StorageCompactTab.recent;
   Timer? _searchDebounce;
+  StreamSubscription<AppStoredFile>? _savedFilesSubscription;
   String _query = '';
   String? _error;
   bool _isLoading = true;
@@ -72,12 +74,17 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _savedFilesSubscription = _service.savedFiles.listen((_) {
+      if (!mounted) return;
+      unawaited(_loadFiles());
+    });
     _loadFiles();
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _savedFilesSubscription?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -283,8 +290,20 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     });
   }
 
+  void _setCompactTab(_StorageCompactTab tab) {
+    setState(() {
+      _compactTab = tab;
+      _applyCurrentView();
+    });
+  }
+
   void _applyCurrentView() {
-    final files = _allFiles.where(_matchesSelectedFolder).toList();
+    final files = _allFiles.where((file) {
+      if (widget.compact && _compactTab == _StorageCompactTab.screenshots) {
+        return _sourceBucket(file.sourceType) == 'screenshot';
+      }
+      return _matchesSelectedFolder(file);
+    }).toList();
     files.sort((a, b) {
       switch (_sort) {
         case _StorageSort.newest:
@@ -370,6 +389,16 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
             .length,
       ),
       _StorageFolder(
+        id: 'source:screenshot',
+        label: 'Capturas',
+        subtitle: 'Screenshots inteligentes',
+        glyph: '📸',
+        color: const Color(0xFF7C3AED),
+        count: _allFiles
+            .where((file) => _sourceBucket(file.sourceType) == 'screenshot')
+            .length,
+      ),
+      _StorageFolder(
         id: 'source:email',
         label: 'Correo',
         subtitle: 'Adjuntos guardados',
@@ -434,6 +463,7 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     if (source.startsWith('chat')) return 'chat';
     if (source.startsWith('expense')) return 'expense';
     if (source.startsWith('browser')) return 'browser';
+    if (source.startsWith('screenshot')) return 'screenshot';
     if (source == 'manual') return 'manual';
     return source;
   }
@@ -802,7 +832,9 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
             const SizedBox(height: 10),
             _buildCompactTabs(context),
           ],
-          if (!widget.compact || _compactTab == _StorageCompactTab.recent) ...[
+          if (!widget.compact ||
+              _compactTab == _StorageCompactTab.recent ||
+              _compactTab == _StorageCompactTab.screenshots) ...[
             const SizedBox(height: 10),
             Row(
               children: [
@@ -861,16 +893,21 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
             glyph: '🗂️',
             label: 'Carpetas',
             theme: theme,
-            onTap: () =>
-                setState(() => _compactTab = _StorageCompactTab.folders),
+            onTap: () => _setCompactTab(_StorageCompactTab.folders),
           ),
           _StorageCompactTabButton(
             selected: _compactTab == _StorageCompactTab.recent,
             glyph: '🕘',
             label: 'Recientes',
             theme: theme,
-            onTap: () =>
-                setState(() => _compactTab = _StorageCompactTab.recent),
+            onTap: () => _setCompactTab(_StorageCompactTab.recent),
+          ),
+          _StorageCompactTabButton(
+            selected: _compactTab == _StorageCompactTab.screenshots,
+            glyph: '📸',
+            label: 'Capturas',
+            theme: theme,
+            onTap: () => _setCompactTab(_StorageCompactTab.screenshots),
           ),
         ],
       ),
@@ -1988,6 +2025,9 @@ class _UploadPayload {
 }
 
 IconData _fileIcon(AppStoredFile file) {
+  if (file.sourceType.startsWith('screenshot')) {
+    return Icons.screenshot_monitor_outlined;
+  }
   if (file.isPdf) return Icons.picture_as_pdf_outlined;
   if (file.isImage) return Icons.image_outlined;
   switch (file.extension) {
@@ -2019,6 +2059,7 @@ String _sourceLabel(String sourceType) {
   if (sourceType.startsWith('chat')) return 'Chat';
   if (sourceType.startsWith('expense')) return 'Gastos';
   if (sourceType.startsWith('browser')) return 'Navegador';
+  if (sourceType.startsWith('screenshot')) return 'Captura';
   if (sourceType == 'manual') return 'Manual';
   return 'Archivo';
 }
@@ -2040,6 +2081,7 @@ Color _sourceColor(AppStoredFile file) {
   if (sourceType.startsWith('chat')) return const Color(0xFF059669);
   if (sourceType.startsWith('expense')) return const Color(0xFFB45309);
   if (sourceType.startsWith('browser')) return const Color(0xFF0F766E);
+  if (sourceType.startsWith('screenshot')) return const Color(0xFF7C3AED);
   if (sourceType == 'manual') return const Color(0xFF475569);
   return const Color(0xFF64748B);
 }

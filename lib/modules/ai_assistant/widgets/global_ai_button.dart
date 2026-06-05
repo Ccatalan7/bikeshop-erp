@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/services/right_toolbar_service.dart';
 
 class GlobalAIFloatingButton extends StatelessWidget {
   const GlobalAIFloatingButton({super.key});
@@ -14,7 +14,7 @@ class GlobalAIFloatingButton extends StatelessWidget {
       color: theme.colorScheme.primary,
       tooltip: 'Asistente IA Global',
       onPressed: () {
-        context.read<WorkspaceManager>().toggleAIPanel();
+        context.read<RightToolbarService>().openTool(ToolbarTool.aiAssistant);
       },
     );
   }

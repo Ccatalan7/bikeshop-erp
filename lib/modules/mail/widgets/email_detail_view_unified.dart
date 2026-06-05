@@ -364,6 +364,44 @@ $_emailLinkBridgeJavaScript
 </script>
 ''';
 
+const String _emailKeyboardBridgeJavaScript = r'''
+(function() {
+  if (window.__vinabikeEmailKeyboardBridgeInstalled) return;
+  window.__vinabikeEmailKeyboardBridgeInstalled = true;
+
+  function isEditableTarget(target) {
+    if (!target) return false;
+    var tag = target.tagName ? String(target.tagName).toLowerCase() : '';
+    return tag === 'input' ||
+      tag === 'textarea' ||
+      tag === 'select' ||
+      target.isContentEditable === true;
+  }
+
+  document.addEventListener('keydown', function(event) {
+    if (!event || event.defaultPrevented) return;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (isEditableTarget(event.target)) return;
+
+    try {
+      if (window.EmailKeyboardBridge && EmailKeyboardBridge.postMessage) {
+        event.preventDefault();
+        event.stopPropagation();
+        EmailKeyboardBridge.postMessage(event.key === 'ArrowDown' ? '1' : '-1');
+        return false;
+      }
+    } catch (error) {}
+  }, true);
+})();
+''';
+
+const String _emailKeyboardBridgeScript = '''
+<script>
+$_emailKeyboardBridgeJavaScript
+</script>
+''';
+
 void _mailReaderDebug(String message) {
   if (!_emailReaderDiagnosticsEnabled) return;
   debugPrint('📧 [MailReaderDebug] $message');
@@ -397,6 +435,7 @@ class EmailDetailViewUnified extends StatelessWidget {
   final VoidCallback? onReply;
   final VoidCallback? onReplyAll;
   final VoidCallback? onDelete;
+  final ValueChanged<int>? onNavigateSelection;
 
   const EmailDetailViewUnified({
     super.key,
@@ -410,6 +449,7 @@ class EmailDetailViewUnified extends StatelessWidget {
     this.onReply,
     this.onReplyAll,
     this.onDelete,
+    this.onNavigateSelection,
   });
 
   @override
@@ -453,6 +493,7 @@ class EmailDetailViewUnified extends StatelessWidget {
                 isLoading: isLoading,
                 error: error,
                 onRetry: onRetry,
+                onNavigateSelection: onNavigateSelection,
               ),
             ),
           ],
@@ -492,6 +533,7 @@ class EmailDetailViewUnified extends StatelessWidget {
                     isLoading: isLoading,
                     error: error,
                     onRetry: onRetry,
+                    onNavigateSelection: onNavigateSelection,
                   ),
                 ),
               ],
@@ -1345,12 +1387,14 @@ class _EmailBodyPane extends StatelessWidget {
   final bool isLoading;
   final String? error;
   final VoidCallback onRetry;
+  final ValueChanged<int>? onNavigateSelection;
 
   const _EmailBodyPane({
     required this.email,
     required this.isLoading,
     required this.error,
     required this.onRetry,
+    required this.onNavigateSelection,
   });
 
   bool get _hasContent => email.content?.trim().isNotEmpty ?? false;
@@ -1427,7 +1471,10 @@ class _EmailBodyPane extends StatelessWidget {
 
     return Stack(
       children: [
-        _EmailBodyWebView(email: email),
+        _EmailBodyWebView(
+          email: email,
+          onNavigateSelection: onNavigateSelection,
+        ),
         if (isLoading)
           const Positioned(
             left: 0,
@@ -1443,8 +1490,12 @@ class _EmailBodyPane extends StatelessWidget {
 /// WebView that renders ONLY the email body HTML (no sender info)
 class _EmailBodyWebView extends StatefulWidget {
   final Email email;
+  final ValueChanged<int>? onNavigateSelection;
 
-  const _EmailBodyWebView({required this.email});
+  const _EmailBodyWebView({
+    required this.email,
+    required this.onNavigateSelection,
+  });
 
   @override
   State<_EmailBodyWebView> createState() => _EmailBodyWebViewState();
@@ -1491,6 +1542,14 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
           'EmailDebugBridge',
           onMessageReceived: (message) {
             _mailReaderDebug('js ${_debugShort(message.message, 500)}');
+          },
+        )
+        ..addJavaScriptChannel(
+          'EmailKeyboardBridge',
+          onMessageReceived: (message) {
+            final delta = int.tryParse(message.message);
+            if (delta == null || delta == 0) return;
+            widget.onNavigateSelection?.call(delta > 0 ? 1 : -1);
           },
         )
         ..setNavigationDelegate(
@@ -1690,6 +1749,7 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   Future<void> _installLinkBridge() async {
     try {
       await _controller?.runJavaScript(_emailLinkBridgeJavaScript);
+      await _controller?.runJavaScript(_emailKeyboardBridgeJavaScript);
       _mailReaderDebug('js bridge install requested');
     } catch (error) {
       _mailReaderDebug('js bridge install failed: $error');
@@ -1854,6 +1914,7 @@ $base
   }
 </style>
 $_emailLinkBridgeScript
+$_emailKeyboardBridgeScript
 ''';
   }
 

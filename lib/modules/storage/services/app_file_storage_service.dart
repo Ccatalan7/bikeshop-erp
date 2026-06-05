@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,9 +17,13 @@ class AppFileStorageService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final Uuid _uuid = const Uuid();
+  final StreamController<AppStoredFile> _savedFileController =
+      StreamController<AppStoredFile>.broadcast();
   List<_SupplierUrlCandidate>? _supplierUrlCandidates;
   DateTime? _supplierUrlCandidatesLoadedAt;
   static const Duration _supplierUrlCacheMaxAge = Duration(minutes: 5);
+
+  Stream<AppStoredFile> get savedFiles => _savedFileController.stream;
 
   Future<List<AppStoredFile>> listFiles({
     String? query,
@@ -111,7 +116,9 @@ class AppFileStorageService {
           .select()
           .single();
 
-      return AppStoredFile.fromJson(row);
+      final savedFile = AppStoredFile.fromJson(row);
+      _savedFileController.add(savedFile);
+      return savedFile;
     } catch (_) {
       await _supabase.storage.from(bucketName).remove([storagePath]);
       rethrow;

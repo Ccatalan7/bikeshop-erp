@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/web_url.dart';
@@ -15,6 +16,12 @@ import '../widgets/mail_error_diagnostic_banner.dart';
 
 enum _InboxQuickFilter { all, unread, attachments }
 
+class _MailSelectionIntent extends Intent {
+  const _MailSelectionIntent(this.delta);
+
+  final int delta;
+}
+
 /// Unified Mail Inbox Page - Shows merged emails from all connected providers
 class MailInboxPage extends StatefulWidget {
   const MailInboxPage({super.key});
@@ -24,9 +31,13 @@ class MailInboxPage extends StatefulWidget {
 }
 
 class _MailInboxPageState extends State<MailInboxPage> {
+  static const double _estimatedEmailRowHeight = 92;
+
   late final MailAccountManager _manager;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
+  final FocusNode _keyboardFocusNode = FocusNode(debugLabel: 'Mail inbox');
+  final Map<String, GlobalKey> _emailRowKeys = {};
   Timer? _searchDebounceTimer;
   bool _isProcessingOAuthCallback = false;
   String _searchQuery = '';
@@ -100,6 +111,7 @@ class _MailInboxPageState extends State<MailInboxPage> {
     _listScrollController.removeListener(_onListScrolled);
     _searchController.dispose();
     _listScrollController.dispose();
+    _keyboardFocusNode.dispose();
     DeepLinkHandler.instance.removeListener(_onDeepLinkChange);
     // Don't call _manager.dispose() - it's a singleton
     super.dispose();
@@ -326,17 +338,132 @@ ${email.content ?? email.summary ?? ''}
   }
 
   Widget _buildInboxView() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 800;
+    return _buildKeyboardScope(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth > 800;
 
-        if (isDesktop) {
-          return _buildDesktopSplitView();
-        } else {
-          return _buildMobileView();
-        }
-      },
+          if (isDesktop) {
+            return _buildDesktopSplitView();
+          } else {
+            return _buildMobileView();
+          }
+        },
+      ),
     );
+  }
+
+  Widget _buildKeyboardScope({required Widget child}) {
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.arrowDown): _MailSelectionIntent(1),
+        SingleActivator(LogicalKeyboardKey.arrowUp): _MailSelectionIntent(-1),
+      },
+      child: Actions(
+        actions: {
+          _MailSelectionIntent: CallbackAction<_MailSelectionIntent>(
+            onInvoke: (intent) {
+              _moveSelection(intent.delta);
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          focusNode: _keyboardFocusNode,
+          autofocus: true,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  void _moveSelection(int delta) {
+    if (_isEditableTextFocused) return;
+
+    final emails = _visibleEmails;
+    if (emails.isEmpty) return;
+
+    final currentIndex = _selectedEmailIndex(emails);
+    final nextIndex = currentIndex == -1
+        ? (delta > 0 ? 0 : emails.length - 1)
+        : (currentIndex + delta).clamp(0, emails.length - 1).toInt();
+    if (nextIndex == currentIndex) return;
+
+    final nextEmail = emails[nextIndex];
+    _selectEmail(nextEmail);
+    _scrollEmailIntoView(nextEmail, nextIndex, delta);
+  }
+
+  bool get _isEditableTextFocused {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return false;
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  int _selectedEmailIndex(List<Email> emails) {
+    final selected = _manager.selectedEmail;
+    if (selected == null) return -1;
+    return emails.indexWhere(
+      (email) =>
+          email.id == selected.id && email.providerId == selected.providerId,
+    );
+  }
+
+  void _selectEmail(Email email) {
+    _keyboardFocusNode.requestFocus();
+    unawaited(_manager.selectEmail(email));
+  }
+
+  String _emailIdentity(Email email) => '${email.providerId}:${email.id}';
+
+  GlobalKey _emailRowKey(Email email) {
+    return _emailRowKeys.putIfAbsent(_emailIdentity(email), GlobalKey.new);
+  }
+
+  void _scrollEmailIntoView(Email email, int index, int delta) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_listScrollController.hasClients) return;
+
+      final rowContext = _emailRowKeys[_emailIdentity(email)]?.currentContext;
+      if (rowContext != null) {
+        unawaited(
+          Scrollable.ensureVisible(
+            rowContext,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            alignmentPolicy: delta < 0
+                ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+                : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          ),
+        );
+        return;
+      }
+
+      final position = _listScrollController.position;
+      final itemTop = index * _estimatedEmailRowHeight;
+      final itemBottom = itemTop + _estimatedEmailRowHeight;
+      final viewportTop = position.pixels;
+      final viewportBottom = viewportTop + position.viewportDimension;
+
+      double? target;
+      if (itemTop < viewportTop) {
+        target = itemTop;
+      } else if (itemBottom > viewportBottom) {
+        target = itemBottom - position.viewportDimension;
+      }
+
+      if (target == null) return;
+      final clampedTarget = target.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      _listScrollController.animateTo(
+        clampedTarget.toDouble(),
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Widget _buildDesktopSplitView() {
@@ -371,6 +498,7 @@ ${email.content ?? email.summary ?? ''}
                   onDelete: () async {
                     await _manager.deleteSelectedEmail();
                   },
+                  onNavigateSelection: _moveSelection,
                 )
               : _buildEmptyDetailView(),
         ),
@@ -396,6 +524,7 @@ ${email.content ?? email.summary ?? ''}
         onDelete: () async {
           await _manager.deleteSelectedEmail();
         },
+        onNavigateSelection: _moveSelection,
       );
     }
 
@@ -792,10 +921,13 @@ ${email.content ?? email.summary ?? ''}
         final isSelected = _manager.selectedEmail?.id == email.id &&
             _manager.selectedEmail?.providerId == email.providerId;
 
-        return EmailListItemUnified(
-          email: email,
-          isSelected: isSelected,
-          onTap: () => _manager.selectEmail(email),
+        return KeyedSubtree(
+          key: _emailRowKey(email),
+          child: EmailListItemUnified(
+            email: email,
+            isSelected: isSelected,
+            onTap: () => _selectEmail(email),
+          ),
         );
       },
     );
