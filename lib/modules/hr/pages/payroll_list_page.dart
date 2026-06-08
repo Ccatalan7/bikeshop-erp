@@ -5,6 +5,7 @@ import '../services/payroll_voucher_service.dart';
 import '../models/payroll_voucher.dart';
 import '../widgets/payroll_voucher_dialog.dart';
 import '../widgets/payroll_payment_dialog.dart';
+import '../widgets/employee_advance_dialog.dart';
 
 /// Payroll Voucher List - designed to be embedded in MainLayout
 /// Uses ExpansionTile for inline details, no separate Scaffold/AppBar
@@ -62,6 +63,16 @@ class _PayrollListPageState extends State<PayrollListPage> {
     }
   }
 
+  Future<void> _openAdvanceDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => const EmployeeAdvanceDialog(),
+    );
+    if (result == true && mounted) {
+      _loadVouchers();
+    }
+  }
+
   Future<void> _editVoucher(PayrollVoucher voucher) async {
     final result = await showDialog<bool>(
       context: context,
@@ -100,6 +111,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
   /// Delete a draft voucher
   Future<void> _deleteVoucher(PayrollVoucher voucher) async {
+    final service = context.read<PayrollVoucherService>();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -120,12 +132,13 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
     if (confirm != true) return;
 
-    await context.read<PayrollVoucherService>().deleteVoucher(voucher.id!);
+    await service.deleteVoucher(voucher.id!);
     if (mounted) _loadVouchers();
   }
 
   /// Revert confirmed voucher back to draft (confirmed → draft)
   Future<void> _revertToDraft(PayrollVoucher voucher) async {
+    final service = context.read<PayrollVoucherService>();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -147,7 +160,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
     if (confirm != true) return;
 
     try {
-      await context.read<PayrollVoucherService>().revertToDraft(voucher.id!);
+      await service.revertToDraft(voucher.id!);
       if (mounted) _loadVouchers();
     } catch (e) {
       if (mounted) {
@@ -160,12 +173,13 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
   /// Cancel payment of a paid voucher (paid → confirmed)
   Future<void> _cancelPayment(PayrollVoucher voucher) async {
+    final service = context.read<PayrollVoucherService>();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('¿Cancelar Pago?'),
         content: const Text(
-            'Esto eliminará los gastos y asientos contables generados por este pago.'),
+            'Esto revertirá los pagos e imputaciones de anticipos. La obligación de sueldo seguirá confirmada.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -182,7 +196,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
     if (confirm != true) return;
 
     try {
-      await context.read<PayrollVoucherService>().revertPayment(voucher.id!);
+      await service.revertPayment(voucher.id!);
       if (mounted) _loadVouchers();
     } catch (e) {
       if (mounted) {
@@ -218,6 +232,12 @@ class _PayrollListPageState extends State<PayrollListPage> {
                   ),
                 ),
               ),
+              TextButton(
+                onPressed: _openAdvanceDialog,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: const Text('Registrar anticipo'),
+              ),
+              const SizedBox(width: 4),
               IconButton(
                 icon: const Icon(Icons.add, color: Colors.white),
                 tooltip: 'Nueva Nómina',
@@ -273,6 +293,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
   Widget _buildVoucherCard(PayrollVoucher voucher) {
     final isDraft = voucher.status == PayrollVoucherStatus.draft;
     final isConfirmed = voucher.status == PayrollVoucherStatus.confirmed;
+    final isPartial = voucher.status == PayrollVoucherStatus.partial;
     final isPaid = voucher.status == PayrollVoucherStatus.paid;
     final isExpanded = _expandedIds.contains(voucher.id);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
@@ -364,25 +385,35 @@ class _PayrollListPageState extends State<PayrollListPage> {
                       onPressed: () => _deleteVoucher(voucher),
                     ),
                   ],
-                  // CONFIRMED: Pay, Revert to Draft
-                  if (isConfirmed) ...[
+                  // CONFIRMED/PARTIAL: register movements
+                  if (isConfirmed || isPartial) ...[
                     FilledButton(
                       onPressed: () => _payVoucher(voucher),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                       ),
-                      child: const Text('Pagar'),
+                      child: Text(isPartial ? 'Registrar pago' : 'Pagar'),
                     ),
                     const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _revertToDraft(voucher),
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Borrador'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey,
+                    if (isConfirmed)
+                      OutlinedButton.icon(
+                        onPressed: () => _revertToDraft(voucher),
+                        icon: const Icon(Icons.undo, size: 16),
+                        label: const Text('Borrador'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey,
+                        ),
                       ),
-                    ),
+                    if (isPartial)
+                      OutlinedButton.icon(
+                        onPressed: () => _cancelPayment(voucher),
+                        icon: const Icon(Icons.undo, size: 16),
+                        label: const Text('Revertir movimientos'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
                   ],
                   // PAID: Cancel Payment button
                   if (isPaid) ...[
@@ -446,6 +477,16 @@ class _PayrollListPageState extends State<PayrollListPage> {
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 12),
                         textAlign: TextAlign.right)),
+                Expanded(
+                    child: Text('Pagado',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
+                        textAlign: TextAlign.right)),
+                Expanded(
+                    child: Text('Pendiente',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
+                        textAlign: TextAlign.right)),
               ],
             ),
           ),
@@ -472,6 +513,19 @@ class _PayrollListPageState extends State<PayrollListPage> {
                         child: Text(currency.format(line.totalAmount),
                             style: const TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w500),
+                            textAlign: TextAlign.right)),
+                    Expanded(
+                        child: Text(currency.format(line.settledAmount),
+                            style: const TextStyle(fontSize: 13),
+                            textAlign: TextAlign.right)),
+                    Expanded(
+                        child: Text(currency.format(line.balance),
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: line.balance > 0
+                                    ? Colors.orange[800]
+                                    : Colors.green[700]),
                             textAlign: TextAlign.right)),
                   ],
                 ),
@@ -506,6 +560,8 @@ class _PayrollListPageState extends State<PayrollListPage> {
         return Colors.green;
       case PayrollVoucherStatus.confirmed:
         return Colors.orange;
+      case PayrollVoucherStatus.partial:
+        return Colors.amber[800]!;
       case PayrollVoucherStatus.draft:
         return Colors.blueGrey;
       default:
@@ -519,6 +575,8 @@ class _PayrollListPageState extends State<PayrollListPage> {
         return Icons.check;
       case PayrollVoucherStatus.confirmed:
         return Icons.thumb_up;
+      case PayrollVoucherStatus.partial:
+        return Icons.payments_outlined;
       case PayrollVoucherStatus.draft:
         return Icons.edit_note;
       default:

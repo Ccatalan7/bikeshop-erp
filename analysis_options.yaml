@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Local dependency fork. Run its own tests from packages/excel_localized
+  # when intentionally changing it, instead of surfacing vendor diagnostics
+  # throughout the Vinabike app workspace.
+  exclude:
+    - packages/excel_localized/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

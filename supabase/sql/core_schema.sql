@@ -29191,6 +29191,11 @@ set is_required = excluded.is_required,
     helper_text = excluded.helper_text,
     updated_at = now();
 
+-- Canonical payroll settlement ledger.
+-- Kept as an idempotent composed section because the payroll ledger migration
+-- is also the deployable source for existing databases.
+\ir ../migrations/20260607150000_payroll_dated_partial_payments_and_advances.sql
+
 --------------------------------------------------------------------------------
 -- Internal app file library with tenant-scoped Supabase Storage objects.
 --------------------------------------------------------------------------------

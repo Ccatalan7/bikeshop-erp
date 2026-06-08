@@ -32,6 +32,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
 
   // Split payments (UI only): [lineId] -> list of splits
   final Map<String, List<_PaymentSplitDraft>> _paymentSplitsByLineId = {};
+  final Map<String, List<EmployeeAdvance>> _openAdvancesByEmployeeId = {};
 
   @override
   void initState() {
@@ -45,17 +46,78 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
     return splits.fold<double>(0, (sum, s) => sum + s.amount);
   }
 
-  void _addSplit(String lineId, double totalAmount) {
+  void _addSplit(String lineId, double remainingBalance) {
     final current = _paymentSplitsByLineId[lineId] ?? <_PaymentSplitDraft>[];
     final used = current.fold<double>(0, (sum, s) => sum + s.amount);
-    final remaining = (totalAmount - used).clamp(0, totalAmount);
+    final remaining = (remainingBalance - used).clamp(0, remainingBalance);
 
     setState(() {
       _paymentSplitsByLineId[lineId] = [
         ...current,
         _PaymentSplitDraft(
+          kind: _PayrollMovementKind.payment,
           methodId: null,
           amount: remaining > 0 ? remaining.toDouble() : 0.0,
+          paymentDate: DateTime.now(),
+        ),
+      ];
+    });
+  }
+
+  void _addAdvanceSplit(PayrollVoucherLine line) {
+    final lineId = line.id;
+    if (lineId == null) return;
+    final advances = _openAdvancesByEmployeeId[line.employeeId] ?? const [];
+    if (advances.isEmpty) return;
+
+    final current = _paymentSplitsByLineId[lineId] ?? <_PaymentSplitDraft>[];
+    EmployeeAdvance? advance;
+    var availableAdvance = 0.0;
+    for (final candidate in advances) {
+      final alreadyDrafted = current
+          .where((split) =>
+              split.kind == _PayrollMovementKind.advance &&
+              split.advanceId == candidate.id)
+          .fold<double>(0, (sum, split) => sum + split.amount);
+      final candidateAvailable = (candidate.availableAmount - alreadyDrafted)
+          .clamp(0, candidate.availableAmount)
+          .toDouble();
+      if (candidateAvailable > 0) {
+        advance = candidate;
+        availableAdvance = candidateAvailable;
+        break;
+      }
+    }
+    if (advance == null) return;
+    final selectedAdvance = advance;
+
+    final used = current.fold<double>(0, (sum, split) => sum + split.amount);
+    final openRoom = (line.balance - used).clamp(0, line.balance).toDouble();
+    final reduciblePayments = current
+        .where((split) => split.kind == _PayrollMovementKind.payment)
+        .fold<double>(0, (sum, split) => sum + split.amount);
+    final amount =
+        availableAdvance.clamp(0, openRoom + reduciblePayments).toDouble();
+    if (amount <= 0) return;
+
+    var paymentReduction = (amount - openRoom).clamp(0, amount).toDouble();
+    for (final split in current.reversed) {
+      if (paymentReduction <= 0) break;
+      if (split.kind != _PayrollMovementKind.payment) continue;
+      final reduction = paymentReduction.clamp(0, split.amount).toDouble();
+      split.amountController.text =
+          (split.amount - reduction).toStringAsFixed(0);
+      paymentReduction -= reduction;
+    }
+
+    setState(() {
+      _paymentSplitsByLineId[lineId] = [
+        ...current,
+        _PaymentSplitDraft(
+          kind: _PayrollMovementKind.advance,
+          advanceId: selectedAdvance.id,
+          amount: amount,
+          paymentDate: selectedAdvance.paidAt,
         ),
       ];
     });
@@ -63,7 +125,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
 
   void _removeSplit(String lineId, int index) {
     final current = _paymentSplitsByLineId[lineId];
-    if (current == null || current.length <= 1) return;
+    if (current == null) return;
     if (index < 0 || index >= current.length) return;
 
     setState(() {
@@ -73,25 +135,18 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   }
 
   bool _validateSplits(List<PayrollVoucherLine> includedLines) {
+    var movementCount = 0;
     for (final line in includedLines) {
       final lineId = line.id;
       if (lineId == null) continue;
 
       final splits =
           _paymentSplitsByLineId[lineId] ?? const <_PaymentSplitDraft>[];
-      if (splits.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Falta método de pago para ${line.employeeName}.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return false;
-      }
-
       for (final split in splits) {
         if (split.amount <= 0) continue;
-        if (split.methodId == null) {
+        movementCount++;
+        if (split.kind == _PayrollMovementKind.payment &&
+            split.methodId == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content:
@@ -101,19 +156,36 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
           );
           return false;
         }
+        if (split.kind == _PayrollMovementKind.advance &&
+            split.advanceId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Selecciona un anticipo para ${line.employeeName}.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return false;
+        }
       }
 
       final sum = _sumSplits(lineId);
-      if ((sum - line.totalAmount).abs() > 0.01) {
+      if (sum > line.balance + 0.01) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Los montos de pago de ${line.employeeName} deben sumar ${line.totalAmount.toStringAsFixed(0)}.'),
+                'Los movimientos de ${line.employeeName} exceden su saldo pendiente.'),
             backgroundColor: Colors.red,
           ),
         );
         return false;
       }
+    }
+    if (movementCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Agrega al menos un movimiento.')),
+      );
+      return false;
     }
     return true;
   }
@@ -131,8 +203,14 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
       payload[lineId] = splits
           .where((s) => s.amount > 0)
           .map((s) => {
+                'kind': s.kind.name,
                 'payment_method_id': s.methodId,
+                'advance_id': s.advanceId,
                 'amount': s.amount,
+                'payment_date': s.paymentDate.toUtc().toIso8601String(),
+                'reference': s.referenceController.text.trim().isEmpty
+                    ? null
+                    : s.referenceController.text.trim(),
               })
           .toList();
     }
@@ -161,12 +239,14 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         service.getPaymentMethods(),
         hrService
             .getEmployees(), // Fetch current profiles to respect latest preferences
+        service.getOpenEmployeeAdvances(),
       ]);
 
       if (mounted) {
         final voucher = results[0] as PayrollVoucher?;
         final methods = results[1] as List<Map<String, dynamic>>;
         final employees = results[2] as List<Employee>;
+        final advances = results[3] as List<EmployeeAdvance>;
 
         // Cache employees for salary account lookup
         _employeeMap = {
@@ -187,6 +267,14 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
             _voucher = voucher;
             _availableMethods = methods;
             _isLoading = false;
+            _openAdvancesByEmployeeId
+              ..clear()
+              ..addEntries(advances.map(
+                (advance) => MapEntry(advance.employeeId, <EmployeeAdvance>[]),
+              ));
+            for (final advance in advances) {
+              _openAdvancesByEmployeeId[advance.employeeId]!.add(advance);
+            }
 
             // Initialize selections
             for (var line in voucher.lines) {
@@ -239,10 +327,13 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                   (methods.isNotEmpty ? methods.first['id'] as String : null);
 
               _paymentSplitsByLineId[lineId] = [
-                _PaymentSplitDraft(
-                  methodId: methodId,
-                  amount: line.totalAmount,
-                ),
+                if (line.balance > 0)
+                  _PaymentSplitDraft(
+                    kind: _PayrollMovementKind.payment,
+                    methodId: methodId,
+                    amount: line.balance,
+                    paymentDate: DateTime.now(),
+                  ),
               ];
             }
           });
@@ -285,10 +376,12 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
 
         final splits =
             _paymentSplitsByLineId[line.id!] ?? const <_PaymentSplitDraft>[];
-        final primaryMethodId = splits.isNotEmpty
-            ? (splits
-                    .firstWhere((s) => s.amount > 0, orElse: () => splits.first)
-                    .methodId ??
+        final paymentSplits = splits
+            .where((split) =>
+                split.kind == _PayrollMovementKind.payment && split.amount > 0)
+            .toList();
+        final primaryMethodId = paymentSplits.isNotEmpty
+            ? (paymentSplits.first.methodId ??
                 _selectedMethodIds[line.id] ??
                 line.paymentMethodId)
             : (_selectedMethodIds[line.id] ?? line.paymentMethodId);
@@ -326,7 +419,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Ejecutado correctamente.'),
+            content: Text('Movimientos registrados correctamente.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -339,6 +432,43 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         );
       }
     }
+  }
+
+  Future<void> _pickPaymentDate(_PaymentSplitDraft split) async {
+    final earliestPaymentDate = _voucher?.periodEnd ?? DateTime(2020);
+    if (earliestPaymentDate.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('La fecha de pago estará disponible al cerrar el período.'),
+        ),
+      );
+      return;
+    }
+    final initialDate = split.paymentDate.isBefore(earliestPaymentDate)
+        ? earliestPaymentDate
+        : split.paymentDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: earliestPaymentDate,
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(split.paymentDate),
+    );
+    if (!mounted) return;
+    setState(() {
+      split.paymentDate = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        time?.hour ?? split.paymentDate.hour,
+        time?.minute ?? split.paymentDate.minute,
+      );
+    });
   }
 
   @override
@@ -389,7 +519,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Confirmar Pago de Nómina',
+                        const Text('Registrar Movimientos de Nómina',
                             style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -421,7 +551,9 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                       : (_paymentSplitsByLineId[lineId] ??
                           const <_PaymentSplitDraft>[]);
                   final splitSum = lineId == null ? 0.0 : _sumSplits(lineId);
-                  final delta = line.totalAmount - splitSum;
+                  final delta = line.balance - splitSum;
+                  final advances =
+                      _openAdvancesByEmployeeId[line.employeeId] ?? const [];
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -443,6 +575,25 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                   '${line.workedHours.toStringAsFixed(1)} hrs${line.overtimeHours > 0 ? ' + ${line.overtimeHours.toStringAsFixed(1)} extras' : ''}',
                                   style: TextStyle(
                                       color: Colors.grey[600], fontSize: 13)),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Pagado ${currency.format(line.cashPaid)} · '
+                                'Anticipos ${currency.format(line.advancesApplied)}',
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                'Pendiente ${currency.format(line.balance)}',
+                                style: TextStyle(
+                                  color: line.balance > 0
+                                      ? Colors.orange[800]
+                                      : Colors.green[700],
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -465,77 +616,161 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              if (line.balance <= 0)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Text(
+                                    'Liquidado',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                               ...List.generate(splits.length, (i) {
                                 final split = splits[i];
 
                                 return Padding(
                                   padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
-                                  child: Row(
+                                  child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        CrossAxisAlignment.stretch,
                                     children: [
-                                      Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                          initialValue: split.methodId,
-                                          isExpanded: true,
-                                          decoration: InputDecoration(
-                                            labelText: i == 0
-                                                ? 'Métodos de Pago'
-                                                : null,
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 12),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: split.kind ==
+                                                    _PayrollMovementKind.payment
+                                                ? DropdownButtonFormField<
+                                                    String>(
+                                                    initialValue:
+                                                        split.methodId,
+                                                    isExpanded: true,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      labelText:
+                                                          'Método de pago',
+                                                      isDense: true,
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                    ),
+                                                    items: _availableMethods
+                                                        .map((m) =>
+                                                            DropdownMenuItem(
+                                                              value: m['id']
+                                                                  as String,
+                                                              child: Text(
+                                                                  m['name']),
+                                                            ))
+                                                        .toList(),
+                                                    onChanged: _isProcessing
+                                                        ? null
+                                                        : (value) => setState(
+                                                            () =>
+                                                                split.methodId =
+                                                                    value),
+                                                  )
+                                                : DropdownButtonFormField<
+                                                    String>(
+                                                    initialValue:
+                                                        split.advanceId,
+                                                    isExpanded: true,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      labelText:
+                                                          'Anticipo disponible',
+                                                      isDense: true,
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                    ),
+                                                    items: advances
+                                                        .map((advance) =>
+                                                            DropdownMenuItem(
+                                                              value: advance.id,
+                                                              child: Text(
+                                                                '${DateFormat('dd/MM/yyyy').format(advance.paidAt)} · ${currency.format(advance.availableAmount)}',
+                                                              ),
+                                                            ))
+                                                        .toList(),
+                                                    onChanged: _isProcessing
+                                                        ? null
+                                                        : (value) => setState(
+                                                            () => split
+                                                                    .advanceId =
+                                                                value),
+                                                  ),
                                           ),
-                                          items: _availableMethods
-                                              .map((m) => DropdownMenuItem(
-                                                  value: m['id'] as String,
-                                                  child: Text(m['name'])))
-                                              .toList(),
-                                          onChanged: _isProcessing
-                                              ? null
-                                              : (val) {
-                                                  if (lineId == null) return;
-                                                  setState(() {
-                                                    split.methodId = val;
-                                                  });
-                                                },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      SizedBox(
-                                        width: 150,
-                                        child: TextFormField(
-                                          controller: split.amountController,
-                                          decoration: InputDecoration(
-                                            labelText: i == 0 ? 'Monto' : null,
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            prefixText: '\$ ',
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 12),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 145,
+                                            child: TextFormField(
+                                              controller:
+                                                  split.amountController,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Monto',
+                                                isDense: true,
+                                                border: OutlineInputBorder(),
+                                                prefixText: '\$ ',
+                                              ),
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                              ],
+                                              onChanged: _isProcessing
+                                                  ? null
+                                                  : (_) => setState(() {}),
+                                            ),
                                           ),
-                                          keyboardType: TextInputType.number,
-                                          inputFormatters: [
-                                            FilteringTextInputFormatter
-                                                .digitsOnly,
-                                          ],
-                                          onChanged: _isProcessing
-                                              ? null
-                                              : (_) => setState(() {}),
-                                        ),
+                                          IconButton(
+                                            tooltip: 'Quitar movimiento',
+                                            onPressed: _isProcessing ||
+                                                    lineId == null
+                                                ? null
+                                                : () => _removeSplit(lineId, i),
+                                            icon: const Icon(Icons.close),
+                                          ),
+                                        ],
                                       ),
-                                      if (lineId != null && splits.length > 1)
-                                        IconButton(
-                                          tooltip: 'Quitar método',
-                                          onPressed: _isProcessing
-                                              ? null
-                                              : () => _removeSplit(lineId, i),
-                                          icon: const Icon(Icons.close),
+                                      if (split.kind ==
+                                          _PayrollMovementKind.payment)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 6),
+                                          child: Row(
+                                            children: [
+                                              OutlinedButton(
+                                                onPressed: _isProcessing
+                                                    ? null
+                                                    : () =>
+                                                        _pickPaymentDate(split),
+                                                child: Text(
+                                                  DateFormat('dd/MM/yyyy HH:mm')
+                                                      .format(
+                                                          split.paymentDate),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: TextFormField(
+                                                  controller:
+                                                      split.referenceController,
+                                                  decoration:
+                                                      const InputDecoration(
+                                                    labelText:
+                                                        'Referencia (opcional)',
+                                                    isDense: true,
+                                                    border:
+                                                        OutlineInputBorder(),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -549,26 +784,42 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                         MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        delta.abs() <= 0.01
-                                            ? 'OK: suma exacta'
-                                            : (delta > 0
-                                                ? 'Faltan ${currency.format(delta)}'
-                                                : 'Exceso ${currency.format(-delta)}'),
+                                        delta < -0.01
+                                            ? 'Exceso ${currency.format(-delta)}'
+                                            : delta.abs() <= 0.01
+                                                ? 'Saldo cubierto'
+                                                : 'Quedará pendiente ${currency.format(delta)}',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: delta.abs() <= 0.01
-                                              ? Colors.green
-                                              : Colors.red,
+                                          color: delta < -0.01
+                                              ? Colors.red
+                                              : delta.abs() <= 0.01
+                                                  ? Colors.green
+                                                  : Colors.orange[800],
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      TextButton.icon(
-                                        onPressed: _isProcessing
-                                            ? null
-                                            : () => _addSplit(
-                                                lineId, line.totalAmount),
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: const Text('Agregar método'),
+                                      Wrap(
+                                        spacing: 4,
+                                        children: [
+                                          TextButton(
+                                            onPressed: _isProcessing ||
+                                                    line.balance <= 0
+                                                ? null
+                                                : () => _addSplit(
+                                                    lineId, line.balance),
+                                            child: const Text('Agregar pago'),
+                                          ),
+                                          TextButton(
+                                            onPressed: _isProcessing ||
+                                                    line.balance <= 0 ||
+                                                    advances.isEmpty
+                                                ? null
+                                                : () => _addAdvanceSplit(line),
+                                            child:
+                                                const Text('Aplicar anticipo'),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -596,7 +847,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('${includedLines.length} trabajadores'),
-                      Text('Total: ${currency.format(totalAmount)}',
+                      Text('Nómina: ${currency.format(totalAmount)}',
                           style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -620,8 +871,9 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.check),
-                        label: Text(
-                            _isProcessing ? 'Procesando...' : 'Confirmar Pago'),
+                        label: Text(_isProcessing
+                            ? 'Procesando...'
+                            : 'Registrar movimientos'),
                         style: FilledButton.styleFrom(
                             backgroundColor: Colors.green[700],
                             padding: const EdgeInsets.symmetric(
@@ -639,19 +891,31 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   }
 }
 
+enum _PayrollMovementKind { payment, advance }
+
 class _PaymentSplitDraft {
+  final _PayrollMovementKind kind;
   String? methodId;
+  String? advanceId;
+  DateTime paymentDate;
   final TextEditingController amountController;
+  final TextEditingController referenceController;
 
   _PaymentSplitDraft({
+    required this.kind,
     required double amount,
+    required this.paymentDate,
     this.methodId,
-  }) : amountController =
-            TextEditingController(text: amount.toStringAsFixed(0));
+    this.advanceId,
+    String? reference,
+  })  : amountController =
+            TextEditingController(text: amount.toStringAsFixed(0)),
+        referenceController = TextEditingController(text: reference);
 
   double get amount => double.tryParse(amountController.text) ?? 0;
 
   void dispose() {
     amountController.dispose();
+    referenceController.dispose();
   }
 }

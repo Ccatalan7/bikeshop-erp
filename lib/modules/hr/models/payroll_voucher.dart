@@ -1,4 +1,4 @@
-enum PayrollVoucherStatus { draft, confirmed, paid, voided }
+enum PayrollVoucherStatus { draft, confirmed, partial, paid, voided }
 
 class PayrollVoucher {
   final String? id;
@@ -148,6 +148,10 @@ class PayrollVoucherLine {
   // New Strict Payment Fields
   final String? paymentMethodId;
   final String? paymentAccountId;
+  final double cashPaid;
+  final double advancesApplied;
+  final double settledAmount;
+  final double balance;
 
   const PayrollVoucherLine({
     this.id,
@@ -167,7 +171,11 @@ class PayrollVoucherLine {
     this.salaryAccountId,
     this.paymentMethodId,
     this.paymentAccountId,
-  });
+    this.cashPaid = 0,
+    this.advancesApplied = 0,
+    this.settledAmount = 0,
+    double? balance,
+  }) : balance = balance ?? totalAmount;
 
   double get totalHours => workedHours + overtimeHours;
 
@@ -189,6 +197,10 @@ class PayrollVoucherLine {
     String? salaryAccountId,
     String? paymentMethodId,
     String? paymentAccountId,
+    double? cashPaid,
+    double? advancesApplied,
+    double? settledAmount,
+    double? balance,
   }) {
     return PayrollVoucherLine(
       id: id ?? this.id,
@@ -208,6 +220,10 @@ class PayrollVoucherLine {
       salaryAccountId: salaryAccountId ?? this.salaryAccountId,
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       paymentAccountId: paymentAccountId ?? this.paymentAccountId,
+      cashPaid: cashPaid ?? this.cashPaid,
+      advancesApplied: advancesApplied ?? this.advancesApplied,
+      settledAmount: settledAmount ?? this.settledAmount,
+      balance: balance ?? this.balance,
     );
   }
 
@@ -230,6 +246,10 @@ class PayrollVoucherLine {
       salaryAccountId: map['salary_account_id'],
       paymentMethodId: map['payment_method_id'],
       paymentAccountId: map['payment_account_id'],
+      cashPaid: (map['cash_paid'] as num?)?.toDouble() ?? 0,
+      advancesApplied: (map['advances_applied'] as num?)?.toDouble() ?? 0,
+      settledAmount: (map['settled_amount'] as num?)?.toDouble() ?? 0,
+      balance: (map['balance'] as num?)?.toDouble(),
     );
   }
 
@@ -253,5 +273,48 @@ class PayrollVoucherLine {
       'payment_method_id': paymentMethodId,
       'payment_account_id': paymentAccountId,
     };
+  }
+}
+
+class EmployeeAdvance {
+  const EmployeeAdvance({
+    required this.id,
+    required this.employeeId,
+    required this.amount,
+    required this.amountApplied,
+    required this.paidAt,
+    required this.status,
+    this.paymentMethodId,
+    this.paymentAccountId,
+    this.reference,
+    this.notes,
+  });
+
+  final String id;
+  final String employeeId;
+  final double amount;
+  final double amountApplied;
+  final DateTime paidAt;
+  final String status;
+  final String? paymentMethodId;
+  final String? paymentAccountId;
+  final String? reference;
+  final String? notes;
+
+  double get availableAmount => (amount - amountApplied).clamp(0, amount);
+
+  factory EmployeeAdvance.fromMap(Map<String, dynamic> map) {
+    return EmployeeAdvance(
+      id: map['id'] as String,
+      employeeId: map['employee_id'] as String,
+      amount: (map['amount'] as num).toDouble(),
+      amountApplied: (map['amount_applied'] as num?)?.toDouble() ?? 0,
+      paidAt: DateTime.parse(map['paid_at'] as String).toLocal(),
+      status: map['status'] as String? ?? 'open',
+      paymentMethodId: map['payment_method_id'] as String?,
+      paymentAccountId: map['payment_account_id'] as String?,
+      reference: map['reference'] as String?,
+      notes: map['notes'] as String?,
+    );
   }
 }
