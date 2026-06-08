@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/website/models/website_font_registry.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
-import '../../modules/website/widgets/inline_edit_toolbar.dart'
-    show AddBlockDialog;
+import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';
@@ -575,8 +575,12 @@ class _PublicHomePageState extends State<PublicHomePage>
       eff('theme_accent_color', accentSetting),
       PublicStoreTheme.accentGreen,
     );
-    final headingFont = eff('theme_heading_font', headingFontSetting);
-    final bodyFont = eff('theme_body_font', bodyFontSetting);
+    final headingFont = WebsiteFontRegistry.resolveHeadingFont(
+      eff('theme_heading_font', headingFontSetting),
+    );
+    final bodyFont = WebsiteFontRegistry.resolveBodyFont(
+      eff('theme_body_font', bodyFontSetting),
+    );
     final headingSize = _resolveDouble(
       eff('theme_heading_size', headingSizeSetting),
       48.0,

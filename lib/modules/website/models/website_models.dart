@@ -1,6 +1,8 @@
 /// Website and e-commerce data models
 library;
 
+import 'website_font_registry.dart';
+
 class WebsiteBanner {
   final String id;
   final String tenantId;
@@ -254,8 +256,12 @@ class ThemePreset {
       accentColor: parseColor(json['accentColor'], 0xFFFF6F00),
       backgroundColor: parseColor(json['backgroundColor'], 0xFFFFFFFF),
       textColor: parseColor(json['textColor'], 0xFF212121),
-      headingFont: (json['headingFont'] ?? 'Roboto').toString(),
-      bodyFont: (json['bodyFont'] ?? 'Roboto').toString(),
+      headingFont: WebsiteFontRegistry.resolveHeadingFont(
+        json['headingFont']?.toString(),
+      ),
+      bodyFont: WebsiteFontRegistry.resolveBodyFont(
+        json['bodyFont']?.toString(),
+      ),
       headingSize: parseDouble(json['headingSize'], 48.0),
       bodySize: parseDouble(json['bodySize'], 16.0),
       sectionSpacing: parseDouble(json['sectionSpacing'], 64.0),

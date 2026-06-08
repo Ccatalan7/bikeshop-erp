@@ -35,7 +35,6 @@ class _PublicPolicyView extends StatelessWidget {
     required this.blocks,
   });
 
-  static const _bg = Color(0xFFF8FAFC);
   static const _ink = PublicStoreTheme.textPrimary;
   static const _muted = PublicStoreTheme.textSecondary;
   static const _line = PublicStoreTheme.divider;
@@ -232,7 +231,7 @@ class _PolicyHero extends StatelessWidget {
         Text(
           meta.title,
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 32,
             fontWeight: FontWeight.w800,
             height: 1.1,

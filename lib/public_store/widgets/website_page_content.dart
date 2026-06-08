@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
-import '../../modules/website/widgets/inline_edit_toolbar.dart' show AddBlockDialog;
+import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../shared/models/product.dart';
@@ -13,14 +13,14 @@ import '../theme/public_store_theme.dart';
 import 'public_store_layout.dart';
 
 /// Unified widget for rendering website page content (blocks).
-/// 
+///
 /// This replaces the duplicated rendering logic in PublicHomePage and DynamicWebsitePage.
 /// It handles:
 /// - Block rendering (edit mode and view mode)
 /// - Theme application
 /// - Featured products for product blocks
 /// - Responsive visibility
-/// 
+///
 /// Design principles:
 /// - Single responsibility: Only renders blocks, no data loading
 /// - Props over providers: Receives all data via constructor
@@ -28,10 +28,10 @@ import 'public_store_layout.dart';
 class WebsitePageContent extends StatelessWidget {
   /// Blocks to render
   final List<Map<String, dynamic>> blocks;
-  
+
   /// Featured products for products blocks (home page only)
   final List<Product> featuredProducts;
-  
+
   /// Theme settings
   final Color primaryColor;
   final Color accentColor;
@@ -42,16 +42,16 @@ class WebsitePageContent extends StatelessWidget {
   final double bodySize;
   final double sectionSpacing;
   final double containerPadding;
-  
+
   /// Tenant context
   final String? tenantId;
-  
+
   /// Whether we're still loading
   final bool isLoading;
-  
+
   /// Whether this is the home page (affects empty state message)
   final bool isHomePage;
-  
+
   const WebsitePageContent({
     super.key,
     required this.blocks,
@@ -69,8 +69,12 @@ class WebsitePageContent extends StatelessWidget {
     this.isLoading = false,
     this.isHomePage = false,
   });
-  
-  static const List<String> _responsiveBreakpoints = ['desktop', 'tablet', 'mobile'];
+
+  static const List<String> _responsiveBreakpoints = [
+    'desktop',
+    'tablet',
+    'mobile'
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -78,35 +82,36 @@ class WebsitePageContent extends StatelessWidget {
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
     final isInEditorContext = editProvider.isInEditorContext;
-    
+
     // Use edit provider blocks if in editor context, otherwise use passed blocks
     final blocksToRender = isInEditorContext ? editProvider.blocks : blocks;
-    
+
     // Still loading - show nothing (layout handles loading UI)
     if (isLoading && blocksToRender.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     // Filter blocks by visibility
     final currentBreakpoint = _currentBreakpoint(context);
-    final visibleBlocks = _filterVisibleBlocks(blocksToRender, currentBreakpoint, isInEditorContext);
-    
+    final visibleBlocks = _filterVisibleBlocks(
+        blocksToRender, currentBreakpoint, isInEditorContext);
+
     // No blocks
     if (visibleBlocks.isEmpty) {
       return _buildEmptyState(context, isEditMode, editProvider);
     }
-    
+
     // Render blocks
     return _buildBlocksList(context, visibleBlocks, isEditMode, editProvider);
   }
-  
+
   String _currentBreakpoint(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     if (width < 640) return 'mobile';
     if (width < 1024) return 'tablet';
     return 'desktop';
   }
-  
+
   List<Map<String, dynamic>> _filterVisibleBlocks(
     List<Map<String, dynamic>> blocks,
     String breakpoint,
@@ -115,30 +120,30 @@ class WebsitePageContent extends StatelessWidget {
     final filtered = blocks.where((block) {
       // In editor context, show all blocks
       if (isInEditorContext) return true;
-      
+
       // Check global visibility
       final isGloballyVisible = block['is_visible'] ?? true;
       if (!isGloballyVisible) return false;
-      
+
       // Check breakpoint visibility
       final data = Map<String, dynamic>.from(block['block_data'] ?? {});
       final visibility = _normalizeBlockVisibility(data['visibility']);
       return visibility[breakpoint] ?? true;
     }).toList();
-    
+
     // Sort by order
     filtered.sort((a, b) {
       final orderA = a['sort_order'] ?? a['order_index'] ?? 0;
       final orderB = b['sort_order'] ?? b['order_index'] ?? 0;
       return (orderA as int).compareTo(orderB as int);
     });
-    
+
     return filtered;
   }
-  
+
   Map<String, bool> _normalizeBlockVisibility(dynamic raw) {
     final visibility = {for (final bp in _responsiveBreakpoints) bp: true};
-    
+
     dynamic source = raw;
     if (source is String) {
       final trimmed = source.trim();
@@ -153,7 +158,7 @@ class WebsitePageContent extends StatelessWidget {
         }
       }
     }
-    
+
     if (source is Map) {
       source.forEach((key, value) {
         final keyString = key.toString();
@@ -162,21 +167,28 @@ class WebsitePageContent extends StatelessWidget {
         if (parsed != null) visibility[keyString] = parsed;
       });
     }
-    
+
     return visibility;
   }
-  
+
   bool? _toBool(dynamic value) {
     if (value is bool) return value;
     if (value is num) return value != 0;
     if (value is String) {
       final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' || normalized == '1' || normalized == 'si' || normalized == 'sí') return true;
-      if (normalized == 'false' || normalized == '0' || normalized == 'no') return false;
+      if (normalized == 'true' ||
+          normalized == '1' ||
+          normalized == 'si' ||
+          normalized == 'sí') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
     }
     return null;
   }
-  
+
   Widget _buildBlocksList(
     BuildContext context,
     List<Map<String, dynamic>> visibleBlocks,
@@ -193,7 +205,8 @@ class WebsitePageContent extends StatelessWidget {
           ),
         for (int i = 0; i < visibleBlocks.length; i++) ...[
           KeyedSubtree(
-            key: ValueKey('${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
+            key: ValueKey(
+                '${visibleBlocks[i]['id']}_${visibleBlocks[i]['block_data']?.toString().hashCode ?? 0}_$tenantId'),
             child: _buildBlock(context, visibleBlocks[i], isEditMode),
           ),
           // Add spacer between blocks (not after the last one)
@@ -201,39 +214,42 @@ class WebsitePageContent extends StatelessWidget {
             _buildBlockSpacer(
               insertIndex: i + 1,
               blockId: visibleBlocks[i]['id']?.toString() ?? '',
-              blockData: Map<String, dynamic>.from(visibleBlocks[i]['block_data'] ?? {}),
+              blockData: Map<String, dynamic>.from(
+                  visibleBlocks[i]['block_data'] ?? {}),
               isEditMode: isEditMode,
               editProvider: editProvider,
             ),
         ],
         SizedBox(height: sectionSpacing),
-        
+
         // Add block button at the end in edit mode
         if (isEditMode)
           Padding(
             padding: const EdgeInsets.only(bottom: 32),
-            child: _AddBlockButtonLarge(onAdd: (type) => editProvider.addBlock(type)),
+            child: _AddBlockButtonLarge(
+                onAdd: (type) => editProvider.addBlock(type)),
           ),
       ],
     );
   }
-  
-  Widget _buildBlock(BuildContext context, Map<String, dynamic> blockData, bool isEditMode) {
+
+  Widget _buildBlock(
+      BuildContext context, Map<String, dynamic> blockData, bool isEditMode) {
     final blockId = blockData['id']?.toString() ?? '';
     final blockType = (blockData['block_type'] ?? '').toString();
     final data = Map<String, dynamic>.from(blockData['block_data'] ?? {});
     final isVisible = blockData['is_visible'] ?? true;
-    
+
     data.remove('visibility');
     final resolvedHeadingFont = headingFont.isNotEmpty ? headingFont : null;
     final resolvedBodyFont = bodyFont.isNotEmpty ? bodyFont : null;
-    
+
     final baseTheme = Theme.of(context);
     final themedText = baseTheme.textTheme.apply(
       bodyColor: textColor,
       displayColor: textColor,
     );
-    
+
     // Full-width blocks get no horizontal padding
     final fullBleed = _toBool(data['fullBleed']) ?? false;
     final isFullWidthBlock = fullBleed ||
@@ -244,11 +260,12 @@ class WebsitePageContent extends StatelessWidget {
           'categorygrid',
           'partnersbanner',
         ].contains(blockType.toLowerCase());
-    final horizontalPadding = isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0);
-    
+    final horizontalPadding =
+        isFullWidthBlock ? 0.0 : containerPadding.clamp(0.0, 200.0);
+
     // Build the block widget
     final blockHeight = (data['blockHeight'] as num?)?.toDouble();
-    
+
     Widget content = isEditMode
         ? DeferredEditableBlockRenderer.build(
             context: context,
@@ -262,7 +279,8 @@ class WebsitePageContent extends StatelessWidget {
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             isVisible: isVisible,
             tenantId: tenantId,
           )
@@ -278,10 +296,11 @@ class WebsitePageContent extends StatelessWidget {
             bodyFont: resolvedBodyFont,
             headingSize: headingSize,
             bodySize: bodySize,
-            onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
+            onNavigate: (route) =>
+                PublicStoreLayout.navigateToHref(context, route),
             tenantId: tenantId,
           );
-    
+
     // Apply custom block height if set
     if (!isEditMode && blockHeight != null) {
       content = SizedBox(
@@ -290,7 +309,7 @@ class WebsitePageContent extends StatelessWidget {
         child: content,
       );
     }
-    
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Theme(
@@ -299,7 +318,7 @@ class WebsitePageContent extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildBlockSpacer({
     required int insertIndex,
     required String blockId,
@@ -307,8 +326,9 @@ class WebsitePageContent extends StatelessWidget {
     required bool isEditMode,
     required WebsiteEditModeProvider editProvider,
   }) {
-    final spacingAfter = (blockData['spacingAfter'] as num?)?.toDouble() ?? sectionSpacing;
-    
+    final spacingAfter =
+        (blockData['spacingAfter'] as num?)?.toDouble() ?? sectionSpacing;
+
     if (isEditMode) {
       return _InsertBlockDropZone(
         insertIndex: insertIndex,
@@ -329,8 +349,9 @@ class WebsitePageContent extends StatelessWidget {
       return SizedBox(height: spacingAfter);
     }
   }
-  
-  Widget _buildEmptyState(BuildContext context, bool isEditMode, WebsiteEditModeProvider editProvider) {
+
+  Widget _buildEmptyState(BuildContext context, bool isEditMode,
+      WebsiteEditModeProvider editProvider) {
     if (isEditMode) {
       return Container(
         padding: const EdgeInsets.all(48),
@@ -341,12 +362,18 @@ class WebsitePageContent extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'Tu sitio web está vacío',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.grey[600]),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 12),
             Text(
               'Agrega bloques para construir tu página',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey[500]),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: Colors.grey[500]),
             ),
             const SizedBox(height: 32),
             _AddBlockButtonLarge(onAdd: (type) => editProvider.addBlock(type)),
@@ -354,7 +381,7 @@ class WebsitePageContent extends StatelessWidget {
         ),
       );
     }
-    
+
     // Coming soon for visitors
     return Container(
       constraints: const BoxConstraints(minHeight: 500),
@@ -363,19 +390,23 @@ class WebsitePageContent extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.storefront, size: 100, color: primaryColor.withValues(alpha: 0.5)),
+            Icon(Icons.storefront,
+                size: 100, color: primaryColor.withValues(alpha: 0.5)),
             const SizedBox(height: 32),
             Text(
               'Próximamente',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: primaryColor,
-                fontWeight: FontWeight.bold,
-              ),
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             Text(
               'Estamos preparando algo increíble para ti',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
           ],
@@ -520,7 +551,10 @@ class _AddBlockButtonLarge extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Text(
                   'Agregar nuevo bloque',
-                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16),
                 ),
                 const SizedBox(height: 4),
                 Text(

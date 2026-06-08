@@ -2823,6 +2823,9 @@ class WebsiteService extends ChangeNotifier {
     Map<String, NavLinkType>? pendingFooterNavLinkTypes,
     Map<String, String?>? pendingFooterNavLinkValues,
     Map<String, bool>? pendingFooterNavOpenInNewTab,
+    Map<String, WebsiteNavigation>? pendingFooterNavItems,
+    Map<String, WebsiteNavigation>? pendingFooterNavCreates,
+    Set<String>? pendingFooterNavDeletes,
     Map<String, Map<String, String>>? pendingPageSeo,
     List<String>? pendingFooterSectionOrder,
     Map<String, List<String>>? pendingFooterLinkOrder,
@@ -2909,18 +2912,95 @@ class WebsiteService extends ChangeNotifier {
       }
     }
 
-    // Save pending footer navigation order if present
-    if (pendingFooterSectionOrder != null &&
-        pendingFooterSectionOrder.isNotEmpty) {
-      await reorderNavigationIds(pendingFooterSectionOrder);
-    }
-    if (pendingFooterLinkOrder != null && pendingFooterLinkOrder.isNotEmpty) {
-      for (final entry in pendingFooterLinkOrder.entries) {
-        await reorderNavigationIds(entry.value);
+    final createdFooterNavIds = <String, String>{};
+
+    // Delete staged footer navigation items before creating/reordering.
+    if (pendingFooterNavDeletes != null && pendingFooterNavDeletes.isNotEmpty) {
+      for (final navId in pendingFooterNavDeletes) {
+        await deleteNavigation(navId);
       }
     }
 
-    // Save pending footer navigation item edits (label + destination)
+    // Create draft footer navigation items, resolving draft parent IDs first.
+    if (pendingFooterNavCreates != null && pendingFooterNavCreates.isNotEmpty) {
+      final remaining =
+          Map<String, WebsiteNavigation>.from(pendingFooterNavCreates);
+
+      while (remaining.isNotEmpty) {
+        var createdAny = false;
+
+        for (final entry in remaining.entries.toList()) {
+          final draftId = entry.key;
+          final staged = pendingFooterNavItems?[draftId] ?? entry.value;
+          final parentId = staged.parentId;
+          final parentIsDraft =
+              parentId != null && pendingFooterNavCreates.containsKey(parentId);
+
+          if (parentIsDraft && !createdFooterNavIds.containsKey(parentId)) {
+            continue;
+          }
+
+          var nextLinkValue = staged.linkValue;
+          if (pendingFooterNavLinkValues?.containsKey(draftId) ?? false) {
+            nextLinkValue = pendingFooterNavLinkValues?[draftId];
+          }
+
+          final created = await createNavigation(
+            WebsiteNavigation(
+              id: '',
+              tenantId: tenantId,
+              menuLocation: staged.menuLocation,
+              label: pendingFooterNavLabels?[draftId] ?? staged.label,
+              icon: staged.icon,
+              linkType: pendingFooterNavLinkTypes?[draftId] ?? staged.linkType,
+              linkValue: nextLinkValue,
+              openInNewTab:
+                  pendingFooterNavOpenInNewTab?[draftId] ?? staged.openInNewTab,
+              parentId: parentId == null
+                  ? null
+                  : (createdFooterNavIds[parentId] ?? parentId),
+              orderIndex: staged.orderIndex,
+              isVisible: staged.isVisible,
+              showOnDesktop: staged.showOnDesktop,
+              showOnMobile: staged.showOnMobile,
+              cssClass: staged.cssClass,
+              highlight: staged.highlight,
+              createdAt: staged.createdAt,
+              updatedAt: DateTime.now(),
+            ),
+          );
+
+          createdFooterNavIds[draftId] = created.id;
+          remaining.remove(draftId);
+          createdAny = true;
+        }
+
+        if (!createdAny) {
+          throw StateError(
+            'No se pudo resolver la jerarquía de navegación pendiente.',
+          );
+        }
+      }
+    }
+
+    String resolveFooterNavId(String id) => createdFooterNavIds[id] ?? id;
+
+    // Save pending footer navigation order after draft IDs have been resolved.
+    if (pendingFooterSectionOrder != null &&
+        pendingFooterSectionOrder.isNotEmpty) {
+      await reorderNavigationIds(
+        pendingFooterSectionOrder.map(resolveFooterNavId).toList(),
+      );
+    }
+    if (pendingFooterLinkOrder != null && pendingFooterLinkOrder.isNotEmpty) {
+      for (final entry in pendingFooterLinkOrder.entries) {
+        await reorderNavigationIds(
+          entry.value.map(resolveFooterNavId).toList(),
+        );
+      }
+    }
+
+    // Save pending footer navigation item edits.
     final hasNavLabelEdits =
         pendingFooterNavLabels != null && pendingFooterNavLabels.isNotEmpty;
     final hasNavTypeEdits = pendingFooterNavLinkTypes != null &&
@@ -2929,19 +3009,28 @@ class WebsiteService extends ChangeNotifier {
         pendingFooterNavLinkValues.isNotEmpty;
     final hasNavTabEdits = pendingFooterNavOpenInNewTab != null &&
         pendingFooterNavOpenInNewTab.isNotEmpty;
+    final hasNavItemEdits =
+        pendingFooterNavItems != null && pendingFooterNavItems.isNotEmpty;
 
     if (hasNavLabelEdits ||
         hasNavTypeEdits ||
         hasNavValueEdits ||
-        hasNavTabEdits) {
+        hasNavTabEdits ||
+        hasNavItemEdits) {
       final ids = <String>{
         ...?pendingFooterNavLabels?.keys,
         ...?pendingFooterNavLinkTypes?.keys,
         ...?pendingFooterNavLinkValues?.keys,
         ...?pendingFooterNavOpenInNewTab?.keys,
+        ...?pendingFooterNavItems?.keys,
       };
 
       for (final navId in ids) {
+        if ((pendingFooterNavDeletes?.contains(navId) ?? false) ||
+            (pendingFooterNavCreates?.containsKey(navId) ?? false)) {
+          continue;
+        }
+
         WebsiteNavigation? existing;
         final localIndex = _navigation.indexWhere((n) => n.id == navId);
         if (localIndex >= 0) {
@@ -2962,17 +3051,35 @@ class WebsiteService extends ChangeNotifier {
 
         if (existing == null) continue;
 
-        var nextLinkValue = existing.linkValue;
+        final staged = pendingFooterNavItems?[navId];
+        final base = staged ?? existing;
+
+        var nextLinkValue = base.linkValue;
         if (pendingFooterNavLinkValues?.containsKey(navId) ?? false) {
           nextLinkValue = pendingFooterNavLinkValues?[navId];
         }
 
-        final next = existing.copyWith(
-          label: pendingFooterNavLabels?[navId] ?? existing.label,
-          linkType: pendingFooterNavLinkTypes?[navId] ?? existing.linkType,
+        final next = WebsiteNavigation(
+          id: existing.id,
+          tenantId: existing.tenantId,
+          menuLocation: base.menuLocation,
+          label: pendingFooterNavLabels?[navId] ?? base.label,
+          icon: base.icon,
+          linkType: pendingFooterNavLinkTypes?[navId] ?? base.linkType,
           linkValue: nextLinkValue,
           openInNewTab:
-              pendingFooterNavOpenInNewTab?[navId] ?? existing.openInNewTab,
+              pendingFooterNavOpenInNewTab?[navId] ?? base.openInNewTab,
+          parentId: base.parentId,
+          orderIndex: base.orderIndex,
+          isVisible: base.isVisible,
+          showOnDesktop: base.showOnDesktop,
+          showOnMobile: base.showOnMobile,
+          cssClass: base.cssClass,
+          highlight: base.highlight,
+          createdAt: existing.createdAt,
+          updatedAt: DateTime.now(),
+          children: existing.children,
+          linkedPage: existing.linkedPage,
         );
 
         await updateNavigation(next);

@@ -504,7 +504,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontFamily: PublicStoreTheme.defaultBodyFont,
+                              fontFamily: null,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
                             ),
@@ -526,7 +526,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                               minimumSize: const Size(0, 0),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               textStyle: const TextStyle(
-                                fontFamily: PublicStoreTheme.defaultBodyFont,
+                                fontFamily: null,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -756,7 +756,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           _product!.name,
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: PublicStoreTheme.textMuted,
@@ -937,7 +937,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           _product!.name.toUpperCase(),
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: isMobile ? 34 : 40,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
@@ -968,7 +968,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           ChileanUtils.formatCurrency(_product!.price),
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: isMobile ? 42 : 46,
             fontWeight: FontWeight.w700,
             color: _catalogBlue,
@@ -979,7 +979,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         const Text(
           'Precio final con IVA incluido',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 13,
             color: PublicStoreTheme.textSecondary,
           ),
@@ -1023,7 +1023,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                               ? 'Disponible para compra'
                               : 'Temporalmente sin stock',
                           style: const TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.black87,
@@ -1037,7 +1037,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                                   : 'Podemos ayudarte a revisar reposición o alternativas similares.')
                               : 'Producto disponible por compra directa o coordinación con tienda.',
                           style: const TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 13,
                             color: PublicStoreTheme.textSecondary,
                             height: 1.45,
@@ -1088,7 +1088,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         child: Text(
                           'Ya tienes este producto en el carrito.',
                           style: TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 13,
                             color: PublicStoreTheme.textSecondary,
                           ),
@@ -1105,7 +1105,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         child: const Text(
                           'Ver carrito',
                           style: TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1120,7 +1120,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   child: Text(
                     'NO DISPONIBLE',
                     style: TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontFamily: null,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.0,
@@ -1243,7 +1243,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             child: Text(
               label.toUpperCase(),
               style: TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: selected ? _catalogBlue : PublicStoreTheme.textSecondary,
@@ -1265,7 +1265,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ? description
             : 'Estamos actualizando la descripción extendida de este producto.',
         style: const TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 15,
           color: PublicStoreTheme.textPrimary,
           height: 1.7,
@@ -1298,7 +1298,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         key: ValueKey('product_technical_specs_empty'),
         'La ficha técnica de este producto está en actualización.',
         style: TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 15,
           color: PublicStoreTheme.textSecondary,
           height: 1.6,
@@ -1328,7 +1328,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           group.title.toUpperCase(),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 12,
             fontWeight: FontWeight.w800,
             color: _catalogBlue,
@@ -1676,7 +1676,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           Text(
             label.toUpperCase(),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: PublicStoreTheme.textSecondary,
@@ -1687,7 +1687,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           Text(
             value,
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1797,7 +1797,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         child: Text(
                           brand.toUpperCase(),
                           style: TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: Colors.grey.shade500,
@@ -1825,7 +1825,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                       Text(
                         product.name.toUpperCase(),
                         style: const TextStyle(
-                          fontFamily: PublicStoreTheme.defaultHeadingFont,
+                          fontFamily: null,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: Colors.black87,
@@ -1839,7 +1839,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                       Text(
                         ChileanUtils.formatCurrency(product.price),
                         style: const TextStyle(
-                          fontFamily: PublicStoreTheme.defaultBodyFont,
+                          fontFamily: null,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: Colors.black,
@@ -1862,7 +1862,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       child: Text(
         label,
         style: const TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: _catalogBlue,
@@ -1875,7 +1875,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return const Text(
       '/',
       style: TextStyle(
-        fontFamily: PublicStoreTheme.defaultBodyFont,
+        fontFamily: null,
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: PublicStoreTheme.textMuted,
@@ -1934,7 +1934,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       child: Text(
         label,
         style: TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: foreground,
@@ -1974,7 +1974,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               child: Text(
                 '$_quantity',
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
@@ -2033,7 +2033,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         label: Text(
           inCart ? 'AÑADIR OTRA UNIDAD' : 'AGREGAR AL CARRITO',
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 12,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.9,
@@ -2078,7 +2078,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 Text(
                   title,
                   style: const TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: Colors.black87,
@@ -2088,7 +2088,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 13,
                     color: PublicStoreTheme.textSecondary,
                     height: 1.45,
@@ -2114,7 +2114,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           title.toUpperCase(),
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 28,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,

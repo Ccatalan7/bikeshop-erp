@@ -676,7 +676,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                       Text(
                         message,
                         style: const TextStyle(
-                          fontFamily: PublicStoreTheme.defaultBodyFont,
+                          fontFamily: null,
                           fontSize: 15,
                           color: PublicStoreTheme.textSecondary,
                           height: 1.6,
@@ -744,7 +744,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 Text(
                   _presentationKicker(paymentPresentation),
                   style: TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: Colors.white.withValues(alpha: 0.78),
@@ -757,7 +757,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             Text(
               _presentationTitle(paymentPresentation),
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultHeadingFont,
+                fontFamily: null,
                 fontSize: 52,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -768,7 +768,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             Text(
               _presentationSubtitle(paymentPresentation),
               style: TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 16,
                 color: Colors.white.withValues(alpha: 0.78),
                 height: 1.55,
@@ -790,7 +790,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               Text(
                 'PEDIDO',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   color: Colors.white.withValues(alpha: 0.68),
@@ -801,7 +801,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               Text(
                 order.orderNumber,
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   fontSize: 34,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -869,7 +869,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         Text(
           label.toUpperCase(),
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 12,
             fontWeight: FontWeight.w800,
             color: Colors.white.withValues(alpha: 0.62),
@@ -882,7 +882,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             value,
             textAlign: TextAlign.right,
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -926,7 +926,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               message,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -1016,7 +1016,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           const Text(
             'Para completar tu pedido, realiza una transferencia bancaria a:',
             style: TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 14,
               color: Colors.black87,
               height: 1.5,
@@ -1034,7 +1034,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             const Text(
               'Nuestro equipo te compartirá los datos de transferencia para completar el pago.',
               style: TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 color: PublicStoreTheme.textSecondary,
                 height: 1.5,
@@ -1046,7 +1046,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             Text(
               transferProofInstructions,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 color: PublicStoreTheme.textSecondary,
                 height: 1.5,
@@ -1101,7 +1101,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 ? 'RESUMEN DE COMPRA'
                 : 'RESUMEN DEL PEDIDO',
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: 32,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1111,7 +1111,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           Text(
             order.orderNumber,
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: 34,
               fontWeight: FontWeight.w700,
               color: _logoBlue,
@@ -1175,7 +1175,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               const Text(
                 'TOTAL',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: PublicStoreTheme.textSecondary,
@@ -1185,7 +1185,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
               Text(
                 ChileanUtils.formatCurrency(order.total),
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
                   color: _logoBlue,
@@ -1285,7 +1285,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           Text(
             _summaryFooterText(paymentPresentation),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
@@ -1317,7 +1317,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           Text(
             title.toUpperCase(),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: 24,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1349,7 +1349,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               label.toUpperCase(),
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: PublicStoreTheme.textSecondary,
@@ -1362,7 +1362,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               value,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
@@ -1395,7 +1395,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 Text(
                   item.productName,
                   style: const TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -1407,7 +1407,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                   Text(
                     'SKU: ${item.productSku}',
                     style: const TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontFamily: null,
                       fontSize: 12,
                       color: PublicStoreTheme.textSecondary,
                     ),
@@ -1420,7 +1420,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           Text(
             'x${item.quantity}',
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: PublicStoreTheme.textSecondary,
@@ -1430,7 +1430,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
           Text(
             ChileanUtils.formatCurrency(item.subtotal),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1464,7 +1464,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               label.toUpperCase(),
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: PublicStoreTheme.textSecondary,
@@ -1477,7 +1477,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               value,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
@@ -1518,7 +1518,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
             child: Text(
               text,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
@@ -1542,7 +1542,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         Text(
           label,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             color: secondary
                 ? PublicStoreTheme.textSecondary
@@ -1552,7 +1552,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         Text(
           value,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
@@ -1573,7 +1573,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       child: Text(
         label,
         style: TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: tone,
@@ -1590,7 +1590,7 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
         Text(
           title.toUpperCase(),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 32,
             fontWeight: FontWeight.w700,
             color: Colors.black,

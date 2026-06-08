@@ -70,6 +70,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   final Map<String, NavLinkType> _pendingFooterNavLinkTypes = {};
   final Map<String, String?> _pendingFooterNavLinkValues = {};
   final Map<String, bool> _pendingFooterNavOpenInNewTab = {};
+  final Map<String, WebsiteNavigation> _pendingFooterNavItems = {};
+  final Map<String, WebsiteNavigation> _pendingFooterNavCreates = {};
+  final Set<String> _pendingFooterNavDeletes = {};
 
   // Transient selection for on-canvas inline editing
   String? _selectedFooterNavId;
@@ -134,6 +137,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _pendingFooterNavLinkValues;
   Map<String, bool> get pendingFooterNavOpenInNewTab =>
       _pendingFooterNavOpenInNewTab;
+  Map<String, WebsiteNavigation> get pendingFooterNavItems =>
+      _pendingFooterNavItems;
+  Map<String, WebsiteNavigation> get pendingFooterNavCreates =>
+      _pendingFooterNavCreates;
+  Set<String> get pendingFooterNavDeletes => _pendingFooterNavDeletes;
 
   String? get selectedFooterNavId => _selectedFooterNavId;
   bool get canUndo => _historyIndex > 0;
@@ -265,6 +273,93 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update a footer navigation item as staged editor state.
+  ///
+  /// Used by the side-panel footer editor for fields beyond label/destination
+  /// such as visibility, parent section, and device visibility.
+  void updateFooterNavItem(WebsiteNavigation nav) {
+    if (_pendingFooterNavCreates.containsKey(nav.id)) {
+      _pendingFooterNavCreates[nav.id] = nav;
+    } else {
+      _pendingFooterNavItems[nav.id] = nav;
+    }
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer nav item updated: ${nav.id}');
+    notifyListeners();
+  }
+
+  WebsiteNavigation createFooterNavDraft(WebsiteNavigation nav) {
+    final draftId = nav.id.trim().isEmpty ? 'draft_${_uuid.v4()}' : nav.id;
+    final draft = WebsiteNavigation(
+      id: draftId,
+      tenantId: nav.tenantId,
+      menuLocation: nav.menuLocation,
+      label: nav.label,
+      icon: nav.icon,
+      linkType: nav.linkType,
+      linkValue: nav.linkValue,
+      openInNewTab: nav.openInNewTab,
+      parentId: nav.parentId,
+      orderIndex: nav.orderIndex,
+      isVisible: nav.isVisible,
+      showOnDesktop: nav.showOnDesktop,
+      showOnMobile: nav.showOnMobile,
+      cssClass: nav.cssClass,
+      highlight: nav.highlight,
+      createdAt: nav.createdAt,
+      updatedAt: nav.updatedAt,
+      children: nav.children,
+      linkedPage: nav.linkedPage,
+    );
+
+    _pendingFooterNavCreates[draft.id] = draft;
+    _pendingFooterNavDeletes.remove(draft.id);
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer nav draft created: ${draft.id}');
+    notifyListeners();
+    return draft;
+  }
+
+  void deleteFooterNavItem(WebsiteNavigation nav) {
+    final ids = <String>{};
+
+    void collect(WebsiteNavigation item) {
+      ids.add(item.id);
+      for (final child in item.children) {
+        collect(child);
+      }
+    }
+
+    collect(nav);
+
+    var foundDraftChild = true;
+    while (foundDraftChild) {
+      foundDraftChild = false;
+      for (final draft in _pendingFooterNavCreates.values) {
+        if (draft.parentId != null &&
+            ids.contains(draft.parentId) &&
+            ids.add(draft.id)) {
+          foundDraftChild = true;
+        }
+      }
+    }
+
+    for (final id in ids) {
+      if (_pendingFooterNavCreates.remove(id) == null) {
+        _pendingFooterNavDeletes.add(id);
+      }
+      _pendingFooterNavItems.remove(id);
+      _pendingFooterNavLabels.remove(id);
+      _pendingFooterNavLinkTypes.remove(id);
+      _pendingFooterNavLinkValues.remove(id);
+      _pendingFooterNavOpenInNewTab.remove(id);
+    }
+
+    _hasFooterChanges = true;
+    debugPrint('🦶 [EditProvider] Footer nav items deleted: ${ids.join(', ')}');
+    notifyListeners();
+  }
+
   String getEffectiveFooterNavLabel(String navId, String savedLabel) {
     if (_pendingFooterNavLabels.containsKey(navId)) {
       return _pendingFooterNavLabels[navId]!;
@@ -290,6 +385,86 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     return saved;
   }
 
+  WebsiteNavigation getEffectiveFooterNavItem(WebsiteNavigation saved) {
+    final staged = _pendingFooterNavItems[saved.id];
+    final source = staged ?? saved;
+    final hasLinkValue = _pendingFooterNavLinkValues.containsKey(saved.id);
+
+    return WebsiteNavigation(
+      id: saved.id,
+      tenantId: saved.tenantId,
+      menuLocation: source.menuLocation,
+      label: _pendingFooterNavLabels[saved.id] ?? source.label,
+      icon: source.icon,
+      linkType: _pendingFooterNavLinkTypes[saved.id] ?? source.linkType,
+      linkValue: hasLinkValue
+          ? _pendingFooterNavLinkValues[saved.id]
+          : source.linkValue,
+      openInNewTab:
+          _pendingFooterNavOpenInNewTab[saved.id] ?? source.openInNewTab,
+      parentId: source.parentId,
+      orderIndex: source.orderIndex,
+      isVisible: source.isVisible,
+      showOnDesktop: source.showOnDesktop,
+      showOnMobile: source.showOnMobile,
+      cssClass: source.cssClass,
+      highlight: source.highlight,
+      createdAt: saved.createdAt,
+      updatedAt: source.updatedAt,
+      children: source.children,
+      linkedPage: saved.linkedPage,
+    );
+  }
+
+  List<WebsiteNavigation> getEffectiveFooterNavigation(
+    List<WebsiteNavigation> savedRoots,
+  ) {
+    final byId = <String, WebsiteNavigation>{};
+
+    void collect(WebsiteNavigation item) {
+      byId[item.id] = item;
+      for (final child in item.children) {
+        collect(child);
+      }
+    }
+
+    for (final root in savedRoots) {
+      collect(root);
+    }
+    byId.addAll(_pendingFooterNavCreates);
+    byId.removeWhere((id, _) => _pendingFooterNavDeletes.contains(id));
+
+    final effectiveById = <String, WebsiteNavigation>{
+      for (final entry in byId.entries)
+        entry.key: getEffectiveFooterNavItem(entry.value),
+    };
+    final childrenByParent = <String, List<WebsiteNavigation>>{};
+    final roots = <WebsiteNavigation>[];
+
+    for (final item in effectiveById.values) {
+      final parentId = item.parentId;
+      if (parentId == null || !effectiveById.containsKey(parentId)) {
+        roots.add(item);
+      } else {
+        childrenByParent.putIfAbsent(parentId, () => []).add(item);
+      }
+    }
+
+    WebsiteNavigation buildNode(WebsiteNavigation item, Set<String> path) {
+      if (path.contains(item.id)) return item.copyWith(children: const []);
+      final nextPath = <String>{...path, item.id};
+      final children = List<WebsiteNavigation>.from(
+        childrenByParent[item.id] ?? const <WebsiteNavigation>[],
+      )..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return item.copyWith(
+        children: children.map((child) => buildNode(child, nextPath)).toList(),
+      );
+    }
+
+    roots.sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    return roots.map((root) => buildNode(root, const <String>{})).toList();
+  }
+
   /// Clear footer changed flag (after save)
   void clearFooterChanges() {
     _hasFooterChanges = false;
@@ -300,6 +475,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pendingFooterNavLinkTypes.clear();
     _pendingFooterNavLinkValues.clear();
     _pendingFooterNavOpenInNewTab.clear();
+    _pendingFooterNavItems.clear();
+    _pendingFooterNavCreates.clear();
+    _pendingFooterNavDeletes.clear();
     _selectedFooterNavId = null;
     notifyListeners();
   }
@@ -426,6 +604,49 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearPendingEditorChanges() {
+    _hasUnsavedChanges = false;
+    _hasHeaderChanges = false;
+    _hasSiteSettingsChanges = false;
+    _hasSeoChanges = false;
+    _hasThemeChanges = false;
+    _hasFooterChanges = false;
+    _hasCategoryChanges = false;
+
+    _pendingHeaderSettings = {};
+    _pendingSiteSettings = {};
+    _pendingFooterSettings = {};
+    _pendingThemeSettings = {};
+    _pendingFooterSectionOrder = null;
+    _pendingFooterLinkOrder = {};
+    _pendingFooterNavLabels.clear();
+    _pendingFooterNavLinkTypes.clear();
+    _pendingFooterNavLinkValues.clear();
+    _pendingFooterNavOpenInNewTab.clear();
+    _pendingFooterNavItems.clear();
+    _pendingFooterNavCreates.clear();
+    _pendingFooterNavDeletes.clear();
+    _pendingCategoryVisibility.clear();
+    _pendingPageSeo.clear();
+    _selectedFooterNavId = null;
+  }
+
+  /// Restore the editor state from the last loaded/saved snapshot.
+  void discardPendingChanges() {
+    if (_history.isNotEmpty) {
+      _blocks =
+          _history.first.map((b) => Map<String, dynamic>.from(b)).toList();
+      _history
+        ..clear()
+        ..add(_blocks.map((b) => Map<String, dynamic>.from(b)).toList());
+      _historyIndex = 0;
+    }
+
+    _clearPendingEditorChanges();
+    _selectedBlockId = null;
+    notifyListeners();
+  }
+
   /// Enter preview mode (shows top bar with "Editar" button)
   /// [pageId] - Optional page ID for multi-page editing (null = home page)
   /// [pageSlug] - Optional page slug for navigation
@@ -439,13 +660,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _isEditMode = false;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
-    _hasUnsavedChanges = false;
-    _hasHeaderChanges = false;
-    _hasSiteSettingsChanges = false;
-    _hasSeoChanges = false;
-    _hasFooterChanges = false;
-    _pendingSiteSettings = {};
-    _pendingPageSeo.clear();
+    _clearPendingEditorChanges();
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -467,13 +682,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _isEditMode = true;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
-    _hasUnsavedChanges = false;
-    _hasHeaderChanges = false;
-    _hasSiteSettingsChanges = false;
-    _hasSeoChanges = false;
-    _hasFooterChanges = false;
-    _pendingSiteSettings = {};
-    _pendingPageSeo.clear();
+    _clearPendingEditorChanges();
     _selectedBlockId = null;
     _currentPageId = pageId;
     _currentPageSlug = pageSlug;
@@ -516,12 +725,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _isPreviewMode = false;
     _isEditMode = false;
     _selectedBlockId = null;
-    _hasUnsavedChanges = false;
-    _hasHeaderChanges = false;
-    _hasSiteSettingsChanges = false;
+    _clearPendingEditorChanges();
     _blocks = [];
     _settings = {};
-    _pendingSiteSettings = {};
     _currentPageId = null;
     _currentPageSlug = null;
     notifyListeners();

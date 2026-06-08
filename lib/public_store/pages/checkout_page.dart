@@ -802,7 +802,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         const Text(
           'Completa tus datos de contacto, entrega y pago para confirmar tu pedido con el mismo lenguaje claro del resto de la tienda.',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             color: PublicStoreTheme.textSecondary,
             height: 1.55,
@@ -850,7 +850,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               const Text(
                 'Vuelve al catálogo, revisa productos y agrega artículos antes de continuar al checkout.',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 15,
                   color: PublicStoreTheme.textSecondary,
                   height: 1.6,
@@ -1197,7 +1197,7 @@ class _CheckoutPageState extends State<CheckoutPage>
             const Text(
               'Selecciona una sugerencia y revisa los datos antes de confirmar.',
               style: TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 color: PublicStoreTheme.textSecondary,
               ),
@@ -1206,7 +1206,7 @@ class _CheckoutPageState extends State<CheckoutPage>
             const Text(
               'Puedes escribir tu dirección manualmente. Separarla nos ayuda a guardarla mejor en tu cuenta.',
               style: TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 12,
                 color: PublicStoreTheme.textSecondary,
               ),
@@ -1296,7 +1296,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     Text(
                       title,
                       style: TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 15,
                         fontWeight:
                             isSelected ? FontWeight.w700 : FontWeight.w600,
@@ -1307,7 +1307,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 13,
                         color: PublicStoreTheme.textSecondary,
                         height: 1.45,
@@ -1360,7 +1360,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     Text(
                       'Retiro en $storeName',
                       style: const TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         color: Colors.black87,
@@ -1370,7 +1370,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     const Text(
                       'La tienda preparará tu pedido y te avisará antes de que pases a buscarlo.',
                       style: TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 13,
                         color: PublicStoreTheme.textSecondary,
                         height: 1.45,
@@ -1391,7 +1391,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   child: Text(
                     row.$1,
                     style: const TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontFamily: null,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: PublicStoreTheme.textSecondary,
@@ -1402,7 +1402,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   child: Text(
                     row.$2,
                     style: const TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontFamily: null,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
@@ -1568,7 +1568,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Text(
             'RESUMEN DEL PEDIDO',
             style: TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: isMobile ? 28 : 32,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1617,7 +1617,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               const Text(
                 'TOTAL',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: PublicStoreTheme.textSecondary,
@@ -1627,7 +1627,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               Text(
                 ChileanUtils.formatCurrency(cart.total),
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
                   color: _logoBlue,
@@ -1701,7 +1701,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                 child: Text(
                   'Tus datos están protegidos y serán utilizados únicamente para procesar tu pedido.',
                   style: TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -1736,7 +1736,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Text(
             title.toUpperCase(),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: 24,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1824,7 +1824,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                           child: Text(
                             title,
                             style: TextStyle(
-                              fontFamily: PublicStoreTheme.defaultBodyFont,
+                              fontFamily: null,
                               fontSize: 15,
                               fontWeight: isSelected
                                   ? FontWeight.w700
@@ -1843,7 +1843,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 13,
                         color: PublicStoreTheme.textSecondary,
                         height: 1.45,
@@ -1907,7 +1907,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                 Text(
                   item.product.name,
                   style: const TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -1920,7 +1920,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                 Text(
                   'Cantidad: ${item.quantity}',
                   style: const TextStyle(
-                    fontFamily: PublicStoreTheme.defaultBodyFont,
+                    fontFamily: null,
                     fontSize: 12,
                     color: PublicStoreTheme.textSecondary,
                   ),
@@ -1932,7 +1932,7 @@ class _CheckoutPageState extends State<CheckoutPage>
           Text(
             ChileanUtils.formatCurrency(item.subtotal),
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -1954,7 +1954,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         Text(
           label,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             color: secondary
                 ? PublicStoreTheme.textSecondary
@@ -1964,7 +1964,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         Text(
           value,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
@@ -1984,7 +1984,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       child: Text(
         label,
         style: const TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: _logoBlue,
@@ -2001,7 +2001,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         Text(
           title.toUpperCase(),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 32,
             fontWeight: FontWeight.w700,
             color: Colors.black,

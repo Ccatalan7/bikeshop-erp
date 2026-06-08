@@ -653,15 +653,16 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 |-------|-------|
 | **Project URL** | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` |
 | **Project ID** | `xzdvtzdqjeyqxnkqprtf` |
-| **Region** | AWS US West 1 |
-| **Database Host** | `aws-0-us-west-1.pooler.supabase.com` |
+| **Region** | AWS South America East 1 (`sa-east-1`) |
+| **Direct Database Host** | `db.xzdvtzdqjeyqxnkqprtf.supabase.co` |
+| **Pooler Host** | `aws-1-sa-east-1.pooler.supabase.com` |
 | **Database Port** | `6543` (pooler) / `5432` (direct) |
 
 ## Connection Strings
 
 **Pooler Connection (recommended for most operations):**
 ```
-postgresql://postgres.xzdvtzdqjeyqxnkqprtf:[PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.xzdvtzdqjeyqxnkqprtf:[PASSWORD]@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
 ```
 
 **Direct Connection (for migrations/schema changes):**
@@ -671,7 +672,172 @@ postgresql://postgres:[PASSWORD]@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgr
 
 ## 🚀 Correct Use of Supabase CLI (CRITICAL FOR AGENTS)
 
-When interacting with the Supabase project using the terminal, NEVER guess or invent commands. Always use the explicit `--project-ref` flag pointing to our project `xzdvtzdqjeyqxnkqprtf`.
+Agents must inspect and operate Supabase themselves. Do not stop at "Supabase CLI is not configured", ask the user to run routine commands, or blame local Docker before checking the hosted project.
+
+### Mandatory CLI preflight
+
+Run this at the start of every Supabase/database incident or implementation task:
+
+```bash
+cd /Users/Claudio/Dev/bikeshop-erp
+
+# Confirm the installed CLI and linked project.
+supabase --version
+cat supabase/.temp/project-ref
+supabase projects list --output json
+
+# Check for an update. If Supabase is listed, upgrade it and continue.
+outdated_supabase="$(brew outdated --quiet supabase)"
+if [ -n "$outdated_supabase" ]; then brew upgrade supabase; fi
+```
+
+Rules:
+
+- The production project ref is always `xzdvtzdqjeyqxnkqprtf`.
+- For commands that accept it, always pass `--project-ref xzdvtzdqjeyqxnkqprtf`.
+- `supabase status` checks the **local Docker stack only**. A Docker/Colima error does not mean hosted Supabase is down and is not a blocker for hosted CLI operations.
+- `supabase projects list --output json` is the source of truth for hosted project status, region, and linked state.
+- Never run Supabase CLI commands in parallel. Linked queries can throttle temporary login creation, and recent CLI versions can race while updating their local telemetry file.
+- If a command is missing, check `supabase <command> --help`, upgrade the CLI, and continue. Do not hand the setup work back to the user.
+
+### Hosted incident triage
+
+For auth/network/API failures, inspect the hosted project before changing app code:
+
+```bash
+# Hosted control-plane status
+supabase projects list --output json \
+  | jq '.[] | select(.ref == "xzdvtzdqjeyqxnkqprtf")'
+
+# Endpoint DNS and Auth health
+dig +short xzdvtzdqjeyqxnkqprtf.supabase.co
+curl -sS -o /dev/null -w '%{http_code} %{errormsg}\n' \
+  --connect-timeout 10 \
+  https://xzdvtzdqjeyqxnkqprtf.supabase.co/auth/v1/health
+```
+
+Interpretation:
+
+- `ACTIVE_HEALTHY` plus a working health endpoint means the hosted service is up; continue into app credentials, Auth, RLS, or query diagnostics.
+- `INACTIVE` plus missing project-endpoint DNS means the hosted project is paused/inactive. Do not "fix" the Flutter URL or local DNS.
+- A failed `supabase status` with a healthy hosted project only means the local Docker stack is stopped.
+
+As of Supabase CLI `2.105.0`, the CLI can inspect project status but does not expose a `projects restore` subcommand. On macOS, use the authenticated CLI credential to call the official Management API restore endpoint:
+
+```bash
+stored="$(security find-generic-password -s 'Supabase CLI' -a supabase -w)"
+case "$stored" in
+  go-keyring-base64:*) token="$(printf '%s' "${stored#go-keyring-base64:}" | base64 --decode)" ;;
+  *) token="$stored" ;;
+esac
+
+curl -sS -X POST \
+  "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/restore" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json"
+
+unset stored token
+```
+
+After requesting restore, poll `supabase projects list --output json` sequentially until the project is healthy, then verify Auth and a read-only database query.
+
+If restore returns HTTP `402` with `This organization has unpaid invoices`, that is the root cause. No app code, DNS change, local Docker action, or schema change can reactivate the project; report the exact billing blocker so the organization owner can settle it, then rerun restore and verification.
+
+An overdue invoice can cause Supabase to automatically downgrade the organization to the Free Plan **and** keep every project paused. Being on `free` does not clear historical Pro/overage invoices and does not permit restore while invoices remain unpaid. Check the current organization plan through the authenticated Management API:
+
+```bash
+stored="$(security find-generic-password -s 'Supabase CLI' -a supabase -w)"
+case "$stored" in
+  go-keyring-base64:*) token="$(printf '%s' "${stored#go-keyring-base64:}" | base64 --decode)" ;;
+  *) token="$stored" ;;
+esac
+
+curl -sS "https://api.supabase.com/v1/organizations/xyluboaukuagajdqivij" \
+  -H "Authorization: Bearer $token" \
+  | jq '{id, name, plan}'
+
+unset stored token
+```
+
+For this organization, the reusable interpretation is:
+
+- `plan: "free"` plus restore HTTP `402` means the downgrade already happened, but outstanding invoices still must be paid before restore.
+- Supabase monthly invoices can mix fixed fees and usage fees: fixed plan fees are billed in advance for the cycle that started when the invoice was issued, while usage/compute/overage fees are billed in arrears for the previous cycle.
+- Paying an overdue invoice while the organization is already `free` settles that existing invoice; it does not renew Pro or prepay a new Pro month. Inspect the invoice line items in the organization's Invoices page to see the exact split.
+- After payment, restore the production project and verify that its current database/storage/egress usage fits Free Plan limits before deciding to remain on Free.
+
+### Mandatory post-restore integrity and usage check
+
+Project restoration progresses through statuses such as `COMING_UP` and `RESTORING` before `ACTIVE_HEALTHY`. DNS and individual services can respond before the control-plane status becomes healthy. Do not diagnose missing data while the project is still coming up; poll sequentially until `ACTIVE_HEALTHY`.
+
+After any restore/reactivation, automatically verify all of the following:
+
+1. Organization plan, project status, DNS, Auth, REST, and Storage health.
+2. Database size, production tenant existence, Auth user count, key business-table counts/latest timestamps, invalid indexes, and unvalidated constraints.
+3. Storage bucket/object counts, total bytes, missing metadata, missing bucket references, and actual downloads from representative public objects.
+4. Disk allocation/utilization and recent API activity.
+5. Evidence against a pre-incident baseline when available. Without a prior snapshot/count/dump, never claim absolute proof that no row was lost; report that no evidence of loss was found and identify the newest preserved records.
+
+Useful authenticated Management API checks:
+
+```bash
+# Disk allocation and utilization.
+curl -sS "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/config/disk" \
+  -H "Authorization: Bearer $token" | jq .
+curl -sS "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/config/disk/util" \
+  -H "Authorization: Bearer $token" | jq .
+
+# Recent API activity. Valid intervals are:
+# 15min, 30min, 1hr, 3hr, 1day, 3day, 7day
+curl -sS \
+  "https://api.supabase.com/v1/projects/xzdvtzdqjeyqxnkqprtf/analytics/endpoints/usage.api-counts?interval=7day" \
+  -H "Authorization: Bearer $token" | jq .
+```
+
+The Management API access token can inspect recent API request counts, but it does not expose the authoritative organization billing-cycle egress byte total. Check the signed-in organization **Usage** page for exact uncached/cached egress. Do not derive billing egress from API request counts; request counts do not contain response sizes and are not equivalent to egress.
+
+### Autonomous verification requirement
+
+Do not merely author Supabase changes. Run the applicable checks yourself:
+
+```bash
+# Preferred read-only production SQL check through the authenticated CLI.
+supabase db query --linked --output table \
+  "select now() as checked_at, current_database() as database_name;"
+
+# Inspect the CLI-supported syntax before inventing a command.
+supabase db query --help
+```
+
+- Use `supabase db query --linked` first for production SQL inspection and verification.
+- Run linked queries sequentially.
+- After schema/function/policy changes, run focused verification SQL and relevant tests automatically.
+- After Edge Function changes, deploy and invoke/verify the affected function automatically.
+- Never ask the user to run a routine query or test that the agent can run.
+- Never print access tokens, database passwords, service-role keys, or full credential-bearing connection strings.
+
+### Mandatory living-runbook rule
+
+`.github/copilot-instructions.md` is the canonical operational runbook for agents working with this Supabase project. Whenever an agent discovers reusable Supabase knowledge, the agent must update this file in the **same task** without waiting for the user to ask.
+
+Update this Supabase section when discovering any of the following:
+
+- a CLI command or flag that is new, changed, removed, or more reliable than the documented path
+- a required CLI upgrade, authentication/bootstrap step, or platform-specific credential-store detail
+- stale project metadata such as project ref, region, host, pooler, status interpretation, or endpoint behavior
+- a recurring failure mode and its proven diagnosis/fix, including exact meaningful error messages/status codes
+- a better autonomous query, deployment, schema, Edge Function, Auth, Storage, or verification workflow
+- a misleading or contradictory instruction elsewhere in this file
+
+Rules for runbook updates:
+
+- Replace stale or contradictory guidance; do not merely append another conflicting note.
+- Document commands that were actually checked against the installed CLI or hosted project.
+- Keep durable, reusable knowledge. Do not add temporary row data, one-off debugging noise, access tokens, passwords, or new secrets.
+- Preserve the rule that schema SQL must be mirrored into idempotent `supabase/sql/core_schema.sql`.
+- Before finishing any Supabase task, explicitly ask: "Did this task reveal something future agents need in the runbook?" If yes, update this file before reporting completion.
+
+### Project-scoped operations
 
 **1. Managing Secrets for Edge Functions:**
 To set secrets that Edge Functions will read via `Deno.env.get()`:
@@ -779,23 +945,23 @@ curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_pages?tenant_i
 # psql "postgresql://postgres.xzdvtzdqjeyqxnkqprtf:..."  # Often fails with "Tenant or user not found"
 ```
 
-**Service Role Key Location:** `.env` file → `SUPABASE_SERVICE_ROLE_KEY`
+**Service Role Key Location:** use the fallback credential documented below. It is not currently present in `.env`; do not waste time repeatedly searching `.env` for it or claim that its absence blocks CLI-linked SQL.
 
 ## 🔐 Autonomous Database Access For Agents (CRITICAL)
 
-**Supabase CLI login alone is NOT enough for serious production investigation.**
+**A current authenticated Supabase CLI is the preferred first tool for production investigation.**
 
-CLI login is useful for:
+With a current CLI, agents can use:
+
+- `supabase projects list --output json` for hosted project status
+- `supabase db query --linked` for read-only SQL, exact forensic queries, DDL, and verification
 - `supabase secrets ... --project-ref xzdvtzdqjeyqxnkqprtf`
 - `supabase functions deploy ... --project-ref xzdvtzdqjeyqxnkqprtf`
-- migrations / project-scoped admin workflows
+- project-scoped admin workflows
 
-CLI login is **NOT** enough for:
-- arbitrary read-only SQL inspection
-- exact ad hoc cleanup SQL
-- production incident forensics with custom `SELECT` / `WITH` queries
+Use service-role REST or direct `psql` as fallbacks when the CLI-linked query path is unavailable, when testing a specific REST/RLS behavior, or when a database operation specifically requires a direct connection.
 
-For autonomous DB work, agents need **one or both** of these:
+For autonomous DB fallback work, agents can use **one or both** of these:
 
 ### 1. Service Role Access (preferred default for inspection)
 
@@ -899,16 +1065,17 @@ Use `-v ON_ERROR_STOP=1` so deployment aborts on the first SQL error.
 
 Use this order by default:
 
-1. **REST + service role** for fast inspection and verifier queries.
-2. **Direct `psql`** for exact SQL, cleanup scripts, migrations, or incident forensics.
-3. **Supabase CLI** for secrets/functions/project admin tasks.
+1. **Supabase CLI** for hosted status, linked SQL inspection/verification, secrets, functions, and project admin tasks.
+2. **REST + service role** for testing REST/RLS behavior or simple table inspection when linked SQL is unavailable.
+3. **Direct `psql`** for operations that specifically require a direct database connection.
 
 ## 🚨 Pitfalls Encountered In This Session
 
 Future agents should avoid these exact mistakes:
 
-1. **Do not assume CLI login gives raw SQL access.**
-  - It does not replace service-role REST or direct `psql`.
+1. **Do not assume an old CLI limitation still applies.**
+  - Run `supabase --version` and `supabase db query --help`.
+  - Current CLI versions support `supabase db query --linked`; upgrade and use it before falling back.
 
 2. **Do not rely on `stock_movements_view` having raw table columns.**
   - The view does **not** expose raw `type`.
@@ -3494,6 +3661,93 @@ Include the following modules:
 
 **CRITICAL: The Website Builder is a visual, block-based CMS. ALL content must be editable through the UI - NEVER hardcode content in code or SQL!**
 
+## 🚨 MANDATORY: Editor-Owned Website Changes (June 2026)
+
+Any change to the public website/storefront must be owned by a real editor feature, setting, or data model that the user can later change without an agent.
+
+This applies to visible content, typography, colors, spacing, layout variants, header behavior, footer behavior, navigation, mega menus, block configuration, product-list presentation, policy/trust content, checkout/customer-facing copy, and any other public-store surface.
+
+### Required workflow for agents
+
+Before changing website rendering code, identify the editable owner for the change:
+
+- site theme setting in `website_settings` (`theme_*`, button settings, header/footer settings, etc.)
+- block schema field in `website_block_registry.dart` persisted through `website_blocks.block_data`
+- navigation/menu record in `website_navigation`
+- page/SEO record in `website_pages` or staged SEO settings
+- product/category/business data already editable elsewhere in the ERP
+
+If the editable owner does not exist yet, add or extend the editor feature first. Do not ship a renderer-only, widget-only, CSS-only, SQL-only, or hardcoded Dart change that the user cannot adjust later from the UI.
+
+Every public website change must complete the same three-part contract:
+
+1. **Owner:** a persisted editor-owned value exists.
+2. **Control:** the user can discover and change that value in the active editor.
+3. **Consumer:** every affected public renderer reads that value, while the editor/default value is only a fallback.
+
+A change is incomplete if any one of those parts is missing. Do not claim a visual change is finished after editing a renderer alone, and do not add an editor control whose value is ignored by the public renderer.
+
+When implementing a requested website change, set it through the same provider/schema/settings path that the user will use later. The code change may add the capability, but the resulting website state must not depend on a hidden constant or an agent-only code path.
+
+### Theme and typography rule
+
+- Website typography, colors, and base spacing must flow through the editor-backed theme settings and `WebsiteThemeBuilder`.
+- Do not force public-store pages to a hardcoded `PublicStoreTheme.defaultHeadingFont`, `PublicStoreTheme.defaultBodyFont`, fixed color, or fixed spacing as the final behavior when the editor exposes a corresponding theme control.
+- `PublicStoreTheme` constants are acceptable as fallback defaults only. They must not override saved `website_settings` values.
+- If a new global visual option is needed, add the side-panel control, stage it in `WebsiteEditModeProvider`, save it through the global `Guardar` pipeline, and make every affected renderer/page consume the saved value.
+
+### Navigation and mega-menu rule
+
+- Header/footer/menu changes must use `website_navigation` and the editor controls for label, destination, hierarchy, visibility, ordering, and presentation.
+- Do not create a menu, submenu, mega menu, or navigation behavior only in renderer code.
+- If a menu needs a new presentation mode (for example dropdown vs mega menu), model it as an editable stored option and expose it in the navigation editor. Do not rely on hidden CSS classes or "has children therefore mega menu" behavior as the only control.
+
+### Universal controls rule
+
+If a website editing capability already exists, agents must reuse or extend the most mature shared control instead of creating another block-specific control.
+
+User-surfaced examples are symptoms, not the full scope. For any task about editor consistency, universal controls, missing controls, save behavior, or website refactors, audit every `WebsiteBlockType` and every affected capability before proposing or shipping a fix. The audit must cover at least: text/content editing, typography/style persistence, links/actions, media/focal point/alt data, colors/theme tokens, responsive behavior, animation, repeaters/lists, and save semantics.
+
+Current canonical controls/capabilities:
+
+- Links/destinations: `WebsiteLinkValueEditor`.
+- Inline formatted text: `InlineEditableTextV2` + `TextFormattingToolbar` with explicit toolbar presets.
+- Click-to-replace images: `InlineEditableImage` / the shared image picker path, not ad-hoc URL-only controls.
+- Cover/background focal point: `FocalPointPicker`, promoted as the shared focal-point control for every cover/background image.
+- Block field controls: schema-driven `WebsiteBlockFieldSchema` rendering where the field type can describe the capability.
+- Add-block discovery: the registry-driven `AddBlockDialog`; do not maintain a separate hardcoded block list.
+- Public typography: the active `WebsiteThemeBuilder`/Flutter `Theme`; public widgets must inherit it rather than forcing `PublicStoreTheme.defaultHeadingFont/defaultBodyFont`.
+
+Do not add block-local duplicates such as a second link picker, a second text formatting toolbar, a block-only focal point picker, a local color picker, or a one-off image position control unless the task is explicitly to prototype a replacement. If a duplicate already exists and you touch that area, either migrate it to the canonical control or document why it remains temporarily as compatibility debt.
+
+When a control becomes more developed in one block (for example carousel background repositioning), treat that as a candidate for a shared control and roll it out to every block with the same capability: hero, carousel, video banner, canvas background, banners, cards, galleries, and future cover-image blocks.
+
+Capability behavior belongs in the shared field schema/control routing. A block should declare that an image is a cover, gallery item, avatar, logo, or inline image; it should not privately decide whether focal point, mobile focal point, alt text, upload, or reset controls exist. The same applies to semantic text roles, formatting persistence, links/actions, repeaters, responsive settings, and style controls.
+
+Never expose a control that only changes the edit-mode preview. The saved public renderer must consume the same value. Conversely, never consume a renderer option that has no editor owner/control.
+
+### Save semantics rule
+
+Editor content/config changes must stage in `WebsiteEditModeProvider` and persist through the editor-wide `Guardar` action. Do not add a block-local or dialog-local `Guardar` button that directly saves content/config to services while the rest of the editor is staged.
+
+Dialog buttons may confirm local form input only if they update staged provider state and the final persistence still waits for the global `Guardar`. Prefer labels like `Aplicar` or `Listo` for local form confirmation to avoid implying a second save pipeline.
+
+Immediate persistence is allowed only for clearly operational actions, such as publish/unpublish, Google sync/import, OAuth connection, destructive deletes, or other actions the UI explicitly presents as operations rather than editable staged website content.
+
+### Definition of done
+
+For every website change:
+
+- The user can find the related control in the inline editor or an ERP website management screen.
+- The change is applied by setting/updating that control or data model, not by bypassing it.
+- Shared capabilities reuse the canonical control; no new per-block duplicate controls are introduced.
+- For control-consistency work, the task includes a block-by-block capability matrix, not only the examples mentioned by the user.
+- Staged editor changes save through global `Guardar` unless they are explicitly operational actions like publish/unpublish.
+- No block/content/config surface introduces its own direct-save `Guardar` button.
+- Public renderers read the saved editor value, and editor-assigned values win over hardcoded fallbacks.
+- Reloading the editor/public page preserves the result.
+- If behavior/schema/data-flow changes, update the relevant website docs/handoff in the same task.
+
 ## 🏆 Public Store Quality Bar (April 2026)
 
 The public storefront is not a demo surface.
@@ -4186,6 +4440,11 @@ All blocks inherit theme settings automatically.
 
 When creating ANY website feature:
 
+- [ ] **Which editor control/data owner owns this change?** (theme setting, block field, navigation row, page/SEO record, product/category/business data)
+- [ ] **Can the user change/revert it later without an agent?** (If not, add the editor feature first)
+- [ ] **Does it reuse the canonical shared control for this capability?** (link picker, text toolbar, media/focal point, color, action, responsive visibility)
+- [ ] **If this is an editor consistency task, did you audit every block/capability instead of only the examples in the prompt?**
+- [ ] **Does staged content/config save only through the global editor `Guardar`?** (No block-local direct-save buttons)
 - [ ] **Is all content editable?** (No hardcoded text/images)
 - [ ] **Does it use InlineEditableText?** (For text fields)
 - [ ] **Does it use InlineEditableImage?** (For images)

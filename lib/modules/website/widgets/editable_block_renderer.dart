@@ -3,12 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
-import '../widgets/inline_edit_toolbar.dart';
 import '../widgets/inline_editable_text_v2.dart';
 import '../widgets/inline_editable_image.dart';
 import '../widgets/block_resize_handle.dart';
+import '../widgets/block_action_bar.dart';
 import '../widgets/text_formatting_toolbar.dart';
 import '../widgets/canvas_block.dart';
+import '../widgets/website_link_value_editor.dart';
+import '../models/website_font_registry.dart';
 import 'website_block_renderer.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
@@ -35,6 +37,9 @@ class EditableBlockRenderer {
     bool isVisible = true,
     String? tenantId,
   }) {
+    headingFont = WebsiteFontRegistry.resolveOptionalHeadingFont(headingFont);
+    bodyFont = WebsiteFontRegistry.resolveOptionalBodyFont(bodyFont);
+
     // Use Selector to only rebuild when edit mode or selection changes for THIS block
     return Selector<WebsiteEditModeProvider,
         ({bool isEditMode, bool isSelected})>(
@@ -1112,9 +1117,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         // Detect mobile based on available width (for editor preview)
         final isMobile = constraints.maxWidth < 600;
 
-        // Resolve mobile background alignment
-        // Priority: focal point values > legacy preset alignment > center default
-        Alignment bgAlignment = Alignment.center;
+        // Resolve shared desktop/mobile focal point values.
+        final desktopFocalX =
+            (widget.data['focalPointX'] as num?)?.toDouble() ?? 0.5;
+        final desktopFocalY =
+            (widget.data['focalPointY'] as num?)?.toDouble() ?? 0.5;
+        Alignment bgAlignment = Alignment(
+          (desktopFocalX * 2) - 1,
+          (desktopFocalY * 2) - 1,
+        );
         if (isMobile) {
           final focalX = (widget.data['mobileFocalPointX'] as num?)?.toDouble();
           final focalY = (widget.data['mobileFocalPointY'] as num?)?.toDouble();
@@ -1250,10 +1261,16 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                         text: ctaText.isEmpty ? 'Ver más' : ctaText,
                         link: ctaLink,
                         backgroundColor: widget.accentColor,
-                        onTextChanged: (value) => editProvider.updateBlockData(
-                            widget.blockId, 'buttonText', value),
-                        onLinkChanged: (value) => editProvider.updateBlockData(
-                            widget.blockId, 'buttonLink', value),
+                        onTextChanged: (value) =>
+                            editProvider.updateBlockDataMultiple(
+                          widget.blockId,
+                          {'ctaText': value, 'buttonText': value},
+                        ),
+                        onLinkChanged: (value) =>
+                            editProvider.updateBlockDataMultiple(
+                          widget.blockId,
+                          {'ctaLink': value, 'buttonLink': value},
+                        ),
                         onNavigate: ctaLink.isNotEmpty
                             ? () {
                                 widget.onNavigate?.call(ctaLink);
@@ -1276,14 +1293,18 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final theme = Theme.of(context);
 
     final title = (widget.data['title'] ?? '').toString();
-    final description = (widget.data['description'] ?? '').toString();
-    final imageUrl = widget.data['image']?.toString();
+    final description =
+        (widget.data['content'] ?? widget.data['description'] ?? '').toString();
+    final imageUrl =
+        (widget.data['imageUrl'] ?? widget.data['image'])?.toString();
 
     // Get formatting data if saved
     final titleFormatting = TextFormatting.fromJson(
         widget.data['titleFormatting'] as Map<String, dynamic>?);
     final descriptionFormatting = TextFormatting.fromJson(
-        widget.data['descriptionFormatting'] as Map<String, dynamic>?);
+      (widget.data['contentFormatting'] as Map<String, dynamic>?) ??
+          (widget.data['descriptionFormatting'] as Map<String, dynamic>?),
+    );
 
     final headingStyle =
         (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
@@ -1309,8 +1330,10 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             fit: BoxFit.cover,
             borderRadius: BorderRadius.circular(16),
             isEditMode: true,
-            onChanged: (url) =>
-                editProvider.updateBlockData(widget.blockId, 'image', url),
+            onChanged: (url) => editProvider.updateBlockDataMultiple(
+              widget.blockId,
+              {'imageUrl': url, 'image': url},
+            ),
           ),
         ),
 
@@ -1347,13 +1370,17 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 placeholder: 'Descripción de tu empresa...',
                 formatting: descriptionFormatting,
                 fieldKey: '${widget.blockId}_about_description',
-                onTextChanged: (value) => editProvider.updateBlockData(
-                    widget.blockId, 'description', value),
-                onFormattingChanged: (formatting) =>
-                    editProvider.updateBlockData(
+                onTextChanged: (value) => editProvider.updateBlockDataMultiple(
                   widget.blockId,
-                  'descriptionFormatting',
-                  formatting.toJson(),
+                  {'content': value, 'description': value},
+                ),
+                onFormattingChanged: (formatting) =>
+                    editProvider.updateBlockDataMultiple(
+                  widget.blockId,
+                  {
+                    'contentFormatting': formatting.toJson(),
+                    'descriptionFormatting': formatting.toJson(),
+                  },
                 ),
               ),
             ],
@@ -1476,10 +1503,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           link: buttonLink,
           backgroundColor: Colors.white,
           foregroundColor: widget.primaryColor,
-          onTextChanged: (value) =>
-              editProvider.updateBlockData(widget.blockId, 'buttonText', value),
-          onLinkChanged: (value) =>
-              editProvider.updateBlockData(widget.blockId, 'buttonLink', value),
+          onTextChanged: (value) => editProvider.updateBlockDataMultiple(
+            widget.blockId,
+            {'buttonText': value, 'ctaText': value},
+          ),
+          onLinkChanged: (value) => editProvider.updateBlockDataMultiple(
+            widget.blockId,
+            {'buttonLink': value, 'ctaLink': value},
+          ),
           onNavigate: (primaryAction?.to ?? buttonLink).isNotEmpty
               ? () {
                   widget.onNavigate?.call(primaryAction?.to ?? buttonLink);
@@ -1500,6 +1531,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               imageUrl: backgroundImage,
               isEditMode: true,
               fit: BoxFit.cover,
+              alignment: Alignment(
+                (((widget.data['focalPointX'] as num?)?.toDouble() ?? 0.5) *
+                        2) -
+                    1,
+                (((widget.data['focalPointY'] as num?)?.toDouble() ?? 0.5) *
+                        2) -
+                    1,
+              ),
               onChanged: (url) => editProvider.updateBlockData(
                 widget.blockId,
                 'backgroundImage',
@@ -2292,13 +2331,17 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           'name': 'Básico',
           'price': '\$9.990',
           'description': 'Ideal para empezar',
-          'features': ['Feature 1', 'Feature 2']
+          'features': ['Feature 1', 'Feature 2'],
+          'ctaText': 'Reservar',
+          'ctaLink': '/productos',
         },
         {
           'name': 'Pro',
           'price': '\$19.990',
           'description': 'El más popular',
           'features': ['Feature 1', 'Feature 2', 'Feature 3'],
+          'ctaText': 'Reservar',
+          'ctaLink': '/productos',
           'highlighted': true
         },
       ];
@@ -2356,6 +2399,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               'price': '\$0',
               'description': 'Descripción del plan',
               'features': ['Característica 1'],
+              'ctaText': 'Reservar',
+              'ctaLink': '/productos',
             });
             editProvider.updateBlockData(widget.blockId, 'plans', newPlans);
           },
@@ -3339,155 +3384,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   }
 }
 
-/// Inline link picker for button editor - light theme matching modal design
-class _InlineLinkPicker extends StatefulWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-
-  const _InlineLinkPicker({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-  });
-
-  @override
-  State<_InlineLinkPicker> createState() => _InlineLinkPickerState();
-}
-
-class _InlineLinkPickerState extends State<_InlineLinkPicker> {
-  bool _isExpanded = false;
-
-  static const _quickLinks = [
-    ('/productos', 'Productos', Icons.inventory_2_outlined),
-    ('/tienda/categorias', 'Categorías', Icons.category_outlined),
-    ('/contacto', 'Contacto', Icons.email_outlined),
-    ('/', 'Inicio', Icons.home_outlined),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Text field with integrated dropdown chevron
-        TextField(
-          controller: widget.controller,
-          focusNode: widget.focusNode,
-          style: const TextStyle(fontSize: 14, color: Colors.black87),
-          decoration: InputDecoration(
-            labelText: 'Enlace (URL o ruta)',
-            labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: Icon(_getLinkIcon(widget.controller.text),
-                size: 18, color: Colors.blue),
-            suffixIcon: InkWell(
-              onTap: () => setState(() => _isExpanded = !_isExpanded),
-              borderRadius: BorderRadius.circular(4),
-              child: Icon(
-                _isExpanded ? Icons.expand_less : Icons.expand_more,
-                size: 20,
-                color: Colors.grey[600],
-              ),
-            ),
-            hintText: '/productos',
-            hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-          ),
-          onChanged: widget.onChanged,
-        ),
-
-        // Quick links dropdown when expanded
-        if (_isExpanded) ...[
-          const SizedBox(height: 4),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: _quickLinks.map((link) {
-                final isSelected = widget.controller.text == link.$1;
-                return InkWell(
-                  onTap: () {
-                    widget.controller.text = link.$1;
-                    widget.onChanged(link.$1);
-                    setState(() => _isExpanded = false);
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    decoration: BoxDecoration(
-                      color:
-                          isSelected ? Colors.blue.shade50 : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          link.$3,
-                          size: 16,
-                          color:
-                              isSelected ? Colors.blue : Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            link.$2,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isSelected ? Colors.blue : Colors.black87,
-                              fontWeight: isSelected
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          link.$1,
-                          style: TextStyle(
-                              fontSize: 11, color: Colors.grey.shade400),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  IconData _getLinkIcon(String link) {
-    if (link.isEmpty) return Icons.link;
-    if (link.startsWith('#')) return Icons.tag;
-    if (link.startsWith('http')) return Icons.open_in_new;
-    if (link.contains('producto')) return Icons.inventory_2_outlined;
-    if (link.contains('categori')) return Icons.category_outlined;
-    if (link.contains('contacto')) return Icons.email_outlined;
-    if (link == '/') return Icons.home_outlined;
-    return Icons.link;
-  }
-}
-
 /// Editable button widget with "first click edits, second click navigates" behavior
 class _EditableButton extends StatefulWidget {
   final String text;
@@ -3873,15 +3769,15 @@ class _EditableButtonState extends State<_EditableButton> {
           ),
           const SizedBox(height: 14),
 
-          // Link section
-          const Text(
-            'Enlace del botón',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-          const SizedBox(height: 6),
-          _DarkLinkPicker(
-            controller: _linkController,
-            onChanged: (_) => setState(() {}), // Local update only
+          WebsiteLinkValueEditor(
+            label: 'Enlace del botón',
+            value: _linkController.text,
+            dense: true,
+            darkStyle: true,
+            onChanged: (value) {
+              _linkController.text = value;
+              setState(() {});
+            },
           ),
           const SizedBox(height: 16),
 
@@ -3942,202 +3838,6 @@ class _EditableButtonState extends State<_EditableButton> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Dark-themed link picker matching side panel style
-class _DarkLinkPicker extends StatefulWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-
-  const _DarkLinkPicker({
-    required this.controller,
-    required this.onChanged,
-  });
-
-  @override
-  State<_DarkLinkPicker> createState() => _DarkLinkPickerState();
-}
-
-class _DarkLinkPickerState extends State<_DarkLinkPicker> {
-  bool _isExpanded = false;
-
-  static const _quickLinks = [
-    ('/productos', 'Productos', Icons.inventory_2_outlined),
-    ('/tienda/categorias', 'Categorías', Icons.category_outlined),
-    ('/contacto', 'Contacto', Icons.email_outlined),
-    ('/', 'Inicio', Icons.home_outlined),
-  ];
-
-  IconData _getLinkIcon(String link) {
-    if (link.isEmpty) return Icons.link;
-    if (link.startsWith('#')) return Icons.tag;
-    if (link.startsWith('http')) return Icons.open_in_new;
-    if (link.contains('producto')) return Icons.inventory_2_outlined;
-    if (link.contains('categori')) return Icons.category_outlined;
-    if (link.contains('contacto')) return Icons.email_outlined;
-    if (link == '/') return Icons.home_outlined;
-    return Icons.link;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const tealAccent = Color(0xFF00A09D);
-    const darkSurface = Color(0xFF2D2D2D);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Current link display - clickable to expand
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: darkSurface,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: _isExpanded ? tealAccent : Colors.white12,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _getLinkIcon(widget.controller.text),
-                  size: 16,
-                  color: tealAccent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.controller.text.isEmpty
-                        ? 'Sin enlace'
-                        : widget.controller.text,
-                    style: TextStyle(
-                      color: widget.controller.text.isEmpty
-                          ? Colors.white38
-                          : Colors.white,
-                      fontSize: 13,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Icon(
-                  _isExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: Colors.white54,
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Expanded options
-        if (_isExpanded) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF252525),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Quick links
-                ..._quickLinks.map((link) {
-                  final isSelected = widget.controller.text == link.$1;
-                  return InkWell(
-                    onTap: () {
-                      widget.controller.text = link.$1;
-                      widget.onChanged(link.$1);
-                      setState(() => _isExpanded = false);
-                    },
-                    borderRadius: BorderRadius.circular(4),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? tealAccent.withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            link.$3,
-                            size: 14,
-                            color: isSelected ? tealAccent : Colors.white54,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              link.$2,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isSelected ? tealAccent : Colors.white,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            link.$1,
-                            style: const TextStyle(
-                                fontSize: 10, color: Colors.white38),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 8),
-                // Custom URL input
-                TextField(
-                  controller: widget.controller,
-                  style: const TextStyle(fontSize: 12, color: Colors.white),
-                  cursorColor: tealAccent,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: true,
-                    fillColor: darkSurface,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: const BorderSide(color: tealAccent),
-                    ),
-                    hintText: 'URL personalizada...',
-                    hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        fontSize: 12),
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.only(left: 8, right: 4),
-                      child: Icon(Icons.edit, size: 14, color: Colors.white38),
-                    ),
-                    prefixIconConstraints:
-                        const BoxConstraints(minWidth: 0, minHeight: 0),
-                  ),
-                  onChanged: widget.onChanged,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
     );
   }
 }
@@ -4665,7 +4365,7 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   ),
-                  child: const Text('Guardar', style: TextStyle(fontSize: 12)),
+                  child: const Text('Aplicar', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),

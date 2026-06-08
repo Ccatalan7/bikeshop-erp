@@ -6,6 +6,15 @@ class PublicStoreTheme {
   static const String defaultHeadingFont = 'Oswald';
   static const String defaultBodyFont = 'Barlow';
 
+  /// Resolve the active editor-owned font from the nearest website Theme.
+  /// Constants remain fallback-only for surfaces rendered outside that scope.
+  static String headingFont(BuildContext context) =>
+      Theme.of(context).textTheme.headlineMedium?.fontFamily ??
+      defaultHeadingFont;
+
+  static String bodyFont(BuildContext context) =>
+      Theme.of(context).textTheme.bodyMedium?.fontFamily ?? defaultBodyFont;
+
   // Brand Colors (Professional Blues & Grays)
   static const Color logoBlue = Color(0xFF093357);
   static const Color primaryBlue = Color(0xFF2563EB); // Professional blue

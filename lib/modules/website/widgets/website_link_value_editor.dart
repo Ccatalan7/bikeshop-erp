@@ -72,8 +72,9 @@ class WebsiteLinkValueEditor extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color:
-                  darkStyle ? Colors.white.withValues(alpha: 0.9) : Colors.grey[700],
+              color: darkStyle
+                  ? Colors.white.withValues(alpha: 0.9)
+                  : Colors.grey[700],
             ),
           ),
           const SizedBox(height: 6),
@@ -85,8 +86,9 @@ class WebsiteLinkValueEditor extends StatelessWidget {
             helpText!,
             style: TextStyle(
               fontSize: 11,
-              color:
-                  darkStyle ? Colors.white.withValues(alpha: 0.5) : Colors.grey[600],
+              color: darkStyle
+                  ? Colors.white.withValues(alpha: 0.5)
+                  : Colors.grey[600],
             ),
           ),
         ],
@@ -105,10 +107,13 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: darkStyle ? Colors.white.withValues(alpha: 0.05) : Colors.grey[100],
+          color: darkStyle
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.grey[100],
           border: Border.all(
-            color:
-                darkStyle ? Colors.white.withValues(alpha: 0.1) : Colors.grey[300]!,
+            color: darkStyle
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.grey[300]!,
           ),
           borderRadius: BorderRadius.circular(6),
         ),
@@ -117,8 +122,9 @@ class WebsiteLinkValueEditor extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color:
-                  darkStyle ? Colors.white.withValues(alpha: 0.7) : Colors.grey[700],
+              color: darkStyle
+                  ? Colors.white.withValues(alpha: 0.7)
+                  : Colors.grey[700],
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -138,8 +144,9 @@ class WebsiteLinkValueEditor extends StatelessWidget {
             Icon(
               Icons.edit,
               size: 14,
-              color:
-                  darkStyle ? Colors.white.withValues(alpha: 0.4) : Colors.grey[500],
+              color: darkStyle
+                  ? Colors.white.withValues(alpha: 0.4)
+                  : Colors.grey[500],
             ),
           ],
         ),
@@ -600,7 +607,9 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             listTileTheme: ListTileThemeData(
               iconColor: Colors.white.withValues(alpha: 0.7),
               textColor: Colors.white,
-            ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
+            ),
+            dialogTheme:
+                const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
         : parentTheme;
 
@@ -613,7 +622,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         return Theme(
           data: editorTheme,
           child: Dialog(
-            backgroundColor: editorTheme.dialogBackgroundColor,
+            backgroundColor: editorTheme.dialogTheme.backgroundColor,
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
             clipBehavior: Clip.antiAlias,
@@ -741,7 +750,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
   Future<void> _pickCategory(BuildContext context) async {
     await _ensureCategoriesLoaded();
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
 
     if (_categoriesError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -786,7 +795,9 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             listTileTheme: ListTileThemeData(
               iconColor: Colors.white.withValues(alpha: 0.7),
               textColor: Colors.white,
-            ), dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
+            ),
+            dialogTheme:
+                const DialogThemeData(backgroundColor: Color(0xFF1E1E1E)),
           )
         : parentTheme;
 
@@ -799,7 +810,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         return Theme(
           data: editorTheme,
           child: Dialog(
-            backgroundColor: editorTheme.dialogBackgroundColor,
+            backgroundColor: editorTheme.dialogTheme.backgroundColor,
             insetPadding:
                 const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
             clipBehavior: Clip.antiAlias,
@@ -999,7 +1010,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             final url = _generateUrl();
             Navigator.of(context).pop(url);
           },
-          child: const Text('Guardar'),
+          child: const Text('Aplicar'),
         ),
       ],
     );

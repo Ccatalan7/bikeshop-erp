@@ -9,8 +9,7 @@ import '../../modules/website/models/website_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/editable_block_renderer.dart';
-import '../../modules/website/widgets/inline_edit_toolbar.dart'
-    show AddBlockDialog;
+import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/models/product.dart';

@@ -19,6 +19,33 @@ enum WebsiteBlockFieldType {
   repeater,
 }
 
+enum WebsiteTextRole {
+  plain,
+  heading,
+  paragraph,
+  caption,
+  buttonLabel,
+  quote,
+  statValue,
+  navigationLabel,
+}
+
+enum WebsiteMediaRole {
+  cover,
+  inline,
+  avatar,
+  logo,
+  galleryItem,
+  poster,
+}
+
+enum WebsiteActionRole {
+  primary,
+  secondary,
+  card,
+  navigation,
+}
+
 class WebsiteBlockFieldOption {
   const WebsiteBlockFieldOption({required this.value, required this.label});
 
@@ -42,6 +69,19 @@ class WebsiteBlockFieldSchema {
     this.itemFields = const [],
     this.minItems,
     this.maxItems,
+    this.textRole = WebsiteTextRole.plain,
+    this.supportsFormatting = false,
+    this.formattingKey,
+    this.mediaRole,
+    this.supportsFocalPoint = false,
+    this.supportsAltText = false,
+    this.focalPointXKey = 'focalPointX',
+    this.focalPointYKey = 'focalPointY',
+    this.mobileFocalPointXKey = 'mobileFocalPointX',
+    this.mobileFocalPointYKey = 'mobileFocalPointY',
+    this.altTextKey = 'altText',
+    this.actionRole,
+    this.migrationAliases = const [],
   });
 
   final String key;
@@ -58,6 +98,95 @@ class WebsiteBlockFieldSchema {
   final List<WebsiteBlockFieldSchema> itemFields;
   final int? minItems;
   final int? maxItems;
+  final WebsiteTextRole textRole;
+  final bool supportsFormatting;
+  final String? formattingKey;
+  final WebsiteMediaRole? mediaRole;
+  final bool supportsFocalPoint;
+  final bool supportsAltText;
+  final String focalPointXKey;
+  final String focalPointYKey;
+  final String mobileFocalPointXKey;
+  final String mobileFocalPointYKey;
+  final String altTextKey;
+  final WebsiteActionRole? actionRole;
+  final List<String> migrationAliases;
+
+  WebsiteTextRole get resolvedTextRole {
+    if (textRole != WebsiteTextRole.plain) return textRole;
+
+    final normalizedKey = key.toLowerCase();
+    if (normalizedKey.contains('title') || normalizedKey == 'heading') {
+      return WebsiteTextRole.heading;
+    }
+    if (normalizedKey.contains('button') ||
+        normalizedKey.contains('cta') ||
+        normalizedKey == 'label') {
+      return WebsiteTextRole.buttonLabel;
+    }
+    if (normalizedKey.contains('caption')) return WebsiteTextRole.caption;
+    if (normalizedKey.contains('quote') || normalizedKey == 'comment') {
+      return WebsiteTextRole.quote;
+    }
+    if (normalizedKey.contains('value') ||
+        normalizedKey == 'price' ||
+        normalizedKey == 'number') {
+      return WebsiteTextRole.statValue;
+    }
+    if (type == WebsiteBlockFieldType.textarea ||
+        type == WebsiteBlockFieldType.richtext ||
+        normalizedKey.contains('description') ||
+        normalizedKey.contains('content') ||
+        normalizedKey.contains('subtitle') ||
+        normalizedKey == 'bio') {
+      return WebsiteTextRole.paragraph;
+    }
+    return WebsiteTextRole.plain;
+  }
+
+  String get resolvedFormattingKey => formattingKey ?? '${key}Formatting';
+
+  WebsiteMediaRole? get resolvedMediaRole {
+    if (mediaRole != null) return mediaRole;
+    if (type != WebsiteBlockFieldType.image) return null;
+
+    final normalizedKey = key.toLowerCase();
+    if (normalizedKey.contains('background') ||
+        normalizedKey == 'imageurl' ||
+        normalizedKey.contains('cover') ||
+        normalizedKey.contains('poster')) {
+      return WebsiteMediaRole.cover;
+    }
+    if (normalizedKey.contains('avatar') ||
+        normalizedKey.contains('portrait')) {
+      return WebsiteMediaRole.avatar;
+    }
+    if (normalizedKey.contains('logo')) return WebsiteMediaRole.logo;
+    return WebsiteMediaRole.inline;
+  }
+
+  WebsiteActionRole? get resolvedActionRole {
+    if (actionRole != null) return actionRole;
+    if (type != WebsiteBlockFieldType.link) return null;
+
+    final normalizedKey = key.toLowerCase();
+    if (normalizedKey.contains('cta') || normalizedKey.contains('button')) {
+      return WebsiteActionRole.primary;
+    }
+    if (normalizedKey.contains('nav') || normalizedKey.contains('menu')) {
+      return WebsiteActionRole.navigation;
+    }
+    return WebsiteActionRole.card;
+  }
+
+  bool get isCoverMedia => resolvedMediaRole == WebsiteMediaRole.cover;
+  bool get hasFocalPointControl =>
+      supportsFocalPoint ||
+      resolvedMediaRole == WebsiteMediaRole.cover ||
+      resolvedMediaRole == WebsiteMediaRole.galleryItem;
+  bool get hasAltTextControl =>
+      supportsAltText || type == WebsiteBlockFieldType.image;
+  bool get isAction => resolvedActionRole != null;
 }
 
 class WebsiteBlockControlSection {

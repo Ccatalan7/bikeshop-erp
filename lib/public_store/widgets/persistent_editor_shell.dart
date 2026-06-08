@@ -84,6 +84,7 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
   Widget build(BuildContext context) {
     return DeferredWebsiteEditorPanel(
       onSave: _handleSave,
+      onRestoreComplete: _handleRestoreComplete,
       onDiscard: _handleDiscard,
     );
   }
@@ -117,6 +118,9 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         pendingFooterNavLinkTypes: editProvider.pendingFooterNavLinkTypes,
         pendingFooterNavLinkValues: editProvider.pendingFooterNavLinkValues,
         pendingFooterNavOpenInNewTab: editProvider.pendingFooterNavOpenInNewTab,
+        pendingFooterNavItems: editProvider.pendingFooterNavItems,
+        pendingFooterNavCreates: editProvider.pendingFooterNavCreates,
+        pendingFooterNavDeletes: editProvider.pendingFooterNavDeletes,
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
@@ -157,7 +161,34 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
   }
 
   void _handleDiscard() {
+    widget.editProvider.discardPendingChanges();
     widget.editProvider.switchToPreviewMode();
+  }
+
+  Future<void> _handleRestoreComplete() async {
+    final websiteService = context.read<WebsiteService>();
+    final tenantId = await _resolveTenantId();
+    if (tenantId == null) {
+      throw Exception('No se pudo identificar el tenant');
+    }
+
+    final editProvider = widget.editProvider;
+    await websiteService.loadPublicStoreDataUnified(
+      tenantId,
+      forceRefresh: true,
+    );
+
+    final pageId = editProvider.currentPageId;
+    final freshBlocks = pageId == null
+        ? websiteService.blocks
+        : await websiteService.loadBlocksForPage(pageId, tenantId: tenantId);
+
+    editProvider.enterEditMode(
+      freshBlocks,
+      websiteService.settings,
+      pageId: pageId,
+      pageSlug: editProvider.currentPageSlug,
+    );
   }
 
   Future<String?> _resolveTenantId() async {

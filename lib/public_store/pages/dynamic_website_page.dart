@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/website/models/website_font_registry.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
@@ -354,6 +355,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       if (websiteService.settings.isEmpty) {
         await websiteService.loadSettingsForTenant(tenantId);
       }
+      if (!mounted) return;
       WebsiteEditModeProvider? editProvider;
       try {
         editProvider = context.read<WebsiteEditModeProvider>();
@@ -475,8 +477,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     if (parsedPrimary != null) _primaryColor = parsedPrimary;
     if (parsedAccent != null) _accentColor = parsedAccent;
     if (parsedText != null) _textColor = parsedText;
-    if (headingFont.isNotEmpty) _headingFont = headingFont;
-    if (bodyFont.isNotEmpty) _bodyFont = bodyFont;
+    if (headingFont.isNotEmpty) {
+      _headingFont = WebsiteFontRegistry.resolveHeadingFont(headingFont);
+    }
+    if (bodyFont.isNotEmpty) {
+      _bodyFont = WebsiteFontRegistry.resolveBodyFont(bodyFont);
+    }
 
     final parsedHeadingSize = double.tryParse(headingSize);
     final parsedBodySize = double.tryParse(bodySize);

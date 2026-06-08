@@ -286,7 +286,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     setState(() {
       _activeInlineFooterNavId = nav.id;
       _inlineFooterNavLabelController.text =
-          editProvider.getEffectiveFooterNavLabel(nav.id, nav.label);
+          editProvider.getEffectiveFooterNavItem(nav).label;
     });
     editProvider.selectBlock('footer');
     editProvider.selectFooterNavItem(nav.id);
@@ -306,17 +306,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteEditModeProvider editProvider,
     WebsiteNavigation nav,
   ) async {
-    final effective = nav.copyWith(
-      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
-      linkType:
-          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
-      linkValue:
-          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
-      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
-        nav.id,
-        nav.openInNewTab,
-      ),
-    );
+    final effective = editProvider.getEffectiveFooterNavItem(nav);
 
     final initialHref = (effective.linkValue ?? '').trim();
 
@@ -1269,7 +1259,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   editProvider.switchToPreviewMode();
                 }
               },
+              onRestoreComplete: () => _reloadEditorAfterBackupRestore(
+                context,
+                editProvider,
+                websiteService,
+              ),
               onDiscard: () {
+                editProvider.discardPendingChanges();
                 editProvider.switchToPreviewMode();
               },
             ),
@@ -2686,13 +2682,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               } catch (e) {
                 if (dialogContext.mounted) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Error guardando dominio: $e')),
+                    SnackBar(content: Text('Error actualizando dominio: $e')),
                   );
                 }
               }
             },
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Guardar'),
+            icon: const Icon(Icons.language_outlined),
+            label: const Text('Aplicar dominio'),
           ),
         ],
       ),
@@ -3133,6 +3129,34 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   /// Save changes to the database
+  Future<void> _reloadEditorAfterBackupRestore(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+  ) async {
+    final tenantId = await _resolveTenantIdForSave(context);
+    if (tenantId == null) {
+      throw Exception('No se pudo identificar el tenant');
+    }
+
+    await websiteService.loadPublicStoreDataUnified(
+      tenantId,
+      forceRefresh: true,
+    );
+
+    final pageId = editProvider.currentPageId;
+    final freshBlocks = pageId == null
+        ? websiteService.blocks
+        : await websiteService.loadBlocksForPage(pageId, tenantId: tenantId);
+
+    editProvider.enterEditMode(
+      freshBlocks,
+      websiteService.settings,
+      pageId: pageId,
+      pageSlug: editProvider.currentPageSlug,
+    );
+  }
+
   Future<void> _saveChanges(
     BuildContext context,
     WebsiteEditModeProvider editProvider,
@@ -3169,6 +3193,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         pendingFooterNavLinkTypes: editProvider.pendingFooterNavLinkTypes,
         pendingFooterNavLinkValues: editProvider.pendingFooterNavLinkValues,
         pendingFooterNavOpenInNewTab: editProvider.pendingFooterNavOpenInNewTab,
+        pendingFooterNavItems: editProvider.pendingFooterNavItems,
+        pendingFooterNavCreates: editProvider.pendingFooterNavCreates,
+        pendingFooterNavDeletes: editProvider.pendingFooterNavDeletes,
         pendingPageSeo: editProvider.pendingPageSeo,
         pendingFooterSectionOrder: editProvider.pendingFooterSectionOrder,
         pendingFooterLinkOrder: editProvider.pendingFooterLinkOrder,
@@ -4094,7 +4121,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String label,
     String currentValue,
   ) async {
-    final websiteService = context.read<WebsiteService>();
+    final editProvider = context.read<WebsiteEditModeProvider>();
     final controller = TextEditingController(text: currentValue);
 
     final saved = await showDialog<bool>(
@@ -4138,26 +4165,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
-            onPressed: () async {
+            onPressed: () {
               final value = controller.text.trim();
-              try {
-                await websiteService.saveSetting(settingKey, value);
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(
-                      content: Text('Error al guardar: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+              editProvider.updateFooterSetting(settingKey, value);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext, true);
               }
             },
-            icon: const Icon(Icons.save),
-            label: const Text('Guardar'),
+            icon: const Icon(Icons.check),
+            label: const Text('Aplicar'),
           ),
         ],
       ),
@@ -4261,7 +4277,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String label,
     String? currentValue,
   ) async {
-    final websiteService = context.read<WebsiteService>();
+    final editProvider = context.read<WebsiteEditModeProvider>();
     final controller = TextEditingController(text: currentValue ?? '');
 
     final saved = await showDialog<bool>(
@@ -4296,30 +4312,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
-            onPressed: () async {
+            onPressed: () {
               final value = controller.text.trim();
-              try {
-                await websiteService.saveSetting(settingKey, value);
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(
-                      content: Text('Error al guardar: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+              editProvider.updateFooterSetting(settingKey, value);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext, true);
               }
             },
-            icon: const Icon(Icons.save),
-            label: const Text('Guardar'),
+            icon: const Icon(Icons.check),
+            label: const Text('Aplicar'),
           ),
         ],
       ),
     );
+
+    controller.dispose();
 
     if (saved == true && mounted) {
       setState(() {}); // Refresh to show updated value
@@ -4364,52 +4371,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         builder: (context, constraints) {
           final websiteService = context.watch<WebsiteService>();
           final editProvider = context.watch<WebsiteEditModeProvider>();
-          var footerNavItems =
-              List<WebsiteNavigation>.from(websiteService.footerNavigation);
-
-          // Apply pending footer navigation edits (label + destination) for live preview
-          footerNavItems = footerNavItems.map((section) {
-            final effectiveSection = section.copyWith(
-              label: editProvider.getEffectiveFooterNavLabel(
-                  section.id, section.label),
-              linkType: editProvider.getEffectiveFooterNavLinkType(
-                section.id,
-                section.linkType,
-              ),
-              linkValue: editProvider.getEffectiveFooterNavLinkValue(
-                section.id,
-                section.linkValue,
-              ),
-              openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
-                section.id,
-                section.openInNewTab,
-              ),
-              children: section.children
-                  .map(
-                    (child) => child.copyWith(
-                      label: editProvider.getEffectiveFooterNavLabel(
-                        child.id,
-                        child.label,
-                      ),
-                      linkType: editProvider.getEffectiveFooterNavLinkType(
-                        child.id,
-                        child.linkType,
-                      ),
-                      linkValue: editProvider.getEffectiveFooterNavLinkValue(
-                        child.id,
-                        child.linkValue,
-                      ),
-                      openInNewTab:
-                          editProvider.getEffectiveFooterNavOpenInNewTab(
-                        child.id,
-                        child.openInNewTab,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            );
-            return effectiveSection;
-          }).toList();
+          var footerNavItems = editProvider.getEffectiveFooterNavigation(
+            websiteService.footerNavigation,
+          );
 
           // Apply pending section order from provider for live preview
           final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
@@ -4978,17 +4942,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isEditMode,
   }) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final effective = nav.copyWith(
-      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
-      linkType:
-          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
-      linkValue:
-          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
-      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
-        nav.id,
-        nav.openInNewTab,
-      ),
-    );
+    final effective = editProvider.getEffectiveFooterNavItem(nav);
 
     final href = _routeForPublicStore(effective.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
@@ -5269,17 +5223,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isEditMode,
   }) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final effective = nav.copyWith(
-      label: editProvider.getEffectiveFooterNavLabel(nav.id, nav.label),
-      linkType:
-          editProvider.getEffectiveFooterNavLinkType(nav.id, nav.linkType),
-      linkValue:
-          editProvider.getEffectiveFooterNavLinkValue(nav.id, nav.linkValue),
-      openInNewTab: editProvider.getEffectiveFooterNavOpenInNewTab(
-        nav.id,
-        nav.openInNewTab,
-      ),
-    );
+    final effective = editProvider.getEffectiveFooterNavItem(nav);
 
     final href = _routeForPublicStore(effective.href ?? '/');
     final isInlineEditing = isEditMode && _activeInlineFooterNavId == nav.id;
@@ -5486,7 +5430,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontFamily: PublicStoreTheme.defaultHeadingFont,
+                fontFamily: null,
                 fontSize: 14,
                 letterSpacing: 0.1,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
@@ -6059,7 +6003,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               Text(
                 label,
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   color: color ?? Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,

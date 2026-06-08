@@ -253,20 +253,20 @@ class _ContactPageState extends State<ContactPage>
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 1120),
-          child: Column(
+          child: const Column(
             children: [
-              const Text(
+              Text(
                 'Contáctanos',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   fontSize: 42,
                   fontWeight: FontWeight.w800,
                   color: PublicStoreTheme.textPrimary,
                   letterSpacing: 0,
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text(
+              SizedBox(height: 12),
+              Text(
                 'Estamos aquí para ayudarte. Escríbenos y te responderemos lo antes posible.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -489,11 +489,11 @@ class _ContactPageState extends State<ContactPage>
         contentPadding: const EdgeInsets.all(16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: PublicStoreTheme.divider),
+          borderSide: const BorderSide(color: PublicStoreTheme.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: PublicStoreTheme.divider),
+          borderSide: const BorderSide(color: PublicStoreTheme.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -545,7 +545,7 @@ class _ContactPageState extends State<ContactPage>
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: PublicStoreTheme.divider),
                     ),
-                    child: Icon(Icons.location_on_outlined,
+                    child: const Icon(Icons.location_on_outlined,
                         color: PublicStoreTheme.textPrimary, size: 24),
                   ),
                   const SizedBox(width: 16),
@@ -749,7 +749,7 @@ class _ContactPageState extends State<ContactPage>
               _buildHourRow(row.dayLabel, row.hoursLabel, row.isOpen),
             if (googleMapsUrl.isNotEmpty) ...[
               const SizedBox(height: 18),
-              Divider(color: PublicStoreTheme.divider),
+              const Divider(color: PublicStoreTheme.divider),
               const SizedBox(height: 14),
               _buildGoogleMapsButton(googleMapsUrl),
             ],
@@ -779,7 +779,7 @@ class _ContactPageState extends State<ContactPage>
         label: const Text('Ver en Google Maps'),
         style: OutlinedButton.styleFrom(
           foregroundColor: PublicStoreTheme.textPrimary,
-          side: BorderSide(color: PublicStoreTheme.divider),
+          side: const BorderSide(color: PublicStoreTheme.divider),
           backgroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           textStyle: const TextStyle(
@@ -1039,7 +1039,7 @@ class _ContactPageState extends State<ContactPage>
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          side: BorderSide(color: PublicStoreTheme.divider),
+          side: const BorderSide(color: PublicStoreTheme.divider),
           padding: const EdgeInsets.symmetric(vertical: 14),
           backgroundColor: Colors.white,
           textStyle: const TextStyle(

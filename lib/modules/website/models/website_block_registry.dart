@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../block_marketplace/block_marketplace_loader.dart';
+import 'website_block_capabilities.dart';
 import 'website_block_definition.dart';
 import 'website_block_type.dart';
 
@@ -42,22 +43,30 @@ class WebsiteBlockRegistry {
           key: 'title',
           label: 'Título',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'subtitle',
           label: 'Subtítulo',
           type: WebsiteBlockFieldType.textarea,
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'ctaText',
           label: 'Texto del botón',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.buttonLabel,
+          migrationAliases: ['buttonText'],
         ),
         WebsiteBlockFieldSchema(
           key: 'ctaLink',
           label: 'Enlace del botón',
           type: WebsiteBlockFieldType.link,
           defaultValue: '/productos',
+          actionRole: WebsiteActionRole.primary,
+          migrationAliases: ['buttonLink'],
         ),
         WebsiteBlockFieldSchema(
           key: 'isFullScreen',
@@ -80,6 +89,11 @@ class WebsiteBlockRegistry {
           key: 'imageUrl',
           label: 'Imagen de fondo',
           type: WebsiteBlockFieldType.image,
+          mediaRole: WebsiteMediaRole.cover,
+          supportsFocalPoint: true,
+          supportsAltText: true,
+          altTextKey: 'imageAltText',
+          migrationAliases: ['backgroundImage'],
         ),
         WebsiteBlockFieldSchema(
           key: 'showOverlay',
@@ -155,6 +169,12 @@ class WebsiteBlockRegistry {
       defaultData: {
         'height': 420,
         'backgroundColor': '#FFFFFF',
+        'backgroundImageUrl': '',
+        'backgroundImageAltText': '',
+        'focalPointX': 0.5,
+        'focalPointY': 0.5,
+        'mobileFocalPointX': 0.5,
+        'mobileFocalPointY': 0.5,
         'elements': <Map<String, dynamic>>[],
         'activeElementId': null,
       },
@@ -175,6 +195,10 @@ class WebsiteBlockRegistry {
           label: 'Texto',
           type: WebsiteBlockFieldType.textarea,
           group: 'content',
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
+          migrationAliases: ['description'],
+          formattingKey: 'formatting',
         ),
         WebsiteBlockFieldSchema(
           key: 'preset',
@@ -229,6 +253,7 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Haz clic aquí',
           group: 'content',
+          textRole: WebsiteTextRole.buttonLabel,
         ),
         WebsiteBlockFieldSchema(
           key: 'link',
@@ -236,6 +261,7 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.link,
           defaultValue: '/productos',
           group: 'content',
+          actionRole: WebsiteActionRole.primary,
         ),
         WebsiteBlockFieldSchema(
           key: 'style',
@@ -400,6 +426,8 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Somos Vinabike',
           group: 'content',
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'content',
@@ -408,12 +436,18 @@ class WebsiteBlockRegistry {
           defaultValue:
               'Llevamos más de 10 años reparando bicicletas y asesorando ciclistas en Chile.',
           group: 'content',
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'imageUrl',
           label: 'Imagen',
           type: WebsiteBlockFieldType.image,
           group: 'media',
+          mediaRole: WebsiteMediaRole.inline,
+          supportsAltText: true,
+          altTextKey: 'imageAltText',
+          migrationAliases: ['image'],
         ),
         WebsiteBlockFieldSchema(
           key: 'imagePosition',
@@ -614,29 +648,41 @@ class WebsiteBlockRegistry {
           label: 'Título',
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Agenda tu mantención hoy',
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'subtitle',
           label: 'Subtítulo',
           type: WebsiteBlockFieldType.textarea,
           defaultValue: 'Estamos listos para ayudarte',
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'buttonText',
           label: 'Texto del botón',
           type: WebsiteBlockFieldType.text,
           defaultValue: 'Agendar',
+          textRole: WebsiteTextRole.buttonLabel,
+          migrationAliases: ['ctaText'],
         ),
         WebsiteBlockFieldSchema(
           key: 'buttonLink',
           label: 'Enlace del botón',
           type: WebsiteBlockFieldType.link,
           defaultValue: '/contacto',
+          actionRole: WebsiteActionRole.primary,
+          migrationAliases: ['ctaLink'],
         ),
         WebsiteBlockFieldSchema(
           key: 'backgroundImage',
           label: 'Imagen de fondo',
           type: WebsiteBlockFieldType.image,
+          mediaRole: WebsiteMediaRole.cover,
+          supportsFocalPoint: true,
+          supportsAltText: true,
+          altTextKey: 'backgroundImageAltText',
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayColor',
@@ -702,13 +748,18 @@ class WebsiteBlockRegistry {
           itemFields: [
             WebsiteBlockFieldSchema(
               key: 'imageUrl',
-              label: 'URL de la imagen',
-              type: WebsiteBlockFieldType.text,
+              label: 'Imagen',
+              type: WebsiteBlockFieldType.image,
+              mediaRole: WebsiteMediaRole.galleryItem,
+              supportsFocalPoint: true,
+              supportsAltText: true,
+              altTextKey: 'altText',
             ),
             WebsiteBlockFieldSchema(
               key: 'caption',
               label: 'Leyenda',
               type: WebsiteBlockFieldType.text,
+              textRole: WebsiteTextRole.caption,
             ),
           ],
         ),
@@ -853,6 +904,7 @@ class WebsiteBlockRegistry {
               'Limpieza básica',
             ],
             'ctaText': 'Reservar',
+            'ctaLink': '/productos',
           },
           {
             'name': 'Full Service',
@@ -863,6 +915,7 @@ class WebsiteBlockRegistry {
               'Ajuste integral',
             ],
             'ctaText': 'Reservar',
+            'ctaLink': '/productos',
           },
         ],
       },
@@ -901,6 +954,14 @@ class WebsiteBlockRegistry {
               label: 'Texto del botón',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Reservar',
+              textRole: WebsiteTextRole.buttonLabel,
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'ctaLink',
+              label: 'Enlace del botón',
+              type: WebsiteBlockFieldType.link,
+              defaultValue: '/productos',
+              actionRole: WebsiteActionRole.primary,
             ),
             WebsiteBlockFieldSchema(
               key: 'features',
@@ -956,6 +1017,8 @@ class WebsiteBlockRegistry {
           key: 'title',
           label: 'Título',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'categories',
@@ -969,23 +1032,31 @@ class WebsiteBlockRegistry {
               label: 'Título',
               type: WebsiteBlockFieldType.text,
               defaultValue: 'Categoría',
+              textRole: WebsiteTextRole.heading,
             ),
             WebsiteBlockFieldSchema(
               key: 'subtitle',
               label: 'Subtítulo',
               type: WebsiteBlockFieldType.text,
               defaultValue: '',
+              textRole: WebsiteTextRole.paragraph,
             ),
             WebsiteBlockFieldSchema(
               key: 'imageUrl',
               label: 'Imagen',
               type: WebsiteBlockFieldType.image,
+              mediaRole: WebsiteMediaRole.cover,
+              supportsFocalPoint: true,
+              supportsAltText: true,
+              altTextKey: 'altText',
             ),
             WebsiteBlockFieldSchema(
               key: 'link',
               label: 'Enlace',
               type: WebsiteBlockFieldType.link,
               defaultValue: '/productos',
+              actionRole: WebsiteActionRole.card,
+              migrationAliases: ['ctaLink'],
             ),
           ],
         ),
@@ -1025,17 +1096,25 @@ class WebsiteBlockRegistry {
           key: 'title',
           label: 'Título',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'subtitle',
           label: 'Subtítulo',
           type: WebsiteBlockFieldType.textarea,
+          textRole: WebsiteTextRole.paragraph,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'imageUrl',
           label: 'Imagen de fondo',
           type: WebsiteBlockFieldType.image,
           helpText: 'Se usa como fallback en móvil o si el video no carga.',
+          mediaRole: WebsiteMediaRole.cover,
+          supportsFocalPoint: true,
+          supportsAltText: true,
+          altTextKey: 'imageAltText',
         ),
         WebsiteBlockFieldSchema(
           key: 'videoUrl',
@@ -1061,12 +1140,14 @@ class WebsiteBlockRegistry {
           key: 'ctaText',
           label: 'Texto del botón',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.buttonLabel,
         ),
         WebsiteBlockFieldSchema(
           key: 'ctaLink',
           label: 'Enlace del botón',
           type: WebsiteBlockFieldType.link,
           defaultValue: '/productos',
+          actionRole: WebsiteActionRole.primary,
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayOpacity',
@@ -1107,10 +1188,11 @@ class WebsiteBlockRegistry {
       description: 'Banner de partners/sucursales con texto simple.',
       defaultData: {
         'title': 'Partners',
+        'imageUrl': null,
         'items': [
-          'Envíos a todo Chile',
-          'Marcas líderes',
-          'Servicio técnico certificado',
+          {'label': 'Envíos a todo Chile'},
+          {'label': 'Marcas líderes'},
+          {'label': 'Servicio técnico certificado'},
         ],
       },
       fields: [
@@ -1118,12 +1200,32 @@ class WebsiteBlockRegistry {
           key: 'title',
           label: 'Título',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
           key: 'items',
-          label: 'Items',
-          type: WebsiteBlockFieldType.chips,
-          defaultValue: <String>[],
+          label: 'Mensajes',
+          type: WebsiteBlockFieldType.repeater,
+          itemLabel: 'Mensaje',
+          minItems: 1,
+          itemFields: [
+            WebsiteBlockFieldSchema(
+              key: 'label',
+              label: 'Texto',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: 'Nuevo mensaje',
+            ),
+          ],
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'imageUrl',
+          label: 'Imagen de fondo',
+          type: WebsiteBlockFieldType.image,
+          mediaRole: WebsiteMediaRole.cover,
+          supportsFocalPoint: true,
+          supportsAltText: true,
+          altTextKey: 'imageAltText',
         ),
       ],
       controlSections: [
@@ -1131,6 +1233,11 @@ class WebsiteBlockRegistry {
           id: 'content',
           label: 'Contenido',
           fieldKeys: ['title', 'items'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'media',
+          label: 'Fondo',
+          fieldKeys: ['imageUrl'],
         ),
       ],
     ),
@@ -1140,26 +1247,69 @@ class WebsiteBlockRegistry {
       description: 'Carrusel/cuadrícula de logos de marcas.',
       defaultData: {
         'title': 'Marcas',
-        'logos': <String>[],
+        'logoSize': 'medium',
+        'brands': <Map<String, dynamic>>[],
       },
       fields: [
         WebsiteBlockFieldSchema(
           key: 'title',
           label: 'Título',
           type: WebsiteBlockFieldType.text,
+          textRole: WebsiteTextRole.heading,
+          supportsFormatting: true,
         ),
         WebsiteBlockFieldSchema(
-          key: 'logos',
-          label: 'Logos (URLs)',
-          type: WebsiteBlockFieldType.chips,
-          defaultValue: <String>[],
+          key: 'logoSize',
+          label: 'Tamaño de logos',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'medium',
+          options: [
+            WebsiteBlockFieldOption(value: 'small', label: 'Pequeño'),
+            WebsiteBlockFieldOption(value: 'medium', label: 'Mediano'),
+            WebsiteBlockFieldOption(value: 'large', label: 'Grande'),
+            WebsiteBlockFieldOption(value: 'xlarge', label: 'Extra grande'),
+          ],
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'brands',
+          label: 'Marcas',
+          type: WebsiteBlockFieldType.repeater,
+          itemLabel: 'Marca',
+          minItems: 1,
+          itemFields: [
+            WebsiteBlockFieldSchema(
+              key: 'name',
+              label: 'Nombre',
+              type: WebsiteBlockFieldType.text,
+              defaultValue: 'Marca',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'imageUrl',
+              label: 'Logo',
+              type: WebsiteBlockFieldType.image,
+              mediaRole: WebsiteMediaRole.logo,
+              supportsAltText: true,
+              altTextKey: 'altText',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'link',
+              label: 'Enlace',
+              type: WebsiteBlockFieldType.link,
+              actionRole: WebsiteActionRole.card,
+            ),
+          ],
         ),
       ],
       controlSections: [
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
-          fieldKeys: ['title', 'logos'],
+          fieldKeys: ['title', 'brands'],
+        ),
+        WebsiteBlockControlSection(
+          id: 'layout',
+          label: 'Diseño',
+          fieldKeys: ['logoSize'],
         ),
       ],
     ),
@@ -1233,12 +1383,21 @@ class WebsiteBlockRegistry {
               key: 'avatarUrl',
               label: 'Foto',
               type: WebsiteBlockFieldType.image,
+              mediaRole: WebsiteMediaRole.avatar,
+              supportsAltText: true,
+              altTextKey: 'avatarAltText',
             ),
             WebsiteBlockFieldSchema(
-              key: 'socialLinks',
-              label: 'Redes sociales',
-              type: WebsiteBlockFieldType.chips,
-              defaultValue: <String>[],
+              key: 'instagram',
+              label: 'Instagram',
+              type: WebsiteBlockFieldType.link,
+              actionRole: WebsiteActionRole.card,
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'linkedin',
+              label: 'LinkedIn',
+              type: WebsiteBlockFieldType.link,
+              actionRole: WebsiteActionRole.card,
             ),
           ],
         ),
@@ -1402,9 +1561,10 @@ class WebsiteBlockRegistry {
                 ),
                 WebsiteBlockFieldSchema(
                   key: 'link',
-                  label: 'URL',
-                  type: WebsiteBlockFieldType.text,
+                  label: 'Destino',
+                  type: WebsiteBlockFieldType.link,
                   defaultValue: '',
+                  actionRole: WebsiteActionRole.navigation,
                 ),
               ],
             ),
@@ -1476,20 +1636,54 @@ class WebsiteBlockRegistry {
   }
 
   static List<WebsiteBlockDefinition> all() {
-    final source = _definitions.isNotEmpty
-        ? _definitions.values
-        : _fallbackDefinitions.values;
-    return source.toList()..sort((a, b) => a.title.compareTo(b.title));
+    return WebsiteBlockType.values.map(definitionFor).toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
   }
 
-  static WebsiteBlockDefinition definitionFor(WebsiteBlockType type) =>
-      _definitions[type] ??
-      _fallbackDefinitions[type] ??
-      WebsiteBlockDefinition(
+  static WebsiteBlockDefinition definitionFor(WebsiteBlockType type) {
+    final marketplace = _definitions[type];
+    final fallback = _fallbackDefinitions[type];
+
+    if (marketplace == null && fallback != null) return fallback;
+    if (fallback == null && marketplace != null) return marketplace;
+    if (marketplace != null && fallback != null) {
+      return WebsiteBlockDefinition(
         type: type,
-        title: type.name,
-        description: 'Bloque sin definición registrada',
-        defaultData: const {},
-        usesCustomEditor: true,
+        title: marketplace.title,
+        description: marketplace.description,
+        defaultData: {
+          ...marketplace.defaultData,
+          ...fallback.defaultData,
+        },
+        // The baked-in schema is the canonical capability contract. Marketplace
+        // metadata may enrich labels/discovery, but cannot remove editor controls.
+        fields:
+            fallback.fields.isNotEmpty ? fallback.fields : marketplace.fields,
+        usesCustomEditor:
+            fallback.usesCustomEditor || marketplace.usesCustomEditor,
+        previewBadge: marketplace.previewBadge ?? fallback.previewBadge,
+        category: marketplace.category,
+        tags: {...fallback.tags, ...marketplace.tags}.toList(),
+        version: marketplace.version > fallback.version
+            ? marketplace.version
+            : fallback.version,
+        supportsResponsive:
+            fallback.supportsResponsive && marketplace.supportsResponsive,
+        controlSections: fallback.controlSections.isNotEmpty
+            ? fallback.controlSections
+            : marketplace.controlSections,
       );
+    }
+
+    return WebsiteBlockDefinition(
+      type: type,
+      title: type.name,
+      description: 'Bloque sin definición registrada',
+      defaultData: const {},
+      usesCustomEditor: true,
+    );
+  }
+
+  static WebsiteBlockCapabilityProfile capabilitiesFor(WebsiteBlockType type) =>
+      WebsiteBlockCapabilityRegistry.profileFor(type);
 }

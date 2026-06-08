@@ -868,6 +868,21 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final backgroundFit =
         (widget.data['backgroundFit'] ?? 'cover').toString().toLowerCase();
     final fit = backgroundFit == 'contain' ? BoxFit.contain : BoxFit.cover;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final focalX =
+        (widget.data[isMobile ? 'mobileFocalPointX' : 'focalPointX'] as num?)
+                ?.toDouble() ??
+            (widget.data['focalPointX'] as num?)?.toDouble() ??
+            0.5;
+    final focalY =
+        (widget.data[isMobile ? 'mobileFocalPointY' : 'focalPointY'] as num?)
+                ?.toDouble() ??
+            (widget.data['focalPointY'] as num?)?.toDouble() ??
+            0.5;
+    final focalAlignment = Alignment(
+      (focalX.clamp(0.0, 1.0) * 2) - 1,
+      (focalY.clamp(0.0, 1.0) * 2) - 1,
+    );
 
     // Use ConstraintLayoutBuilder OUTSIDE SizedBox to get actual available width first
     // Then scale the block height proportionally
@@ -948,6 +963,10 @@ class _CanvasBlockState extends State<CanvasBlock> {
                                 child: Image.network(
                                   backgroundImageUrl,
                                   fit: fit,
+                                  alignment: focalAlignment,
+                                  semanticLabel: widget
+                                      .data['backgroundImageAltText']
+                                      ?.toString(),
                                   errorBuilder: (context, _, __) =>
                                       const SizedBox.shrink(),
                                 ),

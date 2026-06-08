@@ -19,6 +19,7 @@ import '../../inventory/services/category_service.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_font_registry.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
@@ -26,6 +27,7 @@ import '../services/website_service.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
 import 'focal_point_picker.dart';
+import 'text_formatting_toolbar.dart';
 import 'website_link_value_editor.dart';
 
 /// Sanitize filename for Supabase Storage (remove spaces and special chars)
@@ -45,11 +47,13 @@ String _sanitizeFileName(String fileName) {
 /// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
   final Future<void> Function()? onSave;
+  final Future<void> Function()? onRestoreComplete;
   final VoidCallback? onDiscard;
 
   const WebsiteEditorPanel({
     super.key,
     this.onSave,
+    this.onRestoreComplete,
     this.onDiscard,
   });
 
@@ -233,10 +237,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     showDialog(
       context: context,
       builder: (dialogContext) => _BackupsDialog(
-        onRestoreComplete: () {
-          // Signal that restore happened - caller should reload
-          widget.onSave?.call(); // Re-use save callback to trigger reload
-        },
+        onRestoreComplete: widget.onRestoreComplete,
       ),
     );
   }
@@ -366,6 +367,22 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
   @override
   Widget build(BuildContext context) {
     final blocks = editProvider.blocks;
+    const categoryOrder = [
+      'Estructura',
+      'Elementos',
+      'Contenido',
+      'Media',
+      'Social',
+      'Conversión',
+    ];
+    final blockOptionsByCategory = <String, List<_BlockOption>>{};
+    for (final definition in WebsiteBlockRegistry.all()) {
+      if (definition.type == WebsiteBlockType.footer) continue;
+      blockOptionsByCategory
+          .putIfAbsent(definition.type.editorCategory, () => [])
+          .add(_BlockOption(definition.type.name));
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -597,17 +614,9 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
           ),
           const SizedBox(height: 20),
 
-          _buildSection('Estructura', [
-            const _BlockOption('hero'),
-            const _BlockOption('carousel'),
-            const _BlockOption('categoryGrid'),
-            const _BlockOption('canvas'),
-          ]),
-          _buildSection('Elementos', [
-            const _BlockOption('text'),
-            const _BlockOption('button'),
-            const _BlockOption('divider'),
-          ]),
+          for (final category in categoryOrder.take(2))
+            if (blockOptionsByCategory[category]?.isNotEmpty == true)
+              _buildSection(category, blockOptionsByCategory[category]!),
           _buildSection('Canvas (arrastrable)', [
             const _BlockOption(
               'canvas_el:text',
@@ -635,30 +644,9 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
               iconOverride: Icons.grid_view_rounded,
             ),
           ]),
-          _buildSection('Contenido', [
-            const _BlockOption('products'),
-            const _BlockOption('about'),
-            const _BlockOption('services'),
-            const _BlockOption('features'),
-          ]),
-          _buildSection('Media', [
-            const _BlockOption('gallery'),
-            const _BlockOption('videoBanner'),
-            const _BlockOption('brandLogos'),
-            const _BlockOption('partnersBanner'),
-          ]),
-          _buildSection('Social', [
-            const _BlockOption('testimonials'),
-            const _BlockOption('googleReviews'),
-            const _BlockOption('team'),
-            const _BlockOption('stats'),
-          ]),
-          _buildSection('Conversión', [
-            const _BlockOption('cta'),
-            const _BlockOption('pricing'),
-            const _BlockOption('contact'),
-            const _BlockOption('faq'),
-          ]),
+          for (final category in categoryOrder.skip(2))
+            if (blockOptionsByCategory[category]?.isNotEmpty == true)
+              _buildSection(category, blockOptionsByCategory[category]!),
         ],
       ),
     );
@@ -1115,7 +1103,7 @@ class _SyncTabState extends State<_SyncTab> {
                   context,
                   googleService,
                 );
-                if (!hasAccess) return;
+                if (!hasAccess || !context.mounted) return;
 
                 final locations = await googleService.fetchLocations();
                 if (!context.mounted) return;
@@ -1154,6 +1142,7 @@ class _SyncTabState extends State<_SyncTab> {
                   googleService,
                 );
                 if (!hasAccess) return;
+                if (!context.mounted) return;
 
                 // 1. Get location name from settings (saved in previous step)
                 final locationName =
@@ -1316,6 +1305,7 @@ class _SyncTabState extends State<_SyncTab> {
                   }
 
                   await websiteService.saveSettings(settings);
+                  if (!ctx.mounted || !context.mounted) return;
 
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2149,6 +2139,16 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     final overlayOpacity =
         (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
     final hasVideoFile = (slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
+    final titleFormatting = TextFormatting.fromJson(
+      slide['titleFormatting'] is Map
+          ? Map<String, dynamic>.from(slide['titleFormatting'] as Map)
+          : null,
+    );
+    final subtitleFormatting = TextFormatting.fromJson(
+      slide['subtitleFormatting'] is Map
+          ? Map<String, dynamic>.from(slide['subtitleFormatting'] as Map)
+          : null,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2158,12 +2158,34 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           value: slide['title']?.toString() ?? '',
           onChanged: (v) => _updateSlide(_selectedSlideIndex, 'title', v),
         ),
+        const SizedBox(height: 8),
+        TextFormattingToolbar(
+          currentFormatting: titleFormatting,
+          preset: TextToolbarPreset.basic,
+          showAdvancedOptions: false,
+          onFormattingChanged: (value) => _updateSlide(
+            _selectedSlideIndex,
+            'titleFormatting',
+            value.toJson(),
+          ),
+        ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'Subtítulo',
           value: slide['subtitle']?.toString() ?? '',
           onChanged: (v) => _updateSlide(_selectedSlideIndex, 'subtitle', v),
           maxLines: 2,
+        ),
+        const SizedBox(height: 8),
+        TextFormattingToolbar(
+          currentFormatting: subtitleFormatting,
+          preset: TextToolbarPreset.basic,
+          showAdvancedOptions: false,
+          onFormattingChanged: (value) => _updateSlide(
+            _selectedSlideIndex,
+            'subtitleFormatting',
+            value.toJson(),
+          ),
         ),
         const SizedBox(height: 12),
         _EditorTextField(
@@ -2190,7 +2212,22 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               _updateSlide(_selectedSlideIndex, 'imageUrl', url),
         ),
         const SizedBox(height: 12),
-        // Focal point picker for mobile background alignment
+        const _SectionHeader('Foco de imagen'),
+        const SizedBox(height: 8),
+        FocalPointPicker(
+          imageUrl: slide['imageUrl']?.toString(),
+          focalX: (slide['focalPointX'] as num?)?.toDouble() ?? 0.5,
+          focalY: (slide['focalPointY'] as num?)?.toDouble() ?? 0.5,
+          onChanged: (x, y) {
+            _updateSlideMultiple(_selectedSlideIndex, {
+              'focalPointX': x,
+              'focalPointY': y,
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        const _SectionHeader('Foco móvil'),
+        const SizedBox(height: 8),
         FocalPointPicker(
           imageUrl: slide['imageUrl']?.toString(),
           focalX: (slide['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
@@ -2202,6 +2239,13 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               'mobileFocalPointY': y,
             });
           },
+        ),
+        const SizedBox(height: 12),
+        _EditorTextField(
+          label: 'Texto alternativo',
+          value: slide['altText']?.toString() ?? '',
+          onChanged: (value) =>
+              _updateSlide(_selectedSlideIndex, 'altText', value),
         ),
 
         const SizedBox(height: 20),
@@ -3938,8 +3982,9 @@ class _GenericBlockControls extends StatelessWidget {
   List<Map<String, dynamic>> _toMapList(dynamic value) {
     if (value is List) {
       return value
-          .whereType<Map>()
-          .map((m) => Map<String, dynamic>.from(m))
+          .map((item) => item is Map
+              ? Map<String, dynamic>.from(item)
+              : <String, dynamic>{'label': item.toString()})
           .toList();
     }
     return const [];
@@ -3959,13 +4004,48 @@ class _GenericBlockControls extends StatelessWidget {
     );
   }
 
+  Widget _buildTextFormattingInspector({
+    required WebsiteBlockFieldSchema field,
+    required Map<String, dynamic> currentData,
+    required void Function(String key, dynamic value) setRelatedValue,
+  }) {
+    if (!field.supportsFormatting) return const SizedBox.shrink();
+
+    final rawFormatting = currentData[field.resolvedFormattingKey];
+    final formatting = TextFormatting.fromJson(
+      rawFormatting is Map ? Map<String, dynamic>.from(rawFormatting) : null,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        const _SectionHeader('Formato'),
+        const SizedBox(height: 8),
+        TextFormattingToolbar(
+          currentFormatting: formatting,
+          preset: TextToolbarPreset.basic,
+          showAdvancedOptions: false,
+          onFormattingChanged: (value) => setRelatedValue(
+            field.resolvedFormattingKey,
+            value.toJson(),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSchemaField({
     required BuildContext context,
     required WebsiteBlockFieldSchema field,
     required Map<String, dynamic> currentData,
     required void Function(dynamic value) setValue,
+    required void Function(String key, dynamic value) setRelatedValue,
   }) {
-    final raw = currentData[field.key];
+    dynamic raw = currentData[field.key];
+    for (final alias in field.migrationAliases) {
+      raw ??= currentData[alias];
+    }
     final label = field.label;
 
     switch (field.type) {
@@ -3986,6 +4066,11 @@ class _GenericBlockControls extends StatelessWidget {
                 }
               },
             ),
+            _buildTextFormattingInspector(
+              field: field,
+              currentData: currentData,
+              setRelatedValue: setRelatedValue,
+            ),
             _helpText(field.helpText),
           ],
         );
@@ -3998,6 +4083,11 @@ class _GenericBlockControls extends StatelessWidget {
               value: raw?.toString() ?? (field.defaultValue?.toString() ?? ''),
               onChanged: (v) => setValue(v),
               maxLines: 4,
+            ),
+            _buildTextFormattingInspector(
+              field: field,
+              currentData: currentData,
+              setRelatedValue: setRelatedValue,
             ),
             _helpText(field.helpText),
           ],
@@ -4067,6 +4157,16 @@ class _GenericBlockControls extends StatelessWidget {
         );
       case WebsiteBlockFieldType.image:
         final currentUrl = raw?.toString();
+        final focalX =
+            (currentData[field.focalPointXKey] as num?)?.toDouble() ?? 0.5;
+        final focalY =
+            (currentData[field.focalPointYKey] as num?)?.toDouble() ?? 0.5;
+        final mobileFocalX =
+            (currentData[field.mobileFocalPointXKey] as num?)?.toDouble() ??
+                focalX;
+        final mobileFocalY =
+            (currentData[field.mobileFocalPointYKey] as num?)?.toDouble() ??
+                focalY;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4077,6 +4177,44 @@ class _GenericBlockControls extends StatelessWidget {
               currentUrl: currentUrl,
               onChanged: (url) => setValue(url),
             ),
+            if (field.hasFocalPointControl &&
+                currentUrl?.isNotEmpty == true) ...[
+              const SizedBox(height: 12),
+              const _SectionHeader('Foco de imagen'),
+              const SizedBox(height: 8),
+              FocalPointPicker(
+                imageUrl: currentUrl,
+                focalX: focalX,
+                focalY: focalY,
+                onChanged: (x, y) {
+                  setRelatedValue(field.focalPointXKey, x);
+                  setRelatedValue(field.focalPointYKey, y);
+                },
+              ),
+              if (field.isCoverMedia) ...[
+                const SizedBox(height: 12),
+                const _SectionHeader('Foco móvil'),
+                const SizedBox(height: 8),
+                FocalPointPicker(
+                  imageUrl: currentUrl,
+                  focalX: mobileFocalX,
+                  focalY: mobileFocalY,
+                  onChanged: (x, y) {
+                    setRelatedValue(field.mobileFocalPointXKey, x);
+                    setRelatedValue(field.mobileFocalPointYKey, y);
+                  },
+                ),
+              ],
+            ],
+            if (field.hasAltTextControl) ...[
+              const SizedBox(height: 12),
+              _EditorTextField(
+                label: 'Texto alternativo',
+                value: currentData[field.altTextKey]?.toString() ?? '',
+                hint: 'Describe la imagen',
+                onChanged: (value) => setRelatedValue(field.altTextKey, value),
+              ),
+            ],
             _helpText(field.helpText),
           ],
         );
@@ -4231,49 +4369,71 @@ class _GenericBlockControls extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    if (index > 0)
-                      InkWell(
-                        onTap: () {
-                          final next = List<Map<String, dynamic>>.from(items);
-                          final tmp = next[index - 1];
-                          next[index - 1] = next[index];
-                          next[index] = tmp;
-                          setValue(next);
-                        },
-                        child: Icon(
-                          Icons.arrow_upward,
-                          size: 16,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    if (index > 0) const SizedBox(width: 10),
-                    if (index < items.length - 1)
-                      InkWell(
-                        onTap: () {
-                          final next = List<Map<String, dynamic>>.from(items);
-                          final tmp = next[index + 1];
-                          next[index + 1] = next[index];
-                          next[index] = tmp;
-                          setValue(next);
-                        },
-                        child: Icon(
-                          Icons.arrow_downward,
-                          size: 16,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    if (index < items.length - 1) const SizedBox(width: 10),
-                    InkWell(
-                      onTap: () {
-                        final next = List<Map<String, dynamic>>.from(items);
-                        next.removeAt(index);
-                        setValue(next);
-                      },
-                      child: Icon(
-                        Icons.close,
-                        size: 16,
-                        color: Colors.red.shade300,
-                      ),
+                    IconButton(
+                      tooltip: 'Subir',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: index > 0
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              final tmp = next[index - 1];
+                              next[index - 1] = next[index];
+                              next[index] = tmp;
+                              setValue(next);
+                            }
+                          : null,
+                      icon: const Icon(Icons.arrow_upward),
+                    ),
+                    IconButton(
+                      tooltip: 'Bajar',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: index < items.length - 1
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              final tmp = next[index + 1];
+                              next[index + 1] = next[index];
+                              next[index] = tmp;
+                              setValue(next);
+                            }
+                          : null,
+                      icon: const Icon(Icons.arrow_downward),
+                    ),
+                    IconButton(
+                      tooltip: 'Duplicar',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: field.maxItems == null ||
+                              items.length < field.maxItems!
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              next.insert(
+                                index + 1,
+                                Map<String, dynamic>.from(itemData),
+                              );
+                              setValue(next);
+                            }
+                          : null,
+                      icon: const Icon(Icons.copy_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Eliminar',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      color: Colors.red.shade300,
+                      onPressed: field.minItems == null ||
+                              items.length > field.minItems!
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              next.removeAt(index);
+                              setValue(next);
+                            }
+                          : null,
+                      icon: const Icon(Icons.delete_outline),
                     ),
                   ],
                 ),
@@ -4290,6 +4450,17 @@ class _GenericBlockControls extends StatelessWidget {
                             List<Map<String, dynamic>>.from(items);
                         final nextItem = Map<String, dynamic>.from(itemData);
                         nextItem[subField.key] = v;
+                        for (final alias in subField.migrationAliases) {
+                          nextItem[alias] = v;
+                        }
+                        nextItems[index] = nextItem;
+                        setValue(nextItems);
+                      },
+                      setRelatedValue: (key, value) {
+                        final nextItems =
+                            List<Map<String, dynamic>>.from(items);
+                        final nextItem = Map<String, dynamic>.from(itemData);
+                        nextItem[key] = value;
                         nextItems[index] = nextItem;
                         setValue(nextItems);
                       },
@@ -4346,6 +4517,13 @@ class _GenericBlockControls extends StatelessWidget {
       }
     }
 
+    void setSchemaFieldValue(WebsiteBlockFieldSchema field, dynamic value) {
+      setFieldValue(field.key, value);
+      for (final alias in field.migrationAliases) {
+        setFieldValue(alias, value);
+      }
+    }
+
     if (definition != null && fields.isNotEmpty) {
       final sections = definition.controlSections;
       final fieldByKey = {for (final f in fields) f.key: f};
@@ -4384,7 +4562,8 @@ class _GenericBlockControls extends StatelessWidget {
                     context: context,
                     field: f,
                     currentData: data,
-                    setValue: (v) => setFieldValue(f.key, v),
+                    setValue: (v) => setSchemaFieldValue(f, v),
+                    setRelatedValue: setFieldValue,
                   );
                   yield const SizedBox(height: 16);
                 }),
@@ -4408,7 +4587,8 @@ class _GenericBlockControls extends StatelessWidget {
                   context: context,
                   field: f,
                   currentData: data,
-                  setValue: (v) => setFieldValue(f.key, v),
+                  setValue: (v) => setSchemaFieldValue(f, v),
+                  setRelatedValue: setFieldValue,
                 );
                 yield const SizedBox(height: 16);
               }),
@@ -4421,35 +4601,6 @@ class _GenericBlockControls extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...sectionWidgets,
-          if (parsed == WebsiteBlockType.hero) ...[
-            const SizedBox(height: 12),
-            _CollapsibleSection(
-              title: 'Foco móvil',
-              initiallyExpanded: true,
-              children: [
-                const _SectionHeader('Imagen de fondo (móvil)'),
-                const SizedBox(height: 12),
-                FocalPointPicker(
-                  imageUrl:
-                      (data['imageUrl'] ?? data['backgroundImage'])?.toString(),
-                  focalX:
-                      (data['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
-                  focalY:
-                      (data['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
-                  onChanged: (x, y) {
-                    provider.updateBlockDataMultiple(
-                      blockId,
-                      {
-                        'mobileFocalPointX': x,
-                        'mobileFocalPointY': y,
-                      },
-                      saveHistory: false,
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
         ],
       );
     }
@@ -4620,6 +4771,12 @@ class _CanvasBlockControls extends StatelessWidget {
     final fullBleed = (data['fullBleed'] as bool?) ?? false;
     final bg = (data['backgroundColor'] ?? '#FFFFFF').toString();
     final backgroundImageUrl = (data['backgroundImageUrl'] ?? '').toString();
+    final focalPointX = (data['focalPointX'] as num?)?.toDouble() ?? 0.5;
+    final focalPointY = (data['focalPointY'] as num?)?.toDouble() ?? 0.5;
+    final mobileFocalPointX =
+        (data['mobileFocalPointX'] as num?)?.toDouble() ?? focalPointX;
+    final mobileFocalPointY =
+        (data['mobileFocalPointY'] as num?)?.toDouble() ?? focalPointY;
     final backgroundVideoUrl = (data['backgroundVideoUrl'] ?? '').toString();
     final backgroundYoutubeId = (data['backgroundYoutubeId'] ?? '').toString();
     final overlayEnabled = (data['overlayEnabled'] as bool?) ?? false;
@@ -4712,6 +4869,42 @@ class _CanvasBlockControls extends StatelessWidget {
               onChanged: (url) =>
                   provider.updateBlockData(blockId, 'backgroundImageUrl', url),
             ),
+            if (backgroundImageUrl.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const _SectionHeader('Foco de imagen'),
+              const SizedBox(height: 8),
+              FocalPointPicker(
+                imageUrl: backgroundImageUrl,
+                focalX: focalPointX,
+                focalY: focalPointY,
+                onChanged: (x, y) => provider.updateBlockDataMultiple(
+                  blockId,
+                  {'focalPointX': x, 'focalPointY': y},
+                ),
+              ),
+              const SizedBox(height: 12),
+              const _SectionHeader('Foco móvil'),
+              const SizedBox(height: 8),
+              FocalPointPicker(
+                imageUrl: backgroundImageUrl,
+                focalX: mobileFocalPointX,
+                focalY: mobileFocalPointY,
+                onChanged: (x, y) => provider.updateBlockDataMultiple(
+                  blockId,
+                  {'mobileFocalPointX': x, 'mobileFocalPointY': y},
+                ),
+              ),
+              const SizedBox(height: 12),
+              _EditorTextField(
+                label: 'Texto alternativo',
+                value: (data['backgroundImageAltText'] ?? '').toString(),
+                onChanged: (value) => provider.updateBlockData(
+                  blockId,
+                  'backgroundImageAltText',
+                  value,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _EditorTextField(
               label: 'Video URL (mp4/webm) (opcional)',
@@ -5003,9 +5196,11 @@ class _CanvasBlockControls extends StatelessWidget {
                   onChanged: (v) => _updateElement(activeId!, {'style': v}),
                 ),
                 const SizedBox(height: 12),
-                _LinkPicker(
+                WebsiteLinkValueEditor(
                   label: 'Link',
-                  currentLink: (active['link'] ?? '/').toString(),
+                  value: (active['link'] ?? '/').toString(),
+                  dense: true,
+                  darkStyle: true,
                   onChanged: (v) => _updateElement(activeId!, {'link': v}),
                 ),
                 const SizedBox(height: 12),
@@ -6190,8 +6385,8 @@ class _ThemeTabState extends State<_ThemeTab> {
   final _accentColorController = TextEditingController();
 
   // Typography
-  String _headingFont = 'Oswald';
-  String _bodyFont = 'Barlow';
+  String _headingFont = WebsiteFontRegistry.headingDefault;
+  String _bodyFont = WebsiteFontRegistry.bodyDefault;
   String _headingSize = 'normal';
   String _bodySize = 'normal';
 
@@ -6204,21 +6399,7 @@ class _ThemeTabState extends State<_ThemeTab> {
 
   bool _loaded = false;
 
-  final _fonts = [
-    'Oswald',
-    'Barlow',
-    'Barlow Condensed',
-    'Inter',
-    'Roboto',
-    'Open Sans',
-    'Montserrat',
-    'Poppins',
-    'Lato',
-    'Oswald',
-    'Raleway',
-    'Playfair Display',
-    'Merriweather',
-  ];
+  static const _fonts = WebsiteFontRegistry.supportedFamilies;
 
   final _sizes = {
     'small': 'Pequeño',
@@ -6302,8 +6483,18 @@ class _ThemeTabState extends State<_ThemeTab> {
               service.getSetting('theme_primary_color', '#00A09D');
           _accentColorController.text =
               service.getSetting('theme_accent_color', '#FF6D00');
-          _headingFont = service.getSetting('theme_heading_font', 'Oswald');
-          _bodyFont = service.getSetting('theme_body_font', 'Barlow');
+          _headingFont = WebsiteFontRegistry.resolveHeadingFont(
+            service.getSetting(
+              'theme_heading_font',
+              WebsiteFontRegistry.headingDefault,
+            ),
+          );
+          _bodyFont = WebsiteFontRegistry.resolveBodyFont(
+            service.getSetting(
+              'theme_body_font',
+              WebsiteFontRegistry.bodyDefault,
+            ),
+          );
           _headingSize = _sizeKeyFromStoredValue(
             isHeading: true,
             raw: service.getSetting('theme_heading_size', '48'),
@@ -6562,6 +6753,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Fuente',
               value: _headingFont,
               items: _fonts,
+              labels: WebsiteFontRegistry.labelsByFamily,
               onChanged: (v) {
                 if (v == null) return;
                 setState(() => _headingFont = v);
@@ -6592,6 +6784,7 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Fuente',
               value: _bodyFont,
               items: _fonts,
+              labels: WebsiteFontRegistry.labelsByFamily,
               onChanged: (v) {
                 if (v == null) return;
                 setState(() => _bodyFont = v);
@@ -7412,386 +7605,6 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
   }
 }
 
-/// Smart link picker with pages, products, anchors, and external URLs
-class _LinkPicker extends StatefulWidget {
-  final String label;
-  final String currentLink;
-  final Function(String) onChanged;
-
-  const _LinkPicker({
-    required this.label,
-    required this.currentLink,
-    required this.onChanged,
-  });
-
-  @override
-  State<_LinkPicker> createState() => _LinkPickerState();
-}
-
-class _LinkPickerState extends State<_LinkPicker> {
-  bool _isExpanded = false;
-  int _selectedTab = 0; // 0=Pages, 1=Products, 2=Anchor, 3=External
-
-  @override
-  Widget build(BuildContext context) {
-    final displayText = _getDisplayText(widget.currentLink);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        // Current link display with edit button
-        InkWell(
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D2D2D),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: _isExpanded ? const Color(0xFF00A09D) : Colors.white12,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _getLinkIcon(widget.currentLink),
-                  size: 16,
-                  color: const Color(0xFF00A09D),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    displayText.isEmpty ? 'Sin enlace' : displayText,
-                    style: TextStyle(
-                      color:
-                          displayText.isEmpty ? Colors.white38 : Colors.white,
-                      fontSize: 13,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Icon(
-                  _isExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: Colors.white54,
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Expanded picker
-        if (_isExpanded) ...[
-          const SizedBox(height: 8),
-          // Tab buttons
-          Row(
-            children: [
-              _buildTabButton(0, 'Páginas', Icons.article_outlined),
-              const SizedBox(width: 4),
-              _buildTabButton(1, 'Tienda', Icons.shopping_bag_outlined),
-              const SizedBox(width: 4),
-              _buildTabButton(2, 'Ancla', Icons.tag),
-              const SizedBox(width: 4),
-              _buildTabButton(3, 'URL', Icons.link),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Tab content
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: _buildTabContent(),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildTabButton(int index, String label, IconData icon) {
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF00A09D) : Colors.transparent,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  size: 14,
-                  color: isSelected ? const Color(0xFF00A09D) : Colors.white54),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: isSelected ? const Color(0xFF00A09D) : Colors.white54,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabContent() {
-    switch (_selectedTab) {
-      case 0:
-        return _buildPagesTab();
-      case 1:
-        return _buildProductsTab();
-      case 2:
-        return _buildAnchorTab();
-      case 3:
-        return _buildExternalTab();
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildPagesTab() {
-    return FutureBuilder<List<_PageInfo>>(
-      future: _loadPages(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 60,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        }
-
-        final pages = snapshot.data ?? [];
-        if (pages.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text('No hay páginas',
-                style: TextStyle(color: Colors.white54, fontSize: 12)),
-          );
-        }
-
-        return Column(
-          children: pages.map((page) {
-            final isSelected = widget.currentLink == page.path;
-            return InkWell(
-              onTap: () {
-                widget.onChanged(page.path);
-                setState(() => _isExpanded = false);
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF00A09D).withValues(alpha: 0.15)
-                      : null,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      page.isHome
-                          ? Icons.home_outlined
-                          : Icons.article_outlined,
-                      size: 14,
-                      color:
-                          isSelected ? const Color(0xFF00A09D) : Colors.white54,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        page.title,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isSelected
-                              ? const Color(0xFF00A09D)
-                              : Colors.white,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      page.path,
-                      style:
-                          const TextStyle(fontSize: 10, color: Colors.white38),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildProductsTab() {
-    final links = [
-      ('/productos', 'Todos los productos', Icons.inventory_2_outlined),
-      (
-        '/productos?destacados=true',
-        'Productos destacados',
-        Icons.star_outline
-      ),
-      ('/productos?ofertas=true', 'Ofertas', Icons.local_offer_outlined),
-      ('/tienda/categorias', 'Categorías', Icons.category_outlined),
-      ('/carrito', 'Carrito', Icons.shopping_cart_outlined),
-    ];
-
-    return Column(
-      children: links.map((item) {
-        final isSelected = widget.currentLink == item.$1;
-        return InkWell(
-          onTap: () {
-            widget.onChanged(item.$1);
-            setState(() => _isExpanded = false);
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFF00A09D).withValues(alpha: 0.15)
-                  : null,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Icon(item.$3,
-                    size: 14,
-                    color:
-                        isSelected ? const Color(0xFF00A09D) : Colors.white54),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    item.$2,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color:
-                          isSelected ? const Color(0xFF00A09D) : Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildAnchorTab() {
-    return TextFormField(
-      initialValue:
-          widget.currentLink.startsWith('#') ? widget.currentLink : '',
-      style: const TextStyle(color: Colors.white, fontSize: 12),
-      decoration: InputDecoration(
-        hintText: '#seccion-contacto',
-        hintStyle:
-            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
-        prefixIcon: const Icon(Icons.tag, size: 16, color: Colors.white54),
-        filled: true,
-        fillColor: const Color(0xFF2D2D2D),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      onFieldSubmitted: (value) {
-        final anchor = value.startsWith('#') ? value : '#$value';
-        widget.onChanged(anchor);
-        setState(() => _isExpanded = false);
-      },
-    );
-  }
-
-  Widget _buildExternalTab() {
-    return TextFormField(
-      initialValue:
-          widget.currentLink.startsWith('http') ? widget.currentLink : '',
-      style: const TextStyle(color: Colors.white, fontSize: 12),
-      decoration: InputDecoration(
-        hintText: 'https://ejemplo.com',
-        hintStyle:
-            TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 12),
-        prefixIcon: const Icon(Icons.link, size: 16, color: Colors.white54),
-        filled: true,
-        fillColor: const Color(0xFF2D2D2D),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      onFieldSubmitted: (value) {
-        widget.onChanged(value);
-        setState(() => _isExpanded = false);
-      },
-    );
-  }
-
-  Future<List<_PageInfo>> _loadPages() async {
-    try {
-      final service = context.read<WebsiteService>();
-      await service.loadPages();
-      return service.pages
-          .map((p) => _PageInfo(
-                title: p.title,
-                path: p.fullPath,
-                isHome: p.isHome,
-              ))
-          .toList();
-    } catch (e) {
-      debugPrint('Error loading pages: $e');
-      return [];
-    }
-  }
-
-  String _getDisplayText(String link) {
-    if (link.isEmpty) return '';
-    if (link.startsWith('#')) return 'Ancla: $link';
-    if (link.startsWith('http')) return link;
-    if (link.startsWith('/tienda')) return 'Tienda: ${link.split('/').last}';
-    if (link == '/') return 'Inicio';
-    return link;
-  }
-
-  IconData _getLinkIcon(String link) {
-    if (link.isEmpty) return Icons.link_off;
-    if (link.startsWith('#')) return Icons.tag;
-    if (link.startsWith('http')) return Icons.open_in_new;
-    if (link.startsWith('/tienda')) return Icons.shopping_bag_outlined;
-    return Icons.article_outlined;
-  }
-}
-
-class _PageInfo {
-  final String title;
-  final String path;
-  final bool isHome;
-
-  _PageInfo({required this.title, required this.path, required this.isHome});
-}
-
 class _EditorTextField extends StatefulWidget {
   final String label;
   final String value;
@@ -8588,7 +8401,7 @@ class _ColorFieldState extends State<_ColorField> {
   }
 
   String _colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+    return '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
   }
 
   @override
@@ -8627,7 +8440,6 @@ class _ColorFieldState extends State<_ColorField> {
                           // Use simple picker for cleaner UI, or full for power
                           enableAlpha: true,
                           displayThumbColor: true,
-                          showLabel: true,
                           paletteType: PaletteType.hsvWithHue,
                           pickerAreaHeightPercent: 0.8,
                         ),
@@ -8722,7 +8534,7 @@ class _ColorFieldState extends State<_ColorField> {
             spacing: 8,
             runSpacing: 8,
             children: presetColors.map((color) {
-              final isSelected = currentColor.value == color.value;
+              final isSelected = currentColor.toARGB32() == color.toARGB32();
               return GestureDetector(
                 onTap: () {
                   widget.controller.text = _colorToHex(color);
@@ -10829,7 +10641,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00A09D)),
-            child: const Text('Guardar'),
+            child: const Text('Aplicar'),
           ),
         ],
       ),
@@ -10910,8 +10722,10 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   }
 
   List<WebsiteNavigation> _getDisplayedFooterSections(WebsiteService service) {
-    var sections = List<WebsiteNavigation>.from(service.footerNavigation)
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    var sections = editProvider.getEffectiveFooterNavigation(
+      service.footerNavigation,
+    )..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     sections = _applyIdOrder(sections, _footerSectionOrderOverride);
 
     // Apply visual reordering during drag
@@ -11077,8 +10891,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       title: 'Nueva sección',
       initialIsSection: true,
       onSave: (nav) async {
-        final service = context.read<WebsiteService>();
-        await service.createNavigation(nav);
+        final editProvider = context.read<WebsiteEditModeProvider>();
+        editProvider.createFooterNavDraft(nav);
       },
     );
   }
@@ -11089,8 +10903,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       initialParentId: parentId,
       initialIsSection: false,
       onSave: (nav) async {
-        final service = context.read<WebsiteService>();
-        await service.createNavigation(nav);
+        final editProvider = context.read<WebsiteEditModeProvider>();
+        editProvider.createFooterNavDraft(nav);
       },
     );
   }
@@ -11338,63 +11152,54 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                 child: ElevatedButton(
                   onPressed: (errorText != null || _isSavingInlineNav)
                       ? null
-                      : () async {
-                          final service = context.read<WebsiteService>();
+                      : () {
+                          final editProvider =
+                              context.read<WebsiteEditModeProvider>();
                           setState(() => _isSavingInlineNav = true);
 
-                          try {
-                            final updated = WebsiteNavigation(
-                              id: nav.id,
-                              tenantId: nav.tenantId,
-                              menuLocation: MenuLocation.footer,
-                              label: _inlineNavLabelController.text.trim(),
-                              linkType: isSection
-                                  ? NavLinkType.action
-                                  : _inlineNavLinkType,
-                              linkValue: isSection
-                                  ? ''
-                                  : _inlineNavLinkValueController.text.trim(),
-                              openInNewTab: (!isSection &&
-                                      _inlineNavLinkType ==
-                                          NavLinkType.external)
-                                  ? _inlineNavOpenInNewTab
-                                  : false,
-                              parentId: isSection ? null : _inlineNavParentId,
-                              orderIndex: nav.orderIndex,
-                              isVisible: _inlineNavIsVisible,
-                              showOnDesktop: _inlineNavShowOnDesktop,
-                              showOnMobile: _inlineNavShowOnMobile,
-                              cssClass: nav.cssClass,
-                              highlight: nav.highlight,
-                              createdAt: nav.createdAt,
-                              updatedAt: DateTime.now(),
-                              children: nav.children,
-                              linkedPage: nav.linkedPage,
+                          final updated = WebsiteNavigation(
+                            id: nav.id,
+                            tenantId: nav.tenantId,
+                            menuLocation: MenuLocation.footer,
+                            label: _inlineNavLabelController.text.trim(),
+                            linkType: isSection
+                                ? NavLinkType.action
+                                : _inlineNavLinkType,
+                            linkValue: isSection
+                                ? ''
+                                : _inlineNavLinkValueController.text.trim(),
+                            openInNewTab: (!isSection &&
+                                    _inlineNavLinkType == NavLinkType.external)
+                                ? _inlineNavOpenInNewTab
+                                : false,
+                            parentId: isSection ? null : _inlineNavParentId,
+                            orderIndex: nav.orderIndex,
+                            isVisible: _inlineNavIsVisible,
+                            showOnDesktop: _inlineNavShowOnDesktop,
+                            showOnMobile: _inlineNavShowOnMobile,
+                            cssClass: nav.cssClass,
+                            highlight: nav.highlight,
+                            createdAt: nav.createdAt,
+                            updatedAt: DateTime.now(),
+                            children: nav.children,
+                            linkedPage: nav.linkedPage,
+                          );
+
+                          editProvider.updateFooterNavItem(updated);
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Cambio aplicado. Presiona Guardar para publicarlo.',
+                                ),
+                                backgroundColor: Color(0xFF00A09D),
+                              ),
                             );
-
-                            await service.updateNavigation(updated);
-
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Cambios guardados'),
-                                  backgroundColor: Color(0xFF00A09D),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error al guardar: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isSavingInlineNav = false);
-                            }
+                            setState(() {
+                              _isSavingInlineNav = false;
+                              _editingFooterNavId = null;
+                            });
                           }
                         },
                   style: ElevatedButton.styleFrom(
@@ -11410,7 +11215,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Guardar'),
+                      : const Text('Aplicar'),
                 ),
               ),
             ],
@@ -11886,8 +11691,11 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   }
 
   Future<void> _toggleFooterNavVisibility(WebsiteNavigation nav) async {
-    final service = context.read<WebsiteService>();
-    await service.updateNavigation(nav.copyWith(isVisible: !nav.isVisible));
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final effective = editProvider.getEffectiveFooterNavItem(nav);
+    editProvider.updateFooterNavItem(
+      effective.copyWith(isVisible: !effective.isVisible),
+    );
   }
 
   Future<void> _deleteFooterNav(WebsiteNavigation nav) async {
@@ -11918,8 +11726,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     if (confirmed != true) return;
     if (!mounted) return;
 
-    final service = context.read<WebsiteService>();
-    await service.deleteNavigation(nav.id);
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    editProvider.deleteFooterNavItem(nav);
   }
 
   Future<void> _showFooterNavDialog({
@@ -11943,7 +11751,10 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     var parentId = initialParentId;
 
     final service = context.read<WebsiteService>();
-    final footerParents = service.footerNavigation;
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    final footerParents = editProvider.getEffectiveFooterNavigation(
+      service.footerNavigation,
+    );
 
     await showDialog<void>(
       context: context,
@@ -12233,7 +12044,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00A09D)),
-                  child: Text(existing != null ? 'Guardar' : 'Crear'),
+                  child: Text(existing != null ? 'Aplicar' : 'Agregar'),
                 ),
               ],
             );
@@ -12744,7 +12555,7 @@ class _AddItemButton extends StatelessWidget {
 
 /// Dialog for managing website backups
 class _BackupsDialog extends StatefulWidget {
-  final VoidCallback? onRestoreComplete;
+  final Future<void> Function()? onRestoreComplete;
 
   const _BackupsDialog({this.onRestoreComplete});
 
@@ -12885,16 +12696,20 @@ class _BackupsDialogState extends State<_BackupsDialog> {
     setState(() => _isRestoring = true);
 
     try {
-      await _backupService.restoreBackup(backup.id);
+      final restored = await _backupService.restoreBackup(backup.id);
+      if (!restored) {
+        throw Exception('La copia de seguridad no pudo restaurarse');
+      }
 
       if (mounted) {
+        await widget.onRestoreComplete?.call();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Copia de seguridad restaurada'),
             backgroundColor: Colors.green,
           ),
         );
-        widget.onRestoreComplete?.call();
         Navigator.pop(context);
       }
     } catch (e) {

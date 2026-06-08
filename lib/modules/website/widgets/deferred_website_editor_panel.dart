@@ -5,11 +5,13 @@ import 'website_editor_panel.dart' deferred as editor;
 class DeferredWebsiteEditorPanel extends StatefulWidget {
   final VoidCallback? onDiscard;
   final Future<void> Function()? onSave;
+  final Future<void> Function()? onRestoreComplete;
 
   const DeferredWebsiteEditorPanel({
     super.key,
     this.onDiscard,
     this.onSave,
+    this.onRestoreComplete,
   });
 
   @override
@@ -57,6 +59,7 @@ class _DeferredWebsiteEditorPanelState
 
     return editor.WebsiteEditorPanel(
       onSave: widget.onSave != null ? _handleSave : null,
+      onRestoreComplete: widget.onRestoreComplete,
       onDiscard: widget.onDiscard,
     );
   }

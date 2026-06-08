@@ -111,7 +111,45 @@ class BlockMarketplaceLoader {
       itemFields: _parseItemFields(json['itemFields']),
       minItems: _parseNum(json['minItems'])?.toInt(),
       maxItems: _parseNum(json['maxItems'])?.toInt(),
+      textRole: _parseTextRole(json['textRole']?.toString()),
+      supportsFormatting: json['supportsFormatting'] == true,
+      formattingKey: json['formattingKey']?.toString(),
+      mediaRole: _parseMediaRole(json['mediaRole']?.toString()),
+      supportsFocalPoint: json['supportsFocalPoint'] == true,
+      supportsAltText: json['supportsAltText'] == true,
+      focalPointXKey: json['focalPointXKey']?.toString() ?? 'focalPointX',
+      focalPointYKey: json['focalPointYKey']?.toString() ?? 'focalPointY',
+      mobileFocalPointXKey:
+          json['mobileFocalPointXKey']?.toString() ?? 'mobileFocalPointX',
+      mobileFocalPointYKey:
+          json['mobileFocalPointYKey']?.toString() ?? 'mobileFocalPointY',
+      altTextKey: json['altTextKey']?.toString() ?? 'altText',
+      actionRole: _parseActionRole(json['actionRole']?.toString()),
+      migrationAliases: _parseStringList(json['migrationAliases']),
     );
+  }
+
+  static WebsiteTextRole _parseTextRole(String? raw) {
+    return WebsiteTextRole.values.firstWhere(
+      (value) => value.name == raw,
+      orElse: () => WebsiteTextRole.plain,
+    );
+  }
+
+  static WebsiteMediaRole? _parseMediaRole(String? raw) {
+    if (raw == null) return null;
+    for (final value in WebsiteMediaRole.values) {
+      if (value.name == raw) return value;
+    }
+    return null;
+  }
+
+  static WebsiteActionRole? _parseActionRole(String? raw) {
+    if (raw == null) return null;
+    for (final value in WebsiteActionRole.values) {
+      if (value.name == raw) return value;
+    }
+    return null;
   }
 
   static WebsiteBlockFieldType _parseFieldType(String? raw) {

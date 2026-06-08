@@ -96,7 +96,7 @@ class CartPage extends StatelessWidget {
         Text(
           '${cart.itemCount} ${cart.itemCount == 1 ? 'producto' : 'productos'} en revisión',
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 18,
             color: PublicStoreTheme.textSecondary,
           ),
@@ -105,7 +105,7 @@ class CartPage extends StatelessWidget {
         const Text(
           'Ajusta cantidades y confirma disponibilidad antes de continuar al pago.',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 14,
             color: PublicStoreTheme.textSecondary,
             height: 1.5,
@@ -153,7 +153,7 @@ class CartPage extends StatelessWidget {
               const Text(
                 'Agrega productos para comenzar tu compra. El carro mantendrá las cantidades y el resumen mientras recorres la tienda.',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 15,
                   color: PublicStoreTheme.textSecondary,
                   height: 1.6,
@@ -282,7 +282,7 @@ class CartPage extends StatelessWidget {
                       child: Text(
                         product.name.toUpperCase(),
                         style: TextStyle(
-                          fontFamily: PublicStoreTheme.defaultHeadingFont,
+                          fontFamily: null,
                           fontSize: isMobile ? 24 : 28,
                           fontWeight: FontWeight.w700,
                           color: Colors.black87,
@@ -294,7 +294,7 @@ class CartPage extends StatelessWidget {
                     Text(
                       'SKU ${product.sku}',
                       style: const TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: PublicStoreTheme.textMuted,
@@ -328,7 +328,7 @@ class CartPage extends StatelessWidget {
               child: Text(
                 'Stock insuficiente. Solo ${product.stockQuantity} disponibles.',
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: PublicStoreTheme.error,
@@ -344,7 +344,7 @@ class CartPage extends StatelessWidget {
                     const Text(
                       'CANTIDAD',
                       style: TextStyle(
-                        fontFamily: PublicStoreTheme.defaultBodyFont,
+                        fontFamily: null,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: PublicStoreTheme.textSecondary,
@@ -361,7 +361,7 @@ class CartPage extends StatelessWidget {
                         Text(
                           '${ChileanUtils.formatCurrency(product.price)} c/u',
                           style: const TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 13,
                             color: PublicStoreTheme.textMuted,
                           ),
@@ -380,7 +380,7 @@ class CartPage extends StatelessWidget {
                         const Text(
                           'CANTIDAD',
                           style: TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: PublicStoreTheme.textSecondary,
@@ -458,7 +458,7 @@ class CartPage extends StatelessWidget {
           Text(
             'RESUMEN DEL PEDIDO',
             style: TextStyle(
-              fontFamily: PublicStoreTheme.defaultHeadingFont,
+              fontFamily: null,
               fontSize: isMobile ? 28 : 32,
               fontWeight: FontWeight.w700,
               color: Colors.black87,
@@ -489,7 +489,7 @@ class CartPage extends StatelessWidget {
               const Text(
                 'TOTAL',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: PublicStoreTheme.textSecondary,
@@ -499,7 +499,7 @@ class CartPage extends StatelessWidget {
               Text(
                 ChileanUtils.formatCurrency(cart.total),
                 style: const TextStyle(
-                  fontFamily: PublicStoreTheme.defaultHeadingFont,
+                  fontFamily: null,
                   fontSize: 44,
                   fontWeight: FontWeight.w700,
                   color: _logoBlue,
@@ -590,7 +590,7 @@ class CartPage extends StatelessWidget {
             child: Text(
               '${item.quantity}',
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,
@@ -638,7 +638,7 @@ class CartPage extends StatelessWidget {
         Text(
           ChileanUtils.formatCurrency(subtotal),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 34,
             fontWeight: FontWeight.w700,
             color: _logoBlue,
@@ -650,7 +650,7 @@ class CartPage extends StatelessWidget {
           Text(
             '${ChileanUtils.formatCurrency(unitPrice)} c/u',
             style: const TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               fontSize: 12,
               color: PublicStoreTheme.textMuted,
             ),
@@ -671,7 +671,7 @@ class CartPage extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             color: secondary
                 ? PublicStoreTheme.textSecondary
@@ -681,7 +681,7 @@ class CartPage extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: secondary ? PublicStoreTheme.textSecondary : Colors.black87,
@@ -701,7 +701,7 @@ class CartPage extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontFamily: PublicStoreTheme.defaultBodyFont,
+          fontFamily: null,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: PublicStoreTheme.textSecondary,
@@ -739,7 +739,7 @@ class CartPage extends StatelessWidget {
             child: Text(
               text,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultBodyFont,
+                fontFamily: null,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
@@ -758,7 +758,7 @@ class CartPage extends StatelessWidget {
         Text(
           title.toUpperCase(),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 32,
             fontWeight: FontWeight.w700,
             color: Colors.black,

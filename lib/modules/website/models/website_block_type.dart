@@ -42,6 +42,39 @@ enum WebsiteBlockType {
 extension WebsiteBlockTypeX on WebsiteBlockType {
   String get serialized => name;
 
+  String get editorCategory => switch (this) {
+        WebsiteBlockType.hero ||
+        WebsiteBlockType.carousel ||
+        WebsiteBlockType.categoryGrid ||
+        WebsiteBlockType.canvas =>
+          'Estructura',
+        WebsiteBlockType.text ||
+        WebsiteBlockType.button ||
+        WebsiteBlockType.divider =>
+          'Elementos',
+        WebsiteBlockType.products ||
+        WebsiteBlockType.about ||
+        WebsiteBlockType.services ||
+        WebsiteBlockType.features =>
+          'Contenido',
+        WebsiteBlockType.gallery ||
+        WebsiteBlockType.videoBanner ||
+        WebsiteBlockType.brandLogos ||
+        WebsiteBlockType.partnersBanner =>
+          'Media',
+        WebsiteBlockType.testimonials ||
+        WebsiteBlockType.googleReviews ||
+        WebsiteBlockType.team ||
+        WebsiteBlockType.stats =>
+          'Social',
+        WebsiteBlockType.cta ||
+        WebsiteBlockType.pricing ||
+        WebsiteBlockType.contact ||
+        WebsiteBlockType.faq =>
+          'Conversión',
+        WebsiteBlockType.footer => 'Especial',
+      };
+
   IconData get icon => switch (this) {
         WebsiteBlockType.hero => Icons.view_carousel,
         WebsiteBlockType.carousel => Icons.slideshow,

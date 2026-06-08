@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
 import '../providers/public_store_tenant_provider.dart';
-import '../theme/public_store_theme.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
@@ -946,8 +945,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                               Text(
                                 _catalogTitle(),
                                 style: const TextStyle(
-                                  fontFamily:
-                                      PublicStoreTheme.defaultHeadingFont,
+                                  fontFamily: null,
                                   fontSize: 20,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
@@ -960,7 +958,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                           Text(
                             '$_totalProductCount ${_catalogNounPlural()}',
                             style: TextStyle(
-                              fontFamily: PublicStoreTheme.defaultBodyFont,
+                              fontFamily: null,
                               fontSize: 13,
                               color: Colors.grey.shade600,
                             ),
@@ -991,8 +989,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                                 Text(
                                   'Filtro',
                                   style: TextStyle(
-                                    fontFamily:
-                                        PublicStoreTheme.defaultHeadingFont,
+                                    fontFamily: null,
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
                                     letterSpacing: 0.2,
@@ -1010,8 +1007,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                                 Text(
                                   'Ordenar por',
                                   style: TextStyle(
-                                    fontFamily:
-                                        PublicStoreTheme.defaultHeadingFont,
+                                    fontFamily: null,
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
                                     letterSpacing: 0.2,
@@ -1114,7 +1110,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         const Text(
           'Filtros',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Colors.black87,
@@ -1130,7 +1126,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           decoration: InputDecoration(
             hintText: 'Buscar ${_catalogNounPlural()}',
             hintStyle: TextStyle(
-              fontFamily: PublicStoreTheme.defaultBodyFont,
+              fontFamily: null,
               color: Colors.grey.shade500,
               fontSize: 14,
             ),
@@ -1157,7 +1153,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
           style: const TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 14,
           ),
           onChanged: (value) {
@@ -1174,7 +1170,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         const Text(
           'Categorías',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultHeadingFont,
+            fontFamily: null,
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: Colors.black87,
@@ -1325,7 +1321,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                   child: Text(
                     '${node.name} ($productCount)',
                     style: TextStyle(
-                      fontFamily: PublicStoreTheme.defaultBodyFont,
+                      fontFamily: null,
                       fontSize: 13,
                       color: isSelected ? Colors.black : Colors.grey.shade700,
                       fontWeight:
@@ -1381,7 +1377,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               child: Text(
                 '$name ($count)',
                 style: TextStyle(
-                  fontFamily: PublicStoreTheme.defaultBodyFont,
+                  fontFamily: null,
                   fontSize: 13,
                   color: isSelected ? Colors.black : Colors.grey.shade700,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1416,7 +1412,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             Text(
               titleText,
               style: const TextStyle(
-                fontFamily: PublicStoreTheme.defaultHeadingFont,
+                fontFamily: null,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -1431,7 +1427,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               ? 'Mostrando $startIndex - $endIndex de $totalProducts $noun'
               : '0 $noun encontrados',
           style: TextStyle(
-            fontFamily: PublicStoreTheme.defaultBodyFont,
+            fontFamily: null,
             fontSize: 13,
             color: Colors.grey.shade600,
           ),
@@ -1910,8 +1906,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                                   child: Text(
                                     hasBrand ? brand.toUpperCase() : '',
                                     style: const TextStyle(
-                                      fontFamily:
-                                          PublicStoreTheme.defaultBodyFont,
+                                      fontFamily: null,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
@@ -1925,8 +1920,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                                 Text(
                                   stockLabel,
                                   style: const TextStyle(
-                                    fontFamily:
-                                        PublicStoreTheme.defaultBodyFont,
+                                    fontFamily: null,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
@@ -1949,7 +1943,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                         child: Text(
                           brand.toUpperCase(),
                           style: TextStyle(
-                            fontFamily: PublicStoreTheme.defaultBodyFont,
+                            fontFamily: null,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: Colors.grey.shade500,
@@ -1983,7 +1977,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                       Text(
                         product.name.toUpperCase(),
                         style: const TextStyle(
-                          fontFamily: PublicStoreTheme.defaultHeadingFont,
+                          fontFamily: null,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: Colors.black87,
@@ -1997,7 +1991,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                       Text(
                         ChileanUtils.formatCurrency(product.price),
                         style: const TextStyle(
-                          fontFamily: PublicStoreTheme.defaultBodyFont,
+                          fontFamily: null,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: Colors.black,

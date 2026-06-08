@@ -15,6 +15,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../models/website_font_registry.dart';
 import '../models/website_block_type.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
@@ -95,6 +96,8 @@ class WebsiteBlockRenderer {
     String? tenantId,
   }) {
     final type = parseWebsiteBlockType(blockType);
+    headingFont = WebsiteFontRegistry.resolveOptionalHeadingFont(headingFont);
+    bodyFont = WebsiteFontRegistry.resolveOptionalBodyFont(bodyFont);
 
     switch (type) {
       case WebsiteBlockType.hero:
@@ -270,6 +273,7 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
           previewMode: previewMode,
+          onNavigate: onNavigate,
         );
       case WebsiteBlockType.footer:
         return const SizedBox(height: 64);
@@ -309,6 +313,8 @@ class WebsiteBlockRenderer {
           primaryColor: primaryColor,
           headingFont: headingFont,
           bodyFont: bodyFont,
+          previewMode: previewMode,
+          onNavigate: onNavigate,
         );
       case WebsiteBlockType.googleReviews:
         // Inject synced Google review truth when the block has no custom reviews.
@@ -710,8 +716,7 @@ class WebsiteBlockRenderer {
     final shadowColor =
         _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
 
-    final imageAlignment =
-        imageAlignmentParam ?? Alignment.center; // Use parameter if provided
+    final imageAlignment = imageAlignmentParam ?? _resolveFocalAlignment(data);
 
     // Parse border radius (note: typically handled by ClipRRect parent, but we can set it here too)
     final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
@@ -826,6 +831,35 @@ class WebsiteBlockRenderer {
     );
   }
 
+  static Alignment _resolveFocalAlignment(
+    Map<String, dynamic> data, {
+    double? screenWidth,
+  }) {
+    final useMobile = screenWidth != null && screenWidth < 600;
+    final xKey = useMobile ? 'mobileFocalPointX' : 'focalPointX';
+    final yKey = useMobile ? 'mobileFocalPointY' : 'focalPointY';
+    final fallbackX = (data['focalPointX'] as num?)?.toDouble();
+    final fallbackY = (data['focalPointY'] as num?)?.toDouble();
+    final focalX = (data[xKey] as num?)?.toDouble() ?? fallbackX ?? 0.5;
+    final focalY = (data[yKey] as num?)?.toDouble() ?? fallbackY ?? 0.5;
+
+    return Alignment(
+      (focalX.clamp(0.0, 1.0) * 2) - 1,
+      (focalY.clamp(0.0, 1.0) * 2) - 1,
+    );
+  }
+
+  static TextFormatting _resolveTextFormatting(
+    Map<String, dynamic> data,
+    String key, {
+    String? fallbackKey,
+  }) {
+    final raw = data[key] ?? (fallbackKey == null ? null : data[fallbackKey]);
+    return TextFormatting.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : null,
+    );
+  }
+
   static Widget _buildHero({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -866,21 +900,25 @@ class WebsiteBlockRenderer {
     final alignment =
         data['alignment']?.toString() ?? 'center'; // center, left, right
 
-    final resolvedHeading = _applyThemeFont(
+    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
+    final subtitleFormatting =
+        _resolveTextFormatting(data, 'subtitleFormatting');
+
+    final resolvedHeading = titleFormatting.applyTo(_applyThemeFont(
       (theme.textTheme.displayLarge ?? const TextStyle()).copyWith(
         fontSize: headingSize,
         color: Colors.white,
       ),
       headingFont,
-    );
+    ));
 
-    final resolvedSubtitle = _applyThemeFont(
+    final resolvedSubtitle = subtitleFormatting.applyTo(_applyThemeFont(
       (theme.textTheme.headlineSmall ?? const TextStyle()).copyWith(
         fontSize: bodySize != null ? bodySize * 1.2 : null,
         color: Colors.white70,
       ),
       bodyFont,
-    );
+    ));
 
     // Resolve alignment logic
     CrossAxisAlignment crossAlign;
@@ -1003,7 +1041,9 @@ class WebsiteBlockRenderer {
                     fontSize:
                         isMobile ? (headingSize ?? 32) * 0.8 : headingSize,
                   ),
-                  textAlign: textAlign,
+                  textAlign: titleFormatting.textAlign == TextAlign.start
+                      ? textAlign
+                      : titleFormatting.textAlign,
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 20),
@@ -1012,7 +1052,9 @@ class WebsiteBlockRenderer {
                     style: resolvedSubtitle.copyWith(
                       fontSize: isMobile ? (bodySize ?? 16) : bodySize,
                     ),
-                    textAlign: textAlign,
+                    textAlign: subtitleFormatting.textAlign == TextAlign.start
+                        ? textAlign
+                        : subtitleFormatting.textAlign,
                   ),
                 ],
                 const SizedBox(height: 40),
@@ -1355,6 +1397,12 @@ class WebsiteBlockRenderer {
     final theme = Theme.of(context);
     final title = (data['title'] ?? 'Sobre Nosotros').toString().trim();
     final content = (data['content'] ?? '').toString().trim();
+    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
+    final contentFormatting = _resolveTextFormatting(
+      data,
+      'contentFormatting',
+      fallbackKey: 'descriptionFormatting',
+    );
 
     if (content.isEmpty) {
       return const SizedBox.shrink();
@@ -1373,18 +1421,28 @@ class WebsiteBlockRenderer {
         children: [
           Text(
             title.isEmpty ? 'Sobre Nosotros' : title,
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontFamily: headingFont,
+            style: titleFormatting.applyTo(
+              theme.textTheme.displaySmall?.copyWith(
+                    fontFamily: headingFont,
+                  ) ??
+                  const TextStyle(),
             ),
-            textAlign: TextAlign.center,
+            textAlign: titleFormatting.textAlign == TextAlign.start
+                ? TextAlign.center
+                : titleFormatting.textAlign,
           ),
           const SizedBox(height: 24),
           Text(
             content,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontFamily: bodyFont,
+            style: contentFormatting.applyTo(
+              theme.textTheme.bodyLarge?.copyWith(
+                    fontFamily: bodyFont,
+                  ) ??
+                  const TextStyle(),
             ),
-            textAlign: TextAlign.center,
+            textAlign: contentFormatting.textAlign == TextAlign.start
+                ? TextAlign.center
+                : contentFormatting.textAlign,
           ),
         ],
       ),
@@ -1435,23 +1493,33 @@ class WebsiteBlockRenderer {
       data: data,
       defaultColor: primaryColor,
       imageUrl: backgroundImage,
+      imageAlignmentParam: _resolveFocalAlignment(
+        data,
+        screenWidth: MediaQuery.of(context).size.width,
+      ),
     );
 
-    final titleStyle = const TextStyle(
+    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
+    final subtitleFormatting = _resolveTextFormatting(
+      data,
+      'subtitleFormatting',
+      fallbackKey: 'descriptionFormatting',
+    );
+    final titleStyle = titleFormatting.applyTo(const TextStyle(
       fontSize: 24,
       fontWeight: FontWeight.w700,
       color: Colors.white,
       letterSpacing: 1,
     ).copyWith(
       fontFamily: headingFont?.isNotEmpty == true ? headingFont : null,
-    );
+    ));
 
-    final subtitleStyle =
+    final subtitleStyle = subtitleFormatting.applyTo(
         (Theme.of(context).textTheme.bodyLarge ?? const TextStyle(fontSize: 16))
             .copyWith(
       fontFamily: bodyFont?.isNotEmpty == true ? bodyFont : null,
       color: Colors.white70,
-    );
+    ));
 
     return Container(
       height: blockHeight,
@@ -1476,14 +1544,18 @@ class WebsiteBlockRenderer {
                   Text(
                     (title.isEmpty ? '¿Necesitas ayuda?' : title).toUpperCase(),
                     style: titleStyle,
-                    textAlign: TextAlign.center,
+                    textAlign: titleFormatting.textAlign == TextAlign.start
+                        ? TextAlign.center
+                        : titleFormatting.textAlign,
                   ),
                   if (subtitle.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(
                       subtitle,
                       style: subtitleStyle,
-                      textAlign: TextAlign.center,
+                      textAlign: subtitleFormatting.textAlign == TextAlign.start
+                          ? TextAlign.center
+                          : subtitleFormatting.textAlign,
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -2256,6 +2328,10 @@ class WebsiteBlockRenderer {
                                       : Image.network(
                                           imageUrl,
                                           fit: BoxFit.cover,
+                                          alignment:
+                                              _resolveFocalAlignment(image),
+                                          semanticLabel:
+                                              image['altText']?.toString(),
                                           errorBuilder:
                                               (context, error, stackTrace) {
                                             return Center(
@@ -2823,6 +2899,7 @@ class WebsiteBlockRenderer {
     String? headingFont,
     String? bodyFont,
     bool previewMode = false,
+    void Function(String route)? onNavigate,
   }) {
     final theme = Theme.of(context);
     final title = (data['title'] ?? 'Nuestro equipo').toString().trim();
@@ -2970,7 +3047,9 @@ class WebsiteBlockRenderer {
                                     if (instagram.isNotEmpty)
                                       IconButton(
                                         tooltip: 'Instagram',
-                                        onPressed: () {},
+                                        onPressed: previewMode
+                                            ? null
+                                            : () => onNavigate?.call(instagram),
                                         icon: const Icon(
                                             Icons.camera_alt_outlined),
                                         color: accentColor,
@@ -2978,7 +3057,9 @@ class WebsiteBlockRenderer {
                                     if (linkedin.isNotEmpty)
                                       IconButton(
                                         tooltip: 'LinkedIn',
-                                        onPressed: () {},
+                                        onPressed: previewMode
+                                            ? null
+                                            : () => onNavigate?.call(linkedin),
                                         icon: const Icon(Icons.work_outline),
                                         color: accentColor,
                                       ),
@@ -3141,6 +3222,10 @@ class WebsiteBlockRenderer {
       previewMode: previewMode,
       onNavigate: onNavigate,
       hasPlayableVideo: hasPlayableVideo,
+      focalAlignment: _resolveFocalAlignment(
+        data,
+        screenWidth: MediaQuery.of(context).size.width,
+      ),
     );
   }
 
@@ -3198,13 +3283,19 @@ class WebsiteBlockRenderer {
   }) {
     final theme = Theme.of(context);
     final title = (data['title'] ?? '').toString().trim();
+    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
     final imageUrl = data['imageUrl']?.toString();
 
     // Parse items (list of text lines)
     List<String> items = [];
     final rawItems = data['items'];
     if (rawItems is List) {
-      items = rawItems.map((e) => e.toString()).toList();
+      items = rawItems
+          .map((item) => item is Map
+              ? (item['label'] ?? item['text'] ?? '').toString()
+              : item.toString())
+          .where((item) => item.trim().isNotEmpty)
+          .toList();
     }
 
     if (items.isEmpty) {
@@ -3237,6 +3328,10 @@ class WebsiteBlockRenderer {
                 ? DecorationImage(
                     image: NetworkImage(imageUrl),
                     fit: BoxFit.cover,
+                    alignment: _resolveFocalAlignment(
+                      data,
+                      screenWidth: constraints.maxWidth,
+                    ),
                     colorFilter: const ColorFilter.mode(
                       Colors.black54,
                       BlendMode.darken,
@@ -3263,12 +3358,18 @@ class WebsiteBlockRenderer {
                         padding: const EdgeInsets.only(bottom: 24),
                         child: Text(
                           title.toUpperCase(),
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontFamily: bodyFont,
-                            color: Colors.white60,
-                            letterSpacing: 3,
+                          style: titleFormatting.applyTo(
+                            theme.textTheme.labelLarge?.copyWith(
+                                  fontFamily: bodyFont,
+                                  color: Colors.white60,
+                                  letterSpacing: 3,
+                                ) ??
+                                const TextStyle(),
                           ),
-                          textAlign: TextAlign.center,
+                          textAlign:
+                              titleFormatting.textAlign == TextAlign.start
+                                  ? TextAlign.center
+                                  : titleFormatting.textAlign,
                         ),
                       ),
                     ...items.map((item) => Padding(
@@ -3305,8 +3406,11 @@ class WebsiteBlockRenderer {
     required Color primaryColor,
     String? headingFont,
     String? bodyFont,
+    bool previewMode = false,
+    void Function(String route)? onNavigate,
   }) {
     final title = (data['title'] ?? 'MARCAS').toString().trim();
+    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
 
     // Logo height only - width will be calculated to fill available space
     final logoSizeStr = (data['logoSize'] ?? 'medium').toString();
@@ -3334,6 +3438,11 @@ class WebsiteBlockRenderer {
       brands = rawBrands
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (brands.isEmpty && data['logos'] is List) {
+      brands = (data['logos'] as List)
+          .map((url) => {'name': '', 'imageUrl': url.toString()})
           .toList();
     }
 
@@ -3379,13 +3488,14 @@ class WebsiteBlockRenderer {
                 // Title with accent underline
                 Text(
                   title.toUpperCase(),
-                  style: TextStyle(
+                  style: titleFormatting.applyTo(TextStyle(
                     fontFamily: headingFont,
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 2,
                     color: Colors.black87,
-                  ),
+                  )),
+                  textAlign: titleFormatting.textAlign,
                 ),
                 Padding(
                   padding: hasFixedHeight
@@ -3399,6 +3509,8 @@ class WebsiteBlockRenderer {
                     bodyFont: bodyFont,
                     logoHeight: logoHeight,
                     gap: gap,
+                    previewMode: previewMode,
+                    onNavigate: onNavigate,
                   ),
                 ),
               ],
@@ -3444,12 +3556,16 @@ class _BrandLogosCarousel extends StatefulWidget {
   final String? bodyFont;
   final double logoHeight;
   final double gap;
+  final bool previewMode;
+  final void Function(String route)? onNavigate;
 
   const _BrandLogosCarousel({
     required this.brands,
     this.bodyFont,
     this.logoHeight = 90,
     this.gap = 40,
+    required this.previewMode,
+    this.onNavigate,
   });
 
   @override
@@ -3510,6 +3626,8 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                             bodyFont: widget.bodyFont,
                             width: double.infinity,
                             height: widget.logoHeight,
+                            previewMode: widget.previewMode,
+                            onNavigate: widget.onNavigate,
                           ),
                         ),
                         if (i < items.length - 1) SizedBox(width: widget.gap),
@@ -3565,12 +3683,16 @@ class _BrandLogoItem extends StatelessWidget {
   final String? bodyFont;
   final double width;
   final double height;
+  final bool previewMode;
+  final void Function(String route)? onNavigate;
 
   const _BrandLogoItem({
     required this.brand,
     this.bodyFont,
     this.width = 140,
     this.height = 90,
+    required this.previewMode,
+    this.onNavigate,
   });
 
   @override
@@ -3586,6 +3708,7 @@ class _BrandLogoItem extends StatelessWidget {
           ? Image.network(
               imageUrl,
               fit: BoxFit.contain,
+              semanticLabel: (brand['altText'] ?? brand['name'])?.toString(),
               errorBuilder: (context, error, stackTrace) {
                 return _buildPlaceholder(name);
               },
@@ -3597,9 +3720,7 @@ class _BrandLogoItem extends StatelessWidget {
       content = MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: () {
-            // Could open link in browser
-          },
+          onTap: previewMode ? null : () => onNavigate?.call(link),
           child: content,
         ),
       );
@@ -4067,6 +4188,10 @@ class _CategoryCard extends StatelessWidget {
             ? DecorationImage(
                 image: NetworkImage(imageUrl),
                 fit: BoxFit.cover,
+                alignment: WebsiteBlockRenderer._resolveFocalAlignment(
+                  data,
+                  screenWidth: MediaQuery.of(context).size.width,
+                ),
                 colorFilter: const ColorFilter.mode(
                   Colors.black38,
                   BlendMode.darken,
@@ -5393,6 +5518,7 @@ class _VideoBannerWidget extends StatefulWidget {
   final bool previewMode;
   final void Function(String route)? onNavigate;
   final bool hasPlayableVideo;
+  final Alignment focalAlignment;
 
   const _VideoBannerWidget({
     required this.title,
@@ -5410,6 +5536,7 @@ class _VideoBannerWidget extends StatefulWidget {
     required this.previewMode,
     this.onNavigate,
     required this.hasPlayableVideo,
+    required this.focalAlignment,
   });
 
   @override
@@ -5442,6 +5569,7 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                 ? DecorationImage(
                     image: NetworkImage(widget.imageUrl!),
                     fit: BoxFit.cover,
+                    alignment: widget.focalAlignment,
                     // Force rasterization on Web with identity modulate
                     colorFilter: kIsWeb
                         ? const ColorFilter.mode(

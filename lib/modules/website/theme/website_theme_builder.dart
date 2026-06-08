@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/website_font_registry.dart';
+
 class WebsiteThemeBuilder {
   const WebsiteThemeBuilder._();
 
@@ -29,15 +31,9 @@ class WebsiteThemeBuilder {
   }) {
     final baseTextTheme = base.textTheme;
 
-    // If only one is set, use it for everything.
-    final effectiveBodyFont = (bodyFont?.trim().isNotEmpty == true)
-        ? bodyFont!.trim()
-        : (headingFont?.trim().isNotEmpty == true)
-            ? headingFont!.trim()
-            : null;
-    final effectiveHeadingFont = (headingFont?.trim().isNotEmpty == true)
-        ? headingFont!.trim()
-        : effectiveBodyFont;
+    final effectiveHeadingFont =
+        WebsiteFontRegistry.resolveHeadingFont(headingFont);
+    final effectiveBodyFont = WebsiteFontRegistry.resolveBodyFont(bodyFont);
 
     final headingTextTheme =
         _safeGetTextTheme(effectiveHeadingFont, baseTextTheme);
