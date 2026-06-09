@@ -646,6 +646,8 @@ String _businessInfoHtml(Map<String, String> settings, String storeName) {
       fallback: '+56998357797');
   final address = _setting(settings, ['contact_address'],
       fallback: 'Álvarez 32, Local 17, Viña del Mar, Chile');
+  final hoursSummary = _parseBusinessHours(settings)?.summary ??
+      'Lunes a viernes de 11:00 a 19:30; sábados de 11:00 a 15:00.';
 
   return '''
     <section>
@@ -655,7 +657,7 @@ String _businessInfoHtml(Map<String, String> settings, String storeName) {
         <p><strong>Dirección:</strong><br>${_escapeHtml(address)}</p>
         <p><strong>Teléfono y WhatsApp:</strong><br>${_escapeHtml(phone)}</p>
         <p><strong>Email:</strong><br><a href="mailto:${_escapeHtml(email)}">${_escapeHtml(email)}</a></p>
-        <p><strong>Horario referencial:</strong><br>Lunes a viernes de 11:00 a 19:30; sábados de 11:00 a 15:00.</p>
+        <p><strong>Horario referencial:</strong><br>${_escapeHtml(hoursSummary)}</p>
         <p><strong>Moneda:</strong><br>Pesos chilenos (CLP). Los precios publicados incluyen IVA cuando corresponde.</p>
       </div>
     </section>
@@ -774,6 +776,9 @@ String _buildStaticTrustPageJsonLd({
   final address = _setting(settings, ['contact_address'],
       fallback: 'Álvarez 32, Local 17, Viña del Mar, Chile');
   final instagram = _setting(settings, ['instagram'], fallback: '');
+  final openingHoursSpecification =
+      _parseBusinessHours(settings)?.jsonLdSpecifications ??
+          _defaultOpeningHoursSpecification();
 
   final pageType = switch (slug) {
     'contacto' => 'ContactPage',
@@ -813,26 +818,7 @@ String _buildStaticTrustPageJsonLd({
           'name': 'Chile',
         },
         if (instagram.isNotEmpty) 'sameAs': [instagram],
-        'openingHoursSpecification': [
-          {
-            '@type': 'OpeningHoursSpecification',
-            'dayOfWeek': [
-              'Monday',
-              'Tuesday',
-              'Wednesday',
-              'Thursday',
-              'Friday',
-            ],
-            'opens': '11:00',
-            'closes': '19:30',
-          },
-          {
-            '@type': 'OpeningHoursSpecification',
-            'dayOfWeek': 'Saturday',
-            'opens': '11:00',
-            'closes': '15:00',
-          },
-        ],
+        'openingHoursSpecification': openingHoursSpecification,
         'hasMerchantReturnPolicy': _buildMerchantReturnPolicyJsonLd(storeUrl),
         'contactPoint': {
           '@type': 'ContactPoint',
@@ -874,6 +860,220 @@ String _setting(Map<String, String> settings, List<String> keys,
     if (value != null && value.isNotEmpty) return value;
   }
   return fallback;
+}
+
+class _SeoBusinessHours {
+  const _SeoBusinessHours({
+    required this.summary,
+    required this.jsonLdSpecifications,
+  });
+
+  final String summary;
+  final List<Map<String, dynamic>> jsonLdSpecifications;
+}
+
+class _SeoBusinessHoursPeriod {
+  const _SeoBusinessHoursPeriod({required this.opens, required this.closes});
+
+  final String opens;
+  final String closes;
+
+  String get label => '$opens - $closes';
+}
+
+_SeoBusinessHours? _parseBusinessHours(Map<String, String> settings) {
+  final raw = _setting(
+    settings,
+    ['google_business_regular_hours', 'business_hours_json'],
+    fallback: '',
+  );
+  if (raw.isEmpty) return null;
+
+  try {
+    final decoded = jsonDecode(raw);
+    final root = decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{};
+    final data = root['opening_hours'] is Map
+        ? Map<String, dynamic>.from(root['opening_hours'] as Map)
+        : root;
+    final periods = data['periods'] as List<dynamic>? ?? const [];
+    if (periods.isEmpty) return null;
+
+    const dayOrder = [
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+      'SUNDAY',
+    ];
+    const dayLabels = {
+      'MONDAY': 'Lunes',
+      'TUESDAY': 'Martes',
+      'WEDNESDAY': 'Miércoles',
+      'THURSDAY': 'Jueves',
+      'FRIDAY': 'Viernes',
+      'SATURDAY': 'Sábado',
+      'SUNDAY': 'Domingo',
+    };
+    const schemaDayLabels = {
+      'MONDAY': 'Monday',
+      'TUESDAY': 'Tuesday',
+      'WEDNESDAY': 'Wednesday',
+      'THURSDAY': 'Thursday',
+      'FRIDAY': 'Friday',
+      'SATURDAY': 'Saturday',
+      'SUNDAY': 'Sunday',
+    };
+
+    final hoursByDay = {
+      for (final day in dayOrder) day: <_SeoBusinessHoursPeriod>[],
+    };
+
+    for (final rawPeriod in periods) {
+      if (rawPeriod is! Map) continue;
+      final period = Map<String, dynamic>.from(rawPeriod);
+
+      if (period.containsKey('openDay') || period.containsKey('openTime')) {
+        final openDay = period['openDay']?.toString().toUpperCase();
+        if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
+
+        final openTime = _formatBusinessTime(period['openTime']);
+        final closeTime = _formatBusinessTime(period['closeTime']);
+        if (openTime == null || closeTime == null) continue;
+
+        hoursByDay[openDay]!.add(
+          _SeoBusinessHoursPeriod(opens: openTime, closes: closeTime),
+        );
+        continue;
+      }
+
+      final open = period['open'] is Map
+          ? Map<String, dynamic>.from(period['open'] as Map)
+          : null;
+      final close = period['close'] is Map
+          ? Map<String, dynamic>.from(period['close'] as Map)
+          : null;
+      final openDay = _googlePlacesDayToBusinessDay(open?['day']);
+      if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
+
+      final openTime = _formatPlacesTime(open?['time']);
+      final closeTime = _formatPlacesTime(close?['time']);
+      if (openTime == null || closeTime == null) continue;
+
+      hoursByDay[openDay]!.add(
+        _SeoBusinessHoursPeriod(opens: openTime, closes: closeTime),
+      );
+    }
+
+    final daySchedules = <String, String>{
+      for (final day in dayOrder)
+        day: hoursByDay[day]!.isEmpty
+            ? 'Cerrado'
+            : hoursByDay[day]!.map((period) => period.label).join(' / '),
+    };
+
+    final summaryParts = <String>[];
+    var start = 0;
+    while (start < dayOrder.length) {
+      final schedule = daySchedules[dayOrder[start]]!;
+      var end = start;
+
+      while (end + 1 < dayOrder.length &&
+          daySchedules[dayOrder[end + 1]] == schedule) {
+        end++;
+      }
+
+      summaryParts.add(
+        '${_formatSeoDayRange(dayLabels[dayOrder[start]]!, dayLabels[dayOrder[end]]!)}: $schedule',
+      );
+      start = end + 1;
+    }
+
+    final jsonLdSpecifications = <Map<String, dynamic>>[];
+    for (final day in dayOrder) {
+      final schemaDay = schemaDayLabels[day]!;
+      for (final period in hoursByDay[day]!) {
+        jsonLdSpecifications.add({
+          '@type': 'OpeningHoursSpecification',
+          'dayOfWeek': schemaDay,
+          'opens': period.opens,
+          'closes': period.closes,
+        });
+      }
+    }
+
+    if (jsonLdSpecifications.isEmpty) return null;
+
+    return _SeoBusinessHours(
+      summary: summaryParts.join('; '),
+      jsonLdSpecifications: jsonLdSpecifications,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+List<Map<String, dynamic>> _defaultOpeningHoursSpecification() {
+  return [
+    {
+      '@type': 'OpeningHoursSpecification',
+      'dayOfWeek': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      'opens': '11:00',
+      'closes': '19:30',
+    },
+    {
+      '@type': 'OpeningHoursSpecification',
+      'dayOfWeek': 'Saturday',
+      'opens': '11:00',
+      'closes': '15:00',
+    },
+  ];
+}
+
+String _formatSeoDayRange(String start, String end) {
+  if (start == end) return start;
+  if (start == 'Lunes' && end == 'Domingo') return 'Todos los días';
+  return '$start a $end';
+}
+
+String? _googlePlacesDayToBusinessDay(dynamic rawDay) {
+  final day = rawDay is num ? rawDay.toInt() : int.tryParse('$rawDay');
+  return switch (day) {
+    0 => 'SUNDAY',
+    1 => 'MONDAY',
+    2 => 'TUESDAY',
+    3 => 'WEDNESDAY',
+    4 => 'THURSDAY',
+    5 => 'FRIDAY',
+    6 => 'SATURDAY',
+    _ => null,
+  };
+}
+
+String? _formatBusinessTime(dynamic rawTime) {
+  if (rawTime is String) return _formatPlacesTime(rawTime);
+  if (rawTime is! Map) return null;
+
+  final time = Map<String, dynamic>.from(rawTime);
+  final hours = (time['hours'] as num?)?.toInt() ?? 0;
+  final minutes = (time['minutes'] as num?)?.toInt() ?? 0;
+
+  return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+}
+
+String? _formatPlacesTime(dynamic rawTime) {
+  final digits = rawTime?.toString().trim();
+  if (digits == null || digits.isEmpty) return null;
+  if (digits.contains(':')) return digits;
+  if (digits.length < 3) return null;
+
+  final padded = digits.padLeft(4, '0');
+  final hours = padded.substring(0, 2);
+  final minutes = padded.substring(2, 4);
+  return '$hours:$minutes';
 }
 
 Map<String, dynamic>? _findPageBySlug(

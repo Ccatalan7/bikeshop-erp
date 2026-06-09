@@ -42,8 +42,41 @@ extension on _ExpenseBreakdownRange {
   }
 }
 
+const String _periodLast7Days = 'Últimos 7 días';
+const String _periodCurrentWeek = 'Esta semana';
+const String _periodCurrentMonth = 'Mes actual';
+const String _periodPreviousMonth = 'Mes anterior';
+const String _periodCurrentYear = 'Año actual';
+
+class _DashboardDateRange {
+  final DateTime start;
+  final DateTime end;
+  final bool isDaily;
+  final int months;
+
+  const _DashboardDateRange({
+    required this.start,
+    required this.end,
+    required this.isDaily,
+    required this.months,
+  });
+}
+
+enum _IncomeDetailViewMode { transactions, days }
+
 const int _maxBreakdownSlices = 8;
 const String _otherBreakdownKey = '__other__';
+
+String _compactSpanishWeekdayDate(DateTime date) {
+  final weekday = DateFormat('EEE', 'es_CL').format(date).replaceAll('.', '');
+  final day = DateFormat('d', 'es_CL').format(date);
+  final monthRaw = DateFormat('MMM', 'es_CL').format(date).replaceAll('.', '');
+  final month = monthRaw.isEmpty
+      ? monthRaw
+      : '${monthRaw[0].toUpperCase()}${monthRaw.substring(1)}';
+
+  return '$weekday $day $month';
+}
 
 String _expenseBreakdownKeyForDetail(PeriodDetailItem item) {
   if (item.sourceType == 'purchase_payment') {
@@ -127,14 +160,23 @@ class _AccountingDashboardSectionState
   static const Duration _cacheDuration = Duration(minutes: 5);
 
   static const Map<String, int> _periodToMonths = {
-    'Esta semana': 1,
-    'Mes actual': 1,
-    'Mes anterior': 1,
     'Últimos 6 meses': 6,
     'Últimos 12 meses': 12,
     'Últimos 18 meses': 18,
     'Últimos 24 meses': 24,
   };
+
+  static const List<String> _periodOptions = [
+    _periodLast7Days,
+    _periodCurrentWeek,
+    _periodCurrentMonth,
+    _periodPreviousMonth,
+    _periodCurrentYear,
+    'Últimos 6 meses',
+    'Últimos 12 meses',
+    'Últimos 18 meses',
+    'Últimos 24 meses',
+  ];
 
   static const List<_ExpenseBreakdownRange> _breakdownOptions = [
     _ExpenseBreakdownRange.currentMonth,
@@ -209,6 +251,67 @@ class _AccountingDashboardSectionState
 
   DateTime _exclusiveBreakdownEnd(DateTime inclusiveEnd) {
     return inclusiveEnd.add(const Duration(seconds: 1));
+  }
+
+  DateTime _endOfDay(DateTime date) {
+    return DateTime(date.year, date.month, date.day, 23, 59, 59);
+  }
+
+  DateTime _endOfMonth(int year, int month) {
+    return DateTime(year, month + 1, 0, 23, 59, 59);
+  }
+
+  _DashboardDateRange _dateRangeForPeriod(String period, DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+
+    switch (period) {
+      case _periodLast7Days:
+        final start = today.subtract(const Duration(days: 6));
+        return _DashboardDateRange(
+          start: start,
+          end: _endOfDay(today),
+          isDaily: true,
+          months: 1,
+        );
+      case _periodCurrentWeek:
+        final start = today.subtract(Duration(days: now.weekday - 1));
+        return _DashboardDateRange(
+          start: start,
+          end: _endOfDay(start.add(const Duration(days: 6))),
+          isDaily: true,
+          months: 1,
+        );
+      case _periodCurrentMonth:
+        return _DashboardDateRange(
+          start: DateTime(now.year, now.month, 1),
+          end: _endOfMonth(now.year, now.month),
+          isDaily: true,
+          months: 1,
+        );
+      case _periodPreviousMonth:
+        final previousMonthEnd = DateTime(now.year, now.month, 0);
+        return _DashboardDateRange(
+          start: DateTime(previousMonthEnd.year, previousMonthEnd.month, 1),
+          end: _endOfDay(previousMonthEnd),
+          isDaily: true,
+          months: 1,
+        );
+      case _periodCurrentYear:
+        return _DashboardDateRange(
+          start: DateTime(now.year, 1, 1),
+          end: _endOfMonth(now.year, now.month),
+          isDaily: false,
+          months: now.month,
+        );
+      default:
+        final months = _periodToMonths[period] ?? 12;
+        return _DashboardDateRange(
+          start: DateTime(now.year, now.month - months + 1, 1),
+          end: _endOfMonth(now.year, now.month),
+          isDaily: false,
+          months: months,
+        );
+    }
   }
 
   List<ExpenseBreakdownItem> _buildExpenseBreakdown(
@@ -326,45 +429,19 @@ class _AccountingDashboardSectionState
     final reportsService = context.read<FinancialReportsService>();
     final isCashFlow = _basis == _AccountingBasis.cash;
     final now = DateTime.now();
-
-    final isDailyView = _selectedPeriod == 'Esta semana' ||
-        _selectedPeriod == 'Mes actual' ||
-        _selectedPeriod == 'Mes anterior';
+    final selectedRange = _dateRangeForPeriod(_selectedPeriod, now);
 
     List<MonthlyIncomeExpensePoint> series;
 
-    if (isDailyView) {
-      DateTime startDate;
-      DateTime endDate;
-
-      if (_selectedPeriod == 'Esta semana') {
-        final weekday = now.weekday;
-        startDate = DateTime(now.year, now.month, now.day)
-            .subtract(Duration(days: weekday - 1));
-        endDate =
-            startDate.add(const Duration(days: 6, hours: 23, minutes: 59));
-      } else if (_selectedPeriod == 'Mes actual') {
-        startDate = DateTime(now.year, now.month, 1);
-        final lastDay = DateTime(now.year, now.month + 1, 0);
-        endDate =
-            DateTime(lastDay.year, lastDay.month, lastDay.day, 23, 59, 59);
-      } else {
-        // Mes anterior
-        startDate = DateTime(now.year, now.month - 1, 1);
-        final lastDay = DateTime(now.year, now.month, 0);
-        endDate =
-            DateTime(lastDay.year, lastDay.month, lastDay.day, 23, 59, 59);
-      }
-
+    if (selectedRange.isDaily) {
       series = await reportsService.getIncomeExpenseDailyTimeseries(
-        startDate: startDate,
-        endDate: endDate,
+        startDate: selectedRange.start,
+        endDate: selectedRange.end,
         isCashFlow: isCashFlow,
       );
     } else {
-      final months = _periodToMonths[_selectedPeriod] ?? 12;
       series = await reportsService.getIncomeExpenseTimeseries(
-        months: months,
+        months: selectedRange.months,
         isCashFlow: isCashFlow,
       );
     }
@@ -418,9 +495,10 @@ class _AccountingDashboardSectionState
       (sum, item) => sum + item.amount.abs(),
     );
 
-    final monthsCount = _periodToMonths[_selectedPeriod] ?? 12;
-    final rangeStart = series.isNotEmpty ? series.first.periodStart : now;
-    final rangeEnd = series.isNotEmpty ? series.last.periodEnd : now;
+    final rangeStart =
+        series.isNotEmpty ? series.first.periodStart : selectedRange.start;
+    final rangeEnd =
+        series.isNotEmpty ? series.last.periodEnd : selectedRange.end;
 
     return _DashboardPayload(
       series: series,
@@ -428,7 +506,7 @@ class _AccountingDashboardSectionState
       trailingLabel: _breakdownRange.label,
       totalIncome: totalIncome,
       totalExpense: totalExpense,
-      months: monthsCount,
+      months: selectedRange.months,
       rangeStart: rangeStart,
       rangeEnd: rangeEnd,
       breakdownRange: _breakdownRange,
@@ -469,7 +547,7 @@ class _AccountingDashboardSectionState
           basis: _basis,
           onBasisChanged: _onBasisChanged,
           selectedPeriod: _selectedPeriod,
-          periodOptions: _periodToMonths.keys.toList(),
+          periodOptions: _periodOptions,
           onPeriodChanged: _onPeriodChanged,
           onRefresh: _refreshData,
           selectedBreakdownRange: _breakdownRange,
@@ -902,6 +980,833 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
   }
 }
 
+class _DetailModeToggle extends StatelessWidget {
+  final _IncomeDetailViewMode value;
+  final ValueChanged<_IncomeDetailViewMode> onChanged;
+
+  const _DetailModeToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = <_IncomeDetailViewMode>[
+      _IncomeDetailViewMode.transactions,
+      _IncomeDetailViewMode.days,
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            _DetailModeButton(
+              label: _labelFor(options[i]),
+              isSelected: value == options[i],
+              onPressed: () => onChanged(options[i]),
+            ),
+            if (i < options.length - 1)
+              Container(
+                width: 1,
+                height: 18,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.16),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _labelFor(_IncomeDetailViewMode mode) {
+    switch (mode) {
+      case _IncomeDetailViewMode.transactions:
+        return 'Movimientos';
+      case _IncomeDetailViewMode.days:
+        return 'Por día';
+    }
+  }
+}
+
+class _ChartPeriodSelector extends StatelessWidget {
+  final String selectedPeriod;
+  final List<String> options;
+  final ValueChanged<String?>? onChanged;
+
+  const _ChartPeriodSelector({
+    required this.selectedPeriod,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+
+    return PopupMenuButton<String>(
+      tooltip: 'Cambiar rango del gráfico',
+      enabled: onChanged != null,
+      position: PopupMenuPosition.under,
+      onSelected: onChanged,
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          enabled: false,
+          child: Text('Rango del gráfico'),
+        ),
+        const PopupMenuDivider(height: 8),
+        for (final option in options)
+          PopupMenuItem<String>(
+            value: option,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: selectedPeriod == option
+                      ? Icon(Icons.check_rounded, size: 17, color: color)
+                      : const SizedBox.shrink(),
+                ),
+                Expanded(child: Text(option)),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color:
+                Theme.of(context).colorScheme.outline.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_month_rounded, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              selectedPeriod,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 17,
+              color: Theme.of(context).hintColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailHeaderTitleButton extends StatefulWidget {
+  final String title;
+  final String dateLabel;
+  final Color color;
+  final ValueChanged<BuildContext> onPressed;
+
+  const _DetailHeaderTitleButton({
+    required this.title,
+    required this.dateLabel,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  State<_DetailHeaderTitleButton> createState() =>
+      _DetailHeaderTitleButtonState();
+}
+
+class _DetailHeaderTitleButtonState extends State<_DetailHeaderTitleButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Tooltip(
+        message: 'Elegir fecha del detalle',
+        child: InkWell(
+          onTap: () => widget.onPressed(context),
+          borderRadius: BorderRadius.circular(8),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? widget.color.withValues(alpha: 0.07)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _isHovered
+                    ? widget.color.withValues(alpha: 0.24)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: widget.color,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      widget.dateLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).hintColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+                AnimatedOpacity(
+                  opacity: _isHovered ? 1 : 0.52,
+                  duration: const Duration(milliseconds: 120),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Icon(
+                      Icons.calendar_today_rounded,
+                      size: 15,
+                      color: widget.color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailTotalPill extends StatelessWidget {
+  final String label;
+  final double amount;
+  final int count;
+  final Color color;
+
+  const _DetailTotalPill({
+    required this.label,
+    required this.amount,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color.withValues(alpha: 0.78),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          Text(
+            formatter.format(amount),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          if (count > 0)
+            Text(
+              '$count ${count == 1 ? 'mov.' : 'movs.'}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderPaymentMethodTotals extends StatelessWidget {
+  final List<PaymentMethodBreakdownItem> items;
+
+  const _HeaderPaymentMethodTotals({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final sortedItems = [...items]
+      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < sortedItems.length; i++) ...[
+            _HeaderPaymentMethodTotal(
+              item: sortedItems[i],
+              color: _paymentMethodColor(sortedItems[i], i),
+            ),
+            if (i < sortedItems.length - 1) const SizedBox(width: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderPaymentMethodTotal extends StatelessWidget {
+  final PaymentMethodBreakdownItem item;
+  final Color color;
+
+  const _HeaderPaymentMethodTotal({
+    required this.item,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = NumberFormat.decimalPattern('es_CL');
+
+    return Tooltip(
+      message:
+          '${item.name}: ${formatter.format(item.displayAmount.round())} CLP · ${item.transactionCount} ${item.transactionCount == 1 ? 'movimiento' : 'movimientos'}',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_iconForPaymentMethod(item), size: 15, color: color),
+          const SizedBox(width: 4),
+          Text(
+            formatter.format(item.displayAmount.round()),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailPeriodCalendarPopover extends StatelessWidget {
+  final DateTimeRange initialRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final Color color;
+  final ValueChanged<DateTimeRange> onRangeSelected;
+
+  const _DetailPeriodCalendarPopover({
+    required this.initialRange,
+    required this.firstDate,
+    required this.lastDate,
+    required this.color,
+    required this.onRangeSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      width: 342,
+      child: Material(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: _DetailPeriodRangePicker(
+          initialRange: initialRange,
+          firstDate: firstDate,
+          lastDate: lastDate,
+          color: color,
+          onApply: onRangeSelected,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailPeriodRangePicker extends StatefulWidget {
+  final DateTimeRange initialRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final Color color;
+  final ValueChanged<DateTimeRange> onApply;
+
+  const _DetailPeriodRangePicker({
+    required this.initialRange,
+    required this.firstDate,
+    required this.lastDate,
+    required this.color,
+    required this.onApply,
+  });
+
+  @override
+  State<_DetailPeriodRangePicker> createState() =>
+      _DetailPeriodRangePickerState();
+}
+
+class _DetailPeriodRangePickerState extends State<_DetailPeriodRangePicker> {
+  late DateTime _startDate;
+  late DateTime? _endDate;
+  late DateTime _visibleMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _startDate = _dateOnly(widget.initialRange.start);
+    _endDate = _dateOnly(widget.initialRange.end);
+    _visibleMonth = DateTime(_startDate.year, _startDate.month);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final days = _visibleMonthDays(_visibleMonth);
+    final canGoPrevious = _monthStart(_visibleMonth)
+        .isAfter(DateTime(widget.firstDate.year, widget.firstDate.month));
+    final canGoNext = _monthStart(_visibleMonth)
+        .isBefore(DateTime(widget.lastDate.year, widget.lastDate.month));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, size: 16, color: widget.color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Elegir período',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                _rangeLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: canGoPrevious
+                    ? () => setState(() {
+                          _visibleMonth = DateTime(
+                            _visibleMonth.year,
+                            _visibleMonth.month - 1,
+                          );
+                        })
+                    : null,
+                icon: const Icon(Icons.chevron_left_rounded),
+                tooltip: 'Mes anterior',
+              ),
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy', 'es_CL').format(_visibleMonth),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: canGoNext
+                    ? () => setState(() {
+                          _visibleMonth = DateTime(
+                            _visibleMonth.year,
+                            _visibleMonth.month + 1,
+                          );
+                        })
+                    : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+                tooltip: 'Mes siguiente',
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 3,
+            crossAxisSpacing: 3,
+            childAspectRatio: 1.18,
+            children: [
+              for (final label in const ['L', 'M', 'X', 'J', 'V', 'S', 'D'])
+                Center(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              for (final day in days)
+                day == null
+                    ? const SizedBox.shrink()
+                    : _buildDayCell(context, day),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _endDate == null
+                    ? null
+                    : () => widget.onApply(
+                          DateTimeRange(
+                            start: _startDate,
+                            end: _endDate!,
+                          ),
+                        ),
+                child: const Text('Aplicar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayCell(BuildContext context, DateTime day) {
+    final theme = Theme.of(context);
+    final disabled = day.isBefore(_dateOnly(widget.firstDate)) ||
+        day.isAfter(_dateOnly(widget.lastDate));
+    final isStart = _isSameDate(day, _startDate);
+    final isEnd = _endDate != null && _isSameDate(day, _endDate!);
+    final isInRange =
+        _endDate != null && day.isAfter(_startDate) && day.isBefore(_endDate!);
+
+    return InkWell(
+      onTap: disabled ? null : () => _selectDay(day),
+      borderRadius: BorderRadius.circular(7),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: isStart || isEnd
+              ? widget.color
+              : isInRange
+                  ? widget.color.withValues(alpha: 0.12)
+                  : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: isStart || isEnd
+                ? widget.color
+                : isInRange
+                    ? widget.color.withValues(alpha: 0.18)
+                    : Colors.transparent,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            DateFormat('d', 'es_CL').format(day),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: disabled
+                  ? theme.disabledColor
+                  : isStart || isEnd
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurface,
+              fontWeight: isStart || isEnd || isInRange
+                  ? FontWeight.w800
+                  : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectDay(DateTime day) {
+    final selected = _dateOnly(day);
+    setState(() {
+      if (_endDate != null || selected.isBefore(_startDate)) {
+        _startDate = selected;
+        _endDate = null;
+      } else if (_isSameDate(selected, _startDate)) {
+        _endDate = selected;
+      } else {
+        _endDate = selected;
+      }
+    });
+  }
+
+  List<DateTime?> _visibleMonthDays(DateTime month) {
+    final first = DateTime(month.year, month.month);
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leadingEmptyCells = first.weekday - 1;
+
+    return [
+      for (var i = 0; i < leadingEmptyCells; i++) null,
+      for (var day = 1; day <= daysInMonth; day++)
+        DateTime(month.year, month.month, day),
+    ];
+  }
+
+  String get _rangeLabel {
+    final end = _endDate;
+    if (end == null) {
+      return '${_shortDate(_startDate)} - ...';
+    }
+    if (_isSameDate(_startDate, end)) {
+      return _shortDate(_startDate);
+    }
+    return '${_shortDate(_startDate)} - ${_shortDate(end)}';
+  }
+
+  DateTime _monthStart(DateTime date) => DateTime(date.year, date.month);
+
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _shortDate(DateTime date) => DateFormat('d MMM', 'es_CL').format(date);
+}
+
+class _DetailModeButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  const _DetailModeButton({
+    required this.label,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isSelected
+                    ? color
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.72),
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentMethodFilterBar extends StatelessWidget {
+  final List<PaymentMethodBreakdownItem> items;
+  final String? selectedMethodName;
+  final ValueChanged<String?> onChanged;
+
+  const _PaymentMethodFilterBar({
+    required this.items,
+    required this.selectedMethodName,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final sortedItems = [...items]
+      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 2, 8, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Text(
+              'Método',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(width: 8),
+            _PaymentMethodFilterChip(
+              label: 'Todos',
+              isSelected: selectedMethodName == null,
+              onPressed: () => onChanged(null),
+            ),
+            for (var itemIndex = 0;
+                itemIndex < sortedItems.length;
+                itemIndex++) ...[
+              const SizedBox(width: 6),
+              _PaymentMethodFilterChip(
+                label: sortedItems[itemIndex].name,
+                isSelected: selectedMethodName == sortedItems[itemIndex].name,
+                onPressed: () => onChanged(sortedItems[itemIndex].name),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentMethodFilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  const _PaymentMethodFilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color:
+              isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
+          border: Border.all(
+            color: isSelected
+                ? color.withValues(alpha: 0.28)
+                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isSelected ? color : Theme.of(context).hintColor,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+Color _paymentMethodColor(PaymentMethodBreakdownItem item, int index) {
+  final text = '${item.code} ${item.name}'.toLowerCase();
+  if (text.contains('cash') || text.contains('efectivo')) {
+    return const Color(0xFF2E7D32);
+  }
+  if (text.contains('card') ||
+      text.contains('tarjeta') ||
+      text.contains('crédito') ||
+      text.contains('credito') ||
+      text.contains('debito') ||
+      text.contains('débito')) {
+    return const Color(0xFF1565C0);
+  }
+  if (text.contains('transfer')) {
+    return const Color(0xFF00838F);
+  }
+  if (text.contains('mercado')) {
+    return const Color(0xFF6A1B9A);
+  }
+  if (text.contains('check') || text.contains('cheque')) {
+    return const Color(0xFFEF6C00);
+  }
+
+  const fallback = [
+    Color(0xFF455A64),
+    Color(0xFF5D4037),
+    Color(0xFF00695C),
+  ];
+  return fallback[index % fallback.length];
+}
+
+IconData _iconForPaymentMethod(PaymentMethodBreakdownItem item) {
+  final text = '${item.icon ?? ''} ${item.code} ${item.name}'.toLowerCase();
+  if (text.contains('cash') || text.contains('efectivo')) {
+    return Icons.payments;
+  }
+  if (text.contains('card') ||
+      text.contains('tarjeta') ||
+      text.contains('crédito') ||
+      text.contains('credito') ||
+      text.contains('débito') ||
+      text.contains('debito')) {
+    return Icons.credit_card;
+  }
+  if (text.contains('transfer')) {
+    return Icons.account_balance;
+  }
+  if (text.contains('mercado') || text.contains('wallet')) {
+    return Icons.account_balance_wallet;
+  }
+  if (text.contains('check') || text.contains('cheque')) {
+    return Icons.receipt_long;
+  }
+  return Icons.attach_money;
+}
+
 class _StatChip extends StatelessWidget {
   final String label;
   final String value;
@@ -984,7 +1889,9 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   bool _showingIncome = true; // true = income, false = expense
   List<PeriodDetailItem>? _detailItems;
   bool _isLoadingDetails = false;
-  bool _showDayView = false; // false = list view, true = day grouped view
+  _IncomeDetailViewMode _detailViewMode = _IncomeDetailViewMode.transactions;
+  String? _selectedPaymentMethodName;
+  DateTimeRange? _selectedDetailRange;
   DateTime? _selectedDay;
   String? _selectedDetailKey;
   Invoice? _selectedInvoice;
@@ -1046,21 +1953,10 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: widget.selectedPeriod,
-                borderRadius: BorderRadius.circular(12),
-                onChanged: widget.onPeriodChanged,
-                style: Theme.of(context).textTheme.bodyMedium,
-                items: widget.periodOptions
-                    .map(
-                      (value) => DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      ),
-                    )
-                    .toList(),
-              ),
+            _ChartPeriodSelector(
+              selectedPeriod: widget.selectedPeriod,
+              options: widget.periodOptions,
+              onChanged: widget.onPeriodChanged,
             ),
           ],
         ),
@@ -1281,12 +2177,30 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
 
     final period = _selectedPeriod!;
     final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
-    final totalAmount = isIncome ? period.income : period.expense;
+    final detailItems = _detailItems ?? const <PeriodDetailItem>[];
+    final activeMode = _detailViewMode;
+    final dateScopedItems = _dateScopedDetailItems(detailItems);
+    final paymentBreakdown = isIncome && widget.basis == _AccountingBasis.cash
+        ? _buildIncomePaymentBreakdownFromDetails(dateScopedItems)
+        : const <PaymentMethodBreakdownItem>[];
+    final canShowPaymentMethods = paymentBreakdown.isNotEmpty;
+    final visibleItems = _filterDetailItemsByPaymentMethod(dateScopedItems);
+    final dateScopedTotal = dateScopedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.amount,
+    );
+    final displayedTotal = _selectedPaymentMethodName == null
+        ? dateScopedTotal
+        : visibleItems.fold<double>(0, (sum, item) => sum + item.amount);
+    final dateLabel =
+        activeMode == _IncomeDetailViewMode.days && _selectedDay != null
+            ? _compactSpanishWeekdayDate(_selectedDay!)
+            : _detailRangeLabel(period);
+    final totalLabel = _selectedPaymentMethodName ?? 'Total';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header with back button, title, toggle, and total
         Row(
           children: [
             IconButton(
@@ -1295,122 +2209,54 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
               tooltip: 'Volver al gráfico',
             ),
             const SizedBox(width: 4),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isIncome ? 'Ingresos' : 'Gastos',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                Text(
-                  period.periodLabel(),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-            const Spacer(),
-            // Compact toggle buttons
-            if (_detailItems != null && _detailItems!.isNotEmpty) ...[
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outline
-                        .withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ToggleIconButton(
-                      icon: Icons.list,
-                      isSelected: !_showDayView,
-                      onPressed: () => _setDetailViewMode(false),
-                      tooltip: 'Detalle',
-                    ),
-                    _ToggleIconButton(
-                      icon: Icons.calendar_view_day,
-                      isSelected: _showDayView,
-                      onPressed: () => _setDetailViewMode(true),
-                      tooltip: 'Por día',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            Expanded(
+              child: Row(
                 children: [
-                  Text(
-                    NumberFormat.currency(locale: 'es_CL', symbol: 'CLP')
-                        .format(totalAmount),
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  _DetailHeaderTitleButton(
+                    title: isIncome ? 'Ingresos' : 'Gastos',
+                    dateLabel: dateLabel,
+                    color: color,
+                    onPressed: _openDetailPeriodPicker,
                   ),
-                  if (_detailItems != null && _detailItems!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Builder(
-                      builder: (context) {
-                        double average = 0;
-                        String label = '';
-
-                        if (_showDayView) {
-                          // Calculate daily average
-                          final uniqueDays = _detailItems!
-                              .map((i) => DateTime(
-                                    i.transactionDate.year,
-                                    i.transactionDate.month,
-                                    i.transactionDate.day,
-                                  ))
-                              .toSet()
-                              .length;
-                          if (uniqueDays > 0) {
-                            average = totalAmount / uniqueDays;
-                            label = 'prom. diario';
-                          }
-                        } else {
-                          // Calculate per-transaction average
-                          average = totalAmount / _detailItems!.length;
-                          label = 'prom. tx';
-                        }
-
-                        return Text(
-                          '${NumberFormat.currency(locale: 'es_CL', symbol: '', decimalDigits: 0).format(average)} / $label',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: color.withValues(alpha: 0.8),
-                                    fontSize: 10,
-                                  ),
-                        );
-                      },
+                  if (canShowPaymentMethods) ...[
+                    const SizedBox(width: 18),
+                    Flexible(
+                      child: _HeaderPaymentMethodTotals(
+                        items: paymentBreakdown,
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
+            if (detailItems.isNotEmpty) ...[
+              _DetailModeToggle(
+                value: activeMode,
+                onChanged: _setDetailViewMode,
+              ),
+              const SizedBox(width: 12),
+            ],
+            _DetailTotalPill(
+              label: totalLabel,
+              amount: displayedTotal,
+              count: visibleItems.length,
+              color: color,
+            ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         const Divider(),
+        if (canShowPaymentMethods)
+          _PaymentMethodFilterBar(
+            items: paymentBreakdown,
+            selectedMethodName: _selectedPaymentMethodName,
+            onChanged: _setPaymentMethodFilter,
+          ),
         // Detail list
         Expanded(
           child: _isLoadingDetails
               ? const Center(child: CircularProgressIndicator())
-              : _detailItems == null || _detailItems!.isEmpty
+              : detailItems.isEmpty
                   ? Center(
                       child: Text(
                         'No hay transacciones para este período',
@@ -1419,19 +2265,43 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                             ),
                       ),
                     )
-                  : _showDayView
-                      ? _buildDayGroupedView(context, isIncome)
-                      : _buildDetailListView(context, isIncome),
+                  : visibleItems.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No hay cobros para este método',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).hintColor,
+                                ),
+                          ),
+                        )
+                      : activeMode == _IncomeDetailViewMode.days
+                          ? _buildDayGroupedView(
+                              context,
+                              isIncome,
+                              visibleItems,
+                            )
+                          : _buildDetailListView(
+                              context,
+                              isIncome,
+                              visibleItems,
+                            ),
         ),
       ],
     );
   }
 
-  Widget _buildDetailListView(BuildContext context, bool isIncome) {
+  Widget _buildDetailListView(
+    BuildContext context,
+    bool isIncome,
+    List<PeriodDetailItem> items,
+  ) {
     return ListView.builder(
-      itemCount: _detailItems!.length,
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        final item = _detailItems![index];
+        final item = items[index];
         final detailKey = _detailKeyFor(item);
         final canOpenInvoice = isIncome && _isInvoiceBackedIncome(item);
         final isSelected = _selectedDetailKey == detailKey;
@@ -1448,7 +2318,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                   canOpenInvoice ? () => _openInvoiceDetailInline(item) : null,
             ),
             if (isSelected) _buildInlineInvoiceDetail(context),
-            if (index < _detailItems!.length - 1) const Divider(height: 1),
+            if (index < items.length - 1) const Divider(height: 1),
           ],
         );
       },
@@ -1521,10 +2391,14 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     );
   }
 
-  Widget _buildDayGroupedView(BuildContext context, bool isIncome) {
+  Widget _buildDayGroupedView(
+    BuildContext context,
+    bool isIncome,
+    List<PeriodDetailItem> detailItems,
+  ) {
     // Group items by day
     final groupedByDay = <DateTime, List<PeriodDetailItem>>{};
-    for (final item in _detailItems!) {
+    for (final item in detailItems) {
       final day = DateTime(
         item.transactionDate.year,
         item.transactionDate.month,
@@ -1657,7 +2531,7 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      DateFormat('EEEE d MMMM', 'es_CL').format(day),
+                      _compactSpanishWeekdayDate(day),
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: color,
@@ -1788,34 +2662,37 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   }
 
   void _onBarTapped(MonthlyIncomeExpensePoint period, bool isIncome) async {
+    final detailRange = _periodRangeForPeriod(period);
     setState(() {
       _selectedPeriod = period;
       _showingIncome = isIncome;
       _isLoadingDetails = true;
       _detailItems = null;
+      _detailViewMode = _IncomeDetailViewMode.transactions;
+      _selectedPaymentMethodName = null;
+      _selectedDetailRange = detailRange;
       _selectedDay = null;
       _clearInlineInvoiceDetailState();
     });
 
+    await _loadDetailItemsForRange(detailRange);
+  }
+
+  Future<void> _loadDetailItemsForRange(DateTimeRange range) async {
     try {
       final reportsService = context.read<FinancialReportsService>();
       final isCashFlow = widget.basis == _AccountingBasis.cash;
+      final endDate = DateTime(range.end.year, range.end.month, range.end.day)
+          .add(const Duration(days: 1));
 
-      // Calculate end date (add 1 day for daily, 1 month for monthly)
-      final isDailyView = period.periodStart.day == period.periodEnd.day &&
-          period.periodStart.month == period.periodEnd.month;
-      final endDate = isDailyView
-          ? period.periodStart.add(const Duration(days: 1))
-          : DateTime(period.periodStart.year, period.periodStart.month + 1, 1);
-
-      final items = isIncome
+      final items = _showingIncome
           ? await reportsService.getIncomePeriodDetails(
-              startDate: period.periodStart,
+              startDate: range.start,
               endDate: endDate,
               isCashFlow: isCashFlow,
             )
           : await reportsService.getExpensePeriodDetails(
-              startDate: period.periodStart,
+              startDate: range.start,
               endDate: endDate,
               isCashFlow: isCashFlow,
             );
@@ -1839,17 +2716,171 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     setState(() {
       _selectedPeriod = null;
       _detailItems = null;
+      _detailViewMode = _IncomeDetailViewMode.transactions;
+      _selectedPaymentMethodName = null;
+      _selectedDetailRange = null;
       _selectedDay = null;
       _clearInlineInvoiceDetailState();
     });
   }
 
-  void _setDetailViewMode(bool showDayView) {
+  Future<void> _openDetailPeriodPicker(BuildContext anchorContext) async {
+    final currentPeriod = _selectedPeriod;
+    if (currentPeriod == null || widget.data.isEmpty) return;
+
+    final firstPeriod = widget.data.first;
+    final lastPeriod = widget.data.last;
+    final firstDate = DateTime(
+      firstPeriod.periodStart.year,
+      firstPeriod.periodStart.month,
+      firstPeriod.periodStart.day,
+    );
+    final lastDate = DateTime(
+      lastPeriod.periodEnd.year,
+      lastPeriod.periodEnd.month,
+      lastPeriod.periodEnd.day,
+    );
+    final currentRange =
+        _selectedDetailRange ?? _periodRangeForPeriod(currentPeriod);
+    final initialRange = DateTimeRange(
+      start: _clampDate(currentRange.start, firstDate, lastDate),
+      end: _clampDate(currentRange.end, firstDate, lastDate),
+    );
+
+    final renderBox = anchorContext.findRenderObject() as RenderBox?;
+    final overlayBox =
+        Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
+    if (renderBox == null || overlayBox == null) return;
+
+    final offset = renderBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    final anchorRect = Rect.fromLTWH(
+      offset.dx,
+      offset.dy + renderBox.size.height + 6,
+      renderBox.size.width,
+      0,
+    );
+
+    final pickedRange = await showMenu<DateTimeRange>(
+      context: anchorContext,
+      position:
+          RelativeRect.fromRect(anchorRect, Offset.zero & overlayBox.size),
+      elevation: 10,
+      color: Theme.of(anchorContext).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      constraints: const BoxConstraints.tightFor(width: 342),
+      items: [
+        PopupMenuItem<DateTimeRange>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: _DetailPeriodCalendarPopover(
+            initialRange: initialRange,
+            firstDate: firstDate,
+            lastDate: lastDate,
+            color: _showingIncome
+                ? const Color(0xFF4CAF50)
+                : const Color(0xFFFF5252),
+            onRangeSelected: (range) => Navigator.of(anchorContext).pop(range),
+          ),
+        ),
+      ],
+    );
+
+    if (pickedRange == null || !mounted) return;
+
     setState(() {
-      _showDayView = showDayView;
+      _selectedDetailRange = pickedRange;
+      _isLoadingDetails = true;
+      _detailItems = null;
+      _selectedDay = null;
+      _selectedPaymentMethodName = null;
+      _detailViewMode = _IncomeDetailViewMode.transactions;
+      _clearInlineInvoiceDetailState();
+    });
+    await _loadDetailItemsForRange(pickedRange);
+  }
+
+  DateTime _clampDate(DateTime value, DateTime firstDate, DateTime lastDate) {
+    final dateOnly = DateTime(value.year, value.month, value.day);
+    if (dateOnly.isBefore(firstDate)) return firstDate;
+    if (dateOnly.isAfter(lastDate)) return lastDate;
+    return dateOnly;
+  }
+
+  DateTimeRange _periodRangeForPeriod(MonthlyIncomeExpensePoint period) {
+    return DateTimeRange(
+      start: DateTime(
+        period.periodStart.year,
+        period.periodStart.month,
+        period.periodStart.day,
+      ),
+      end: DateTime(
+        period.periodEnd.year,
+        period.periodEnd.month,
+        period.periodEnd.day,
+      ),
+    );
+  }
+
+  String _detailRangeLabel(MonthlyIncomeExpensePoint period) {
+    final selectedRange = _selectedDetailRange;
+    if (selectedRange == null) return period.periodLabel();
+
+    final periodRange = _periodRangeForPeriod(period);
+    if (_isSameDay(periodRange.start, selectedRange.start) &&
+        _isSameDay(periodRange.end, selectedRange.end)) {
+      return period.periodLabel();
+    }
+
+    if (_isSameDay(selectedRange.start, selectedRange.end)) {
+      return _compactSpanishWeekdayDate(selectedRange.start);
+    }
+
+    return '${_compactSpanishWeekdayDate(selectedRange.start)} - ${_compactSpanishWeekdayDate(selectedRange.end)}';
+  }
+
+  void _setDetailViewMode(_IncomeDetailViewMode mode) {
+    setState(() {
+      _detailViewMode = mode;
       _selectedDay = null;
       _clearInlineInvoiceDetailState();
     });
+  }
+
+  void _setPaymentMethodFilter(String? methodName) {
+    setState(() {
+      _selectedPaymentMethodName =
+          _selectedPaymentMethodName == methodName ? null : methodName;
+      _clearInlineInvoiceDetailState();
+    });
+  }
+
+  List<PeriodDetailItem> _dateScopedDetailItems(
+    List<PeriodDetailItem> items,
+  ) {
+    final selectedDay = _selectedDay;
+    if (_detailViewMode != _IncomeDetailViewMode.days || selectedDay == null) {
+      return items;
+    }
+
+    return items.where((item) {
+      return item.transactionDate.year == selectedDay.year &&
+          item.transactionDate.month == selectedDay.month &&
+          item.transactionDate.day == selectedDay.day;
+    }).toList();
+  }
+
+  List<PeriodDetailItem> _filterDetailItemsByPaymentMethod(
+    List<PeriodDetailItem> items,
+  ) {
+    final selectedMethodName = _selectedPaymentMethodName;
+    if (selectedMethodName == null || selectedMethodName.isEmpty) {
+      return items;
+    }
+
+    return items.where((item) {
+      if (item.sourceType != 'sales_payment') return false;
+      return _paymentMethodNameForDetail(item) == selectedMethodName;
+    }).toList();
   }
 
   void _openDayTransactionsPage(DateTime day) {
@@ -1880,6 +2911,47 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   bool _isInvoiceBackedIncome(PeriodDetailItem item) {
     return item.sourceType == 'sales_invoice' ||
         item.sourceType == 'sales_payment';
+  }
+
+  String _paymentMethodNameForDetail(PeriodDetailItem item) {
+    return item.description.trim().isNotEmpty
+        ? item.description.trim()
+        : 'Sin método';
+  }
+
+  List<PaymentMethodBreakdownItem> _buildIncomePaymentBreakdownFromDetails(
+    List<PeriodDetailItem> items,
+  ) {
+    final totalsByName = <String, double>{};
+    final countsByName = <String, int>{};
+    final latestByName = <String, DateTime?>{};
+
+    for (final item in items) {
+      if (item.sourceType != 'sales_payment') continue;
+
+      final name = _paymentMethodNameForDetail(item);
+      totalsByName[name] = (totalsByName[name] ?? 0) + item.amount;
+      countsByName[name] = (countsByName[name] ?? 0) + 1;
+
+      final currentLatest = latestByName[name];
+      if (currentLatest == null ||
+          item.transactionDate.isAfter(currentLatest)) {
+        latestByName[name] = item.transactionDate;
+      }
+    }
+
+    return totalsByName.entries.map((entry) {
+      return PaymentMethodBreakdownItem(
+        paymentMethodId: entry.key,
+        code: entry.key,
+        name: entry.key,
+        sortOrder: 0,
+        amount: entry.value,
+        transactionCount: countsByName[entry.key] ?? 0,
+        latestPaymentAt: latestByName[entry.key],
+      );
+    }).toList()
+      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
   }
 
   Future<void> _openInvoiceDetailInline(PeriodDetailItem item) async {
@@ -2082,51 +3154,6 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   }
 }
 
-/// Compact icon button for toggle in header
-class _ToggleIconButton extends StatelessWidget {
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onPressed;
-  final String tooltip;
-
-  const _ToggleIconButton({
-    required this.icon,
-    required this.isSelected,
-    required this.onPressed,
-    required this.tooltip,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Tile for showing a single period detail item
 class _PeriodDetailTile extends StatelessWidget {
   final PeriodDetailItem item;
@@ -2195,7 +3222,7 @@ class _PeriodDetailTile extends StatelessWidget {
           if (item.documentNumber.isNotEmpty && item.description.isNotEmpty)
             item.documentNumber,
           if (item.secondaryText.isNotEmpty) item.secondaryText,
-          DateFormat('d MMM yyyy', 'es_CL').format(item.transactionDate),
+          _compactSpanishWeekdayDate(item.transactionDate),
         ].join(' • '),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -2290,7 +3317,7 @@ class _InlineInvoiceDetailPanel extends StatelessWidget {
                       [
                         if ((invoice.customerName ?? '').trim().isNotEmpty)
                           invoice.customerName!.trim(),
-                        DateFormat('d MMM yyyy', 'es_CL').format(invoice.date),
+                        _compactSpanishWeekdayDate(invoice.date),
                         _invoiceStatusLabel(invoice.status),
                       ].join(' • '),
                       maxLines: 1,

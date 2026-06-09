@@ -56,6 +56,30 @@ class ExpenseBreakdownItem {
   double get displayAmount => amount.abs();
 }
 
+class PaymentMethodBreakdownItem {
+  final String paymentMethodId;
+  final String code;
+  final String name;
+  final String? icon;
+  final int sortOrder;
+  final double amount;
+  final int transactionCount;
+  final DateTime? latestPaymentAt;
+
+  PaymentMethodBreakdownItem({
+    required this.paymentMethodId,
+    required this.code,
+    required this.name,
+    this.icon,
+    required this.sortOrder,
+    required this.amount,
+    required this.transactionCount,
+    this.latestPaymentAt,
+  });
+
+  double get displayAmount => amount.abs();
+}
+
 /// Detail item for period drill-down (when clicking on a bar in the chart)
 class PeriodDetailItem {
   final String id;
