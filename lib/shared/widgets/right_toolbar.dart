@@ -16,6 +16,7 @@ import 'quick_access_expense_rail.dart';
 import 'quick_messages_panel.dart';
 import 'quick_purchase_panel.dart';
 import 'quick_sale_panel.dart';
+import 'quick_supplier_messages_panel.dart';
 import 'quick_task_panel.dart';
 import 'right_toolbar_glass_surface.dart';
 
@@ -85,6 +86,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Asistente IA';
       case ToolbarTool.messages:
         return 'Mensajería';
+      case ToolbarTool.supplierMessages:
+        return 'Proveedores';
       case ToolbarTool.storage:
         return 'Archivos';
       case ToolbarTool.kiosk:
@@ -114,6 +117,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.auto_awesome;
       case ToolbarTool.messages:
         return Icons.chat_bubble_outline;
+      case ToolbarTool.supplierMessages:
+        return Icons.storefront_outlined;
       case ToolbarTool.storage:
         return Icons.folder_open_outlined;
       case ToolbarTool.kiosk:
@@ -143,6 +148,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return const AIChatPanel(jobs: [], embedded: true);
       case ToolbarTool.messages:
         return const QuickMessagesPanel();
+      case ToolbarTool.supplierMessages:
+        return const QuickSupplierMessagesPanel();
       case ToolbarTool.storage:
         return const AppFilesPanel(compact: true, showHeader: false);
       case ToolbarTool.kiosk:
@@ -167,7 +174,26 @@ class _RightToolbarState extends State<RightToolbar> {
 
   int _toolBadgeCount(ToolbarTool tool, ChatProvider chatProvider) {
     if (tool == ToolbarTool.messages) {
-      return chatProvider.totalUnreadCount;
+      return chatProvider.conversations.fold(0, (sum, conversation) {
+        if (conversation.isSupplierConversation) return sum;
+        if (conversation.type == 'support' &&
+            conversation.status == 'pending') {
+          return sum +
+              (conversation.unreadCount > 0 ? conversation.unreadCount : 1);
+        }
+        return sum + conversation.unreadCount;
+      });
+    }
+    if (tool == ToolbarTool.supplierMessages) {
+      return chatProvider.conversations.fold(0, (sum, conversation) {
+        if (!conversation.isSupplierConversation) return sum;
+        if (conversation.type == 'support' &&
+            conversation.status == 'pending') {
+          return sum +
+              (conversation.unreadCount > 0 ? conversation.unreadCount : 1);
+        }
+        return sum + conversation.unreadCount;
+      });
     }
     return 0;
   }
@@ -181,11 +207,14 @@ class _RightToolbarState extends State<RightToolbar> {
   }) {
     final badgeCount = _toolBadgeCount(tool, chatProvider);
     final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
-    final badgeColor = tool == ToolbarTool.messages
-        ? const Color(0xFF16A34A)
-        : theme.colorScheme.error;
+    final badgeColor =
+        tool == ToolbarTool.messages || tool == ToolbarTool.supplierMessages
+            ? const Color(0xFF16A34A)
+            : theme.colorScheme.error;
     final badgeTextColor =
-        tool == ToolbarTool.messages ? Colors.white : theme.colorScheme.onError;
+        tool == ToolbarTool.messages || tool == ToolbarTool.supplierMessages
+            ? Colors.white
+            : theme.colorScheme.onError;
 
     return Stack(
       clipBehavior: Clip.none,

@@ -13,13 +13,10 @@ import '../../modules/messaging/utils/conversation_activity.dart';
 import '../../modules/messaging/widgets/chat_window.dart';
 import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/messaging/widgets/new_chat_dialog.dart';
-import '../../modules/purchases/models/purchase_invoice.dart';
-import '../../modules/purchases/services/purchase_service.dart';
-import '../models/supplier.dart' as shared_supplier;
 import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
 
-enum _MessageFilter { all, unread, whatsapp, clients, suppliers, team }
+enum _MessageFilter { all, unread, whatsapp, clients, team }
 
 class QuickMessagesPanel extends StatefulWidget {
   const QuickMessagesPanel({super.key});
@@ -39,13 +36,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   ChatProvider? _chatProvider;
   Set<String> _pinnedConversationIds = {};
   List<Customer> _whatsAppContacts = [];
-  List<shared_supplier.Supplier> _supplierChatSuppliers = [];
-  List<PurchaseInvoice> _supplierChatInvoices = [];
   bool _isRefreshing = false;
   bool _isLoadingWhatsAppContacts = false;
-  bool _isLoadingSupplierChats = false;
   bool _showOnlyActiveChats = true;
-  String? _openingSupplierId;
 
   @override
   void initState() {
@@ -56,14 +49,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
     unawaited(_loadPreferences());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(
-          context
-              .read<ChatProvider>()
-              .loadConversations(refreshContextHints: true),
-        );
-        unawaited(_loadSupplierChatData());
-      }
+      if (!mounted) return;
+      unawaited(
+        context
+            .read<ChatProvider>()
+            .loadConversations(refreshContextHints: true),
+      );
     });
   }
 
@@ -169,33 +160,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     }
   }
 
-  Future<void> _loadSupplierChatData() async {
-    if (_isLoadingSupplierChats) return;
-    setState(() => _isLoadingSupplierChats = true);
-    try {
-      final purchaseService = context.read<PurchaseService>();
-      final suppliers = await purchaseService.getSuppliers(activeOnly: true);
-      final invoices = await purchaseService.getPurchaseInvoicesForList();
-
-      if (!mounted) return;
-      setState(() {
-        _supplierChatSuppliers = suppliers
-            .where((supplier) => _supplierChatPhone(supplier) != null)
-            .toList()
-          ..sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-          );
-        _supplierChatInvoices = invoices;
-        _isLoadingSupplierChats = false;
-      });
-    } catch (error) {
-      debugPrint('Error loading supplier chats in quick panel: $error');
-      if (mounted) {
-        setState(() => _isLoadingSupplierChats = false);
-      }
-    }
-  }
-
   bool _hasWhatsAppPhone(String? phone) {
     return _normalizedPhone(phone).length >= 8;
   }
@@ -223,7 +187,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     await context
         .read<ChatProvider>()
         .loadConversations(refreshContextHints: true);
-    await _loadSupplierChatData();
     if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
       await _loadWhatsAppContacts();
     }
@@ -290,9 +253,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     if (selectedId == null) return null;
 
     for (final conversation in conversations) {
-      if (conversation.id == selectedId) {
-        return conversation;
-      }
+      if (conversation.id == selectedId) return conversation;
     }
     return null;
   }
@@ -371,41 +332,44 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Widget _buildActionBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _showNewChatDialog,
-                  icon: const Icon(Icons.add_comment_outlined, size: 18),
-                  label: const Text('Nuevo chat'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(38),
+          Expanded(
+            child: Text(
+              'Mensajería',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _buildActiveModeToggleButton(),
-              const SizedBox(width: 8),
-              IconButton.outlined(
-                tooltip: 'Recargar',
-                onPressed: _isRefreshing ? null : _refresh,
-                icon: _isRefreshing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh, size: 20),
-              ),
-              const SizedBox(width: 8),
-              IconButton.outlined(
-                tooltip: 'Abrir mensajería completa',
-                onPressed: () => _openFullChat(),
-                icon: const Icon(Icons.open_in_full, size: 18),
-              ),
-            ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.outlined(
+            tooltip: 'Nuevo chat interno',
+            onPressed: _showNewChatDialog,
+            icon: const Icon(Icons.add_comment_outlined, size: 18),
+          ),
+          const SizedBox(width: 8),
+          _buildActiveModeToggleButton(),
+          const SizedBox(width: 8),
+          IconButton.outlined(
+            tooltip: 'Recargar',
+            onPressed: _isRefreshing ? null : _refresh,
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 20),
+          ),
+          const SizedBox(width: 8),
+          IconButton.outlined(
+            tooltip: 'Abrir mensajería completa',
+            onPressed: () => _openFullChat(),
+            icon: const Icon(Icons.open_in_full, size: 18),
           ),
         ],
       ),
@@ -443,7 +407,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     return Tooltip(
       waitDuration: const Duration(milliseconds: 1500),
       message: active
-          ? 'Solo activos: muestra clientes y proveedores con trabajos, facturas o compras abiertas.'
+          ? 'Solo activos: muestra clientes con trabajos, facturas o chats abiertos.'
           : 'Historial completo: muestra también conversaciones y documentos cerrados.',
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
@@ -496,22 +460,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   Widget _buildFilterStrip(ChatProvider provider) {
-    final visibleConversations =
-        provider.conversations.where(_matchesActivityMode).toList();
-    final supplierEntries = _quickSupplierEntries(
-      provider.conversations
-          .where((conversation) => conversation.isSupplierConversation)
-          .toList(),
-      includeInactive: !_showOnlyActiveChats,
-    );
-    final supplierConversationIds = supplierEntries
-        .map((entry) => entry.conversation?.id)
-        .whereType<String>()
-        .toSet();
-    final visibleNonSupplierConversations = visibleConversations
-        .where(
-          (conversation) => !supplierConversationIds.contains(conversation.id),
-        )
+    final visibleConversations = _clientConversations(provider.conversations)
+        .where(_matchesActivityMode)
         .toList();
 
     return SizedBox(
@@ -523,12 +473,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           _buildFilterChip(
             _MessageFilter.all,
             'Todos',
-            visibleNonSupplierConversations.length + supplierEntries.length,
+            visibleConversations.length,
           ),
           _buildFilterChip(
             _MessageFilter.unread,
             'Sin leer',
-            visibleNonSupplierConversations
+            visibleConversations
                 .where((conversation) =>
                     conversation.unreadCount > 0 ||
                     (conversation.isSupport &&
@@ -538,24 +488,17 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           _buildFilterChip(
             _MessageFilter.whatsapp,
             'WhatsApp',
-            visibleNonSupplierConversations.where((c) => c.isWhatsApp).length,
+            visibleConversations.where((c) => c.isWhatsApp).length,
           ),
           _buildFilterChip(
             _MessageFilter.clients,
             'Clientes',
-            visibleNonSupplierConversations
-                .where((c) => c.isSupport && !c.isSupplierConversation)
-                .length,
-          ),
-          _buildFilterChip(
-            _MessageFilter.suppliers,
-            'Proveedores',
-            supplierEntries.length,
+            visibleConversations.where((c) => c.isSupport).length,
           ),
           _buildFilterChip(
             _MessageFilter.team,
             'Equipo',
-            visibleNonSupplierConversations.where((c) => c.isInternal).length,
+            visibleConversations.where((c) => c.isInternal).length,
           ),
         ],
       ),
@@ -570,7 +513,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       _MessageFilter.unread => const Color(0xFF16A34A),
       _MessageFilter.whatsapp => const Color(0xFF047857),
       _MessageFilter.clients => const Color(0xFF0F4C81),
-      _MessageFilter.suppliers => const Color(0xFF7C3AED),
       _MessageFilter.team => const Color(0xFF475569),
       _MessageFilter.all => colorScheme.primary,
     };
@@ -656,22 +598,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Widget _buildConversationList(ChatProvider provider) {
     final isSearching = _searchTerm.isNotEmpty;
-    final supplierEntries = _quickSupplierEntries(
-      provider.conversations
-          .where((conversation) => conversation.isSupplierConversation)
-          .toList(),
-      includeInactive: !_showOnlyActiveChats,
-    ).where((entry) => _matchesSupplierEntryFilter(entry, isSearching)).toList()
-      ..sort(_compareSupplierEntries);
-    final supplierConversationIds = supplierEntries
-        .map((entry) => entry.conversation?.id)
-        .whereType<String>()
-        .toSet();
-    final conversations = provider.conversations
+    final conversations = _clientConversations(provider.conversations)
         .where(_matchesActivityMode)
-        .where(
-          (conversation) => !supplierConversationIds.contains(conversation.id),
-        )
         .where((conversation) => isSearching || _matchesFilter(conversation))
         .where((conversation) => _matchesSearch(provider, conversation))
         .toList()
@@ -679,16 +607,18 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final contactMatches = isSearching
         ? _matchingWhatsAppContacts(provider).take(10).toList()
         : <Customer>[];
+    final hasClientConversations =
+        _clientConversations(provider.conversations).isNotEmpty;
 
     if (conversations.isEmpty &&
-        supplierEntries.isEmpty &&
         contactMatches.isEmpty &&
         !(isSearching && _isLoadingWhatsAppContacts)) {
       return _buildEmptyState(
-        provider.conversations.isEmpty,
+        !hasClientConversations,
         activeModeEmpty: _showOnlyActiveChats &&
-            provider.conversations.isNotEmpty &&
-            !provider.conversations.any(_matchesActivityMode),
+            hasClientConversations &&
+            !_clientConversations(provider.conversations)
+                .any(_matchesActivityMode),
       );
     }
 
@@ -707,18 +637,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           for (final conversation in conversations) ...[
             _buildConversationResult(provider, conversation),
             const Divider(height: 1),
-          ],
-          if (supplierEntries.isNotEmpty) ...[
-            if (isSearching || _filter != _MessageFilter.suppliers)
-              _buildSearchSectionHeader(
-                icon: Icons.storefront_outlined,
-                title: 'Proveedores',
-                count: supplierEntries.length,
-              ),
-            for (final entry in supplierEntries) ...[
-              _buildSupplierResult(entry),
-              const Divider(height: 1),
-            ],
           ],
           if (isSearching &&
               (contactMatches.isNotEmpty || _isLoadingWhatsAppContacts)) ...[
@@ -760,160 +678,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  Widget _buildSupplierResult(_QuickSupplierChatEntry entry) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final conversation = entry.conversation;
-    final isSelected = conversation != null &&
-        _selectedConversationId != null &&
-        conversation.id == _selectedConversationId;
-    final isOpening = _openingSupplierId == entry.supplier.id;
-    final preview = conversation?.lastMessageContent?.trim();
-    final invoice = entry.relevantInvoice(_showOnlyActiveChats);
-
-    return Material(
-      color: isSelected
-          ? colorScheme.primary.withValues(alpha: 0.1)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: isOpening ? null : () => _openSupplierChat(entry),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 9, 12, 9),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFF7C3AED).withValues(alpha: 0.1),
-                child: Text(
-                  _supplierInitials(entry.supplier.name),
-                  style: const TextStyle(
-                    color: Color(0xFF7C3AED),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.supplier.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      preview?.isNotEmpty == true
-                          ? preview!
-                          : '${entry.phone} · Proveedor WhatsApp',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    if (invoice != null) ...[
-                      const SizedBox(height: 6),
-                      _buildSupplierInvoiceChip(invoice),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isOpening)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(
-                  conversation == null
-                      ? Icons.add_comment_outlined
-                      : Icons.chevron_right,
-                  size: 20,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSupplierInvoiceChip(PurchaseInvoice invoice) {
-    final color = _purchaseInvoiceStatusColor(invoice.status);
-    final number = invoice.invoiceNumber.isEmpty
-        ? invoice.supplierInvoiceNumber ?? 'Compra'
-        : invoice.invoiceNumber;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-      ),
-      child: Text(
-        '$number · ${invoice.status.displayName} · ${_formatCLP(invoice.balance > 0 ? invoice.balance : invoice.total)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openSupplierChat(_QuickSupplierChatEntry entry) async {
-    final conversation = entry.conversation;
-    if (conversation != null) {
-      _openConversationInPanel(conversation);
-      return;
-    }
-
-    setState(() => _openingSupplierId = entry.supplier.id);
-    try {
-      final provider = context.read<ChatProvider>();
-      await provider.openWhatsAppCustomerChat(
-        phoneNumber: entry.phone,
-        contactName: entry.supplier.name,
-        contextType: 'supplier',
-        contextId: entry.supplier.id,
-      );
-      if (!mounted) return;
-      final conversationId = provider.activeConversationId;
-      setState(() {
-        _selectedConversationId = conversationId;
-        _panelActiveConversationId = conversationId;
-        _openingSupplierId = null;
-      });
-      _searchController.clear();
-    } catch (error) {
-      debugPrint('Error opening WhatsApp supplier from quick panel: $error');
-      if (!mounted) return;
-      setState(() => _openingSupplierId = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo iniciar el chat del proveedor'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   void _openConversationInPanel(Conversation conversation) {
     setState(() {
       _selectedConversationId = conversation.id;
@@ -923,10 +687,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   void _returnToInbox(String conversationId) {
     final shouldClearActive = _panelActiveConversationId == conversationId;
-    debugPrint(
-      '[InboxSync] panel:returnToInbox conversation=$conversationId '
-      'clearActive=$shouldClearActive',
-    );
     setState(() {
       _selectedConversationId = null;
       if (shouldClearActive) {
@@ -1029,9 +789,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                 )
               else
                 const Icon(
-                  Icons.add_comment_outlined,
+                  Icons.chevron_right,
                   size: 19,
-                  color: Color(0xFF047857),
+                  color: Color(0xFF64748B),
                 ),
             ],
           ),
@@ -1068,243 +828,12 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  List<_QuickSupplierChatEntry> _quickSupplierEntries(
-    List<Conversation> supplierConversations, {
-    required bool includeInactive,
-  }) {
-    final entries = <_QuickSupplierChatEntry>[];
-    final usedConversationIds = <String>{};
-
-    for (final supplier in _supplierChatSuppliers) {
-      final phone = _supplierChatPhone(supplier);
-      if (phone == null) continue;
-      final conversation = _findSupplierConversation(
-        supplier,
-        supplierConversations,
-      );
-      if (conversation != null) usedConversationIds.add(conversation.id);
-
-      final invoices = _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasStandaloneActiveConversation = invoices.isEmpty &&
-          conversation != null &&
-          ConversationActivity.isActiveConversation(conversation);
-      if (!includeInactive &&
-          !hasActiveInvoices &&
-          !hasStandaloneActiveConversation) {
-        continue;
-      }
-
-      entries.add(
-        _QuickSupplierChatEntry(
-          supplier: supplier,
-          phone: phone,
-          conversation: conversation,
-          invoices: invoices,
-        ),
-      );
-    }
-
-    for (final conversation in supplierConversations) {
-      if (usedConversationIds.contains(conversation.id)) continue;
-      final phone = conversation.contextHint?.supplierPhone ??
-          conversation.contextHint?.phone ??
-          '';
-      if (!_hasWhatsAppPhone(phone)) continue;
-      final supplier = _supplierFromConversation(conversation, phone);
-      final invoices = supplier.id.isEmpty
-          ? <PurchaseInvoice>[]
-          : _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasActiveWork = hasActiveInvoices ||
-          (invoices.isEmpty &&
-              ConversationActivity.isActiveConversation(conversation));
-      if (!includeInactive && !hasActiveWork) continue;
-
-      entries.add(
-        _QuickSupplierChatEntry(
-          supplier: supplier,
-          phone: phone,
-          conversation: conversation,
-          invoices: invoices,
-        ),
-      );
-    }
-
-    return entries;
-  }
-
-  Conversation? _findSupplierConversation(
-    shared_supplier.Supplier supplier,
+  Iterable<Conversation> _clientConversations(
     List<Conversation> conversations,
   ) {
-    for (final conversation in conversations) {
-      if (conversation.contextHint?.supplierId == supplier.id ||
-          (conversation.contextType == 'supplier' &&
-              conversation.contextId == supplier.id)) {
-        return conversation;
-      }
-    }
-
-    final supplierPhones = _phoneCandidates(_supplierChatPhone(supplier));
-    if (supplierPhones.isEmpty) return null;
-    for (final conversation in conversations) {
-      final conversationPhones = _phoneCandidates(
-        conversation.contextHint?.supplierPhone ??
-            conversation.contextHint?.phone,
-      );
-      if (supplierPhones.intersection(conversationPhones).isNotEmpty) {
-        return conversation;
-      }
-    }
-    return null;
-  }
-
-  shared_supplier.Supplier _supplierFromConversation(
-    Conversation conversation,
-    String phone,
-  ) {
-    final now = DateTime.now();
-    return shared_supplier.Supplier(
-      id: conversation.contextHint?.supplierId ?? conversation.contextId ?? '',
-      tenantId: '',
-      name: conversation.contextHint?.supplierLabel ??
-          conversation.creatorName ??
-          conversation.title ??
-          phone,
-      phone: phone,
-      createdAt: now,
-      updatedAt: now,
+    return conversations.where(
+      (conversation) => !conversation.isSupplierConversation,
     );
-  }
-
-  List<PurchaseInvoice> _supplierInvoices(String supplierId) {
-    if (supplierId.isEmpty) return const [];
-    final invoices = _supplierChatInvoices
-        .where((invoice) => invoice.supplierId == supplierId)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    return invoices;
-  }
-
-  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
-    return ConversationActivity.isActivePurchaseInvoiceStatus(
-      invoice.status.name,
-    );
-  }
-
-  bool _matchesSupplierEntryFilter(
-    _QuickSupplierChatEntry entry,
-    bool isSearching,
-  ) {
-    if (!_matchesSupplierSearch(entry)) return false;
-
-    if (isSearching) {
-      return switch (_filter) {
-        _MessageFilter.all ||
-        _MessageFilter.whatsapp ||
-        _MessageFilter.suppliers =>
-          true,
-        _MessageFilter.unread => (entry.conversation?.unreadCount ?? 0) > 0,
-        _MessageFilter.clients || _MessageFilter.team => false,
-      };
-    }
-
-    return switch (_filter) {
-      _MessageFilter.all || _MessageFilter.suppliers => true,
-      _MessageFilter.unread => (entry.conversation?.unreadCount ?? 0) > 0,
-      _MessageFilter.whatsapp ||
-      _MessageFilter.clients ||
-      _MessageFilter.team =>
-        false,
-    };
-  }
-
-  bool _matchesSupplierSearch(_QuickSupplierChatEntry entry) {
-    if (_searchTerm.isEmpty) return true;
-    final haystack = _normalizeSearchText([
-      entry.supplier.name,
-      entry.phone,
-      entry.conversation?.lastMessageContent ?? '',
-      for (final invoice in entry.invoices)
-        '${invoice.invoiceNumber} ${invoice.supplierInvoiceNumber ?? ''} ${invoice.status.displayName}',
-    ].join(' '));
-    return haystack.contains(_searchTerm);
-  }
-
-  int _compareSupplierEntries(
-    _QuickSupplierChatEntry a,
-    _QuickSupplierChatEntry b,
-  ) {
-    final aDate = a.lastActivityAt;
-    final bDate = b.lastActivityAt;
-    if (aDate != null && bDate != null) {
-      final dateCompare = bDate.compareTo(aDate);
-      if (dateCompare != 0) return dateCompare;
-    }
-    if (aDate != null) return -1;
-    if (bDate != null) return 1;
-    return a.supplier.name.toLowerCase().compareTo(
-          b.supplier.name.toLowerCase(),
-        );
-  }
-
-  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
-    final salesRepPhone = supplier.salesRepPhone?.trim();
-    if (_hasWhatsAppPhone(salesRepPhone)) return salesRepPhone;
-    final phone = supplier.phone?.trim();
-    if (_hasWhatsAppPhone(phone)) return phone;
-    return null;
-  }
-
-  Set<String> _phoneCandidates(String? phone) {
-    final digits = _normalizedPhone(phone);
-    if (digits.isEmpty) return {};
-    final candidates = <String>{digits};
-    if (digits.startsWith('56') && digits.length > 2) {
-      candidates.add(digits.substring(2));
-    }
-    if (digits.startsWith('9') && digits.length == 9) {
-      candidates.add('56$digits');
-    }
-    if (digits.length >= 8) {
-      candidates.add(digits.substring(digits.length - 8));
-    }
-    return candidates;
-  }
-
-  String _supplierInitials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return 'P';
-    if (parts.length == 1) {
-      return parts.first.characters.take(2).toString().toUpperCase();
-    }
-    return '${parts.first.characters.first}${parts.last.characters.first}'
-        .toUpperCase();
-  }
-
-  Color _purchaseInvoiceStatusColor(PurchaseInvoiceStatus status) {
-    return switch (status) {
-      PurchaseInvoiceStatus.paid => const Color(0xFF2563EB),
-      PurchaseInvoiceStatus.received => const Color(0xFF16A34A),
-      PurchaseInvoiceStatus.confirmed => const Color(0xFF7C3AED),
-      PurchaseInvoiceStatus.sent => const Color(0xFF0EA5E9),
-      PurchaseInvoiceStatus.cancelled => const Color(0xFFDC2626),
-      PurchaseInvoiceStatus.draft => const Color(0xFF64748B),
-    };
-  }
-
-  String _formatCLP(double value) {
-    final rounded = value.round().toString();
-    final formatted = rounded.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => '.',
-    );
-    return '\$$formatted';
   }
 
   bool _matchesFilter(Conversation conversation) {
@@ -1313,9 +842,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       _MessageFilter.unread => conversation.unreadCount > 0 ||
           (conversation.isSupport && conversation.status == 'pending'),
       _MessageFilter.whatsapp => conversation.isWhatsApp,
-      _MessageFilter.clients =>
-        conversation.isSupport && !conversation.isSupplierConversation,
-      _MessageFilter.suppliers => conversation.isSupplierConversation,
+      _MessageFilter.clients => conversation.isSupport,
       _MessageFilter.team => conversation.isInternal,
     };
   }
@@ -1334,13 +861,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       conversation.title ?? '',
       conversation.creatorName ?? '',
       conversation.contextHint?.customerLabel ?? '',
-      conversation.contextHint?.supplierLabel ?? '',
       conversation.contextHint?.phone ?? '',
-      conversation.contextHint?.supplierPhone ?? '',
       conversation.contextHint?.jobNumber ?? '',
       conversation.contextHint?.jobStatus ?? '',
-      conversation.contextHint?.purchaseInvoiceNumber ?? '',
-      conversation.contextHint?.purchaseInvoiceStatus ?? '',
       conversation.contextHint?.bikeName ?? '',
       conversation.channelLabel,
       conversation.lastMessageContent ?? '',
@@ -1354,7 +877,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final existingCustomerIds = <String>{};
     final existingPhones = <String>{};
     final existingNames = <String>{};
-    for (final conversation in provider.conversations) {
+    for (final conversation in _clientConversations(provider.conversations)) {
       if (!conversation.isWhatsApp) continue;
       final title = _normalizeSearchText(provider.getChatTitle(conversation));
       if (title.isNotEmpty) existingNames.add(title);
@@ -1454,10 +977,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         return 'Trabajo';
       case 'invoice':
         return 'Factura';
-      case 'purchase_invoice':
-        return 'Compra';
-      case 'supplier':
-        return 'Proveedor';
       case 'bike':
         return 'Bicicleta';
       case 'customer':
@@ -1521,7 +1040,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final subtitle = activeModeEmpty
         ? 'Desactiva "Solo activos" para ver el historial completo.'
         : isTotallyEmpty
-            ? 'Los chats internos, web y WhatsApp aparecerán aquí.'
+            ? 'Los chats internos, web y WhatsApp de clientes aparecerán aquí.'
             : 'Prueba con otro filtro o limpia la búsqueda.';
 
     return ListView(
@@ -1554,41 +1073,5 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         ),
       ],
     );
-  }
-}
-
-class _QuickSupplierChatEntry {
-  final shared_supplier.Supplier supplier;
-  final String phone;
-  final Conversation? conversation;
-  final List<PurchaseInvoice> invoices;
-
-  const _QuickSupplierChatEntry({
-    required this.supplier,
-    required this.phone,
-    required this.conversation,
-    required this.invoices,
-  });
-
-  List<PurchaseInvoice> get activeInvoices => invoices
-      .where(
-        (invoice) => ConversationActivity.isActivePurchaseInvoiceStatus(
-          invoice.status.name,
-        ),
-      )
-      .toList();
-
-  PurchaseInvoice? relevantInvoice(bool showOnlyActive) {
-    final relevantInvoices = showOnlyActive ? activeInvoices : invoices;
-    if (relevantInvoices.isEmpty) return null;
-    return relevantInvoices.first;
-  }
-
-  DateTime? get lastActivityAt {
-    final conversationDate =
-        conversation?.lastMessageAt ?? conversation?.updatedAt;
-    if (conversationDate != null) return conversationDate;
-    if (invoices.isEmpty) return null;
-    return invoices.first.date;
   }
 }

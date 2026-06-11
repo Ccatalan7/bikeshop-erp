@@ -257,6 +257,9 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _websiteMerchantGtinController = TextEditingController();
   final _websiteMerchantMpnController = TextEditingController();
   final _websiteGoogleProductCategoryController = TextEditingController();
+  final _whatsappCatalogTitleController = TextEditingController();
+  final _whatsappCatalogDescriptionController = TextEditingController();
+  final _whatsappCatalogPriceController = TextEditingController();
   final _brandController = TextEditingController();
   final _modelController = TextEditingController();
   final _priceController = TextEditingController();
@@ -275,6 +278,7 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isActive = true;
   bool _isPublished = true;
   bool _isGoogleMerchant = false;
+  bool _isWhatsappCatalog = false;
   ProductType _selectedProductType = ProductType.product;
   PurchaseTreatment _selectedPurchaseTreatment = PurchaseTreatment.inventory;
 
@@ -362,6 +366,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (_selectedProductType == ProductType.service) {
       _selectedPurchaseTreatment = PurchaseTreatment.inventory;
       _isGoogleMerchant = false;
+      _isWhatsappCatalog = false;
     }
     _createTabController();
     _inventoryService = Provider.of<inventory_services.InventoryService>(
@@ -431,6 +436,9 @@ class _ProductFormPageState extends State<ProductFormPage>
     _websiteMerchantGtinController.dispose();
     _websiteMerchantMpnController.dispose();
     _websiteGoogleProductCategoryController.dispose();
+    _whatsappCatalogTitleController.dispose();
+    _whatsappCatalogDescriptionController.dispose();
+    _whatsappCatalogPriceController.dispose();
     _brandController.dispose();
     _modelController.dispose();
     _priceController
@@ -1043,6 +1051,12 @@ class _ProductFormPageState extends State<ProductFormPage>
         _websiteMerchantMpnController.text = product.websiteMerchantMpn ?? '';
         _websiteGoogleProductCategoryController.text =
             product.websiteGoogleProductCategory ?? '';
+        _whatsappCatalogTitleController.text =
+            product.whatsappCatalogTitle ?? '';
+        _whatsappCatalogDescriptionController.text =
+            product.whatsappCatalogDescription ?? '';
+        _whatsappCatalogPriceController.text =
+            product.whatsappCatalogPrice?.toStringAsFixed(0) ?? '';
         _websiteImageUrl = product.websiteImageUrl;
         _websiteImageUrlOptimized = product.websiteImageUrlOptimized;
         _websiteAdditionalImages
@@ -1062,6 +1076,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         _isActive = product.isActive;
         _isPublished = product.isPublished;
         _isGoogleMerchant = product.isGoogleMerchant;
+        _isWhatsappCatalog = product.isWhatsappCatalog;
         _imageUrl = product.imageUrl;
         _imageUrlOptimized = product.imageUrlOptimized;
         _additionalImages
@@ -3697,6 +3712,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         _autoDerivedSpecValues.clear();
         _specFieldGuidance = const <String, String>{};
         _isGoogleMerchant = false;
+        _isWhatsappCatalog = false;
         _inventoryQtyController.text = '0';
         _minStockController.text = '0';
 
@@ -4610,6 +4626,12 @@ class _ProductFormPageState extends State<ProductFormPage>
           _normalizeNullableText(_websiteMerchantMpnController.text);
       final websiteGoogleProductCategory =
           _normalizeNullableText(_websiteGoogleProductCategoryController.text);
+      final whatsappCatalogTitle =
+          _normalizeNullableText(_whatsappCatalogTitleController.text);
+      final whatsappCatalogDescription =
+          _normalizeNullableText(_whatsappCatalogDescriptionController.text);
+      final rawWhatsappCatalogPrice =
+          _whatsappCatalogPriceController.text.trim();
       final rawBrand = _brandController.text.trim();
       final rawModel = _modelController.text.trim();
       final potentialBrand = _selectedBrand ?? _matchBrandSelection();
@@ -4644,6 +4666,9 @@ class _ProductFormPageState extends State<ProductFormPage>
       final websitePrice = rawWebsitePrice.isEmpty
           ? null
           : double.tryParse(rawWebsitePrice.replaceAll(',', '.'));
+      final whatsappCatalogPrice = rawWhatsappCatalogPrice.isEmpty
+          ? null
+          : double.tryParse(rawWhatsappCatalogPrice.replaceAll(',', '.'));
       final cost =
           double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0;
       final tracksInventory = _tracksInventoryInForm;
@@ -4677,6 +4702,8 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       final normalizedGoogleMerchant =
           _isServiceForm ? false : _isGoogleMerchant;
+      final normalizedWhatsappCatalog =
+          _isServiceForm ? false : _isWhatsappCatalog;
 
       if (requiresInventoryConversion &&
           _existingProduct != null &&
@@ -4716,6 +4743,10 @@ class _ProductFormPageState extends State<ProductFormPage>
             websiteMerchantGtin: websiteMerchantGtin,
             websiteMerchantMpn: websiteMerchantMpn,
             websiteGoogleProductCategory: websiteGoogleProductCategory,
+            isWhatsappCatalog: normalizedWhatsappCatalog,
+            whatsappCatalogTitle: whatsappCatalogTitle,
+            whatsappCatalogDescription: whatsappCatalogDescription,
+            whatsappCatalogPrice: whatsappCatalogPrice,
             categoryId: categoryIdForSave,
             categoryName: selectedCategoryName,
             supplierId: supplierIdForSave,
@@ -4779,6 +4810,13 @@ class _ProductFormPageState extends State<ProductFormPage>
         websiteMerchantMpnHasValue: true,
         websiteGoogleProductCategory: websiteGoogleProductCategory,
         websiteGoogleProductCategoryHasValue: true,
+        isWhatsappCatalog: normalizedWhatsappCatalog,
+        whatsappCatalogTitle: whatsappCatalogTitle,
+        whatsappCatalogTitleHasValue: true,
+        whatsappCatalogDescription: whatsappCatalogDescription,
+        whatsappCatalogDescriptionHasValue: true,
+        whatsappCatalogPrice: whatsappCatalogPrice,
+        whatsappCatalogPriceHasValue: true,
         categoryId: categoryIdForSave,
         categoryName: selectedCategoryName ?? baseProduct.categoryName,
         supplierId: supplierIdForSave,
@@ -7589,6 +7627,11 @@ class _ProductFormPageState extends State<ProductFormPage>
           title: 'Google Merchant',
           children: _buildWebsiteMerchantFields(theme),
         ),
+      3 => (
+          icon: Icons.chat_outlined,
+          title: 'Catálogo WhatsApp',
+          children: _buildWhatsappCatalogFields(theme),
+        ),
       _ => (
           icon: Icons.language,
           title: 'Tienda Online',
@@ -7618,6 +7661,11 @@ class _ProductFormPageState extends State<ProductFormPage>
                 value: 2,
                 icon: Icon(Icons.shopping_bag_outlined),
                 label: Text('Google Merchant'),
+              ),
+              ButtonSegment(
+                value: 3,
+                icon: Icon(Icons.chat_outlined),
+                label: Text('WhatsApp'),
               ),
             ],
             selected: {_websiteSubTabIndex},
@@ -8493,6 +8541,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             if (!_isActive) {
               _isPublished = false;
               _isGoogleMerchant = false;
+              _isWhatsappCatalog = false;
             }
           });
         },
@@ -8542,6 +8591,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   // CASCADE: If unpublishing, turn off Google Merchant
                   if (!_isPublished) {
                     _isGoogleMerchant = false;
+                    _isWhatsappCatalog = false;
                   }
                 });
               }
@@ -8730,6 +8780,27 @@ class _ProductFormPageState extends State<ProductFormPage>
         _skuController.text,
         _existingProduct?.sku,
       ]);
+
+  String get _effectiveWhatsappCatalogTitle => _firstNonEmptyText([
+        _whatsappCatalogTitleController.text,
+        _websiteNameController.text,
+        _nameController.text,
+        _existingProduct?.name,
+      ]);
+
+  String get _effectiveWhatsappCatalogDescription => _firstNonEmptyText([
+        _whatsappCatalogDescriptionController.text,
+        _websiteDescriptionController.text,
+        _descriptionController.text,
+        _existingProduct?.description,
+      ]);
+
+  double get _effectiveWhatsappCatalogPrice {
+    final whatsappPrice = double.tryParse(
+      _whatsappCatalogPriceController.text.replaceAll(',', '.'),
+    );
+    return whatsappPrice ?? _effectiveWebsitePrice;
+  }
 
   String? get _activeProductUrl {
     final id = _existingProduct?.id;
@@ -9160,6 +9231,178 @@ class _ProductFormPageState extends State<ProductFormPage>
     ];
   }
 
+  List<Widget> _buildWhatsappCatalogFields(ThemeData theme) {
+    if (_isServiceForm) {
+      return [
+        Text(
+          'Los servicios no se publican en el catálogo de productos de WhatsApp. Para servicios, usa la publicación web y los flujos de mensajería interna.',
+          style: theme.textTheme.bodyMedium,
+        ),
+      ];
+    }
+
+    final hasImage = _selectedWebsiteImageBytes != null ||
+        _websitePreviewImageUrl.trim().isNotEmpty;
+    final price = _effectiveWhatsappCatalogPrice;
+    final productUrl = _activeProductUrl;
+
+    return [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Row(
+          children: [
+            const Text('Incluir en catálogo de WhatsApp'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'WhatsApp',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          !_isActive
+              ? 'Requiere que el producto esté activo.'
+              : !_isPublished
+                  ? 'Requiere que el producto esté publicado.'
+                  : 'Prepara este producto para sincronizarlo con el catálogo conectado a WhatsApp.',
+          style: TextStyle(
+            color: (_isActive && _isPublished) ? null : theme.disabledColor,
+          ),
+        ),
+        value: _isActive && _isPublished && _isWhatsappCatalog,
+        onChanged: (_isActive && _isPublished)
+            ? (value) => setState(() => _isWhatsappCatalog = value)
+            : null,
+      ),
+      const SizedBox(height: 16),
+      _buildReadinessPanel(
+        theme,
+        title: 'Preparación WhatsApp',
+        checks: [
+          (
+            ok: _isActive && _isPublished && _isWhatsappCatalog,
+            label: 'Marcado',
+            detail: 'Debe estar activo, publicado y habilitado para WhatsApp.',
+          ),
+          (
+            ok: _effectiveWhatsappCatalogTitle.length >= 10,
+            label: 'Título útil',
+            detail: 'Debe leerse bien dentro del catálogo móvil.',
+          ),
+          (
+            ok: _effectiveWhatsappCatalogDescription.length >= 20,
+            label: 'Descripción clara',
+            detail: 'WhatsApp necesita una descripción corta y entendible.',
+          ),
+          (
+            ok: price > 0,
+            label: 'Precio válido',
+            detail: 'El catálogo necesita un precio final en CLP.',
+          ),
+          (
+            ok: hasImage,
+            label: 'Imagen disponible',
+            detail: 'Usa la imagen web o principal del producto.',
+          ),
+          (
+            ok: productUrl != null,
+            label: 'URL pública',
+            detail: 'Guarda el producto para generar su enlace público.',
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 700;
+          final fields = [
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _whatsappCatalogTitleController,
+                decoration: InputDecoration(
+                  labelText: 'Título WhatsApp',
+                  hintText: _effectiveWhatsappCatalogTitle,
+                  helperText: 'Vacío = nombre web/normal.',
+                ),
+              ),
+            ),
+            SizedBox(width: 16, height: isNarrow ? 16 : 0),
+            Expanded(
+              flex: isNarrow ? 0 : 1,
+              child: TextFormField(
+                controller: _whatsappCatalogPriceController,
+                decoration: InputDecoration(
+                  labelText: 'Precio WhatsApp',
+                  hintText: price > 0 ? price.toStringAsFixed(0) : '0',
+                  helperText: 'Vacío = precio web/normal.',
+                  prefixText: 'CLP ',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                ],
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.isEmpty) return null;
+                  final parsed = double.tryParse(text.replaceAll(',', '.'));
+                  if (parsed == null || parsed < 0) {
+                    return 'Ingresa un precio WhatsApp válido';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ];
+          return isNarrow
+              ? Column(
+                  children: fields
+                      .map((widget) => widget is Expanded
+                          ? SizedBox(
+                              width: double.infinity,
+                              child: widget.child,
+                            )
+                          : widget)
+                      .toList(),
+                )
+              : Row(children: fields);
+        },
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: _whatsappCatalogDescriptionController,
+        decoration: InputDecoration(
+          labelText: 'Descripción WhatsApp',
+          hintText: _effectiveWhatsappCatalogDescription,
+          helperText: 'Vacío = descripción web/normal.',
+        ),
+        maxLines: 4,
+      ),
+      const SizedBox(height: 16),
+      _buildWhatsappCatalogPreview(theme),
+      const SizedBox(height: 16),
+      _buildUrlToolRow(
+        theme,
+        title: 'URL pública del producto',
+        value: productUrl ?? 'Guarda el producto para generar su URL pública.',
+        canOpen: productUrl != null,
+      ),
+    ];
+  }
+
   Widget _buildReadinessPanel(
     ThemeData theme, {
     required String title,
@@ -9337,6 +9580,107 @@ class _ProductFormPageState extends State<ProductFormPage>
                   '${inStock ? 'En stock' : 'Agotado'} · $_effectiveMerchantBrand',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWhatsappCatalogPreview(ThemeData theme) {
+    final imageUrl = _websitePreviewImageUrl;
+    final price = ChileanUtils.formatCurrency(_effectiveWhatsappCatalogPrice);
+    final description = _effectiveWhatsappCatalogDescription;
+    final inStock = !_tracksInventoryInForm ||
+        (int.tryParse(_inventoryQtyController.text) ?? 0) > 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 104,
+              height: 104,
+              child: _selectedWebsiteImageBytes != null
+                  ? Image.memory(_selectedWebsiteImageBytes!, fit: BoxFit.cover)
+                  : ImageService.buildProductImage(
+                      imageUrl: imageUrl,
+                      size: 104,
+                      isListThumbnail: false,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.chat_outlined,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Vista previa WhatsApp',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _effectiveWhatsappCatalogTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  price,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  inStock ? 'Disponible' : 'Agotado',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: inStock
+                        ? Colors.green.shade800
+                        : theme.colorScheme.error,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],

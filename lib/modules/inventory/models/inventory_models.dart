@@ -14,6 +14,8 @@ class Product {
       'website_merchant_title,website_merchant_description,'
       'website_merchant_brand,website_merchant_gtin,'
       'website_merchant_mpn,website_google_product_category,'
+      'is_whatsapp_catalog,whatsapp_catalog_title,'
+      'whatsapp_catalog_description,whatsapp_catalog_price,'
       'warehouse_location,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
@@ -85,6 +87,10 @@ class Product {
   final String? websiteMerchantMpn;
   final String? websiteGoogleProductCategory;
   final bool isGoogleMerchant;
+  final bool isWhatsappCatalog;
+  final String? whatsappCatalogTitle;
+  final String? whatsappCatalogDescription;
+  final double? whatsappCatalogPrice;
   final PurchaseTreatment purchaseTreatment;
   final ProductType productType;
   // Set-related fields
@@ -149,6 +155,7 @@ class Product {
     this.isActive = true,
     this.isPublished = true,
     this.isGoogleMerchant = false,
+    this.isWhatsappCatalog = false,
     this.websiteName,
     this.websitePrice,
     this.websiteImageUrl,
@@ -163,6 +170,9 @@ class Product {
     this.websiteMerchantGtin,
     this.websiteMerchantMpn,
     this.websiteGoogleProductCategory,
+    this.whatsappCatalogTitle,
+    this.whatsappCatalogDescription,
+    this.whatsappCatalogPrice,
     this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     this.isSet = false,
@@ -272,6 +282,12 @@ class Product {
       websiteMerchantMpn: json['website_merchant_mpn'],
       websiteGoogleProductCategory: json['website_google_product_category'],
       isGoogleMerchant: json['is_google_merchant'] ?? false,
+      isWhatsappCatalog: json['is_whatsapp_catalog'] ?? false,
+      whatsappCatalogTitle: json['whatsapp_catalog_title'],
+      whatsappCatalogDescription: json['whatsapp_catalog_description'],
+      whatsappCatalogPrice: json['whatsapp_catalog_price'] is num
+          ? (json['whatsapp_catalog_price'] as num).toDouble()
+          : null,
       purchaseTreatment: parsePurchaseTreatment(
         json['purchase_treatment'],
         productType: json['product_type']?.toString(),
@@ -373,6 +389,10 @@ class Product {
       'website_merchant_mpn': websiteMerchantMpn,
       'website_google_product_category': websiteGoogleProductCategory,
       'is_google_merchant': isGoogleMerchant,
+      'is_whatsapp_catalog': isWhatsappCatalog,
+      'whatsapp_catalog_title': whatsappCatalogTitle,
+      'whatsapp_catalog_description': whatsappCatalogDescription,
+      'whatsapp_catalog_price': whatsappCatalogPrice,
       'show_on_website': isPublished,
       'purchase_treatment': purchaseTreatment.dbValue,
       'product_type': productType.name,
@@ -486,6 +506,13 @@ class Product {
     String? websiteGoogleProductCategory,
     bool websiteGoogleProductCategoryHasValue = false,
     bool? isGoogleMerchant,
+    bool? isWhatsappCatalog,
+    String? whatsappCatalogTitle,
+    bool whatsappCatalogTitleHasValue = false,
+    String? whatsappCatalogDescription,
+    bool whatsappCatalogDescriptionHasValue = false,
+    double? whatsappCatalogPrice,
+    bool whatsappCatalogPriceHasValue = false,
     PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
     bool? isSet,
@@ -604,6 +631,19 @@ class Product {
           ? websiteGoogleProductCategory
           : this.websiteGoogleProductCategory,
       isGoogleMerchant: isGoogleMerchant ?? this.isGoogleMerchant,
+      isWhatsappCatalog: isWhatsappCatalog ?? this.isWhatsappCatalog,
+      whatsappCatalogTitle:
+          (whatsappCatalogTitleHasValue || whatsappCatalogTitle != null)
+              ? whatsappCatalogTitle
+              : this.whatsappCatalogTitle,
+      whatsappCatalogDescription: (whatsappCatalogDescriptionHasValue ||
+              whatsappCatalogDescription != null)
+          ? whatsappCatalogDescription
+          : this.whatsappCatalogDescription,
+      whatsappCatalogPrice:
+          (whatsappCatalogPriceHasValue || whatsappCatalogPrice != null)
+              ? whatsappCatalogPrice
+              : this.whatsappCatalogPrice,
       purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
       isSet: isSet ?? this.isSet,

@@ -7,6 +7,7 @@ enum ToolbarTool {
   bikeFinder,
   aiAssistant,
   messages,
+  supplierMessages,
   storage,
   kiosk,
   quickSale,

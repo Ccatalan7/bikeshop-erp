@@ -2672,6 +2672,44 @@ Architecture rule:
 
 Direct transport sends are only appropriate inside the messaging workflow itself or for explicitly approved automated notifications where no staff review is expected.
 
+## WhatsApp Cloud API Business Profile
+
+The ERP currently uses a real WhatsApp Cloud API business number as the app-wired messaging face for Viñabike:
+
+- active `whatsapp_channels` row for Viñabike production tenant `5443b130-cc28-45af-a420-cd500b288890`
+- display name in ERP: `Viñabike Oficial`
+- Cloud API display phone: `+56 9 4188 4520`
+- Meta verified name as of 2026-06-10: `Viñabike`
+- phone number id: `1107058485829123`
+- WhatsApp Business Account id: `912031294920516`
+- status as of 2026-06-10: `CONNECTED`, quality `GREEN`, messaging tier `TIER_250`, platform `CLOUD_API`
+
+This Cloud API number is a WhatsApp Business Platform number, but its public profile is separate from the physical Chile SIM logged into the WhatsApp Business app. Do not assume avatar, catalog, about text, address, or website automatically carry over from the physical phone. Treat the Cloud API number as the primary ERP-managed business inbox and configure its profile deliberately through Meta/Graph API.
+
+Current public profile fields set through Graph API on 2026-06-10:
+
+- category / vertical: `RETAIL`
+- about: `Tienda y taller de bicicletas en Viña del Mar.`
+- description: `Venta, reparación y mantención de bicicletas, repuestos y accesorios en Viña del Mar.`
+- address: `Álvarez 32, Local 17, Viña del Mar, Chile`
+- email: `contacto@vinabike.cl`
+- website: `https://vinabike.cl/`
+- avatar/profile image: uploaded from `.github/Logo Viñabike Fondo Blanco Canva 2.jpeg`
+
+Operational helper:
+
+- `supabase/functions/whatsapp-profile-admin/index.ts` can inspect and update the WhatsApp Business Profile using the server-side `WHATSAPP_ACCESS_TOKEN`; it avoids exposing the Meta token locally.
+- Deploy with: `supabase functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt`.
+- Protect invocations with `WHATSAPP_PROFILE_ADMIN_TOKEN` in Supabase secrets, or the service-role bearer when used by trusted agents only. Never expose either token in chat or checked-in files.
+- Use `inspect` before changing profile data, and only update public business facts that are already verified from `website_settings`, Google Business data, or explicit user instruction.
+- Profile text fields and website can be updated with Graph API. Avatar/profile image updates use the same helper's `upload_profile_picture` multipart action, which performs Meta's resumable upload flow to get a `profile_picture_handle` before updating the WhatsApp Business Profile. Catalog/commerce setup may still need WhatsApp Manager/Commerce Manager configuration; do not claim catalog setup is done after updating profile fields only.
+
+Approved templates observed on 2026-06-10 include `seguimiento_presupuesto_bicicleta`, `bicicleta_lista_retiro`, `actualizacion_servicio_bicicleta`, and `seguimiento_servicio_bicicleta` in `es_CL`. Keep first-contact/outside-24h messaging template-aware; production Cloud API removes sandbox allowlist restrictions but does not remove WhatsApp's 24-hour service-window and approved-template rules.
+
+Inventory products now have an ERP-side WhatsApp catalog preparation layer in the product form's `Tienda Online` tab. The fields live on `products`: `is_whatsapp_catalog`, `whatsapp_catalog_title`, `whatsapp_catalog_description`, and `whatsapp_catalog_price`. Empty WhatsApp title/description/price values intentionally fall back to website/product data in the UI. This prepares clean catalog data, but it is not the Meta Commerce Catalog sync itself; future sync work still needs to inspect/create/connect the Meta catalog asset and push eligible rows through a server-side Edge Function.
+
+Live catalog work on 2026-06-10 resolved the publication path. The old UI catalog `647068650790417` was never readable through the Catalog API (`/{catalog_id}` and `/{catalog_id}/products` returned Graph code `100` subcode `33`) and the business owned zero API-visible catalogs, so that id is a dead end — do not keep fighting it. The fix was to create a brand-new catalog through Graph: `POST 751663314343298/owned_product_catalogs` body `{name, vertical:"commerce"}` returned the working catalog id `932738139825582` ("Viñabike Catálogo WhatsApp", owned by business `751663314343298`). Test product SKU `N079` (`9eaf3153-6bb8-4e2b-8d2e-69c5ec06c493`) was then uploaded successfully via the helper's `upsert_catalog_product` action with `catalogId:932738139825582` (Meta product id `36596330423313700`, retailer_id `N079`, `$15.000`, `in stock`, `published`). The catalog was connected to WABA `912031294920516` via `POST 912031294920516/product_catalogs` body `{catalog_id:932738139825582}` → `{success:true}`, confirmed by `912031294920516/product_catalogs` listing it with `product_count:1`. One step still fails: the phone-number in-chat commerce toggle `POST 1107058485829123/whatsapp_commerce_settings` (urlencoded, via the `connect_catalog` action) returns Graph code `1` "An unknown error has occurred." and the GET returns `data: []`. This is Meta's notorious code-1 on `whatsapp_commerce_settings`; the catalog and product are fully live and WABA-connected regardless, so it does not block catalog existence/publication. It likely needs WhatsApp commerce onboarding completed or in-chat shopping availability for the region. The helper `supabase/functions/whatsapp-profile-admin/index.ts` now exposes generic `graph_get` / `graph_post` actions plus the dedicated urlencoded `connect_catalog` and `upsert_catalog_product` actions; the latter two return the inner payload directly (no top-level `.status`/`.payload` keys). Rotate the Meta `WHATSAPP_ACCESS_TOKEN` since it appeared in earlier chat/screenshots.
+
 ---
 
 # 🧮 Database Schema (PostgreSQL)

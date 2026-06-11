@@ -19020,10 +19020,15 @@ alter table public.products
   add column if not exists website_merchant_gtin text,
   add column if not exists website_merchant_mpn text,
   add column if not exists website_google_product_category text,
+  add column if not exists is_whatsapp_catalog boolean not null default false,
+  add column if not exists whatsapp_catalog_title text,
+  add column if not exists whatsapp_catalog_description text,
+  add column if not exists whatsapp_catalog_price numeric(12,2),
   add column if not exists website_featured boolean default false;
 
 create index if not exists idx_products_website on products(show_on_website) where show_on_website = true;
 create index if not exists idx_products_featured on products(website_featured) where website_featured = true;
+create index if not exists idx_products_whatsapp_catalog on products(tenant_id, updated_at desc) where is_whatsapp_catalog = true;
 
 create table if not exists public.google_oauth_connections (
   integration_key text primary key,
