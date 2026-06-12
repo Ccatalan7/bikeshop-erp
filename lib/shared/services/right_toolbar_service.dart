@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// The tools available in the right toolbar.
 enum ToolbarTool {
+  notifications,
   newJob,
   bikeFinder,
   aiAssistant,

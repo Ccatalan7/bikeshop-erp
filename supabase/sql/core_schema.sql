@@ -19002,6 +19002,200 @@ create trigger trg_online_order_erp_notification
   after insert on online_orders
   for each row execute function public.create_online_order_erp_notification();
 
+-- ============================================================
+-- Notification source: new workshop job (trabajo)
+-- ============================================================
+create or replace function public.create_mechanic_job_erp_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_customer_name text;
+  v_body text;
+begin
+  -- Skip soft-deleted rows
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  select name into v_customer_name
+  from public.customers
+  where id = NEW.customer_id;
+
+  v_body := coalesce(nullif(NEW.job_number, ''), 'Trabajo')
+    || ' · '
+    || coalesce(nullif(v_customer_name, ''), 'Cliente');
+
+  insert into public.erp_notifications (
+    tenant_id,
+    type,
+    title,
+    body,
+    route,
+    entity_type,
+    entity_id,
+    severity,
+    data
+  ) values (
+    NEW.tenant_id,
+    'mechanic_job_created',
+    'Nuevo trabajo',
+    v_body,
+    '/taller/pegas?job=' || NEW.id::text,
+    'mechanic_job',
+    NEW.id,
+    'info',
+    jsonb_build_object(
+      'job_id', NEW.id,
+      'job_number', NEW.job_number,
+      'customer_id', NEW.customer_id,
+      'customer_name', v_customer_name,
+      'status', NEW.status
+    )
+  ) on conflict (tenant_id, type, entity_type, entity_id) do nothing;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_mechanic_job_erp_notification on mechanic_jobs;
+create trigger trg_mechanic_job_erp_notification
+  after insert on mechanic_jobs
+  for each row execute function public.create_mechanic_job_erp_notification();
+
+-- ============================================================
+-- Notification source: new sales payment received
+-- ============================================================
+create or replace function public.create_sales_payment_erp_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_body text;
+begin
+  -- Skip soft-deleted rows
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  v_body := coalesce(nullif(NEW.invoice_reference, ''), 'Pago');
+
+  if coalesce(NEW.amount, 0) > 0 then
+    v_body := v_body || ' · $' || trim(to_char(NEW.amount, 'FM999G999G999G990'));
+  end if;
+
+  insert into public.erp_notifications (
+    tenant_id,
+    type,
+    title,
+    body,
+    route,
+    entity_type,
+    entity_id,
+    severity,
+    data
+  ) values (
+    NEW.tenant_id,
+    'sales_payment_received',
+    'Nuevo pago recibido',
+    v_body,
+    '/sales/payments',
+    'sales_payment',
+    NEW.id,
+    'success',
+    jsonb_build_object(
+      'payment_id', NEW.id,
+      'invoice_id', NEW.invoice_id,
+      'invoice_reference', NEW.invoice_reference,
+      'amount', NEW.amount
+    )
+  ) on conflict (tenant_id, type, entity_type, entity_id) do nothing;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sales_payment_erp_notification on sales_payments;
+create trigger trg_sales_payment_erp_notification
+  after insert on sales_payments
+  for each row execute function public.create_sales_payment_erp_notification();
+
+-- ============================================================
+-- Notification source: WhatsApp catalog product approved (customer-visible)
+-- Fires only when status transitions INTO 'customer_visible'.
+-- ============================================================
+create or replace function public.create_whatsapp_catalog_erp_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_body text;
+begin
+  if NEW.whatsapp_catalog_sync_status is distinct from 'customer_visible' then
+    return NEW;
+  end if;
+
+  if OLD.whatsapp_catalog_sync_status is not distinct from 'customer_visible' then
+    return NEW;
+  end if;
+
+  v_name := coalesce(
+    nullif(NEW.whatsapp_catalog_title, ''),
+    nullif(NEW.name, ''),
+    'Producto'
+  );
+
+  v_body := v_name || ' ya es visible en el catálogo de WhatsApp';
+
+  insert into public.erp_notifications (
+    tenant_id,
+    type,
+    title,
+    body,
+    route,
+    entity_type,
+    entity_id,
+    severity,
+    data
+  ) values (
+    NEW.tenant_id,
+    'whatsapp_catalog_approved',
+    'Producto aprobado en WhatsApp',
+    v_body,
+    '/inventory/products?product=' || NEW.id::text,
+    'product',
+    NEW.id,
+    'success',
+    jsonb_build_object(
+      'product_id', NEW.id,
+      'product_name', v_name,
+      'sku', NEW.sku
+    )
+  ) on conflict (tenant_id, type, entity_type, entity_id) do update
+    set title = excluded.title,
+        body = excluded.body,
+        route = excluded.route,
+        severity = excluded.severity,
+        data = excluded.data,
+        read_at = null,
+        updated_at = now();
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_whatsapp_catalog_erp_notification on products;
+create trigger trg_whatsapp_catalog_erp_notification
+  after update of whatsapp_catalog_sync_status on products
+  for each row execute function public.create_whatsapp_catalog_erp_notification();
+
 -- Product visibility for online store (control which products appear on website)
 alter table public.products
   add column if not exists show_on_website boolean default true,
@@ -19024,11 +19218,139 @@ alter table public.products
   add column if not exists whatsapp_catalog_title text,
   add column if not exists whatsapp_catalog_description text,
   add column if not exists whatsapp_catalog_price numeric(12,2),
+  add column if not exists whatsapp_catalog_sync_status text not null default 'not_synced',
+  add column if not exists whatsapp_catalog_sync_error text,
+  add column if not exists whatsapp_catalog_sync_requested_at timestamptz,
+  add column if not exists whatsapp_catalog_synced_at timestamptz,
+  add column if not exists whatsapp_catalog_meta_product_id text,
   add column if not exists website_featured boolean default false;
 
 create index if not exists idx_products_website on products(show_on_website) where show_on_website = true;
 create index if not exists idx_products_featured on products(website_featured) where website_featured = true;
 create index if not exists idx_products_whatsapp_catalog on products(tenant_id, updated_at desc) where is_whatsapp_catalog = true;
+
+-- Review-aware lifecycle. Meta accepting an upsert (visibility=published) does
+-- NOT mean the product is visible to customers; that is gated by the async
+-- per-product review field capability_to_review_status[WHATSAPP] == APPROVED.
+-- 'under_review' = accepted but hidden, 'customer_visible' = APPROVED (live),
+-- 'rejected' = REJECTED. Legacy 'synced' is kept for historical rows.
+alter table public.products
+  drop constraint if exists products_whatsapp_catalog_sync_status_check;
+
+alter table public.products
+  add constraint products_whatsapp_catalog_sync_status_check
+  check (
+    whatsapp_catalog_sync_status in (
+      'not_synced',
+      'pending',
+      'syncing',
+      'synced',
+      'under_review',
+      'customer_visible',
+      'rejected',
+      'removed',
+      'failed'
+    )
+  );
+
+create or replace function public.enqueue_whatsapp_catalog_product_sync()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_service_role_key text;
+begin
+  if tg_op = 'INSERT' and not coalesce(new.is_whatsapp_catalog, false) then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and not coalesce(old.is_whatsapp_catalog, false)
+     and not coalesce(new.is_whatsapp_catalog, false) then
+    return new;
+  end if;
+
+  update public.products
+  set whatsapp_catalog_sync_status = 'pending',
+      whatsapp_catalog_sync_error = null,
+      whatsapp_catalog_sync_requested_at = now()
+  where id = new.id;
+
+  select decrypted_secret
+  into v_service_role_key
+  from vault.decrypted_secrets
+  where name = 'whatsapp_catalog_sync_service_role_key'
+  order by created_at desc
+  limit 1;
+
+  if nullif(v_service_role_key, '') is null then
+    update public.products
+    set whatsapp_catalog_sync_status = 'failed',
+        whatsapp_catalog_sync_error =
+          'Missing Vault secret whatsapp_catalog_sync_service_role_key'
+    where id = new.id;
+    return new;
+  end if;
+
+  perform net.http_post(
+    url := 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/whatsapp-catalog-sync',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || v_service_role_key,
+      'apikey', v_service_role_key
+    ),
+    body := jsonb_build_object('productId', new.id::text),
+    timeout_milliseconds := 15000
+  );
+
+  return new;
+exception
+  when others then
+    update public.products
+    set whatsapp_catalog_sync_status = 'failed',
+        whatsapp_catalog_sync_error = sqlerrm
+    where id = new.id;
+    return new;
+end;
+$$;
+
+revoke all on function public.enqueue_whatsapp_catalog_product_sync() from public;
+
+drop trigger if exists trg_products_whatsapp_catalog_sync_insert on public.products;
+create trigger trg_products_whatsapp_catalog_sync_insert
+  after insert on public.products
+  for each row
+  execute function public.enqueue_whatsapp_catalog_product_sync();
+
+drop trigger if exists trg_products_whatsapp_catalog_sync_update on public.products;
+create trigger trg_products_whatsapp_catalog_sync_update
+  after update of
+    is_whatsapp_catalog,
+    whatsapp_catalog_title,
+    whatsapp_catalog_description,
+    whatsapp_catalog_price,
+    name,
+    sku,
+    description,
+    brand,
+    category_name,
+    price,
+    stock_quantity,
+    inventory_qty,
+    is_active,
+    is_published,
+    website_name,
+    website_description,
+    website_price,
+    website_image_url,
+    website_image_url_optimized,
+    image_url,
+    image_url_optimized
+  on public.products
+  for each row
+  execute function public.enqueue_whatsapp_catalog_product_sync();
 
 create table if not exists public.google_oauth_connections (
   integration_key text primary key,

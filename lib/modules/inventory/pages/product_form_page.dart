@@ -32,6 +32,8 @@ import '../widgets/set_configuration_widget.dart';
 import '../utils/product_spec_inference_utils.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
+import '../services/whatsapp_catalog_sync_service.dart';
+import '../../ai_assistant/services/ai_service.dart';
 import '../../bikeshop/config/brake_canonical_data.dart';
 import '../../bikeshop/config/drivetrain_canonical_data.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
@@ -303,6 +305,10 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isUploadingGalleryImage = false;
   bool _isUploadingWebsiteGalleryImage = false;
   bool _isLoadingGoogleDiagnostics = false;
+  bool _isGeneratingWhatsappDescription = false;
+  bool _isRefreshingWhatsappStatus = false;
+  String? _whatsappStatusOverride;
+  String? _whatsappReviewOverride;
   Map<String, dynamic>? _googleDiagnostics;
   String? _googleDiagnosticsError;
   int _googleDiagnosticsRequestId = 0;
@@ -4537,8 +4543,19 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool get _isChildProduct => _existingProduct?.parentSetId != null;
 
   Future<void> _saveProduct() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo guardar. Revisa los campos marcados en rojo.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
+    final wasWhatsappCatalog = _existingProduct?.isWhatsappCatalog ?? false;
     final requiresInventoryConversion = _requiresInventoryConversion;
     String? conversionReason;
     if (requiresInventoryConversion) {
@@ -4891,15 +4908,62 @@ class _ProductFormPageState extends State<ProductFormPage>
         }
       }
 
+      WhatsAppCatalogSyncResult? whatsappSyncResult;
+      String? whatsappSyncError;
+      final shouldSyncWhatsappCatalog = !_isServiceForm &&
+          savedProduct.id != null &&
+          (savedProduct.isWhatsappCatalog || wasWhatsappCatalog);
+      if (shouldSyncWhatsappCatalog) {
+        try {
+          whatsappSyncResult =
+              await WhatsAppCatalogSyncService().syncProduct(savedProduct.id!);
+        } catch (error, stackTrace) {
+          whatsappSyncError = error.toString().replaceFirst('Exception: ', '');
+          ErrorReportingService.report(
+            'Error sincronizando catálogo WhatsApp: $error',
+            stackTrace,
+          );
+        }
+      }
+
       _notifySharedInventory();
 
       if (!mounted) return;
+      if (whatsappSyncError != null) {
+        _existingProduct = savedProduct;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Producto guardado, pero no se pudo sincronizar con WhatsApp: '
+              '$whatsappSyncError',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final whatsappSuccessMessage = whatsappSyncResult == null
+          ? ''
+          : whatsappSyncResult.wasRemoved
+              ? ' y retirado de WhatsApp'
+              : whatsappSyncResult.isCustomerVisible
+                  ? ' y visible en WhatsApp'
+                  : whatsappSyncResult.isUnderReview
+                      ? ' y enviado a WhatsApp (en revisión)'
+                      : whatsappSyncResult.wasPublished
+                          ? ' y enviado a WhatsApp'
+                          : '';
+      if (whatsappSyncResult?.syncStatus != null) {
+        _whatsappStatusOverride = whatsappSyncResult!.syncStatus;
+        _whatsappReviewOverride = whatsappSyncResult.whatsappReview;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _existingProduct != null
-                ? 'Producto actualizado con éxito'
-                : 'Producto creado con éxito',
+                ? 'Producto actualizado con éxito$whatsappSuccessMessage'
+                : 'Producto creado con éxito$whatsappSuccessMessage',
           ),
           backgroundColor: Colors.green,
         ),
@@ -8802,6 +8866,119 @@ class _ProductFormPageState extends State<ProductFormPage>
     return whatsappPrice ?? _effectiveWebsitePrice;
   }
 
+  String get _effectiveProductCategoryName {
+    for (final category in _categories) {
+      if (category.id == _selectedCategoryId) return category.name;
+    }
+    return _existingProduct?.categoryName ?? '';
+  }
+
+  Future<void> _generateWhatsappCatalogDescription() async {
+    if (_isGeneratingWhatsappDescription) return;
+
+    final title = _effectiveWhatsappCatalogTitle.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Agrega un nombre de producto antes de usar la IA.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingWhatsappDescription = true);
+    try {
+      final brand = _firstNonEmptyText([
+        _brandController.text,
+        _selectedBrand?.name,
+        _existingProduct?.brand,
+      ]);
+      final model = _modelController.text.trim();
+      final category = _effectiveProductCategoryName;
+      final existingDescription = _firstNonEmptyText([
+        _websiteDescriptionController.text,
+        _descriptionController.text,
+        _existingProduct?.description,
+      ]);
+      final sku = _skuController.text.trim();
+
+      final dataLines = <String>[
+        '- Nombre: $title',
+        if (sku.isNotEmpty) '- SKU: $sku',
+        if (brand.isNotEmpty) '- Marca: $brand',
+        if (model.isNotEmpty) '- Modelo: $model',
+        if (category.isNotEmpty) '- Categoría: $category',
+        if (existingDescription.isNotEmpty)
+          '- Descripción existente: $existingDescription',
+      ].join('\n');
+
+      final prompt = '''
+Eres el vendedor experto de una bicicletería chilena escribiendo la ficha de un producto para el catálogo de WhatsApp. Tu objetivo es que se lea como si lo escribió una persona que conoce de bicicletas, no una IA.
+
+DATOS REALES (única fuente de verdad):
+$dataLines
+
+CÓMO ESCRIBIR (suena humano y profesional):
+- Parte directo por el producto y para qué sirve concretamente, no con una frase de relleno.
+- Tono cercano pero técnico, como un mecánico que recomienda algo a un cliente.
+- Español de Chile, natural, sin sonar a folleto ni a marketing genérico.
+- 2 o 3 frases, entre 90 y 320 caracteres.
+- Si hay marca o modelo en los datos, menciónalos con naturalidad.
+- Prioriza información concreta y útil por sobre adjetivos.
+
+PROHIBIDO (esto delata que lo hizo una IA, NO lo uses):
+- Clichés como "solución versátil", "ideal para", "este producto", "perfecto para", "lleva tu bici al siguiente nivel", "no te quedes sin", "calidad premium", "potencia tu experiencia".
+- Empezar con "Adapta tu...", "Mejora tu...", "Descubre...", "Presentamos...".
+- Signos de exclamación, emojis, hashtags, mayúsculas de grito.
+- Inventar materiales, medidas, compatibilidades, pesos, beneficios o certificaciones que no estén en los datos.
+- Precio, stock, títulos, listas, comillas, Markdown o cualquier nota tuya.
+
+Responde ÚNICAMENTE con el texto final de la descripción, nada más.
+''';
+
+      final generated = await AIAssistantService().generateOneShotText(
+        prompt,
+        modelName: 'gemini-2.5-flash',
+      );
+      final description = generated
+          .trim()
+          .replaceFirst(RegExp(r'^["“”]+'), '')
+          .replaceFirst(RegExp(r'["“”]+$'), '')
+          .trim();
+      if (description.length < 20) {
+        throw Exception('La IA devolvió una descripción demasiado corta.');
+      }
+
+      _whatsappCatalogDescriptionController.text = description;
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Descripción WhatsApp generada. Revísala antes de guardar.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (error, stackTrace) {
+      ErrorReportingService.report(
+        'Error generando descripción WhatsApp con IA: $error',
+        stackTrace,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo generar la descripción: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingWhatsappDescription = false);
+      }
+    }
+  }
+
   String? get _activeProductUrl {
     final id = _existingProduct?.id;
     if (id == null || id.isEmpty) return null;
@@ -9275,7 +9452,11 @@ class _ProductFormPageState extends State<ProductFormPage>
               ? 'Requiere que el producto esté activo.'
               : !_isPublished
                   ? 'Requiere que el producto esté publicado.'
-                  : 'Prepara este producto para sincronizarlo con el catálogo conectado a WhatsApp.',
+                  : _isWhatsappCatalog
+                      ? 'Al guardar, publica o actualiza este producto en el catálogo conectado a WhatsApp.'
+                      : _existingProduct?.isWhatsappCatalog == true
+                          ? 'Al guardar, retira este producto del catálogo conectado a WhatsApp.'
+                          : 'Activa esta opción y guarda para publicar el producto en WhatsApp.',
           style: TextStyle(
             color: (_isActive && _isPublished) ? null : theme.disabledColor,
           ),
@@ -9288,7 +9469,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       const SizedBox(height: 16),
       _buildReadinessPanel(
         theme,
-        title: 'Preparación WhatsApp',
+        title: 'Sincronización WhatsApp',
         checks: [
           (
             ok: _isActive && _isPublished && _isWhatsappCatalog,
@@ -9323,6 +9504,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         ],
       ),
       const SizedBox(height: 16),
+      ..._buildWhatsappStatusSection(theme),
       LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 700;
@@ -9382,12 +9564,45 @@ class _ProductFormPageState extends State<ProductFormPage>
         },
       ),
       const SizedBox(height: 12),
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          Text(
+            'Descripción para el catálogo',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: _isGeneratingWhatsappDescription
+                ? null
+                : _generateWhatsappCatalogDescription,
+            icon: _isGeneratingWhatsappDescription
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined, size: 18),
+            label: Text(
+              _isGeneratingWhatsappDescription
+                  ? 'Generando...'
+                  : 'Generar con IA',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
       TextFormField(
         controller: _whatsappCatalogDescriptionController,
         decoration: InputDecoration(
           labelText: 'Descripción WhatsApp',
           hintText: _effectiveWhatsappCatalogDescription,
-          helperText: 'Vacío = descripción web/normal.',
+          helperText:
+              'Vacío = descripción web/normal. Mínimo 20 caracteres efectivos.',
         ),
         maxLines: 4,
       ),
@@ -9401,6 +9616,168 @@ class _ProductFormPageState extends State<ProductFormPage>
         canOpen: productUrl != null,
       ),
     ];
+  }
+
+  /// Honest WhatsApp catalog visibility state. Meta accepts catalog uploads
+  /// asynchronously: a product can be uploaded (it has a Meta product id) and
+  /// still be hidden from customers until Meta sets its WhatsApp review state
+  /// to APPROVED. We therefore never claim "visible" from upload success alone.
+  List<Widget> _buildWhatsappStatusSection(ThemeData theme) {
+    final product = _existingProduct;
+    // Only meaningful for an already-saved product that is (or was) on WhatsApp.
+    if (product?.id == null) return const [];
+    if (!(product!.isWhatsappCatalog || _whatsappStatusOverride != null)) {
+      return const [];
+    }
+
+    final status = _whatsappStatusOverride ?? product.whatsappCatalogSyncStatus;
+    final review = _whatsappReviewOverride;
+    final error = product.whatsappCatalogSyncError;
+
+    final ({Color color, IconData icon, String label, String detail}) info =
+        switch (status) {
+      'customer_visible' => (
+          color: Colors.green,
+          icon: Icons.verified_outlined,
+          label: 'Visible para clientes',
+          detail: 'WhatsApp aprobó el producto y ya aparece en el catálogo.',
+        ),
+      'under_review' => (
+          color: Colors.orange,
+          icon: Icons.hourglass_top_outlined,
+          label: 'En revisión por WhatsApp',
+          detail:
+              'Meta recibió el producto pero aún no lo muestra a los clientes. '
+                  'La aprobación es automática y puede tardar. Vuelve a verificar más tarde.',
+        ),
+      'rejected' => (
+          color: theme.colorScheme.error,
+          icon: Icons.block_outlined,
+          label: 'Rechazado por WhatsApp',
+          detail: 'Meta rechazó el producto. Revisa título, descripción, '
+              'imagen y precio, y vuelve a sincronizar.',
+        ),
+      'removed' => (
+          color: theme.colorScheme.onSurfaceVariant,
+          icon: Icons.remove_circle_outline,
+          label: 'Retirado del catálogo',
+          detail: 'El producto no está publicado en el catálogo de WhatsApp.',
+        ),
+      'pending' => (
+          color: Colors.orange,
+          icon: Icons.cloud_upload_outlined,
+          label: 'Pendiente de subir',
+          detail: 'Aún no está en el catálogo de WhatsApp. Guarda o sincroniza '
+              'para subirlo.',
+        ),
+      'failed' => (
+          color: theme.colorScheme.error,
+          icon: Icons.error_outline,
+          label: 'Error de sincronización',
+          detail: error ?? 'No se pudo sincronizar con WhatsApp.',
+        ),
+      _ => (
+          color: theme.colorScheme.onSurfaceVariant,
+          icon: Icons.help_outline,
+          label: 'Estado desconocido',
+          detail: 'Verifica el estado actual del producto en WhatsApp.',
+        ),
+    };
+
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: info.color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: info.color.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(info.icon, color: info.color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    info.label,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: info.color,
+                    ),
+                  ),
+                ),
+                if (review != null && review.isNotEmpty)
+                  Text(
+                    'Meta: $review',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(info.detail, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _isRefreshingWhatsappStatus
+                    ? null
+                    : _refreshWhatsappCatalogStatus,
+                icon: _isRefreshingWhatsappStatus
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh, size: 18),
+                label: Text(
+                  _isRefreshingWhatsappStatus
+                      ? 'Verificando...'
+                      : 'Re-verificar estado',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Future<void> _refreshWhatsappCatalogStatus() async {
+    final productId = _existingProduct?.id;
+    if (productId == null) return;
+    setState(() => _isRefreshingWhatsappStatus = true);
+    try {
+      final result =
+          await WhatsAppCatalogSyncService().refreshStatus(productId);
+      if (!mounted) return;
+      setState(() {
+        _whatsappStatusOverride = result.syncStatus;
+        _whatsappReviewOverride = result.whatsappReview;
+        if (result.syncStatus != null) {
+          _existingProduct = _existingProduct?.copyWith(
+            whatsappCatalogSyncStatus: result.syncStatus,
+            whatsappCatalogSyncStatusHasValue: true,
+          );
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isRefreshingWhatsappStatus = false);
+    }
   }
 
   Widget _buildReadinessPanel(

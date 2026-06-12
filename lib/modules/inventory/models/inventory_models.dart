@@ -16,6 +16,8 @@ class Product {
       'website_merchant_mpn,website_google_product_category,'
       'is_whatsapp_catalog,whatsapp_catalog_title,'
       'whatsapp_catalog_description,whatsapp_catalog_price,'
+      'whatsapp_catalog_sync_status,whatsapp_catalog_sync_error,'
+      'whatsapp_catalog_meta_product_id,whatsapp_catalog_synced_at,'
       'warehouse_location,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
@@ -91,6 +93,13 @@ class Product {
   final String? whatsappCatalogTitle;
   final String? whatsappCatalogDescription;
   final double? whatsappCatalogPrice;
+  // Server-managed WhatsApp catalog sync lifecycle (read-only on the client).
+  // 'customer_visible' is the only value that means the product is live for
+  // customers; 'under_review' means Meta accepted it but it is still hidden.
+  final String? whatsappCatalogSyncStatus;
+  final String? whatsappCatalogSyncError;
+  final String? whatsappCatalogMetaProductId;
+  final DateTime? whatsappCatalogSyncedAt;
   final PurchaseTreatment purchaseTreatment;
   final ProductType productType;
   // Set-related fields
@@ -173,6 +182,10 @@ class Product {
     this.whatsappCatalogTitle,
     this.whatsappCatalogDescription,
     this.whatsappCatalogPrice,
+    this.whatsappCatalogSyncStatus,
+    this.whatsappCatalogSyncError,
+    this.whatsappCatalogMetaProductId,
+    this.whatsappCatalogSyncedAt,
     this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     this.isSet = false,
@@ -287,6 +300,13 @@ class Product {
       whatsappCatalogDescription: json['whatsapp_catalog_description'],
       whatsappCatalogPrice: json['whatsapp_catalog_price'] is num
           ? (json['whatsapp_catalog_price'] as num).toDouble()
+          : null,
+      whatsappCatalogSyncStatus: json['whatsapp_catalog_sync_status']?.toString(),
+      whatsappCatalogSyncError: json['whatsapp_catalog_sync_error']?.toString(),
+      whatsappCatalogMetaProductId:
+          json['whatsapp_catalog_meta_product_id']?.toString(),
+      whatsappCatalogSyncedAt: json['whatsapp_catalog_synced_at'] != null
+          ? DateTime.tryParse(json['whatsapp_catalog_synced_at'].toString())
           : null,
       purchaseTreatment: parsePurchaseTreatment(
         json['purchase_treatment'],
@@ -513,6 +533,14 @@ class Product {
     bool whatsappCatalogDescriptionHasValue = false,
     double? whatsappCatalogPrice,
     bool whatsappCatalogPriceHasValue = false,
+    String? whatsappCatalogSyncStatus,
+    bool whatsappCatalogSyncStatusHasValue = false,
+    String? whatsappCatalogSyncError,
+    bool whatsappCatalogSyncErrorHasValue = false,
+    String? whatsappCatalogMetaProductId,
+    bool whatsappCatalogMetaProductIdHasValue = false,
+    DateTime? whatsappCatalogSyncedAt,
+    bool whatsappCatalogSyncedAtHasValue = false,
     PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
     bool? isSet,
@@ -644,6 +672,22 @@ class Product {
           (whatsappCatalogPriceHasValue || whatsappCatalogPrice != null)
               ? whatsappCatalogPrice
               : this.whatsappCatalogPrice,
+      whatsappCatalogSyncStatus: (whatsappCatalogSyncStatusHasValue ||
+              whatsappCatalogSyncStatus != null)
+          ? whatsappCatalogSyncStatus
+          : this.whatsappCatalogSyncStatus,
+      whatsappCatalogSyncError: (whatsappCatalogSyncErrorHasValue ||
+              whatsappCatalogSyncError != null)
+          ? whatsappCatalogSyncError
+          : this.whatsappCatalogSyncError,
+      whatsappCatalogMetaProductId: (whatsappCatalogMetaProductIdHasValue ||
+              whatsappCatalogMetaProductId != null)
+          ? whatsappCatalogMetaProductId
+          : this.whatsappCatalogMetaProductId,
+      whatsappCatalogSyncedAt: (whatsappCatalogSyncedAtHasValue ||
+              whatsappCatalogSyncedAt != null)
+          ? whatsappCatalogSyncedAt
+          : this.whatsappCatalogSyncedAt,
       purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
       isSet: isSet ?? this.isSet,

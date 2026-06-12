@@ -43,6 +43,15 @@ When running in debug mode (`kDebugMode`), the app will:
 - **🌐 Web (Chrome)**: Run app in Chrome browser with HTML renderer
 - **🪟 Windows**: Run as native Windows desktop app
 
+## Supabase Edge Function Diagnostics
+
+Files under `supabase/functions/` run on Deno, not Node.js. The workspace settings
+enable the Deno language server only for that folder so URL imports and globals
+such as `Deno.env` are understood without changing TypeScript behavior elsewhere.
+
+Install the recommended **Deno** extension when prompted. After first installing
+or enabling it, reload the editor window so stale TypeScript problems are cleared.
+
 ## 📝 Troubleshooting
 
 **Issue**: Auto-login not working

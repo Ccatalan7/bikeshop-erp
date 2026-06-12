@@ -1053,6 +1053,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   StreamSubscription<Email>? _mailNotificationSubscription;
   RealtimeChannel? _onlineOrdersChannel;
   String? _lastNotifiedOnlineOrderId;
+  String? _lastNotifiedGenericId;
   String? _lastSeenOnlineOrderNotificationId;
   DateTime? _lastMailAlertAt;
   bool _isRefreshingOnlineOrderAlerts = false;
@@ -1154,6 +1155,13 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
 
     await _refreshOnlineOrderAlerts(showTopNotification: true);
 
+    // Load the generic notifications-center feed (all types).
+    try {
+      await NotificationService().loadNotifications(tenantId);
+    } catch (e) {
+      debugPrint('🔔 [MainLayout] Notifications feed load failed: $e');
+    }
+
     _onlineOrdersRefreshTimer?.cancel();
     _onlineOrdersRefreshTimer = Timer.periodic(
       const Duration(seconds: 20),
@@ -1172,40 +1180,95 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
             column: 'tenant_id',
             value: tenantId,
           ),
-          callback: (payload) {
-            if (!mounted) return;
-            final record = payload.newRecord;
-            if (record['type'] != 'online_order_created') return;
-
-            final notificationId = record['id']?.toString();
-            if (notificationId == null ||
-                notificationId == _lastNotifiedOnlineOrderId) {
-              return;
-            }
-            _lastNotifiedOnlineOrderId = notificationId;
-            if (!NotificationService().recordOnlineOrderAlert(
-              notificationId,
-              notification: record,
-            )) {
-              return;
-            }
-
-            final title = record['title']?.toString() ?? 'Nueva venta online';
-            final body = record['body']?.toString() ?? 'Pedido web';
-            final route = record['route']?.toString() ?? '/website/orders';
-
-            if (!_isOnlineOrdersLocation()) {
-              _showTopNotification(
-                title,
-                body,
-                icon: Icons.shopping_cart_checkout_outlined,
-                route: route,
-              );
-            }
-          },
+          callback: (payload) => _handleNotificationRecord(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'erp_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'tenant_id',
+            value: tenantId,
+          ),
+          callback: (payload) => _handleNotificationRecord(payload.newRecord),
         )
         .subscribe();
   }
+
+  void _handleNotificationRecord(Map<String, dynamic> record) {
+    if (!mounted) return;
+
+    // Keep the generic notifications-center feed up to date for every type.
+    NotificationService().recordNotification(record);
+
+    final type = record['type']?.toString();
+
+    // Preserve the existing online-order behavior (badge + top alert).
+    if (type == 'online_order_created') {
+      final notificationId = record['id']?.toString();
+      if (notificationId == null ||
+          notificationId == _lastNotifiedOnlineOrderId) {
+        return;
+      }
+      _lastNotifiedOnlineOrderId = notificationId;
+      if (!NotificationService().recordOnlineOrderAlert(
+        notificationId,
+        notification: record,
+      )) {
+        return;
+      }
+
+      final title = record['title']?.toString() ?? 'Nueva venta online';
+      final body = record['body']?.toString() ?? 'Pedido web';
+      final route = record['route']?.toString() ?? '/website/orders';
+
+      if (!_isOnlineOrdersLocation()) {
+        _showTopNotification(
+          title,
+          body,
+          icon: Icons.shopping_cart_checkout_outlined,
+          route: route,
+        );
+      }
+      return;
+    }
+
+    // For the other notification sources, surface a transient top alert
+    // when the row is unread (newly created / re-activated).
+    if (record['read_at'] != null) return;
+
+    final notificationId = record['id']?.toString();
+    if (notificationId == null ||
+        notificationId == _lastNotifiedGenericId) {
+      return;
+    }
+    _lastNotifiedGenericId = notificationId;
+
+    final title = record['title']?.toString() ?? 'Nueva notificación';
+    final body = record['body']?.toString() ?? '';
+    final route = record['route']?.toString();
+    _showTopNotification(
+      title,
+      body,
+      icon: _iconForNotificationType(type),
+      route: route ?? '/',
+    );
+  }
+
+  IconData _iconForNotificationType(String? type) {
+    switch (type) {
+      case 'mechanic_job_created':
+        return Icons.build_outlined;
+      case 'sales_payment_received':
+        return Icons.payments_outlined;
+      case 'whatsapp_catalog_approved':
+        return Icons.verified_outlined;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
 
   Future<void> _refreshOnlineOrderAlerts({
     bool showTopNotification = false,
@@ -1602,13 +1665,6 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
             color: Theme.of(context).colorScheme.onSurface,
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {
-                // TODO: Implement notifications
-              },
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               onPressed: () {

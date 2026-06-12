@@ -6,10 +6,12 @@ import '../../modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/storage/widgets/app_files_panel.dart';
 import '../../modules/settings/services/appearance_service.dart';
+import '../services/notification_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
+import 'notifications_panel.dart';
 import 'query_performance_gauge.dart';
 import 'quick_bike_finder_panel.dart';
 import 'quick_access_expense_rail.dart';
@@ -47,6 +49,21 @@ class _RightToolbarState extends State<RightToolbar> {
   void initState() {
     super.initState();
     _loadWidth();
+    NotificationService()
+        .unreadNotificationsCount
+        .addListener(_onUnreadNotificationsChanged);
+  }
+
+  @override
+  void dispose() {
+    NotificationService()
+        .unreadNotificationsCount
+        .removeListener(_onUnreadNotificationsChanged);
+    super.dispose();
+  }
+
+  void _onUnreadNotificationsChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadWidth() async {
@@ -78,6 +95,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   String _toolTitle(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.notifications:
+        return 'Notificaciones';
       case ToolbarTool.newJob:
         return 'Nuevo Trabajo';
       case ToolbarTool.bikeFinder:
@@ -109,6 +128,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   IconData _toolIcon(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.notifications:
+        return Icons.notifications_outlined;
       case ToolbarTool.newJob:
         return Icons.build_circle_outlined;
       case ToolbarTool.bikeFinder:
@@ -140,6 +161,8 @@ class _RightToolbarState extends State<RightToolbar> {
 
   Widget _toolPanel(ToolbarTool tool) {
     switch (tool) {
+      case ToolbarTool.notifications:
+        return const NotificationsToolbarPanel();
       case ToolbarTool.newJob:
         return const SizedBox.shrink();
       case ToolbarTool.bikeFinder:
@@ -173,6 +196,9 @@ class _RightToolbarState extends State<RightToolbar> {
   }
 
   int _toolBadgeCount(ToolbarTool tool, ChatProvider chatProvider) {
+    if (tool == ToolbarTool.notifications) {
+      return NotificationService().unreadNotificationsCount.value;
+    }
     if (tool == ToolbarTool.messages) {
       return chatProvider.conversations.fold(0, (sum, conversation) {
         if (conversation.isSupplierConversation) return sum;

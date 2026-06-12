@@ -387,6 +387,10 @@ verify_jwt = false
 # an extra Auth API round trip on every message send.
 verify_jwt = true
 
+[functions.whatsapp-catalog-sync]
+# Product-form saves invoke this with the current ERP user's authenticated session.
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

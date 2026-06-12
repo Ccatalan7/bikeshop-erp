@@ -649,6 +649,125 @@ class NotificationService {
     }
   }
 
+  // ============================================================
+  // GENERIC NOTIFICATIONS CENTER FEED
+  // Backed by the shared erp_notifications table. Surfaces every
+  // notification type (jobs, payments, online orders, WhatsApp
+  // catalog approvals, ...) in one feed for the right-side panel.
+  // ============================================================
+
+  /// Latest notifications (read + unread) for the current tenant.
+  final ValueNotifier<List<Map<String, dynamic>>> notificationsFeed =
+      ValueNotifier<List<Map<String, dynamic>>>(const []);
+
+  /// Total unread notifications across all types.
+  final ValueNotifier<int> unreadNotificationsCount = ValueNotifier<int>(0);
+
+  String? _notificationsTenantId;
+
+  void _recomputeUnreadCount() {
+    final unread = notificationsFeed.value
+        .where((row) => row['read_at'] == null)
+        .length;
+    unreadNotificationsCount.value = unread;
+  }
+
+  /// Load the latest notifications for the notifications center.
+  Future<List<Map<String, dynamic>>> loadNotifications(String tenantId) async {
+    if (tenantId.trim().isEmpty) return const [];
+    _notificationsTenantId = tenantId;
+
+    try {
+      final response = await _supabase
+          .from('erp_notifications')
+          .select(
+              'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      final rows = (response as List<dynamic>)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      notificationsFeed.value = rows;
+      _recomputeUnreadCount();
+      return rows;
+    } catch (e) {
+      debugPrint('⚠️ Could not load notifications: $e');
+      return const [];
+    }
+  }
+
+  /// Insert/refresh a single notification row (used by realtime inserts).
+  void recordNotification(Map<String, dynamic> notification) {
+    final id = notification['id']?.toString();
+    if (id == null || id.isEmpty) return;
+
+    final current = List<Map<String, dynamic>>.from(notificationsFeed.value);
+    final existingIndex =
+        current.indexWhere((row) => row['id']?.toString() == id);
+    final row = Map<String, dynamic>.from(notification);
+    if (existingIndex == -1) {
+      current.insert(0, row);
+    } else {
+      current[existingIndex] = row;
+    }
+    notificationsFeed.value = current;
+    _recomputeUnreadCount();
+  }
+
+  /// Mark a single notification as read (local + database).
+  Future<void> markNotificationRead(String notificationId) async {
+    final id = notificationId.trim();
+    if (id.isEmpty) return;
+
+    final current = List<Map<String, dynamic>>.from(notificationsFeed.value);
+    final index = current.indexWhere((row) => row['id']?.toString() == id);
+    if (index == -1) return;
+    if (current[index]['read_at'] != null) return;
+
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    current[index] = {...current[index], 'read_at': nowIso};
+    notificationsFeed.value = current;
+    _recomputeUnreadCount();
+
+    try {
+      await _supabase
+          .from('erp_notifications')
+          .update({'read_at': nowIso})
+          .eq('id', id)
+          .isFilter('read_at', null);
+    } catch (e) {
+      debugPrint('⚠️ Could not mark notification read: $e');
+    }
+  }
+
+  /// Mark every unread notification as read for the current tenant.
+  Future<void> markAllNotificationsRead() async {
+    final tenantId =
+        _notificationsTenantId ?? await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) return;
+    _notificationsTenantId = tenantId;
+
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    final current = notificationsFeed.value
+        .map((row) =>
+            row['read_at'] == null ? {...row, 'read_at': nowIso} : row)
+        .toList();
+    notificationsFeed.value = current;
+    _recomputeUnreadCount();
+
+    try {
+      await _supabase
+          .from('erp_notifications')
+          .update({'read_at': nowIso})
+          .eq('tenant_id', tenantId)
+          .isFilter('read_at', null);
+    } catch (e) {
+      debugPrint('⚠️ Could not mark all notifications read: $e');
+    }
+  }
+
   Future<void> playNotificationSound({
     NotificationCategory category = NotificationCategory.general,
     String? soundId,

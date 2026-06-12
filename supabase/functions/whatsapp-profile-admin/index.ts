@@ -305,7 +305,6 @@ function buildCatalogProductPayload(product: JsonRecord) {
     product.whatsapp_catalog_description,
     product.website_description,
     product.description,
-    title,
   ])
   const imageUrl = firstNonEmpty([
     product.website_image_url_optimized,
@@ -329,7 +328,7 @@ function buildCatalogProductPayload(product: JsonRecord) {
     condition: 'new',
     currency: 'CLP',
     price: Math.round(price * 100),
-    inventory: Math.max(0, Math.round(stock)),
+    quantity_to_sell_on_facebook: Math.max(0, Math.round(stock)),
     brand: firstNonEmpty([product.brand, 'Vinabike']),
     product_type: firstNonEmpty([product.category_name, 'Bicicletas y accesorios']),
     visibility: 'published',
@@ -521,17 +520,17 @@ async function upsertCatalogProduct(request: AdminRequest, channel: JsonRecord) 
 
   const payload = buildCatalogProductPayload(product)
   const missing = [
-    payload.name ? '' : 'name',
-    payload.description ? '' : 'description',
-    payload.image_url ? '' : 'image_url',
+    payload.name.length >= 10 ? '' : 'title',
+    payload.description.length >= 20 ? '' : 'description',
+    payload.image_url ? '' : 'image',
     payload.price > 0 ? '' : 'price',
-  ].filter(Boolean)
+  ].filter(Boolean) as string[]
   if (missing.length) {
     return {
       ok: false,
       status: 422,
       payload: {
-        error: 'Product is missing required catalog fields',
+        error: 'Faltan datos obligatorios para publicar en WhatsApp',
         missing,
         product,
         payload,
