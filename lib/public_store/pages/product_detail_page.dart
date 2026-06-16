@@ -15,6 +15,7 @@ import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
+import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 
@@ -33,8 +34,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   static const Color _catalogBlue = Color(0xFF123F68);
   static const Color _logoBlue = Color(0xFF093357);
   static const Color _warmLine = Color(0xFFE8E2D8);
-  static const Color _warmSurface = Color(0xFFF7F4EE);
-  static const Color _softSurface = Color(0xFFFCFBF8);
   Product? _product;
   List<Product> _relatedProducts = [];
   bool _isLoading = true;
@@ -107,7 +106,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
       // Load the product - support both UUID and SKU-based lookups
       // SKU format: "sku:S56467" (from legacy /shop/ URLs)
-      final Product? loadedProduct;
+      Product? loadedProduct;
       if (widget.productId.startsWith('sku:')) {
         final sku = widget.productId.substring(4); // Remove "sku:" prefix
         debugPrint('🔍 [ProductDetail] Looking up product by SKU: $sku');
@@ -122,6 +121,21 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           tenantId: tenantId,
           policy: visibilityPolicy,
         );
+      }
+
+      // A previously published SKU or slug may no longer identify the current
+      // product directly. Resolve the full historical path from durable URL
+      // aliases so old links continue working even before the next hosting
+      // deployment generates a server-side redirect.
+      if (loadedProduct == null) {
+        final aliasProductId = await _resolveProductAlias(tenantId);
+        if (aliasProductId != null) {
+          loadedProduct = await inventoryService.getProductById(
+            productId: aliasProductId,
+            tenantId: tenantId,
+            policy: visibilityPolicy,
+          );
+        }
       }
 
       if (!mounted || token != _loadToken) return;
@@ -146,6 +160,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           product: _product!,
           visibilityPolicy: visibilityPolicy,
         );
+        _scheduleCanonicalProductUrlReplacement(_product!, token);
       } else {
         debugPrint('❌ [ProductDetail] Product not found: ${widget.productId}');
         removeStructuredDataScript(_structuredDataScriptId);
@@ -158,6 +173,37 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<String?> _resolveProductAlias(String tenantId) async {
+    try {
+      final aliasPath = GoRouterState.of(context).uri.path;
+      final result = await Supabase.instance.client.rpc(
+        'resolve_public_product_url_alias',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_alias_path': aliasPath,
+        },
+      );
+      final productId = result?.toString().trim() ?? '';
+      return productId.isEmpty ? null : productId;
+    } catch (error) {
+      debugPrint('[ProductDetailPage] Alias lookup failed: $error');
+      return null;
+    }
+  }
+
+  void _scheduleCanonicalProductUrlReplacement(Product product, int token) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || token != _loadToken) return;
+
+      final canonicalPath = publicProductPath(product);
+      final currentUri = GoRouterState.of(context).uri;
+      if (currentUri.path == canonicalPath) return;
+
+      final canonicalUri = currentUri.replace(path: canonicalPath);
+      GoRouter.of(context).replace(canonicalUri.toString());
+    });
   }
 
   Future<void> _loadTechnicalSpecs({
@@ -255,7 +301,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
 
     final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
-    final productUrl = '$normalizedStoreUrl/productos/${product.id}';
+    final productUrl = '$normalizedStoreUrl${publicProductPath(product)}';
     final isStockTracked =
         product.productType != ProductType.service && product.trackStock;
     final availability = isStockTracked
@@ -264,11 +310,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             : 'https://schema.org/OutOfStock')
         : 'https://schema.org/InStock';
 
-    final imageList = <String>[];
-    if (product.imageUrls.isNotEmpty) {
-      imageList.addAll(product.imageUrls);
-    } else if (product.imageUrl != null && product.imageUrl!.isNotEmpty) {
-      imageList.add(product.imageUrl!);
+    final imageList = _structuredDataImageUrls(product);
+    if (imageList.isEmpty) {
+      removeStructuredDataScript(_structuredDataScriptId);
+      return;
     }
 
     final description = (product.description?.trim().isNotEmpty ?? false)
@@ -276,11 +321,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         : 'Encuentra $storeName online: ${product.name}';
     final cleanDescription = _cleanSeoText(description);
 
-    final gtin = (product.gtin?.trim().isNotEmpty ?? false)
-        ? product.gtin!.trim()
-        : (product.barcode?.trim().isNotEmpty ?? false)
-            ? product.barcode!.trim()
-            : null;
+    final gtin = _validGtin(
+      product.websiteMerchantGtin,
+      product.gtin,
+      product.barcode,
+    );
 
     final priceString = product.price % 1 == 0
         ? product.price.toStringAsFixed(0)
@@ -292,7 +337,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       'name': product.name,
       'description': cleanDescription,
       'sku': product.sku,
-      if (gtin != null && gtin.isNotEmpty) 'gtin': gtin,
+      'image': imageList.length == 1 ? imageList.first : imageList,
+      if (gtin != null) 'gtin': gtin,
       'brand': {
         '@type': 'Brand',
         'name': product.brand?.isNotEmpty == true ? product.brand : storeName,
@@ -311,16 +357,71 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       },
     };
 
-    if (imageList.isNotEmpty) {
-      structuredData['image'] =
-          imageList.length == 1 ? imageList.first : imageList;
-    }
-
     if (product.categoryName != null && product.categoryName!.isNotEmpty) {
       structuredData['category'] = product.categoryName;
     }
 
     setStructuredDataScript(_structuredDataScriptId, structuredData);
+  }
+
+  List<String> _structuredDataImageUrls(Product product) {
+    final urls = <String>[];
+
+    void add(String? value) {
+      final url = value?.trim() ?? '';
+      if (url.isEmpty || urls.contains(url)) return;
+      if (!url.startsWith('https://') && !url.startsWith('http://')) return;
+      urls.add(url);
+    }
+
+    add(product.websiteImageUrlOptimized);
+    add(product.imageUrlOptimized);
+    add(product.websiteImageUrl);
+    add(product.imageUrl);
+    for (final url in product.websiteImageUrls) {
+      add(url);
+    }
+    for (final url in product.imageUrls) {
+      add(url);
+    }
+
+    return urls.take(10).toList(growable: false);
+  }
+
+  String? _validGtin(String? preferred, String? fallback, String? barcode) {
+    for (final value in [preferred, fallback, barcode]) {
+      final valid = _normalizeValidGtin(value);
+      if (valid != null) return valid;
+    }
+    return null;
+  }
+
+  String? _normalizeValidGtin(String? rawValue) {
+    final value = (rawValue ?? '').trim().replaceAll(RegExp(r'[\s-]+'), '');
+    if (!RegExp(r'^\d+$').hasMatch(value)) return null;
+    if (!(value.length == 8 ||
+        value.length == 12 ||
+        value.length == 13 ||
+        value.length == 14)) {
+      return null;
+    }
+    if (!_hasValidGtinCheckDigit(value)) return null;
+    return value;
+  }
+
+  bool _hasValidGtinCheckDigit(String value) {
+    final digits = value.split('').map(int.parse).toList(growable: false);
+    final checkDigit = digits.last;
+    var sum = 0;
+    var positionFromRight = 1;
+
+    for (var i = digits.length - 2; i >= 0; i--) {
+      sum += digits[i] * (positionFromRight.isOdd ? 3 : 1);
+      positionFromRight++;
+    }
+
+    final calculatedCheckDigit = (10 - (sum % 10)) % 10;
+    return calculatedCheckDigit == checkDigit;
   }
 
   void _updateSeo() {
@@ -329,6 +430,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     final websiteService = context.read<WebsiteService>();
     final storeName = websiteService.getSetting('store_name', 'Vinabike');
+    final storeUrl = websiteService.getSetting(
+      'store_url',
+      'https://vinabike.cl',
+    );
+    final canonicalUrl =
+        '${storeUrl.replaceAll(RegExp(r'/+$'), '')}${publicProductPath(product)}';
 
     // Templates are configurable via website_settings (and later via SEO editor UI).
     final titleTemplate = websiteService.getSetting(
@@ -372,6 +479,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ? cleanResolvedDescription
             : null,
         imageUrl: image,
+        canonicalUrl: canonicalUrl,
       );
     });
   }
@@ -381,6 +489,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         .replaceAll(RegExp(r'<[^>]+>'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  String _formatHeroPrice(double value) {
+    return ChileanUtils.formatCurrency(value).replaceFirst(r'$ ', r'$');
   }
 
   String _applySeoTemplate({
@@ -431,6 +543,24 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
 
     setState(() => _quantity = 1);
+  }
+
+  void _buyNow() {
+    if (_product == null) return;
+
+    final isStockTracked =
+        _product!.productType != ProductType.service && _product!.trackStock;
+    if (isStockTracked && _product!.stockQuantity < _quantity) {
+      _showProductFeedbackBanner(
+        message: 'Stock insuficiente',
+        backgroundColor: PublicStoreTheme.error,
+      );
+      return;
+    }
+
+    context.read<CartProvider>().addProduct(_product!, quantity: _quantity);
+    setState(() => _quantity = 1);
+    context.go('/checkout');
   }
 
   void _showProductFeedbackBanner({
@@ -647,8 +777,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 768;
         final isTablet = constraints.maxWidth < 1100;
-        final horizontalMargin = isMobile ? 16.0 : (isTablet ? 24.0 : 32.0);
-        final verticalMargin = isMobile ? 18.0 : 34.0;
+        final horizontalMargin = isMobile ? 16.0 : (isTablet ? 24.0 : 48.0);
+        final verticalMargin = isMobile ? 18.0 : 30.0;
 
         return SingleChildScrollView(
           child: Column(
@@ -657,7 +787,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               Align(
                 alignment: Alignment.topCenter,
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1320),
+                  constraints: const BoxConstraints(maxWidth: 1420),
                   margin: EdgeInsets.fromLTRB(
                     horizontalMargin,
                     verticalMargin,
@@ -668,7 +798,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (!isMobile) _buildBreadcrumb(),
-                      if (!isMobile) const SizedBox(height: 26),
+                      if (!isMobile) const SizedBox(height: 30),
                       if (isMobile) ...[
                         _buildImageGallery(isMobile: true),
                         const SizedBox(height: 24),
@@ -679,20 +809,23 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                             final rowWidth = rowConstraints.maxWidth.isFinite
                                 ? rowConstraints.maxWidth
                                 : constraints.maxWidth - (horizontalMargin * 2);
-                            final columnGap = isTablet ? 24.0 : 34.0;
-                            final columnWidth =
-                                ((rowWidth - columnGap) / 2).floorToDouble();
+                            final columnGap = isTablet ? 32.0 : 56.0;
+                            final galleryWidth = isTablet
+                                ? ((rowWidth - columnGap) * 0.52)
+                                : ((rowWidth - columnGap) * 0.54);
+                            final infoWidth =
+                                rowWidth - columnGap - galleryWidth;
 
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 SizedBox(
-                                  width: columnWidth,
+                                  width: galleryWidth,
                                   child: _buildImageGallery(),
                                 ),
                                 SizedBox(width: columnGap),
                                 SizedBox(
-                                  width: columnWidth,
+                                  width: infoWidth,
                                   child: _buildProductInfo(),
                                 ),
                               ],
@@ -818,51 +951,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           ),
         );
 
-        if (!isMobile && images.length > 1) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 82,
-                height: imageHeight,
-                child: ListView.separated(
-                  itemCount: images.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final isSelected = index == _selectedImageIndex;
-                    return _buildThumbnail(
-                      imageUrl: images[index],
-                      isSelected: isSelected,
-                      size: 82,
-                      onTap: () => setState(() => _selectedImageIndex = index),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(child: mainStage),
-            ],
-          );
-        }
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             mainStage,
             if (images.length > 1) ...[
-              const SizedBox(height: 18),
+              SizedBox(height: isMobile ? 16 : 20),
               SizedBox(
-                height: 72,
+                height: isMobile ? 72 : 92,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: images.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, __) =>
+                      SizedBox(width: isMobile ? 12 : 18),
                   itemBuilder: (context, index) {
                     final isSelected = index == _selectedImageIndex;
                     return _buildThumbnail(
                       imageUrl: images[index],
                       isSelected: isSelected,
-                      size: 72,
+                      size: isMobile ? 72 : 92,
                       onTap: () => setState(() => _selectedImageIndex = index),
                     );
                   },
@@ -916,60 +1023,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (_product!.brand?.trim().isNotEmpty ?? false)
-              _buildMetaPill(
-                _product!.brand!.trim().toUpperCase(),
-                foreground: _catalogBlue,
-                background: _catalogBlue.withValues(alpha: 0.08),
-              ),
-            _buildMetaPill(
-              (_product!.categoryName ?? 'PRODUCTO').toUpperCase(),
-              foreground: PublicStoreTheme.textSecondary,
-              background: _softSurface,
-            ),
-          ],
-        ),
-        SizedBox(height: isMobile ? 14 : 18),
         Text(
           _product!.name.toUpperCase(),
           style: TextStyle(
             fontFamily: null,
-            fontSize: isMobile ? 34 : 40,
+            fontSize: isMobile ? 30 : 34,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
-            height: 1.06,
+            height: isMobile ? 1.18 : 1.2,
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            if (_product!.sku.isNotEmpty)
-              _buildMetaPill(
-                'SKU ${_product!.sku}',
-                foreground: PublicStoreTheme.textSecondary,
-                background: _softSurface,
-              ),
-            _buildMetaPill(
-              inStock ? 'EN STOCK' : 'AGOTADO',
-              foreground: inStock ? _catalogBlue : PublicStoreTheme.error,
-              background: (inStock ? _catalogBlue : PublicStoreTheme.error)
-                  .withValues(alpha: 0.08),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
+        SizedBox(height: isMobile ? 20 : 24),
+        const Divider(height: 1, color: _warmLine),
+        SizedBox(height: isMobile ? 20 : 24),
         Text(
-          ChileanUtils.formatCurrency(_product!.price),
+          _formatHeroPrice(_product!.price),
           style: TextStyle(
             fontFamily: null,
-            fontSize: isMobile ? 42 : 46,
+            fontSize: isMobile ? 38 : 40,
             fontWeight: FontWeight.w700,
             color: _catalogBlue,
             height: 0.95,
@@ -984,154 +1056,98 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             color: PublicStoreTheme.textSecondary,
           ),
         ),
-        const SizedBox(height: 18),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 16 : 16,
-            vertical: isMobile ? 14 : 14,
-          ),
-          decoration: BoxDecoration(
-            color: _warmSurface.withValues(alpha: 0.72),
-            border: const Border(
-              top: BorderSide(color: _warmLine),
-              bottom: BorderSide(color: _warmLine),
-            ),
-          ),
-          child: Column(
+        SizedBox(height: isMobile ? 20 : 24),
+        const Divider(height: 1, color: _warmLine),
+        SizedBox(height: isMobile ? 18 : 22),
+        _buildStockSkuRow(inStock: inStock),
+        SizedBox(height: isMobile ? 18 : 22),
+        if (inStock)
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(top: 5),
-                    decoration: BoxDecoration(
-                      color: inStock ? _catalogBlue : PublicStoreTheme.error,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          inStock
-                              ? 'Disponible para compra'
-                              : 'Temporalmente sin stock',
-                          style: const TextStyle(
-                            fontFamily: null,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isStockTracked
-                              ? (inStock
-                                  ? '${_product!.stockQuantity} unidad${_product!.stockQuantity == 1 ? '' : 'es'} disponibles para despacho o retiro.'
-                                  : 'Podemos ayudarte a revisar reposición o alternativas similares.')
-                              : 'Producto disponible por compra directa o coordinación con tienda.',
-                          style: const TextStyle(
-                            fontFamily: null,
-                            fontSize: 13,
-                            color: PublicStoreTheme.textSecondary,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (inStock) ...[
-                if (isMobile) ...[
-                  _buildQuantitySelector(
-                    canIncrease: canIncrease,
-                    expand: true,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildCartAction(
-                    inCart: inCart,
-                    width: double.infinity,
-                  ),
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildQuantitySelector(canIncrease: canIncrease),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildCartAction(
-                          inCart: inCart,
-                          width: double.infinity,
-                        ),
-                      ),
-                    ],
-                  ),
-                if (inCart) ...[
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.shopping_bag_outlined,
-                        size: 16,
-                        color: _catalogBlue,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Ya tienes este producto en el carrito.',
-                          style: TextStyle(
-                            fontFamily: null,
-                            fontSize: 13,
-                            color: PublicStoreTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => context.go('/carrito'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _catalogBlue,
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Ver carrito',
-                          style: TextStyle(
-                            fontFamily: null,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ] else
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'NO DISPONIBLE',
-                    style: TextStyle(
-                      fontFamily: null,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.0,
-                      color: PublicStoreTheme.textSecondary,
-                    ),
-                  ),
+              if (isMobile) ...[
+                _buildQuantitySelector(
+                  canIncrease: canIncrease,
+                  expand: true,
                 ),
+                const SizedBox(height: 14),
+                _buildCartAction(
+                  inCart: inCart,
+                  width: double.infinity,
+                ),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildQuantitySelector(canIncrease: canIncrease),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildCartAction(
+                        inCart: inCart,
+                        width: double.infinity,
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 14),
+              _buildBuyNowAction(isMobile: isMobile),
+              if (inCart) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.shopping_bag_outlined,
+                      size: 16,
+                      color: _catalogBlue,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Ya tienes este producto en el carrito.',
+                        style: TextStyle(
+                          fontFamily: null,
+                          fontSize: 13,
+                          color: PublicStoreTheme.textSecondary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go('/carrito'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _catalogBlue,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Ver carrito',
+                        style: TextStyle(
+                          fontFamily: null,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
+          )
+        else
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'NO DISPONIBLE',
+              style: TextStyle(
+                fontFamily: null,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+                color: PublicStoreTheme.textSecondary,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 28),
         Container(
           decoration: const BoxDecoration(
             border: Border(
@@ -1149,11 +1165,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 icon: Icons.storefront_outlined,
                 title: 'Retiro en tienda',
                 subtitle: 'Disponible en Alvarez 32, Local 17, Viña del Mar.',
-              ),
-              _buildInfoTile(
-                icon: Icons.verified_outlined,
-                title: 'Respaldo Vinabike',
-                subtitle: 'Atención postventa y garantía según producto.',
                 isLast: true,
               ),
             ],
@@ -1749,7 +1760,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          context.go('/productos/${product.id}');
+          context.go(publicProductPath(product));
         },
         child: Container(
           color: Colors.white,
@@ -1897,14 +1908,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         decoration: BoxDecoration(
           color:
               isSelected ? _catalogBlue.withValues(alpha: 0.04) : Colors.white,
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected ? _catalogBlue : _warmLine,
-              width: isSelected ? 2 : 1,
-            ),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected ? _catalogBlue : _warmLine,
+            width: isSelected ? 2 : 1,
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(6, 6, 6, 10),
+        padding: const EdgeInsets.all(8),
         child: Image.network(
           imageUrl,
           fit: BoxFit.contain,
@@ -1920,27 +1930,51 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildMetaPill(
-    String label, {
-    required Color foreground,
-    required Color background,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: null,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: foreground,
-          letterSpacing: 0.8,
+  Widget _buildStockSkuRow({required bool inStock}) {
+    final sku = _product!.sku.trim();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: inStock
+                ? PublicStoreTheme.successGreen
+                : PublicStoreTheme.textMuted,
+            shape: BoxShape.circle,
+          ),
         ),
-      ),
+        const SizedBox(width: 12),
+        Text(
+          inStock ? 'En stock' : 'Agotado',
+          style: TextStyle(
+            fontFamily: null,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: inStock
+                ? PublicStoreTheme.successGreen
+                : PublicStoreTheme.textSecondary,
+          ),
+        ),
+        if (sku.isNotEmpty) ...[
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              'SKU: $sku',
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontFamily: null,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: PublicStoreTheme.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -2011,6 +2045,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
+  Widget _buildBuyNowAction({required bool isMobile}) {
+    return SizedBox(
+      width: double.infinity,
+      height: isMobile ? 52 : 50,
+      child: OutlinedButton(
+        onPressed: _buyNow,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _catalogBlue,
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: _warmLine),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(5),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        child: const Text(
+          'Comprar ahora',
+          style: TextStyle(
+            fontFamily: null,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCartAction({
     required bool inCart,
     required double width,
@@ -2029,14 +2090,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+        icon: const Icon(Icons.shopping_cart_outlined, size: 17),
         label: Text(
-          inCart ? 'AÑADIR OTRA UNIDAD' : 'AGREGAR AL CARRITO',
+          inCart ? 'Añadir otra unidad' : 'Agregar al carrito',
           style: const TextStyle(
             fontFamily: null,
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.9,
           ),
         ),
       ),

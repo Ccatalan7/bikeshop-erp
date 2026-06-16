@@ -5385,6 +5385,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                                 margin: const EdgeInsets.only(right: 20),
                                 child: PremiumProductCard(
                                   productId: product.id,
+                                  productSku: product.sku,
                                   name: product.name,
                                   price: product.price,
                                   imageUrl: product.imageUrl,
@@ -5411,6 +5412,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                             final product = displayProducts[index];
                             return PremiumProductCard(
                               productId: product.id,
+                              productSku: product.sku,
                               name: product.name,
                               price: product.price,
                               imageUrl: product.imageUrl,
@@ -5782,6 +5784,7 @@ class _MobileProductAutoCarouselState
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: PremiumProductCard(
                   productId: product.id,
+                  productSku: product.sku,
                   name: product.name,
                   price: product.price,
                   imageUrl: product.imageUrl,

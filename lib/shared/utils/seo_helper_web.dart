@@ -6,6 +6,7 @@ void updateSeoImpl({
   String? description,
   String? imageUrl,
   String? keywords,
+  String? canonicalUrl,
 }) {
   // Update Browser Title
   SystemChrome.setApplicationSwitcherDescription(
@@ -19,6 +20,7 @@ void updateSeoImpl({
   // Update Meta Description
   _updateMeta('description', description);
   _updateMeta('keywords', keywords);
+  _updateCanonicalLink(canonicalUrl);
 
   // Open Graph Data
   _updateMetaProperty('og:title', title);
@@ -31,6 +33,23 @@ void updateSeoImpl({
   _updateMeta('twitter:description', description);
   if (imageUrl != null) {
     _updateMeta('twitter:image', imageUrl);
+  }
+}
+
+void _updateCanonicalLink(String? url) {
+  final element = html.document.querySelector("link[rel='canonical']");
+  if (url == null || url.isEmpty) {
+    element?.remove();
+    return;
+  }
+
+  if (element != null) {
+    element.setAttribute('href', url);
+  } else {
+    final link = html.LinkElement()
+      ..rel = 'canonical'
+      ..href = url;
+    html.document.head?.append(link);
   }
 }
 

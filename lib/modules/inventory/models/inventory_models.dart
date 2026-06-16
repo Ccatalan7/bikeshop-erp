@@ -18,6 +18,8 @@ class Product {
       'whatsapp_catalog_description,whatsapp_catalog_price,'
       'whatsapp_catalog_sync_status,whatsapp_catalog_sync_error,'
       'whatsapp_catalog_meta_product_id,whatsapp_catalog_synced_at,'
+      'whatsapp_catalog_synced_url,whatsapp_catalog_url_matches,'
+      'whatsapp_catalog_verified_at,'
       'warehouse_location,is_active,'
       'is_published,is_google_merchant,purchase_treatment,product_type,'
       'track_stock,is_set,set_type,parent_set_id,component_label,'
@@ -100,6 +102,9 @@ class Product {
   final String? whatsappCatalogSyncError;
   final String? whatsappCatalogMetaProductId;
   final DateTime? whatsappCatalogSyncedAt;
+  final String? whatsappCatalogSyncedUrl;
+  final bool? whatsappCatalogUrlMatches;
+  final DateTime? whatsappCatalogVerifiedAt;
   final PurchaseTreatment purchaseTreatment;
   final ProductType productType;
   // Set-related fields
@@ -186,6 +191,9 @@ class Product {
     this.whatsappCatalogSyncError,
     this.whatsappCatalogMetaProductId,
     this.whatsappCatalogSyncedAt,
+    this.whatsappCatalogSyncedUrl,
+    this.whatsappCatalogUrlMatches,
+    this.whatsappCatalogVerifiedAt,
     this.purchaseTreatment = PurchaseTreatment.inventory,
     this.productType = ProductType.product,
     this.isSet = false,
@@ -301,12 +309,18 @@ class Product {
       whatsappCatalogPrice: json['whatsapp_catalog_price'] is num
           ? (json['whatsapp_catalog_price'] as num).toDouble()
           : null,
-      whatsappCatalogSyncStatus: json['whatsapp_catalog_sync_status']?.toString(),
+      whatsappCatalogSyncStatus:
+          json['whatsapp_catalog_sync_status']?.toString(),
       whatsappCatalogSyncError: json['whatsapp_catalog_sync_error']?.toString(),
       whatsappCatalogMetaProductId:
           json['whatsapp_catalog_meta_product_id']?.toString(),
       whatsappCatalogSyncedAt: json['whatsapp_catalog_synced_at'] != null
           ? DateTime.tryParse(json['whatsapp_catalog_synced_at'].toString())
+          : null,
+      whatsappCatalogSyncedUrl: json['whatsapp_catalog_synced_url']?.toString(),
+      whatsappCatalogUrlMatches: json['whatsapp_catalog_url_matches'] as bool?,
+      whatsappCatalogVerifiedAt: json['whatsapp_catalog_verified_at'] != null
+          ? DateTime.tryParse(json['whatsapp_catalog_verified_at'].toString())
           : null,
       purchaseTreatment: parsePurchaseTreatment(
         json['purchase_treatment'],
@@ -541,6 +555,12 @@ class Product {
     bool whatsappCatalogMetaProductIdHasValue = false,
     DateTime? whatsappCatalogSyncedAt,
     bool whatsappCatalogSyncedAtHasValue = false,
+    String? whatsappCatalogSyncedUrl,
+    bool whatsappCatalogSyncedUrlHasValue = false,
+    bool? whatsappCatalogUrlMatches,
+    bool whatsappCatalogUrlMatchesHasValue = false,
+    DateTime? whatsappCatalogVerifiedAt,
+    bool whatsappCatalogVerifiedAtHasValue = false,
     PurchaseTreatment? purchaseTreatment,
     ProductType? productType,
     bool? isSet,
@@ -676,18 +696,30 @@ class Product {
               whatsappCatalogSyncStatus != null)
           ? whatsappCatalogSyncStatus
           : this.whatsappCatalogSyncStatus,
-      whatsappCatalogSyncError: (whatsappCatalogSyncErrorHasValue ||
-              whatsappCatalogSyncError != null)
-          ? whatsappCatalogSyncError
-          : this.whatsappCatalogSyncError,
+      whatsappCatalogSyncError:
+          (whatsappCatalogSyncErrorHasValue || whatsappCatalogSyncError != null)
+              ? whatsappCatalogSyncError
+              : this.whatsappCatalogSyncError,
       whatsappCatalogMetaProductId: (whatsappCatalogMetaProductIdHasValue ||
               whatsappCatalogMetaProductId != null)
           ? whatsappCatalogMetaProductId
           : this.whatsappCatalogMetaProductId,
-      whatsappCatalogSyncedAt: (whatsappCatalogSyncedAtHasValue ||
-              whatsappCatalogSyncedAt != null)
-          ? whatsappCatalogSyncedAt
-          : this.whatsappCatalogSyncedAt,
+      whatsappCatalogSyncedAt:
+          (whatsappCatalogSyncedAtHasValue || whatsappCatalogSyncedAt != null)
+              ? whatsappCatalogSyncedAt
+              : this.whatsappCatalogSyncedAt,
+      whatsappCatalogSyncedUrl:
+          (whatsappCatalogSyncedUrlHasValue || whatsappCatalogSyncedUrl != null)
+              ? whatsappCatalogSyncedUrl
+              : this.whatsappCatalogSyncedUrl,
+      whatsappCatalogUrlMatches: (whatsappCatalogUrlMatchesHasValue ||
+              whatsappCatalogUrlMatches != null)
+          ? whatsappCatalogUrlMatches
+          : this.whatsappCatalogUrlMatches,
+      whatsappCatalogVerifiedAt: (whatsappCatalogVerifiedAtHasValue ||
+              whatsappCatalogVerifiedAt != null)
+          ? whatsappCatalogVerifiedAt
+          : this.whatsappCatalogVerifiedAt,
       purchaseTreatment: purchaseTreatment ?? this.purchaseTreatment,
       productType: productType ?? this.productType,
       isSet: isSet ?? this.isSet,

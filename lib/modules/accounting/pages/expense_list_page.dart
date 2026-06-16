@@ -7,10 +7,10 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../shared/widgets/search_widget.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/expense_link.dart';
+import '../models/expense_line.dart';
 import '../services/expense_service.dart';
 
 class ExpenseListPage extends StatefulWidget {
@@ -78,6 +78,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       // Fetch payments for loaded expenses (to correctly label single vs mixed payments)
       final expenseIds =
           expenses.map((e) => e.id).whereType<String>().toList(growable: false);
+      final expenseLines =
+          await _expenseService.fetchLinesForExpenses(expenseIds);
+      final linesByExpenseId = _groupExpenseLines(expenseLines);
       final paymentRows =
           await _expenseService.fetchPaymentsForExpenses(expenseIds);
       final paymentSummary = _buildPaymentSummary(paymentRows);
@@ -89,13 +92,24 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       }
       final linksByExpenseId = _groupExpenseLinks(expenseLinks);
 
+      final categoryNamesById = {
+        for (final c in categories)
+          if (c.id.isNotEmpty) c.id: c.name,
+      };
+      final expensesWithLines = expenses
+          .map(
+            (expense) => expense.copyWith(
+              lines: expense.id == null
+                  ? const <ExpenseLine>[]
+                  : linesByExpenseId[expense.id] ?? const <ExpenseLine>[],
+            ),
+          )
+          .toList(growable: false);
+
       setState(() {
         _categories = categories;
-        _categoryNamesById = {
-          for (final c in categories)
-            if (c.id.isNotEmpty) c.id: c.name,
-        };
-        _allExpenses = expenses;
+        _categoryNamesById = categoryNamesById;
+        _allExpenses = expensesWithLines;
         _paymentMethodsMap = methods;
         _expenseLinksByExpenseId = linksByExpenseId;
         _paymentSummaryByExpenseId
@@ -147,6 +161,16 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     return summaries;
   }
 
+  Map<String, List<ExpenseLine>> _groupExpenseLines(List<ExpenseLine> lines) {
+    final grouped = <String, List<ExpenseLine>>{};
+    for (final line in lines) {
+      final expenseId = line.expenseId;
+      if (expenseId == null || expenseId.isEmpty) continue;
+      grouped.putIfAbsent(expenseId, () => <ExpenseLine>[]).add(line);
+    }
+    return grouped;
+  }
+
   Map<String, List<ExpenseLink>> _groupExpenseLinks(List<ExpenseLink> links) {
     final grouped = <String, List<ExpenseLink>>{};
     for (final link in links) {
@@ -157,16 +181,13 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
   }
 
   void _applyFilters() {
-    final term = _searchController.text.trim().toLowerCase();
+    final searchTokens = _searchTokens(_searchController.text);
     final filtered = _allExpenses.where((expense) {
       final purchaseLinks = expense.id == null
           ? const <ExpenseLink>[]
           : _expenseLinksByExpenseId[expense.id] ?? const <ExpenseLink>[];
-      final matchesSearch = term.isEmpty ||
-          expense.expenseNumber.toLowerCase().contains(term) ||
-          (expense.supplierName?.toLowerCase().contains(term) ?? false) ||
-          (expense.reference?.toLowerCase().contains(term) ?? false) ||
-          purchaseLinks.any((link) => _linkSearchText(link).contains(term));
+      final matchesSearch =
+          _matchesSearch(expense, purchaseLinks, searchTokens);
 
       final matchesPosting =
           _postingFilter == null || expense.postingStatus == _postingFilter;
@@ -375,7 +396,123 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       _purchaseInvoiceLabel(link),
       _linkKindLabel(link.linkKind),
       link.notes ?? '',
-    ].join(' ').toLowerCase();
+    ].join(' ');
+  }
+
+  bool _matchesSearch(
+    Expense expense,
+    List<ExpenseLink> purchaseLinks,
+    List<String> tokens,
+  ) {
+    if (tokens.isEmpty) return true;
+
+    final index = _normalizeSearchText(
+      [
+        expense.expenseNumber,
+        expense.supplierName ?? '',
+        expense.supplierRut ?? '',
+        _documentTypeLabel(expense.documentType),
+        expense.documentNumber ?? '',
+        expense.paymentTerms ?? '',
+        expense.reference ?? '',
+        expense.notes ?? '',
+        expense.category?.name ?? '',
+        _categoryNamesById[expense.categoryId] ?? '',
+        _postingStatusLabel(expense.postingStatus),
+        _paymentStatusLabel(expense.paymentStatus),
+        _approvalStatusLabel(expense.approvalStatus),
+        _paymentMethodNameFor(expense),
+        ChileanUtils.formatDate(expense.issueDate),
+        if (expense.dueDate != null) ChileanUtils.formatDate(expense.dueDate!),
+        ...expense.tags,
+        ...expense.lines.expand(
+          (line) => [
+            line.accountCode,
+            line.accountName,
+            line.description ?? '',
+            line.costCenter ?? '',
+          ],
+        ),
+        ...purchaseLinks.map(_linkSearchText),
+      ].join(' '),
+    );
+    final compactIndex = index.replaceAll(' ', '');
+
+    return tokens.every((token) {
+      final compactToken = token.replaceAll(' ', '');
+      return index.contains(token) ||
+          (compactToken.isNotEmpty && compactIndex.contains(compactToken));
+    });
+  }
+
+  List<String> _searchTokens(String value) {
+    final normalized = _normalizeSearchText(value);
+    if (normalized.isEmpty) return const [];
+    return normalized
+        .split(' ')
+        .where((token) => token.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String _normalizeSearchText(String value) {
+    final lower = value.toLowerCase();
+    final withoutAccents = lower
+        .replaceAll(RegExp('[áàäâã]'), 'a')
+        .replaceAll(RegExp('[éèëê]'), 'e')
+        .replaceAll(RegExp('[íìïî]'), 'i')
+        .replaceAll(RegExp('[óòöôõ]'), 'o')
+        .replaceAll(RegExp('[úùüû]'), 'u')
+        .replaceAll('ñ', 'n');
+    return withoutAccents
+        .replaceAll(RegExp('[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _paymentMethodNameFor(Expense expense) {
+    final headerMethodId = expense.paymentMethodId;
+    if (headerMethodId != null && headerMethodId.isNotEmpty) {
+      return _paymentMethodsMap[headerMethodId] ?? 'Sin medio de pago';
+    }
+
+    final summary = _paymentSummaryByExpenseId[expense.id];
+    if (summary != null && expense.paymentStatus == ExpensePaymentStatus.paid) {
+      if (summary.methodIds.length == 1) {
+        final onlyMethodId = summary.methodIds.first;
+        return _paymentMethodsMap[onlyMethodId] ?? 'Medio de pago';
+      }
+      if (summary.methodIds.length > 1) {
+        return 'Pago mixto';
+      }
+    }
+
+    return 'Sin medio de pago';
+  }
+
+  String _approvalStatusLabel(ExpenseApprovalStatus status) {
+    switch (status) {
+      case ExpenseApprovalStatus.pending:
+        return 'Pendiente';
+      case ExpenseApprovalStatus.approved:
+        return 'Aprobado';
+      case ExpenseApprovalStatus.rejected:
+        return 'Rechazado';
+    }
+  }
+
+  String _documentTypeLabel(ExpenseDocumentType type) {
+    switch (type) {
+      case ExpenseDocumentType.invoice:
+        return 'Factura';
+      case ExpenseDocumentType.receipt:
+        return 'Recibo';
+      case ExpenseDocumentType.ticket:
+        return 'Boleta';
+      case ExpenseDocumentType.reimbursement:
+        return 'Reembolso';
+      case ExpenseDocumentType.other:
+        return 'Otro';
+    }
   }
 
   void _showMobileFilters(BuildContext context) {
@@ -528,12 +665,14 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           Row(
             children: [
               Expanded(
-                child: SearchWidget(
+                child: _ExpenseSearchField(
                   controller: _searchController,
                   hintText: isMobile
-                      ? 'Buscar...'
-                      : 'Buscar por número, proveedor o referencia...',
+                      ? 'Buscar gasto...'
+                      : 'Buscar número, proveedor, categoría, cuenta, nota...',
                   onSearchChanged: (_) => _applyFilters(),
+                  resultCount: _filteredExpenses.length,
+                  totalCount: _allExpenses.length,
                 ),
               ),
               const SizedBox(width: 8),
@@ -587,11 +726,13 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       child: Row(
         children: [
           SizedBox(
-            width: 320,
-            child: SearchWidget(
+            width: 470,
+            child: _ExpenseSearchField(
               controller: _searchController,
-              hintText: 'Buscar por número, proveedor...',
+              hintText: 'Buscar número, proveedor, categoría, cuenta, nota...',
               onSearchChanged: (_) => _applyFilters(),
+              resultCount: _filteredExpenses.length,
+              totalCount: _allExpenses.length,
             ),
           ),
           const SizedBox(width: 16),
@@ -794,6 +935,7 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
     }
 
     if (_filteredExpenses.isEmpty) {
+      final hasSearch = _searchController.text.trim().isNotEmpty;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -802,7 +944,9 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
                 size: 64, color: Theme.of(context).disabledColor),
             const SizedBox(height: 12),
             Text(
-              'No se encontraron gastos.',
+              hasSearch
+                  ? 'No encontramos gastos para "${_searchController.text.trim()}".'
+                  : 'No se encontraron gastos.',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).disabledColor,
                   ),
@@ -811,6 +955,10 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           ],
         ),
       );
+    }
+
+    if (!isMobile) {
+      return _buildDesktopExpenseTable(context);
     }
 
     return ListView.separated(
@@ -835,6 +983,71 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
           onDelete: () => _confirmDeleteExpense(expense),
         );
       },
+    );
+  }
+
+  Widget _buildDesktopExpenseTable(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.025),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _ExpenseTableHeader(
+              filteredCount: _filteredExpenses.length,
+              totalCount: _allExpenses.length,
+              hasFilters: _searchController.text.trim().isNotEmpty ||
+                  _postingFilter != null ||
+                  _paymentFilter != null ||
+                  _selectedCategoryId != null ||
+                  _dateRange != null,
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: _filteredExpenses.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.grey.shade100,
+                ),
+                itemBuilder: (context, index) {
+                  final expense = _filteredExpenses[index];
+                  final purchaseLinks = expense.id == null
+                      ? const <ExpenseLink>[]
+                      : _expenseLinksByExpenseId[expense.id] ??
+                          const <ExpenseLink>[];
+                  return _DesktopExpenseRow(
+                    expense: expense,
+                    currencyFormat: _currencyFormat,
+                    paymentMethodName: _paymentMethodNameFor(expense),
+                    categoryName: expense.category?.name ??
+                        _categoryNamesById[expense.categoryId] ??
+                        'Sin categoría',
+                    purchaseLinks: purchaseLinks,
+                    onTap: () => _openExpenseDetail(expense),
+                    onEdit: () => _editExpense(expense),
+                    onDelete: () => _confirmDeleteExpense(expense),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -914,6 +1127,725 @@ class _ExpenseListPageState extends State<ExpenseListPage> {
       case ExpensePaymentStatus.voided:
         return 'Anulado';
     }
+  }
+}
+
+class _ExpenseSearchField extends StatelessWidget {
+  const _ExpenseSearchField({
+    required this.controller,
+    required this.hintText,
+    required this.onSearchChanged,
+    required this.resultCount,
+    required this.totalCount,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String> onSearchChanged;
+  final int resultCount;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasText = controller.text.trim().isNotEmpty;
+
+    return SizedBox(
+      height: 48,
+      child: TextField(
+        controller: controller,
+        textInputAction: TextInputAction.search,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.grey.shade500,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: hasText ? theme.colorScheme.primary : Colors.grey.shade600,
+          ),
+          suffixIcon: hasText
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.08,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$resultCount/$totalCount',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Limpiar búsqueda',
+                      onPressed: () {
+                        controller.clear();
+                        onSearchChanged('');
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                )
+              : null,
+          suffixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: theme.colorScheme.primary,
+              width: 1.5,
+            ),
+          ),
+        ),
+        onChanged: onSearchChanged,
+      ),
+    );
+  }
+}
+
+class _ExpenseTableHeader extends StatelessWidget {
+  const _ExpenseTableHeader({
+    required this.filteredCount,
+    required this.totalCount,
+    required this.hasFilters,
+  });
+
+  final int filteredCount;
+  final int totalCount;
+  final bool hasFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade100),
+            ),
+          ),
+          child: Row(
+            children: [
+              Text(
+                'Listado de gastos',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.1,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: hasFilters
+                      ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  hasFilters
+                      ? '$filteredCount de $totalCount'
+                      : '$totalCount gastos',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: hasFilters
+                        ? theme.colorScheme.primary
+                        : Colors.grey.shade700,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          height: 38,
+          padding: const EdgeInsets.fromLTRB(32, 0, 16, 0),
+          color: Colors.grey.shade50,
+          child: const _ExpenseColumns(
+            expense: _HeaderLabel('Gasto'),
+            supplier: _HeaderLabel('Proveedor / doc.'),
+            category: _HeaderLabel('Categoría / cuenta'),
+            payment: _HeaderLabel('Pago'),
+            date: _HeaderLabel('Fecha'),
+            amount: _HeaderLabel('Monto', alignEnd: true),
+            actions: SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopExpenseRow extends StatelessWidget {
+  const _DesktopExpenseRow({
+    required this.expense,
+    required this.currencyFormat,
+    required this.paymentMethodName,
+    required this.categoryName,
+    required this.purchaseLinks,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final Expense expense;
+  final NumberFormat currencyFormat;
+  final String paymentMethodName;
+  final String categoryName;
+  final List<ExpenseLink> purchaseLinks;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryText = _primaryText;
+    final documentText = _documentText;
+    final firstLine = expense.lines.isEmpty ? null : expense.lines.first;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+        color: Colors.white,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 4,
+              height: 56,
+              decoration: BoxDecoration(
+                color: _statusColor(expense.paymentStatus),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ExpenseColumns(
+                expense: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        _NumberBadge(expense.expenseNumber),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            primaryText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: Colors.grey.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (documentText.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      _MutedLine(
+                        icon: Icons.description_outlined,
+                        text: documentText,
+                      ),
+                    ],
+                  ],
+                ),
+                supplier: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _emptyFallback(
+                        expense.supplierName,
+                        purchaseLinks.isEmpty
+                            ? 'Proveedor sin nombre'
+                            : 'Vinculado a compra',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    _MutedLine(
+                      icon: purchaseLinks.isEmpty
+                          ? Icons.badge_outlined
+                          : _linkKindIcon(purchaseLinks.first.linkKind),
+                      text: purchaseLinks.isEmpty
+                          ? _supplierMeta
+                          : _purchaseLinkSummary(purchaseLinks),
+                    ),
+                  ],
+                ),
+                category: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      categoryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    _MutedLine(
+                      icon: Icons.account_tree_outlined,
+                      text: _lineSummary(firstLine),
+                    ),
+                  ],
+                ),
+                payment: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _StatusBadge(status: expense.paymentStatus),
+                    const SizedBox(height: 5),
+                    _MutedLine(
+                      icon: Icons.payment_rounded,
+                      text: paymentMethodName,
+                    ),
+                  ],
+                ),
+                date: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      ChileanUtils.formatDate(expense.issueDate),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _secondaryDateText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                amount: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      currencyFormat.format(expense.totalAmount),
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.grey.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _amountDetail,
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: Align(
+                  alignment: Alignment.centerRight,
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Ajustes',
+                    icon: Icon(
+                      Icons.more_horiz,
+                      size: 20,
+                      color: Colors.grey.shade500,
+                    ),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18),
+                            SizedBox(width: 10),
+                            Text('Editar gasto'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Eliminar gasto',
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        onEdit();
+                      } else if (value == 'delete') {
+                        onDelete();
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _primaryText {
+    final firstLine = expense.lines.isEmpty ? null : expense.lines.first;
+    final candidates = [
+      expense.notes,
+      expense.reference,
+      firstLine?.description,
+      expense.supplierName,
+      categoryName == 'Sin categoría' ? null : categoryName,
+      firstLine?.accountName,
+      expense.documentNumber,
+    ];
+
+    for (final candidate in candidates) {
+      final value = candidate?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return 'Gasto sin detalle';
+  }
+
+  String get _documentText {
+    final parts = <String>[];
+    final documentNumber = expense.documentNumber?.trim();
+    if (documentNumber != null && documentNumber.isNotEmpty) {
+      parts.add('${_documentTypeLabel(expense.documentType)} $documentNumber');
+    } else if (expense.documentType != ExpenseDocumentType.invoice) {
+      parts.add(_documentTypeLabel(expense.documentType));
+    }
+
+    final reference = expense.reference?.trim();
+    if (reference != null &&
+        reference.isNotEmpty &&
+        reference != _primaryText) {
+      parts.add('Ref. $reference');
+    }
+    return parts.join(' · ');
+  }
+
+  String get _supplierMeta {
+    final rut = expense.supplierRut?.trim();
+    if (rut != null && rut.isNotEmpty) return rut;
+
+    final documentNumber = expense.documentNumber?.trim();
+    if (documentNumber != null && documentNumber.isNotEmpty) {
+      return '${_documentTypeLabel(expense.documentType)} $documentNumber';
+    }
+
+    final reference = expense.reference?.trim();
+    if (reference != null && reference.isNotEmpty) return 'Ref. $reference';
+
+    return 'Ingreso manual';
+  }
+
+  String get _secondaryDateText {
+    if (expense.paymentStatus == ExpensePaymentStatus.paid &&
+        expense.paidAt != null) {
+      return 'Pagado ${ChileanUtils.formatDate(expense.paidAt!)}';
+    }
+    if (expense.dueDate != null) {
+      return 'Vence ${ChileanUtils.formatDate(expense.dueDate!)}';
+    }
+    return _postingStatusLabel(expense.postingStatus);
+  }
+
+  String get _amountDetail {
+    if (expense.paymentStatus == ExpensePaymentStatus.paid) {
+      return '';
+    }
+    if (expense.balance > 0) {
+      return 'Saldo ${currencyFormat.format(expense.balance)}';
+    }
+    if (expense.amountPaid > 0) {
+      return 'Abonado ${currencyFormat.format(expense.amountPaid)}';
+    }
+    return '';
+  }
+
+  String _lineSummary(ExpenseLine? line) {
+    if (line == null) return 'Sin línea contable';
+
+    final account = [
+      line.accountCode,
+      line.accountName,
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
+    final description = line.description?.trim();
+    final summary = description != null && description.isNotEmpty
+        ? description
+        : account.isEmpty
+            ? 'Sin cuenta'
+            : account;
+
+    if (expense.lines.length <= 1) return summary;
+    return '$summary +${expense.lines.length - 1} líneas';
+  }
+
+  static String _emptyFallback(String? value, String fallback) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? fallback : text;
+  }
+
+  static String _purchaseLinkSummary(List<ExpenseLink> links) {
+    final first = links.first;
+    final number = (first.purchaseInvoiceNumber ?? '').trim();
+    final supplier = (first.purchaseSupplierName ?? '').trim();
+    final label = [
+      if (number.isNotEmpty) number,
+      if (supplier.isNotEmpty) supplier,
+      _linkKindLabel(first.linkKind),
+    ].join(' · ');
+    if (links.length == 1) return label;
+    return '$label +${links.length - 1}';
+  }
+
+  static String _documentTypeLabel(ExpenseDocumentType type) {
+    switch (type) {
+      case ExpenseDocumentType.invoice:
+        return 'Factura';
+      case ExpenseDocumentType.receipt:
+        return 'Recibo';
+      case ExpenseDocumentType.ticket:
+        return 'Boleta';
+      case ExpenseDocumentType.reimbursement:
+        return 'Reembolso';
+      case ExpenseDocumentType.other:
+        return 'Otro';
+    }
+  }
+
+  static String _postingStatusLabel(ExpensePostingStatus status) {
+    switch (status) {
+      case ExpensePostingStatus.draft:
+        return 'Borrador';
+      case ExpensePostingStatus.posted:
+        return 'Contabilizado';
+      case ExpensePostingStatus.voided:
+        return 'Anulado';
+    }
+  }
+
+  static String _linkKindLabel(String value) {
+    switch (value) {
+      case 'delivery':
+        return 'Entrega';
+      case 'import_cost':
+        return 'Importación';
+      default:
+        return 'Relacionado';
+    }
+  }
+
+  static IconData _linkKindIcon(String value) {
+    switch (value) {
+      case 'delivery':
+        return Icons.local_shipping_outlined;
+      case 'import_cost':
+        return Icons.public_outlined;
+      default:
+        return Icons.link_rounded;
+    }
+  }
+
+  static Color _statusColor(ExpensePaymentStatus status) {
+    switch (status) {
+      case ExpensePaymentStatus.pending:
+        return Colors.orange.shade700;
+      case ExpensePaymentStatus.scheduled:
+        return Colors.blueGrey.shade700;
+      case ExpensePaymentStatus.partial:
+        return Colors.purple.shade700;
+      case ExpensePaymentStatus.paid:
+        return Colors.green.shade600;
+      case ExpensePaymentStatus.voided:
+        return Colors.red.shade700;
+    }
+  }
+}
+
+class _ExpenseColumns extends StatelessWidget {
+  const _ExpenseColumns({
+    required this.expense,
+    required this.supplier,
+    required this.category,
+    required this.payment,
+    required this.date,
+    required this.amount,
+    required this.actions,
+  });
+
+  final Widget expense;
+  final Widget supplier;
+  final Widget category;
+  final Widget payment;
+  final Widget date;
+  final Widget amount;
+  final Widget actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(flex: 31, child: expense),
+        const SizedBox(width: 16),
+        Expanded(flex: 21, child: supplier),
+        const SizedBox(width: 16),
+        Expanded(flex: 23, child: category),
+        const SizedBox(width: 16),
+        Expanded(flex: 16, child: payment),
+        const SizedBox(width: 16),
+        SizedBox(width: 104, child: date),
+        const SizedBox(width: 16),
+        SizedBox(width: 132, child: amount),
+        SizedBox(width: 40, child: actions),
+      ],
+    );
+  }
+}
+
+class _HeaderLabel extends StatelessWidget {
+  const _HeaderLabel(this.text, {this.alignEnd = false});
+
+  final String text;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+      child: Text(
+        text.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.7,
+            ),
+      ),
+    );
+  }
+}
+
+class _NumberBadge extends StatelessWidget {
+  const _NumberBadge(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+      ),
+    );
+  }
+}
+
+class _MutedLine extends StatelessWidget {
+  const _MutedLine({
+    required this.icon,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey.shade500),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey.shade500,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

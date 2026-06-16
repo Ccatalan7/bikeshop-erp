@@ -7,6 +7,9 @@ class WhatsAppCatalogSyncResult {
     required this.retailerId,
     this.syncStatus,
     this.whatsappReview,
+    this.expectedUrl,
+    this.storedUrl,
+    this.urlMatches,
   });
 
   final String action;
@@ -19,6 +22,9 @@ class WhatsAppCatalogSyncResult {
 
   /// Raw Meta WhatsApp review value (APPROVED / NO_REVIEW / REJECTED / ...).
   final String? whatsappReview;
+  final String? expectedUrl;
+  final String? storedUrl;
+  final bool? urlMatches;
 
   bool get wasPublished => action == 'upserted';
   bool get wasRemoved => action == 'removed' || action == 'already_absent';
@@ -94,6 +100,9 @@ class WhatsAppCatalogSyncService {
         retailerId: data['retailerId']?.toString() ?? productId,
         syncStatus: data['syncStatus']?.toString(),
         whatsappReview: data['whatsappReview']?.toString(),
+        expectedUrl: data['expectedUrl']?.toString(),
+        storedUrl: data['storedUrl']?.toString(),
+        urlMatches: data['urlMatches'] as bool?,
       );
     } on FunctionException catch (error) {
       throw Exception(_errorMessage(error.details));

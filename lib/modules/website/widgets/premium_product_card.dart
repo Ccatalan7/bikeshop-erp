@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../../public_store/utils/product_url.dart';
 import '../../../shared/utils/chilean_utils.dart';
 
 /// Commencal-style clean, minimal product card used across the website.
 ///
 /// - In **previewMode** the card is non-interactive.
-/// - When interactive, tapping navigates to `/tienda/producto/<id>` via [onNavigate].
+/// - When interactive, tapping navigates to the product's public URL.
 class PremiumProductCard extends StatefulWidget {
   final String productId;
+  final String? productSku;
   final String name;
   final double price;
   final String? imageUrl;
@@ -18,6 +20,7 @@ class PremiumProductCard extends StatefulWidget {
   const PremiumProductCard({
     super.key,
     required this.productId,
+    this.productSku,
     required this.name,
     required this.price,
     this.imageUrl,
@@ -46,13 +49,18 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
       child: GestureDetector(
         onTap: !_isInteractive
             ? null
-            : () =>
-                widget.onNavigate?.call('/tienda/producto/${widget.productId}'),
+            : () => widget.onNavigate?.call(
+                  buildPublicProductPath(
+                    name: widget.name,
+                    sku: widget.productSku ?? '',
+                    fallbackProductId: widget.productId,
+                  ),
+                ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: const BoxDecoration(color: Colors.white),
           transform: _isInteractive && _isHovered
-              ? (Matrix4.identity()..translate(0.0, -2.0))
+              ? (Matrix4.identity()..translateByDouble(0.0, -2.0, 0.0, 1.0))
               : Matrix4.identity(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

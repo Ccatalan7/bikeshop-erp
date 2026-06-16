@@ -18,8 +18,8 @@ const num _structuredDataMaxShippingRateClp = 30000;
 ///   `scripts/sync_seo_index.sh`).
 /// - Fetches products from Supabase via REST using `SUPABASE_SERVICE_ROLE_KEY`
 ///   from `.env` (never printed).
-/// - Writes HTML files at `build/web_store/productos/<uuid>` (no extension) so
-///   `/productos/<uuid>` can be served as static HTML.
+/// - Writes canonical HTML files at `build/web_store/productos/<slug>/<sku>`
+///   and legacy UUID snapshots that point crawlers to the canonical URL.
 /// - Writes `sitemap.xml` and `robots.txt` into the same build directory.
 /// - Adds/overrides meta tags, canonical URL, OG/Twitter, and injects Product
 ///   JSON-LD.
@@ -73,7 +73,7 @@ void main(List<String> args) async {
           ? _resolveEnvValue('SUPABASE_URL', env: env)!
           : 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
 
-  final baseHtml = await baseIndexFile.readAsString();
+  final baseIndexHtml = await baseIndexFile.readAsString();
 
   final settings = await _fetchWebsiteSettings(
     supabaseUrl: supabaseUrl,
@@ -97,11 +97,23 @@ void main(List<String> args) async {
     serviceRoleKey: serviceRoleKey,
     onlyMerchant: onlyMerchant,
   );
+  final productUrlAliases = await _fetchProductUrlAliases(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
   final pages = await _fetchWebsitePages(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
     serviceRoleKey: serviceRoleKey,
   );
+  final baseHtml = _buildHomepageHtml(
+    baseHtml: baseIndexHtml,
+    storeUrl: storeUrl,
+    storeName: storeName,
+    pages: pages,
+  );
+  await baseIndexFile.writeAsString(baseHtml);
   final pageBlocks = await _fetchWebsiteBlocksForPages(
     supabaseUrl: supabaseUrl,
     pages: pages,
@@ -111,6 +123,8 @@ void main(List<String> args) async {
   final outDir = Directory(pathJoin(buildDir.path, 'productos'));
   outDir.createSync(recursive: true);
 
+  final productHtmlById = <String, String>{};
+  final canonicalPathByProductId = <String, String>{};
   var written = 0;
   for (final product in products) {
     final id = (product['id'] ?? '').toString();
@@ -156,7 +170,8 @@ void main(List<String> args) async {
     final imageUrls = _productImageUrls(product);
     final imageUrl = imageUrls.isEmpty ? '' : imageUrls.first;
 
-    final productUrl = _joinUrl(storeUrl, '/productos/$id');
+    final productPath = _publicProductPath(product);
+    final productUrl = _joinUrl(storeUrl, productPath);
 
     final variables = <String, String>{
       'store_name': storeName,
@@ -226,10 +241,58 @@ void main(List<String> args) async {
       isProduct: true,
     );
 
-    final outFile = File(pathJoin(outDir.path, id));
-    await outFile.writeAsString(html);
+    final relativeProductPath =
+        productPath.substring('/productos/'.length).split('/');
+    var canonicalOutPath = outDir.path;
+    for (final segment in relativeProductPath) {
+      canonicalOutPath = pathJoin(canonicalOutPath, segment);
+    }
+    final canonicalOutFile = File(canonicalOutPath);
+    canonicalOutFile.parent.createSync(recursive: true);
+    await canonicalOutFile.writeAsString(html);
+
+    // Keep old indexed/shared UUID URLs crawlable while signaling the clean
+    // product URL as canonical inside the generated HTML.
+    final legacyOutFile = File(pathJoin(outDir.path, id));
+    if (legacyOutFile.path != canonicalOutFile.path) {
+      await legacyOutFile.writeAsString(
+        _buildLegacyProductRedirectHtml(
+          html: html,
+          canonicalUrl: productUrl,
+        ),
+      );
+    }
+    productHtmlById[id] = html;
+    canonicalPathByProductId[id] = productPath;
     written++;
   }
+
+  final redirectAliases = _buildProductRedirectAliases(
+    products: products,
+    aliases: productUrlAliases,
+    canonicalPathByProductId: canonicalPathByProductId,
+  );
+  var aliasSnapshotsWritten = 0;
+  for (final redirect in redirectAliases) {
+    final html = productHtmlById[redirect.productId];
+    final canonicalPath = canonicalPathByProductId[redirect.productId];
+    if (html == null || canonicalPath == null) continue;
+    await _writeRedirectSnapshot(
+      buildDir: buildDir,
+      aliasPath: redirect.aliasPath,
+      html: html,
+      canonicalUrl: _joinUrl(storeUrl, canonicalPath),
+    );
+    aliasSnapshotsWritten++;
+  }
+  final firebaseRedirectsWritten = await _writeFirebaseProductRedirects(
+    firebaseConfigFile: File(parsed['firebase-config'] ?? 'firebase.json'),
+    manifestFile: File(
+      parsed['redirect-manifest'] ?? 'scripts/generated_product_redirects.json',
+    ),
+    redirects: redirectAliases,
+    canonicalPathByProductId: canonicalPathByProductId,
+  );
 
   final categories = _buildProductCategories(
     products: products,
@@ -271,6 +334,9 @@ void main(List<String> args) async {
   }
 
   stdout.writeln('✅ Product SEO snapshots generated: $written');
+  stdout.writeln('✅ Product alias snapshots generated: $aliasSnapshotsWritten');
+  stdout.writeln(
+      '✅ Firebase product 301 redirects generated: $firebaseRedirectsWritten');
   stdout.writeln('✅ Category SEO pages generated: $categoryPagesWritten');
   final staticTrustPagesWritten = await _writeStaticTrustPages(
     buildDir: buildDir,
@@ -297,13 +363,78 @@ void main(List<String> args) async {
 // HTML mutation
 // -----------------------------------------------------------------------------
 
+String _buildHomepageHtml({
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required List<Map<String, dynamic>> pages,
+}) {
+  Map<String, dynamic>? homePage;
+  for (final page in pages) {
+    final slug = (page['slug'] ?? '').toString().trim();
+    if (page['is_home'] == true || slug == 'home' || slug == 'inicio') {
+      homePage = page;
+      break;
+    }
+  }
+
+  final title = _cleanText((homePage?['meta_title'] ?? '').toString());
+  final description =
+      _cleanText((homePage?['meta_description'] ?? '').toString());
+  if (title.isEmpty && description.isEmpty) return baseHtml;
+
+  final effectiveTitle = title.isNotEmpty ? _truncate(title, 120) : storeName;
+  var html = baseHtml;
+  html = _replaceTag(
+    html,
+    RegExp(r'<title>.*?</title>', dotAll: true),
+    '<title>${_escapeHtml(effectiveTitle)}</title>',
+  );
+  html = _replaceMetaContent(html, name: 'title', content: effectiveTitle);
+  if (description.isNotEmpty) {
+    html = _replaceMetaContent(
+      html,
+      name: 'description',
+      content: _truncate(description, 320),
+    );
+  }
+  html = _replaceLinkHref(html, rel: 'canonical', href: storeUrl);
+  html = _replaceMetaProperty(html, property: 'og:url', content: storeUrl);
+  html = _replaceMetaProperty(
+    html,
+    property: 'og:title',
+    content: effectiveTitle,
+  );
+  if (description.isNotEmpty) {
+    html = _replaceMetaProperty(
+      html,
+      property: 'og:description',
+      content: _truncate(description, 320),
+    );
+  }
+  html = _replaceMetaName(html, name: 'twitter:url', content: storeUrl);
+  html = _replaceMetaName(
+    html,
+    name: 'twitter:title',
+    content: effectiveTitle,
+  );
+  if (description.isNotEmpty) {
+    html = _replaceMetaName(
+      html,
+      name: 'twitter:description',
+      content: _truncate(description, 320),
+    );
+  }
+  return html;
+}
+
 String _buildProductHtml({
   required String baseHtml,
   required String title,
   required String description,
   required String canonicalUrl,
   required String ogImageUrl,
-  required String jsonLdProduct,
+  required String? jsonLdProduct,
   required String fallbackHtml,
   required bool isProduct,
 }) {
@@ -337,23 +468,32 @@ String _buildProductHtml({
   html =
       _replaceMetaName(html, name: 'twitter:description', content: description);
 
-  // Inject product JSON-LD right before </head>.
-  final injection =
-      '\n  <!-- JSON-LD Structured Data for Product (generated at deploy) -->\n'
-      '  <script type="application/ld+json" id="seo-product-jsonld">\n'
-      '  $jsonLdProduct\n'
-      '  </script>\n';
+  if (jsonLdProduct != null && jsonLdProduct.isNotEmpty) {
+    // Inject product JSON-LD right before </head>.
+    final injection =
+        '\n  <!-- JSON-LD Structured Data for Product (generated at deploy) -->\n'
+        '  <script type="application/ld+json" id="seo-product-jsonld">\n'
+        '  $jsonLdProduct\n'
+        '  </script>\n';
 
-  if (html.contains('id="seo-product-jsonld"')) {
-    // If already present, replace the whole block.
+    if (html.contains('id="seo-product-jsonld"')) {
+      // If already present, replace the whole block.
+      html = html.replaceAll(
+        RegExp(
+            r'<script type="application/ld\+json" id="seo-product-jsonld">.*?</script>',
+            dotAll: true),
+        '${injection.trim()}\n',
+      );
+    } else {
+      html = html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
+    }
+  } else {
     html = html.replaceAll(
       RegExp(
-          r'<script type="application/ld\+json" id="seo-product-jsonld">.*?</script>',
+          r'\s*<!-- JSON-LD Structured Data for Product \(generated at deploy\) -->\s*<script type="application/ld\+json" id="seo-product-jsonld">.*?</script>\s*',
           dotAll: true),
-      '${injection.trim()}\n',
+      '\n',
     );
-  } else {
-    html = html.replaceFirst(RegExp(r'</head>'), '$injection</head>');
   }
 
   if (fallbackHtml.isNotEmpty) {
@@ -1133,7 +1273,7 @@ Map<String, _TrustPageFallback> _trustPageFallbacks(String storeName) {
   };
 }
 
-String _buildProductJsonLd({
+String? _buildProductJsonLd({
   required String productUrl,
   required String storeUrl,
   required String storeName,
@@ -1148,27 +1288,35 @@ String _buildProductJsonLd({
 }) {
   final name =
       _cleanText(_firstNonEmpty(product['website_name'], product['name']));
-  final gtin = (product['gtin'] ?? product['barcode'] ?? '').toString().trim();
+  if (imageUrls.isEmpty) {
+    return null;
+  }
+
+  final gtin = _validGtin(_firstNonEmpty(
+    product['website_merchant_gtin'],
+    product['gtin'],
+    product['barcode'],
+  ));
   final cleanDescription = _cleanText(description);
   final category = (product['category_name'] ?? '').toString().trim();
   final structuredBrandName =
-      productBrand.isNotEmpty ? productBrand : (gtin.isEmpty ? 'Genérico' : '');
+      productBrand.isNotEmpty ? productBrand : (gtin == null ? 'Genérico' : '');
 
   final productData = <String, dynamic>{
     '@type': 'Product',
     'name': name,
     'description': cleanDescription,
     'url': productUrl,
-    if (imageUrls.isNotEmpty) 'image': imageUrls,
+    'image': imageUrls,
     if (productSku.isNotEmpty) 'sku': productSku,
-    if (gtin.isEmpty && productSku.isNotEmpty) 'mpn': productSku,
+    if (gtin == null && productSku.isNotEmpty) 'mpn': productSku,
     if (category.isNotEmpty) 'category': category,
     if (structuredBrandName.isNotEmpty)
       'brand': {
         '@type': 'Brand',
         'name': structuredBrandName,
       },
-    if (gtin.isNotEmpty) 'gtin': gtin,
+    if (gtin != null) 'gtin': gtin,
     'offers': {
       '@type': 'Offer',
       'url': productUrl,
@@ -1380,7 +1528,7 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
       '&is_published=eq.true'
       '&show_on_website=eq.true'
       '&product_type=eq.product'
-      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
+      '&select=id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_gtin,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand,category_name,stock_quantity,inventory_qty,track_stock,updated_at,created_at'
       '&limit=$pageSize'
       '&offset=$offset',
     );
@@ -1401,6 +1549,38 @@ Future<List<Map<String, dynamic>>> _fetchProducts({
   return products;
 }
 
+Future<List<Map<String, dynamic>>> _fetchProductUrlAliases({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+}) async {
+  const pageSize = 1000;
+  final aliases = <Map<String, dynamic>>[];
+
+  for (var offset = 0;; offset += pageSize) {
+    final url = Uri.parse(
+      '$supabaseUrl/rest/v1/product_url_aliases'
+      '?tenant_id=eq.$tenantId'
+      '&select=product_id,alias_path,source,created_at'
+      '&order=created_at.asc'
+      '&limit=$pageSize'
+      '&offset=$offset',
+    );
+    final response = await _httpGet(
+      url,
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': 'Bearer $serviceRoleKey',
+      },
+    );
+    final decoded = jsonDecode(response) as List<dynamic>;
+    aliases.addAll(decoded.map((e) => (e as Map<String, dynamic>)));
+    if (decoded.length < pageSize) break;
+  }
+
+  return aliases;
+}
+
 Future<List<Map<String, dynamic>>> _fetchWebsitePages({
   required String supabaseUrl,
   required String tenantId,
@@ -1410,7 +1590,7 @@ Future<List<Map<String, dynamic>>> _fetchWebsitePages({
     '$supabaseUrl/rest/v1/website_pages'
     '?tenant_id=eq.$tenantId'
     '&is_published=eq.true'
-    '&select=id,slug,title,meta_description,is_home,updated_at'
+    '&select=id,slug,title,meta_title,meta_description,is_home,updated_at'
     '&limit=500',
   );
 
@@ -1518,10 +1698,17 @@ String _truncate(String text, int maxLen) {
   return cut;
 }
 
-String _firstNonEmpty(dynamic first, dynamic second) {
-  final a = (first ?? '').toString().trim();
-  if (a.isNotEmpty) return a;
-  return (second ?? '').toString().trim();
+String _firstNonEmpty(
+  dynamic first, [
+  dynamic second,
+  dynamic third,
+  dynamic fourth,
+]) {
+  for (final value in [first, second, third, fourth]) {
+    final text = (value ?? '').toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return '';
 }
 
 List<String> _productImageUrls(Map<String, dynamic> product) {
@@ -1530,6 +1717,7 @@ List<String> _productImageUrls(Map<String, dynamic> product) {
   void add(dynamic value) {
     final url = (value ?? '').toString().trim();
     if (url.isEmpty || urls.contains(url)) return;
+    if (!url.startsWith('https://') && !url.startsWith('http://')) return;
     urls.add(url);
   }
 
@@ -1553,6 +1741,34 @@ List<String> _productImageUrls(Map<String, dynamic> product) {
   // Google supports many images per URL, but keeping this capped prevents
   // oversized sitemap entries while still exposing useful product alternates.
   return urls.take(10).toList(growable: false);
+}
+
+String? _validGtin(String rawValue) {
+  final value = rawValue.trim().replaceAll(RegExp(r'[\s-]+'), '');
+  if (!RegExp(r'^\d+$').hasMatch(value)) return null;
+  if (!(value.length == 8 ||
+      value.length == 12 ||
+      value.length == 13 ||
+      value.length == 14)) {
+    return null;
+  }
+  if (!_hasValidGtinCheckDigit(value)) return null;
+  return value;
+}
+
+bool _hasValidGtinCheckDigit(String value) {
+  final digits = value.split('').map(int.parse).toList(growable: false);
+  final checkDigit = digits.last;
+  var sum = 0;
+  var positionFromRight = 1;
+
+  for (var i = digits.length - 2; i >= 0; i--) {
+    sum += digits[i] * (positionFromRight.isOdd ? 3 : 1);
+    positionFromRight++;
+  }
+
+  final calculatedCheckDigit = (10 - (sum % 10)) % 10;
+  return calculatedCheckDigit == checkDigit;
 }
 
 List<String> _stringList(dynamic value) {
@@ -1884,12 +2100,12 @@ List<_ProductCategorySeo> _buildProductCategories({
     final slug = _slugify(name);
     if (slug.isEmpty) continue;
 
-    final id = (product['id'] ?? '').toString().trim();
-    if (id.isEmpty) continue;
+    final productPath = _publicProductPath(product);
+    if (productPath == '/productos') continue;
 
     final item = _CategoryProductSeo(
       name: _cleanText((product['name'] ?? '').toString()),
-      url: _joinUrl(storeUrl, '/productos/$id'),
+      url: _joinUrl(storeUrl, productPath),
     );
 
     final existing = bySlug.putIfAbsent(
@@ -1936,6 +2152,21 @@ String _slugify(String value) {
   s = s.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   s = s.replaceAll(RegExp(r'-+'), '-');
   return s.replaceAll(RegExp(r'^-|-$'), '');
+}
+
+String _publicProductPath(Map<String, dynamic> product) {
+  final id = (product['id'] ?? '').toString().trim();
+  final sku = (product['sku'] ?? '').toString().trim();
+  if (sku.isEmpty) return id.isEmpty ? '/productos' : '/productos/$id';
+
+  final name =
+      _cleanText(_firstNonEmpty(product['website_name'], product['name']));
+  var slug = _slugify(name);
+  if (slug.length > 80) {
+    slug = slug.substring(0, 80).replaceFirst(RegExp(r'-+$'), '');
+  }
+  if (slug.isEmpty) slug = 'producto';
+  return '/productos/$slug/${Uri.encodeComponent(sku)}';
 }
 
 Future<void> _writeCrawlerFiles({
@@ -2002,12 +2233,12 @@ Future<void> _writeCrawlerFiles({
   }
 
   for (final product in products) {
-    final id = (product['id'] ?? '').toString().trim();
-    if (id.isEmpty) continue;
+    final productPath = _publicProductPath(product);
+    if (productPath == '/productos') continue;
     final productName =
         _cleanText(_firstNonEmpty(product['website_name'], product['name']));
     addUrl(
-      '/productos/$id',
+      productPath,
       lastmod: now,
       changefreq: 'weekly',
       priority: '0.8',
@@ -2193,6 +2424,16 @@ class _CategoryProductSeo {
   });
 }
 
+class _ProductRedirectAlias {
+  const _ProductRedirectAlias({
+    required this.productId,
+    required this.aliasPath,
+  });
+
+  final String productId;
+  final String aliasPath;
+}
+
 class _TrustPageFallback {
   final String title;
   final String description;
@@ -2238,6 +2479,181 @@ String _escapeHtml(String text) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#39;');
+}
+
+String _buildLegacyProductRedirectHtml({
+  required String html,
+  required String canonicalUrl,
+}) {
+  final escapedUrl = _escapeHtml(canonicalUrl);
+  final encodedUrl = jsonEncode(canonicalUrl);
+  const closingHead = '</head>';
+  final redirectMarkup = '''
+  <meta http-equiv="refresh" content="0; url=$escapedUrl">
+  <script>window.location.replace($encodedUrl);</script>
+''';
+  return html.replaceFirst(closingHead, '$redirectMarkup$closingHead');
+}
+
+List<_ProductRedirectAlias> _buildProductRedirectAliases({
+  required List<Map<String, dynamic>> products,
+  required List<Map<String, dynamic>> aliases,
+  required Map<String, String> canonicalPathByProductId,
+}) {
+  final redirectsBySource = <String, _ProductRedirectAlias>{};
+
+  void add(String productId, String aliasPath) {
+    final canonicalPath = canonicalPathByProductId[productId];
+    final normalizedAlias = _normalizePublicPath(aliasPath);
+    if (canonicalPath == null ||
+        normalizedAlias.isEmpty ||
+        normalizedAlias == canonicalPath) {
+      return;
+    }
+    redirectsBySource.putIfAbsent(
+      normalizedAlias,
+      () => _ProductRedirectAlias(
+        productId: productId,
+        aliasPath: normalizedAlias,
+      ),
+    );
+  }
+
+  for (final product in products) {
+    final id = (product['id'] ?? '').toString().trim();
+    if (id.isEmpty) continue;
+    add(id, '/productos/$id');
+    add(id, '/producto/$id');
+    add(id, '/tienda/producto/$id');
+  }
+
+  for (final alias in aliases) {
+    add(
+      (alias['product_id'] ?? '').toString(),
+      (alias['alias_path'] ?? '').toString(),
+    );
+  }
+
+  final redirects = redirectsBySource.values.toList(growable: false);
+  redirects.sort((a, b) => a.aliasPath.compareTo(b.aliasPath));
+  return redirects;
+}
+
+Future<void> _writeRedirectSnapshot({
+  required Directory buildDir,
+  required String aliasPath,
+  required String html,
+  required String canonicalUrl,
+}) async {
+  final normalizedPath = _normalizePublicPath(aliasPath);
+  if (normalizedPath.isEmpty || normalizedPath == '/') return;
+
+  var outPath = buildDir.path;
+  for (final rawSegment in normalizedPath.substring(1).split('/')) {
+    final segment = Uri.decodeComponent(rawSegment);
+    if (segment.isEmpty || segment == '.' || segment == '..') return;
+    outPath = pathJoin(outPath, segment);
+  }
+  final outFile = File(outPath);
+  outFile.parent.createSync(recursive: true);
+  await outFile.writeAsString(
+    _buildLegacyProductRedirectHtml(
+      html: html,
+      canonicalUrl: canonicalUrl,
+    ),
+  );
+}
+
+Future<int> _writeFirebaseProductRedirects({
+  required File firebaseConfigFile,
+  required File manifestFile,
+  required List<_ProductRedirectAlias> redirects,
+  required Map<String, String> canonicalPathByProductId,
+}) async {
+  if (!firebaseConfigFile.existsSync()) return 0;
+
+  final generated = redirects
+      .map((redirect) {
+        // The old published product URLs used /productos/<uuid>. Keep
+        // /producto/* and ERP-mounted aliases available through generated HTML
+        // and the runtime alias resolver without consuming Firebase's finite
+        // exact-redirect rule budget.
+        if (!redirect.aliasPath.startsWith('/productos/')) return null;
+        final destination = canonicalPathByProductId[redirect.productId];
+        if (destination == null || destination == redirect.aliasPath) {
+          return null;
+        }
+        return <String, dynamic>{
+          'source': redirect.aliasPath,
+          'destination': destination,
+          'type': 301,
+        };
+      })
+      .whereType<Map<String, dynamic>>()
+      .toList(growable: false);
+
+  final previousSources = <String>{};
+  if (manifestFile.existsSync()) {
+    try {
+      final previous = jsonDecode(await manifestFile.readAsString());
+      if (previous is Map && previous['redirects'] is List) {
+        for (final item in previous['redirects'] as List) {
+          if (item is Map && item['source'] != null) {
+            previousSources.add(item['source'].toString());
+          }
+        }
+      }
+    } catch (_) {
+      // A malformed generated manifest must not block a storefront build.
+    }
+  }
+
+  final config = Map<String, dynamic>.from(
+      jsonDecode(await firebaseConfigFile.readAsString()));
+  final hosting = config['hosting'];
+  if (hosting is! List) return 0;
+
+  Map<String, dynamic>? storeHosting;
+  for (final entry in hosting) {
+    if (entry is Map && entry['target'] == 'store') {
+      storeHosting = Map<String, dynamic>.from(entry);
+      hosting[hosting.indexOf(entry)] = storeHosting;
+      break;
+    }
+  }
+  if (storeHosting == null) return 0;
+
+  final retained = <Map<String, dynamic>>[];
+  final existing = storeHosting['redirects'];
+  if (existing is List) {
+    for (final item in existing) {
+      if (item is! Map) continue;
+      final redirect = Map<String, dynamic>.from(item);
+      if (!previousSources.contains(redirect['source']?.toString())) {
+        retained.add(redirect);
+      }
+    }
+  }
+  storeHosting['redirects'] = [...retained, ...generated];
+
+  const encoder = JsonEncoder.withIndent('  ');
+  await firebaseConfigFile.writeAsString('${encoder.convert(config)}\n');
+  manifestFile.parent.createSync(recursive: true);
+  await manifestFile.writeAsString(
+    '${encoder.convert({
+          'generatedAt': DateTime.now().toUtc().toIso8601String(),
+          'redirects': generated,
+        })}\n',
+  );
+  return generated.length;
+}
+
+String _normalizePublicPath(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return '';
+  final path = Uri.tryParse(trimmed)?.path ?? trimmed;
+  if (path.isEmpty) return '';
+  return path == '/' ? '/' : '/${path.replaceAll(RegExp(r'^/+|/+$'), '')}';
 }
 
 String _replaceTag(String html, RegExp pattern, String replacement) {

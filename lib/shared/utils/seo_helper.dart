@@ -8,12 +8,14 @@ class SeoHelper {
     String? description,
     String? imageUrl,
     String? keywords,
+    String? canonicalUrl,
   }) {
     updateSeoImpl(
       title: title,
       description: description,
       imageUrl: imageUrl,
       keywords: keywords,
+      canonicalUrl: canonicalUrl,
     );
   }
 }

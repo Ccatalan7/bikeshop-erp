@@ -13,6 +13,8 @@ on:
       - 'pubspec.lock'
       - 'analysis_options.yaml'
       - 'firebase.json'
+      - 'scripts/generate_product_seo_snapshots.dart'
+      - 'scripts/generated_product_redirects.json'
       - '.firebaserc'
       - '.github/workflows/firebase-hosting-store.yml'
   workflow_dispatch:
@@ -32,8 +34,25 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build web release
-        run: flutter build web --release
+      - name: Build storefront release
+        run: flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store
+
+      - name: Generate SEO snapshots, sitemap, and product redirects
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+        run: |
+          dart run scripts/generate_product_seo_snapshots.dart \
+            --build-dir build/web_store \
+            --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
+            --store-url https://vinabike.cl \
+            --product-scope published
+
+      - name: Verify generated crawler assets and redirects
+        run: |
+          test -s build/web_store/sitemap.xml
+          test -s build/web_store/robots.txt
+          node -e "const f=require('./firebase.json'); const s=f.hosting.find(x=>x.target==='store'); if (!s.redirects?.length) process.exit(1)"
 
       - name: Deploy store target
         uses: FirebaseExtended/action-hosting-deploy@v0

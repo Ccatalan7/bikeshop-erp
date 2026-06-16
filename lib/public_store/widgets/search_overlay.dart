@@ -10,6 +10,7 @@ import '../../shared/services/tenant_service.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../modules/website/services/website_service.dart';
+import '../utils/product_url.dart';
 
 class SearchOverlay extends StatefulWidget {
   final String tenantId;
@@ -186,10 +187,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
     // Close the dialog first (use root navigator to be robust across shells).
     Navigator.of(context, rootNavigator: true).pop();
 
-    // Always navigate using the legacy in-shell path. The router will
-    // automatically rewrite this to clean URLs on the public store host.
     final destination = Uri(
-      path: '/tienda/producto/${product.id}',
+      path: publicProductPath(product),
       queryParameters: widget.preserveQueryParameters.isEmpty
           ? null
           : widget.preserveQueryParameters,

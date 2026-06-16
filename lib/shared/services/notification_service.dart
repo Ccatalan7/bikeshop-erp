@@ -666,9 +666,8 @@ class NotificationService {
   String? _notificationsTenantId;
 
   void _recomputeUnreadCount() {
-    final unread = notificationsFeed.value
-        .where((row) => row['read_at'] == null)
-        .length;
+    final unread =
+        notificationsFeed.value.where((row) => row['read_at'] == null).length;
     unreadNotificationsCount.value = unread;
   }
 
@@ -751,8 +750,8 @@ class NotificationService {
 
     final nowIso = DateTime.now().toUtc().toIso8601String();
     final current = notificationsFeed.value
-        .map((row) =>
-            row['read_at'] == null ? {...row, 'read_at': nowIso} : row)
+        .map(
+            (row) => row['read_at'] == null ? {...row, 'read_at': nowIso} : row)
         .toList();
     notificationsFeed.value = current;
     _recomputeUnreadCount();

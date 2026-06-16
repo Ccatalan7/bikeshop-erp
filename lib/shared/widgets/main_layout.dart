@@ -1239,8 +1239,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     if (record['read_at'] != null) return;
 
     final notificationId = record['id']?.toString();
-    if (notificationId == null ||
-        notificationId == _lastNotifiedGenericId) {
+    if (notificationId == null || notificationId == _lastNotifiedGenericId) {
       return;
     }
     _lastNotifiedGenericId = notificationId;
@@ -1268,7 +1267,6 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         return Icons.notifications_outlined;
     }
   }
-
 
   Future<void> _refreshOnlineOrderAlerts({
     bool showTopNotification = false,

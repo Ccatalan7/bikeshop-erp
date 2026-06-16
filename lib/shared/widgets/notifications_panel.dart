@@ -317,9 +317,8 @@ class _NotificationTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: isUnread
-            ? theme.colorScheme.primary.withValues(alpha: 0.04)
-            : null,
+        color:
+            isUnread ? theme.colorScheme.primary.withValues(alpha: 0.04) : null,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,6 +370,7 @@ class _NotificationTile extends StatelessWidget {
                       ),
                     ),
                   ],
+                  ..._detailRows(theme, type),
                   const SizedBox(height: 4),
                   Text(
                     _relativeTime(createdAt),
@@ -381,6 +381,69 @@ class _NotificationTile extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds the per-type structured detail rows from the notification's
+  /// `data` jsonb payload, so managers see the meaningful context at a glance.
+  List<Widget> _detailRows(ThemeData theme, String type) {
+    final rawData = notification['data'];
+    if (rawData is! Map) return const [];
+    final data = rawData;
+
+    String? value(String key) {
+      final v = data[key];
+      if (v == null) return null;
+      final str = v.toString().trim();
+      return str.isEmpty ? null : str;
+    }
+
+    final rows = <Widget>[];
+    void add(String label, String? text, {int maxLines = 1}) {
+      if (text == null) return;
+      rows.add(_detailRow(theme, label, text, maxLines: maxLines));
+    }
+
+    switch (type) {
+      case 'sales_payment_received':
+        add('Método', value('payment_method'));
+        add('Cliente', value('customer_name'));
+        add('Registrado por', value('recorded_by_name'));
+        break;
+      case 'mechanic_job_created':
+        add('Bicicleta', value('bike_label'));
+        add('Solicitud', value('client_request'), maxLines: 2);
+        break;
+    }
+
+    return rows;
+  }
+
+  Widget _detailRow(ThemeData theme, String label, String text,
+      {int maxLines = 1}) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: RichText(
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          style: theme.textTheme.bodySmall,
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: TextStyle(
+                color: muted.withValues(alpha: 0.75),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextSpan(
+              text: text,
+              style: TextStyle(color: theme.colorScheme.onSurface),
             ),
           ],
         ),
@@ -528,9 +591,8 @@ class _DailySummary extends StatelessWidget {
                       _SummaryRow(
                         icon: Icons.payments_outlined,
                         accent: const Color(0xFF2E7D32),
-                        label: payments == 1
-                            ? 'Pago recibido'
-                            : 'Pagos recibidos',
+                        label:
+                            payments == 1 ? 'Pago recibido' : 'Pagos recibidos',
                         sublabel: paymentsTotal > 0
                             ? ChileanUtils.formatCurrency(paymentsTotal)
                             : null,
@@ -541,8 +603,7 @@ class _DailySummary extends StatelessWidget {
                       _SummaryRow(
                         icon: Icons.shopping_bag_outlined,
                         accent: theme.colorScheme.primary,
-                        label:
-                            orders == 1 ? 'Pedido online' : 'Pedidos online',
+                        label: orders == 1 ? 'Pedido online' : 'Pedidos online',
                         trailing: '$orders',
                         onTap: () => onNavigate('/website/orders'),
                       ),

@@ -13,6 +13,7 @@ import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/utils/chilean_utils.dart';
 // import '../providers/cart_provider.dart'; // Unused
 import '../widgets/full_page_loading.dart';
+import '../utils/product_url.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/services/tenant_service.dart';
@@ -1830,7 +1831,7 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => PublicStoreLayout.navigateToHref(
-            context, '/productos/${product.id}'),
+            context, publicProductPath(product)),
         child: AnimatedContainer(
           duration: hoverDuration,
           curve: Curves.easeOutCubic,

@@ -3318,8 +3318,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
               final textColor =
                   (isDarkMode || isMenuOpen) ? Colors.white : Colors.black87;
-              final iconColor =
-                  (isDarkMode || isMenuOpen) ? Colors.white : primaryColor;
+              final iconColor = (isDarkMode || isMenuOpen)
+                  ? Colors.white
+                  : PublicStoreTheme.logoBlue;
 
               // Remove shadow when menu is open to prevent "seam" line
               final effectiveElevation =

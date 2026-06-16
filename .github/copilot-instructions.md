@@ -2408,6 +2408,210 @@ The website has THREE layers of data that must stay in sync:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Canonical Product URLs And External Link Publishers (Critical)
+
+Clean, stable product URLs are an SEO, trust, sharing, and integration contract.
+Do not treat them as storefront decoration. Product URLs are copied into Google
+Search, Google Merchant Center, WhatsApp/Meta catalogs, social previews,
+messages, QR codes, browser history, and customer bookmarks. A storefront
+deploy does **not** automatically rewrite URL values already stored by those
+external systems.
+
+### Canonical product URL contract
+
+The canonical public product URL is:
+
+```text
+https://vinabike.cl/productos/<readable-product-slug>/<sku>
+```
+
+Example:
+
+```text
+https://vinabike.cl/productos/neumatico-vuelta-mtb-cb531-26x1-95-negro/N079
+```
+
+- The readable slug comes from the website/display product name.
+- SKU is the stable lookup key and keeps products unique when names repeat.
+- Products without a SKU temporarily fall back to `/productos/<uuid>`.
+- Do not casually change an already-published SKU. Existing clean URLs use SKU
+  for lookup; if a SKU must change, add an alias/redirect plan.
+- A renamed product may produce a new slug, but an old slug with the same SKU
+  must still resolve and upgrade to the current canonical URL.
+
+### Canonical URL builders
+
+Never hand-build public product URLs in new code.
+
+- Flutter/storefront and ERP UI:
+  `lib/public_store/utils/product_url.dart`
+  - `publicProductPath(product)`
+  - `buildPublicProductPath(...)`
+- Supabase Edge Functions/external publishers:
+  `supabase/functions/_shared/product_url.ts`
+  - `publicProductPath(product)`
+  - `publicProductUrl(storeUrl, product)`
+- SEO snapshot/sitemap generation:
+  `scripts/generate_product_seo_snapshots.dart`
+  - `_publicProductPath(product)` must remain behaviorally aligned with both
+    shared builders.
+
+When changing slug rules or the canonical URL shape, update and test all three
+implementations in the same task.
+
+### Surfaces that must remain aligned
+
+Any product-link change is incomplete until all of these are checked:
+
+1. Public router: `lib/public_store/routes/public_store_router.dart`
+   - canonical route: `/productos/:slug/:sku`
+   - legacy `/productos/:id`, `/producto/:id`, `/tienda/producto/:id`, and
+     `/shop/:slug` compatibility must remain.
+2. Storefront navigation links:
+   catalog cards, search, cart, related products, homepage/website blocks, and
+   any future share/copy-link action.
+3. Product detail SEO:
+   - browser URL upgrades from old/stale routes to the current canonical route
+   - `<link rel="canonical">`
+   - Open Graph URL where applicable
+   - Product JSON-LD / Offer URL
+4. Static crawler output:
+   `scripts/generate_product_seo_snapshots.dart`
+   - sitemap contains canonical clean URLs only
+   - canonical clean product snapshot exists
+   - legacy UUID snapshot remains crawlable but declares and redirects to the
+     clean canonical URL.
+5. Google Merchant feed:
+   `supabase/functions/google-merchant-feed/index.ts`
+6. WhatsApp/Meta catalog publishers:
+   - `supabase/functions/whatsapp-catalog-sync/index.ts`
+   - `supabase/functions/whatsapp-profile-admin/index.ts`
+7. ERP product form public URL, diagnostics, copy/open actions:
+   `lib/modules/inventory/pages/product_form_page.dart`
+
+Search the repo for hardcoded product URL construction before finishing:
+
+```bash
+rg -n 'vinabike\.cl/productos/\$\{|/productos/\$\{[^}]*\.id\}|\$\{storeUrl\}/productos/' \
+  lib supabase/functions scripts cloudflare-worker
+```
+
+UUID fallback handling inside a compatibility route/snapshot is allowed.
+Newly published links must use the canonical builder.
+
+### External systems do not update themselves
+
+- Deploying the storefront only changes what happens after an old link is
+  clicked. It does not change the URL text/value already stored by Meta,
+  Merchant Center, Google Search, messages, or posts.
+- Existing WhatsApp catalog records must be re-synced/upserted after changing
+  the URL publisher.
+- Google Merchant must fetch the updated feed. Use Merchant Center "Fetch now"
+  when timely propagation matters.
+- Google Search updates after recrawling. The sitemap, canonical tags, and
+  legacy redirects tell Google which URL to keep, but old search results may
+  remain visible for days or longer.
+- Previously sent messages, manually pasted links, social posts, and customer
+  bookmarks cannot be remotely rewritten. Keep legacy URLs working.
+
+### Deployment and verification after product-link or SEO changes
+
+Edge Functions must be deployed individually and verified:
+
+```bash
+supabase functions deploy whatsapp-catalog-sync --project-ref xzdvtzdqjeyqxnkqprtf
+supabase functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+supabase functions deploy google-merchant-feed --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt
+```
+
+Build snapshots/sitemap and deploy the public store:
+
+```bash
+flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store
+dart run scripts/generate_product_seo_snapshots.dart \
+  --build-dir build/web_store \
+  --tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
+  --store-url https://vinabike.cl \
+  --product-scope published
+firebase deploy --only hosting:store
+```
+
+Minimum live checks:
+
+```bash
+# Merchant feed must emit clean product links.
+curl -sS 'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?domain=vinabike.cl' \
+  | rg -o '<g:link>[^<]+' | head
+
+# Sitemap must contain the clean URL, not the UUID URL.
+curl -sS 'https://vinabike.cl/sitemap.xml' | rg '<product-slug>|<product-uuid>'
+
+# Old UUID HTML must declare and redirect to the clean canonical URL.
+curl -sS 'https://vinabike.cl/productos/<product-uuid>' \
+  | rg 'rel="canonical"|http-equiv="refresh"|location.replace'
+```
+
+Also open both the old UUID URL and clean URL in the browser. Confirm:
+
+- the same product loads;
+- the old address upgrades to the clean address;
+- the page canonical URL is the clean address;
+- no redirect loop occurs;
+- direct clean URLs work on both the public store and ERP-mounted preview/edit
+  environments.
+
+### Current state and remaining improvement opportunities
+
+Implemented and deployed on 2026-06-14:
+
+- canonical name-plus-SKU product routes;
+- legacy UUID/stale-slug compatibility and clean-address upgrades;
+- persistent `product_url_aliases` history plus runtime alias resolution for
+  renamed products and SKU changes;
+- generated Firebase Hosting `301` redirects for old published
+  `/productos/<uuid>` URLs;
+- clean storefront, ERP product-form, WhatsApp catalog, and Google Merchant
+  product links;
+- product canonical tags and clean Product/Offer structured-data URLs;
+- clean sitemap/static SEO snapshots plus legacy UUID redirect snapshots;
+- automatic storefront CI generation/verification of snapshots, sitemap, and
+  Firebase product redirects before deployment;
+- re-sync and URL read-back verification of every enabled WhatsApp product;
+- persistent Meta URL verification fields on `products` so a successful upload
+  cannot be confused with a verified stored link;
+- repair of `AE0037`'s missing description; Meta accepted it and it is awaiting
+  normal WhatsApp review;
+- Google Merchant feed re-fetch action in product diagnostics;
+- Search Console sitemap submission, sitemap status, selected-canonical, and
+  last-crawl diagnostics in the product form.
+- Homepage SEO metadata is kept consistent across the live `website_pages`
+  home row, `website_settings` (`seo_meta_title` / `seo_meta_description`),
+  `web/index.html`, and the generated storefront index. The snapshot generator
+  fetches the home page `meta_title` and rewrites the built root index before
+  deployment. Do not update only one of these sources or reintroduce vague,
+  unprovable copy such as “la mejor tienda”.
+
+Current external follow-up:
+
+- Search Console's saved Google user authorization is not the production
+  automation path. The Google OAuth client may remain in testing or verification
+  and personal refresh grants expire. Prefer the configured service account.
+- The remaining external setup is to add
+  `vinabike-seo-merchant@vinabikeapp.iam.gserviceaccount.com` under Search
+  Console → Settings → Users and permissions with full access to
+  `sc-domain:vinabike.cl`. Then press `Consultar` and `Enviar sitemap`.
+- If a service-account request gets a `403`, show its exact email and the
+  Search Console permissions action. Do not send the operator back through the
+  OAuth consent screen. Only offer user OAuth when no service-account path is
+  configured.
+- Product pages cannot use Google's restricted Indexing API; sitemap
+  submission, internal links, canonical tags, redirects, and recrawling are
+  the correct workflow.
+- Continue allowing for WhatsApp client cache/review delay even after Meta's
+  stored URL is verified.
+- Keeping slugs readable and short; do not add opaque UUIDs back into newly
+  published URLs merely because they are convenient identifiers.
+
 ## Current Pages (Viñabike)
 
 | Page | Slug | SEO Status | Notes |
@@ -2537,6 +2741,11 @@ This applies to:
 2. Check ALL pages have SEO configured (not just home)
 3. Use SEO Settings page (`/website/seo`) as primary editor
 4. Verify legal pages are published AND have meta descriptions
+5. Treat every product URL change as a multi-surface release: update the
+   canonical builders, router, SEO artifacts, sitemap/snapshots, Google
+   Merchant feed, WhatsApp/Meta publishers, and ERP copy/open actions in the
+   same task. Deploy, re-sync/refetch external catalogs, and verify their
+   stored links before marking the work complete.
 
 ### ❌ DON'T
 1. Edit `web/index.html` directly (will be overwritten by sync script)
@@ -2707,6 +2916,14 @@ Operational helper:
 Approved templates observed on 2026-06-10 include `seguimiento_presupuesto_bicicleta`, `bicicleta_lista_retiro`, `actualizacion_servicio_bicicleta`, and `seguimiento_servicio_bicicleta` in `es_CL`. Keep first-contact/outside-24h messaging template-aware; production Cloud API removes sandbox allowlist restrictions but does not remove WhatsApp's 24-hour service-window and approved-template rules.
 
 Inventory products now have a live WhatsApp catalog sync in the product form's `Tienda Online` tab. The fields live on `products`: `is_whatsapp_catalog`, `whatsapp_catalog_title`, `whatsapp_catalog_description`, and `whatsapp_catalog_price`. Empty WhatsApp title/description/price values intentionally fall back to website/product data. Saving a product that is enabled for WhatsApp calls the authenticated `whatsapp-catalog-sync` Edge Function, which securely uses the server-side Meta token to create/update the product in the connected catalog. Saving after switching the toggle off removes the matching Meta product. The form must not claim a fully successful save when Meta rejects the sync: keep the form open and report that the ERP product was saved but WhatsApp sync failed. Never expose the Meta token to Flutter.
+
+WhatsApp catalog product URLs must use the shared clean product URL builder in
+`supabase/functions/_shared/product_url.ts`. Meta stores the URL sent in each
+catalog record; deploying the storefront does not rewrite existing Meta
+records. After changing URL generation, deploy `whatsapp-catalog-sync` and
+re-sync every enabled WhatsApp product, then inspect Meta's stored `url` field.
+Keep old UUID URLs working because previously sent WhatsApp messages and cached
+catalog displays cannot be rewritten remotely.
 
 For Meta catalog stock, send `quantity_to_sell_on_facebook`, not the deprecated `inventory` field. Meta normalizes the deprecated field to `100`, which makes Graph inspection disagree with ERP stock even though availability remains correct. Both `whatsapp-catalog-sync` and the operational `whatsapp-profile-admin` upsert helper must map the synchronized `stock_quantity` / `inventory_qty` value to `quantity_to_sell_on_facebook`.
 
@@ -5543,7 +5760,7 @@ Google Shopping / Free Listings
 | **ID** | `id` (UUID) | Unique product identifier | `775815ba-4c04-4ad8-b037-33d9ed70f06a` |
 | **Title** | `name` | Product name (150 char max) | `Aceite Mineral Shimano SM-DBOIL 1 Litro` |
 | **Description** | `description` | Min 150 chars! | Detailed product description |
-| **Link** | Generated | Product URL | `https://vinabike.cl/productos/{id}` |
+| **Link** | Generated | Canonical clean product URL | `https://vinabike.cl/productos/{readable-slug}/{sku}` |
 | **Image Link** | `image_url` | Main product image | Must be HTTPS, min 100x100px |
 | **Price** | `price` + `price_currency` | With currency | `15990 CLP` |
 | **Availability** | `stock_quantity` | In stock / Out of stock | Based on stock > 0 |
@@ -5767,6 +5984,14 @@ After fixing product data:
    - Products → Feeds → Your Feed → Fetch Now
 3. Products re-index within 24-48 hours
 
+After changing product URL generation:
+1. Deploy `google-merchant-feed`; a storefront deploy alone does not update the feed.
+2. Confirm `<g:link>` values use the canonical clean name-plus-SKU URLs.
+3. Regenerate/deploy the public-store sitemap and SEO snapshots.
+4. Trigger "Fetch now" in Merchant Center when timely propagation matters.
+5. Expect Google Search to update separately after recrawl; Merchant processing
+   and organic-search indexing are different systems.
+
 ### Common Rejection Reasons & Fixes
 
 | Rejection | Cause | Fix |
@@ -5860,6 +6085,10 @@ When enabling a product for Google Merchant:
    ```
 
 7. ✅ **Test in feed** → Check XML output for correct tags
+
+8. ✅ **Verify canonical link** → `<g:link>` must use
+   `/productos/<readable-product-slug>/<sku>`, never a UUID URL when the
+   product has a SKU
 
 ---
 
@@ -6361,7 +6590,9 @@ This section documents the **routing + navigation layer changes** done to make r
 ## What’s safe / unchanged
 
 - The route map and redirects in `lib/public_store/routes/public_store_router.dart` remain the source of truth for store URLs (clean paths + legacy `/tienda/*` support).
-- No changes to `web/index.html`, SEO sync (`scripts/sync_seo_index.sh`), JSON-LD, snapshots, or the Firebase deploy workflow.
+- Routing changes that affect public URLs must be reviewed together with
+  `web/index.html`, SEO sync, JSON-LD, snapshots/sitemap, external catalog
+  publishers, and the Firebase deploy workflow.
 - Edit/preview entry rules remain: `?preview=true` and `?edit=true` are still honored.
 - The bridging helper `_routeForPublicStore()` is still the canonical way to translate between legacy `/tienda/*` and clean store routes.
 
@@ -6439,6 +6670,10 @@ Some route changes can still feel instant (same layout shell, sticky header, etc
 - When adding new routes, add both:
   - clean path (public store)
   - legacy `/tienda/*` redirect (ERP mounted)
+- For product destinations, generate the canonical
+  `/productos/<readable-slug>/<sku>` path with the shared product URL builder.
+- Preserve old product UUID/stale-slug routes and ensure they upgrade to the
+  current clean canonical URL.
 
 ### ❌ Avoid this
 
@@ -6446,6 +6681,7 @@ Some route changes can still feel instant (same layout shell, sticky header, etc
 - Using a bottom-sheet/dialog context for routing after popping the overlay.
 - Introducing routes that exist only in one environment (ERP host vs public store) unless there is a redirect/bridge.
 - Making transitions depend on `go()` navigations (they often won’t animate).
+- Hand-building new product links with `/productos/${product.id}`.
 
 ## Practical verification checklist (5 minutes)
 
@@ -6453,7 +6689,9 @@ Some route changes can still feel instant (same layout shell, sticky header, etc
 
 - Open the mobile menu and tap: Iniciar Sesión / Inicio / Productos / Contacto.
 - Confirm URLs are clean (`/cuenta/login`, `/`, `/productos`, `/contacto`).
-- Tap a product card → `/productos/<id>` loads.
+- Tap a product card → `/productos/<readable-slug>/<sku>` loads.
+- Open the old `/productos/<uuid>` URL → the same product loads and the browser
+  address upgrades to the clean URL.
 
 ### ERP host mode (project-vinabike…)
 
@@ -6463,4 +6701,5 @@ Some route changes can still feel instant (same layout shell, sticky header, etc
 
 ### Deep links
 
-- Directly open: `/productos`, `/contacto`, `/nosotros`, `/pagina/<slug>`.
+- Directly open: `/productos`, `/productos/<readable-slug>/<sku>`,
+  `/productos/<legacy-uuid>`, `/contacto`, `/nosotros`, `/pagina/<slug>`.

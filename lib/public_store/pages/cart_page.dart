@@ -6,6 +6,7 @@ import '../providers/cart_provider.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
+import '../utils/product_url.dart';
 
 class CartPage extends StatelessWidget {
   static const Color _logoBlue = Color(0xFF093357);
@@ -278,7 +279,7 @@ class CartPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     InkWell(
-                      onTap: () => context.go('/productos/${product.id}'),
+                      onTap: () => context.go(publicProductPath(product)),
                       child: Text(
                         product.name.toUpperCase(),
                         style: TextStyle(

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { publicProductUrl } from '../_shared/product_url.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +19,7 @@ type JsonRecord = Record<string, unknown>
 // WhatsApp. Customer visibility is gated by the asynchronous per-product review
 // field capability_to_review_status[WHATSAPP] == APPROVED. Until Meta approves,
 // the product stays under_review and remains hidden from the catalog customers
-// see in chat. See refreshProductReview() / fetchWhatsappReviewValue().
+// see in chat. See refreshProductReview() / fetchCatalogProductState().
 type CatalogSyncStatus =
   | 'pending'
   | 'syncing'
@@ -49,6 +50,9 @@ async function updateSyncStatus(
   options: {
     error?: string | null
     metaProductId?: string | null
+    syncedUrl?: string | null
+    urlMatches?: boolean | null
+    verifiedAt?: string | null
   } = {},
 ) {
   const values: JsonRecord = {
@@ -69,6 +73,15 @@ async function updateSyncStatus(
   }
   if (options.metaProductId !== undefined) {
     values.whatsapp_catalog_meta_product_id = options.metaProductId
+  }
+  if (options.syncedUrl !== undefined) {
+    values.whatsapp_catalog_synced_url = options.syncedUrl
+  }
+  if (options.urlMatches !== undefined) {
+    values.whatsapp_catalog_url_matches = options.urlMatches
+  }
+  if (options.verifiedAt !== undefined) {
+    values.whatsapp_catalog_verified_at = options.verifiedAt
   }
 
   const { error } = await adminClient
@@ -267,7 +280,7 @@ function buildCatalogProductPayload(product: JsonRecord) {
     name: title,
     description,
     image_url: imageUrl,
-    url: `https://vinabike.cl/productos/${String(product.id)}`,
+    url: publicProductUrl('https://vinabike.cl', product),
     availability: stock > 0 ? 'in stock' : 'out of stock',
     condition: 'new',
     currency: 'CLP',
@@ -312,13 +325,20 @@ function extractWhatsappReviewValue(payload: unknown): string {
   return ''
 }
 
-async function fetchWhatsappReviewValue(metaProductId: string): Promise<string> {
-  if (!metaProductId) return ''
+async function fetchCatalogProductState(metaProductId: string) {
+  if (!metaProductId) {
+    return { reviewValue: '', url: '' }
+  }
   const result = await graphRequest(
-    `${metaProductId}?fields=capability_to_review_status`,
+    `${metaProductId}?fields=url,capability_to_review_status`,
   )
-  if (!result.ok) return ''
-  return extractWhatsappReviewValue(result.payload)
+  if (!result.ok) {
+    return { reviewValue: '', url: '' }
+  }
+  return {
+    reviewValue: extractWhatsappReviewValue(result.payload),
+    url: stringValue(recordValue(result.payload).url),
+  }
 }
 
 async function upsertProduct(
@@ -377,7 +397,10 @@ async function upsertProduct(
   // Meta accepted the upsert, but acceptance is not customer visibility. Read
   // back the WhatsApp review capability so the ERP reports the real state
   // instead of falsely claiming the product is live for customers.
-  const reviewValue = await fetchWhatsappReviewValue(metaProductId ?? '')
+  const metaState = await fetchCatalogProductState(metaProductId ?? '')
+  const reviewValue = metaState.reviewValue
+  const storedUrl = metaState.url
+  const urlMatches = storedUrl ? storedUrl === payload.url : null
   const syncStatus = metaProductId
     ? mapWhatsappReviewStatus(reviewValue)
     : 'under_review'
@@ -385,7 +408,12 @@ async function upsertProduct(
     adminClient,
     stringValue(product.id),
     syncStatus,
-    { metaProductId },
+    {
+      metaProductId,
+      syncedUrl: storedUrl || payload.url,
+      urlMatches,
+      verifiedAt: new Date().toISOString(),
+    },
   )
   return jsonResponse({
     ok: true,
@@ -396,6 +424,9 @@ async function upsertProduct(
     metaProductId,
     syncStatus,
     whatsappReview: reviewValue || 'NO_REVIEW',
+    expectedUrl: payload.url,
+    storedUrl: storedUrl || null,
+    urlMatches,
   })
 }
 
@@ -441,7 +472,12 @@ async function removeProduct(
       adminClient,
       stringValue(product.id),
       'removed',
-      { metaProductId: null },
+      {
+        metaProductId: null,
+        syncedUrl: null,
+        urlMatches: null,
+        verifiedAt: new Date().toISOString(),
+      },
     )
     return jsonResponse({
       ok: true,
@@ -472,7 +508,12 @@ async function removeProduct(
     adminClient,
     stringValue(product.id),
     'removed',
-    { metaProductId: null },
+    {
+      metaProductId: null,
+      syncedUrl: null,
+      urlMatches: null,
+      verifiedAt: new Date().toISOString(),
+    },
   )
   return jsonResponse({
     ok: true,
@@ -501,13 +542,16 @@ async function refreshProductReview(
   const catalogProduct = await findCatalogProduct(
     catalogId,
     retailerId,
-    'id,retailer_id,capability_to_review_status',
+    'id,retailer_id,url,capability_to_review_status',
   )
 
   if (!catalogProduct) {
     if (shouldPublish) {
       await updateSyncStatus(adminClient, stringValue(product.id), 'pending', {
         error: 'Aún no está en el catálogo de WhatsApp. Vuelve a sincronizar.',
+        syncedUrl: null,
+        urlMatches: false,
+        verifiedAt: new Date().toISOString(),
       })
       return jsonResponse({
         ok: true,
@@ -520,6 +564,9 @@ async function refreshProductReview(
     }
     await updateSyncStatus(adminClient, stringValue(product.id), 'removed', {
       metaProductId: null,
+      syncedUrl: null,
+      urlMatches: null,
+      verifiedAt: new Date().toISOString(),
     })
     return jsonResponse({
       ok: true,
@@ -533,9 +580,15 @@ async function refreshProductReview(
 
   const metaProductId = stringValue(catalogProduct.id) || null
   const reviewValue = extractWhatsappReviewValue(catalogProduct)
+  const expectedUrl = publicProductUrl('https://vinabike.cl', product)
+  const storedUrl = stringValue(catalogProduct.url)
+  const urlMatches = storedUrl === expectedUrl
   const syncStatus = mapWhatsappReviewStatus(reviewValue)
   await updateSyncStatus(adminClient, stringValue(product.id), syncStatus, {
     metaProductId,
+    syncedUrl: storedUrl || null,
+    urlMatches,
+    verifiedAt: new Date().toISOString(),
   })
   return jsonResponse({
     ok: true,
@@ -546,6 +599,9 @@ async function refreshProductReview(
     metaProductId,
     syncStatus,
     whatsappReview: reviewValue || 'NO_REVIEW',
+    expectedUrl,
+    storedUrl: storedUrl || null,
+    urlMatches,
   })
 }
 

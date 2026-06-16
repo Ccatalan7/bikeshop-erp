@@ -20,16 +20,26 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
+    const action = cleanText(body.action || 'inspect')
     const productUrl = cleanText(body.productUrl)
     const offerId = cleanText(body.offerId || body.productId)
+    const siteUrl =
+      Deno.env.get('GOOGLE_SEARCH_CONSOLE_SITE_URL') || 'sc-domain:vinabike.cl'
+    const sitemapUrl = cleanText(body.sitemapUrl) || 'https://vinabike.cl/sitemap.xml'
+
+    if (action === 'submit_sitemap') {
+      return jsonResponse(await submitSearchConsoleSitemap({ siteUrl, sitemapUrl }))
+    }
+
+    if (action === 'refresh_merchant_feed') {
+      return jsonResponse(await refreshMerchantFeeds())
+    }
 
     if (!productUrl) {
       return jsonResponse({ error: 'Missing productUrl' }, 400)
     }
 
     const requiredSecrets = [
-      'GOOGLE_SEARCH_CONSOLE_CLIENT_ID',
-      'GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET',
       'GOOGLE_SEARCH_CONSOLE_SITE_URL',
       'GOOGLE_SERVICE_ACCOUNT_EMAIL',
       'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
@@ -40,8 +50,6 @@ serve(async (req) => {
     const privateKey = normalizePrivateKey(
       Deno.env.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY') || '',
     )
-    const siteUrl =
-      Deno.env.get('GOOGLE_SEARCH_CONSOLE_SITE_URL') || 'sc-domain:vinabike.cl'
     const merchantAccountId = Deno.env.get('GOOGLE_MERCHANT_ACCOUNT_ID') || ''
 
     const hasServiceAccount = Boolean(email && privateKey)
@@ -49,8 +57,9 @@ serve(async (req) => {
       ? await getMerchantFeedEligibility(offerId)
       : null
 
-    const [searchConsole, merchant] = await Promise.all([
+    const [searchConsole, searchConsoleSitemap, merchant] = await Promise.all([
       inspectSearchConsole({ siteUrl, productUrl }),
+      inspectSearchConsoleSitemap({ siteUrl, sitemapUrl }),
       hasServiceAccount && merchantAccountId && offerId
         ? inspectMerchant({
           email,
@@ -78,18 +87,20 @@ serve(async (req) => {
       productUrl,
       offerId,
       searchConsole,
+      searchConsoleSitemap,
       merchant,
       setup: {
         requiredSecrets,
         notes: [
-          'Connect Search Console with OAuth from the ERP using a Google account that has access to vinabike.cl.',
+          'Add the service account to Search Console with full access to vinabike.cl.',
           'Add the same service account to Merchant Center with product read access.',
+          'User OAuth is only a fallback when no service-account path is configured.',
         ],
       },
     })
   } catch (error) {
     console.error('google-product-diagnostics error', error)
-    return jsonResponse({ error: error?.message || String(error) }, 500)
+    return jsonResponse({ error: errorMessage(error) }, 500)
   }
 })
 
@@ -98,11 +109,12 @@ async function inspectSearchConsole(args: {
   productUrl: string
 }) {
   try {
-    const tokenResult = await searchConsoleOAuthToken()
+    const tokenResult = await searchConsoleAccessToken()
     if (!tokenResult.ok) {
       return {
         configured: false,
         connectRequired: true,
+        reconnectRequired: tokenResult.reconnectRequired === true,
         error: tokenResult.error,
         requiredSecrets: tokenResult.requiredSecrets || [],
       }
@@ -129,13 +141,25 @@ async function inspectSearchConsole(args: {
       const visibleSites = response.status === 403
         ? await listSearchConsoleSites(tokenResult.accessToken)
         : null
+      const permissionDenied = response.status === 403
+      const usesServiceAccount = tokenResult.source === 'service_account'
 
       return {
         configured: true,
         ok: false,
         status: response.status,
         errorCode: payload?.error?.status || payload?.error?.code || null,
-        error: payload?.error?.message || JSON.stringify(payload),
+        error: permissionDenied
+          ? usesServiceAccount
+            ? `Agrega la cuenta técnica ${tokenResult.serviceAccountEmail} como usuario con acceso completo a ${args.siteUrl}.`
+            : 'La cuenta Google conectada no tiene acceso a sc-domain:vinabike.cl. Reconecta Search Console usando una cuenta propietaria o con acceso completo.'
+          : payload?.error?.message || JSON.stringify(payload),
+        googleError: payload?.error?.message || null,
+        authSource: tokenResult.source,
+        serviceAccountEmail: tokenResult.serviceAccountEmail || null,
+        grantServiceAccountRequired: permissionDenied && usesServiceAccount,
+        connectRequired: permissionDenied && !usesServiceAccount,
+        reconnectRequired: permissionDenied && !usesServiceAccount,
         searchedSiteUrl: args.siteUrl,
         availableSites: visibleSites?.sites || [],
         availableSitesError: visibleSites?.error || null,
@@ -156,6 +180,14 @@ async function inspectSearchConsole(args: {
       lastCrawlTime: indexStatus.lastCrawlTime,
       googleCanonical: indexStatus.googleCanonical,
       userCanonical: indexStatus.userCanonical,
+      canonicalMatches:
+        canonicalUrlKey(indexStatus.userCanonical) ===
+          canonicalUrlKey(args.productUrl) &&
+        (!cleanText(indexStatus.googleCanonical) ||
+          canonicalUrlKey(indexStatus.googleCanonical) ===
+            canonicalUrlKey(args.productUrl)),
+      authSource: tokenResult.source,
+      serviceAccountEmail: tokenResult.serviceAccountEmail || null,
       sitemap: indexStatus.sitemap,
       richResultsVerdict: richResults.verdict,
       raw: payload,
@@ -164,7 +196,150 @@ async function inspectSearchConsole(args: {
     return {
       configured: true,
       ok: false,
-      error: error?.message || String(error),
+      error: errorMessage(error),
+    }
+  }
+}
+
+async function inspectSearchConsoleSitemap(args: {
+  siteUrl: string
+  sitemapUrl: string
+}) {
+  try {
+    const tokenResult = await searchConsoleAccessToken()
+    if (!tokenResult.ok) {
+      return {
+        configured: false,
+        connectRequired: true,
+        reconnectRequired: tokenResult.reconnectRequired === true,
+        error: tokenResult.error,
+      }
+    }
+    const response = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(args.siteUrl)}/sitemaps`,
+      {
+        headers: {
+          Authorization: `Bearer ${tokenResult.accessToken}`,
+          Accept: 'application/json',
+        },
+      },
+    )
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const permissionDenied = response.status === 403
+      const usesServiceAccount = tokenResult.source === 'service_account'
+      return {
+        configured: true,
+        ok: false,
+        status: response.status,
+        error: permissionDenied
+          ? usesServiceAccount
+            ? `Agrega la cuenta técnica ${tokenResult.serviceAccountEmail} como usuario con acceso completo a ${args.siteUrl}.`
+            : 'La cuenta Google conectada no tiene acceso al sitemap de sc-domain:vinabike.cl. Reconecta Search Console usando una cuenta propietaria o con acceso completo.'
+          : payload?.error?.message || JSON.stringify(payload),
+        googleError: payload?.error?.message || null,
+        authSource: tokenResult.source,
+        serviceAccountEmail: tokenResult.serviceAccountEmail || null,
+        grantServiceAccountRequired: permissionDenied && usesServiceAccount,
+        connectRequired: permissionDenied && !usesServiceAccount,
+        reconnectRequired: permissionDenied && !usesServiceAccount,
+      }
+    }
+    const sitemaps = Array.isArray(payload?.sitemap) ? payload.sitemap : []
+    const sitemap = sitemaps.find(
+      (entry: Record<string, unknown>) => cleanText(entry?.path) === args.sitemapUrl,
+    )
+    return {
+      configured: true,
+      ok: Boolean(sitemap),
+      submitted: Boolean(sitemap),
+      sitemapUrl: args.sitemapUrl,
+      lastSubmitted: sitemap?.lastSubmitted || null,
+      lastDownloaded: sitemap?.lastDownloaded || null,
+      isPending: sitemap?.isPending ?? null,
+      warnings: sitemap?.warnings ?? null,
+      errors: sitemap?.errors ?? null,
+      authSource: tokenResult.source,
+      serviceAccountEmail: tokenResult.serviceAccountEmail || null,
+      raw: sitemap || null,
+    }
+  } catch (error) {
+    return {
+      configured: true,
+      ok: false,
+      error: errorMessage(error),
+    }
+  }
+}
+
+async function submitSearchConsoleSitemap(args: {
+  siteUrl: string
+  sitemapUrl: string
+}) {
+  try {
+    const tokenResult = await searchConsoleAccessToken({ requireWrite: true })
+    if (!tokenResult.ok) {
+      return {
+        ok: false,
+        configured: false,
+        connectRequired: true,
+        reconnectRequired: tokenResult.reconnectRequired === true,
+        error: tokenResult.error,
+      }
+    }
+    if (
+      !tokenResult.scope
+        .split(/\s+/)
+        .includes('https://www.googleapis.com/auth/webmasters')
+    ) {
+      return {
+        ok: false,
+        configured: true,
+        reconnectRequired: true,
+        error:
+          'Reconecta Search Console una vez para autorizar el envío del sitemap.',
+        currentScope: tokenResult.scope,
+      }
+    }
+
+    const response = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(args.siteUrl)}/sitemaps/${encodeURIComponent(args.sitemapUrl)}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${tokenResult.accessToken}`,
+        },
+      },
+    )
+    const payload = await response.text()
+    const permissionDenied = !response.ok && response.status === 403
+    const usesServiceAccount = tokenResult.source === 'service_account'
+    return {
+      ok: response.ok,
+      configured: true,
+      siteUrl: args.siteUrl,
+      sitemapUrl: args.sitemapUrl,
+      status: response.status,
+      error: response.ok
+        ? null
+        : permissionDenied
+        ? usesServiceAccount
+          ? `Agrega la cuenta técnica ${tokenResult.serviceAccountEmail} como usuario con acceso completo a ${args.siteUrl}.`
+          : 'La cuenta Google conectada no puede enviar el sitemap de vinabike.cl. Reconecta Search Console usando una cuenta propietaria o con acceso completo.'
+        : payload,
+      googleError: response.ok ? null : payload,
+      authSource: tokenResult.source,
+      serviceAccountEmail: tokenResult.serviceAccountEmail || null,
+      grantServiceAccountRequired: permissionDenied && usesServiceAccount,
+      connectRequired: permissionDenied && !usesServiceAccount,
+      reconnectRequired: permissionDenied && !usesServiceAccount,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      configured: false,
+      reconnectRequired: true,
+      error: errorMessage(error),
     }
   }
 }
@@ -248,11 +423,11 @@ async function listSearchConsoleSites(accessToken: string): Promise<{
   const siteEntry = Array.isArray(payload?.siteEntry) ? payload.siteEntry : []
   return {
     sites: siteEntry
-      .map((site) => ({
+      .map((site: Record<string, unknown>) => ({
         siteUrl: cleanText(site?.siteUrl),
         permissionLevel: cleanText(site?.permissionLevel),
       }))
-      .filter((site) => site.siteUrl.length > 0),
+      .filter((site: { siteUrl: string }) => site.siteUrl.length > 0),
     error: null,
   }
 }
@@ -260,10 +435,12 @@ async function listSearchConsoleSites(accessToken: string): Promise<{
 async function searchConsoleOAuthToken(): Promise<{
   ok: true
   accessToken: string
+  scope: string
 } | {
   ok: false
   error: string
   requiredSecrets?: string[]
+  reconnectRequired?: boolean
 }> {
   const clientId = Deno.env.get('GOOGLE_SEARCH_CONSOLE_CLIENT_ID') || ''
   const clientSecret = Deno.env.get('GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET') || ''
@@ -281,7 +458,7 @@ async function searchConsoleOAuthToken(): Promise<{
   const supabase = adminClient()
   const { data, error } = await supabase
     .from('google_oauth_connections')
-    .select('access_token, refresh_token, expires_at')
+    .select('access_token, refresh_token, expires_at, scope')
     .eq('integration_key', searchConsoleIntegrationKey)
     .maybeSingle()
 
@@ -297,7 +474,11 @@ async function searchConsoleOAuthToken(): Promise<{
     ? new Date(data.expires_at).getTime()
     : 0
   if (data.access_token && expiresAt > Date.now() + 120000) {
-    return { ok: true, accessToken: data.access_token }
+    return {
+      ok: true,
+      accessToken: data.access_token,
+      scope: cleanText(data.scope),
+    }
   }
 
   if (!data.refresh_token) {
@@ -307,11 +488,21 @@ async function searchConsoleOAuthToken(): Promise<{
     }
   }
 
-  const refreshed = await refreshGoogleOAuthToken({
-    clientId,
-    clientSecret,
-    refreshToken: data.refresh_token,
-  })
+  let refreshed
+  try {
+    refreshed = await refreshGoogleOAuthToken({
+      clientId,
+      clientSecret,
+      refreshToken: data.refresh_token,
+    })
+  } catch (_) {
+    return {
+      ok: false,
+      reconnectRequired: true,
+      error:
+        'La autorización de Search Console expiró. Reconecta Google una vez para continuar.',
+    }
+  }
   const expiresAtDate = new Date(
     Date.now() + Number(refreshed.expires_in || 3600) * 1000,
   )
@@ -321,14 +512,80 @@ async function searchConsoleOAuthToken(): Promise<{
     .update({
       access_token: refreshed.access_token,
       token_type: refreshed.token_type || 'Bearer',
-      scope: refreshed.scope || null,
+      scope: refreshed.scope || data.scope || null,
       expires_at: expiresAtDate.toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('integration_key', searchConsoleIntegrationKey)
 
   if (updateError) throw updateError
-  return { ok: true, accessToken: refreshed.access_token }
+  return {
+    ok: true,
+    accessToken: refreshed.access_token,
+    scope: cleanText(refreshed.scope || data.scope),
+  }
+}
+
+async function searchConsoleAccessToken({
+  requireWrite = false,
+}: {
+  requireWrite?: boolean
+} = {}): Promise<{
+  ok: true
+  accessToken: string
+  scope: string
+  source: 'oauth' | 'service_account'
+  serviceAccountEmail?: string
+} | {
+  ok: false
+  error: string
+  requiredSecrets?: string[]
+  reconnectRequired?: boolean
+}> {
+  const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL') || ''
+  const privateKey = normalizePrivateKey(
+    Deno.env.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY') || '',
+  )
+  if (email && privateKey) {
+    try {
+      const accessToken = await serviceAccountAccessToken({
+        email,
+        privateKey,
+        scopes: ['https://www.googleapis.com/auth/webmasters'],
+      })
+      return {
+        ok: true,
+        accessToken,
+        scope: 'https://www.googleapis.com/auth/webmasters',
+        source: 'service_account',
+        serviceAccountEmail: email,
+      }
+    } catch (_) {
+      // Fall through to the more actionable OAuth connection error.
+    }
+  }
+
+  const oauth = await searchConsoleOAuthToken()
+  if (oauth.ok && hasSearchConsoleScope(oauth.scope, requireWrite)) {
+    return { ...oauth, source: 'oauth' }
+  }
+
+  if (!oauth.ok) return oauth
+  return {
+    ok: false,
+    reconnectRequired: true,
+    error:
+      'Reconecta Search Console una vez para autorizar el envío del sitemap.',
+  }
+}
+
+function hasSearchConsoleScope(scope: string, requireWrite: boolean) {
+  const scopes = scope.split(/\s+/).filter(Boolean)
+  if (scopes.includes('https://www.googleapis.com/auth/webmasters')) {
+    return true
+  }
+  return !requireWrite &&
+    scopes.includes('https://www.googleapis.com/auth/webmasters.readonly')
 }
 
 async function refreshGoogleOAuthToken(args: {
@@ -442,9 +699,85 @@ async function inspectMerchant(args: {
     return {
       configured: true,
       ok: false,
-      error: error?.message || String(error),
+      error: errorMessage(error),
       feedEligibility: args.feedEligibility,
     }
+  }
+}
+
+async function refreshMerchantFeeds() {
+  const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL') || ''
+  const privateKey = normalizePrivateKey(
+    Deno.env.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY') || '',
+  )
+  const merchantAccountId = Deno.env.get('GOOGLE_MERCHANT_ACCOUNT_ID') || ''
+  if (!email || !privateKey || !merchantAccountId) {
+    return {
+      ok: false,
+      configured: false,
+      error: 'Merchant feed refresh is not configured.',
+    }
+  }
+
+  const token = await serviceAccountAccessToken({
+    email,
+    privateKey,
+    scopes: [merchantScope],
+  })
+  const listResponse = await fetch(
+    `https://shoppingcontent.googleapis.com/content/v2.1/${merchantAccountId}/datafeeds`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    },
+  )
+  const listPayload = await listResponse.json().catch(() => ({}))
+  if (!listResponse.ok) {
+    return {
+      ok: false,
+      configured: true,
+      status: listResponse.status,
+      error: listPayload?.error?.message || JSON.stringify(listPayload),
+    }
+  }
+
+  const feeds = Array.isArray(listPayload?.resources)
+    ? listPayload.resources
+    : Array.isArray(listPayload?.datafeeds)
+    ? listPayload.datafeeds
+    : []
+  const results = []
+  for (const feed of feeds) {
+    const id = cleanText(feed?.id)
+    if (!id) continue
+    const response = await fetch(
+      `https://shoppingcontent.googleapis.com/content/v2.1/${merchantAccountId}/datafeeds/${encodeURIComponent(id)}/fetchNow`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      },
+    )
+    const payload = await response.json().catch(() => ({}))
+    results.push({
+      id,
+      name: cleanText(feed?.name),
+      ok: response.ok,
+      status: response.status,
+      error: response.ok ? null : payload?.error?.message || JSON.stringify(payload),
+    })
+  }
+
+  return {
+    ok: results.length > 0 && results.every((result) => result.ok),
+    configured: true,
+    feedCount: results.length,
+    results,
   }
 }
 
@@ -535,6 +868,22 @@ function adminClient() {
 
 function cleanText(value: unknown) {
   return String(value ?? '').trim()
+}
+
+function canonicalUrlKey(value: unknown) {
+  const raw = cleanText(value)
+  if (!raw) return ''
+  try {
+    const url = new URL(raw)
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/g, '')
+    return `${url.protocol}//${url.host}${path}${url.search}`
+  } catch (_) {
+    return raw.replace(/\/+$/g, '')
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function isUuid(value: string) {

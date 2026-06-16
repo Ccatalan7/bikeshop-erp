@@ -82,6 +82,40 @@ class ExpenseService extends ChangeNotifier {
     return results;
   }
 
+  Future<List<ExpenseLine>> fetchLinesForExpenses(
+    List<String> expenseIds,
+  ) async {
+    if (expenseIds.isEmpty) return const [];
+
+    const chunkSize = 100;
+    final results = <ExpenseLine>[];
+
+    for (var i = 0; i < expenseIds.length; i += chunkSize) {
+      final chunk = expenseIds.sublist(
+        i,
+        (i + chunkSize) > expenseIds.length
+            ? expenseIds.length
+            : (i + chunkSize),
+      );
+
+      final rows = await _client
+          .from('expense_lines')
+          .select()
+          .inFilter('expense_id', chunk)
+          .order('expense_id')
+          .order('line_index')
+          .order('created_at') as List<dynamic>;
+
+      results.addAll(
+        rows.map(
+          (row) => ExpenseLine.fromJson(Map<String, dynamic>.from(row)),
+        ),
+      );
+    }
+
+    return results;
+  }
+
   Future<Expense?> getExpense(String id, {bool forceRefresh = false}) async {
     if (!_expensesLoaded || forceRefresh) {
       await fetchExpenses(forceRefresh: forceRefresh);

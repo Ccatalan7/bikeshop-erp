@@ -3,6 +3,7 @@ void updateSeoImpl({
   String? description,
   String? imageUrl,
   String? keywords,
+  String? canonicalUrl,
 }) {
   // No-op on non-web platforms (mobile/desktop app)
   // Flutter handles the title via Title widget or SystemChrome,

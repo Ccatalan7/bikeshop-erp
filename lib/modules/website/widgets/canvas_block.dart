@@ -1320,6 +1320,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
           final imageUrl = product['image_url']?.toString();
           content = PremiumProductCard(
             productId: id,
+            productSku: product['sku']?.toString(),
             name: name,
             price: price,
             imageUrl: imageUrl,
@@ -1401,6 +1402,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                   width: cardWidth.clamp(220, 380),
                   child: PremiumProductCard(
                     productId: id,
+                    productSku: p['sku']?.toString(),
                     name: name,
                     price: price,
                     imageUrl: imageUrl,
@@ -1438,6 +1440,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 final imageUrl = p['image_url']?.toString();
                 return PremiumProductCard(
                   productId: id,
+                  productSku: p['sku']?.toString(),
                   name: name,
                   price: price,
                   imageUrl: imageUrl,

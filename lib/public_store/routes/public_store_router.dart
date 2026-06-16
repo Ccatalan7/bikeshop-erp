@@ -562,7 +562,20 @@ class PublicStoreRouter {
           ),
         ),
 
-        // Product detail (canonical: /productos/:id)
+        // Product detail (canonical: /productos/:slug/:sku)
+        GoRoute(
+          path: '/productos/:slug/:sku',
+          pageBuilder: (context, state) {
+            final sku = state.pathParameters['sku']!;
+            return _buildPage(
+              context,
+              state,
+              ProductDetailPage(productId: 'sku:$sku'),
+            );
+          },
+        ),
+
+        // Previous canonical product detail. ProductDetailPage upgrades the URL.
         GoRoute(
           path: '/productos/:id',
           pageBuilder: (context, state) {

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { publicProductUrl } from '../_shared/product_url.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,7 @@ interface AdminRequest {
     | 'graph_post'
     | 'connect_catalog'
     | 'upsert_catalog_product'
+    | 'audit_catalog_products'
     | 'update_profile'
     | 'upload_profile_picture'
   tenantId?: string
@@ -34,6 +36,7 @@ interface AdminRequest {
   path?: string
   body?: JsonRecord
   profile?: JsonRecord
+  repair?: boolean
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -179,6 +182,45 @@ async function loadProduct(tenantId: string, productId: string) {
   return data as JsonRecord | null
 }
 
+async function loadEnabledCatalogProducts(tenantId: string) {
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const { data, error } = await adminClient
+    .from('products')
+    .select([
+      'id',
+      'tenant_id',
+      'name',
+      'sku',
+      'description',
+      'brand',
+      'category_name',
+      'price',
+      'inventory_qty',
+      'stock_quantity',
+      'is_active',
+      'is_published',
+      'is_whatsapp_catalog',
+      'whatsapp_catalog_title',
+      'whatsapp_catalog_description',
+      'whatsapp_catalog_price',
+      'website_name',
+      'website_description',
+      'website_price',
+      'website_image_url',
+      'website_image_url_optimized',
+      'image_url',
+      'image_url_optimized',
+    ].join(','))
+    .eq('tenant_id', tenantId)
+    .eq('is_whatsapp_catalog', true)
+    .eq('is_active', true)
+    .eq('is_published', true)
+    .order('name')
+
+  if (error) throw error
+  return (data ?? []) as unknown as JsonRecord[]
+}
+
 function sanitizedProfile(input: JsonRecord = {}) {
   const allowedKeys = [
     'about',
@@ -295,7 +337,6 @@ function numberValue(value: unknown) {
 }
 
 function buildCatalogProductPayload(product: JsonRecord) {
-  const productId = String(product.id)
   const title = firstNonEmpty([
     product.whatsapp_catalog_title,
     product.website_name,
@@ -315,7 +356,9 @@ function buildCatalogProductPayload(product: JsonRecord) {
   const price = numberValue(product.whatsapp_catalog_price) ||
     numberValue(product.website_price) ||
     numberValue(product.price)
-  const stock = numberValue(product.stock_quantity) || numberValue(product.inventory_qty)
+  const stock = product.stock_quantity === null || product.stock_quantity === undefined
+    ? numberValue(product.inventory_qty)
+    : numberValue(product.stock_quantity)
   const retailerId = firstNonEmpty([product.sku, product.id])
 
   return {
@@ -323,7 +366,7 @@ function buildCatalogProductPayload(product: JsonRecord) {
     name: title,
     description,
     image_url: imageUrl,
-    url: `https://vinabike.cl/productos/${productId}`,
+    url: publicProductUrl('https://vinabike.cl', product),
     availability: stock > 0 ? 'in stock' : 'out of stock',
     condition: 'new',
     currency: 'CLP',
@@ -405,13 +448,191 @@ async function inspectCatalogId(request: AdminRequest) {
 
   const [catalog, products] = await Promise.all([
     graphRequest(`${catalogId}?fields=${encodeURIComponent(fields)}`),
-    graphRequest(`${catalogId}/products?fields=id,retailer_id,name,availability,price,currency&limit=5`),
+    graphRequest(`${catalogId}/products?fields=id,retailer_id,name,url,availability,price,currency,quantity_to_sell_on_facebook,capability_to_review_status&limit=100`),
   ])
 
   return {
     catalogId,
     catalog,
     products,
+  }
+}
+
+async function fetchAllCatalogProducts(catalogId: string) {
+  const products: JsonRecord[] = []
+  let after = ''
+
+  for (let page = 0; page < 100; page += 1) {
+    const cursor = after ? `&after=${encodeURIComponent(after)}` : ''
+    const result = await graphRequest(
+      `${catalogId}/products?fields=id,retailer_id,name,url,availability,price,currency,quantity_to_sell_on_facebook,capability_to_review_status&limit=100${cursor}`,
+    )
+    if (!result.ok) {
+      throw new Error(
+        getObjectValue(
+          (result.payload as JsonRecord | null)?.error,
+          'message',
+        ) || 'Meta could not inspect all catalog products',
+      )
+    }
+    const payload = result.payload as JsonRecord
+    products.push(
+      ...getArrayValue(payload, 'data')
+        .filter((item): item is JsonRecord => Boolean(item && typeof item === 'object')),
+    )
+    const paging = payload.paging as JsonRecord | undefined
+    const cursors = paging?.cursors as JsonRecord | undefined
+    after = getObjectValue(cursors, 'after') ?? ''
+    if (!getObjectValue(paging, 'next') || !after) break
+  }
+
+  return products
+}
+
+function catalogPayloadMissing(payload: ReturnType<typeof buildCatalogProductPayload>) {
+  return [
+    payload.name.length >= 10 ? '' : 'title',
+    payload.description.length >= 20 ? '' : 'description',
+    payload.image_url ? '' : 'image',
+    payload.price > 0 ? '' : 'price',
+  ].filter(Boolean) as string[]
+}
+
+async function upsertCatalogPayload(
+  catalogId: string,
+  payload: ReturnType<typeof buildCatalogProductPayload>,
+) {
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(payload)) {
+    body.set(key, String(value))
+  }
+  body.set('allow_upsert', 'true')
+  return graphRequest(`${catalogId}/products`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+}
+
+async function auditCatalogProducts(request: AdminRequest, channel: JsonRecord) {
+  const tenantId = request.tenantId || String(channel.tenant_id || '')
+  if (!tenantId) {
+    return {
+      ok: false,
+      status: 400,
+      payload: { error: 'tenantId is required' },
+    }
+  }
+
+  const catalogInfo = await inspectCatalog(channel)
+  const catalogId = request.catalogId ?? resolveCatalogId(catalogInfo as JsonRecord)
+  if (!catalogId) {
+    return {
+      ok: false,
+      status: 409,
+      payload: { error: 'No connected WhatsApp product catalog found' },
+    }
+  }
+
+  const localProducts = await loadEnabledCatalogProducts(tenantId)
+  let metaProducts = await fetchAllCatalogProducts(catalogId)
+  let metaByRetailerId = new Map(
+    metaProducts.map((product) => [firstNonEmpty([product.retailer_id]), product]),
+  )
+  const repairResults: JsonRecord[] = []
+
+  if (request.repair === true) {
+    for (const product of localProducts) {
+      const expected = buildCatalogProductPayload(product)
+      const observed = metaByRetailerId.get(expected.retailer_id)
+      const missing = catalogPayloadMissing(expected)
+      const observedUrl = firstNonEmpty([observed?.url])
+      if (missing.length > 0 || observedUrl === expected.url) continue
+
+      const repaired = await upsertCatalogPayload(catalogId, expected)
+      repairResults.push({
+        productId: product.id,
+        retailerId: expected.retailer_id,
+        expectedUrl: expected.url,
+        ok: repaired.ok,
+        status: repaired.status,
+        result: repaired.payload,
+      })
+    }
+    metaProducts = await fetchAllCatalogProducts(catalogId)
+    metaByRetailerId = new Map(
+      metaProducts.map((product) => [firstNonEmpty([product.retailer_id]), product]),
+    )
+  }
+
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const checkedAt = new Date().toISOString()
+  const products = []
+  for (const product of localProducts) {
+    const expected = buildCatalogProductPayload(product)
+    const observed = metaByRetailerId.get(expected.retailer_id)
+    const observedUrl = firstNonEmpty([observed?.url])
+    const missing = catalogPayloadMissing(expected)
+    const urlMatches = observedUrl === expected.url
+    const status = missing.length > 0
+      ? 'invalid_local_product'
+      : !observed
+      ? 'missing_from_meta'
+      : urlMatches
+      ? 'ok'
+      : 'url_mismatch'
+
+    await adminClient
+      .from('products')
+      .update({
+        whatsapp_catalog_synced_url: observedUrl || null,
+        whatsapp_catalog_url_matches: urlMatches,
+        whatsapp_catalog_verified_at: checkedAt,
+      })
+      .eq('id', product.id)
+
+    products.push({
+      productId: product.id,
+      retailerId: expected.retailer_id,
+      name: expected.name,
+      status,
+      missing,
+      expectedUrl: expected.url,
+      observedUrl: observedUrl || null,
+      urlMatches,
+    })
+  }
+
+  const localRetailerIds = new Set(
+    localProducts.map((product) => firstNonEmpty([product.sku, product.id])),
+  )
+  const orphanMetaProducts = metaProducts
+    .filter((product) => !localRetailerIds.has(firstNonEmpty([product.retailer_id])))
+    .map((product) => ({
+      id: product.id,
+      retailerId: product.retailer_id,
+      name: product.name,
+      url: product.url,
+    }))
+
+  return {
+    ok: true,
+    status: 200,
+    payload: {
+      catalogId,
+      checkedAt,
+      repaired: request.repair === true,
+      repairResults,
+      summary: {
+        localEnabled: localProducts.length,
+        metaProducts: metaProducts.length,
+        matchingUrls: products.filter((product) => product.urlMatches).length,
+        problems: products.filter((product) => product.status !== 'ok').length,
+        orphanMetaProducts: orphanMetaProducts.length,
+      },
+      products,
+      orphanMetaProducts,
+    },
   }
 }
 
@@ -738,6 +959,11 @@ serve(async (req) => {
 
   if (action === 'upsert_catalog_product') {
     const result = await upsertCatalogProduct(request, channel)
+    return jsonResponse(result.payload, result.status)
+  }
+
+  if (action === 'audit_catalog_products') {
+    const result = await auditCatalogProducts(request, channel)
     return jsonResponse(result.payload, result.status)
   }
 

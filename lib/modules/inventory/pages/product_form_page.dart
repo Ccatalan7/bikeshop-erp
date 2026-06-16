@@ -19,6 +19,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
+import '../../../public_store/utils/product_url.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
@@ -8982,7 +8983,20 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
   String? get _activeProductUrl {
     final id = _existingProduct?.id;
     if (id == null || id.isEmpty) return null;
-    return 'https://vinabike.cl/productos/$id';
+    final path = buildPublicProductPath(
+      name: _firstNonEmptyText([
+        _websiteNameController.text,
+        _nameController.text,
+        _existingProduct?.websiteName,
+        _existingProduct?.name,
+      ]),
+      sku: _firstNonEmptyText([
+        _skuController.text,
+        _existingProduct?.sku,
+      ]),
+      fallbackProductId: id,
+    );
+    return 'https://vinabike.cl$path';
   }
 
   String? get _searchConsoleInspectionUrl {
@@ -8992,6 +9006,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
         '?resource_id=sc-domain%3Avinabike.cl'
         '&id=${Uri.encodeComponent(productUrl)}';
   }
+
+  String get _searchConsoleUsersUrl =>
+      'https://search.google.com/search-console/users'
+      '?resource_id=sc-domain%3Avinabike.cl';
 
   String get _merchantFeedUrl =>
       'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-merchant-feed?domain=vinabike.cl';
@@ -9089,6 +9107,44 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       setState(() => _googleDiagnosticsError = e.toString());
     } finally {
       if (mounted && requestId == _googleDiagnosticsRequestId) {
+        setState(() => _isLoadingGoogleDiagnostics = false);
+      }
+    }
+  }
+
+  Future<void> _runGoogleLinkMaintenance(String action) async {
+    if (_isLoadingGoogleDiagnostics) return;
+    setState(() {
+      _isLoadingGoogleDiagnostics = true;
+      _googleDiagnosticsError = null;
+    });
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'google-product-diagnostics',
+        body: {'action': action},
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{'raw': response.data};
+      if (!mounted) return;
+      setState(() {
+        final diagnostics =
+            Map<String, dynamic>.from(_googleDiagnostics ?? const {});
+        diagnostics[action == 'submit_sitemap'
+            ? 'searchConsoleSitemap'
+            : 'merchantRefresh'] = data;
+        _googleDiagnostics = diagnostics;
+        if (data['ok'] != true) {
+          _googleDiagnosticsError = data['error']?.toString() ??
+              'Google no pudo completar la acción.';
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _googleDiagnosticsError = error.toString());
+      }
+    } finally {
+      if (mounted) {
         setState(() => _isLoadingGoogleDiagnostics = false);
       }
     }
@@ -9633,6 +9689,8 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final status = _whatsappStatusOverride ?? product.whatsappCatalogSyncStatus;
     final review = _whatsappReviewOverride;
     final error = product.whatsappCatalogSyncError;
+    final urlMatches = product.whatsappCatalogUrlMatches;
+    final syncedUrl = product.whatsappCatalogSyncedUrl;
 
     final ({Color color, IconData icon, String label, String detail}) info =
         switch (status) {
@@ -9648,7 +9706,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
           label: 'En revisión por WhatsApp',
           detail:
               'Meta recibió el producto pero aún no lo muestra a los clientes. '
-                  'La aprobación es automática y puede tardar. Vuelve a verificar más tarde.',
+              'La aprobación es automática y puede tardar. Vuelve a verificar más tarde.',
         ),
       'rejected' => (
           color: theme.colorScheme.error,
@@ -9720,6 +9778,50 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
             ),
             const SizedBox(height: 6),
             Text(info.detail, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  urlMatches == true
+                      ? Icons.link_outlined
+                      : urlMatches == false
+                          ? Icons.link_off_outlined
+                          : Icons.help_outline,
+                  size: 17,
+                  color: urlMatches == true
+                      ? Colors.green.shade700
+                      : urlMatches == false
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    urlMatches == true
+                        ? 'Enlace limpio verificado en Meta.'
+                        : urlMatches == false
+                            ? 'Meta todavía conserva un enlace distinto. Sincroniza nuevamente.'
+                            : 'El enlace guardado en Meta todavía no ha sido verificado.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: urlMatches == false
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (syncedUrl != null && syncedUrl.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                syncedUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerLeft,
@@ -9763,6 +9865,12 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
           _existingProduct = _existingProduct?.copyWith(
             whatsappCatalogSyncStatus: result.syncStatus,
             whatsappCatalogSyncStatusHasValue: true,
+            whatsappCatalogSyncedUrl: result.storedUrl,
+            whatsappCatalogSyncedUrlHasValue: true,
+            whatsappCatalogUrlMatches: result.urlMatches,
+            whatsappCatalogUrlMatchesHasValue: true,
+            whatsappCatalogVerifiedAt: DateTime.now(),
+            whatsappCatalogVerifiedAtHasValue: true,
           );
         }
       });
@@ -10133,9 +10241,31 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final merchant = diagnostics?['merchant'] is Map
         ? Map<String, dynamic>.from(diagnostics!['merchant'] as Map)
         : null;
+    final sitemap = diagnostics?['searchConsoleSitemap'] is Map
+        ? Map<String, dynamic>.from(diagnostics!['searchConsoleSitemap'] as Map)
+        : null;
+    final merchantRefresh = diagnostics?['merchantRefresh'] is Map
+        ? Map<String, dynamic>.from(diagnostics!['merchantRefresh'] as Map)
+        : null;
     final searchConsoleNeedsConnection =
         searchConsole?['connectRequired'] == true ||
+            searchConsole?['reconnectRequired'] == true ||
+            sitemap?['connectRequired'] == true ||
+            sitemap?['reconnectRequired'] == true ||
             (searchConsole?['configured'] == false);
+    final serviceAccountAccessRequired =
+        searchConsole?['grantServiceAccountRequired'] == true ||
+            sitemap?['grantServiceAccountRequired'] == true;
+    final serviceAccountEmail = _firstNonEmptyText([
+      searchConsole?['serviceAccountEmail']?.toString(),
+      sitemap?['serviceAccountEmail']?.toString(),
+    ]);
+    final searchConsoleUsesServiceAccount =
+        serviceAccountAccessRequired ||
+            searchConsole?['authSource'] == 'service_account' ||
+            sitemap?['authSource'] == 'service_account';
+    final searchConsoleHasConnection =
+        searchConsole?['configured'] == true || sitemap?['configured'] == true;
 
     return Container(
       width: double.infinity,
@@ -10160,44 +10290,106 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                   ),
                 ),
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  if (searchConsoleNeedsConnection || diagnostics == null)
-                    TextButton.icon(
-                      onPressed: _isLoadingGoogleDiagnostics
-                          ? null
-                          : _connectSearchConsoleOAuth,
-                      icon: const Icon(Icons.link_outlined),
-                      label: const Text('Conectar'),
-                    ),
-                  OutlinedButton.icon(
-                    onPressed: productUrl == null || _isLoadingGoogleDiagnostics
-                        ? null
-                        : _refreshGoogleDiagnostics,
-                    icon: _isLoadingGoogleDiagnostics
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh_outlined),
-                    label: const Text('Consultar'),
-                  ),
-                ],
-              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                if (diagnostics != null && !searchConsoleUsesServiceAccount)
+                  TextButton.icon(
+                    onPressed: _isLoadingGoogleDiagnostics
+                        ? null
+                        : _connectSearchConsoleOAuth,
+                    icon: Icon(
+                      searchConsoleNeedsConnection
+                          ? Icons.link_off_outlined
+                          : Icons.link_outlined,
+                    ),
+                    label: Text(
+                      searchConsoleHasConnection || searchConsoleNeedsConnection
+                          ? 'Reconectar'
+                          : 'Conectar',
+                    ),
+                  ),
+                if (serviceAccountAccessRequired &&
+                    serviceAccountEmail.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _copyWebsiteText(
+                      serviceAccountEmail,
+                      'Cuenta técnica',
+                    ),
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('Copiar cuenta técnica'),
+                  ),
+                if (serviceAccountAccessRequired)
+                  TextButton.icon(
+                    onPressed: () => _openWebsiteUrl(_searchConsoleUsersUrl),
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('Abrir permisos'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: productUrl == null || _isLoadingGoogleDiagnostics
+                      ? null
+                      : _refreshGoogleDiagnostics,
+                  icon: _isLoadingGoogleDiagnostics
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_outlined),
+                  label: const Text('Consultar'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _isLoadingGoogleDiagnostics
+                      ? null
+                      : () => _runGoogleLinkMaintenance('submit_sitemap'),
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text('Enviar sitemap'),
+                ),
+                if (showMerchant)
+                  OutlinedButton.icon(
+                    onPressed: _isLoadingGoogleDiagnostics
+                        ? null
+                        : () => _runGoogleLinkMaintenance(
+                            'refresh_merchant_feed'),
+                    icon: const Icon(Icons.sync_outlined),
+                    label: const Text('Actualizar feed'),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Text(
             productUrl == null
                 ? 'Guarda el producto para consultar estados reales.'
-                : 'Search Console se conecta con tu cuenta Google autorizada. Merchant usa la cuenta técnica de Google ya configurada.',
+                : searchConsoleUsesServiceAccount
+                    ? 'Search Console y Merchant usan una cuenta técnica del servidor. No requieren iniciar sesión ni pasar por una aplicación Google en pruebas.'
+                    : 'Search Console se conecta con tu cuenta Google autorizada. Merchant usa la cuenta técnica de Google ya configurada.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.35,
             ),
           ),
+          if (serviceAccountAccessRequired &&
+              serviceAccountEmail.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'En Search Console, abre Configuración → Usuarios y permisos y '
+              'agrega $serviceAccountEmail con acceso completo. Es el único '
+              'paso pendiente para dejar esta integración operando sin OAuth.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          ],
           if (_googleDiagnosticsError != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -10223,16 +10415,29 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               'Search Console',
               searchConsole,
             ),
+            _buildDiagnosticsStatusLine(
+              theme,
+              'Sitemap',
+              sitemap,
+            ),
             if (showMerchant)
               _buildDiagnosticsStatusLine(
                 theme,
                 'Merchant',
                 merchant,
               ),
+            if (showMerchant && merchantRefresh != null)
+              _buildDiagnosticsStatusLine(
+                theme,
+                'Actualización Merchant',
+                merchantRefresh,
+              ),
           ],
           const SizedBox(height: 12),
           Text(
-            'Search Console requiere conectar Google una vez. Merchant requiere GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY y GOOGLE_MERCHANT_ACCOUNT_ID.',
+            searchConsoleUsesServiceAccount
+                ? 'La cuenta técnica mantiene la automatización activa sin depender de sesiones personales ni permisos OAuth que expiran.'
+                : 'Search Console requiere conectar Google una vez. Merchant requiere GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY y GOOGLE_MERCHANT_ACCOUNT_ID.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -10275,8 +10480,23 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     final error = _firstNonEmptyText([
       data?['error']?.toString(),
       data?['availableSitesError']?.toString(),
+      if (data?['canonicalMatches'] == false)
+        'Google todavía no eligió la URL limpia como canónica.',
       if (feedReasons.isNotEmpty) feedReasons.join(' '),
     ]);
+    final details = <String>[
+      if (_firstNonEmptyText([data?['googleCanonical']?.toString()]).isNotEmpty)
+        'Canónica Google: ${data?['googleCanonical']}',
+      if (_firstNonEmptyText([data?['lastCrawlTime']?.toString()]).isNotEmpty)
+        'Último rastreo: ${data?['lastCrawlTime']}',
+      if (_firstNonEmptyText([data?['lastSubmitted']?.toString()]).isNotEmpty)
+        'Sitemap enviado: ${data?['lastSubmitted']}',
+      if (_firstNonEmptyText([data?['lastDownloaded']?.toString()]).isNotEmpty)
+        'Sitemap leído: ${data?['lastDownloaded']}',
+      if (_firstNonEmptyText([data?['serviceAccountEmail']?.toString()])
+          .isNotEmpty)
+        'Cuenta técnica: ${data?['serviceAccountEmail']}',
+    ];
     final availableSites = data?['availableSites'] is List
         ? (data!['availableSites'] as List)
             .whereType<Map>()
@@ -10339,6 +10559,19 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               padding: const EdgeInsets.only(left: 26),
               child: Text(
                 'Propiedades visibles: ${availableSites.join(', ')}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(
+                details.join(' · '),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   height: 1.35,

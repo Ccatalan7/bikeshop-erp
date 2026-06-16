@@ -8,7 +8,7 @@ const corsHeaders = {
 }
 
 const integrationKey = 'search_console'
-const searchConsoleScope = 'https://www.googleapis.com/auth/webmasters.readonly'
+const searchConsoleScope = 'https://www.googleapis.com/auth/webmasters'
 const userEmailScope = 'https://www.googleapis.com/auth/userinfo.email'
 
 serve(async (req) => {
@@ -22,7 +22,7 @@ serve(async (req) => {
     return jsonResponse({ error: 'Use GET or POST' }, 405)
   } catch (error) {
     console.error('google-oauth-callback error', error)
-    return jsonResponse({ error: error?.message || String(error) }, 500)
+    return jsonResponse({ error: errorMessage(error) }, 500)
   }
 })
 
@@ -64,7 +64,7 @@ async function handlePost(req: Request) {
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('scope', `${searchConsoleScope} ${userEmailScope}`)
   authUrl.searchParams.set('access_type', 'offline')
-  authUrl.searchParams.set('prompt', 'consent')
+  authUrl.searchParams.set('prompt', 'consent select_account')
   authUrl.searchParams.set('include_granted_scopes', 'true')
   authUrl.searchParams.set('state', state)
   authUrl.searchParams.set('login_hint', 'vinabikechile@gmail.com')
@@ -204,6 +204,10 @@ function redirectUri() {
 
 function cleanText(value: unknown) {
   return String(value ?? '').trim()
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function jsonResponse(payload: unknown, status = 200) {
