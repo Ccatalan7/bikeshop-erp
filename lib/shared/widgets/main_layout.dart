@@ -1057,6 +1057,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   String? _lastSeenOnlineOrderNotificationId;
   DateTime? _lastMailAlertAt;
   bool _isRefreshingOnlineOrderAlerts = false;
+  bool _isRefreshingNotificationsFeed = false;
 
   @override
   void initState() {
@@ -1119,6 +1120,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshOnlineOrderAlerts(showTopNotification: true);
+      unawaited(_refreshNotificationsFeed());
       MailAccountManager.instance.backgroundRefresh();
     }
   }
@@ -1156,16 +1158,15 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     await _refreshOnlineOrderAlerts(showTopNotification: true);
 
     // Load the generic notifications-center feed (all types).
-    try {
-      await NotificationService().loadNotifications(tenantId);
-    } catch (e) {
-      debugPrint('🔔 [MainLayout] Notifications feed load failed: $e');
-    }
+    await _refreshNotificationsFeed();
 
     _onlineOrdersRefreshTimer?.cancel();
     _onlineOrdersRefreshTimer = Timer.periodic(
       const Duration(seconds: 20),
-      (_) => _refreshOnlineOrderAlerts(showTopNotification: true),
+      (_) {
+        unawaited(_refreshOnlineOrderAlerts(showTopNotification: true));
+        unawaited(_refreshNotificationsFeed());
+      },
     );
 
     await _onlineOrdersChannel?.unsubscribe();
@@ -1193,7 +1194,14 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           ),
           callback: (payload) => _handleNotificationRecord(payload.newRecord),
         )
-        .subscribe();
+        .subscribe((status, error) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        unawaited(_refreshNotificationsFeed());
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut) {
+        debugPrint('🔔 [MainLayout] Notifications realtime issue: $error');
+      }
+    });
   }
 
   void _handleNotificationRecord(Map<String, dynamic> record) {
@@ -1303,6 +1311,21 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       );
     } finally {
       _isRefreshingOnlineOrderAlerts = false;
+    }
+  }
+
+  Future<void> _refreshNotificationsFeed() async {
+    if (_isRefreshingNotificationsFeed) return;
+
+    _isRefreshingNotificationsFeed = true;
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (!mounted || tenantId == null || tenantId.isEmpty) return;
+      await NotificationService().loadNotifications(tenantId);
+    } catch (e) {
+      debugPrint('🔔 [MainLayout] Notifications feed load failed: $e');
+    } finally {
+      _isRefreshingNotificationsFeed = false;
     }
   }
 

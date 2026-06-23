@@ -18940,6 +18940,30 @@ begin
   end if;
 end $$;
 
+-- Global smart tasks realtime sync for the right-toolbar tasks panel.
+-- Guarded because older local schema snapshots may create smart_tasks from
+-- its historical migrations before or after this canonical schema block.
+do $$
+begin
+  if to_regclass('public.smart_tasks') is not null then
+    alter table public.smart_tasks replica identity full;
+
+    if exists (
+      select 1
+      from pg_publication
+      where pubname = 'supabase_realtime'
+    ) and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'smart_tasks'
+    ) then
+      alter publication supabase_realtime add table public.smart_tasks;
+    end if;
+  end if;
+end $$;
+
 create or replace function public.create_online_order_erp_notification()
 returns trigger
 language plpgsql

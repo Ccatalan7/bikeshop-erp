@@ -1409,11 +1409,6 @@
           "type": 301
         },
         {
-          "source": "/productos/2183ff57-a614-4d3f-b2c6-c9bae3bd8bc3",
-          "destination": "/productos/rayos-27-2-cms-mtb-gruesa/2000000248288",
-          "type": 301
-        },
-        {
           "source": "/productos/230656ec-df0e-4d94-9875-881030ffce53",
           "destination": "/productos/manilla-freno-mtb-larga-nakasawa/P002208010348",
           "type": 301
@@ -3869,11 +3864,6 @@
           "type": 301
         },
         {
-          "source": "/productos/73fee801-dd0c-43b8-a05a-7a47bda4bd9e",
-          "destination": "/productos/collerin-rbx-31-8-mm-bettabikes/NNV40",
-          "type": 301
-        },
-        {
           "source": "/productos/7428d49a-6e8d-4867-9181-848015ad3ed6",
           "destination": "/productos/luz-trasera-led-inteligente-recargable-gl09-ae/AE0193",
           "type": 301
@@ -3971,11 +3961,6 @@
         {
           "source": "/productos/7705b14d-f06c-4e30-9e60-579cdc9e0739",
           "destination": "/productos/cambio-media-pista-acero-c-pata-en-bolsa-compatibles-genericos-6v/PO02724002241",
-          "type": 301
-        },
-        {
-          "source": "/productos/770dbf83-66a7-4cd1-9912-4d1a20212955",
-          "destination": "/productos/funda-freno-betta-1m/NNV59",
           "type": 301
         },
         {
@@ -4111,11 +4096,6 @@
         {
           "source": "/productos/7aaeef8d-8056-4ada-9cca-584510c35eda",
           "destination": "/productos/manilla-freno-aluminio-logan-par/NNV87",
-          "type": 301
-        },
-        {
-          "source": "/productos/7aca0a2c-3cf7-4bc5-8795-9bd2a2e3e445",
-          "destination": "/productos/freno-u-brake-betta/NNV57",
           "type": 301
         },
         {
@@ -4631,11 +4611,6 @@
         {
           "source": "/productos/8aa6cfa8-3dcf-4b05-ab3c-9c15d921348f",
           "destination": "/productos/pedal-termoplastico-azul-c-pines-volkov/V004695",
-          "type": 301
-        },
-        {
-          "source": "/productos/8ab9c7f1-bc66-4904-b943-b098ae615358",
-          "destination": "/productos/eje-delantero-bloqueo-bettabikes/NNV49",
           "type": 301
         },
         {
@@ -6419,6 +6394,11 @@
           "type": 301
         },
         {
+          "source": "/productos/c82d9c3c-b67d-4541-ab17-3fe1528f2b9a",
+          "destination": "/productos/camara-maxxis-26x1-5-2-5-40-63-559-0-8-lfvsep48/7364",
+          "type": 301
+        },
+        {
           "source": "/productos/c8b1d589-cda2-4f5d-822b-271c4a068d3e",
           "destination": "/productos/maza-trasera-novatec-32h-135x10mm-hg-d042sb/AE0062",
           "type": 301
@@ -6694,11 +6674,6 @@
           "type": 301
         },
         {
-          "source": "/productos/d13cc224-a143-4275-84e5-482891b04400",
-          "destination": "/productos/postiza-bettabikes/TEMP-D13CC224",
-          "type": 301
-        },
-        {
           "source": "/productos/d1645285-9149-49e7-8c21-839654410cd8",
           "destination": "/productos/gruesa-de-rayos-negros-265x14g/213061",
           "type": 301
@@ -6841,6 +6816,11 @@
         {
           "source": "/productos/d61519e9-e3a3-4f12-9daf-60f1e073db6d",
           "destination": "/productos/neumatico-cst-24x2-10-c1020n/25257",
+          "type": 301
+        },
+        {
+          "source": "/productos/d62dd5f5-6b6f-4e7d-aa54-479e378c2745",
+          "destination": "/productos/pastilla-redonda-garozo-a-presion/GZ0010",
           "type": 301
         },
         {
