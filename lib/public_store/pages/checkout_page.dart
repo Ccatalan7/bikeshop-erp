@@ -10,6 +10,7 @@ import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../services/address_autocomplete_service.dart';
+import '../services/meta_pixel_service.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
@@ -83,6 +84,24 @@ class _CheckoutPageState extends State<CheckoutPage>
       autocompleteService.addListener(_onAutocompleteChanged);
       final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
       autocompleteService.initialize(tenantId: tenantId);
+
+      final cart = context.read<CartProvider>();
+      MetaPixelService.instance.trackInitiateCheckout(
+        items: cart.items
+            .map(
+              (item) => MetaCatalogEventItem(
+                contentId: MetaPixelService.catalogContentId(
+                  sku: item.product.sku,
+                  productId: item.product.id,
+                ),
+                quantity: item.quantity,
+                itemPrice: item.product.price,
+              ),
+            )
+            .where((item) => item.contentId.isNotEmpty)
+            .toList(),
+        value: cart.total,
+      );
 
       _handleCheckoutQueryParameters();
     });

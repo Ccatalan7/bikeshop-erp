@@ -8915,7 +8915,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       ].join('\n');
 
       final prompt = '''
-Eres el vendedor experto de una bicicletería chilena escribiendo la ficha de un producto para el catálogo de WhatsApp. Tu objetivo es que se lea como si lo escribió una persona que conoce de bicicletas, no una IA.
+Eres el vendedor experto de una bicicletería chilena escribiendo la ficha de un producto para el catálogo de Meta usado en WhatsApp y anuncios de catálogo. Tu objetivo es que se lea como si lo escribió una persona que conoce de bicicletas, no una IA.
 
 DATOS REALES (única fuente de verdad):
 $dataLines
@@ -9468,7 +9468,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     if (_isServiceForm) {
       return [
         Text(
-          'Los servicios no se publican en el catálogo de productos de WhatsApp. Para servicios, usa la publicación web y los flujos de mensajería interna.',
+          'Los servicios no se publican en el catálogo de productos de Meta. Para servicios, usa la publicación web y los flujos de mensajería interna.',
           style: theme.textTheme.bodyMedium,
         ),
       ];
@@ -9482,10 +9482,12 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     return [
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: Row(
+        title: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
-            const Text('Incluir en catálogo de WhatsApp'),
-            const SizedBox(width: 8),
+            const Text('Publicar en catálogo de Meta'),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -9493,7 +9495,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                'WhatsApp',
+                'WhatsApp + Meta Ads',
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
@@ -9509,10 +9511,10 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               : !_isPublished
                   ? 'Requiere que el producto esté publicado.'
                   : _isWhatsappCatalog
-                      ? 'Al guardar, publica o actualiza este producto en el catálogo conectado a WhatsApp.'
+                      ? 'Al guardar, publica o actualiza este producto en el catálogo compartido por WhatsApp y anuncios de Meta.'
                       : _existingProduct?.isWhatsappCatalog == true
-                          ? 'Al guardar, retira este producto del catálogo conectado a WhatsApp.'
-                          : 'Activa esta opción y guarda para publicar el producto en WhatsApp.',
+                          ? 'Al guardar, retira este producto del catálogo de Meta.'
+                          : 'Activa esta opción y guarda para publicar el producto en Meta.',
           style: TextStyle(
             color: (_isActive && _isPublished) ? null : theme.disabledColor,
           ),
@@ -9525,12 +9527,12 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       const SizedBox(height: 16),
       _buildReadinessPanel(
         theme,
-        title: 'Sincronización WhatsApp',
+        title: 'Sincronización Meta',
         checks: [
           (
             ok: _isActive && _isPublished && _isWhatsappCatalog,
             label: 'Marcado',
-            detail: 'Debe estar activo, publicado y habilitado para WhatsApp.',
+            detail: 'Debe estar activo, publicado y habilitado para Meta.',
           ),
           (
             ok: _effectiveWhatsappCatalogTitle.length >= 10,
@@ -9540,7 +9542,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
           (
             ok: _effectiveWhatsappCatalogDescription.length >= 20,
             label: 'Descripción clara',
-            detail: 'WhatsApp necesita una descripción corta y entendible.',
+            detail: 'Meta necesita una descripción corta y entendible.',
           ),
           (
             ok: price > 0,
@@ -9570,7 +9572,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _whatsappCatalogTitleController,
                 decoration: InputDecoration(
-                  labelText: 'Título WhatsApp',
+                  labelText: 'Título de catálogo',
                   hintText: _effectiveWhatsappCatalogTitle,
                   helperText: 'Vacío = nombre web/normal.',
                 ),
@@ -9582,7 +9584,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
               child: TextFormField(
                 controller: _whatsappCatalogPriceController,
                 decoration: InputDecoration(
-                  labelText: 'Precio WhatsApp',
+                  labelText: 'Precio de catálogo',
                   hintText: price > 0 ? price.toStringAsFixed(0) : '0',
                   helperText: 'Vacío = precio web/normal.',
                   prefixText: 'CLP ',
@@ -9598,7 +9600,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                   if (text.isEmpty) return null;
                   final parsed = double.tryParse(text.replaceAll(',', '.'));
                   if (parsed == null || parsed < 0) {
-                    return 'Ingresa un precio WhatsApp válido';
+                    return 'Ingresa un precio de catálogo válido';
                   }
                   return null;
                 },
@@ -9655,7 +9657,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       TextFormField(
         controller: _whatsappCatalogDescriptionController,
         decoration: InputDecoration(
-          labelText: 'Descripción WhatsApp',
+          labelText: 'Descripción de catálogo',
           hintText: _effectiveWhatsappCatalogDescription,
           helperText:
               'Vacío = descripción web/normal. Mínimo 20 caracteres efectivos.',
@@ -9674,7 +9676,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     ];
   }
 
-  /// Honest WhatsApp catalog visibility state. Meta accepts catalog uploads
+  /// Honest Meta catalog visibility state. Meta accepts catalog uploads
   /// asynchronously: a product can be uploaded (it has a Meta product id) and
   /// still be hidden from customers until Meta sets its WhatsApp review state
   /// to APPROVED. We therefore never claim "visible" from upload success alone.
@@ -9697,13 +9699,14 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       'customer_visible' => (
           color: Colors.green,
           icon: Icons.verified_outlined,
-          label: 'Visible para clientes',
-          detail: 'WhatsApp aprobó el producto y ya aparece en el catálogo.',
+          label: 'Sincronizado con Meta',
+          detail: 'Meta aprobó el producto para WhatsApp. También puede usarse '
+              'en anuncios de catálogo de Instagram y Facebook.',
         ),
       'under_review' => (
           color: Colors.orange,
           icon: Icons.hourglass_top_outlined,
-          label: 'En revisión por WhatsApp',
+          label: 'En revisión por Meta',
           detail:
               'Meta recibió el producto pero aún no lo muestra a los clientes. '
               'La aprobación es automática y puede tardar. Vuelve a verificar más tarde.',
@@ -9711,7 +9714,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       'rejected' => (
           color: theme.colorScheme.error,
           icon: Icons.block_outlined,
-          label: 'Rechazado por WhatsApp',
+          label: 'Rechazado por Meta',
           detail: 'Meta rechazó el producto. Revisa título, descripción, '
               'imagen y precio, y vuelve a sincronizar.',
         ),
@@ -9719,26 +9722,26 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
           color: theme.colorScheme.onSurfaceVariant,
           icon: Icons.remove_circle_outline,
           label: 'Retirado del catálogo',
-          detail: 'El producto no está publicado en el catálogo de WhatsApp.',
+          detail: 'El producto no está publicado en el catálogo de Meta.',
         ),
       'pending' => (
           color: Colors.orange,
           icon: Icons.cloud_upload_outlined,
           label: 'Pendiente de subir',
-          detail: 'Aún no está en el catálogo de WhatsApp. Guarda o sincroniza '
+          detail: 'Aún no está en el catálogo de Meta. Guarda o sincroniza '
               'para subirlo.',
         ),
       'failed' => (
           color: theme.colorScheme.error,
           icon: Icons.error_outline,
           label: 'Error de sincronización',
-          detail: error ?? 'No se pudo sincronizar con WhatsApp.',
+          detail: error ?? 'No se pudo sincronizar con Meta.',
         ),
       _ => (
           color: theme.colorScheme.onSurfaceVariant,
           icon: Icons.help_outline,
           label: 'Estado desconocido',
-          detail: 'Verifica el estado actual del producto en WhatsApp.',
+          detail: 'Verifica el estado actual del producto en Meta.',
         ),
     };
 

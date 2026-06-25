@@ -67,6 +67,60 @@
     gtag('config', 'G-FR5Q37BW43');
   </script>
 
+  <!-- Meta Pixel is initialized at runtime from the tenant website setting. -->
+  <script>
+    (function (window, document) {
+      window.vinabikeMetaPixelInit = function (pixelId) {
+        var id = String(pixelId || '').trim();
+        if (!/^\d+$/.test(id)) return false;
+
+        if (!window.fbq) {
+          var fbq = window.fbq = function () {
+            fbq.callMethod
+              ? fbq.callMethod.apply(fbq, arguments)
+              : fbq.queue.push(arguments);
+          };
+          if (!window._fbq) window._fbq = fbq;
+          fbq.push = fbq;
+          fbq.loaded = true;
+          fbq.version = '2.0';
+          fbq.queue = [];
+
+          var script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+          var firstScript = document.getElementsByTagName('script')[0];
+          firstScript.parentNode.insertBefore(script, firstScript);
+        }
+
+        if (window.__vinabikeMetaPixelId !== id) {
+          window.fbq('init', id);
+          window.__vinabikeMetaPixelId = id;
+        }
+        if (!window.__vinabikeMetaPageViewTracked) {
+          window.fbq('track', 'PageView');
+          window.__vinabikeMetaPageViewTracked = true;
+        }
+        return true;
+      };
+
+      window.vinabikeMetaPixelTrack = function (eventName, payloadJson, eventId) {
+        if (!window.fbq || !window.__vinabikeMetaPixelId) return false;
+        try {
+          var payload = JSON.parse(payloadJson || '{}');
+          if (eventId) {
+            window.fbq('track', eventName, payload, { eventID: eventId });
+          } else {
+            window.fbq('track', eventName, payload);
+          }
+          return true;
+        } catch (_) {
+          return false;
+        }
+      };
+    })(window, document);
+  </script>
+
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Viñabike">

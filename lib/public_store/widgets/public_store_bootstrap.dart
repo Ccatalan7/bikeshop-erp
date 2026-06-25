@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/meta_pixel_service.dart';
 
 /// SIMPLE bootstrap widget for public store
 ///
@@ -91,6 +92,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
       // Step 2: Pre-populate from fresh sync cache for faster first paint.
       final didPreloadFromCache =
           websiteService.preloadPublicStoreFromSynchronousCache(tenantId);
+      _configureMetaPixel(websiteService);
 
       // Start the heavier store-data load immediately. The shell only waits for
       // navigation below, so settings/blocks are already in flight by the time
@@ -147,10 +149,12 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
           tenantId,
           forceRefresh: true,
         );
+        _configureMetaPixel(websiteService);
         return;
       }
 
       await websiteService.loadPublicStoreDataUnified(tenantId);
+      _configureMetaPixel(websiteService);
 
       // The fast path may use prefetch/edge cache. Keep the existing freshness
       // contract by following it with an origin read after first paint.
@@ -160,12 +164,19 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap> {
           tenantId,
           forceRefresh: true,
         );
+        _configureMetaPixel(websiteService);
       } catch (e) {
         debugPrint('⚠️ [Bootstrap] Origin revalidation failed: $e');
       }
     } catch (e) {
       debugPrint('⚠️ [Bootstrap] Network load failed: $e');
     }
+  }
+
+  void _configureMetaPixel(WebsiteService websiteService) {
+    MetaPixelService.instance.initialize(
+      websiteService.getSetting('seo_fb_pixel_id'),
+    );
   }
 
   void _hideHtmlSplashAfterFrame() {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../shared/models/product.dart';
+import '../services/meta_pixel_service.dart';
 
 class CartItem {
   final Product product;
@@ -47,6 +48,15 @@ class CartProvider with ChangeNotifier {
       _items.add(CartItem(product: product, quantity: quantity));
     }
 
+    MetaPixelService.instance.trackAddToCart(
+      contentId: MetaPixelService.catalogContentId(
+        sku: product.sku,
+        productId: product.id,
+      ),
+      contentName: product.websiteName ?? product.name,
+      itemPrice: product.price,
+      quantity: quantity,
+    );
     notifyListeners();
   }
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-21T20:16:44.249767Z",
+  "generatedAt": "2026-06-25T06:45:09.790627Z",
   "redirects": [
     {
       "source": "/productos/000ca591-e26b-4397-b56d-fcbab4ee36bb",
@@ -1207,6 +1207,11 @@
       "type": 301
     },
     {
+      "source": "/productos/27f1bd43-e059-4162-8045-903e74896aed",
+      "destination": "/productos/camara-29-x-2-0-2-40-kenda-valvula-de-auto-de48mm/4420",
+      "type": 301
+    },
+    {
       "source": "/productos/28018750-3021-4097-9e7f-3201361285ad",
       "destination": "/productos/manillas-de-cambio-juego-sensah-mx8-8x3-velocidades-trasero/19102-TRASE",
       "type": 301
@@ -1214,6 +1219,11 @@
     {
       "source": "/productos/2804ec98-06d7-473a-aaad-07589e01eab7",
       "destination": "/productos/guante-corto-west-biking-azul-negro/AE0298",
+      "type": 301
+    },
+    {
+      "source": "/productos/288a3592-8e60-412c-aa88-f2745981effb",
+      "destination": "/productos/herradura-de-tiro-lateral-ztto-asa-2-5d-juego/AE0368",
       "type": 301
     },
     {
@@ -1374,11 +1384,6 @@
     {
       "source": "/productos/2ccb3723-d4ad-4cc7-926c-b53157227c3e",
       "destination": "/productos/perno-corona-hassns-m8-8-5mm-negro/AE0091",
-      "type": 301
-    },
-    {
-      "source": "/productos/2cf2519d-6061-489e-9b9b-3fbd56ea14c1",
-      "destination": "/productos/piola-de-cambio-2-1-m-shimano-garozzo/NNV131",
       "type": 301
     },
     {
@@ -3357,6 +3362,11 @@
       "type": 301
     },
     {
+      "source": "/productos/6da06edc-642a-449c-b374-b0877a6ae794",
+      "destination": "/productos/camara-26-x-1-75-2-35-kenda-valvula-de-auto-de-48mm/4417",
+      "type": 301
+    },
+    {
       "source": "/productos/6e7d7c5a-c4ec-4244-8683-3f5dd4b273e8",
       "destination": "/productos/campanilla-manillar-bicicleta-90-100db-negra/AE0096",
       "type": 301
@@ -3769,11 +3779,6 @@
     {
       "source": "/productos/7c73ed84-76be-46a2-a077-8e41ec9725fa",
       "destination": "/productos/buff-trip-black-polar/1095",
-      "type": 301
-    },
-    {
-      "source": "/productos/7c748b44-915d-4ed5-9da0-cdee6f9d3931",
-      "destination": "/productos/maza-delantera-padrobikes/NNV98",
       "type": 301
     },
     {
@@ -4204,11 +4209,6 @@
     {
       "source": "/productos/88ff31d3-e440-498c-8eae-c18e1ea1752d",
       "destination": "/productos/cambio-9v-rd-r3000-sora-directo-caja-erdr3000ss/4524667678656",
-      "type": 301
-    },
-    {
-      "source": "/productos/89003840-7e5b-4a54-8e8d-32af9e160a7c",
-      "destination": "/productos/llave-para-lockring-motor-15-16mm/NNV83",
       "type": 301
     },
     {
@@ -5752,6 +5752,11 @@
       "type": 301
     },
     {
+      "source": "/productos/be610400-dd1e-4b76-aa33-148d961f58c5",
+      "destination": "/productos/neumatico-26-x-1-75-kenda-negro-alambre-aptor/4817",
+      "type": 301
+    },
+    {
       "source": "/productos/be783151-f617-475a-ac4c-00d3232c003f",
       "destination": "/productos/rayos-29-0-cms-mtb-gruesa/R749",
       "type": 301
@@ -6122,6 +6127,16 @@
       "type": 301
     },
     {
+      "source": "/productos/camara-27-5-x-2-0-2-40-kenda-valvula-de-auto-de48mm/4450",
+      "destination": "/productos/camara-29-x-2-0-2-40-kenda-valvula-de-auto-de48mm/4420",
+      "type": 301
+    },
+    {
+      "source": "/productos/camara-kenda-26-x-1-75-2-35-v-a-40mm/4417",
+      "destination": "/productos/camara-26-x-1-75-2-35-kenda-valvula-de-auto-de-48mm/4417",
+      "type": 301
+    },
+    {
       "source": "/productos/cb16446d-7506-4138-a487-6ef2bfc35717",
       "destination": "/productos/extractor-de-obus-aluminio-azul-toopre/AE0286",
       "type": 301
@@ -6328,7 +6343,7 @@
     },
     {
       "source": "/productos/d187da4a-1e06-47c8-aa5a-c57ec1b5b3a4",
-      "destination": "/productos/pastillas-freno-disco-semi-metal-ceramico-ds01-ztto/AE0292",
+      "destination": "/productos/pastillas-freno-disco-semi-metal-ceramico-ms01b-ds01-ztto/AE0292",
       "type": 301
     },
     {
@@ -7669,6 +7684,11 @@
     {
       "source": "/productos/ffe5178b-4fea-4ad5-b7dd-c6cc61ea1d60",
       "destination": "/productos/camara-le-tour-26-x-1-95-2-125-v-auto-butyl/13309",
+      "type": 301
+    },
+    {
+      "source": "/productos/pastillas-freno-disco-semi-metal-ceramico-ds01-ztto/AE0292",
+      "destination": "/productos/pastillas-freno-disco-semi-metal-ceramico-ms01b-ds01-ztto/AE0292",
       "type": 301
     }
   ]

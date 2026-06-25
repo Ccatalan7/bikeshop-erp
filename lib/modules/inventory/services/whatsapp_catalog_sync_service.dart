@@ -68,7 +68,7 @@ class WhatsAppCatalogSyncService {
         lastError = error;
         final message = error.toString().replaceFirst('Exception: ', '');
         debugPrint(
-          'WhatsApp catalog $mode attempt $attempt/3 failed: $message',
+          'Meta catalog $mode attempt $attempt/3 failed: $message',
         );
         if (attempt == 3 || _isPermanentFailure(message)) rethrow;
         await Future<void>.delayed(Duration(seconds: attempt));
@@ -119,7 +119,7 @@ class WhatsAppCatalogSyncService {
   }
 
   String _errorMessage(dynamic value) {
-    if (value == null) return 'No se pudo sincronizar el catálogo de WhatsApp.';
+    if (value == null) return 'No se pudo sincronizar el catálogo de Meta.';
     if (value is String) return value;
     if (value is Map) {
       final missing = value['missing'];
@@ -133,7 +133,7 @@ class WhatsAppCatalogSyncService {
             _ => field.toString(),
           };
         }).join(', ');
-        return 'Completa estos datos de WhatsApp: $labels.';
+        return 'Completa estos datos del catálogo de Meta: $labels.';
       }
       for (final key in const ['error', 'message', 'details', 'msg']) {
         if (!value.containsKey(key)) continue;

@@ -18,6 +18,7 @@ import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provide
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
+import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -143,6 +144,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _product = loadedProduct;
 
       if (_product != null) {
+        MetaPixelService.instance.trackViewContent(
+          contentId: MetaPixelService.catalogContentId(
+            sku: _product!.sku,
+            productId: _product!.id,
+          ),
+          contentName: _product!.websiteName ?? _product!.name,
+          value: _product!.price,
+        );
         debugPrint('✅ [ProductDetail] Found product: ${_product!.name}');
         // Render immediately, then load related products in background.
         setState(() => _isLoading = false);

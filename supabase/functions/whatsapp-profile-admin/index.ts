@@ -11,6 +11,10 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const WHATSAPP_ACCESS_TOKEN = Deno.env.get('WHATSAPP_ACCESS_TOKEN') ?? ''
 const WHATSAPP_API_VERSION = Deno.env.get('WHATSAPP_API_VERSION') ?? 'v23.0'
+const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? WHATSAPP_ACCESS_TOKEN
+const META_API_VERSION = Deno.env.get('META_API_VERSION') ?? WHATSAPP_API_VERSION
+const PRIMARY_META_CATALOG_ID = Deno.env.get('META_CATALOG_ID') ??
+  Deno.env.get('WHATSAPP_CATALOG_ID') ?? ''
 const WHATSAPP_PROFILE_ADMIN_TOKEN = Deno.env.get('WHATSAPP_PROFILE_ADMIN_TOKEN') ?? ''
 
 type JsonRecord = Record<string, unknown>
@@ -65,11 +69,11 @@ async function graphRequest(
   options: RequestInit = {},
 ) {
   const response = await fetch(
-    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${path}`,
+    `https://graph.facebook.com/${META_API_VERSION}/${path}`,
     {
       ...options,
       headers: {
-        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
         ...(options.headers ?? {}),
       },
     },
@@ -294,7 +298,7 @@ async function inspectToken() {
   const [me, app, debugToken, permissions] = await Promise.all([
     graphRequest('me?fields=id,name'),
     graphRequest('app?fields=id,name'),
-    graphRequest(`debug_token?input_token=${encodeURIComponent(WHATSAPP_ACCESS_TOKEN)}`),
+    graphRequest(`debug_token?input_token=${encodeURIComponent(META_ACCESS_TOKEN)}`),
     graphRequest('me/permissions'),
   ])
 
@@ -672,6 +676,8 @@ async function connectCatalog(request: AdminRequest, channel: JsonRecord) {
 }
 
 function resolveCatalogId(catalogInfo: JsonRecord) {
+  if (PRIMARY_META_CATALOG_ID) return PRIMARY_META_CATALOG_ID
+
   const commercePayload = catalogInfo.commerceSettings &&
       typeof catalogInfo.commerceSettings === 'object'
     ? (catalogInfo.commerceSettings as JsonRecord).payload
@@ -811,11 +817,11 @@ async function uploadProfilePictureHandle(file: File) {
   const fileBuffer = await file.arrayBuffer()
   const fileName = file.name || 'profile-picture.jpg'
   const fileType = file.type || 'image/jpeg'
-  const sessionUrl = new URL(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${appId}/uploads`)
+  const sessionUrl = new URL(`https://graph.facebook.com/${META_API_VERSION}/${appId}/uploads`)
   sessionUrl.searchParams.set('file_name', fileName)
   sessionUrl.searchParams.set('file_length', String(fileBuffer.byteLength))
   sessionUrl.searchParams.set('file_type', fileType)
-  sessionUrl.searchParams.set('access_token', WHATSAPP_ACCESS_TOKEN)
+  sessionUrl.searchParams.set('access_token', META_ACCESS_TOKEN)
 
   const session = await graphJsonRequest(sessionUrl.toString(), { method: 'POST' })
   if (!session.ok) return session
@@ -833,11 +839,11 @@ async function uploadProfilePictureHandle(file: File) {
   }
 
   const upload = await graphJsonRequest(
-    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${uploadSessionId}`,
+    `https://graph.facebook.com/${META_API_VERSION}/${uploadSessionId}`,
     {
       method: 'POST',
       headers: {
-        Authorization: `OAuth ${WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `OAuth ${META_ACCESS_TOKEN}`,
         file_offset: '0',
       },
       body: fileBuffer,
@@ -877,7 +883,7 @@ serve(async (req) => {
     return jsonResponse({ error: 'Method not allowed' }, 405)
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !WHATSAPP_ACCESS_TOKEN) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !META_ACCESS_TOKEN) {
     return jsonResponse({ error: 'Missing required environment variables' }, 500)
   }
 

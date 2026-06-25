@@ -19586,6 +19586,46 @@ alter table public.products
     )
   );
 
+-- Durable Meta Commerce catalog sync log. Product IDs intentionally do not use
+-- an FK so hard-delete cleanup events can preserve the deleted product id.
+create table if not exists public.product_catalog_sync_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references public.tenants(id) on delete cascade,
+  product_id uuid,
+  catalog_id text,
+  retailer_id text,
+  meta_product_id text,
+  operation text not null check (
+    operation in ('upsert', 'remove', 'delete', 'refresh', 'legacy_cleanup')
+  ),
+  status text not null check (
+    status in ('started', 'success', 'failed', 'skipped', 'partial')
+  ),
+  attempt_count integer,
+  http_status integer,
+  error text,
+  request_payload jsonb not null default '{}'::jsonb,
+  response_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_product_catalog_sync_events_tenant_created
+  on public.product_catalog_sync_events(tenant_id, created_at desc);
+
+create index if not exists idx_product_catalog_sync_events_product_created
+  on public.product_catalog_sync_events(product_id, created_at desc);
+
+create index if not exists idx_product_catalog_sync_events_catalog_retailer
+  on public.product_catalog_sync_events(catalog_id, retailer_id, created_at desc);
+
+alter table public.product_catalog_sync_events enable row level security;
+
+drop policy if exists "product_catalog_sync_events_select" on public.product_catalog_sync_events;
+create policy "product_catalog_sync_events_select"
+  on public.product_catalog_sync_events
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
 create or replace function public.enqueue_whatsapp_catalog_product_sync()
 returns trigger
 language plpgsql
@@ -19594,22 +19634,21 @@ set search_path = public
 as $$
 declare
   v_service_role_key text;
+  v_request_body jsonb;
 begin
-  if tg_op = 'INSERT' and not coalesce(new.is_whatsapp_catalog, false) then
+  if tg_op = 'DELETE' then
+    if not coalesce(old.is_whatsapp_catalog, false)
+       and nullif(old.whatsapp_catalog_meta_product_id, '') is null
+       and coalesce(old.whatsapp_catalog_sync_status, 'not_synced') in ('not_synced', 'removed') then
+      return old;
+    end if;
+  elsif tg_op = 'INSERT' and not coalesce(new.is_whatsapp_catalog, false) then
     return new;
-  end if;
-
-  if tg_op = 'UPDATE'
+  elsif tg_op = 'UPDATE'
      and not coalesce(old.is_whatsapp_catalog, false)
      and not coalesce(new.is_whatsapp_catalog, false) then
     return new;
   end if;
-
-  update public.products
-  set whatsapp_catalog_sync_status = 'pending',
-      whatsapp_catalog_sync_error = null,
-      whatsapp_catalog_sync_requested_at = now()
-  where id = new.id;
 
   select decrypted_secret
   into v_service_role_key
@@ -19619,12 +19658,54 @@ begin
   limit 1;
 
   if nullif(v_service_role_key, '') is null then
+    if tg_op = 'DELETE' then
+      insert into public.product_catalog_sync_events (
+        tenant_id,
+        product_id,
+        operation,
+        status,
+        error,
+        request_payload
+      )
+      values (
+        old.tenant_id,
+        old.id,
+        'delete',
+        'failed',
+        'Missing Vault secret whatsapp_catalog_sync_service_role_key',
+        jsonb_build_object('productId', old.id::text)
+      );
+      return old;
+    end if;
+
     update public.products
     set whatsapp_catalog_sync_status = 'failed',
         whatsapp_catalog_sync_error =
           'Missing Vault secret whatsapp_catalog_sync_service_role_key'
     where id = new.id;
     return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    v_request_body := jsonb_build_object(
+      'productId', old.id::text,
+      'operation', 'delete',
+      'product', jsonb_build_object(
+        'id', old.id::text,
+        'tenant_id', old.tenant_id::text,
+        'sku', old.sku,
+        'name', old.name,
+        'whatsapp_catalog_meta_product_id', old.whatsapp_catalog_meta_product_id
+      )
+    );
+  else
+    update public.products
+    set whatsapp_catalog_sync_status = 'pending',
+        whatsapp_catalog_sync_error = null,
+        whatsapp_catalog_sync_requested_at = now()
+    where id = new.id;
+
+    v_request_body := jsonb_build_object('productId', new.id::text);
   end if;
 
   perform net.http_post(
@@ -19634,13 +19715,37 @@ begin
       'Authorization', 'Bearer ' || v_service_role_key,
       'apikey', v_service_role_key
     ),
-    body := jsonb_build_object('productId', new.id::text),
+    body := v_request_body,
     timeout_milliseconds := 15000
   );
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
 
   return new;
 exception
   when others then
+    if tg_op = 'DELETE' then
+      insert into public.product_catalog_sync_events (
+        tenant_id,
+        product_id,
+        operation,
+        status,
+        error,
+        request_payload
+      )
+      values (
+        old.tenant_id,
+        old.id,
+        'delete',
+        'failed',
+        sqlerrm,
+        jsonb_build_object('productId', old.id::text)
+      );
+      return old;
+    end if;
+
     update public.products
     set whatsapp_catalog_sync_status = 'failed',
         whatsapp_catalog_sync_error = sqlerrm
@@ -19682,6 +19787,12 @@ create trigger trg_products_whatsapp_catalog_sync_update
     image_url,
     image_url_optimized
   on public.products
+  for each row
+  execute function public.enqueue_whatsapp_catalog_product_sync();
+
+drop trigger if exists trg_products_whatsapp_catalog_sync_delete on public.products;
+create trigger trg_products_whatsapp_catalog_sync_delete
+  after delete on public.products
   for each row
   execute function public.enqueue_whatsapp_catalog_product_sync();
 

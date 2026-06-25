@@ -9,6 +9,7 @@ import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../providers/cart_provider.dart';
+import '../services/meta_pixel_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_models.dart';
@@ -423,6 +424,32 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       _OrderConfirmationCache.loadedOrders[widget.orderId] = order;
       _OrderConfirmationCache.paymentMessages[widget.orderId] = _paymentMessage;
       _OrderConfirmationCache.loadErrors.remove(widget.orderId);
+
+      final paymentFailed = const {'failure', 'failed', 'rejected'}.contains(
+        widget.paymentStatus?.toLowerCase(),
+      );
+      if (order.status.toLowerCase() != 'cancelled' &&
+          order.paymentStatus.toLowerCase() != 'failed' &&
+          !paymentFailed) {
+        final metaItems = order.items
+            .map(
+              (item) => MetaCatalogEventItem(
+                contentId: MetaPixelService.catalogContentId(
+                  sku: item.productSku ?? item.liveProductSku,
+                  productId: item.productId,
+                ),
+                quantity: item.quantity,
+                itemPrice: item.unitPrice,
+              ),
+            )
+            .where((item) => item.contentId.isNotEmpty)
+            .toList();
+        MetaPixelService.instance.trackPurchase(
+          orderId: order.id,
+          items: metaItems,
+          value: order.total,
+        );
+      }
 
       if (mounted) {
         setState(() {
