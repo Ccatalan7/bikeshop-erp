@@ -78,7 +78,7 @@ class DesktopUpdateService extends ChangeNotifier {
         await _downloadInstaller(installer);
       }
 
-      final process = await Process.start(
+      await Process.start(
         'powershell.exe',
         [
           '-NoProfile',
@@ -94,11 +94,6 @@ class DesktopUpdateService extends ChangeNotifier {
           pid.toString(),
         ],
         mode: ProcessStartMode.detached,
-      );
-
-      await process.exitCode.timeout(
-        const Duration(milliseconds: 600),
-        onTimeout: () => 0,
       );
 
       exit(0);
