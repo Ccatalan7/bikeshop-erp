@@ -67,8 +67,10 @@ import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
 import 'shared/services/smart_screenshot_service.dart';
+import 'shared/services/desktop_update_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
+import 'shared/widgets/desktop_update_prompt.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
@@ -323,6 +325,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) => OcrFileHandoffService()),
         ChangeNotifierProvider(create: (_) => SmartScreenshotService()),
+        ChangeNotifierProvider(create: (_) => DesktopUpdateService()),
         ChangeNotifierProvider(create: (_) {
           final navigationService = NavigationService();
           navigationService.initialize();
@@ -752,6 +755,7 @@ class VinabikeApp extends StatelessWidget {
                           ),
                         ),
                         const QueryPerformanceGauge(),
+                        const DesktopUpdatePrompt(),
                       ],
                     ),
                   );

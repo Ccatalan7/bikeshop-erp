@@ -1,0 +1,132 @@
+name: Build Windows Desktop Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'windows-v*'
+    paths:
+      - 'assets/**'
+      - 'lib/**'
+      - 'packages/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'windows/**'
+      - 'windows_notification_stub/**'
+      - '.github/workflows/windows-release.yml'
+      - 'scripts/install_vinabike_erp.ps1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and publish Windows zip
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.6'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Compute release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $versionLine = Select-String -Path 'pubspec.yaml' -Pattern '^version:\s*(.+)$' | Select-Object -First 1
+          if (-not $versionLine) {
+            throw 'Could not read version from pubspec.yaml.'
+          }
+
+          $appVersion = $versionLine.Matches[0].Groups[1].Value.Trim()
+          $safeVersion = $appVersion -replace '[^0-9A-Za-z._-]', '_'
+          $releaseTag = if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $env:GITHUB_REF_NAME
+          } else {
+            "windows-v$safeVersion-$env:GITHUB_RUN_NUMBER"
+          }
+          $zipName = "vinabike_erp_windows_$safeVersion-$env:GITHUB_RUN_NUMBER.zip"
+
+          "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
+          "safe_version=$safeVersion" >> $env:GITHUB_OUTPUT
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+          "app_version=$appVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Build Windows release
+        run: flutter build windows --release --dart-define=VINABIKE_BUILD_TAG=${{ steps.meta.outputs.release_tag }}
+
+      - name: Package release artifacts
+        id: package
+        shell: pwsh
+        env:
+          ZIP_NAME: ${{ steps.meta.outputs.zip_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $dist = Join-Path (Get-Location) 'dist'
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+
+          $releaseDir = Resolve-Path 'build\windows\x64\runner\Release'
+          $zipPath = Join-Path $dist $env:ZIP_NAME
+
+          Compress-Archive -LiteralPath $releaseDir -DestinationPath $zipPath -Force
+
+          $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+          "$hash  $env:ZIP_NAME" | Set-Content -LiteralPath "$zipPath.sha256" -NoNewline
+
+          Copy-Item -LiteralPath 'scripts\install_vinabike_erp.ps1' -Destination (Join-Path $dist 'install_vinabike_erp.ps1') -Force
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vinabike-erp-windows
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          ZIP_NAME: ${{ steps.meta.outputs.zip_name }}
+          APP_VERSION: ${{ steps.meta.outputs.app_version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $notes = @"
+          Vinabike ERP Windows desktop release.
+
+          Install or update from PowerShell:
+
+              Invoke-WebRequest https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/scripts/install_vinabike_erp.ps1 -OutFile `$env:TEMP\install_vinabike_erp.ps1
+              powershell -ExecutionPolicy Bypass -File `$env:TEMP\install_vinabike_erp.ps1 -Launch
+
+          The installer downloads $ZIP_NAME and verifies its SHA256 checksum before replacing the local app folder.
+          "@
+
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG dist/* --clobber
+          } else {
+            gh release create $env:RELEASE_TAG dist/* `
+              --target $env:GITHUB_SHA `
+              --title "Vinabike ERP Windows $env:APP_VERSION ($env:GITHUB_RUN_NUMBER)" `
+              --notes $notes
+          }
