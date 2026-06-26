@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'windows-v*'
     paths:
       - 'assets/**'
       - 'lib/**'
@@ -28,7 +26,7 @@ concurrency:
 jobs:
   build:
     name: Build and publish Windows zip
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Check out repository
@@ -40,6 +38,12 @@ jobs:
           flutter-version: '3.35.6'
           channel: 'stable'
           cache: true
+
+      - name: Show Flutter toolchain
+        run: flutter doctor -v
+
+      - name: Clean generated Flutter build state
+        run: flutter clean
 
       - name: Install Flutter dependencies
         run: flutter pub get

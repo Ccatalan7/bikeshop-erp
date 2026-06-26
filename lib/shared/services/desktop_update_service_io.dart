@@ -8,11 +8,13 @@ class DesktopUpdateInfo {
   final String tag;
   final String releaseName;
   final String assetName;
+  final String installerDownloadUrl;
 
   const DesktopUpdateInfo({
     required this.tag,
     required this.releaseName,
     required this.assetName,
+    required this.installerDownloadUrl,
   });
 }
 
@@ -72,24 +74,40 @@ class DesktopUpdateService extends ChangeNotifier {
         throw StateError('LOCALAPPDATA is not available.');
       }
 
+      final update = _availableUpdate ?? await _fetchLatestWindowsRelease();
       final installer = File('$installRoot\\Install-VinabikeERP.ps1');
+      final bootstrap = File('$installRoot\\Start-VinabikeERPUpdate.cmd');
+      final bootstrapLog = File('$installRoot\\updater-bootstrap.log');
+
       await installer.parent.create(recursive: true);
-      await _downloadInstaller(installer);
+      await _appendBootstrapLog(
+        bootstrapLog,
+        'Preparing update handoff for ${update.tag}.',
+      );
+      await _downloadInstaller(
+        installer,
+        downloadUrl: update.installerDownloadUrl,
+      );
+      await bootstrap.writeAsString(
+        _buildBootstrapScript(
+          installerPath: installer.path,
+          logPath: bootstrapLog.path,
+          waitForProcessId: pid,
+        ),
+      );
+      await _appendBootstrapLog(
+        bootstrapLog,
+        'Starting update bootstrap script at ${bootstrap.path}.',
+      );
 
       await Process.start(
-        'powershell.exe',
+        'cmd.exe',
         [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-WindowStyle',
-          'Hidden',
-          '-File',
-          installer.path,
-          '-Force',
-          '-Launch',
-          '-WaitForProcessId',
-          pid.toString(),
+          '/c',
+          'start',
+          'Vinabike ERP Updater',
+          '/min',
+          bootstrap.path,
         ],
         mode: ProcessStartMode.detached,
       );
@@ -166,6 +184,8 @@ class DesktopUpdateService extends ChangeNotifier {
         tag: release['tag_name']?.toString() ?? '',
         releaseName: release['name']?.toString() ?? 'Windows release',
         assetName: zipName,
+        installerDownloadUrl:
+            _findInstallerDownloadUrl(assets) ?? _fallbackInstallerDownloadUrl,
       );
     }
 
@@ -188,10 +208,11 @@ class DesktopUpdateService extends ChangeNotifier {
     }
   }
 
-  Future<void> _downloadInstaller(File installer) async {
-    final uri = Uri.parse(
-      'https://raw.githubusercontent.com/$_repo/main/scripts/install_vinabike_erp.ps1',
-    );
+  Future<void> _downloadInstaller(
+    File installer, {
+    required String downloadUrl,
+  }) async {
+    final uri = Uri.parse(downloadUrl);
     final response = await http.get(
       uri,
       headers: const {'User-Agent': 'VinabikeERP-Updater'},
@@ -204,5 +225,54 @@ class DesktopUpdateService extends ChangeNotifier {
     }
 
     await installer.writeAsString(response.body);
+  }
+
+  String? _findInstallerDownloadUrl(List<dynamic> assets) {
+    for (final assetValue in assets) {
+      final asset = assetValue as Map<String, dynamic>;
+      if (asset['name']?.toString() == 'install_vinabike_erp.ps1') {
+        return asset['browser_download_url']?.toString();
+      }
+    }
+
+    return null;
+  }
+
+  String get _fallbackInstallerDownloadUrl =>
+      'https://raw.githubusercontent.com/$_repo/main/scripts/install_vinabike_erp.ps1';
+
+  String _buildBootstrapScript({
+    required String installerPath,
+    required String logPath,
+    required int waitForProcessId,
+  }) {
+    final installer = _escapeBatchValue(installerPath);
+    final log = _escapeBatchValue(logPath);
+
+    return '''
+@echo off
+setlocal
+set "VINABIKE_INSTALLER=$installer"
+set "VINABIKE_LOG=$log"
+
+echo [%DATE% %TIME%] Bootstrap started.>>"%VINABIKE_LOG%"
+timeout /t 1 /nobreak >nul
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%VINABIKE_INSTALLER%" -Force -Launch -WaitForProcessId $waitForProcessId >>"%VINABIKE_LOG%" 2>&1
+set "VINABIKE_EXIT=%ERRORLEVEL%"
+echo [%DATE% %TIME%] PowerShell installer exited with %VINABIKE_EXIT%.>>"%VINABIKE_LOG%"
+exit /b %VINABIKE_EXIT%
+''';
+  }
+
+  String _escapeBatchValue(String value) =>
+      value.replaceAll('%', '%%').replaceAll('"', '');
+
+  Future<void> _appendBootstrapLog(File logFile, String message) async {
+    await logFile.parent.create(recursive: true);
+    final timestamp = DateTime.now().toIso8601String();
+    await logFile.writeAsString(
+      '[$timestamp] $message${Platform.lineTerminator}',
+      mode: FileMode.append,
+    );
   }
 }
