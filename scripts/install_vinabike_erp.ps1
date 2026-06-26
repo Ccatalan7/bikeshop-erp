@@ -9,17 +9,6 @@ param(
     [int]$WaitForProcessId = 0
 )
 
-$ErrorActionPreference = 'Stop'
-Set-StrictMode -Version Latest
-
-function Write-Info {
-    param([string]$Message)
-
-    if (-not $Quiet) {
-        Write-Host $Message
-    }
-}
-
 function Resolve-FullPath {
     param([string]$Path)
 
@@ -32,6 +21,31 @@ $script:DownloadDir = Join-Path $script:InstallRoot 'downloads'
 $script:StateFile = Join-Path $script:InstallRoot 'current-release.json'
 $script:InstallerPath = Join-Path $script:InstallRoot 'Install-VinabikeERP.ps1'
 $script:LauncherPath = Join-Path $script:InstallRoot 'Launch-VinabikeERP.ps1'
+$script:LogPath = Join-Path $script:InstallRoot 'updater.log'
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+function Write-Log {
+    param([string]$Message)
+
+    try {
+        $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff zzz'
+        Add-Content -LiteralPath $script:LogPath -Value "[$timestamp] $Message"
+    } catch {
+        # Logging must never block an install.
+    }
+}
+
+function Write-Info {
+    param([string]$Message)
+
+    Write-Log $Message
+
+    if (-not $Quiet) {
+        Write-Host $Message
+    }
+}
 
 function Assert-UnderInstallRoot {
     param([string]$Path)
@@ -68,6 +82,39 @@ function Save-Download {
 
     Assert-UnderInstallRoot $OutFile
     Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -Headers @{ 'User-Agent' = 'VinabikeERP-Updater' }
+}
+
+function Get-ManagedAppProcesses {
+    $expectedExe = Resolve-FullPath (Join-Path $script:AppDir 'vinabike_erp.exe')
+
+    Get-Process -Name 'vinabike_erp' -ErrorAction SilentlyContinue | Where-Object {
+        try {
+            $_.Path -and ((Resolve-FullPath $_.Path) -eq $expectedExe)
+        } catch {
+            $false
+        }
+    }
+}
+
+function Wait-ManagedAppProcessesToExit {
+    param([int]$TimeoutSeconds = 120)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        $running = @(Get-ManagedAppProcesses)
+        if ($running.Count -eq 0) {
+            return
+        }
+
+        Write-Info "Waiting for managed Vinabike ERP processes to exit: $($running.Id -join ', ')"
+        Start-Sleep -Seconds 1
+    }
+
+    $remaining = @(Get-ManagedAppProcesses)
+    if ($remaining.Count -gt 0) {
+        throw "Vinabike ERP is still running from the managed install: $($remaining.Id -join ', ')"
+    }
 }
 
 function Get-ExpectedHash {
@@ -239,7 +286,7 @@ function Get-LatestRelease {
 function Install-Release {
     param([pscustomobject]$Release)
 
-    $running = Get-Process -Name 'vinabike_erp' -ErrorAction SilentlyContinue
+    $running = @(Get-ManagedAppProcesses)
     if ($running) {
         if ($Quiet) {
             Write-Info 'Vinabike ERP is running; skipping update check.'
@@ -334,6 +381,7 @@ function Install-Release {
 New-Item -ItemType Directory -Force -Path $script:InstallRoot | Out-Null
 Copy-InstallerToInstallRoot
 Write-LauncherScript
+Write-Log "Starting updater. Force=$Force Launch=$Launch Quiet=$Quiet NoShortcuts=$NoShortcuts WaitForProcessId=$WaitForProcessId"
 
 if ($WaitForProcessId -gt 0) {
     Write-Info "Waiting for Vinabike ERP process $WaitForProcessId to exit..."
@@ -342,6 +390,8 @@ if ($WaitForProcessId -gt 0) {
     } catch {
         # If the process already exited, continue with the update.
     }
+
+    Wait-ManagedAppProcessesToExit
 }
 
 $latest = Get-LatestRelease

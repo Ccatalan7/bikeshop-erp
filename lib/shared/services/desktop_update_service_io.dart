@@ -73,10 +73,8 @@ class DesktopUpdateService extends ChangeNotifier {
       }
 
       final installer = File('$installRoot\\Install-VinabikeERP.ps1');
-      if (!await installer.exists()) {
-        await installer.parent.create(recursive: true);
-        await _downloadInstaller(installer);
-      }
+      await installer.parent.create(recursive: true);
+      await _downloadInstaller(installer);
 
       await Process.start(
         'powershell.exe',
