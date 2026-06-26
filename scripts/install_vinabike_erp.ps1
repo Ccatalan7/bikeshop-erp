@@ -117,6 +117,48 @@ function Wait-ManagedAppProcessesToExit {
     }
 }
 
+function Stop-UpdaterBootstrapShells {
+    try {
+        $shells = Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*Start-VinabikeERPUpdate.cmd*' }
+
+        foreach ($shell in @($shells)) {
+            Write-Info "Stopping stale updater shell $($shell.ProcessId)..."
+            Stop-Process -Id $shell.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Info "Could not inspect stale updater shells: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-WithRetry {
+    param(
+        [string]$Description,
+        [scriptblock]$Operation,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $attempt = 1
+    $lastError = $null
+
+    while ((Get-Date) -lt $deadline) {
+        try {
+            & $Operation
+            return
+        } catch {
+            $lastError = $_
+            Write-Info "${Description} failed on attempt ${attempt}: $($_.Exception.Message)"
+            Start-Sleep -Milliseconds 750
+            $attempt += 1
+        }
+    }
+
+    if ($lastError) {
+        throw $lastError
+    }
+}
+
 function Get-ExpectedHash {
     param([string]$HashFile)
 
@@ -283,6 +325,23 @@ function Get-LatestRelease {
     throw "No published GitHub release for $Repo contains a Windows zip and checksum."
 }
 
+function Copy-StagedAppInPlace {
+    param([string]$StagingDir)
+
+    Write-Info 'Applying release in place because the app folder is still locked.'
+    New-Item -ItemType Directory -Force -Path $script:AppDir | Out-Null
+
+    Get-ChildItem -LiteralPath $StagingDir -Force | ForEach-Object {
+        $source = $_.FullName
+        Invoke-WithRetry `
+            -Description "Copying $($_.Name)" `
+            -TimeoutSeconds 120 `
+            -Operation {
+                Copy-Item -LiteralPath $source -Destination $script:AppDir -Recurse -Force
+            }
+    }
+}
+
 function Install-Release {
     param([pscustomobject]$Release)
 
@@ -344,21 +403,46 @@ function Install-Release {
     }
 
     Write-Info 'Installing release...'
+    $installedInPlace = $false
     try {
-        Remove-SafeItem $previousDir
+        Invoke-WithRetry `
+            -Description 'Removing previous app backup' `
+            -Operation { Remove-SafeItem $previousDir }
 
         if (Test-Path -LiteralPath $script:AppDir) {
             Assert-UnderInstallRoot $script:AppDir
             Assert-UnderInstallRoot $previousDir
-            Move-Item -LiteralPath $script:AppDir -Destination $previousDir -Force
+
+            try {
+                Invoke-WithRetry `
+                    -Description 'Moving current app to backup' `
+                    -TimeoutSeconds 20 `
+                    -Operation {
+                        Move-Item -LiteralPath $script:AppDir -Destination $previousDir -Force
+                    }
+            } catch {
+                Write-Info "Could not move the current app folder: $($_.Exception.Message)"
+                Copy-StagedAppInPlace $stagingDir
+                $installedInPlace = $true
+            }
         }
 
-        Assert-UnderInstallRoot $stagingDir
-        Assert-UnderInstallRoot $script:AppDir
-        Move-Item -LiteralPath $stagingDir -Destination $script:AppDir -Force
+        if (-not $installedInPlace) {
+            Assert-UnderInstallRoot $stagingDir
+            Assert-UnderInstallRoot $script:AppDir
+            Invoke-WithRetry `
+                -Description 'Promoting staged app' `
+                -Operation {
+                    Move-Item -LiteralPath $stagingDir -Destination $script:AppDir -Force
+                }
+        }
     } catch {
         if (-not (Test-Path -LiteralPath $script:AppDir) -and (Test-Path -LiteralPath $previousDir)) {
-            Move-Item -LiteralPath $previousDir -Destination $script:AppDir -Force
+            Invoke-WithRetry `
+                -Description 'Restoring previous app after failed install' `
+                -Operation {
+                    Move-Item -LiteralPath $previousDir -Destination $script:AppDir -Force
+                }
         }
 
         throw
@@ -375,6 +459,7 @@ function Install-Release {
     $state | ConvertTo-Json | Set-Content -LiteralPath $script:StateFile -Encoding UTF8
 
     Remove-SafeItem $extractDir
+    Remove-SafeItem $stagingDir
     Remove-Item -LiteralPath $zipPath, $hashPath -Force -ErrorAction SilentlyContinue
 }
 
@@ -393,6 +478,8 @@ if ($WaitForProcessId -gt 0) {
 
     Wait-ManagedAppProcessesToExit
 }
+
+Stop-UpdaterBootstrapShells
 
 $latest = Get-LatestRelease
 $installedTag = Get-InstalledTag

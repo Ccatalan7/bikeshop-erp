@@ -91,6 +91,7 @@ class DesktopUpdateService extends ChangeNotifier {
       await bootstrap.writeAsString(
         _buildBootstrapScript(
           installerPath: installer.path,
+          appPath: '$installRoot\\app\\vinabike_erp.exe',
           logPath: bootstrapLog.path,
           waitForProcessId: pid,
         ),
@@ -103,13 +104,13 @@ class DesktopUpdateService extends ChangeNotifier {
       await Process.start(
         'cmd.exe',
         [
+          '/d',
           '/c',
-          'start',
-          'Vinabike ERP Updater',
-          '/min',
+          'call',
           bootstrap.path,
         ],
         mode: ProcessStartMode.detached,
+        workingDirectory: installRoot,
       );
 
       exit(0);
@@ -243,16 +244,19 @@ class DesktopUpdateService extends ChangeNotifier {
 
   String _buildBootstrapScript({
     required String installerPath,
+    required String appPath,
     required String logPath,
     required int waitForProcessId,
   }) {
     final installer = _escapeBatchValue(installerPath);
+    final app = _escapeBatchValue(appPath);
     final log = _escapeBatchValue(logPath);
 
     return '''
 @echo off
 setlocal
 set "VINABIKE_INSTALLER=$installer"
+set "VINABIKE_APP=$app"
 set "VINABIKE_LOG=$log"
 
 echo [%DATE% %TIME%] Bootstrap started.>>"%VINABIKE_LOG%"
@@ -260,6 +264,10 @@ timeout /t 1 /nobreak >nul
 powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%VINABIKE_INSTALLER%" -Force -Launch -WaitForProcessId $waitForProcessId >>"%VINABIKE_LOG%" 2>&1
 set "VINABIKE_EXIT=%ERRORLEVEL%"
 echo [%DATE% %TIME%] PowerShell installer exited with %VINABIKE_EXIT%.>>"%VINABIKE_LOG%"
+if not "%VINABIKE_EXIT%"=="0" (
+  echo [%DATE% %TIME%] Reopening existing app after failed update.>>"%VINABIKE_LOG%"
+  if exist "%VINABIKE_APP%" start "" "%VINABIKE_APP%"
+)
 exit /b %VINABIKE_EXIT%
 ''';
   }

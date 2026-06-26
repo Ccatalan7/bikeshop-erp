@@ -63,6 +63,8 @@ The updater is separate from Flutter because Windows cannot safely replace the r
 - `%LOCALAPPDATA%\VinabikeERP\updater-bootstrap.log`: the app-to-updater handoff log.
 - `%LOCALAPPDATA%\VinabikeERP\updater.log`: the PowerShell installer log.
 
+The updater also defends against Windows file-lock timing during restart: it retries the app-folder swap, closes stale updater `cmd` shells left by older builds, and falls back to applying the release in place if the folder itself cannot be renamed. If the install still fails, the bootstrap reopens the existing app instead of leaving the user stranded.
+
 ## Why This Instead Of Google Drive
 
 Google Drive is fine for a one-off zip, but it is weak for recurring app updates:
