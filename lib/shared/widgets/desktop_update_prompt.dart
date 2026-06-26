@@ -66,14 +66,14 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Actualizacion lista',
+                                'Actualizacion preparada',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Vinabike ERP se cerrara, instalara la nueva version y volvera a abrirse.',
+                                'La nueva version ya esta descargada. Reinicia para aplicarla.',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
@@ -117,9 +117,7 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
                                 )
                               : const Icon(Icons.restart_alt_rounded, size: 18),
                           label: Text(
-                            service.isUpdating
-                                ? 'Reiniciando'
-                                : 'Reiniciar y actualizar',
+                            service.isUpdating ? 'Reiniciando' : 'Reiniciar',
                           ),
                         ),
                       ],

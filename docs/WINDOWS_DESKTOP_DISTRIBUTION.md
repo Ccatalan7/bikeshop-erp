@@ -9,8 +9,9 @@ The setup is intentionally free and low-friction:
 - A SHA256 file is published next to the zip.
 - `scripts/install_vinabike_erp.ps1` downloads the latest release, verifies the SHA256 checksum, installs into the current user's profile, and creates shortcuts.
 - The Flutter app checks for a newer Windows release after staff users enter the workspace.
-- When an update exists, the app shows an in-app update prompt. Pressing `Reiniciar y actualizar` starts a separate updater bootstrap, closes the app, replaces the app folder, and relaunches Vinabike ERP.
-- The normal `Vinabike ERP` shortcut also runs a launcher script that checks for updates before opening the app. This keeps updates available even when users ignore the in-app prompt.
+- When an update exists, the app prepares it in the background while the user keeps working. The in-app prompt appears only after the update has already been downloaded and staged.
+- Pressing `Reiniciar` starts a separate updater bootstrap, closes the app, applies the prepared update, and relaunches Vinabike ERP.
+- The normal `Vinabike ERP` shortcut opens the app immediately. It does not block startup to check for updates.
 
 ## Coworker Install
 
@@ -21,7 +22,7 @@ Invoke-WebRequest https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/
 powershell -ExecutionPolicy Bypass -File $env:TEMP\install_vinabike_erp.ps1 -Launch
 ```
 
-After that, users open `Vinabike ERP` from the desktop or Start Menu. Future updates appear inside the Flutter app as an update prompt, and the normal shortcut also checks for updates before launch.
+After that, users open `Vinabike ERP` from the desktop or Start Menu. Future updates are prepared silently in the background and appear inside the Flutter app only when they are ready to apply.
 
 ## Publishing An Update
 
@@ -35,7 +36,7 @@ You can also publish manually:
 
 The workflow is pinned to the GitHub `windows-2022` runner so the Windows build uses the Visual Studio 2022 toolchain instead of whatever `windows-latest` points to that week. Release tags do not trigger this workflow; the workflow creates the release.
 
-The newest non-prerelease GitHub Release that contains `vinabike_erp_windows_*.zip`, its `.sha256` file, and `install_vinabike_erp.ps1` becomes the update source. The next time users open the app, the Flutter workspace shows an update prompt. The launcher shortcut also checks for updates before starting the app.
+The newest non-prerelease GitHub Release that contains `vinabike_erp_windows_*.zip`, its `.sha256` file, and `install_vinabike_erp.ps1` becomes the update source. The next time users open the app, the Flutter workspace prepares the update silently, then shows an update prompt only when the update is ready.
 
 ## Local Test Build
 
@@ -54,9 +55,9 @@ Do not distribute only `vinabike_erp.exe`; the app needs the DLLs and `data` fol
 For coworkers, the normal flow is:
 
 1. Open Vinabike ERP.
-2. If an update is available, press `Reiniciar y actualizar`.
-3. The app closes.
-4. The updater installs the new build and reopens Vinabike ERP.
+2. If an update exists, the app downloads and stages it in the background.
+3. When the prompt appears, press `Reiniciar`.
+4. The app closes, applies the prepared update, and reopens Vinabike ERP.
 
 The updater is separate from Flutter because Windows cannot safely replace the running `vinabike_erp.exe` while the app is open. If the handoff fails, check:
 

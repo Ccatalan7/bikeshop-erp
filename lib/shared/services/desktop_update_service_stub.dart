@@ -4,17 +4,20 @@ class DesktopUpdateInfo {
   final String tag;
   final String releaseName;
   final String assetName;
+  final String installerDownloadUrl;
 
   const DesktopUpdateInfo({
     required this.tag,
     required this.releaseName,
     required this.assetName,
+    required this.installerDownloadUrl,
   });
 }
 
 class DesktopUpdateService extends ChangeNotifier {
   bool get isSupported => false;
   bool get isChecking => false;
+  bool get isPreparing => false;
   bool get isUpdating => false;
   DesktopUpdateInfo? get availableUpdate => null;
   String? get errorMessage => null;

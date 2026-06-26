@@ -25,15 +25,19 @@ class DesktopUpdateService extends ChangeNotifier {
   bool _hasChecked = false;
   bool _dismissed = false;
   bool _isChecking = false;
+  bool _isPreparing = false;
   bool _isUpdating = false;
+  bool _isUpdateReady = false;
+  String? _preparingTag;
   DesktopUpdateInfo? _availableUpdate;
   String? _errorMessage;
 
   bool get isSupported => !kDebugMode && Platform.isWindows;
   bool get isChecking => _isChecking;
+  bool get isPreparing => _isPreparing;
   bool get isUpdating => _isUpdating;
   DesktopUpdateInfo? get availableUpdate =>
-      _dismissed ? null : _availableUpdate;
+      !_dismissed && _isUpdateReady ? _availableUpdate : null;
   String? get errorMessage => _errorMessage;
 
   Future<void> checkForUpdate({bool force = false}) async {
@@ -50,7 +54,19 @@ class DesktopUpdateService extends ChangeNotifier {
           ? _currentBuildTag
           : await _readInstalledReleaseTag();
 
-      _availableUpdate = currentTag != latest.tag ? latest : null;
+      if (currentTag != latest.tag) {
+        if (_availableUpdate?.tag != latest.tag) {
+          _dismissed = false;
+        }
+        _availableUpdate = latest;
+        _isUpdateReady = await _readPreparedReleaseTag() == latest.tag;
+        if (!_isUpdateReady) {
+          _prepareUpdateInBackground(latest);
+        }
+      } else {
+        _availableUpdate = null;
+        _isUpdateReady = false;
+      }
       _hasChecked = true;
     } catch (error, stackTrace) {
       _errorMessage = 'No se pudo revisar actualizaciones.';
@@ -92,6 +108,7 @@ class DesktopUpdateService extends ChangeNotifier {
         _buildBootstrapScript(
           installerPath: installer.path,
           appPath: '$installRoot\\app\\vinabike_erp.exe',
+          applyPrepared: true,
           logPath: bootstrapLog.path,
           waitForProcessId: pid,
         ),
@@ -209,6 +226,22 @@ class DesktopUpdateService extends ChangeNotifier {
     }
   }
 
+  Future<String?> _readPreparedReleaseTag() async {
+    final installRoot = _installRoot;
+    if (installRoot == null) return null;
+
+    final stateFile = File('$installRoot\\prepared-release.json');
+    if (!await stateFile.exists()) return null;
+
+    try {
+      final state =
+          jsonDecode(await stateFile.readAsString()) as Map<String, dynamic>;
+      return state['tag_name']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _downloadInstaller(
     File installer, {
     required String downloadUrl,
@@ -228,6 +261,67 @@ class DesktopUpdateService extends ChangeNotifier {
     await installer.writeAsString(response.body);
   }
 
+  void _prepareUpdateInBackground(DesktopUpdateInfo update) {
+    if (_isPreparing || _preparingTag == update.tag) return;
+
+    _isPreparing = true;
+    _preparingTag = update.tag;
+    notifyListeners();
+
+    Future<void>(() async {
+      try {
+        await _prepareUpdate(update);
+        if (_availableUpdate?.tag == update.tag) {
+          _isUpdateReady = true;
+          _errorMessage = null;
+        }
+      } catch (error, stackTrace) {
+        if (_availableUpdate?.tag == update.tag) {
+          _errorMessage = 'No se pudo preparar la actualización.';
+        }
+        debugPrint('Windows update prepare failed: $error\n$stackTrace');
+      } finally {
+        if (_preparingTag == update.tag) {
+          _isPreparing = false;
+        }
+        notifyListeners();
+      }
+    });
+  }
+
+  Future<void> _prepareUpdate(DesktopUpdateInfo update) async {
+    final installRoot = _installRoot;
+    if (installRoot == null) {
+      throw StateError('LOCALAPPDATA is not available.');
+    }
+
+    final installer = File('$installRoot\\Install-VinabikeERP.ps1');
+    await installer.parent.create(recursive: true);
+    await _downloadInstaller(installer,
+        downloadUrl: update.installerDownloadUrl);
+
+    final process = await Process.start(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-File',
+        installer.path,
+        '-Prepare',
+        '-Quiet',
+      ],
+      workingDirectory: installRoot,
+    );
+
+    final exitCode = await process.exitCode;
+    if (exitCode != 0) {
+      throw StateError('Installer prepare failed with exit code $exitCode.');
+    }
+  }
+
   String? _findInstallerDownloadUrl(List<dynamic> assets) {
     for (final assetValue in assets) {
       final asset = assetValue as Map<String, dynamic>;
@@ -245,11 +339,13 @@ class DesktopUpdateService extends ChangeNotifier {
   String _buildBootstrapScript({
     required String installerPath,
     required String appPath,
+    required bool applyPrepared,
     required String logPath,
     required int waitForProcessId,
   }) {
     final installer = _escapeBatchValue(installerPath);
     final app = _escapeBatchValue(appPath);
+    final updateMode = applyPrepared ? '-ApplyPrepared' : '-Force';
     final log = _escapeBatchValue(logPath);
 
     return '''
@@ -261,7 +357,7 @@ set "VINABIKE_LOG=$log"
 
 echo [%DATE% %TIME%] Bootstrap started.>>"%VINABIKE_LOG%"
 timeout /t 1 /nobreak >nul
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%VINABIKE_INSTALLER%" -Force -Launch -WaitForProcessId $waitForProcessId >>"%VINABIKE_LOG%" 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%VINABIKE_INSTALLER%" $updateMode -Launch -WaitForProcessId $waitForProcessId >>"%VINABIKE_LOG%" 2>&1
 set "VINABIKE_EXIT=%ERRORLEVEL%"
 echo [%DATE% %TIME%] PowerShell installer exited with %VINABIKE_EXIT%.>>"%VINABIKE_LOG%"
 if not "%VINABIKE_EXIT%"=="0" (

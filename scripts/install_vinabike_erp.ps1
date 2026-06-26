@@ -4,6 +4,8 @@ param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'VinabikeERP'),
     [switch]$Force,
     [switch]$Launch,
+    [switch]$Prepare,
+    [switch]$ApplyPrepared,
     [switch]$Quiet,
     [switch]$NoShortcuts,
     [int]$WaitForProcessId = 0
@@ -19,6 +21,8 @@ $script:InstallRoot = Resolve-FullPath $InstallRoot
 $script:AppDir = Join-Path $script:InstallRoot 'app'
 $script:DownloadDir = Join-Path $script:InstallRoot 'downloads'
 $script:StateFile = Join-Path $script:InstallRoot 'current-release.json'
+$script:PreparedDir = Join-Path $script:InstallRoot 'prepared'
+$script:PreparedStateFile = Join-Path $script:InstallRoot 'prepared-release.json'
 $script:InstallerPath = Join-Path $script:InstallRoot 'Install-VinabikeERP.ps1'
 $script:LauncherPath = Join-Path $script:InstallRoot 'Launch-VinabikeERP.ps1'
 $script:LogPath = Join-Path $script:InstallRoot 'updater.log'
@@ -208,14 +212,6 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $installer = Join-Path $root 'Install-VinabikeERP.ps1'
 $app = Join-Path $root 'app\vinabike_erp.exe'
 
-if (Test-Path -LiteralPath $installer) {
-    try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Quiet
-    } catch {
-        # Keep opening the last installed app if the update check fails.
-    }
-}
-
 if (-not (Test-Path -LiteralPath $app) -and (Test-Path -LiteralPath $installer)) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Force
 }
@@ -342,18 +338,23 @@ function Copy-StagedAppInPlace {
     }
 }
 
-function Install-Release {
-    param([pscustomobject]$Release)
+function Test-StagedApp {
+    param([string]$StagingDir)
 
-    $running = @(Get-ManagedAppProcesses)
-    if ($running) {
-        if ($Quiet) {
-            Write-Info 'Vinabike ERP is running; skipping update check.'
-            return
-        }
-
-        throw 'Close Vinabike ERP before updating it, then run this installer again.'
+    if (-not (Test-Path -LiteralPath (Join-Path $StagingDir 'vinabike_erp.exe'))) {
+        throw 'Staged app is missing vinabike_erp.exe.'
     }
+
+    if (-not (Test-Path -LiteralPath (Join-Path $StagingDir 'data'))) {
+        throw 'Staged app is missing the Flutter data folder.'
+    }
+}
+
+function New-StagedRelease {
+    param(
+        [pscustomobject]$Release,
+        [string]$StagingDir
+    )
 
     New-Item -ItemType Directory -Force -Path $script:DownloadDir | Out-Null
 
@@ -373,13 +374,11 @@ function Install-Release {
     }
 
     $extractDir = Join-Path $script:DownloadDir ("extract-" + [guid]::NewGuid().ToString('N'))
-    $stagingDir = Join-Path $script:InstallRoot 'app.new'
-    $previousDir = Join-Path $script:InstallRoot 'app.previous'
 
     Remove-SafeItem $extractDir
-    Remove-SafeItem $stagingDir
+    Remove-SafeItem $StagingDir
     New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $StagingDir | Out-Null
 
     Write-Info 'Extracting release...'
     Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
@@ -392,15 +391,79 @@ function Install-Release {
     }
 
     $releaseRoot = $exe.Directory.FullName
-    Get-ChildItem -LiteralPath $releaseRoot | Copy-Item -Destination $stagingDir -Recurse -Force
+    Get-ChildItem -LiteralPath $releaseRoot | Copy-Item -Destination $StagingDir -Recurse -Force
 
-    if (-not (Test-Path -LiteralPath (Join-Path $stagingDir 'vinabike_erp.exe'))) {
-        throw 'Staged app is missing vinabike_erp.exe.'
+    Test-StagedApp $StagingDir
+
+    Remove-SafeItem $extractDir
+    Remove-Item -LiteralPath $zipPath, $hashPath -Force -ErrorAction SilentlyContinue
+}
+
+function Get-PreparedReleaseState {
+    if (-not (Test-Path -LiteralPath $script:PreparedStateFile)) {
+        return $null
     }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $stagingDir 'data'))) {
-        throw 'Staged app is missing the Flutter data folder.'
+    try {
+        return Get-Content -LiteralPath $script:PreparedStateFile -Raw | ConvertFrom-Json
+    } catch {
+        return $null
     }
+}
+
+function Prepare-Release {
+    param([pscustomobject]$Release)
+
+    $preparedAppDir = Join-Path $script:PreparedDir 'app'
+    $state = Get-PreparedReleaseState
+
+    if ($state -and $state.tag_name -eq $Release.Tag) {
+        try {
+            Test-StagedApp $preparedAppDir
+            Write-Info "Vinabike ERP release $($Release.Tag) is already prepared."
+            return
+        } catch {
+            Write-Info "Prepared update is invalid and will be rebuilt: $($_.Exception.Message)"
+        }
+    }
+
+    Remove-SafeItem $script:PreparedDir
+    New-Item -ItemType Directory -Force -Path $script:PreparedDir | Out-Null
+
+    Write-Info "Preparing Vinabike ERP release $($Release.Tag)..."
+    New-StagedRelease -Release $Release -StagingDir $preparedAppDir
+
+    $preparedState = [ordered]@{
+        tag_name = $Release.Tag
+        release_name = $Release.Name
+        asset_name = $Release.ZipAsset.name
+        app_dir = $preparedAppDir
+        prepared_at = (Get-Date).ToString('o')
+        install_root = $script:InstallRoot
+    }
+
+    $preparedState | ConvertTo-Json | Set-Content -LiteralPath $script:PreparedStateFile -Encoding UTF8
+    Write-Info "Prepared Vinabike ERP release $($Release.Tag)."
+}
+
+function Install-StagedRelease {
+    param(
+        [pscustomobject]$Release,
+        [string]$StagingDir
+    )
+
+    $running = @(Get-ManagedAppProcesses)
+    if ($running) {
+        if ($Quiet) {
+            Write-Info 'Vinabike ERP is running; skipping update check.'
+            return
+        }
+
+        throw 'Close Vinabike ERP before updating it, then run this installer again.'
+    }
+
+    Test-StagedApp $StagingDir
+    $previousDir = Join-Path $script:InstallRoot 'app.previous'
 
     Write-Info 'Installing release...'
     $installedInPlace = $false
@@ -422,18 +485,18 @@ function Install-Release {
                     }
             } catch {
                 Write-Info "Could not move the current app folder: $($_.Exception.Message)"
-                Copy-StagedAppInPlace $stagingDir
+                Copy-StagedAppInPlace $StagingDir
                 $installedInPlace = $true
             }
         }
 
         if (-not $installedInPlace) {
-            Assert-UnderInstallRoot $stagingDir
+            Assert-UnderInstallRoot $StagingDir
             Assert-UnderInstallRoot $script:AppDir
             Invoke-WithRetry `
                 -Description 'Promoting staged app' `
                 -Operation {
-                    Move-Item -LiteralPath $stagingDir -Destination $script:AppDir -Force
+                    Move-Item -LiteralPath $StagingDir -Destination $script:AppDir -Force
                 }
         }
     } catch {
@@ -457,16 +520,40 @@ function Install-Release {
     }
 
     $state | ConvertTo-Json | Set-Content -LiteralPath $script:StateFile -Encoding UTF8
+}
 
-    Remove-SafeItem $extractDir
+function Install-PreparedRelease {
+    param([pscustomobject]$Release)
+
+    $state = Get-PreparedReleaseState
+    if (-not $state -or $state.tag_name -ne $Release.Tag -or -not $state.app_dir) {
+        return $false
+    }
+
+    $preparedAppDir = Resolve-FullPath $state.app_dir
+    Assert-UnderInstallRoot $preparedAppDir
+
+    Write-Info "Applying prepared Vinabike ERP release $($Release.Tag)..."
+    Install-StagedRelease -Release $Release -StagingDir $preparedAppDir
+    Remove-SafeItem $script:PreparedDir
+    Remove-Item -LiteralPath $script:PreparedStateFile -Force -ErrorAction SilentlyContinue
+    return $true
+}
+
+function Install-Release {
+    param([pscustomobject]$Release)
+
+    $stagingDir = Join-Path $script:InstallRoot 'app.new'
+
+    New-StagedRelease -Release $Release -StagingDir $stagingDir
+    Install-StagedRelease -Release $Release -StagingDir $stagingDir
     Remove-SafeItem $stagingDir
-    Remove-Item -LiteralPath $zipPath, $hashPath -Force -ErrorAction SilentlyContinue
 }
 
 New-Item -ItemType Directory -Force -Path $script:InstallRoot | Out-Null
 Copy-InstallerToInstallRoot
 Write-LauncherScript
-Write-Log "Starting updater. Force=$Force Launch=$Launch Quiet=$Quiet NoShortcuts=$NoShortcuts WaitForProcessId=$WaitForProcessId"
+Write-Log "Starting updater. Force=$Force Launch=$Launch Prepare=$Prepare ApplyPrepared=$ApplyPrepared Quiet=$Quiet NoShortcuts=$NoShortcuts WaitForProcessId=$WaitForProcessId"
 
 if ($WaitForProcessId -gt 0) {
     Write-Info "Waiting for Vinabike ERP process $WaitForProcessId to exit..."
@@ -485,11 +572,31 @@ $latest = Get-LatestRelease
 $installedTag = Get-InstalledTag
 $exePath = Join-Path $script:AppDir 'vinabike_erp.exe'
 
+if ($Prepare) {
+    if ($installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
+        Write-Info "Vinabike ERP is already current: $installedTag"
+    } else {
+        Prepare-Release $latest
+    }
+
+    Ensure-Shortcuts
+    Write-Info "Done. Prepared update at $script:PreparedDir"
+    return
+}
+
 if (-not $Force -and $installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
     Write-Info "Vinabike ERP is already current: $installedTag"
 } else {
-    Write-Info "Installing Vinabike ERP release $($latest.Tag)..."
-    Install-Release $latest
+    if ($ApplyPrepared) {
+        $appliedPrepared = Install-PreparedRelease $latest
+        if (-not $appliedPrepared) {
+            Write-Info "No prepared update found for $($latest.Tag); falling back to full install."
+            Install-Release $latest
+        }
+    } else {
+        Write-Info "Installing Vinabike ERP release $($latest.Tag)..."
+        Install-Release $latest
+    }
 }
 
 Ensure-Shortcuts
