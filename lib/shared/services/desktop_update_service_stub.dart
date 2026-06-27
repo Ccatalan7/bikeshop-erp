@@ -19,6 +19,7 @@ class DesktopUpdateService extends ChangeNotifier {
   bool get isChecking => false;
   bool get isPreparing => false;
   bool get isUpdating => false;
+  bool get isUpdateReady => false;
   DesktopUpdateInfo? get availableUpdate => null;
   String? get errorMessage => null;
 

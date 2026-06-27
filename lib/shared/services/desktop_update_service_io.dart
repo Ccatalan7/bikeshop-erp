@@ -36,14 +36,18 @@ class DesktopUpdateService extends ChangeNotifier {
   bool get isChecking => _isChecking;
   bool get isPreparing => _isPreparing;
   bool get isUpdating => _isUpdating;
+  bool get isUpdateReady => _isUpdateReady;
   DesktopUpdateInfo? get availableUpdate =>
-      !_dismissed && _isUpdateReady ? _availableUpdate : null;
+      !_dismissed ? _availableUpdate : null;
   String? get errorMessage => _errorMessage;
 
   Future<void> checkForUpdate({bool force = false}) async {
     if (!isSupported) return;
     if (_isChecking || (_hasChecked && !force)) return;
 
+    if (force) {
+      _dismissed = false;
+    }
     _isChecking = true;
     _errorMessage = null;
     notifyListeners();
@@ -286,6 +290,7 @@ class DesktopUpdateService extends ChangeNotifier {
       } finally {
         if (_preparingTag == update.tag) {
           _isPreparing = false;
+          _preparingTag = null;
         }
         notifyListeners();
       }
