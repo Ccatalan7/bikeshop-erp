@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,10 @@ class DesktopUpdatePrompt extends StatefulWidget {
 }
 
 class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
+  static const _pollInterval = Duration(minutes: 1);
+
+  Timer? _pollTimer;
+
   @override
   void initState() {
     super.initState();
@@ -19,6 +25,24 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
       if (!mounted) return;
       context.read<DesktopUpdateService>().checkForUpdate();
     });
+
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
+      if (!mounted) return;
+
+      final service = context.read<DesktopUpdateService>();
+      if (!service.isSupported || service.isUpdating) return;
+
+      service.checkForUpdate(
+        force: true,
+        revealDismissed: false,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   @override

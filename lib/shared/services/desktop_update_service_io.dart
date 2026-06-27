@@ -41,11 +41,14 @@ class DesktopUpdateService extends ChangeNotifier {
       !_dismissed ? _availableUpdate : null;
   String? get errorMessage => _errorMessage;
 
-  Future<void> checkForUpdate({bool force = false}) async {
+  Future<void> checkForUpdate({
+    bool force = false,
+    bool revealDismissed = true,
+  }) async {
     if (!isSupported) return;
     if (_isChecking || (_hasChecked && !force)) return;
 
-    if (force) {
+    if (force && revealDismissed) {
       _dismissed = false;
     }
     _isChecking = true;

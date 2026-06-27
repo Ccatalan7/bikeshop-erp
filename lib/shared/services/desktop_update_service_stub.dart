@@ -23,7 +23,10 @@ class DesktopUpdateService extends ChangeNotifier {
   DesktopUpdateInfo? get availableUpdate => null;
   String? get errorMessage => null;
 
-  Future<void> checkForUpdate({bool force = false}) async {}
+  Future<void> checkForUpdate({
+    bool force = false,
+    bool revealDismissed = true,
+  }) async {}
 
   Future<void> startUpdate() async {}
 
