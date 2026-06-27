@@ -31,13 +31,14 @@ if ([string]::IsNullOrWhiteSpace($branch)) {
     throw 'Could not determine the current Git branch.'
 }
 
-$headSha = (git rev-parse HEAD).Trim()
+Write-Step 'Staging all Source Control changes'
+git add -A
+
 $stagedFiles = @(git diff --cached --name-only)
-$unstagedStatus = @(git status --short)
 
 if ($stagedFiles.Count -eq 0) {
-    Write-Host 'No staged changes found.'
-    Write-Host 'Stage the files you want to release in Source Control, then run this task again.'
+    Write-Host 'No Source Control changes found.'
+    Write-Host 'Make changes first, then run this task again.'
     Write-Host ''
     Write-Host 'Current status:'
     git status --short
@@ -53,17 +54,9 @@ if ([string]::IsNullOrWhiteSpace($Message)) {
 }
 
 Write-Step "Current branch: $branch"
-Write-Host "Staged files to commit:"
+Write-Host "Files to commit and publish:"
 foreach ($file in $stagedFiles) {
     Write-Host "  $file"
-}
-
-if ($unstagedStatus.Count -gt 0) {
-    Write-Host ''
-    Write-Host 'Full working tree status:'
-    git status --short
-    Write-Host ''
-    Write-Host 'Only staged files will be committed. Unstaged files will be left alone.'
 }
 
 $confirmation = Read-Host "Type YES to commit, push, and publish a Windows release from branch '$branch'"
