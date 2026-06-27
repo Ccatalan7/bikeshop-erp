@@ -37,7 +37,7 @@
 			"group": "build"
 		},
 		{
-			"label": "🚀 Publish Windows Update (staged changes)",
+			"label": "🚀 Publish Windows Update (all changes)",
 			"type": "shell",
 			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish_windows_update.ps1",
 			"problemMatcher": [],

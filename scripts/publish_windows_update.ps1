@@ -1,6 +1,7 @@
 param(
     [string]$Message = "",
-    [switch]$NoWait
+    [switch]$NoWait,
+    [switch]$RequireConfirmation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,23 +47,23 @@ if ($stagedFiles.Count -eq 0) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Message)) {
-    $Message = Read-Host 'Commit message'
-}
-
-if ([string]::IsNullOrWhiteSpace($Message)) {
-    throw 'Commit message cannot be empty.'
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
+    $Message = "chore: publish Windows update $timestamp"
 }
 
 Write-Step "Current branch: $branch"
+Write-Host "Commit message: $Message"
 Write-Host "Files to commit and publish:"
 foreach ($file in $stagedFiles) {
     Write-Host "  $file"
 }
 
-$confirmation = Read-Host "Type YES to commit, push, and publish a Windows release from branch '$branch'"
-if ($confirmation -ne 'YES') {
-    Write-Host 'Cancelled.'
-    exit 1
+if ($RequireConfirmation) {
+    $confirmation = Read-Host "Type YES to commit, push, and publish a Windows release from branch '$branch'"
+    if ($confirmation -ne 'YES') {
+        Write-Host 'Cancelled.'
+        exit 1
+    }
 }
 
 Write-Step 'Committing staged changes'
