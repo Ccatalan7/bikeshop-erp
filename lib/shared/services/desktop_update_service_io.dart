@@ -50,11 +50,11 @@ class DesktopUpdateService extends ChangeNotifier {
 
     try {
       final latest = await _fetchLatestWindowsRelease();
-      final currentTag = _currentBuildTag.isNotEmpty
-          ? _currentBuildTag
-          : await _readInstalledReleaseTag();
+      final installedTag = await _readInstalledReleaseTag();
+      final isCurrentRelease =
+          installedTag == latest.tag || _currentBuildTag == latest.tag;
 
-      if (currentTag != latest.tag) {
+      if (!isCurrentRelease) {
         if (_availableUpdate?.tag != latest.tag) {
           _dismissed = false;
         }
