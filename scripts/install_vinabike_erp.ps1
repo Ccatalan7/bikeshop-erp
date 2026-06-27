@@ -26,6 +26,8 @@ $script:PreparedStateFile = Join-Path $script:InstallRoot 'prepared-release.json
 $script:InstallerPath = Join-Path $script:InstallRoot 'Install-VinabikeERP.ps1'
 $script:LauncherPath = Join-Path $script:InstallRoot 'Launch-VinabikeERP.ps1'
 $script:LogPath = Join-Path $script:InstallRoot 'updater.log'
+$script:UpdateMutex = $null
+$script:HasUpdateMutex = $false
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -48,6 +50,38 @@ function Write-Info {
 
     if (-not $Quiet) {
         Write-Host $Message
+    }
+}
+
+function Enter-UpdateMutex {
+    param([int]$TimeoutSeconds = 300)
+
+    $script:UpdateMutex = [System.Threading.Mutex]::new($false, 'Local\VinabikeERPUpdateMutex')
+
+    try {
+        if (-not $script:UpdateMutex.WaitOne(0)) {
+            Write-Info 'Another Vinabike ERP update process is running; waiting for it to finish...'
+            if (-not $script:UpdateMutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds))) {
+                throw "Timed out waiting for another Vinabike ERP update process after $TimeoutSeconds seconds."
+            }
+        }
+
+        $script:HasUpdateMutex = $true
+    } catch [System.Threading.AbandonedMutexException] {
+        $script:HasUpdateMutex = $true
+        Write-Info 'Recovered an abandoned Vinabike ERP update lock.'
+    }
+}
+
+function Exit-UpdateMutex {
+    if ($script:HasUpdateMutex -and $null -ne $script:UpdateMutex) {
+        $script:UpdateMutex.ReleaseMutex() | Out-Null
+        $script:HasUpdateMutex = $false
+    }
+
+    if ($null -ne $script:UpdateMutex) {
+        $script:UpdateMutex.Dispose()
+        $script:UpdateMutex = $null
     }
 }
 
@@ -395,7 +429,11 @@ function New-StagedRelease {
 
     Test-StagedApp $StagingDir
 
-    Remove-SafeItem $extractDir
+    try {
+        Remove-SafeItem $extractDir
+    } catch {
+        Write-Info "Could not remove temporary extract folder $extractDir`: $($_.Exception.Message)"
+    }
     Remove-Item -LiteralPath $zipPath, $hashPath -Force -ErrorAction SilentlyContinue
 }
 
@@ -555,54 +593,59 @@ Copy-InstallerToInstallRoot
 Write-LauncherScript
 Write-Log "Starting updater. Force=$Force Launch=$Launch Prepare=$Prepare ApplyPrepared=$ApplyPrepared Quiet=$Quiet NoShortcuts=$NoShortcuts WaitForProcessId=$WaitForProcessId"
 
-if ($WaitForProcessId -gt 0) {
-    Write-Info "Waiting for Vinabike ERP process $WaitForProcessId to exit..."
-    try {
-        Wait-Process -Id $WaitForProcessId -Timeout 60 -ErrorAction SilentlyContinue
-    } catch {
-        # If the process already exited, continue with the update.
+Enter-UpdateMutex
+try {
+    if ($WaitForProcessId -gt 0) {
+        Write-Info "Waiting for Vinabike ERP process $WaitForProcessId to exit..."
+        try {
+            Wait-Process -Id $WaitForProcessId -Timeout 60 -ErrorAction SilentlyContinue
+        } catch {
+            # If the process already exited, continue with the update.
+        }
+
+        Wait-ManagedAppProcessesToExit
     }
 
-    Wait-ManagedAppProcessesToExit
-}
+    Stop-UpdaterBootstrapShells
 
-Stop-UpdaterBootstrapShells
+    $latest = Get-LatestRelease
+    $installedTag = Get-InstalledTag
+    $exePath = Join-Path $script:AppDir 'vinabike_erp.exe'
 
-$latest = Get-LatestRelease
-$installedTag = Get-InstalledTag
-$exePath = Join-Path $script:AppDir 'vinabike_erp.exe'
+    if ($Prepare) {
+        if ($installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
+            Write-Info "Vinabike ERP is already current: $installedTag"
+        } else {
+            Prepare-Release $latest
+        }
 
-if ($Prepare) {
-    if ($installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
+        Ensure-Shortcuts
+        Write-Info "Done. Prepared update at $script:PreparedDir"
+        return
+    }
+
+    if (-not $Force -and $installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
         Write-Info "Vinabike ERP is already current: $installedTag"
     } else {
-        Prepare-Release $latest
+        if ($ApplyPrepared) {
+            $appliedPrepared = Install-PreparedRelease $latest
+            if (-not $appliedPrepared) {
+                Write-Info "No prepared update found for $($latest.Tag); falling back to full install."
+                Install-Release $latest
+            }
+        } else {
+            Write-Info "Installing Vinabike ERP release $($latest.Tag)..."
+            Install-Release $latest
+        }
     }
 
     Ensure-Shortcuts
-    Write-Info "Done. Prepared update at $script:PreparedDir"
-    return
-}
 
-if (-not $Force -and $installedTag -eq $latest.Tag -and (Test-Path -LiteralPath $exePath)) {
-    Write-Info "Vinabike ERP is already current: $installedTag"
-} else {
-    if ($ApplyPrepared) {
-        $appliedPrepared = Install-PreparedRelease $latest
-        if (-not $appliedPrepared) {
-            Write-Info "No prepared update found for $($latest.Tag); falling back to full install."
-            Install-Release $latest
-        }
-    } else {
-        Write-Info "Installing Vinabike ERP release $($latest.Tag)..."
-        Install-Release $latest
+    if ($Launch) {
+        Start-Process -FilePath (Join-Path $script:AppDir 'vinabike_erp.exe') -WorkingDirectory $script:AppDir
     }
+
+    Write-Info "Done. Installed at $script:AppDir"
+} finally {
+    Exit-UpdateMutex
 }
-
-Ensure-Shortcuts
-
-if ($Launch) {
-    Start-Process -FilePath (Join-Path $script:AppDir 'vinabike_erp.exe') -WorkingDirectory $script:AppDir
-}
-
-Write-Info "Done. Installed at $script:AppDir"
