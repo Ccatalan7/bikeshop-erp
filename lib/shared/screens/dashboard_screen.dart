@@ -31,8 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFFC62828),
-                      Color(0xFFD32F2F),
+                      Color(0xFFF9A825),
+                      Color(0xFFFBC02D),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onPrimary,
+                            color: Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -57,10 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           'Sistema completo de gestión para tu tienda de bicicletas',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimary
-                                .withValues(alpha: 0.8),
+                            color: Colors.black87.withValues(alpha: 0.75),
                           ),
                         ),
                       ],
@@ -69,8 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       top: -8,
                       right: -8,
                       child: IconButton(
-                        icon: Icon(Icons.close,
-                            color: Theme.of(context).colorScheme.onPrimary),
+                        icon: const Icon(Icons.close, color: Colors.black87),
                         tooltip: 'Cerrar',
                         onPressed: () {
                           setState(() {
