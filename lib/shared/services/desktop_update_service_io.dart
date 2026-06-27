@@ -92,7 +92,8 @@ class DesktopUpdateService extends ChangeNotifier {
 
       final update = _availableUpdate ?? await _fetchLatestWindowsRelease();
       final installer = File('$installRoot\\Install-VinabikeERP.ps1');
-      final bootstrap = File('$installRoot\\Start-VinabikeERPUpdate.cmd');
+      final applyScript = File('$installRoot\\Apply-VinabikeERPUpdate.ps1');
+      final launcherScript = File('$installRoot\\Start-VinabikeERPUpdate.vbs');
       final bootstrapLog = File('$installRoot\\updater-bootstrap.log');
 
       await installer.parent.create(recursive: true);
@@ -104,8 +105,8 @@ class DesktopUpdateService extends ChangeNotifier {
         installer,
         downloadUrl: update.installerDownloadUrl,
       );
-      await bootstrap.writeAsString(
-        _buildBootstrapScript(
+      await applyScript.writeAsString(
+        _buildApplyScript(
           installerPath: installer.path,
           appPath: '$installRoot\\app\\vinabike_erp.exe',
           applyPrepared: true,
@@ -113,18 +114,20 @@ class DesktopUpdateService extends ChangeNotifier {
           waitForProcessId: pid,
         ),
       );
+      await launcherScript.writeAsString(
+        _buildHiddenLauncherScript(applyScript.path),
+      );
       await _appendBootstrapLog(
         bootstrapLog,
-        'Starting update bootstrap script at ${bootstrap.path}.',
+        'Starting hidden update launcher at ${launcherScript.path}.',
       );
 
       await Process.start(
-        'cmd.exe',
+        'wscript.exe',
         [
-          '/d',
-          '/c',
-          'call',
-          bootstrap.path,
+          '//B',
+          '//Nologo',
+          launcherScript.path,
         ],
         mode: ProcessStartMode.detached,
         workingDirectory: installRoot,
@@ -336,40 +339,68 @@ class DesktopUpdateService extends ChangeNotifier {
   String get _fallbackInstallerDownloadUrl =>
       'https://raw.githubusercontent.com/$_repo/main/scripts/install_vinabike_erp.ps1';
 
-  String _buildBootstrapScript({
+  String _buildApplyScript({
     required String installerPath,
     required String appPath,
     required bool applyPrepared,
     required String logPath,
     required int waitForProcessId,
   }) {
-    final installer = _escapeBatchValue(installerPath);
-    final app = _escapeBatchValue(appPath);
+    final installer = _escapePowerShellSingleQuoted(installerPath);
+    final app = _escapePowerShellSingleQuoted(appPath);
     final updateMode = applyPrepared ? '-ApplyPrepared' : '-Force';
-    final log = _escapeBatchValue(logPath);
+    final log = _escapePowerShellSingleQuoted(logPath);
 
     return '''
-@echo off
-setlocal
-set "VINABIKE_INSTALLER=$installer"
-set "VINABIKE_APP=$app"
-set "VINABIKE_LOG=$log"
+\$ErrorActionPreference = 'Continue'
+\$installer = '$installer'
+\$app = '$app'
+\$log = '$log'
 
-echo [%DATE% %TIME%] Bootstrap started.>>"%VINABIKE_LOG%"
-timeout /t 1 /nobreak >nul
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%VINABIKE_INSTALLER%" $updateMode -Launch -WaitForProcessId $waitForProcessId >>"%VINABIKE_LOG%" 2>&1
-set "VINABIKE_EXIT=%ERRORLEVEL%"
-echo [%DATE% %TIME%] PowerShell installer exited with %VINABIKE_EXIT%.>>"%VINABIKE_LOG%"
-if not "%VINABIKE_EXIT%"=="0" (
-  echo [%DATE% %TIME%] Reopening existing app after failed update.>>"%VINABIKE_LOG%"
-  if exist "%VINABIKE_APP%" start "" "%VINABIKE_APP%"
-)
-exit /b %VINABIKE_EXIT%
+function Write-VinabikeUpdateLog {
+  param([string]\$Message)
+  try {
+    \$timestamp = Get-Date -Format o
+    Add-Content -LiteralPath \$log -Value "[\$timestamp] \$Message"
+  } catch {}
+}
+
+Write-VinabikeUpdateLog 'Hidden update handoff started.'
+Start-Sleep -Seconds 1
+\$exitCode = 0
+
+try {
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \$installer $updateMode -Launch -WaitForProcessId $waitForProcessId *>> \$log
+  if (\$null -ne \$LASTEXITCODE) {
+    \$exitCode = \$LASTEXITCODE
+  } elseif (-not \$?) {
+    \$exitCode = 1
+  }
+} catch {
+  Write-VinabikeUpdateLog "Installer failed: \$(\$_.Exception.Message)"
+  \$exitCode = 1
+}
+
+Write-VinabikeUpdateLog "Installer exited with \$exitCode."
+if (\$exitCode -ne 0 -and (Test-Path -LiteralPath \$app)) {
+  Write-VinabikeUpdateLog 'Reopening existing app after failed update.'
+  Start-Process -FilePath \$app -WorkingDirectory (Split-Path -Parent \$app)
+}
+
+exit \$exitCode
 ''';
   }
 
-  String _escapeBatchValue(String value) =>
-      value.replaceAll('%', '%%').replaceAll('"', '');
+  String _buildHiddenLauncherScript(String scriptPath) {
+    final escapedScript = scriptPath.replaceAll('"', '""');
+    return '''
+Set shell = CreateObject("WScript.Shell")
+shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedScript""", 0, False
+''';
+  }
+
+  String _escapePowerShellSingleQuoted(String value) =>
+      value.replaceAll("'", "''");
 
   Future<void> _appendBootstrapLog(File logFile, String message) async {
     await logFile.parent.create(recursive: true);
