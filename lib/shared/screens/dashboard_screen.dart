@@ -31,8 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFFF9A825),
-                      Color(0xFFFBC02D),
+                      Color(0xFF6A1B9A),
+                      Color(0xFF8E24AA),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -49,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: Colors.white,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -57,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           'Sistema completo de gestión para tu tienda de bicicletas',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.black87.withValues(alpha: 0.75),
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
                       ],
@@ -66,7 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       top: -8,
                       right: -8,
                       child: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.black87),
+                        icon: const Icon(Icons.close, color: Colors.white),
                         tooltip: 'Cerrar',
                         onPressed: () {
                           setState(() {
