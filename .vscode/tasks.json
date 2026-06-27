@@ -41,10 +41,7 @@
 			"type": "shell",
 			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish_windows_update.ps1",
 			"problemMatcher": [],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"presentation": {
 				"reveal": "always",
 				"panel": "dedicated",
