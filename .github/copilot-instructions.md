@@ -235,6 +235,155 @@ When this appears:
 - Treat it as machine-local unless the repo explicitly sets those variables.
 - Do not add repo code workarounds for this warning without evidence that it affects the app binary or causes a real build failure.
 
+## Windows Desktop Auto-Update Runbook
+
+The Windows ERP desktop app has an app-owned updater for non-technical coworker installs. This is currently **Windows-only**. Do not assume it applies to macOS, web, Android, iOS, or Flutter debug runs.
+
+### Current Architecture
+
+Primary files:
+
+- `.github/workflows/windows-release.yml` builds and publishes the Windows release artifacts.
+- `scripts/install_vinabike_erp.ps1` installs, prepares, applies, verifies, logs, and relaunches the Windows app.
+- `scripts/publish_windows_update.ps1` is the developer publish helper used by the VS Code task.
+- `.vscode/tasks.json` exposes `Publish Windows Update (all changes)` as a selectable build task.
+- `lib/shared/services/desktop_update_service.dart` conditionally exports the desktop updater service.
+- `lib/shared/services/desktop_update_service_io.dart` contains the Windows updater implementation.
+- `lib/shared/services/desktop_update_service_stub.dart` keeps non-IO/non-Windows targets inert.
+- `lib/shared/widgets/desktop_update_prompt.dart` shows the in-app update prompt and progress states.
+- `lib/main.dart` registers `DesktopUpdateService` and overlays `DesktopUpdatePrompt`.
+
+The updater is intentionally gated to installed Windows release builds:
+
+```dart
+!kDebugMode && Platform.isWindows
+```
+
+That means:
+
+- `flutter run` / debug builds do not show update prompts.
+- macOS does not show Windows update prompts.
+- Web/mobile do not show Windows update prompts.
+- Test the updater from the installed app under `%LOCALAPPDATA%\VinabikeERP\app\vinabike_erp.exe`, not from VS Code debug mode.
+
+### Release Artifacts
+
+The GitHub Actions workflow publishes releases named like:
+
+```text
+windows-v1.0.1_3-17
+```
+
+Each Windows release must include:
+
+- `vinabike_erp_windows_<version>-<run>.zip`
+- `vinabike_erp_windows_<version>-<run>.zip.sha256`
+- `install_vinabike_erp.ps1`
+
+The app queries GitHub Releases, finds the latest non-draft/non-prerelease release with a Windows zip and matching `.sha256`, downloads the installer script, and uses that script to prepare/apply the update. Do not send or install only the `.exe`; the full release folder and Flutter DLL/data assets are required.
+
+### Developer Publish Flow
+
+Use the VS Code task when the user wants to publish a Windows update:
+
+```text
+Ctrl+Shift+B -> Publish Windows Update (all changes)
+```
+
+The task runs `scripts/publish_windows_update.ps1`. Its current behavior is intentionally low-friction:
+
+1. Stages every Source Control change with `git add -A`.
+2. Creates a commit automatically. If no message is passed, it generates a timestamped Windows update commit message.
+3. Pushes the current branch.
+4. Triggers `.github/workflows/windows-release.yml` with `gh workflow run`.
+5. Waits for the GitHub Actions run.
+6. Prints elapsed build time on each poll.
+7. Prints the latest releases after success.
+
+Important consequences:
+
+- Anything visible in Source Control will be included. Clean or intentionally keep unrelated changes before running the task.
+- The task does not need manual staging, manual commit, or a `YES` confirmation in the normal path.
+- The task is selectable, not default, so Firebase deploy tasks remain available from the same build-task menu.
+- GitHub Windows release builds are slow because they compile/package Flutter on a Windows runner. Small Dart/UI changes can still take 10+ minutes to publish.
+
+### Installed App Behavior
+
+The installed Windows app:
+
+1. Checks for updates after startup.
+2. Polls again while the app remains open, currently about once per minute.
+3. Shows visible states:
+   - `Buscando actualizaciones`
+   - `Descargando actualizacion`
+   - `Actualizacion lista`
+   - `Reiniciando para actualizar`
+4. Downloads/prepares updates in the background.
+5. Applies a prepared update only after the user clicks `Reiniciar`.
+6. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
+7. Relaunches the app after the installer finishes.
+
+The installer writes local state under:
+
+```text
+%LOCALAPPDATA%\VinabikeERP
+```
+
+Useful files during debugging:
+
+- `current-release.json` = installed release tag.
+- `prepared-release.json` = prepared release tag waiting to be applied.
+- `updater.log` = installer/prepare/apply log.
+- `updater-bootstrap.log` = app-to-installer handoff log.
+- `app\vinabike_erp.exe` = installed app.
+- `prepared\app\vinabike_erp.exe` = staged app waiting to apply.
+
+If the app appears stale, compare:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\VinabikeERP\current-release.json"
+Get-Content "$env:LOCALAPPDATA\VinabikeERP\prepared-release.json"
+gh release list --repo Ccatalan7/bikeshop-erp --limit 5
+```
+
+### Updater Safety Rules
+
+- Keep update application hidden. Do not reintroduce visible PowerShell/cmd windows for normal app updates.
+- Keep `scripts/install_vinabike_erp.ps1` serialized with the update mutex. Multiple prepare/apply processes previously raced and corrupted prepared state.
+- Keep checksum verification. Do not apply a zip without validating the `.sha256` asset.
+- Keep current/prepared release state files accurate. The in-app prompt depends on tag matching.
+- Keep fallback behavior conservative: if applying a prepared update fails, reopen the existing installed app rather than leaving the user stranded.
+- When changing updater behavior, remember that installed users only get the improved updater **after** one successful update containing the fix.
+- Do not claim a new updater behavior is available to already-installed apps until the release containing that updater code has been installed.
+
+### Windows Update Verification Checklist
+
+For updater changes, verify as much of this as the environment allows:
+
+1. `dart analyze` the updater service/widget files.
+2. `PowerShell` parse `scripts/install_vinabike_erp.ps1` and `scripts/publish_windows_update.ps1`.
+3. Publish a Windows release through the VS Code task or `scripts/publish_windows_update.ps1`.
+4. Confirm GitHub Actions succeeds.
+5. Confirm `gh release list --repo Ccatalan7/bikeshop-erp --limit 3` shows the new latest release.
+6. Launch the installed Windows app, not a debug build.
+7. Confirm the app detects the update, prepares it, shows `Actualizacion lista`, restarts, and displays the changed app behavior.
+8. Inspect `%LOCALAPPDATA%\VinabikeERP\current-release.json` after restart to confirm the installed tag advanced.
+
+### macOS Future Path
+
+macOS updates are intentionally not implemented yet. The current Windows updater must not be reused for macOS as-is because it is built around Windows PowerShell, `.exe`, `%LOCALAPPDATA%`, Windows shortcuts, and Windows process handoff.
+
+If macOS auto-updates are needed later, build a separate macOS release/update pipeline with its own platform gate and artifacts:
+
+- A macOS GitHub Actions workflow or macOS build machine.
+- `.app` packaging, likely `.dmg` or `.zip`.
+- Proper code signing and notarization for a professional coworker/customer install experience.
+- A macOS-specific updater mechanism, ideally Sparkle-style, or a deliberately designed equivalent.
+- Separate state/log paths under macOS app-support directories.
+- A `Platform.isMacOS` updater service path that does not interfere with the existing Windows updater.
+
+Leave the current Windows updater focused on Windows. Add macOS support beside it, not by weakening the Windows-specific safety assumptions.
+
 ---
 
 # 🚴 CRITICAL: BIKE WORKSHOP MASTER SCHEMA (ALWAYS UPDATE)
