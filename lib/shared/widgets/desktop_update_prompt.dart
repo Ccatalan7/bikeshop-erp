@@ -50,76 +50,58 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
     return Consumer<DesktopUpdateService>(
       builder: (context, service, _) {
         final update = service.availableUpdate;
-        final isCheckingOnly = service.isChecking && update == null;
-        if (!service.isSupported || (update == null && !isCheckingOnly)) {
+        if (!service.isSupported || update == null) {
           return const SizedBox.shrink();
         }
 
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
-        final hasPrepareError = update != null &&
-            service.errorMessage != null &&
+        final hasPrepareError = service.errorMessage != null &&
             !service.isPreparing &&
             !service.isUpdateReady &&
             !service.isUpdating;
 
+        if (!service.isUpdating && !service.isUpdateReady && !hasPrepareError) {
+          return const SizedBox.shrink();
+        }
+
         final String title;
-        final String body;
+        final String? body;
         final IconData icon;
         final Color iconColor;
         final bool showProgress;
-        final bool showActions;
 
-        if (isCheckingOnly) {
-          title = 'Buscando actualizaciones';
-          body = 'Revisando si hay una nueva version disponible.';
-          icon = Icons.system_update_alt_rounded;
-          iconColor = colorScheme.primary;
-          showProgress = true;
-          showActions = false;
-        } else if (service.isUpdating) {
+        if (service.isUpdating) {
           title = 'Reiniciando para actualizar';
-          body = 'Cerrando Vinabike ERP y aplicando la nueva version.';
+          body = null;
           icon = Icons.restart_alt_rounded;
           iconColor = colorScheme.primary;
           showProgress = true;
-          showActions = true;
         } else if (hasPrepareError) {
           title = 'No se pudo preparar la actualizacion';
           body = service.errorMessage ?? 'Intentalo nuevamente en un momento.';
           icon = Icons.error_outline_rounded;
           iconColor = colorScheme.error;
           showProgress = false;
-          showActions = true;
-        } else if (service.isPreparing || !service.isUpdateReady) {
-          title = 'Descargando actualizacion';
-          body =
-              'La nueva version se esta descargando. Puedes seguir trabajando.';
-          icon = Icons.downloading_rounded;
-          iconColor = colorScheme.primary;
-          showProgress = true;
-          showActions = true;
         } else {
           title = 'Actualizacion lista';
-          body =
-              'La nueva version ya esta descargada. Reinicia para aplicarla.';
+          body = 'Reinicia cuando puedas.';
           icon = Icons.system_update_alt_rounded;
           iconColor = colorScheme.primary;
           showProgress = false;
-          showActions = true;
         }
 
         return Positioned(
           top: 56,
           right: 72,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
+            constraints: const BoxConstraints(maxWidth: 330),
             child: Material(
               color: colorScheme.surface,
-              elevation: 3,
+              elevation: 2,
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   border: Border.all(color: colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(8),
@@ -133,10 +115,10 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
                       children: [
                         Icon(
                           icon,
-                          size: 22,
+                          size: 20,
                           color: iconColor,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,45 +129,46 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                body,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
+                              if (body != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  body,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: 'Cerrar',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: service.isUpdating || isCheckingOnly
-                              ? null
-                              : service.dismissAvailableUpdate,
-                        ),
+                        if (!service.isUpdating) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: 'Cerrar',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: service.dismissAvailableUpdate,
+                          ),
+                        ],
                       ],
                     ),
                     if (showProgress) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       const LinearProgressIndicator(minHeight: 3),
                     ],
-                    if (showActions) ...[
-                      const SizedBox(height: 12),
+                    if (!service.isUpdating) ...[
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton(
-                            onPressed: service.isUpdating
-                                ? null
-                                : service.dismissAvailableUpdate,
-                            child:
-                                Text(hasPrepareError ? 'Cerrar' : 'Mas tarde'),
-                          ),
-                          const SizedBox(width: 8),
                           FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
                             onPressed: _primaryActionFor(context, service),
                             icon: _primaryIconFor(service, hasPrepareError),
                             label: Text(_primaryLabelFor(

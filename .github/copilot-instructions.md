@@ -313,15 +313,12 @@ The installed Windows app:
 
 1. Checks for updates after startup.
 2. Polls again while the app remains open, currently about once per minute.
-3. Shows visible states:
-   - `Buscando actualizaciones`
-   - `Descargando actualizacion`
-   - `Actualizacion lista`
-   - `Reiniciando para actualizar`
+3. Keeps background polling/checking/downloading silent. Do not show a visible "checking" card every poll; periodic flicker is bad UX.
 4. Downloads/prepares updates in the background.
-5. Applies a prepared update only after the user clicks `Reiniciar`.
-6. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
-7. Relaunches the app after the installer finishes.
+5. Shows a small actionable prompt only when an update is ready, while restarting, or when preparation failed.
+6. Applies a prepared update only after the user clicks `Reiniciar`.
+7. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
+8. Relaunches the app after the installer finishes.
 
 The installer writes local state under:
 
@@ -366,7 +363,7 @@ For updater changes, verify as much of this as the environment allows:
 4. Confirm GitHub Actions succeeds.
 5. Confirm `gh release list --repo Ccatalan7/bikeshop-erp --limit 3` shows the new latest release.
 6. Launch the installed Windows app, not a debug build.
-7. Confirm the app detects the update, prepares it, shows `Actualizacion lista`, restarts, and displays the changed app behavior.
+7. Confirm the app detects the update without a visible one-minute checking flicker, prepares it silently, shows `Actualizacion lista`, restarts, and displays the changed app behavior.
 8. Inspect `%LOCALAPPDATA%\VinabikeERP\current-release.json` after restart to confirm the installed tag advanced.
 
 ### macOS Future Path
