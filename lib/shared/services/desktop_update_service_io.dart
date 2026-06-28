@@ -37,6 +37,8 @@ class DesktopUpdateService extends ChangeNotifier {
   bool get isPreparing => _isPreparing;
   bool get isUpdating => _isUpdating;
   bool get isUpdateReady => _isUpdateReady;
+  bool get hasDismissedReadyUpdate =>
+      _dismissed && _availableUpdate != null && _isUpdateReady && !_isUpdating;
   DesktopUpdateInfo? get availableUpdate =>
       !_dismissed ? _availableUpdate : null;
   String? get errorMessage => _errorMessage;
@@ -152,6 +154,13 @@ class DesktopUpdateService extends ChangeNotifier {
 
   void dismissAvailableUpdate() {
     _dismissed = true;
+    notifyListeners();
+  }
+
+  void revealAvailableUpdate() {
+    if (_availableUpdate == null) return;
+
+    _dismissed = false;
     notifyListeners();
   }
 

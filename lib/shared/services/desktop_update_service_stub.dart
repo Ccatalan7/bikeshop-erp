@@ -20,6 +20,7 @@ class DesktopUpdateService extends ChangeNotifier {
   bool get isPreparing => false;
   bool get isUpdating => false;
   bool get isUpdateReady => false;
+  bool get hasDismissedReadyUpdate => false;
   DesktopUpdateInfo? get availableUpdate => null;
   String? get errorMessage => null;
 
@@ -31,4 +32,6 @@ class DesktopUpdateService extends ChangeNotifier {
   Future<void> startUpdate() async {}
 
   void dismissAvailableUpdate() {}
+
+  void revealAvailableUpdate() {}
 }

@@ -316,9 +316,10 @@ The installed Windows app:
 3. Keeps background polling/checking/downloading silent. Do not show a visible "checking" card every poll; periodic flicker is bad UX.
 4. Downloads/prepares updates in the background.
 5. Shows a small actionable prompt only when an update is ready, while restarting, or when preparation failed.
-6. Applies a prepared update only after the user clicks `Reiniciar`.
-7. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
-8. Relaunches the app after the installer finishes.
+6. Collapses a dismissed ready-update prompt into a compact `Actualizar` control, so the user can reopen `Reiniciar` without restarting the app.
+7. Applies a prepared update only after the user clicks `Reiniciar`.
+8. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
+9. Relaunches the app after the installer finishes.
 
 The installer writes local state under:
 
