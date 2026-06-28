@@ -31,8 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFF6A1B9A),
-                      Color(0xFF8E24AA),
+                      Color(0xFF1565C0),
+                      Color(0xFF1976D2),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
