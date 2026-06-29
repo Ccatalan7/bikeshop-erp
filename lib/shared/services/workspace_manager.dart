@@ -160,6 +160,7 @@ String getRouteTitle(String path) {
     // Settings
     '/settings': 'Configuración',
     '/settings/appearance': 'Apariencia',
+    '/settings/business-hours': 'Horario de Atención',
     '/settings/users': 'Usuarios y roles',
     '/settings/payment-methods': 'Métodos de Pago',
     '/settings/bluetooth-scanner': 'Escáner Bluetooth',

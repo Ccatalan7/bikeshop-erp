@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,7 @@ import '../services/payroll_voucher_service.dart';
 import '../services/hr_service.dart';
 import '../models/payroll_voucher.dart';
 import '../models/hr_models.dart';
+import '../../website/services/website_service.dart';
 
 /// Dialog for confirming payment of a payroll voucher.
 /// Allows selecting Payment Method (DB) and Source Account (DB) per employee.
@@ -435,24 +438,35 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
   }
 
   Future<void> _pickPaymentDate(_PaymentSplitDraft split) async {
-    final earliestPaymentDate = _voucher?.periodEnd ?? DateTime(2020);
-    if (earliestPaymentDate.isAfter(DateTime.now())) {
+    final today = _dateOnly(DateTime.now());
+    final periodStart = _dateOnly(_voucher?.periodStart ?? DateTime(2020));
+    final periodEnd = _dateOnly(_voucher?.periodEnd ?? periodStart);
+    final openWeekdays = await _loadPayrollOpenWeekdays();
+    if (!mounted) return;
+
+    final firstPaymentDate =
+        _payrollPeriodCloseDate(periodStart, periodEnd, openWeekdays);
+    if (firstPaymentDate.isAfter(today)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('La fecha de pago estará disponible al cerrar el período.'),
+          content: Text(
+            'La fecha de pago estará disponible cuando termine la semana trabajada.',
+          ),
         ),
       );
       return;
     }
-    final initialDate = split.paymentDate.isBefore(earliestPaymentDate)
-        ? earliestPaymentDate
-        : split.paymentDate;
+
+    final initialDate = _clampDate(
+      _dateOnly(split.paymentDate),
+      firstPaymentDate,
+      today,
+    );
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: earliestPaymentDate,
-      lastDate: DateTime.now(),
+      firstDate: firstPaymentDate,
+      lastDate: today,
     );
     if (picked == null || !mounted) return;
     final time = await showTimePicker(
@@ -469,6 +483,121 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
         time?.minute ?? split.paymentDate.minute,
       );
     });
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime _clampDate(DateTime value, DateTime firstDate, DateTime lastDate) {
+    if (value.isBefore(firstDate)) return firstDate;
+    if (value.isAfter(lastDate)) return lastDate;
+    return value;
+  }
+
+  DateTime _payrollPeriodCloseDate(
+    DateTime periodStart,
+    DateTime periodEnd,
+    Set<int>? openWeekdays,
+  ) {
+    if (openWeekdays == null || openWeekdays.isEmpty) return periodEnd;
+
+    var day = periodEnd;
+    while (!day.isBefore(periodStart)) {
+      if (openWeekdays.contains(day.weekday)) return day;
+      day = day.subtract(const Duration(days: 1));
+    }
+
+    return periodEnd;
+  }
+
+  Future<Set<int>?> _loadPayrollOpenWeekdays() async {
+    try {
+      final websiteService = context.read<WebsiteService>();
+      if (websiteService.settings.isEmpty) {
+        await websiteService.loadSettings();
+      }
+
+      final applyToPayroll =
+          websiteService.getSetting('business_hours_apply_payroll', 'true') !=
+              'false';
+      if (!applyToPayroll) return null;
+
+      final manualRaw = websiteService.getSetting('business_hours_json').trim();
+      final googleRaw =
+          websiteService.getSetting('google_business_regular_hours').trim();
+      final raw = manualRaw.isNotEmpty ? manualRaw : googleRaw;
+      if (raw.isEmpty) return null;
+
+      return _parseOpenWeekdays(raw);
+    } catch (error) {
+      debugPrint('Could not load payroll business hours: $error');
+      return null;
+    }
+  }
+
+  Set<int>? _parseOpenWeekdays(String rawJson) {
+    try {
+      final decoded = jsonDecode(rawJson);
+      final rootData = decoded is Map<String, dynamic>
+          ? decoded
+          : Map<String, dynamic>.from(decoded as Map);
+      final data = rootData['opening_hours'] is Map
+          ? Map<String, dynamic>.from(rootData['opening_hours'] as Map)
+          : rootData;
+      final periods = data['periods'] as List<dynamic>? ?? const [];
+      final weekdays = <int>{};
+
+      for (final rawPeriod in periods) {
+        if (rawPeriod is! Map) continue;
+        final period = Map<String, dynamic>.from(rawPeriod);
+
+        if (period.containsKey('openDay')) {
+          final weekday = _businessDayToWeekday(period['openDay']);
+          if (weekday != null) weekdays.add(weekday);
+          continue;
+        }
+
+        final open = period['open'] is Map
+            ? Map<String, dynamic>.from(period['open'] as Map)
+            : null;
+        final weekday = _placesDayToWeekday(open?['day']);
+        if (weekday != null) weekdays.add(weekday);
+      }
+
+      return weekdays;
+    } catch (error) {
+      debugPrint('Could not parse payroll business hours: $error');
+      return null;
+    }
+  }
+
+  int? _businessDayToWeekday(dynamic rawDay) {
+    final day = rawDay?.toString().toUpperCase();
+    return switch (day) {
+      'MONDAY' => DateTime.monday,
+      'TUESDAY' => DateTime.tuesday,
+      'WEDNESDAY' => DateTime.wednesday,
+      'THURSDAY' => DateTime.thursday,
+      'FRIDAY' => DateTime.friday,
+      'SATURDAY' => DateTime.saturday,
+      'SUNDAY' => DateTime.sunday,
+      _ => null,
+    };
+  }
+
+  int? _placesDayToWeekday(dynamic rawDay) {
+    final day = rawDay is num ? rawDay.toInt() : int.tryParse('$rawDay');
+    return switch (day) {
+      1 => DateTime.monday,
+      2 => DateTime.tuesday,
+      3 => DateTime.wednesday,
+      4 => DateTime.thursday,
+      5 => DateTime.friday,
+      6 => DateTime.saturday,
+      0 => DateTime.sunday,
+      _ => null,
+    };
   }
 
   @override

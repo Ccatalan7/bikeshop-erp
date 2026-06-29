@@ -576,6 +576,88 @@ class GoogleBusinessService with ChangeNotifier {
       _safeNotifyListeners();
     }
   }
+
+  Future<void> publishRegularHours({
+    required String locationName,
+    required Map<String, dynamic> regularHours,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    _safeNotifyListeners();
+
+    try {
+      final session = _supabase.auth.currentSession;
+      if (session == null) throw Exception('No estás autenticado');
+
+      final token = session.providerToken;
+      if (token == null) {
+        _debugSessionSnapshot('publishRegularHours_missingToken');
+        throw Exception(
+          'No se encontró un token de Google en tu sesión. Renueva el acceso de Google Business Profile.',
+        );
+      }
+
+      if (kIsWeb) {
+        final resp = await http.post(
+          Uri.parse(_edgeFunctionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${session.accessToken}',
+          },
+          body: jsonEncode({
+            'action': 'updateRegularHours',
+            'accessToken': token,
+            'locationName': locationName,
+            'regularHours': regularHours,
+          }),
+        );
+        if (resp.statusCode != 200) {
+          throw Exception(
+            _toFriendlyGoogleApiError(
+              action: 'actualizar horario de Google Business Profile',
+              response: resp,
+            ),
+          );
+        }
+        return;
+      }
+
+      final response = await http.patch(
+        Uri.parse(
+          'https://mybusinessbusinessinformation.googleapis.com/v1/${_businessInfoLocationName(locationName)}?updateMask=regularHours',
+        ),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'regularHours': regularHours}),
+      );
+      if (response.statusCode != 200) {
+        throw Exception(
+          _toFriendlyGoogleApiError(
+            action: 'actualizar horario de Google Business Profile',
+            response: response,
+          ),
+        );
+      }
+    } catch (e) {
+      _error = e.toString();
+      debugPrint(_error);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      _safeNotifyListeners();
+    }
+  }
+
+  String _businessInfoLocationName(String locationName) {
+    final parts = locationName.split('/');
+    final locationsIndex = parts.lastIndexOf('locations');
+    if (locationsIndex >= 0 && parts.length > locationsIndex + 1) {
+      return 'locations/${parts[locationsIndex + 1]}';
+    }
+    return locationName;
+  }
 }
 
 class GoogleLocation {

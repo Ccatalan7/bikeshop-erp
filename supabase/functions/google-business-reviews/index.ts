@@ -10,10 +10,20 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-    action: "fetchAccounts" | "fetchLocations" | "fetchReviews";
+    action: "fetchAccounts" | "fetchLocations" | "fetchReviews" | "updateRegularHours";
     accessToken: string;
     accountName?: string; // For fetchLocations: "accounts/123456"
     locationName?: string; // For fetchReviews: "locations/123456"
+    regularHours?: Record<string, unknown>;
+}
+
+function toBusinessInfoLocationName(locationName: string) {
+    const parts = locationName.split("/");
+    const locationsIndex = parts.lastIndexOf("locations");
+    if (locationsIndex >= 0 && parts[locationsIndex + 1]) {
+        return `locations/${parts[locationsIndex + 1]}`;
+    }
+    return locationName;
 }
 
 // @ts-ignore - Deno serve
@@ -24,7 +34,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     try {
-        const { action, accessToken, accountName, locationName } = (await req.json()) as RequestBody;
+        const { action, accessToken, accountName, locationName, regularHours } = (await req.json()) as RequestBody;
 
         if (!accessToken) {
             return new Response(
@@ -69,6 +79,22 @@ serve(async (req: Request): Promise<Response> => {
                 url = `https://mybusiness.googleapis.com/v4/${locationName}/reviews`;
                 break;
 
+            case "updateRegularHours":
+                if (!locationName) {
+                    return new Response(
+                        JSON.stringify({ error: "Missing locationName for updateRegularHours" }),
+                        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                    );
+                }
+                if (!regularHours || !Array.isArray(regularHours.periods)) {
+                    return new Response(
+                        JSON.stringify({ error: "Missing regularHours.periods for updateRegularHours" }),
+                        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                    );
+                }
+                url = `https://mybusinessbusinessinformation.googleapis.com/v1/${toBusinessInfoLocationName(locationName)}?updateMask=regularHours`;
+                break;
+
             default:
                 return new Response(
                     JSON.stringify({ error: `Invalid action: ${action}` }),
@@ -78,7 +104,16 @@ serve(async (req: Request): Promise<Response> => {
 
         console.log(`[google-business-reviews] ${action} -> ${url}`);
 
-        const response = await fetch(url, { headers });
+        const response = await fetch(
+            url,
+            action === "updateRegularHours"
+                ? {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({ regularHours }),
+                }
+                : { headers },
+        );
         const responseText = await response.text();
 
         // Try to parse as JSON, but handle HTML error pages

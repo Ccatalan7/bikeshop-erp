@@ -11,6 +11,10 @@ type SettingRow = {
 
 type TenantSettings = Record<string, string>;
 
+// Supabase's esm.sh generic inference differs between the createClient call and
+// helper signatures here; keep the function boundary flexible for Deno checks.
+type SupabaseAdminClient = any;
+
 type RefreshRequest = {
   tenantId?: string;
   force?: boolean;
@@ -54,6 +58,7 @@ const settingsKeys = [
   "google_reviews_last_synced_at",
   "google_reviews_auto_refresh_enabled",
   "google_reviews_source",
+  "business_hours_source",
 ];
 
 const staleAfterMs = 23 * 60 * 60 * 1000;
@@ -127,7 +132,7 @@ function authorizeRefresh(req: Request): void {
 }
 
 async function loadRefreshTargets(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   body: RefreshRequest,
 ): Promise<Array<{ tenantId: string; settings: TenantSettings }>> {
   let query = supabase
@@ -162,7 +167,7 @@ function hasRequiredGooglePlacesSettings(settings: TenantSettings): boolean {
 }
 
 async function refreshTenant(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   tenantId: string,
   settings: TenantSettings,
   options: { force: boolean },
@@ -211,8 +216,12 @@ async function refreshTenant(
       updates.business_google_maps_url = place.url;
       updates.google_maps_url = place.url;
     }
-    if (place.opening_hours) {
+    if (
+      place.opening_hours &&
+      settings.business_hours_source !== "erp_settings"
+    ) {
       updates.business_hours_json = JSON.stringify(place.opening_hours);
+      updates.business_hours_source = "google_places";
     }
 
     await upsertSettings(supabase, tenantId, updates);
@@ -310,7 +319,7 @@ function shouldReplaceReviewCards(params: {
 }
 
 async function upsertSettings(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   tenantId: string,
   values: Record<string, string>,
 ): Promise<void> {

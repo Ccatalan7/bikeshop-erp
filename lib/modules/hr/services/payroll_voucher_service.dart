@@ -14,6 +14,26 @@ class PayrollVoucherService extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  List<PayrollVoucher>? _cachedVouchers;
+  DateTime? _vouchersCacheTime;
+  Future<List<PayrollVoucher>>? _vouchersLoadFuture;
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
+
+  List<PayrollVoucher> get cachedVouchers =>
+      List.unmodifiable(_cachedVouchers ?? const <PayrollVoucher>[]);
+  bool get hasVouchersCache =>
+      _cachedVouchers != null && _vouchersCacheTime != null;
+
+  bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
+  }
+
+  void invalidateVouchersCache() {
+    _cachedVouchers = null;
+    _vouchersCacheTime = null;
+  }
+
   void _setLoading(bool value) {
     _isLoading = value;
     _notifySafe();
@@ -186,6 +206,7 @@ class PayrollVoucherService extends ChangeNotifier {
         });
       }
 
+      invalidateVouchersCache();
       return voucherId;
     } catch (e) {
       _setError('Error saving draft: $e');
@@ -235,6 +256,8 @@ class PayrollVoucherService extends ChangeNotifier {
           'is_included': line.isIncluded,
         });
       }
+
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error updating voucher: $e');
       rethrow;
@@ -325,52 +348,69 @@ class PayrollVoucherService extends ChangeNotifier {
   }
 
   /// Fetches a list of vouchers, ordered by most recent first.
-  Future<List<PayrollVoucher>> fetchVouchers() async {
+  ///
+  /// The list screen only needs voucher headers and payroll lines. Settlement
+  /// totals are loaded lazily when a row is expanded, avoiding one RPC per
+  /// historical payroll during initial navigation.
+  Future<List<PayrollVoucher>> fetchVouchers({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh &&
+        _cachedVouchers != null &&
+        _isCacheValid(_vouchersCacheTime)) {
+      debugPrint(
+          '📦 [PayrollVoucherService] Using cached vouchers (${_cachedVouchers!.length} items)');
+      return List<PayrollVoucher>.from(_cachedVouchers!);
+    }
+
+    if (!forceRefresh && _vouchersLoadFuture != null) {
+      return List<PayrollVoucher>.from(await _vouchersLoadFuture!);
+    }
+
+    _vouchersLoadFuture = _fetchVouchersFromDatabase();
+    try {
+      final vouchers = await _vouchersLoadFuture!;
+      return List<PayrollVoucher>.from(vouchers);
+    } finally {
+      _vouchersLoadFuture = null;
+    }
+  }
+
+  Future<List<PayrollVoucher>> _fetchVouchersFromDatabase() async {
     try {
       _setLoading(true);
       _setError(null);
 
       final data = await _db.select(
         'payroll_vouchers',
+        selectColumns:
+            'id,tenant_id,voucher_number,period_start,period_end,period_label,total_hours,total_amount,employee_count,status,paid_at,paid_by,notes,created_by,created_at,updated_at',
         orderBy: 'created_at',
         descending: true,
       );
 
-      // Fetch lines for each voucher
+      final voucherIds = data
+          .map((row) => row['id']?.toString())
+          .whereType<String>()
+          .toList();
+      final linesByVoucherId = await _fetchLinesByVoucherId(voucherIds);
+
       final vouchers = <PayrollVoucher>[];
-      for (var v in data) {
-        final voucherId = v['id'] as String;
+      for (final row in data) {
+        final voucherId = row['id'] as String?;
+        final lines = voucherId == null
+            ? const <PayrollVoucherLine>[]
+            : linesByVoucherId[voucherId] ?? const <PayrollVoucherLine>[];
 
-        // Fetch lines directly
-        final rawLines = await _db.select(
-          'payroll_voucher_lines',
-          where: 'voucher_id=$voucherId',
-        );
-        final lines =
-            rawLines.map((l) => PayrollVoucherLine.fromMap(l)).toList();
-
-        var voucher = PayrollVoucher.fromMap(v).copyWith(lines: lines);
-        voucher = await _hydrateSettlementData(voucher);
-
-        // Keep header totals aligned with current lines.
-        final computed = _computeVoucherTotals(voucher.lines);
-        if ((computed.totalAmount - voucher.totalAmount).abs() > 0.01 ||
-            (computed.totalHours - voucher.totalHours).abs() > 0.01 ||
-            computed.employeeCount != voucher.employeeCount) {
-          await _db.update('payroll_vouchers', voucherId, {
-            'total_amount': computed.totalAmount,
-            'total_hours': computed.totalHours,
-            'employee_count': computed.employeeCount,
-          });
-          voucher = voucher.copyWith(
-            totalAmount: computed.totalAmount,
-            totalHours: computed.totalHours,
-            employeeCount: computed.employeeCount,
-          );
-        }
-        vouchers.add(voucher);
+        vouchers.add(_withComputedTotals(
+          PayrollVoucher.fromMap(row).copyWith(lines: lines),
+        ));
       }
 
+      _cachedVouchers = vouchers;
+      _vouchersCacheTime = DateTime.now();
+      debugPrint(
+          '✅ [PayrollVoucherService] Cached ${vouchers.length} payroll vouchers');
       return vouchers;
     } catch (e) {
       _setError('Error loading vouchers: $e');
@@ -378,6 +418,78 @@ class PayrollVoucherService extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  Future<Map<String, List<PayrollVoucherLine>>> _fetchLinesByVoucherId(
+    List<String> voucherIds,
+  ) async {
+    if (voucherIds.isEmpty) {
+      return const <String, List<PayrollVoucherLine>>{};
+    }
+
+    final rawLines = await _selectWhereInBatches(
+      table: 'payroll_voucher_lines',
+      column: 'voucher_id',
+      values: voucherIds,
+      selectColumns:
+          'id,voucher_id,employee_id,employee_name,worked_hours,overtime_hours,hourly_rate,overtime_rate,regular_amount,overtime_amount,total_amount,payment_method,is_included,expense_id,salary_account_id,payment_method_id,payment_account_id',
+      orderBy: 'employee_name',
+    );
+
+    final grouped = <String, List<PayrollVoucherLine>>{};
+    for (final row in rawLines) {
+      final voucherId = row['voucher_id'] as String?;
+      if (voucherId == null) continue;
+      grouped
+          .putIfAbsent(voucherId, () => <PayrollVoucherLine>[])
+          .add(PayrollVoucherLine.fromMap(row));
+    }
+    return grouped;
+  }
+
+  Future<List<Map<String, dynamic>>> _selectWhereInBatches({
+    required String table,
+    required String column,
+    required List<String> values,
+    String? selectColumns,
+    String? orderBy,
+  }) async {
+    final uniqueValues =
+        values.where((value) => value.isNotEmpty).toSet().toList();
+    if (uniqueValues.isEmpty) return const [];
+
+    const batchSize = 100;
+    final rows = <Map<String, dynamic>>[];
+    for (var start = 0; start < uniqueValues.length; start += batchSize) {
+      final end = start + batchSize > uniqueValues.length
+          ? uniqueValues.length
+          : start + batchSize;
+      rows.addAll(await _db.select(
+        table,
+        selectColumns: selectColumns,
+        where: column,
+        whereIn: uniqueValues.sublist(start, end),
+        orderBy: orderBy,
+      ));
+    }
+    return rows;
+  }
+
+  PayrollVoucher _withComputedTotals(PayrollVoucher voucher) {
+    if (voucher.lines.isEmpty) return voucher;
+
+    final computed = _computeVoucherTotals(voucher.lines);
+    if ((computed.totalAmount - voucher.totalAmount).abs() <= 0.01 &&
+        (computed.totalHours - voucher.totalHours).abs() <= 0.01 &&
+        computed.employeeCount == voucher.employeeCount) {
+      return voucher;
+    }
+
+    return voucher.copyWith(
+      totalAmount: computed.totalAmount,
+      totalHours: computed.totalHours,
+      employeeCount: computed.employeeCount,
+    );
   }
 
   _VoucherTotals _computeVoucherTotals(List<PayrollVoucherLine> lines) {
@@ -470,6 +582,7 @@ class PayrollVoucherService extends ChangeNotifier {
 
       // Recalculate voucher totals
       await _recalculateVoucherTotals(line.voucherId);
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error updating line: $e');
       rethrow;
@@ -526,6 +639,7 @@ class PayrollVoucherService extends ChangeNotifier {
       }
 
       await _db.rpc('pay_payroll_voucher', params: params);
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error paying voucher: $e');
       rethrow;
@@ -539,6 +653,7 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('confirm_payroll_voucher', params: {'p_voucher_id': id});
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error confirming voucher: $e');
       rethrow;
@@ -552,6 +667,7 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('revert_payroll_payment', params: {'p_voucher_id': id});
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error reverting payment: $e');
       rethrow;
@@ -597,6 +713,7 @@ class PayrollVoucherService extends ChangeNotifier {
 
       // 5. Delete the voucher itself
       await _db.delete('payroll_vouchers', id);
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error deleting voucher: $e');
       rethrow;
@@ -610,6 +727,7 @@ class PayrollVoucherService extends ChangeNotifier {
     try {
       _setLoading(true);
       await _db.rpc('revert_payroll_to_draft', params: {'p_voucher_id': id});
+      invalidateVouchersCache();
     } catch (e) {
       _setError('Error reverting to draft: $e');
       rethrow;
@@ -618,14 +736,141 @@ class PayrollVoucherService extends ChangeNotifier {
     }
   }
 
+  Future<PayrollVoucher> hydrateVoucherSettlements(
+    PayrollVoucher voucher,
+  ) async {
+    final hydrated = await _hydrateSettlementData(voucher);
+    _replaceCachedVoucher(hydrated);
+    return hydrated;
+  }
+
+  void _replaceCachedVoucher(PayrollVoucher voucher) {
+    final id = voucher.id;
+    final cached = _cachedVouchers;
+    if (id == null || cached == null) return;
+
+    final index = cached.indexWhere((item) => item.id == id);
+    if (index == -1) return;
+
+    final updated = List<PayrollVoucher>.from(cached);
+    updated[index] = voucher;
+    _cachedVouchers = updated;
+  }
+
   Future<PayrollVoucher> _hydrateSettlementData(PayrollVoucher voucher) async {
+    if (voucher.id == null ||
+        voucher.id == 'preview' ||
+        voucher.lines.isEmpty) {
+      return voucher;
+    }
+
+    try {
+      return await _hydrateSettlementDataFromTables(voucher);
+    } catch (e) {
+      debugPrint(
+          '⚠️ [PayrollVoucherService] Bulk settlement hydration failed, falling back to RPC: $e');
+      return _hydrateSettlementDataViaRpc(voucher);
+    }
+  }
+
+  Future<PayrollVoucher> _hydrateSettlementDataFromTables(
+    PayrollVoucher voucher,
+  ) async {
+    final expenseIds = voucher.lines
+        .map((line) => line.expenseId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final lineIds = voucher.lines
+        .map((line) => line.id)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final paymentRows = expenseIds.isEmpty
+        ? const <Map<String, dynamic>>[]
+        : await _selectWhereInBatches(
+            table: 'expense_payments',
+            column: 'expense_id',
+            values: expenseIds,
+            selectColumns: 'expense_id,amount',
+          );
+    final advanceRows = lineIds.isEmpty
+        ? const <Map<String, dynamic>>[]
+        : await _selectWhereInBatches(
+            table: 'employee_advance_allocations',
+            column: 'voucher_line_id',
+            values: lineIds,
+            selectColumns: 'voucher_line_id,amount',
+          );
+
+    final cashPaidByExpenseId = <String, double>{};
+    for (final row in paymentRows) {
+      _sumAmount(
+        cashPaidByExpenseId,
+        row['expense_id']?.toString(),
+        row['amount'],
+      );
+    }
+
+    final advancesByLineId = <String, double>{};
+    for (final row in advanceRows) {
+      _sumAmount(
+        advancesByLineId,
+        row['voucher_line_id']?.toString(),
+        row['amount'],
+      );
+    }
+
+    return voucher.copyWith(
+      lines: voucher.lines.map((line) {
+        final cashPaid = line.expenseId == null
+            ? 0.0
+            : cashPaidByExpenseId[line.expenseId] ?? 0.0;
+        final advancesApplied =
+            line.id == null ? 0.0 : advancesByLineId[line.id] ?? 0.0;
+        final paid = cashPaid + advancesApplied;
+        final settledAmount =
+            paid > line.totalAmount ? line.totalAmount : paid;
+        final remaining = line.totalAmount - paid;
+        final balance = remaining > 0 ? remaining : 0.0;
+
+        return line.copyWith(
+          cashPaid: cashPaid,
+          advancesApplied: advancesApplied,
+          settledAmount: settledAmount,
+          balance: balance,
+        );
+      }).toList(),
+    );
+  }
+
+  void _sumAmount(
+    Map<String, double> totals,
+    String? key,
+    Object? amount,
+  ) {
+    if (key == null || key.isEmpty) return;
+    totals[key] = (totals[key] ?? 0) + _toDouble(amount);
+  }
+
+  double _toDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  Future<PayrollVoucher> _hydrateSettlementDataViaRpc(
+    PayrollVoucher voucher,
+  ) async {
     if (voucher.id == null || voucher.id == 'preview') return voucher;
 
     final raw = await _db.rpc(
       'get_payroll_voucher_line_settlements',
       params: {'p_voucher_id': voucher.id},
     );
-    final rows = raw is List ? raw : const [];
+    final rows = raw is List ? raw : const <dynamic>[];
     final settlements = <String, Map<String, dynamic>>{
       for (final row in rows)
         if (row is Map && row['line_id'] != null)

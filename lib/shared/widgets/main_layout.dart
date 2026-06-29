@@ -342,6 +342,7 @@ String _getTitleFromRoute(String route) {
     '/tienda?edit=true': 'Editor Web',
     '/storage': 'Archivos',
     '/settings': 'Configuración',
+    '/settings/business-hours': 'Horario de atención',
     '/debug': 'Debug',
   };
 

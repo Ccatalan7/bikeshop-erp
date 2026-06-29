@@ -66,6 +66,7 @@ export '../../modules/settings/pages/settings_page.dart';
 export '../../modules/settings/pages/factory_reset_page_new.dart';
 export '../../modules/settings/pages/backup_management_page.dart';
 export '../../modules/settings/pages/appearance_settings_page.dart';
+export '../../modules/settings/pages/business_hours_settings_page.dart';
 export '../../modules/settings/pages/company_settings_page.dart';
 export '../../modules/settings/pages/user_management_page.dart';
 export '../../modules/settings/pages/payment_methods_settings_page.dart';

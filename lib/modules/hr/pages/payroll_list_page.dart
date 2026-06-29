@@ -21,6 +21,8 @@ class _PayrollListPageState extends State<PayrollListPage> {
   bool _isLoading = true;
   String? _error;
   final Set<String> _expandedIds = {};
+  final Set<String> _settlementLoadingIds = {};
+  final Set<String> _settlementLoadedIds = {};
 
   @override
   void initState() {
@@ -28,19 +30,32 @@ class _PayrollListPageState extends State<PayrollListPage> {
     _loadVouchers();
   }
 
-  Future<void> _loadVouchers() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  Future<void> _loadVouchers({bool forceRefresh = false}) async {
+    final service = context.read<PayrollVoucherService>();
+
+    if (!forceRefresh && service.hasVouchersCache && _vouchers.isEmpty) {
+      setState(() {
+        _vouchers = List<PayrollVoucher>.from(service.cachedVouchers);
+        _isLoading = false;
+        _error = null;
+      });
+    } else {
+      setState(() {
+        _isLoading = _vouchers.isEmpty;
+        _error = null;
+      });
+    }
 
     try {
-      final vouchers =
-          await context.read<PayrollVoucherService>().fetchVouchers();
+      final vouchers = await service.fetchVouchers(forceRefresh: forceRefresh);
       if (mounted) {
         setState(() {
           _vouchers = vouchers;
           _isLoading = false;
+          if (forceRefresh) {
+            _settlementLoadedIds.clear();
+            _settlementLoadingIds.clear();
+          }
         });
       }
     } catch (e) {
@@ -59,7 +74,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
       builder: (context) => const PayrollVoucherDialog(),
     );
     if (result == true && mounted) {
-      _loadVouchers(); // Refresh list
+      _loadVouchers(forceRefresh: true); // Refresh list
     }
   }
 
@@ -69,7 +84,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
       builder: (context) => const EmployeeAdvanceDialog(),
     );
     if (result == true && mounted) {
-      _loadVouchers();
+      _loadVouchers(forceRefresh: true);
     }
   }
 
@@ -79,7 +94,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
       builder: (context) => PayrollVoucherDialog(existingVoucher: voucher),
     );
     if (result == true && mounted) {
-      _loadVouchers(); // Refresh list
+      _loadVouchers(forceRefresh: true); // Refresh list
     }
   }
 
@@ -87,7 +102,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
   Future<void> _confirmVoucher(PayrollVoucher voucher) async {
     try {
       await context.read<PayrollVoucherService>().confirmVoucher(voucher.id!);
-      if (mounted) _loadVouchers();
+      if (mounted) _loadVouchers(forceRefresh: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +120,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
     );
 
     if (result == true && mounted) {
-      _loadVouchers();
+      _loadVouchers(forceRefresh: true);
     }
   }
 
@@ -133,7 +148,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
     if (confirm != true) return;
 
     await service.deleteVoucher(voucher.id!);
-    if (mounted) _loadVouchers();
+    if (mounted) _loadVouchers(forceRefresh: true);
   }
 
   /// Revert confirmed voucher back to draft (confirmed → draft)
@@ -161,7 +176,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
     try {
       await service.revertToDraft(voucher.id!);
-      if (mounted) _loadVouchers();
+      if (mounted) _loadVouchers(forceRefresh: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -197,12 +212,59 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
     try {
       await service.revertPayment(voucher.id!);
-      if (mounted) _loadVouchers();
+      if (mounted) _loadVouchers(forceRefresh: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
+      }
+    }
+  }
+
+  Future<void> _toggleVoucherExpansion(PayrollVoucher voucher) async {
+    final voucherId = voucher.id;
+    if (voucherId == null) return;
+
+    final isExpanded = _expandedIds.contains(voucherId);
+    setState(() {
+      if (isExpanded) {
+        _expandedIds.remove(voucherId);
+      } else {
+        _expandedIds.add(voucherId);
+      }
+    });
+
+    if (isExpanded ||
+        _settlementLoadedIds.contains(voucherId) ||
+        _settlementLoadingIds.contains(voucherId)) {
+      return;
+    }
+
+    setState(() => _settlementLoadingIds.add(voucherId));
+    try {
+      final hydrated = await context
+          .read<PayrollVoucherService>()
+          .hydrateVoucherSettlements(voucher);
+      if (!mounted) return;
+
+      setState(() {
+        final index = _vouchers.indexWhere((item) => item.id == voucherId);
+        if (index != -1) _vouchers[index] = hydrated;
+        _settlementLoadedIds.add(voucherId);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando pagos: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _settlementLoadingIds.remove(voucherId));
       }
     }
   }
@@ -281,7 +343,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
     }
 
     return RefreshIndicator(
-      onRefresh: _loadVouchers,
+      onRefresh: () => _loadVouchers(forceRefresh: true),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _vouchers.length,
@@ -305,15 +367,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
         children: [
           // Header row (always visible)
           InkWell(
-            onTap: () {
-              setState(() {
-                if (isExpanded) {
-                  _expandedIds.remove(voucher.id);
-                } else {
-                  _expandedIds.add(voucher.id!);
-                }
-              });
-            },
+            onTap: () => _toggleVoucherExpansion(voucher),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -438,13 +492,21 @@ class _PayrollListPageState extends State<PayrollListPage> {
             ),
           ),
           // Expanded details
-          if (isExpanded) _buildExpandedDetails(voucher),
+          if (isExpanded)
+            _buildExpandedDetails(
+              voucher,
+              isLoadingSettlements:
+                  _settlementLoadingIds.contains(voucher.id),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildExpandedDetails(PayrollVoucher voucher) {
+  Widget _buildExpandedDetails(
+    PayrollVoucher voucher, {
+    required bool isLoadingSettlements,
+  }) {
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
 
     return Container(
@@ -452,103 +514,123 @@ class _PayrollListPageState extends State<PayrollListPage> {
       child: Column(
         children: [
           const Divider(height: 1),
-          // Table header
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                    flex: 3,
-                    child: Text('Trabajador',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12))),
-                Expanded(
-                    child: Text('Horas',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.right)),
-                Expanded(
-                    child: Text('Tarifa',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.right)),
-                Expanded(
-                    child: Text('Total',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.right)),
-                Expanded(
-                    child: Text('Pagado',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.right)),
-                Expanded(
-                    child: Text('Pendiente',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12),
-                        textAlign: TextAlign.right)),
-              ],
+          if (isLoadingSettlements)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Cargando detalle de pagos...',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            // Table header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                      flex: 3,
+                      child: Text('Trabajador',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12))),
+                  Expanded(
+                      child: Text('Horas',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          textAlign: TextAlign.right)),
+                  Expanded(
+                      child: Text('Tarifa',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          textAlign: TextAlign.right)),
+                  Expanded(
+                      child: Text('Total',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          textAlign: TextAlign.right)),
+                  Expanded(
+                      child: Text('Pagado',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          textAlign: TextAlign.right)),
+                  Expanded(
+                      child: Text('Pendiente',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          textAlign: TextAlign.right)),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          // Lines
-          ...voucher.lines.where((l) => l.isIncluded).map((line) => Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                        flex: 3,
-                        child: Text(line.employeeName,
-                            style: const TextStyle(fontSize: 13))),
-                    Expanded(
-                        child: Text(line.workedHours.toStringAsFixed(1),
-                            style: const TextStyle(fontSize: 13),
-                            textAlign: TextAlign.right)),
-                    Expanded(
-                        child: Text(currency.format(line.hourlyRate),
-                            style: const TextStyle(fontSize: 13),
-                            textAlign: TextAlign.right)),
-                    Expanded(
-                        child: Text(currency.format(line.totalAmount),
-                            style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w500),
-                            textAlign: TextAlign.right)),
-                    Expanded(
-                        child: Text(currency.format(line.settledAmount),
-                            style: const TextStyle(fontSize: 13),
-                            textAlign: TextAlign.right)),
-                    Expanded(
-                        child: Text(currency.format(line.balance),
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: line.balance > 0
-                                    ? Colors.orange[800]
-                                    : Colors.green[700]),
-                            textAlign: TextAlign.right)),
-                  ],
-                ),
-              )),
-          const SizedBox(height: 8),
-          // Footer with totals
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              border: Border(top: BorderSide(color: Colors.grey[300]!)),
+            const Divider(height: 1),
+            // Lines
+            ...voucher.lines.where((l) => l.isIncluded).map((line) => Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                          flex: 3,
+                          child: Text(line.employeeName,
+                              style: const TextStyle(fontSize: 13))),
+                      Expanded(
+                          child: Text(line.workedHours.toStringAsFixed(1),
+                              style: const TextStyle(fontSize: 13),
+                              textAlign: TextAlign.right)),
+                      Expanded(
+                          child: Text(currency.format(line.hourlyRate),
+                              style: const TextStyle(fontSize: 13),
+                              textAlign: TextAlign.right)),
+                      Expanded(
+                          child: Text(currency.format(line.totalAmount),
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.right)),
+                      Expanded(
+                          child: Text(currency.format(line.settledAmount),
+                              style: const TextStyle(fontSize: 13),
+                              textAlign: TextAlign.right)),
+                      Expanded(
+                          child: Text(currency.format(line.balance),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: line.balance > 0
+                                      ? Colors.orange[800]
+                                      : Colors.green[700]),
+                              textAlign: TextAlign.right)),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 8),
+            // Footer with totals
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                border: Border(top: BorderSide(color: Colors.grey[300]!)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text('Total: ',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                  Text(currency.format(voucher.totalAmount),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('Total: ',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                Text(currency.format(voucher.totalAmount),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
     );

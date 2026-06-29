@@ -31,6 +31,7 @@ interface AdminRequest {
     | 'connect_catalog'
     | 'upsert_catalog_product'
     | 'audit_catalog_products'
+    | 'publish_business_hours'
     | 'update_profile'
     | 'upload_profile_picture'
   tenantId?: string
@@ -40,6 +41,9 @@ interface AdminRequest {
   path?: string
   body?: JsonRecord
   profile?: JsonRecord
+  businessHours?: JsonRecord
+  hoursLabel?: string
+  facebookPageId?: string
   repair?: boolean
 }
 
@@ -62,6 +66,31 @@ function isAuthorized(req: Request) {
   const authHeader = req.headers.get('Authorization') ?? ''
   const bearerToken = authHeader.replace(/^Bearer\s+/i, '')
   return Boolean(SUPABASE_SERVICE_ROLE_KEY && bearerToken === SUPABASE_SERVICE_ROLE_KEY)
+}
+
+async function isAuthorizedForRequest(req: Request, request: AdminRequest) {
+  if (isAuthorized(req)) return true
+  if (request.action !== 'publish_business_hours') return false
+
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim()
+  if (!bearerToken) return false
+
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const { data: userData, error: userError } = await adminClient.auth.getUser(bearerToken)
+  if (userError || !userData.user) return false
+
+  const { data: profile, error: profileError } = await adminClient
+    .from('user_profiles')
+    .select('tenant_id')
+    .eq('user_id', userData.user.id)
+    .maybeSingle()
+
+  if (profileError || !profile?.tenant_id) return false
+  const tenantId = String(profile.tenant_id)
+  if (request.tenantId && request.tenantId !== tenantId) return false
+  request.tenantId = tenantId
+  return true
 }
 
 async function graphRequest(
@@ -329,6 +358,253 @@ function firstNonEmpty(values: unknown[]) {
     if (text) return text
   }
   return ''
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+async function loadWebsiteSettings(tenantId: string) {
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const { data, error } = await adminClient
+    .from('website_settings')
+    .select('key,value')
+    .eq('tenant_id', tenantId)
+
+  if (error) throw error
+
+  const settings: Record<string, string> = {}
+  for (const row of (data ?? []) as JsonRecord[]) {
+    const key = stringValue(row.key)
+    if (!key) continue
+    settings[key] = row.value === null || row.value === undefined
+      ? ''
+      : String(row.value)
+  }
+  return settings
+}
+
+function timeLabel(rawTime: unknown) {
+  if (typeof rawTime === 'string') {
+    const digits = rawTime.replace(':', '').trim().padStart(4, '0')
+    if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`
+  }
+  if (rawTime && typeof rawTime === 'object') {
+    const time = rawTime as JsonRecord
+    const hours = Number(time.hours ?? 0)
+    const minutes = Number(time.minutes ?? 0)
+    if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+      return `${String(Math.max(0, Math.min(23, Math.round(hours)))).padStart(2, '0')}:${
+        String(Math.max(0, Math.min(59, Math.round(minutes)))).padStart(2, '0')
+      }`
+    }
+  }
+  return ''
+}
+
+function dayLabel(rawDay: unknown) {
+  const day = stringValue(rawDay).toUpperCase()
+  const labels: Record<string, string> = {
+    MONDAY: 'Lunes',
+    TUESDAY: 'Martes',
+    WEDNESDAY: 'Miercoles',
+    THURSDAY: 'Jueves',
+    FRIDAY: 'Viernes',
+    SATURDAY: 'Sabado',
+    SUNDAY: 'Domingo',
+  }
+  return labels[day] ?? day
+}
+
+function businessHoursPeriods(hours: JsonRecord = {}) {
+  const root = hours.opening_hours && typeof hours.opening_hours === 'object'
+    ? hours.opening_hours as JsonRecord
+    : hours
+  const periods = Array.isArray(root.periods) ? root.periods : []
+  return periods.filter((period): period is JsonRecord =>
+    Boolean(period && typeof period === 'object')
+  )
+}
+
+function buildHoursLabel(hours: JsonRecord = {}, fallback = '') {
+  const fallbackText = fallback.trim()
+  if (fallbackText) return fallbackText
+
+  const rows: string[] = []
+  for (const period of businessHoursPeriods(hours)) {
+    const openDay = dayLabel(period.openDay)
+    const openTime = timeLabel(period.openTime)
+    const closeTime = timeLabel(period.closeTime)
+    if (!openDay || !openTime || !closeTime) continue
+    rows.push(`${openDay} ${openTime}-${closeTime}`)
+  }
+  return rows.join('; ')
+}
+
+function withHoursBlock(original: string, label: string) {
+  const marker = 'Horario de atencion:'
+  const cleaned = original.replace(/Horario de atenci[oó]n:[\s\S]*$/i, '').trim()
+  const next = `${cleaned ? `${cleaned}\n\n` : ''}${marker}\n${label}`.trim()
+  return next.slice(0, 512)
+}
+
+function facebookHoursPayload(hours: JsonRecord = {}) {
+  const dayMap: Record<string, string> = {
+    MONDAY: 'mon',
+    TUESDAY: 'tue',
+    WEDNESDAY: 'wed',
+    THURSDAY: 'thu',
+    FRIDAY: 'fri',
+    SATURDAY: 'sat',
+    SUNDAY: 'sun',
+  }
+  const payload: Record<string, string> = {}
+  const counts: Record<string, number> = {}
+
+  for (const period of businessHoursPeriods(hours)) {
+    const openDay = stringValue(period.openDay).toUpperCase()
+    const key = dayMap[openDay]
+    if (!key) continue
+    const index = (counts[key] ?? 0) + 1
+    if (index > 2) continue
+    counts[key] = index
+    const openTime = timeLabel(period.openTime)
+    const closeTime = timeLabel(period.closeTime)
+    if (!openTime || !closeTime) continue
+    payload[`${key}_${index}_open`] = openTime
+    payload[`${key}_${index}_close`] = closeTime
+  }
+
+  return payload
+}
+
+async function publishBusinessHours(request: AdminRequest, channel: JsonRecord) {
+  const tenantId = String(channel.tenant_id)
+  const settings = await loadWebsiteSettings(tenantId)
+  const hours = request.businessHours ?? parseJsonSetting(settings.business_hours_json)
+  const label = buildHoursLabel(hours, request.hoursLabel ?? '')
+  if (!label) {
+    return {
+      ok: false,
+      status: 400,
+      payload: { error: 'businessHours or hoursLabel is required' },
+    }
+  }
+
+  const results: JsonRecord[] = []
+  const phoneNumberId = String(channel.phone_number_id)
+  const before = await inspectProfile(channel)
+  const beforeProfile = before.profile as JsonRecord
+  const profilePayload = beforeProfile.payload && typeof beforeProfile.payload === 'object'
+    ? beforeProfile.payload as JsonRecord
+    : {}
+  const profileData = Array.isArray(profilePayload.data)
+    ? profilePayload.data as JsonRecord[]
+    : []
+  const currentProfile = profileData[0] && typeof profileData[0] === 'object'
+    ? profileData[0]
+    : {}
+  const description = withHoursBlock(
+    firstNonEmpty([
+      currentProfile.description,
+      settings.whatsapp_business_description,
+      settings.business_name,
+      settings.store_name,
+    ]),
+    label,
+  )
+  const profile: JsonRecord = {
+    description,
+  }
+  const address = firstNonEmpty([
+    settings.contact_address,
+    settings.seo_address_street,
+    settings.business_address,
+  ])
+  if (address) profile.address = address
+  const email = firstNonEmpty([settings.contact_email, settings.seo_email])
+  if (email) profile.email = email
+  const website = firstNonEmpty([
+    settings.website_url,
+    settings.public_website_url,
+    settings.store_url,
+  ])
+  if (website) profile.websites = [website]
+
+  const whatsapp = await graphRequest(
+    `${phoneNumberId}/whatsapp_business_profile`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        ...profile,
+      }),
+    },
+  )
+  results.push({
+    destination: 'whatsapp',
+    ok: whatsapp.ok,
+    status: whatsapp.status,
+    payload: whatsapp.payload,
+  })
+
+  const facebookPageId = firstNonEmpty([
+    request.facebookPageId,
+    settings.facebook_page_id,
+    settings.meta_facebook_page_id,
+    settings.business_facebook_page_id,
+  ])
+  if (facebookPageId) {
+    const body = {
+      hours: facebookHoursPayload(hours),
+    }
+    const facebook = await graphRequest(
+      facebookPageId,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      },
+    )
+    results.push({
+      destination: 'facebook',
+      ok: facebook.ok,
+      status: facebook.status,
+      payload: facebook.payload,
+    })
+  } else {
+    results.push({
+      destination: 'facebook',
+      ok: false,
+      skipped: true,
+      reason: 'facebook_page_id_missing',
+    })
+  }
+
+  return {
+    ok: results.some((result) => result.ok === true),
+    status: results.some((result) => result.ok === true) ? 200 : 502,
+    payload: {
+      channel,
+      hoursLabel: label,
+      results,
+      after: whatsapp.ok ? await inspectProfile(channel) : null,
+    },
+  }
+}
+
+function parseJsonSetting(raw: string) {
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed as JsonRecord : {}
+  } catch (_) {
+    return {}
+  }
 }
 
 function numberValue(value: unknown) {
@@ -887,10 +1163,6 @@ serve(async (req) => {
     return jsonResponse({ error: 'Missing required environment variables' }, 500)
   }
 
-  if (!isAuthorized(req)) {
-    return jsonResponse({ error: 'Unauthorized' }, 401)
-  }
-
   let request: AdminRequest
   let profilePictureFile: File | null = null
   try {
@@ -911,6 +1183,10 @@ serve(async (req) => {
     }
   } catch (_) {
     return jsonResponse({ error: 'Invalid request body' }, 400)
+  }
+
+  if (!(await isAuthorizedForRequest(req, request))) {
+    return jsonResponse({ error: 'Unauthorized' }, 401)
   }
 
   const channel = await resolveChannel(request)
@@ -970,6 +1246,11 @@ serve(async (req) => {
 
   if (action === 'audit_catalog_products') {
     const result = await auditCatalogProducts(request, channel)
+    return jsonResponse(result.payload, result.status)
+  }
+
+  if (action === 'publish_business_hours') {
+    const result = await publishBusinessHours(request, channel)
     return jsonResponse(result.payload, result.status)
   }
 

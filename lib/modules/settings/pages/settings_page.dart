@@ -76,7 +76,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final sections = <_SettingsSectionData>[
       _SettingsSectionData(
         title: 'Empresa y acceso',
-        description: 'Usuarios, roles y apariencia base del entorno.',
+        description: 'Datos del negocio, horarios y acceso del entorno.',
         icon: Icons.apartment_rounded,
         color: colorScheme.primary,
         entries: const [
@@ -85,6 +85,12 @@ class _SettingsPageState extends State<SettingsPage> {
             title: 'Datos de empresa',
             subtitle: 'Razon social, RUT, giro, contacto y direccion',
             route: '/settings/company',
+          ),
+          _SettingsEntry(
+            icon: Icons.schedule_outlined,
+            title: 'Horario de atencion',
+            subtitle: 'Semana laboral, tienda y nominas',
+            route: '/settings/business-hours',
           ),
           _SettingsEntry(
             icon: Icons.people_outline,

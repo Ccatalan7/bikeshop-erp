@@ -25,6 +25,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         BikeEncyclopediaPage,
         BluetoothScannerPage,
         BugListPage,
+        BusinessHoursSettingsPage,
         BrandFormPage,
         BrandListPage,
         CategoryFormPage,
@@ -2280,6 +2281,17 @@ class AppRouter {
             erp.loadLibrary(),
             () => MainLayout(
               child: erp.CompanySettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/business-hours',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => MainLayout(
+              child: erp.BusinessHoursSettingsPage(),
             ),
           ),
         ),

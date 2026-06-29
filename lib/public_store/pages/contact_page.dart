@@ -125,7 +125,7 @@ class _ContactPageState extends State<ContactPage>
     final facebookHandle = websiteService.getSetting('facebook', '');
     final businessHoursJson = _firstNonEmptySetting(
       websiteService,
-      const ['google_business_regular_hours', 'business_hours_json'],
+      const ['business_hours_json', 'google_business_regular_hours'],
     );
     final configuredGoogleMapsUrl = _firstNonEmptySetting(
       websiteService,
