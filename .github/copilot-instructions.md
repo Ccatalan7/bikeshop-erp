@@ -299,6 +299,7 @@ The task runs `scripts/publish_windows_update.ps1`. Its current behavior is inte
 5. Waits for the GitHub Actions run.
 6. Prints elapsed build time on each poll.
 7. Prints the latest releases after success.
+8. Prunes old `windows-v*` GitHub releases after a successful publish, keeping the latest 10 by default.
 
 Important consequences:
 
@@ -306,6 +307,8 @@ Important consequences:
 - The task does not need manual staging, manual commit, or a `YES` confirmation in the normal path.
 - The task is selectable, not default, so Firebase deploy tasks remain available from the same build-task menu.
 - GitHub Windows release builds are slow because they compile/package Flutter on a Windows runner. Small Dart/UI changes can still take 10+ minutes to publish.
+- Workflow artifacts are short-lived; `.github/workflows/windows-release.yml` keeps the redundant Actions artifact for 7 days, while the GitHub Release asset remains the actual update source.
+- Release cleanup only targets tags/releases matching `windows-v*`. It must not delete non-Windows releases or any Supabase/Firebase data.
 
 ### Installed App Behavior
 
@@ -320,6 +323,7 @@ The installed Windows app:
 7. Applies a prepared update only after the user clicks `Reiniciar`.
 8. Starts a hidden handoff process through `wscript.exe` so no terminal window should appear.
 9. Relaunches the app after the installer finishes.
+10. Clears temporary downloaded zip/checksum/extract files from `%LOCALAPPDATA%\VinabikeERP\downloads`.
 
 The installer writes local state under:
 
@@ -335,6 +339,7 @@ Useful files during debugging:
 - `updater-bootstrap.log` = app-to-installer handoff log.
 - `app\vinabike_erp.exe` = installed app.
 - `prepared\app\vinabike_erp.exe` = staged app waiting to apply.
+- `app.previous\` = one local rollback backup from the previous installed app.
 
 If the app appears stale, compare:
 

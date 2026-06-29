@@ -1,7 +1,10 @@
 param(
     [string]$Message = "",
     [switch]$NoWait,
-    [switch]$RequireConfirmation
+    [switch]$RequireConfirmation,
+    [ValidateRange(1, 100)]
+    [int]$KeepWindowsReleases = 10,
+    [switch]$SkipReleaseCleanup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +50,40 @@ function Format-Elapsed {
     }
 
     return '{0:00}:{1:00}' -f $Elapsed.Minutes, $Elapsed.Seconds
+}
+
+function Invoke-WindowsReleaseCleanup {
+    param([int]$Keep)
+
+    Write-Step "Pruning old Windows releases, keeping latest $Keep"
+
+    $releasesJson = gh release list `
+        --repo Ccatalan7/bikeshop-erp `
+        --limit 100 `
+        --json tagName,createdAt,isDraft,isPrerelease,name
+
+    $releases = @($releasesJson | ConvertFrom-Json)
+    $windowsReleases = @(
+        $releases |
+            Where-Object { (Get-ObjectProperty $_ 'tagName') -like 'windows-v*' } |
+            Sort-Object { [datetime](Get-ObjectProperty $_ 'createdAt') } -Descending
+    )
+
+    if ($windowsReleases.Count -le $Keep) {
+        Write-Host "No old Windows releases to prune. Current count: $($windowsReleases.Count)."
+        return
+    }
+
+    $oldReleases = @($windowsReleases | Select-Object -Skip $Keep)
+    foreach ($release in $oldReleases) {
+        $tagName = Get-ObjectProperty $release 'tagName'
+        if ([string]::IsNullOrWhiteSpace($tagName)) {
+            continue
+        }
+
+        Write-Host "Deleting old Windows release: $tagName"
+        gh release delete $tagName --repo Ccatalan7/bikeshop-erp --yes --cleanup-tag
+    }
 }
 
 Require-Command git
@@ -163,3 +200,11 @@ if ($conclusion -ne 'success') {
 
 Write-Step 'Windows release published'
 gh release list --repo Ccatalan7/bikeshop-erp --limit 3
+
+if (-not $SkipReleaseCleanup) {
+    try {
+        Invoke-WindowsReleaseCleanup -Keep $KeepWindowsReleases
+    } catch {
+        Write-Host "Release cleanup skipped because it failed: $($_.Exception.Message)"
+    }
+}

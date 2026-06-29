@@ -106,6 +106,26 @@ function Remove-SafeItem {
     }
 }
 
+function Clear-DownloadCache {
+    if (-not (Test-Path -LiteralPath $script:DownloadDir)) {
+        return
+    }
+
+    Get-ChildItem -LiteralPath $script:DownloadDir -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -like 'extract-*' -or
+            $_.Name -like 'vinabike_erp_windows_*.zip' -or
+            $_.Name -like 'vinabike_erp_windows_*.zip.sha256'
+        } |
+        ForEach-Object {
+            try {
+                Remove-SafeItem $_.FullName
+            } catch {
+                Write-Log "Could not remove download cache item $($_.FullName): $($_.Exception.Message)"
+            }
+        }
+}
+
 function Invoke-GitHubJson {
     param([string]$Uri)
 
@@ -647,5 +667,6 @@ try {
 
     Write-Info "Done. Installed at $script:AppDir"
 } finally {
+    Clear-DownloadCache
     Exit-UpdateMutex
 }
