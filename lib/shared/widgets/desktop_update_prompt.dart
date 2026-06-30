@@ -54,7 +54,7 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
         }
 
         if (service.hasDismissedReadyUpdate) {
-          return _buildCollapsedUpdateButton(context, service);
+          return const SizedBox.shrink();
         }
 
         final update = service.availableUpdate;
@@ -194,59 +194,6 @@ class _DesktopUpdatePromptState extends State<DesktopUpdatePrompt> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCollapsedUpdateButton(
-    BuildContext context,
-    DesktopUpdateService service,
-  ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Positioned(
-      top: 56,
-      right: 72,
-      child: Tooltip(
-        message: 'Actualizacion lista',
-        child: Material(
-          color: colorScheme.surface,
-          elevation: 1,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: service.revealAvailableUpdate,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 8,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(color: colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.system_update_alt_rounded,
-                    size: 18,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Actualizar',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 

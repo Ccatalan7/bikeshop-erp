@@ -71,6 +71,39 @@ function Convert-ToUtcDateTimeOrNull {
     }
 }
 
+function Get-RunProperty {
+    param(
+        [object]$Run,
+        [string]$Name
+    )
+
+    switch ($Name) {
+        'databaseId' {
+            $value = Get-ObjectProperty $Run 'databaseId'
+            if ($null -eq $value) { $value = Get-ObjectProperty $Run 'id' }
+            return $value
+        }
+        'headSha' {
+            $value = Get-ObjectProperty $Run 'headSha'
+            if ($null -eq $value) { $value = Get-ObjectProperty $Run 'head_sha' }
+            return $value
+        }
+        'url' {
+            $value = Get-ObjectProperty $Run 'url'
+            if ($null -eq $value) { $value = Get-ObjectProperty $Run 'html_url' }
+            return $value
+        }
+        'createdAt' {
+            $value = Get-ObjectProperty $Run 'createdAt'
+            if ($null -eq $value) { $value = Get-ObjectProperty $Run 'created_at' }
+            return $value
+        }
+        default {
+            return Get-ObjectProperty $Run $Name
+        }
+    }
+}
+
 function Invoke-WindowsReleaseCleanup {
     param([int]$Keep)
 
@@ -105,6 +138,32 @@ function Invoke-WindowsReleaseCleanup {
     }
 }
 
+function Get-WindowsWorkflowRuns {
+    param([string]$Branch)
+
+    try {
+        $runsJson = gh api --method GET `
+            repos/Ccatalan7/bikeshop-erp/actions/workflows/windows-release.yml/runs `
+            -f branch=$Branch `
+            -f event=workflow_dispatch `
+            -f per_page=20
+
+        $runsResponse = $runsJson | ConvertFrom-Json
+        return @($runsResponse.workflow_runs)
+    } catch {
+        Write-Host "Direct workflow run API failed; falling back to gh run list: $($_.Exception.Message)"
+
+        $runsJson = gh run list `
+            --repo Ccatalan7/bikeshop-erp `
+            --workflow "Build Windows Desktop Release" `
+            --branch $Branch `
+            --limit 20 `
+            --json databaseId,headSha,status,conclusion,url,createdAt
+
+        return @($runsJson | ConvertFrom-Json)
+    }
+}
+
 function Find-TriggeredWorkflowRun {
     param(
         [string]$Branch,
@@ -112,29 +171,22 @@ function Find-TriggeredWorkflowRun {
         [datetime]$TriggeredAt
     )
 
-    $runsJson = gh run list `
-        --repo Ccatalan7/bikeshop-erp `
-        --workflow "Build Windows Desktop Release" `
-        --branch $Branch `
-        --limit 20 `
-        --json databaseId,headSha,status,conclusion,url,createdAt
-
-    $parsedRuns = @($runsJson | ConvertFrom-Json)
+    $parsedRuns = Get-WindowsWorkflowRuns -Branch $Branch
 
     foreach ($candidate in $parsedRuns) {
-        $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $candidate 'createdAt')
+        $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-RunProperty $candidate 'createdAt')
         if ($null -eq $candidateCreatedAt) {
             continue
         }
 
-        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateCreatedAt -ge $TriggeredAt) {
+        if ((Get-RunProperty $candidate 'headSha') -eq $HeadSha -and $candidateCreatedAt -ge $TriggeredAt) {
             return $candidate
         }
     }
 
     foreach ($candidate in $parsedRuns) {
         $candidateStatus = Get-ObjectProperty $candidate 'status'
-        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
+        if ((Get-RunProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
             return $candidate
         }
     }
@@ -148,18 +200,11 @@ function Find-ActiveWorkflowRun {
         [string]$HeadSha
     )
 
-    $runsJson = gh run list `
-        --repo Ccatalan7/bikeshop-erp `
-        --workflow "Build Windows Desktop Release" `
-        --branch $Branch `
-        --limit 20 `
-        --json databaseId,headSha,status,conclusion,url,createdAt
-
-    $parsedRuns = @($runsJson | ConvertFrom-Json)
+    $parsedRuns = Get-WindowsWorkflowRuns -Branch $Branch
 
     foreach ($candidate in $parsedRuns) {
         $candidateStatus = Get-ObjectProperty $candidate 'status'
-        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
+        if ((Get-RunProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
             return $candidate
         }
     }
@@ -227,7 +272,7 @@ $timerStartUtc = (Get-Date).ToUniversalTime()
 
 if ($run) {
     Write-Step 'Existing Windows release build found for current commit'
-    $existingRunCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $run 'createdAt')
+    $existingRunCreatedAt = Convert-ToUtcDateTimeOrNull (Get-RunProperty $run 'createdAt')
     if ($null -ne $existingRunCreatedAt) {
         $timerStartUtc = $existingRunCreatedAt
     }
@@ -239,10 +284,12 @@ if ($run) {
     $runLookupDeadline = (Get-Date).AddMinutes(5)
     Write-Step 'Finding GitHub Actions Windows release run'
     do {
-        Start-Sleep -Seconds 10
         $elapsed = Format-Elapsed ((Get-Date).ToUniversalTime() - $timerStartUtc)
         Write-Host "Elapsed: $elapsed | Phase: finding GitHub run"
         $run = Find-TriggeredWorkflowRun -Branch $branch -HeadSha $headSha -TriggeredAt $triggeredAt
+        if (-not $run) {
+            Start-Sleep -Seconds 10
+        }
     } while (-not $run -and (Get-Date) -lt $runLookupDeadline)
 }
 
@@ -254,8 +301,8 @@ if (-not $run) {
     exit 0
 }
 
-$runId = Get-ObjectProperty $run 'databaseId'
-$runUrl = Get-ObjectProperty $run 'url'
+$runId = Get-RunProperty $run 'databaseId'
+$runUrl = Get-RunProperty $run 'url'
 if ([string]::IsNullOrWhiteSpace([string]$runId)) {
     throw 'Workflow run was found, but its databaseId was missing.'
 }

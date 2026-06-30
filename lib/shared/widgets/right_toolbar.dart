@@ -8,6 +8,7 @@ import '../../modules/storage/widgets/app_files_panel.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../services/notification_service.dart';
 import '../services/query_performance_service.dart';
+import '../services/desktop_update_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import 'calculator_panel.dart';
@@ -304,6 +305,7 @@ class _RightToolbarState extends State<RightToolbar> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final toolbarService = context.watch<RightToolbarService>();
+    final desktopUpdateService = context.watch<DesktopUpdateService>();
     final chatProvider = context.watch<ChatProvider>();
     final appearanceService = context.watch<AppearanceService>();
     final activeTool = toolbarService.activeTool;
@@ -340,6 +342,7 @@ class _RightToolbarState extends State<RightToolbar> {
                   activeTool,
                   visibleTools,
                   chatProvider,
+                  desktopUpdateService,
                   appearanceService,
                 )
               : RightToolbarGlassSurface(
@@ -359,6 +362,7 @@ class _RightToolbarState extends State<RightToolbar> {
                     activeBg,
                     visibleTools,
                     chatProvider,
+                    desktopUpdateService,
                   ),
                 ),
         ),
@@ -399,10 +403,13 @@ class _RightToolbarState extends State<RightToolbar> {
     Color activeBg,
     List<ToolbarTool> visibleTools,
     ChatProvider chatProvider,
+    DesktopUpdateService desktopUpdateService,
   ) {
     return Column(
       children: [
         const SizedBox(height: 12),
+        if (desktopUpdateService.hasDismissedReadyUpdate)
+          _buildDismissedUpdateIcon(theme, desktopUpdateService),
         // Tool icons
         for (final tool in visibleTools)
           Tooltip(
@@ -445,6 +452,7 @@ class _RightToolbarState extends State<RightToolbar> {
     ToolbarTool tool,
     List<ToolbarTool> visibleTools,
     ChatProvider chatProvider,
+    DesktopUpdateService desktopUpdateService,
     AppearanceService appearanceService,
   ) {
     final useToolbarPalette = appearanceService.messagingUsesSidebarPalette;
@@ -573,6 +581,11 @@ class _RightToolbarState extends State<RightToolbar> {
               child: Column(
                 children: [
                   const SizedBox(height: 12),
+                  if (desktopUpdateService.hasDismissedReadyUpdate)
+                    _buildDismissedUpdateIcon(
+                      railTheme,
+                      desktopUpdateService,
+                    ),
                   for (final t in visibleTools)
                     Tooltip(
                       message: _toolTitle(t),
@@ -620,6 +633,63 @@ class _RightToolbarState extends State<RightToolbar> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDismissedUpdateIcon(
+    ThemeData theme,
+    DesktopUpdateService desktopUpdateService,
+  ) {
+    return Tooltip(
+      message: 'Actualizacion lista',
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: desktopUpdateService.revealAvailableUpdate,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 40,
+            height: 40,
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.22),
+              ),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Icons.system_update_alt_rounded,
+                  size: 21,
+                  color: theme.colorScheme.primary,
+                ),
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: theme.colorScheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
