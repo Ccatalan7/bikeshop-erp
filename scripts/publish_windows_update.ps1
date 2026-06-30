@@ -166,9 +166,10 @@ gh workflow run windows-release.yml --repo Ccatalan7/bikeshop-erp --ref $branch
 $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 $run = $null
-$runLookupDeadline = (Get-Date).AddSeconds(60)
+$runLookupDeadline = (Get-Date).AddMinutes(5)
 do {
     Start-Sleep -Seconds 6
+    Write-Host 'Waiting for GitHub to register the workflow run...'
 
     $runsJson = gh run list `
         --repo Ccatalan7/bikeshop-erp `
@@ -192,8 +193,10 @@ do {
 } while (-not $run -and (Get-Date) -lt $runLookupDeadline)
 
 if (-not $run) {
-    Write-Host 'Workflow was triggered, but the run was not found yet.'
-    Write-Host 'Check GitHub Actions for the latest "Build Windows Desktop Release" run.'
+    Write-Host 'GitHub accepted the workflow_dispatch event, but the run is not visible through the API yet.'
+    Write-Host 'This can happen when GitHub Actions is delayed. The build may still be queued or running.'
+    Write-Host 'Check GitHub Actions for the latest "Build Windows Desktop Release" run, or use:'
+    Write-Host '  gh run list --repo Ccatalan7/bikeshop-erp --workflow "Build Windows Desktop Release" --branch smartpegas1.0 --limit 5'
     exit 0
 }
 
