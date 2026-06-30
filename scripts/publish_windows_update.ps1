@@ -105,6 +105,43 @@ function Invoke-WindowsReleaseCleanup {
     }
 }
 
+function Find-TriggeredWorkflowRun {
+    param(
+        [string]$Branch,
+        [string]$HeadSha,
+        [datetime]$TriggeredAt
+    )
+
+    $runsJson = gh run list `
+        --repo Ccatalan7/bikeshop-erp `
+        --workflow "Build Windows Desktop Release" `
+        --branch $Branch `
+        --limit 20 `
+        --json databaseId,headSha,status,conclusion,url,createdAt
+
+    $parsedRuns = @($runsJson | ConvertFrom-Json)
+
+    foreach ($candidate in $parsedRuns) {
+        $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $candidate 'createdAt')
+        if ($null -eq $candidateCreatedAt) {
+            continue
+        }
+
+        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateCreatedAt -ge $TriggeredAt) {
+            return $candidate
+        }
+    }
+
+    foreach ($candidate in $parsedRuns) {
+        $candidateStatus = Get-ObjectProperty $candidate 'status'
+        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
 Require-Command git
 Require-Command gh
 
@@ -167,29 +204,12 @@ $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 $run = $null
 $runLookupDeadline = (Get-Date).AddMinutes(5)
+Write-Step 'Finding GitHub Actions Windows release run'
 do {
-    Start-Sleep -Seconds 6
-    Write-Host 'Waiting for GitHub to register the workflow run...'
-
-    $runsJson = gh run list `
-        --repo Ccatalan7/bikeshop-erp `
-        --workflow "Build Windows Desktop Release" `
-        --branch $branch `
-        --limit 20 `
-        --json databaseId,headSha,status,conclusion,url,createdAt
-
-    $parsedRuns = @($runsJson | ConvertFrom-Json)
-    foreach ($candidate in $parsedRuns) {
-        $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $candidate 'createdAt')
-        if ($null -eq $candidateCreatedAt) {
-            continue
-        }
-
-        if ((Get-ObjectProperty $candidate 'headSha') -eq $headSha -and $candidateCreatedAt -ge $triggeredAt) {
-            $run = $candidate
-            break
-        }
-    }
+    Start-Sleep -Seconds 10
+    $elapsed = Format-Elapsed $buildTimer.Elapsed
+    Write-Host "Elapsed: $elapsed | Phase: finding GitHub run"
+    $run = Find-TriggeredWorkflowRun -Branch $branch -HeadSha $headSha -TriggeredAt $triggeredAt
 } while (-not $run -and (Get-Date) -lt $runLookupDeadline)
 
 if (-not $run) {
@@ -223,7 +243,7 @@ do {
     $status = Get-ObjectProperty $view 'status'
     $conclusion = Get-ObjectProperty $view 'conclusion'
     $elapsed = Format-Elapsed $buildTimer.Elapsed
-    Write-Host "Elapsed: $elapsed | Status: $status | Conclusion: $conclusion"
+    Write-Host "Elapsed: $elapsed | Phase: building Windows release | Status: $status | Conclusion: $conclusion"
 } while ($status -ne 'completed')
 
 if ($conclusion -ne 'success') {
