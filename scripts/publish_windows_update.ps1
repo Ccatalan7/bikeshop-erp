@@ -142,6 +142,31 @@ function Find-TriggeredWorkflowRun {
     return $null
 }
 
+function Find-ActiveWorkflowRun {
+    param(
+        [string]$Branch,
+        [string]$HeadSha
+    )
+
+    $runsJson = gh run list `
+        --repo Ccatalan7/bikeshop-erp `
+        --workflow "Build Windows Desktop Release" `
+        --branch $Branch `
+        --limit 20 `
+        --json databaseId,headSha,status,conclusion,url,createdAt
+
+    $parsedRuns = @($runsJson | ConvertFrom-Json)
+
+    foreach ($candidate in $parsedRuns) {
+        $candidateStatus = Get-ObjectProperty $candidate 'status'
+        if ((Get-ObjectProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
 Require-Command git
 Require-Command gh
 
@@ -197,20 +222,29 @@ $headSha = (git rev-parse HEAD).Trim()
 Write-Step "Pushing $branch"
 git push origin $branch
 
-Write-Step 'Triggering GitHub Actions Windows release workflow'
-$triggeredAt = (Get-Date).ToUniversalTime().AddSeconds(-5)
-gh workflow run windows-release.yml --repo Ccatalan7/bikeshop-erp --ref $branch
-$buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$run = Find-ActiveWorkflowRun -Branch $branch -HeadSha $headSha
+$timerStartUtc = (Get-Date).ToUniversalTime()
 
-$run = $null
-$runLookupDeadline = (Get-Date).AddMinutes(5)
-Write-Step 'Finding GitHub Actions Windows release run'
-do {
-    Start-Sleep -Seconds 10
-    $elapsed = Format-Elapsed $buildTimer.Elapsed
-    Write-Host "Elapsed: $elapsed | Phase: finding GitHub run"
-    $run = Find-TriggeredWorkflowRun -Branch $branch -HeadSha $headSha -TriggeredAt $triggeredAt
-} while (-not $run -and (Get-Date) -lt $runLookupDeadline)
+if ($run) {
+    Write-Step 'Existing Windows release build found for current commit'
+    $existingRunCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $run 'createdAt')
+    if ($null -ne $existingRunCreatedAt) {
+        $timerStartUtc = $existingRunCreatedAt
+    }
+} else {
+    Write-Step 'Triggering GitHub Actions Windows release workflow'
+    $triggeredAt = (Get-Date).ToUniversalTime().AddSeconds(-5)
+    gh workflow run windows-release.yml --repo Ccatalan7/bikeshop-erp --ref $branch
+
+    $runLookupDeadline = (Get-Date).AddMinutes(5)
+    Write-Step 'Finding GitHub Actions Windows release run'
+    do {
+        Start-Sleep -Seconds 10
+        $elapsed = Format-Elapsed ((Get-Date).ToUniversalTime() - $timerStartUtc)
+        Write-Host "Elapsed: $elapsed | Phase: finding GitHub run"
+        $run = Find-TriggeredWorkflowRun -Branch $branch -HeadSha $headSha -TriggeredAt $triggeredAt
+    } while (-not $run -and (Get-Date) -lt $runLookupDeadline)
+}
 
 if (-not $run) {
     Write-Host 'GitHub accepted the workflow_dispatch event, but the run is not visible through the API yet.'
@@ -242,7 +276,7 @@ do {
     $view = $viewJson | ConvertFrom-Json
     $status = Get-ObjectProperty $view 'status'
     $conclusion = Get-ObjectProperty $view 'conclusion'
-    $elapsed = Format-Elapsed $buildTimer.Elapsed
+    $elapsed = Format-Elapsed ((Get-Date).ToUniversalTime() - $timerStartUtc)
     Write-Host "Elapsed: $elapsed | Phase: building Windows release | Status: $status | Conclusion: $conclusion"
 } while ($status -ne 'completed')
 
