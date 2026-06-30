@@ -52,6 +52,25 @@ function Format-Elapsed {
     return '{0:00}:{1:00}' -f $Elapsed.Minutes, $Elapsed.Seconds
 }
 
+function Convert-ToUtcDateTimeOrNull {
+    param([object]$Value)
+
+    if ($null -eq $Value) {
+        return $null
+    }
+
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $null
+    }
+
+    try {
+        return ([datetime]$text).ToUniversalTime()
+    } catch {
+        return $null
+    }
+}
+
 function Invoke-WindowsReleaseCleanup {
     param([int]$Keep)
 
@@ -160,8 +179,12 @@ do {
 
     $parsedRuns = @($runsJson | ConvertFrom-Json)
     foreach ($candidate in $parsedRuns) {
-        $candidateCreatedAt = [datetime](Get-ObjectProperty $candidate 'createdAt')
-        if ((Get-ObjectProperty $candidate 'headSha') -eq $headSha -and $candidateCreatedAt.ToUniversalTime() -ge $triggeredAt) {
+        $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-ObjectProperty $candidate 'createdAt')
+        if ($null -eq $candidateCreatedAt) {
+            continue
+        }
+
+        if ((Get-ObjectProperty $candidate 'headSha') -eq $headSha -and $candidateCreatedAt -ge $triggeredAt) {
             $run = $candidate
             break
         }
