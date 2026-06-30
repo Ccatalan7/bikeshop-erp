@@ -101,38 +101,40 @@ Write-Step 'Staging all Source Control changes'
 git add -A
 
 $stagedFiles = @(git diff --cached --name-only)
+$hasStagedChanges = $stagedFiles.Count -gt 0
 
-if ($stagedFiles.Count -eq 0) {
-    Write-Host 'No Source Control changes found.'
-    Write-Host 'Make changes first, then run this task again.'
-    Write-Host ''
-    Write-Host 'Current status:'
-    git status --short
-    exit 1
-}
-
-if ([string]::IsNullOrWhiteSpace($Message)) {
+if ($hasStagedChanges -and [string]::IsNullOrWhiteSpace($Message)) {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
     $Message = "chore: publish Windows update $timestamp"
 }
 
 Write-Step "Current branch: $branch"
-Write-Host "Commit message: $Message"
-Write-Host "Files to commit and publish:"
-foreach ($file in $stagedFiles) {
-    Write-Host "  $file"
+if ($hasStagedChanges) {
+    Write-Host "Commit message: $Message"
+    Write-Host "Files to commit and publish:"
+    foreach ($file in $stagedFiles) {
+        Write-Host "  $file"
+    }
+} else {
+    Write-Host 'No uncommitted Source Control changes found.'
+    Write-Host 'Publishing the current branch HEAD instead.'
 }
 
 if ($RequireConfirmation) {
-    $confirmation = Read-Host "Type YES to commit, push, and publish a Windows release from branch '$branch'"
+    $confirmationAction = if ($hasStagedChanges) { 'commit, push, and publish' } else { 'push and publish' }
+    $confirmation = Read-Host "Type YES to $confirmationAction a Windows release from branch '$branch'"
     if ($confirmation -ne 'YES') {
         Write-Host 'Cancelled.'
         exit 1
     }
 }
 
-Write-Step 'Committing staged changes'
-git commit -m $Message
+if ($hasStagedChanges) {
+    Write-Step 'Committing staged changes'
+    git commit -m $Message
+} else {
+    Write-Step 'Skipping commit'
+}
 
 $headSha = (git rev-parse HEAD).Trim()
 
@@ -140,26 +142,31 @@ Write-Step "Pushing $branch"
 git push origin $branch
 
 Write-Step 'Triggering GitHub Actions Windows release workflow'
+$triggeredAt = (Get-Date).ToUniversalTime().AddSeconds(-5)
 gh workflow run windows-release.yml --repo Ccatalan7/bikeshop-erp --ref $branch
 $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
-Start-Sleep -Seconds 6
-
-$runsJson = gh run list `
-    --repo Ccatalan7/bikeshop-erp `
-    --workflow "Build Windows Desktop Release" `
-    --branch $branch `
-    --limit 10 `
-    --json databaseId,headSha,status,conclusion,url,createdAt
-
-$parsedRuns = $runsJson | ConvertFrom-Json
 $run = $null
-foreach ($candidate in $parsedRuns) {
-    if ((Get-ObjectProperty $candidate 'headSha') -eq $headSha) {
-        $run = $candidate
-        break
+$runLookupDeadline = (Get-Date).AddSeconds(60)
+do {
+    Start-Sleep -Seconds 6
+
+    $runsJson = gh run list `
+        --repo Ccatalan7/bikeshop-erp `
+        --workflow "Build Windows Desktop Release" `
+        --branch $branch `
+        --limit 20 `
+        --json databaseId,headSha,status,conclusion,url,createdAt
+
+    $parsedRuns = @($runsJson | ConvertFrom-Json)
+    foreach ($candidate in $parsedRuns) {
+        $candidateCreatedAt = [datetime](Get-ObjectProperty $candidate 'createdAt')
+        if ((Get-ObjectProperty $candidate 'headSha') -eq $headSha -and $candidateCreatedAt.ToUniversalTime() -ge $triggeredAt) {
+            $run = $candidate
+            break
+        }
     }
-}
+} while (-not $run -and (Get-Date) -lt $runLookupDeadline)
 
 if (-not $run) {
     Write-Host 'Workflow was triggered, but the run was not found yet.'

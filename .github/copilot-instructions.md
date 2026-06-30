@@ -293,17 +293,19 @@ Ctrl+Shift+B -> Publish Windows Update (all changes)
 The task runs `scripts/publish_windows_update.ps1`. Its current behavior is intentionally low-friction:
 
 1. Stages every Source Control change with `git add -A`.
-2. Creates a commit automatically. If no message is passed, it generates a timestamped Windows update commit message.
-3. Pushes the current branch.
-4. Triggers `.github/workflows/windows-release.yml` with `gh workflow run`.
-5. Waits for the GitHub Actions run.
-6. Prints elapsed build time on each poll.
-7. Prints the latest releases after success.
-8. Prunes old `windows-v*` GitHub releases after a successful publish, keeping the latest 10 by default.
+2. If staged changes exist, creates a commit automatically. If no message is passed, it generates a timestamped Windows update commit message.
+3. If no staged changes exist, skips the commit and publishes the current branch `HEAD`. This supports the Mac-to-Windows flow where changes were already committed or synced before running the task.
+4. Pushes the current branch.
+5. Triggers `.github/workflows/windows-release.yml` with `gh workflow run`.
+6. Waits for the GitHub Actions run.
+7. Prints elapsed build time on each poll.
+8. Prints the latest releases after success.
+9. Prunes old `windows-v*` GitHub releases after a successful publish, keeping the latest 10 by default.
 
 Important consequences:
 
 - Anything visible in Source Control will be included. Clean or intentionally keep unrelated changes before running the task.
+- A clean Source Control state is valid. In that case, the task publishes the already-committed branch head instead of failing.
 - The task does not need manual staging, manual commit, or a `YES` confirmation in the normal path.
 - The task is selectable, not default, so Firebase deploy tasks remain available from the same build-task menu.
 - GitHub Windows release builds are slow because they compile/package Flutter on a Windows runner. Small Dart/UI changes can still take 10+ minutes to publish.
