@@ -16,6 +16,30 @@ const allowedEmbeddingModels = new Set([
   "gemini-embedding-001",
 ]);
 
+class GeminiApiError extends Error {
+  readonly status: number;
+  readonly upstreamStatusText?: string;
+  readonly upstreamCode?: number;
+  readonly upstreamDetails?: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    message: string,
+    options: {
+      upstreamStatusText?: string;
+      upstreamCode?: number;
+      upstreamDetails?: Record<string, unknown>;
+    } = {},
+  ) {
+    super(message);
+    this.name = "GeminiApiError";
+    this.status = status;
+    this.upstreamStatusText = options.upstreamStatusText;
+    this.upstreamCode = options.upstreamCode;
+    this.upstreamDetails = options.upstreamDetails;
+  }
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -32,6 +56,12 @@ function requireEnv(name: string): string {
     throw new Error(`${name} not configured`);
   }
   return value;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : undefined;
 }
 
 async function requireAuthenticatedUser(req: Request) {
@@ -80,10 +110,25 @@ async function callGemini(path: string, payload: Record<string, unknown>) {
   }
 
   if (!response.ok) {
-    const message = typeof parsed.error === "object" && parsed.error !== null
-      ? JSON.stringify(parsed.error)
+    const errorDetails = objectValue(parsed.error);
+    const upstreamMessageValue = errorDetails?.message;
+    const upstreamStatusValue = errorDetails?.status;
+    const upstreamCodeValue = errorDetails?.code;
+    const upstreamMessage = typeof upstreamMessageValue === "string"
+      ? upstreamMessageValue
       : rawText;
-    throw new Error(`Gemini API error: ${response.status} ${message}`);
+    const upstreamStatusText = typeof upstreamStatusValue === "string"
+      ? upstreamStatusValue
+      : undefined;
+    const upstreamCode = typeof upstreamCodeValue === "number"
+      ? upstreamCodeValue
+      : response.status;
+
+    throw new GeminiApiError(response.status, upstreamMessage, {
+      upstreamStatusText,
+      upstreamCode,
+      upstreamDetails: errorDetails ?? parsed,
+    });
   }
 
   return parsed;
@@ -198,9 +243,27 @@ serve(async (req: Request): Promise<Response> => {
 
     return jsonResponse({ error: "Invalid action" }, 400);
   } catch (error) {
-    console.error("[gemini-proxy] unexpected error", error);
     const message = error instanceof Error ? error.message : String(error);
-    const status = message === "Missing authentication" ? 401 : 400;
+
+    if (error instanceof GeminiApiError) {
+      console.warn(
+        `[gemini-proxy] upstream error status=${error.status} apiStatus=${error.upstreamStatusText ?? "unknown"}: ${message}`,
+      );
+      return jsonResponse({
+        error: message,
+        upstreamStatus: error.status,
+        upstreamStatusText: error.upstreamStatusText,
+        upstreamCode: error.upstreamCode,
+        upstreamDetails: error.upstreamDetails,
+      }, error.status);
+    }
+
+    const status = message === "Missing authentication"
+      ? 401
+      : message.endsWith("not configured")
+      ? 500
+      : 400;
+    console.error("[gemini-proxy] unexpected error", error);
     return jsonResponse({ error: message }, status);
   }
 });

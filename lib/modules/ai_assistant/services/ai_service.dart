@@ -715,6 +715,16 @@ ${hintLines.join('\n')}
     notifyListeners();
 
     try {
+      final jobSummaryResponse = await _tryHandleJobSummary(
+        message,
+        jobs: jobs,
+        customerService: customerService,
+        bikeshopService: bikeshopService,
+      );
+      if (jobSummaryResponse != null) {
+        return jobSummaryResponse;
+      }
+
       final entityCardResponse = await _tryHandleEntityCards(
         message,
         customerService: customerService,
@@ -898,9 +908,14 @@ ${hintLines.join('\n')}
         ..addAll(workingHistory);
 
       return _textResponse(text);
-    } catch (e) {
+    } on GeminiProxyException catch (e) {
       debugPrint('Error sending message via Gemini proxy: $e');
-      return _textResponse('Error: $e');
+      return _textResponse(_friendlyGeminiErrorMessage(e));
+    } catch (e) {
+      debugPrint('Error sending message via AI assistant: $e');
+      return _textResponse(
+        'No pude procesar esa solicitud ahora. Intenta de nuevo en unos segundos.',
+      );
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -920,6 +935,248 @@ ${hintLines.join('\n')}
   }) {
     final compact = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     return AIAssistantResponse(text: compact, cards: cards);
+  }
+
+  String _friendlyGeminiErrorMessage(GeminiProxyException error) {
+    if (error.isAuthenticationError) {
+      return 'No pude autenticar la conexión del asistente. Vuelve a iniciar sesión e intenta otra vez.';
+    }
+
+    if (error.isConfigurationError) {
+      return 'El asistente IA no está configurado en el servidor. Revisa los secrets de Gemini en Supabase.';
+    }
+
+    if (error.isTransient) {
+      return 'Gemini está con alta demanda o respondió temporalmente no disponible. Ya intenté reintentar la solicitud; prueba de nuevo en unos segundos.';
+    }
+
+    return 'El asistente IA no pudo responder ahora. Intenta de nuevo en unos segundos.';
+  }
+
+  Future<AIAssistantResponse?> _tryHandleJobSummary(
+    String message, {
+    List<MechanicJob>? jobs,
+    CustomerService? customerService,
+    BikeshopService? bikeshopService,
+  }) async {
+    final normalized = _normalizeText(message);
+    final mentionsJobs = normalized.contains('trabajo') ||
+        normalized.contains('trabajos') ||
+        normalized.contains('orden de trabajo') ||
+        normalized.contains('ordenes de trabajo') ||
+        normalized.contains('job') ||
+        normalized.contains('jobs');
+    if (!mentionsJobs) {
+      return null;
+    }
+
+    final wantsSummary = normalized.contains('resumen') ||
+        normalized.contains('resume') ||
+        normalized.contains('sumario') ||
+        normalized.contains('summary') ||
+        normalized.contains('estado') ||
+        normalized.contains('activos') ||
+        normalized.contains('activo') ||
+        normalized.contains('pendientes') ||
+        normalized.contains('en curso') ||
+        normalized.contains('como vamos') ||
+        normalized.contains('como esta');
+    if (!wantsSummary) {
+      return null;
+    }
+
+    final sourceJobs = await _loadJobsForSummary(
+      jobs,
+      bikeshopService: bikeshopService,
+    );
+    if (sourceJobs.isEmpty) {
+      return _textResponse('No encontré trabajos para resumir ahora mismo.');
+    }
+
+    final asksForActive =
+        normalized.contains('activo') || normalized.contains('activos');
+    final includeAll = !asksForActive &&
+        (normalized.contains('todos') ||
+            normalized.contains('todas') ||
+            normalized.contains('historico') ||
+            normalized.contains('historial') ||
+            normalized.contains('finalizados') ||
+            normalized.contains('entregados') ||
+            normalized.contains('cancelados'));
+    final selectedJobs = includeAll
+        ? List<MechanicJob>.from(sourceJobs)
+        : sourceJobs.where(_isActiveJob).toList();
+
+    if (selectedJobs.isEmpty) {
+      return _textResponse('No encontré trabajos activos para resumir ahora.');
+    }
+
+    final customerNamesById = await _loadCustomerNamesById(customerService);
+    selectedJobs.sort(_compareJobsForSummary);
+
+    final statusCounts = <String, int>{};
+    var highPriorityCount = 0;
+    var overdueCount = 0;
+    var dueSoonCount = 0;
+    var totalValue = 0.0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final soonLimit = today.add(const Duration(days: 2));
+
+    for (final job in selectedJobs) {
+      final statusLabel = _jobStatusLabel(job);
+      statusCounts[statusLabel] = (statusCounts[statusLabel] ?? 0) + 1;
+      if (job.priority == JobPriority.urgente ||
+          job.priority == JobPriority.alta) {
+        highPriorityCount++;
+      }
+      final deadline = job.deliveryDeadline;
+      if (deadline != null && _isActiveJob(job)) {
+        final deadlineDate = DateTime(
+          deadline.year,
+          deadline.month,
+          deadline.day,
+        );
+        if (deadlineDate.isBefore(today)) {
+          overdueCount++;
+        } else if (!deadlineDate.isAfter(soonLimit)) {
+          dueSoonCount++;
+        }
+      }
+      totalValue += job.totalCost;
+    }
+
+    final statusSummary = statusCounts.entries
+        .map((entry) => '${entry.key}: ${entry.value}')
+        .join(', ');
+    final scopeLabel = includeAll ? 'trabajos' : 'trabajos activos';
+    final headline = 'Tienes ${selectedJobs.length} $scopeLabel.';
+    final lines = <String>[
+      headline,
+      if (statusSummary.isNotEmpty) 'Por estado: $statusSummary.',
+      if (highPriorityCount > 0)
+        'Prioridad alta o urgente: $highPriorityCount.',
+      if (overdueCount > 0) 'Con fecha de entrega vencida: $overdueCount.',
+      if (dueSoonCount > 0) 'Vencen en los próximos 2 días: $dueSoonCount.',
+      if (totalValue > 0)
+        'Total valorizado: ${ChileanUtils.formatCurrency(totalValue)}.',
+    ];
+
+    final detailLines = selectedJobs
+        .take(5)
+        .map((job) => _jobSummaryLine(
+              job,
+              customerName: customerNamesById[job.customerId],
+            ))
+        .toList();
+
+    final cards = selectedJobs
+        .take(3)
+        .map((job) => _buildJobCard(
+              job,
+              customerName: customerNamesById[job.customerId],
+            ))
+        .toList();
+
+    final text = [
+      lines.join('\n'),
+      if (detailLines.isNotEmpty)
+        'Trabajos destacados:\n${detailLines.join('\n')}',
+    ].join('\n\n');
+
+    return _textResponse(text, cards: cards);
+  }
+
+  Future<List<MechanicJob>> _loadJobsForSummary(
+    List<MechanicJob>? jobs, {
+    BikeshopService? bikeshopService,
+  }) async {
+    if (jobs != null && jobs.isNotEmpty) {
+      return jobs.where((job) => job.id != null).toList();
+    }
+
+    if (bikeshopService == null) {
+      return const <MechanicJob>[];
+    }
+
+    final loadedJobs = bikeshopService.hasJobsCache
+        ? bikeshopService.cachedJobs
+        : await bikeshopService.getJobs();
+    return loadedJobs.where((job) => job.id != null).toList();
+  }
+
+  Future<Map<String, String>> _loadCustomerNamesById(
+    CustomerService? customerService,
+  ) async {
+    if (customerService == null) {
+      return const <String, String>{};
+    }
+
+    try {
+      final customers = await _loadCustomersForAi(customerService);
+      return {
+        for (final customer in customers)
+          if (customer.id != null) customer.id!: customer.name,
+      };
+    } catch (e) {
+      debugPrint('⚠️ [AI] Failed to load customers for job summary: $e');
+      return const <String, String>{};
+    }
+  }
+
+  bool _isActiveJob(MechanicJob job) {
+    return job.status != JobStatus.finalizado &&
+        job.status != JobStatus.entregado &&
+        job.status != JobStatus.cancelado;
+  }
+
+  int _compareJobsForSummary(MechanicJob a, MechanicJob b) {
+    final priorityCompare =
+        _jobPriorityRank(b.priority).compareTo(_jobPriorityRank(a.priority));
+    if (priorityCompare != 0) {
+      return priorityCompare;
+    }
+
+    final deadlineCompare =
+        _jobDeadlineSortValue(a).compareTo(_jobDeadlineSortValue(b));
+    if (deadlineCompare != 0) {
+      return deadlineCompare;
+    }
+
+    return b.arrivalDate.compareTo(a.arrivalDate);
+  }
+
+  int _jobPriorityRank(JobPriority priority) {
+    switch (priority) {
+      case JobPriority.urgente:
+        return 4;
+      case JobPriority.alta:
+        return 3;
+      case JobPriority.normal:
+        return 2;
+      case JobPriority.baja:
+        return 1;
+    }
+  }
+
+  int _jobDeadlineSortValue(MechanicJob job) {
+    return job.deliveryDeadline?.millisecondsSinceEpoch ?? 8640000000000000;
+  }
+
+  String _jobSummaryLine(
+    MechanicJob job, {
+    String? customerName,
+  }) {
+    final parts = <String>[
+      _jobCardTitle(job),
+      _jobStatusLabel(job),
+      job.priority.displayName,
+      if ((customerName ?? '').trim().isNotEmpty) customerName!.trim(),
+      if (job.deliveryDeadline != null)
+        'Entrega ${ChileanUtils.formatDate(job.deliveryDeadline!)}',
+      if (job.totalCost > 0) ChileanUtils.formatCurrency(job.totalCost),
+    ];
+    return '- ${parts.join(' | ')}';
   }
 
   Future<AIAssistantResponse?> _tryHandleEntityCards(
