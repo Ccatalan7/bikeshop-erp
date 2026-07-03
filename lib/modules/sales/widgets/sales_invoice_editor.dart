@@ -873,12 +873,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   double get _subtotal {
     final value = _lineEntries.fold<double>(
         0, (sum, entry) => sum + entry.line.netAmount);
-    return value < 0 ? 0 : value;
+    return value < 0 ? 0 : value.roundToDouble();
   }
 
   double get _netAmount {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
-      return _subtotal / 1.19;
+      return (_subtotal / 1.19).roundToDouble();
     } else {
       return _subtotal;
     }

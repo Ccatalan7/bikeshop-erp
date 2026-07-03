@@ -63,6 +63,7 @@ import 'shared/services/error_reporting_service.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
 import 'modules/spreadsheets/services/spreadsheet_service.dart';
+import 'modules/ai_assistant/services/ai_assistant_context_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
@@ -323,6 +324,7 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppearanceService()),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
+        ChangeNotifierProvider(create: (_) => AIAssistantContextService()),
         ChangeNotifierProvider(create: (_) => OcrFileHandoffService()),
         ChangeNotifierProvider(create: (_) => SmartScreenshotService()),
         ChangeNotifierProvider(create: (_) => DesktopUpdateService()),

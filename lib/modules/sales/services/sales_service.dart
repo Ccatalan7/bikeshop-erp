@@ -298,7 +298,10 @@ class SalesService extends ChangeNotifier {
     try {
       final data = await _databaseService.select(_paymentsCollection);
 
-      final payments = data.map(Payment.fromJson).toList()
+      final payments = data
+          .map(Payment.fromJson)
+          .where((payment) => payment.deletedAt == null)
+          .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
       _payments
@@ -387,10 +390,47 @@ class SalesService extends ChangeNotifier {
       AccountingDashboardSection.invalidateCache();
       notifyListeners();
       return savedPayment;
+    } on PostgrestException catch (e) {
+      if (_isPaymentIdempotencyConflict(e) && payment.idempotencyKey != null) {
+        final existing = await _findPaymentByIdempotencyKey(payment);
+        if (existing != null) {
+          _upsertPayment(existing);
+          await fetchInvoice(existing.invoiceId, refresh: true);
+          await loadPayments(forceRefresh: true);
+          invalidatePaymentsCache();
+          invalidateInvoicesCache();
+          AccountingDashboardSection.invalidateCache();
+          notifyListeners();
+          return existing;
+        }
+      }
+      rethrow;
     } catch (e) {
       // Propagate actual error for debugging
       rethrow;
     }
+  }
+
+  bool _isPaymentIdempotencyConflict(PostgrestException error) {
+    final details = error.details?.toString() ?? '';
+    return error.code == '23505' &&
+        (error.message.contains('idempotency') ||
+            details.contains('idempotency'));
+  }
+
+  Future<Payment?> _findPaymentByIdempotencyKey(Payment payment) async {
+    final data = await Supabase.instance.client
+        .from(_paymentsCollection)
+        .select()
+        .eq('tenant_id', payment.tenantId)
+        .eq('idempotency_key', payment.idempotencyKey!)
+        .maybeSingle();
+
+    if (data == null) {
+      return null;
+    }
+
+    return Payment.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<void> deletePayment(String paymentId) async {
@@ -501,7 +541,10 @@ class SalesService extends ChangeNotifier {
   }
 
   List<Payment> getPaymentsForInvoice(String invoiceId) {
-    return _payments.where((payment) => payment.invoiceId == invoiceId).toList()
+    return _payments
+        .where((payment) =>
+            payment.invoiceId == invoiceId && payment.deletedAt == null)
+        .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 
@@ -689,6 +732,11 @@ class SalesService extends ChangeNotifier {
       final data = await _databaseService.selectById(_paymentsCollection, id);
       if (data != null) {
         final payment = Payment.fromJson(data);
+        if (payment.deletedAt != null) {
+          _payments.removeWhere((element) => element.id == payment.id);
+          _debouncedNotify();
+          return;
+        }
         _upsertPayment(payment);
         _debouncedNotify();
       }
@@ -706,6 +754,11 @@ class SalesService extends ChangeNotifier {
   }
 
   void _upsertPayment(Payment payment) {
+    if (payment.deletedAt != null) {
+      _payments.removeWhere((element) => element.id == payment.id);
+      return;
+    }
+
     final index = _payments.indexWhere((element) => element.id == payment.id);
     if (index >= 0) {
       _payments[index] = payment;

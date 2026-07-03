@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/product.dart';
 import '../models/payment_method.dart' as pm;
@@ -67,6 +68,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   TaxTreatment _taxTreatment =
       TaxTreatment.noTax; // Default sin IVA, igual al flujo normal de facturas
   bool _isProcessing = false;
+  String _paymentIdempotencyKey = const Uuid().v4();
 
   // Confirmation state
   String? _invoiceNumber;
@@ -412,7 +414,10 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   void _goToPayment() {
     if (_cart.isEmpty) return;
     _amountController.text = _total.toStringAsFixed(0);
-    setState(() => _step = _QuickSaleStep.payment);
+    setState(() {
+      _paymentIdempotencyKey = const Uuid().v4();
+      _step = _QuickSaleStep.payment;
+    });
   }
 
   Future<void> _confirmPayment() async {
@@ -542,6 +547,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         invoiceId: saved.id!,
         invoiceReference: saved.invoiceNumber,
         paymentMethodId: _selectedPaymentMethod!.id,
+        idempotencyKey: _paymentIdempotencyKey,
         amount: _total,
         date: DateTime.now(),
       );
@@ -579,6 +585,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
       _totalPaid = 0;
       _change = 0;
       _savedInvoiceId = null;
+      _paymentIdempotencyKey = const Uuid().v4();
       _step = _QuickSaleStep.cart;
     });
     _searchFocusNode.requestFocus();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/models/tax_treatment.dart';
@@ -27,6 +28,7 @@ class PaymentForm extends StatefulWidget {
 
 class _PaymentFormState extends State<PaymentForm> {
   final _formKey = GlobalKey<FormState>();
+  final String _idempotencyKey = const Uuid().v4();
   late final TextEditingController _amountController;
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -37,12 +39,28 @@ class _PaymentFormState extends State<PaymentForm> {
   bool _isLoadingMethods = true;
   bool _includesIva = false; // Payment-level IVA toggle
 
+  int? _parseWholePesoAmount(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[\s$]'), '');
+    if (normalized.isEmpty || normalized.contains(',')) {
+      return null;
+    }
+    if (normalized.contains('.')) {
+      final thousandsPattern = RegExp(r'^\d{1,3}(\.\d{3})+$');
+      if (!thousandsPattern.hasMatch(normalized)) {
+        return null;
+      }
+      return int.tryParse(normalized.replaceAll('.', ''));
+    }
+    return int.tryParse(normalized);
+  }
+
   /// Effective balance: always compute from total - paidAmount for consistency.
   /// The raw DB `balance` field can be stale if the invoice total was changed
   /// after a payment was recorded, causing it to disagree with paid_amount.
   double get _effectiveBalance {
-    return (widget.invoice.total - widget.invoice.paidAmount)
+    final calculated = (widget.invoice.total - widget.invoice.paidAmount)
         .clamp(0.0, widget.invoice.total);
+    return calculated.abs() < 1 ? 0 : calculated;
   }
 
   @override
@@ -92,6 +110,10 @@ class _PaymentFormState extends State<PaymentForm> {
   }
 
   Future<void> _submit() async {
+    if (_isSaving) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -103,20 +125,17 @@ class _PaymentFormState extends State<PaymentForm> {
       return;
     }
 
-    final rawAmount =
-        _amountController.text.trim().replaceAll('.', '').replaceAll(',', '.');
-    final amount = double.tryParse(rawAmount);
-    if (amount == null || amount <= 0) {
+    final amountPesos = _parseWholePesoAmount(_amountController.text);
+    if (amountPesos == null || amountPesos <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa un monto válido.')),
+        const SnackBar(content: Text('Ingresa un monto en pesos enteros.')),
       );
       return;
     }
 
     final balance = _effectiveBalance;
-    final amountInt = amount.round();
-    final balanceInt = balance.round();
-    if (amountInt - balanceInt > 1) {
+    final balancePesos = balance.round();
+    if (amountPesos > balancePesos) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -125,23 +144,21 @@ class _PaymentFormState extends State<PaymentForm> {
       return;
     }
 
-    final effectiveAmount = amount > balance ? balance : amount;
-
     final salesService = context.read<SalesService>();
-
-    final tenantId = await TenantService().getTenantId();
-    if (tenantId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Error: No se pudo obtener el tenant ID')),
-        );
-      }
-      return;
-    }
 
     setState(() => _isSaving = true);
     try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Error: No se pudo obtener el tenant ID')),
+          );
+        }
+        return;
+      }
+
       final payment = Payment(
         tenantId: tenantId,
         invoiceId: widget.invoice.id!,
@@ -149,7 +166,8 @@ class _PaymentFormState extends State<PaymentForm> {
             ? widget.invoice.invoiceNumber
             : null,
         paymentMethodId: _selectedPaymentMethod!.id,
-        amount: effectiveAmount,
+        idempotencyKey: _idempotencyKey,
+        amount: amountPesos.toDouble(),
         date: _paymentDate,
         reference: _referenceController.text.trim().isEmpty
             ? null
@@ -246,20 +264,16 @@ class _PaymentFormState extends State<PaymentForm> {
               labelText: 'Monto',
               prefixText: '\$ ',
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: TextInputType.number,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Ingresa el monto del pago';
               }
-              final normalizedValue =
-                  value.replaceAll('.', '').replaceAll(',', '.');
-              final parsed = double.tryParse(normalizedValue);
+              final parsed = _parseWholePesoAmount(value);
               if (parsed == null || parsed <= 0) {
-                return 'Monto inválido';
+                return 'Ingresa pesos enteros, sin decimales';
               }
-              final parsedInt = parsed.round();
-              final balanceInt = _effectiveBalance.round();
-              if (parsedInt - balanceInt > 1) {
+              if (parsed > _effectiveBalance.round()) {
                 return 'No puede superar el saldo';
               }
               return null;
@@ -333,11 +347,9 @@ class _PaymentFormState extends State<PaymentForm> {
           // Show IVA breakdown when toggle is on
           if (_includesIva) ...[
             Builder(builder: (context) {
-              final rawAmount = _amountController.text
-                  .trim()
-                  .replaceAll('.', '')
-                  .replaceAll(',', '.');
-              final amount = double.tryParse(rawAmount) ?? 0;
+              final amount =
+                  (_parseWholePesoAmount(_amountController.text) ?? 0)
+                      .toDouble();
               final net = (amount / 1.19).roundToDouble();
               final iva = amount - net;
               return Card(

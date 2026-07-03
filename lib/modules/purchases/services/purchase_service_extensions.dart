@@ -65,11 +65,13 @@ class PurchaseServiceExtensions {
     required String paymentMethod,
     required DateTime paymentDate,
     String? bankAccountId,
+    String? idempotencyKey,
     String? reference,
     String? notes,
   }) async {
     await _supabase.from('purchase_payments').insert({
       'invoice_id': invoiceId,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
       'amount': amount,
       'payment_method_id': paymentMethod,
       'date': paymentDate.toUtc().toIso8601String(),

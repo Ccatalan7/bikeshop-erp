@@ -1189,12 +1189,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   double get _subtotal {
-    if (_isDiscountBeforeTax) {
-      return _subtotalBeforeDiscount - _discountAmount;
-    } else {
-      // If after tax, the "subtotal" (tax base) remains the full amount
-      return _subtotalBeforeDiscount;
-    }
+    final value = _isDiscountBeforeTax
+        ? _subtotalBeforeDiscount - _discountAmount
+        : _subtotalBeforeDiscount;
+
+    if (value <= 0) return 0;
+    return value.roundToDouble();
   }
 
   // Tax calculations for PURCHASES (tax is ADDED, not included)
@@ -1205,7 +1205,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   double get _iva {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
-      return _subtotal * 0.19; // Add 19% tax on (possibly discounted) subtotal
+      return (_subtotal * 0.19)
+          .roundToDouble(); // Add 19% tax on (possibly discounted) subtotal
     } else {
       return 0; // No tax
     }
@@ -1224,7 +1225,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!_isDiscountBeforeTax) {
       t -= _discountAmount;
     }
-    return t;
+    return t.roundToDouble();
   }
 
   void _recalculateTotals() {

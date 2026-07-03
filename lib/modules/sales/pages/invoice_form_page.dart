@@ -1079,14 +1079,14 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   double get _subtotal {
     final value = _lineEntries.fold<double>(
         0, (sum, entry) => sum + entry.line.netAmount);
-    return value < 0 ? 0 : value;
+    return value < 0 ? 0 : value.roundToDouble();
   }
 
   // Calculate net, IVA, and total based on tax treatment
   double get _netAmount {
     if (_taxTreatment == TaxTreatment.taxIncluded) {
       // Tax included: net = subtotal ÷ 1.19
-      return _subtotal / 1.19;
+      return (_subtotal / 1.19).roundToDouble();
     } else {
       // No tax: net = full subtotal
       return _subtotal;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/document_accounting_preview.dart';
@@ -62,6 +63,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   DateTime _paymentDate = DateTime.now();
   bool _isSavingPayment = false;
   bool _isLoadingPaymentMethods = false;
+  String _inlinePaymentIdempotencyKey = const Uuid().v4();
   List<PaymentMethod> _paymentMethods = [];
   double _listPaneWidth = 600.0;
   static const double _minListPaneWidth = 400.0;
@@ -1596,6 +1598,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       _paymentReferenceController.text = '';
       _paymentNotesController.text = '';
       _selectedPaymentMethod = null;
+      _inlinePaymentIdempotencyKey = const Uuid().v4();
     });
     final paymentMethodService = context.read<PaymentMethodService>();
     await paymentMethodService.loadPaymentMethods();
@@ -1607,7 +1610,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           _selectedPaymentMethod = _paymentMethods.first;
         }
         // Pre-fill the balance
-        final balance = invoice.total - invoice.paidAmount;
+        final balance = _effectiveBalance(invoice);
         _paymentAmountController.text =
             balance > 0 ? balance.toStringAsFixed(0) : '';
       });
@@ -1616,12 +1619,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
   double _effectiveBalance(PurchaseInvoice invoice) {
     final b = invoice.balance;
+    if (b.abs() < 1) return 0;
     if (b > 0) return b;
     final calculated = invoice.total - invoice.paidAmount;
+    if (calculated.abs() < 1) return 0;
     return calculated < 0 ? 0 : calculated;
   }
 
   Future<void> _submitInlinePayment(PurchaseInvoice invoice) async {
+    if (_isSavingPayment) {
+      return;
+    }
+
     if (!(_paymentFormKey.currentState?.validate() ?? false)) return;
     if (_selectedPaymentMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1641,7 +1650,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       return;
     }
     final balance = _effectiveBalance(invoice);
-    if (amount.round() - balance.round() > 1) {
+    final amountCents = (amount * 100).round();
+    final balanceCents = (balance * 100).round();
+    if (amountCents > balanceCents) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -1651,16 +1662,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
     final purchaseService = context.read<PurchaseService>();
     final messenger = ScaffoldMessenger.of(context);
-    final tenantId = await TenantService().getTenantId();
-    if (tenantId == null) return;
 
     setState(() => _isSavingPayment = true);
     try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) return;
+
       final payment = PurchasePayment(
         tenantId: tenantId,
         invoiceId: invoice.id!,
         paymentMethodId: _selectedPaymentMethod!.id,
-        amount: amount > balance ? balance : amount,
+        idempotencyKey: _inlinePaymentIdempotencyKey,
+        amount: amountCents / 100,
         date: _paymentDate,
         reference: _paymentReferenceController.text.trim().isEmpty
             ? null
@@ -1687,6 +1700,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         final refreshedInvoice = updated ?? invoice;
         _selectedInvoice = refreshedInvoice;
         _showingPaymentForm = false;
+        _inlinePaymentIdempotencyKey = const Uuid().v4();
         _primeAccountingContext(refreshedInvoice);
       });
     } catch (e) {
@@ -1796,7 +1810,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     VoidCallback? onActionPressed;
     final List<Widget> secondaryActions = [];
 
-    final effectiveBalance = invoice.total - invoice.paidAmount;
+    final effectiveBalance = _effectiveBalance(invoice);
 
     switch (invoice.status) {
       case PurchaseInvoiceStatus.draft:
@@ -2230,7 +2244,9 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     final parsed = double.tryParse(
                         value.trim().replaceAll('.', '').replaceAll(',', '.'));
                     if (parsed == null || parsed <= 0) return 'Monto inválido';
-                    if (parsed.round() - balance.round() > 1) {
+                    final parsedCents = (parsed * 100).round();
+                    final balanceCents = (balance * 100).round();
+                    if (parsedCents > balanceCents) {
                       return 'No puede superar el saldo';
                     }
                     return null;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../modules/hr/pages/kiosk_mode_page.dart';
+import '../../modules/ai_assistant/services/ai_assistant_context_service.dart';
 import '../../modules/ai_assistant/widgets/ai_chat_bubble.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/storage/widgets/app_files_panel.dart';
@@ -169,7 +170,22 @@ class _RightToolbarState extends State<RightToolbar> {
       case ToolbarTool.bikeFinder:
         return const QuickBikeFinderPanel();
       case ToolbarTool.aiAssistant:
-        return const AIChatPanel(jobs: [], embedded: true);
+        final aiContext = context.watch<AIAssistantContextService>();
+        final useJobsContext = aiContext.hasVisibleJobsContext;
+        debugPrint(
+          '[AI_CTX][RightToolbar.aiPanel] contextId=${identityHashCode(aiContext)} '
+          'hasContext=${aiContext.hasVisibleJobsContext} '
+          'useJobsContext=$useJobsContext count=${aiContext.visibleJobs.length} '
+          'scope="${aiContext.visibleJobsScopeLabel}" '
+          'jobs=[${aiContext.visibleJobs.take(12).map((job) => job.jobNumber ?? job.id ?? 'sin-numero').join(', ')}]',
+        );
+        return AIChatPanel(
+          jobs: useJobsContext ? aiContext.visibleJobs : const [],
+          embedded: true,
+          jobsAreCurrentView: useJobsContext,
+          jobsScopeLabel:
+              useJobsContext ? aiContext.visibleJobsScopeLabel : null,
+        );
       case ToolbarTool.messages:
         return const QuickMessagesPanel();
       case ToolbarTool.supplierMessages:

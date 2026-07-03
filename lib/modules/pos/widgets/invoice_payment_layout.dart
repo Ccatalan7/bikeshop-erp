@@ -44,6 +44,10 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
   }
 
   void _handlePayment() async {
+    if (_isProcessing) {
+      return;
+    }
+
     if (_selectedPaymentMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -65,7 +69,9 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
       return;
     }
 
-    if (amount > widget.invoice.balance) {
+    final amountCents = (amount * 100).round();
+    final balanceCents = (widget.invoice.balance * 100).round();
+    if (amountCents > balanceCents) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -79,7 +85,7 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
 
     setState(() => _isProcessing = true);
     try {
-      await widget.onPayment(amount, _selectedPaymentMethod!);
+      await widget.onPayment(amountCents / 100, _selectedPaymentMethod!);
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -90,7 +96,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return Column(
@@ -137,7 +144,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(widget.invoice.status).withValues(alpha: 0.1),
+                        color: _getStatusColor(widget.invoice.status)
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: _getStatusColor(widget.invoice.status),
@@ -171,7 +179,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                           theme,
                         ),
                       ),
-                    if (widget.invoice.reference != null && widget.invoice.reference!.isNotEmpty)
+                    if (widget.invoice.reference != null &&
+                        widget.invoice.reference!.isNotEmpty)
                       Expanded(
                         child: _buildInfoItem(
                           'Referencia',
@@ -193,7 +202,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
             child: Column(
               children: [
                 ExpansionTile(
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  tilePadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   title: Text(
                     'Ver Detalle (${widget.invoice.items.length} items)',
                     style: theme.textTheme.titleMedium?.copyWith(
@@ -211,7 +221,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                           return ListTile(
                             dense: true,
                             leading: CircleAvatar(
-                              backgroundColor: theme.colorScheme.primaryContainer,
+                              backgroundColor:
+                                  theme.colorScheme.primaryContainer,
                               child: Text(
                                 item.quantity.toStringAsFixed(0),
                                 style: TextStyle(
@@ -246,8 +257,10 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        _buildFinancialRow('Subtotal', widget.invoice.subtotal, theme),
-                        _buildFinancialRow('IVA (19%)', widget.invoice.ivaAmount, theme),
+                        _buildFinancialRow(
+                            'Subtotal', widget.invoice.subtotal, theme),
+                        _buildFinancialRow(
+                            'IVA (19%)', widget.invoice.ivaAmount, theme),
                         const Divider(height: 16),
                         _buildFinancialRow(
                           'Total',
@@ -255,7 +268,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                           theme,
                           isTotal: true,
                         ),
-                        _buildFinancialRow('Pagado', widget.invoice.paidAmount, theme,
+                        _buildFinancialRow(
+                            'Pagado', widget.invoice.paidAmount, theme,
                             color: Colors.green),
                         const Divider(height: 16, thickness: 2),
                         _buildFinancialRow(
@@ -280,7 +294,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.payment, color: theme.colorScheme.primary),
+                            Icon(Icons.payment,
+                                color: theme.colorScheme.primary),
                             const SizedBox(width: 8),
                             Text(
                               'PROCESAR PAGO',
@@ -297,7 +312,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                           builder: (context, paymentMethodService, child) {
                             final methods = paymentMethodService.paymentMethods;
                             if (methods.isEmpty) {
-                              return const Text('No hay métodos de pago disponibles');
+                              return const Text(
+                                  'No hay métodos de pago disponibles');
                             }
 
                             return DropdownButtonFormField<pm.PaymentMethod>(
@@ -342,8 +358,9 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                               onPressed: _isProcessing
                                   ? null
                                   : () {
-                                      _amountController.text =
-                                          widget.invoice.balance.toStringAsFixed(0);
+                                      _amountController.text = widget
+                                          .invoice.balance
+                                          .toStringAsFixed(0);
                                     },
                             ),
                           ),
@@ -427,11 +444,13 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : const Icon(Icons.payment),
-                  label: Text(_isProcessing ? 'Procesando...' : '💳 Registrar Pago'),
+                  label: Text(
+                      _isProcessing ? 'Procesando...' : '💳 Registrar Pago'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
@@ -473,8 +492,9 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
     bool isBalance = false,
     Color? color,
   }) {
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-    
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -483,14 +503,16 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
           Text(
             label,
             style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: isTotal || isBalance ? FontWeight.bold : FontWeight.normal,
+              fontWeight:
+                  isTotal || isBalance ? FontWeight.bold : FontWeight.normal,
               fontSize: isBalance ? 18 : (isTotal ? 16 : 14),
             ),
           ),
           Text(
             currencyFormat.format(amount),
             style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: isTotal || isBalance ? FontWeight.bold : FontWeight.w500,
+              fontWeight:
+                  isTotal || isBalance ? FontWeight.bold : FontWeight.w500,
               fontSize: isBalance ? 20 : (isTotal ? 16 : 14),
               color: color ?? (isBalance ? Colors.red : null),
             ),

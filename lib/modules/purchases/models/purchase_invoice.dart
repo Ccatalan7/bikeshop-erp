@@ -25,10 +25,13 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
   return fallback ?? DateTime.now();
 }
 
+double _clp(num value) => value.roundToDouble();
+
 class PurchaseInvoice {
   static const String listPreviewSelect =
       'id,tenant_id,invoice_number,supplier_id,supplier_name,supplier_rut,'
       'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
+      'prepayment_model,sent_date,confirmed_date,received_date,paid_date,'
       'created_at,updated_at';
 
   final String? id;
@@ -235,6 +238,14 @@ class PurchaseInvoice {
   }
 
   Map<String, dynamic> toJson() {
+    final totalClp = _clp(total);
+    final paidClp = _clp(paidAmount);
+    final netClp = taxTreatment == TaxTreatment.taxIncluded
+        ? _clp(totalClp / 1.19)
+        : totalClp;
+    final taxClp =
+        taxTreatment == TaxTreatment.taxIncluded ? totalClp - netClp : 0.0;
+
     return {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
@@ -247,14 +258,14 @@ class PurchaseInvoice {
       'reference': reference,
       'notes': notes,
       'status': status.name,
-      'subtotal': subtotal,
-      'tax': ivaAmount, // Database column is 'tax', not 'iva_amount'
-      'total': total,
+      'subtotal': netClp,
+      'tax': taxClp, // Database column is 'tax', not 'iva_amount'
+      'total': totalClp,
       'tax_treatment': taxTreatment.toValue(),
-      'net_amount': netAmount,
+      'net_amount': netClp,
       'discount_type': discountType,
       'discount_value': discountValue,
-      'discount_amount': discountAmount,
+      'discount_amount': _clp(discountAmount),
       'is_discount_before_tax': isDiscountBeforeTax,
       'items': items.map((item) => item.toJson()).toList(),
       'additional_costs': additionalCosts.map((cost) => cost.toJson()).toList(),
@@ -265,8 +276,8 @@ class PurchaseInvoice {
       'paid_date': paidDate?.toUtc().toIso8601String(),
       'supplier_invoice_number': supplierInvoiceNumber,
       'supplier_invoice_date': supplierInvoiceDate?.toUtc().toIso8601String(),
-      'paid_amount': paidAmount,
-      'balance': balance,
+      'paid_amount': paidClp,
+      'balance': (totalClp - paidClp).clamp(0.0, double.infinity),
     };
   }
 }

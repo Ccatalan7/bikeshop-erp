@@ -6187,13 +6187,18 @@ create table if not exists sales_payments (
   invoice_id uuid not null references sales_invoices(id) on delete cascade,
   invoice_reference text,
   payment_method_id uuid not null,
+  idempotency_key text,
   amount numeric(12,2) not null default 0,
+  tax_treatment text not null default 'no_tax',
+  net_amount numeric(12,2) not null default 0,
+  iva_amount numeric(12,2) not null default 0,
   date timestamp with time zone not null default now(),
   reference text,
   notes text,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  deleted_at timestamp with time zone
+  deleted_at timestamp with time zone,
+  deleted_by uuid references auth.users(id) on delete set null
 );
 
 -- Add composite FK for sales_payments.payment_method_id (tenant-scoped)
@@ -6286,13 +6291,23 @@ create index if not exists idx_sales_payments_invoice_id
   on sales_payments(invoice_id);
 create index if not exists idx_sales_payments_payment_method_id
   on sales_payments(payment_method_id);
+alter table public.sales_payments
+  add column if not exists idempotency_key text;
+create unique index if not exists idx_sales_payments_tenant_idempotency_key
+  on sales_payments(tenant_id, idempotency_key)
+  where idempotency_key is not null;
 
 alter table public.sales_payments
   add column if not exists invoice_reference text,
+  add column if not exists idempotency_key text,
   add column if not exists notes text,
+  add column if not exists tax_treatment text not null default 'no_tax',
+  add column if not exists net_amount numeric(12,2) not null default 0,
+  add column if not exists iva_amount numeric(12,2) not null default 0,
   add column if not exists created_at timestamp with time zone not null default now(),
   add column if not exists updated_at timestamp with time zone not null default now(),
-  add column if not exists deleted_at timestamp with time zone;
+  add column if not exists deleted_at timestamp with time zone,
+  add column if not exists deleted_by uuid references auth.users(id) on delete set null;
 
 do $$
 begin
@@ -6310,6 +6325,94 @@ begin
   end if;
 end $$;
 
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.sales_payments'::regclass
+       and conname = 'sales_payments_amount_positive'
+  ) then
+    alter table public.sales_payments
+      add constraint sales_payments_amount_positive check (amount > 0) not valid;
+  end if;
+
+  alter table public.sales_payments
+    validate constraint sales_payments_amount_positive;
+end $$;
+
+create or replace function public.validate_sales_payment_integrity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice record;
+  v_existing_paid numeric(12,2);
+  v_remaining numeric(12,2);
+  v_amount numeric(12,2);
+begin
+  if TG_OP = 'DELETE' then
+    return OLD;
+  end if;
+
+  if NEW.deleted_at is not null then
+    NEW.amount := round(coalesce(NEW.amount, 0), 2);
+    return NEW;
+  end if;
+
+  if NEW.invoice_id is null then
+    raise exception 'El pago debe pertenecer a una factura de venta.';
+  end if;
+
+  v_amount := round(coalesce(NEW.amount, 0), 2);
+  if v_amount <= 0 then
+    raise exception 'El monto del pago debe ser mayor a cero.';
+  end if;
+  NEW.amount := v_amount;
+
+  select id, tenant_id, total
+    into v_invoice
+    from public.sales_invoices
+   where id = NEW.invoice_id
+   for update;
+
+  if not found then
+    raise exception 'La factura de venta asociada al pago no existe.';
+  end if;
+
+  if NEW.tenant_id is null then
+    NEW.tenant_id := v_invoice.tenant_id;
+  end if;
+
+  if NEW.tenant_id is distinct from v_invoice.tenant_id then
+    raise exception 'El pago no pertenece al mismo tenant que la factura de venta.';
+  end if;
+
+  select coalesce(sum(amount), 0)
+    into v_existing_paid
+    from public.sales_payments
+   where invoice_id = NEW.invoice_id
+     and deleted_at is null
+     and id is distinct from NEW.id;
+
+  v_remaining := round(greatest(coalesce(v_invoice.total, 0) - v_existing_paid, 0), 2);
+
+  if v_amount > v_remaining then
+    raise exception 'El pago excede el saldo pendiente de la factura de venta. Saldo pendiente: %, monto enviado: %.',
+      v_remaining, v_amount;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sales_payments_validate_integrity on public.sales_payments;
+create trigger trg_sales_payments_validate_integrity
+  before insert or update on public.sales_payments
+  for each row execute function public.validate_sales_payment_integrity();
+
 create or replace function public.recalculate_sales_invoice_payments(p_invoice_id uuid)
 returns void as $$
 declare
@@ -6317,6 +6420,7 @@ declare
   v_total numeric(12,2);
   v_new_status text;
   v_balance numeric(12,2);
+  v_balance_raw numeric(12,2);
 begin
   if p_invoice_id is null then
     return;
@@ -6337,9 +6441,14 @@ begin
   select coalesce(sum(amount), 0)
     into v_total
     from public.sales_payments
-   where invoice_id = p_invoice_id;
+   where invoice_id = p_invoice_id
+     and deleted_at is null;
 
-  v_balance := greatest(coalesce(v_invoice.total, 0) - v_total, 0);
+  v_balance_raw := round(coalesce(v_invoice.total, 0) - v_total, 2);
+  v_balance := case
+    when abs(v_balance_raw) < 1 then 0
+    else greatest(v_balance_raw, 0)
+  end;
 
   -- Determine new status based on payment totals and current status
   if v_invoice.status = 'cancelled' then
@@ -6347,15 +6456,15 @@ begin
     v_new_status := v_invoice.status;
   elsif v_invoice.status = 'draft' then
     -- Draft stays draft unless fully paid
-    if v_total >= coalesce(v_invoice.total, 0) and v_total > 0 then
+    if v_balance = 0 and v_total > 0 then
       v_new_status := 'paid';
     else
       v_new_status := 'draft';
     end if;
-  elsif v_total >= coalesce(v_invoice.total, 0) and v_total > 0 then
+  elsif v_balance = 0 and v_total > 0 then
     -- Fully paid
     v_new_status := 'paid';
-  elsif v_total > 0 and v_total < coalesce(v_invoice.total, 0) then
+  elsif v_total > 0 and v_balance > 0 then
     -- Partially paid - keep current status if it's overdue, otherwise set to confirmed
     if v_invoice.status = 'overdue' then
       v_new_status := 'overdue';
@@ -6588,6 +6697,7 @@ declare
   v_total numeric(12,2);
   v_new_status text;
   v_balance numeric(12,2);
+  v_balance_raw numeric(12,2);
 begin
   if p_invoice_id is null then
     return;
@@ -6596,7 +6706,8 @@ begin
   select id,
          total,
          status,
-         prepayment_model
+         prepayment_model,
+         received_date
     into v_invoice
     from public.purchase_invoices
    where id = p_invoice_id
@@ -6609,9 +6720,14 @@ begin
   select coalesce(sum(amount), 0)
     into v_total
     from public.purchase_payments
-   where invoice_id = p_invoice_id;
+   where invoice_id = p_invoice_id
+     and deleted_at is null;
 
-  v_balance := greatest(coalesce(v_invoice.total, 0) - v_total, 0);
+  v_balance_raw := round(coalesce(v_invoice.total, 0) - v_total, 2);
+  v_balance := case
+    when abs(v_balance_raw) < 1 then 0
+    else greatest(v_balance_raw, 0)
+  end;
 
   -- Status transition logic based on prepayment model
   -- Standard model: Draft→Sent→Confirmed→Received→Paid
@@ -6621,15 +6737,20 @@ begin
     -- Cancelled invoices stay cancelled regardless of payments
     v_new_status := 'cancelled';
 
+  elsif v_invoice.status = 'received' or v_invoice.received_date is not null then
+    -- Receiving inventory is the terminal purchase workflow state.
+    -- Payment recalculation must never downgrade it back to paid/confirmed.
+    v_new_status := 'received';
+
   elsif v_invoice.status IN ('draft', 'sent') then
     -- Pre-confirmation statuses: stay as-is regardless of payments
     v_new_status := v_invoice.status;
 
-  elsif v_total >= coalesce(v_invoice.total, 0) then
+  elsif v_balance = 0 and v_total > 0 then
     -- Fully paid
     v_new_status := 'paid';
 
-  elsif v_total > 0 then
+  elsif v_total > 0 and v_balance > 0 then
     -- Partially paid
     if v_invoice.prepayment_model then
       -- Prepayment model: partial payment keeps it at 'paid' if was paid/received
@@ -6709,21 +6830,27 @@ declare
   v_tenant_id uuid;
 begin
   -- Fetch payment data from table instead of using composite type parameter
-  select id, invoice_id, amount, date, payment_method_id, tenant_id
+  select id, invoice_id, amount, date, payment_method_id, tenant_id, deleted_at
     into v_payment
     from public.purchase_payments
    where id = p_payment_id;
 
-  if not found or v_payment.invoice_id is null then
+  if not found or v_payment.invoice_id is null or v_payment.deleted_at is not null then
     return;
   end if;
 
   v_tenant_id := v_payment.tenant_id;
 
+  if v_tenant_id is null then
+    raise warning 'create_purchase_payment_journal_entry: No tenant_id on payment %, skipping', v_payment.id;
+    return;
+  end if;
+
   select exists (
            select 1
              from public.journal_entries
-            where source_module = 'purchase_payments'
+            where tenant_id = v_tenant_id
+              and source_module = 'purchase_payments'
               and source_reference = v_payment.id::text
         )
     into v_exists;
@@ -6761,6 +6888,7 @@ begin
   v_cash_account_name := v_payment_method.account_name;
 
   v_payable_account_id := public.ensure_account(
+    v_tenant_id,
     v_payable_account_code,
     v_payable_account_name,
     'liability',
@@ -6796,7 +6924,7 @@ begin
     v_description,
     'payment',
     'purchase_payments',
-    v_invoice.invoice_number,
+    v_payment.id::text,
     'posted',
     v_payment.amount,
     v_payment.amount,
@@ -6898,6 +7026,9 @@ begin
     perform public.create_purchase_payment_journal_entry(NEW.id);
     perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
   elsif TG_OP = 'UPDATE' then
+    if NEW.invoice_id is distinct from OLD.invoice_id then
+      perform public.recalculate_purchase_invoice_payments(OLD.invoice_id);
+    end if;
     perform public.delete_purchase_payment_journal_entry(OLD.id);
     perform public.create_purchase_payment_journal_entry(NEW.id);
     perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
@@ -8014,10 +8145,13 @@ create table if not exists purchase_payments (
   invoice_id uuid not null references purchase_invoices(id) on delete cascade,
   invoice_reference text,
   payment_method_id uuid not null,
+  idempotency_key text,
   amount numeric(12,2) not null default 0,
   date timestamp with time zone not null default now(),
   reference text,
   notes text,
+  deleted_at timestamp with time zone,
+  deleted_by uuid references auth.users(id) on delete set null,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
@@ -8213,10 +8347,18 @@ begin
   raise notice 'purchase_payments migration check complete';
 end $$;
 
+alter table public.purchase_payments
+  add column if not exists idempotency_key text,
+  add column if not exists deleted_at timestamp with time zone,
+  add column if not exists deleted_by uuid references auth.users(id) on delete set null;
+
 create index if not exists idx_purchase_payments_invoice_id
   on purchase_payments(invoice_id);
 create index if not exists idx_purchase_payments_payment_method_id
   on purchase_payments(payment_method_id);
+create unique index if not exists idx_purchase_payments_tenant_idempotency_key
+  on purchase_payments(tenant_id, idempotency_key)
+  where idempotency_key is not null;
 
 do $$
 begin
@@ -8233,6 +8375,94 @@ begin
       for each row execute procedure public.set_updated_at();
   end if;
 end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conrelid = 'public.purchase_payments'::regclass
+       and conname = 'purchase_payments_amount_positive'
+  ) then
+    alter table public.purchase_payments
+      add constraint purchase_payments_amount_positive check (amount > 0) not valid;
+  end if;
+
+  alter table public.purchase_payments
+    validate constraint purchase_payments_amount_positive;
+end $$;
+
+create or replace function public.validate_purchase_payment_integrity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice record;
+  v_existing_paid numeric(12,2);
+  v_remaining numeric(12,2);
+  v_amount numeric(12,2);
+begin
+  if TG_OP = 'DELETE' then
+    return OLD;
+  end if;
+
+  if NEW.deleted_at is not null then
+    NEW.amount := round(coalesce(NEW.amount, 0), 2);
+    return NEW;
+  end if;
+
+  if NEW.invoice_id is null then
+    raise exception 'El pago debe pertenecer a una factura de compra.';
+  end if;
+
+  v_amount := round(coalesce(NEW.amount, 0), 2);
+  if v_amount <= 0 then
+    raise exception 'El monto del pago debe ser mayor a cero.';
+  end if;
+  NEW.amount := v_amount;
+
+  select id, tenant_id, total
+    into v_invoice
+    from public.purchase_invoices
+   where id = NEW.invoice_id
+   for update;
+
+  if not found then
+    raise exception 'La factura de compra asociada al pago no existe.';
+  end if;
+
+  if NEW.tenant_id is null then
+    NEW.tenant_id := v_invoice.tenant_id;
+  end if;
+
+  if NEW.tenant_id is distinct from v_invoice.tenant_id then
+    raise exception 'El pago no pertenece al mismo tenant que la factura de compra.';
+  end if;
+
+  select coalesce(sum(amount), 0)
+    into v_existing_paid
+    from public.purchase_payments
+   where invoice_id = NEW.invoice_id
+     and deleted_at is null
+     and id is distinct from NEW.id;
+
+  v_remaining := round(greatest(coalesce(v_invoice.total, 0) - v_existing_paid, 0), 2);
+
+  if v_amount > v_remaining then
+    raise exception 'El pago excede el saldo pendiente de la factura de compra. Saldo pendiente: %, monto enviado: %.',
+      v_remaining, v_amount;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_purchase_payments_validate_integrity on public.purchase_payments;
+create trigger trg_purchase_payments_validate_integrity
+  before insert or update on public.purchase_payments
+  for each row execute function public.validate_purchase_payment_integrity();
 
 -- Trigger already dropped and function recreated earlier (line ~1367)
 -- Now just create the trigger with the refreshed function
@@ -10273,6 +10503,24 @@ create table if not exists journal_lines (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+create table if not exists payment_integrity_backfill_audit (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade,
+  payment_table text not null check (payment_table in ('sales_payments', 'purchase_payments')),
+  payment_id uuid not null,
+  invoice_id uuid not null,
+  invoice_number text,
+  action text not null,
+  reason text not null,
+  amount numeric(12,2) not null,
+  payment_date timestamp with time zone,
+  payment_reference text,
+  created_at timestamp with time zone not null default now()
+);
+
+create unique index if not exists idx_payment_integrity_backfill_audit_payment_reason
+  on payment_integrity_backfill_audit(payment_table, payment_id, reason);
 
 do $$
 begin
@@ -29961,6 +30209,436 @@ set is_required = excluded.is_required,
     sort_order = excluded.sort_order,
     helper_text = excluded.helper_text,
     updated_at = now();
+
+-- ============================================================================
+-- CLP WHOLE-PESO INVOICE/PAYMENT AMOUNT ENFORCEMENT
+-- ============================================================================
+
+create or replace function public.clp_round(p_amount numeric)
+returns numeric
+language sql
+immutable
+as $$
+  select round(coalesce(p_amount, 0), 0)
+$$;
+
+alter table public.purchase_invoices
+  add column if not exists iva_amount numeric(12,2) not null default 0;
+
+create or replace function public.normalize_sales_invoice_clp_amounts()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total numeric;
+  v_net numeric;
+  v_paid numeric;
+begin
+  v_total := public.clp_round(NEW.total);
+  v_paid := public.clp_round(NEW.paid_amount);
+
+  NEW.total := v_total;
+  NEW.paid_amount := v_paid;
+  NEW.discount_amount := public.clp_round(NEW.discount_amount);
+
+  if NEW.tax_treatment = 'tax_included' and v_total <> 0 then
+    v_net := public.clp_round(v_total / 1.19);
+    NEW.net_amount := v_net;
+    NEW.iva_amount := v_total - v_net;
+    NEW.subtotal := v_total;
+  else
+    NEW.net_amount := v_total;
+    NEW.iva_amount := 0;
+    NEW.subtotal := v_total;
+  end if;
+
+  NEW.balance := greatest(v_total - v_paid, 0);
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sales_invoices_normalize_clp_amounts on public.sales_invoices;
+create trigger trg_sales_invoices_normalize_clp_amounts
+  before insert or update of subtotal, iva_amount, total, paid_amount, balance, net_amount, discount_amount, tax_treatment
+  on public.sales_invoices
+  for each row execute function public.normalize_sales_invoice_clp_amounts();
+
+create or replace function public.normalize_purchase_invoice_clp_amounts()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total numeric;
+  v_net numeric;
+  v_paid numeric;
+begin
+  v_total := public.clp_round(NEW.total);
+  v_paid := public.clp_round(NEW.paid_amount);
+
+  NEW.total := v_total;
+  NEW.paid_amount := v_paid;
+  NEW.discount_amount := public.clp_round(NEW.discount_amount);
+
+  if NEW.tax_treatment = 'tax_included' and v_total <> 0 then
+    v_net := public.clp_round(v_total / 1.19);
+    NEW.net_amount := v_net;
+    NEW.subtotal := v_net;
+    NEW.tax := v_total - v_net;
+    NEW.iva_amount := NEW.tax;
+  else
+    NEW.net_amount := v_total;
+    NEW.subtotal := v_total;
+    NEW.tax := 0;
+    NEW.iva_amount := 0;
+  end if;
+
+  NEW.balance := greatest(v_total - v_paid, 0);
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_purchase_invoices_normalize_clp_amounts on public.purchase_invoices;
+create trigger trg_purchase_invoices_normalize_clp_amounts
+  before insert or update of subtotal, tax, iva_amount, total, paid_amount, balance, net_amount, discount_amount, tax_treatment
+  on public.purchase_invoices
+  for each row execute function public.normalize_purchase_invoice_clp_amounts();
+
+alter table public.sales_invoices
+  drop constraint if exists sales_invoices_clp_whole_amounts,
+  add constraint sales_invoices_clp_whole_amounts check (
+    subtotal = public.clp_round(subtotal)
+    and iva_amount = public.clp_round(iva_amount)
+    and total = public.clp_round(total)
+    and paid_amount = public.clp_round(paid_amount)
+    and balance = public.clp_round(balance)
+    and net_amount = public.clp_round(net_amount)
+    and discount_amount = public.clp_round(discount_amount)
+  );
+
+alter table public.purchase_invoices
+  drop constraint if exists purchase_invoices_clp_whole_amounts,
+  add constraint purchase_invoices_clp_whole_amounts check (
+    subtotal = public.clp_round(subtotal)
+    and tax = public.clp_round(tax)
+    and iva_amount = public.clp_round(iva_amount)
+    and total = public.clp_round(total)
+    and paid_amount = public.clp_round(paid_amount)
+    and balance = public.clp_round(balance)
+    and net_amount = public.clp_round(net_amount)
+    and discount_amount = public.clp_round(discount_amount)
+  );
+
+alter table public.sales_payments
+  drop constraint if exists sales_payments_clp_whole_amounts,
+  add constraint sales_payments_clp_whole_amounts check (
+    amount = public.clp_round(amount)
+    and net_amount = public.clp_round(net_amount)
+    and iva_amount = public.clp_round(iva_amount)
+  );
+
+alter table public.purchase_payments
+  drop constraint if exists purchase_payments_clp_whole_amounts,
+  add constraint purchase_payments_clp_whole_amounts check (
+    amount = public.clp_round(amount)
+  );
+
+create or replace function public.validate_sales_payment_integrity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice record;
+  v_existing_paid numeric(12,2);
+  v_remaining numeric(12,2);
+  v_amount numeric(12,2);
+  v_net numeric(12,2);
+begin
+  if TG_OP = 'DELETE' then
+    return OLD;
+  end if;
+
+  v_amount := public.clp_round(NEW.amount);
+  if v_amount <= 0 then
+    raise exception 'El monto del pago debe ser mayor a cero.';
+  end if;
+
+  NEW.amount := v_amount;
+
+  if NEW.tax_treatment = 'tax_included' then
+    v_net := public.clp_round(v_amount / 1.19);
+    NEW.net_amount := v_net;
+    NEW.iva_amount := v_amount - v_net;
+  else
+    NEW.tax_treatment := coalesce(NEW.tax_treatment, 'no_tax');
+    NEW.net_amount := v_amount;
+    NEW.iva_amount := 0;
+  end if;
+
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  if NEW.invoice_id is null then
+    raise exception 'El pago debe pertenecer a una factura de venta.';
+  end if;
+
+  select id, tenant_id, total
+    into v_invoice
+    from public.sales_invoices
+   where id = NEW.invoice_id
+   for update;
+
+  if not found then
+    raise exception 'La factura de venta asociada al pago no existe.';
+  end if;
+
+  if NEW.tenant_id is null then
+    NEW.tenant_id := v_invoice.tenant_id;
+  end if;
+
+  if NEW.tenant_id is distinct from v_invoice.tenant_id then
+    raise exception 'El pago no pertenece al mismo tenant que la factura de venta.';
+  end if;
+
+  select public.clp_round(coalesce(sum(amount), 0))
+    into v_existing_paid
+    from public.sales_payments
+   where invoice_id = NEW.invoice_id
+     and deleted_at is null
+     and id is distinct from NEW.id;
+
+  v_remaining := public.clp_round(greatest(coalesce(v_invoice.total, 0) - v_existing_paid, 0));
+
+  if v_amount > v_remaining then
+    raise exception 'El pago excede el saldo pendiente de la factura de venta. Saldo pendiente: %, monto enviado: %.',
+      v_remaining, v_amount;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+create or replace function public.validate_purchase_payment_integrity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice record;
+  v_existing_paid numeric(12,2);
+  v_remaining numeric(12,2);
+  v_amount numeric(12,2);
+begin
+  if TG_OP = 'DELETE' then
+    return OLD;
+  end if;
+
+  v_amount := public.clp_round(NEW.amount);
+  if v_amount <= 0 then
+    raise exception 'El monto del pago debe ser mayor a cero.';
+  end if;
+  NEW.amount := v_amount;
+
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  if NEW.invoice_id is null then
+    raise exception 'El pago debe pertenecer a una factura de compra.';
+  end if;
+
+  select id, tenant_id, total
+    into v_invoice
+    from public.purchase_invoices
+   where id = NEW.invoice_id
+   for update;
+
+  if not found then
+    raise exception 'La factura de compra asociada al pago no existe.';
+  end if;
+
+  if NEW.tenant_id is null then
+    NEW.tenant_id := v_invoice.tenant_id;
+  end if;
+
+  if NEW.tenant_id is distinct from v_invoice.tenant_id then
+    raise exception 'El pago no pertenece al mismo tenant que la factura de compra.';
+  end if;
+
+  select public.clp_round(coalesce(sum(amount), 0))
+    into v_existing_paid
+    from public.purchase_payments
+   where invoice_id = NEW.invoice_id
+     and deleted_at is null
+     and id is distinct from NEW.id;
+
+  v_remaining := public.clp_round(greatest(coalesce(v_invoice.total, 0) - v_existing_paid, 0));
+
+  if v_amount > v_remaining then
+    raise exception 'El pago excede el saldo pendiente de la factura de compra. Saldo pendiente: %, monto enviado: %.',
+      v_remaining, v_amount;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+create or replace function public.recalculate_sales_invoice_payments(p_invoice_id uuid)
+returns void as $$
+declare
+  v_invoice record;
+  v_total numeric(12,2);
+  v_new_status text;
+  v_balance numeric(12,2);
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  select id,
+         total,
+         status
+    into v_invoice
+    from public.sales_invoices
+   where id = p_invoice_id
+   for update;
+
+  if not found then
+    return;
+  end if;
+
+  select public.clp_round(coalesce(sum(amount), 0))
+    into v_total
+    from public.sales_payments
+   where invoice_id = p_invoice_id
+     and deleted_at is null;
+
+  v_balance := greatest(public.clp_round(coalesce(v_invoice.total, 0)) - v_total, 0);
+
+  if v_invoice.status = 'cancelled' then
+    v_new_status := v_invoice.status;
+  elsif v_invoice.status = 'draft' then
+    if v_balance = 0 and v_total > 0 then
+      v_new_status := 'paid';
+    else
+      v_new_status := 'draft';
+    end if;
+  elsif v_balance = 0 and v_total > 0 then
+    v_new_status := 'paid';
+  elsif v_total > 0 and v_balance > 0 then
+    if v_invoice.status = 'overdue' then
+      v_new_status := 'overdue';
+    else
+      v_new_status := 'confirmed';
+    end if;
+  elsif v_total = 0 then
+    if v_invoice.status = 'paid' then
+      v_new_status := 'confirmed';
+    else
+      v_new_status := v_invoice.status;
+    end if;
+  else
+    v_new_status := v_invoice.status;
+  end if;
+
+  update public.sales_invoices
+     set paid_amount = v_total,
+         balance = v_balance,
+         status = v_new_status,
+         updated_at = now()
+   where id = p_invoice_id;
+
+  perform public.sync_invoice_status_to_job(p_invoice_id);
+end;
+$$ language plpgsql;
+
+create or replace function public.recalculate_purchase_invoice_payments(p_invoice_id uuid)
+returns void as $$
+declare
+  v_invoice record;
+  v_total numeric(12,2);
+  v_new_status text;
+  v_balance numeric(12,2);
+begin
+  if p_invoice_id is null then
+    return;
+  end if;
+
+  select id,
+         total,
+         status,
+         prepayment_model,
+         received_date
+    into v_invoice
+    from public.purchase_invoices
+   where id = p_invoice_id
+   for update;
+
+  if not found then
+    return;
+  end if;
+
+  select public.clp_round(coalesce(sum(amount), 0))
+    into v_total
+    from public.purchase_payments
+   where invoice_id = p_invoice_id
+     and deleted_at is null;
+
+  v_balance := greatest(public.clp_round(coalesce(v_invoice.total, 0)) - v_total, 0);
+
+  if v_invoice.status = 'cancelled' then
+    v_new_status := 'cancelled';
+  elsif v_invoice.status = 'received' or v_invoice.received_date is not null then
+    v_new_status := 'received';
+  elsif v_invoice.status IN ('draft', 'sent') then
+    v_new_status := v_invoice.status;
+  elsif v_balance = 0 and v_total > 0 then
+    v_new_status := 'paid';
+  elsif v_total > 0 and v_balance > 0 then
+    if v_invoice.prepayment_model then
+      if v_invoice.status IN ('paid', 'received') then
+        v_new_status := 'paid';
+      else
+        v_new_status := 'confirmed';
+      end if;
+    else
+      if v_invoice.status IN ('received', 'paid') then
+        v_new_status := 'received';
+      else
+        v_new_status := 'confirmed';
+      end if;
+    end if;
+  else
+    if v_invoice.prepayment_model then
+      if v_invoice.status = 'paid' then
+        v_new_status := 'confirmed';
+      else
+        v_new_status := v_invoice.status;
+      end if;
+    else
+      if v_invoice.status = 'paid' then
+        v_new_status := 'received';
+      else
+        v_new_status := v_invoice.status;
+      end if;
+    end if;
+  end if;
+
+  update public.purchase_invoices
+     set paid_amount = v_total,
+         balance = v_balance,
+         status = v_new_status,
+         updated_at = now()
+   where id = p_invoice_id;
+end;
+$$ language plpgsql;
 
 -- Canonical payroll settlement ledger.
 -- Kept as an idempotent composed section because the payroll ledger migration

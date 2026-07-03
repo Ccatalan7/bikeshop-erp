@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
@@ -28,6 +29,7 @@ class PurchasePaymentFormPage extends StatefulWidget {
 
 class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   final _formKey = GlobalKey<FormState>();
+  final String _idempotencyKey = const Uuid().v4();
   late final TextEditingController _amountController;
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -39,12 +41,29 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   bool _isLoadingMethods = true;
   PurchaseInvoice? _invoice;
 
+  int? _parseWholePesoAmount(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[\s$]'), '');
+    if (normalized.isEmpty || normalized.contains(',')) {
+      return null;
+    }
+    if (normalized.contains('.')) {
+      final thousandsPattern = RegExp(r'^\d{1,3}(\.\d{3})+$');
+      if (!thousandsPattern.hasMatch(normalized)) {
+        return null;
+      }
+      return int.tryParse(normalized.replaceAll('.', ''));
+    }
+    return int.tryParse(normalized);
+  }
+
   /// Effective balance: guards against cases where the DB trigger hasn't updated yet or was negative
   double get _effectiveBalance {
     if (_invoice == null) return 0;
     final b = _invoice!.balance;
+    if (b.abs() < 1) return 0;
     if (b > 0) return b;
     double calculated = (_invoice!.total - _invoice!.paidAmount);
+    if (calculated.abs() < 1) return 0;
     if (calculated < 0) calculated = 0;
     return calculated;
   }
@@ -126,6 +145,10 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
   }
 
   Future<void> _submit() async {
+    if (_isSaving) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -137,20 +160,17 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       return;
     }
 
-    final rawAmount =
-        _amountController.text.trim().replaceAll('.', '').replaceAll(',', '.');
-    final amount = double.tryParse(rawAmount);
-    if (amount == null || amount <= 0) {
+    final amountPesos = _parseWholePesoAmount(_amountController.text);
+    if (amountPesos == null || amountPesos <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ingresa un monto válido.')),
+        const SnackBar(content: Text('Ingresa un monto en pesos enteros.')),
       );
       return;
     }
 
     final balance = _effectiveBalance;
-    final amountInt = amount.round();
-    final balanceInt = balance.round();
-    if (amountInt - balanceInt > 1) {
+    final balancePesos = balance.round();
+    if (amountPesos > balancePesos) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -159,27 +179,26 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
       return;
     }
 
-    final effectiveAmount = amount > balance ? balance : amount;
-
     final purchaseService = context.read<PurchaseService>();
-    final tenantId = await TenantService().getTenantId();
-    if (tenantId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Error: No se pudo obtener el tenant ID')),
-        );
-      }
-      return;
-    }
-
     setState(() => _isSaving = true);
     try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Error: No se pudo obtener el tenant ID')),
+          );
+        }
+        return;
+      }
+
       final payment = PurchasePayment(
         tenantId: tenantId,
         invoiceId: widget.invoiceId,
         paymentMethodId: _selectedPaymentMethod!.id,
-        amount: effectiveAmount,
+        idempotencyKey: _idempotencyKey,
+        amount: amountPesos.toDouble(),
         date: _paymentDate,
         reference: _referenceController.text.trim().isEmpty
             ? null
@@ -360,20 +379,16 @@ class _PurchasePaymentFormPageState extends State<PurchasePaymentFormPage> {
               labelText: 'Monto',
               prefixText: '\$ ',
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: TextInputType.number,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Ingresa el monto del pago';
               }
-              final normalizedValue =
-                  value.replaceAll('.', '').replaceAll(',', '.');
-              final parsed = double.tryParse(normalizedValue);
+              final parsed = _parseWholePesoAmount(value);
               if (parsed == null || parsed <= 0) {
-                return 'Monto inválido';
+                return 'Ingresa pesos enteros, sin decimales';
               }
-              final parsedInt = parsed.round();
-              final balanceInt = _effectiveBalance.round();
-              if (parsedInt - balanceInt > 1) {
+              if (parsed > _effectiveBalance.round()) {
                 return 'No puede superar el saldo';
               }
               return null;

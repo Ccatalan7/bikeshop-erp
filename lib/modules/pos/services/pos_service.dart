@@ -467,6 +467,7 @@ class POSService extends ChangeNotifier {
               ? savedInvoice.invoiceNumber
               : invoiceId,
           paymentMethodId: dbPaymentMethod.id,
+          idempotencyKey: _uuid.v4(),
           amount: appliedAmount,
           date: timestamp,
           reference: payment.reference,

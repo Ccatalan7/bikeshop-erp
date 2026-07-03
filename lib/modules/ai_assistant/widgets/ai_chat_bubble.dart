@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -49,11 +50,17 @@ class AIAssistantButton extends StatelessWidget {
 class AIChatPanel extends StatefulWidget {
   final List<MechanicJob> jobs;
   final bool embedded;
+  final bool jobsAreCurrentView;
+  final String? jobsScopeLabel;
+  final bool allowJobCacheFallback;
 
   const AIChatPanel({
     super.key,
     required this.jobs,
     this.embedded = false,
+    this.jobsAreCurrentView = false,
+    this.jobsScopeLabel,
+    this.allowJobCacheFallback = true,
   });
 
   @override
@@ -144,14 +151,23 @@ class _AIChatPanelState extends State<AIChatPanel> {
     final bikeshopService = context.read<BikeshopService>();
     final purchaseService = context.read<PurchaseService>();
     final salesService = context.read<SalesService>();
+    debugPrint(
+      '[AI_CTX][AIChatPanel.send] currentView=${widget.jobsAreCurrentView} '
+      'allowFallback=${widget.allowJobCacheFallback} '
+      'count=${widget.jobs.length} scope="${widget.jobsScopeLabel}" '
+      'jobs=[${_debugJobNumbers(widget.jobs)}] message="$text"',
+    );
     final response = await _aiService.sendMessage(
       text,
       jobs: widget.jobs,
       customerService: customerService,
       inventoryService: inventoryService,
       bikeshopService: bikeshopService,
+      jobsAreCurrentView: widget.jobsAreCurrentView,
+      jobSummaryScopeLabel: widget.jobsScopeLabel,
       purchaseService: purchaseService,
       salesService: salesService,
+      allowJobCacheFallback: widget.allowJobCacheFallback,
       onNavigate: _handleAINavigation,
     );
 
@@ -378,6 +394,17 @@ class _AIChatPanelState extends State<AIChatPanel> {
     });
   }
 
+  String _debugJobNumbers(List<MechanicJob> jobs) {
+    final numbers = jobs
+        .take(12)
+        .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
+        .join(', ');
+    if (jobs.length <= 12) {
+      return numbers;
+    }
+    return '$numbers, ... +${jobs.length - 12}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -509,15 +536,25 @@ class _AIChatPanelState extends State<AIChatPanel> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: 'Pregunta o pide algo al asistente...',
-                    border: OutlineInputBorder(),
+                child: CallbackShortcuts(
+                  bindings: <ShortcutActivator, VoidCallback>{
+                    const SingleActivator(LogicalKeyboardKey.enter): () {
+                      unawaited(_sendMessage());
+                    },
+                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+                      unawaited(_sendMessage());
+                    },
+                  },
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'Pregunta o pide algo al asistente...',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 8),

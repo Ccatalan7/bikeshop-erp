@@ -1538,6 +1538,7 @@ class _CashierPanelState extends State<_CashierPanel> {
   double _amountReceived = 0.0;
   bool _isProcessing = false;
   final Uuid _uuid = const Uuid();
+  String _invoicePaymentIdempotencyKey = const Uuid().v4();
 
   // Ad-hoc item inline form state
   bool _showAdHocForm = false;
@@ -1752,6 +1753,10 @@ class _CashierPanelState extends State<_CashierPanel> {
 
   Future<void> _processInvoicePayment(
       POSService posService, Invoice invoice) async {
+    if (_isProcessing) {
+      return;
+    }
+
     // Validate payment method selected
     if (_selectedPaymentMethodId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1786,7 +1791,9 @@ class _CashierPanelState extends State<_CashierPanel> {
       return;
     }
 
-    if (amount > invoice.balance) {
+    final amountCents = (amount * 100).round();
+    final balanceCents = (invoice.balance * 100).round();
+    if (amountCents > balanceCents) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('El monto ingresado es mayor al saldo pendiente'),
@@ -1847,7 +1854,8 @@ class _CashierPanelState extends State<_CashierPanel> {
         invoiceReference:
             invoice.invoiceNumber.isNotEmpty ? invoice.invoiceNumber : null,
         paymentMethodId: _selectedPaymentMethodId!,
-        amount: amount,
+        idempotencyKey: _invoicePaymentIdempotencyKey,
+        amount: amountCents / 100,
         date: DateTime.now(),
         reference: _paymentReferenceController.text.trim().isEmpty
             ? null
@@ -1886,6 +1894,7 @@ class _CashierPanelState extends State<_CashierPanel> {
       _paymentReferenceController.clear();
       setState(() {
         _selectedPaymentMethodId = null;
+        _invoicePaymentIdempotencyKey = _uuid.v4();
       });
 
       // Exit payment mode and return to pending invoices
@@ -2420,6 +2429,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                   posService.enterInvoicePaymentMode(selectedInvoice);
                   setState(() {
                     _showPendingInvoices = false;
+                    _invoicePaymentIdempotencyKey = _uuid.v4();
                     // Pre-fill the payment amount with the invoice balance (only if empty)
                     if (_paymentAmountController.text.isEmpty) {
                       _paymentAmountController.text =

@@ -26,6 +26,7 @@ import '../../sales/services/sales_service.dart';
 import '../../settings/services/appearance_service.dart';
 
 import '../../../shared/services/image_service.dart';
+import '../../ai_assistant/services/ai_assistant_context_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
@@ -170,6 +171,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   late DatabaseService _databaseService;
   late JobStatusService _jobStatusService;
   late SalesService _salesService;
+  late AIAssistantContextService _aiAssistantContextService;
   final TenantService _tenantService = TenantService();
 
   List<MechanicJob> _jobs = [];
@@ -286,6 +288,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
     _salesService = Provider.of<SalesService>(context, listen: false);
+    _aiAssistantContextService =
+        Provider.of<AIAssistantContextService>(context, listen: false);
+    debugPrint(
+      '[AI_CTX][PegasTable.init] contextId=${identityHashCode(_aiAssistantContextService)} '
+      'bikeshopServiceId=${identityHashCode(_bikeshopService)}',
+    );
 
     // Listen to BikeshopService changes (realtime updates for jobs AND invoices)
     _bikeshopService.addListener(_onBikeshopServiceChanged);
@@ -353,6 +361,37 @@ class _PegasTablePageState extends State<PegasTablePage>
       default:
         return 'Activos';
     }
+  }
+
+  String _aiAssistantJobsScopeLabel() {
+    switch (_statusFilter) {
+      case 'active':
+        return 'trabajos activos';
+      case 'completed':
+        return 'trabajos completados';
+      case 'delivered':
+        return 'trabajos entregados';
+      case 'warranty_completed':
+        return 'trabajos de garantía completados';
+      case 'unpaid':
+        return 'trabajos sin pagar';
+      case 'test':
+        return 'trabajos de prueba';
+      case 'all':
+      default:
+        return 'trabajos visibles';
+    }
+  }
+
+  String _debugAiJobNumbers(List<MechanicJob> jobs) {
+    final numbers = jobs
+        .take(12)
+        .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
+        .join(', ');
+    if (jobs.length <= 12) {
+      return numbers;
+    }
+    return '$numbers, ... +${jobs.length - 12}';
   }
 
   Color _statusFilterColor(String value) {
@@ -593,6 +632,11 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   @override
   void dispose() {
+    debugPrint(
+      '[AI_CTX][PegasTable.dispose] contextId=${identityHashCode(_aiAssistantContextService)} '
+      'lastFiltered=${_filteredJobs.length}',
+    );
+    _aiAssistantContextService.clearVisibleJobsContext();
     _bikeshopService.removeListener(_onBikeshopServiceChanged);
     _reloadDebounceTimer?.cancel();
     _horizontalScrollController.dispose();
@@ -1138,6 +1182,11 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   void _applyFiltersAndSort() {
+    debugPrint(
+      '[AI_CTX][PegasTable.apply.start] jobs=${_jobs.length} '
+      'filteredBefore=${_filteredJobs.length} statusFilter=$_statusFilter '
+      'search="$_searchTerm" hasContextService=${identityHashCode(_aiAssistantContextService)}',
+    );
     final hasCustomStatusFilter = _customStatusFilter.isNotEmpty;
 
     var filtered = _jobs.where((job) {
@@ -1313,6 +1362,20 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     // Persist state for navigation
     _saveTableState();
+    debugPrint(
+      '[AI_CTX][PegasTable.publish] contextId=${identityHashCode(_aiAssistantContextService)} '
+      'filtered=${filtered.length} '
+      'allJobs=${_jobs.length} statusFilter=$_statusFilter '
+      'scope="${_aiAssistantJobsScopeLabel()}" search="$_searchTerm" '
+      'customFilter=${_customStatusFilter.length} '
+      'priorityFilter=${_priorityFilter.length} '
+      'overdue=$_showOnlyOverdue unpaid=$_showOnlyUnpaid '
+      'jobs=[${_debugAiJobNumbers(filtered)}]',
+    );
+    _aiAssistantContextService.setVisibleJobsContext(
+      jobs: filtered,
+      scopeLabel: _aiAssistantJobsScopeLabel(),
+    );
   }
 
   bool _jobMatchesTestFilter(MechanicJob job) {

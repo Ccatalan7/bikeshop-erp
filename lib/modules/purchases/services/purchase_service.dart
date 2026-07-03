@@ -662,7 +662,10 @@ class PurchaseService extends ChangeNotifier {
 
     try {
       final data = await _db.select('purchase_payments');
-      _paymentCache = data.map((row) => PurchasePayment.fromJson(row)).toList()
+      _paymentCache = data
+          .map((row) => PurchasePayment.fromJson(row))
+          .where((payment) => payment.deletedAt == null)
+          .toList()
         ..sort((a, b) => b.date.compareTo(a.date)); // Most recent first
 
       _paymentsLoaded = true;
@@ -680,7 +683,10 @@ class PurchaseService extends ChangeNotifier {
         where: 'invoice_id=$invoiceId',
       );
 
-      return data.map((row) => PurchasePayment.fromJson(row)).toList()
+      return data
+          .map((row) => PurchasePayment.fromJson(row))
+          .where((payment) => payment.deletedAt == null)
+          .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
     } catch (e) {
       throw Exception('No se pudieron cargar los pagos de la factura: $e');
@@ -693,36 +699,65 @@ class PurchaseService extends ChangeNotifier {
       final result = await _db.insert('purchase_payments', payload);
       final created = PurchasePayment.fromJson(result);
 
-      // Check if invoice should be marked as paid
-      final invoice = await getPurchaseInvoice(payment.invoiceId);
-      if (invoice != null) {
-        // Calculate new balance considering this payment
-        // Note: The database trigger 'recalculate_purchase_invoice_payments' runs AFTER insert
-        // but might not be reflected immediately in 'invoice'.
-        // However, we can check the current balance - payment amount.
-        // Better yet, since we refresh the invoice cache below, let's fetch it again properly.
-      }
-
-      // Refresh caches to get updated invoice balance from DB triggers
-      await getPurchasePayments(forceRefresh: true);
-      await getPurchaseInvoices(forceRefresh: true);
-
-      // Verify balance and update status if needed (tolerance of $1 for rounding)
-      final updatedInvoice = await getPurchaseInvoice(payment.invoiceId);
-      if (updatedInvoice != null &&
-          updatedInvoice.balance < 1.0 &&
-          updatedInvoice.paidAmount > 0 &&
-          updatedInvoice.status != PurchaseInvoiceStatus.paid) {
-        debugPrint(
-            '💰 Invoice ${updatedInvoice.invoiceNumber} fully paid (balance: ${updatedInvoice.balance}). Updating status to PAID.');
-        await markAsPaid(updatedInvoice.id!);
-      }
-
-      notifyListeners();
+      await _refreshAfterPayment(payment.invoiceId);
       return created;
+    } on PostgrestException catch (e) {
+      if (_isPaymentIdempotencyConflict(e) && payment.idempotencyKey != null) {
+        final existing = await _findPaymentByIdempotencyKey(payment);
+        if (existing != null) {
+          await _refreshAfterPayment(existing.invoiceId);
+          return existing;
+        }
+      }
+      throw Exception('No se pudo registrar el pago: ${e.message}');
     } catch (e) {
       throw Exception('No se pudo registrar el pago: $e');
     }
+  }
+
+  bool _isPaymentIdempotencyConflict(PostgrestException error) {
+    final details = error.details?.toString() ?? '';
+    return error.code == '23505' &&
+        (error.message.contains('idempotency') ||
+            details.contains('idempotency'));
+  }
+
+  Future<PurchasePayment?> _findPaymentByIdempotencyKey(
+      PurchasePayment payment) async {
+    final data = await _supabase
+        .from('purchase_payments')
+        .select()
+        .eq('tenant_id', payment.tenantId)
+        .eq('idempotency_key', payment.idempotencyKey!)
+        .maybeSingle();
+
+    if (data == null) {
+      return null;
+    }
+
+    return PurchasePayment.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<void> _refreshAfterPayment(String invoiceId) async {
+    await getPurchasePayments(forceRefresh: true);
+    await getPurchaseInvoices(forceRefresh: true);
+
+    final updatedInvoice = await getPurchaseInvoice(invoiceId);
+    final balance = updatedInvoice == null
+        ? 0.0
+        : (updatedInvoice.balance.abs() < 1 ? 0.0 : updatedInvoice.balance);
+    if (updatedInvoice != null &&
+        balance <= 0 &&
+        updatedInvoice.paidAmount > 0 &&
+        updatedInvoice.status != PurchaseInvoiceStatus.received &&
+        updatedInvoice.receivedDate == null &&
+        updatedInvoice.status != PurchaseInvoiceStatus.paid) {
+      debugPrint(
+          '💰 Invoice ${updatedInvoice.invoiceNumber} fully paid (balance: $balance). Updating status to PAID.');
+      await markAsPaid(updatedInvoice.id!);
+    }
+
+    notifyListeners();
   }
 
   Future<void> deletePayment(String paymentId) async {
@@ -822,26 +857,28 @@ class PurchaseService extends ChangeNotifier {
     required String paymentMethod,
     required String bankAccountId,
     required DateTime paymentDate,
+    String? idempotencyKey,
     String? reference,
     String? notes,
   }) async {
     try {
-      final paymentData = {
-        'invoice_id': invoiceId,
-        'date': paymentDate.toIso8601String(),
-        'amount': amount,
-        'payment_method_id': paymentMethod,
-        'reference': reference,
-        'notes': notes,
-      };
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo obtener el tenant ID');
+      }
 
-      await _db.insert('purchase_payments', paymentData);
-
-      // Refresh caches
-      await getPurchasePayments(forceRefresh: true);
-      await getPurchaseInvoices(forceRefresh: true);
-
-      notifyListeners();
+      await createPayment(
+        PurchasePayment(
+          tenantId: tenantId,
+          invoiceId: invoiceId,
+          paymentMethodId: paymentMethod,
+          idempotencyKey: idempotencyKey,
+          amount: amount,
+          date: paymentDate,
+          reference: reference,
+          notes: notes,
+        ),
+      );
     } catch (e) {
       throw Exception('No se pudo registrar el pago: $e');
     }

@@ -175,7 +175,9 @@ class AIAssistantService extends ChangeNotifier {
   factory AIAssistantService() => _instance;
   AIAssistantService._internal();
 
-  final GeminiProxyService _geminiProxy = GeminiProxyService();
+  GeminiProxyService? _geminiProxyInstance;
+  GeminiProxyService get _geminiProxy =>
+      _geminiProxyInstance ??= GeminiProxyService();
   final List<Map<String, dynamic>> _history = [];
   bool _isLoading = false;
 
@@ -707,8 +709,11 @@ ${hintLines.join('\n')}
     CustomerService? customerService,
     InventoryService? inventoryService,
     BikeshopService? bikeshopService,
+    bool jobsAreCurrentView = false,
+    String? jobSummaryScopeLabel,
     PurchaseService? purchaseService,
     SalesService? salesService,
+    bool allowJobCacheFallback = true,
     AINavigationCallback? onNavigate,
   }) async {
     _isLoading = true;
@@ -720,6 +725,9 @@ ${hintLines.join('\n')}
         jobs: jobs,
         customerService: customerService,
         bikeshopService: bikeshopService,
+        jobsAreCurrentView: jobsAreCurrentView,
+        jobSummaryScopeLabel: jobSummaryScopeLabel,
+        allowJobCacheFallback: allowJobCacheFallback,
       );
       if (jobSummaryResponse != null) {
         return jobSummaryResponse;
@@ -958,6 +966,9 @@ ${hintLines.join('\n')}
     List<MechanicJob>? jobs,
     CustomerService? customerService,
     BikeshopService? bikeshopService,
+    bool jobsAreCurrentView = false,
+    String? jobSummaryScopeLabel,
+    bool allowJobCacheFallback = true,
   }) async {
     final normalized = _normalizeText(message);
     final mentionsJobs = normalized.contains('trabajo') ||
@@ -970,7 +981,9 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    final wantsSummary = normalized.contains('resumen') ||
+    final asksForToday = _mentionsTodayScope(normalized);
+    final wantsSummary = asksForToday ||
+        normalized.contains('resumen') ||
         normalized.contains('resume') ||
         normalized.contains('sumario') ||
         normalized.contains('summary') ||
@@ -988,14 +1001,46 @@ ${hintLines.join('\n')}
     final sourceJobs = await _loadJobsForSummary(
       jobs,
       bikeshopService: bikeshopService,
+      useProvidedJobsOnly: jobsAreCurrentView,
+      allowJobCacheFallback: allowJobCacheFallback,
+    );
+    debugPrint(
+      '[AI_CTX][AIService.summary.source] provided=${jobs?.length ?? 'null'} '
+      'currentView=$jobsAreCurrentView source=${sourceJobs.length} '
+      'allowFallback=$allowJobCacheFallback '
+      'scopeParam="$jobSummaryScopeLabel" '
+      'jobs=[${_debugJobNumbers(sourceJobs)}]',
     );
     if (sourceJobs.isEmpty) {
+      if (jobsAreCurrentView || !allowJobCacheFallback) {
+        return _textResponse(
+          'No encontré trabajos en la vista actual para resumir ahora. Reabre la vista de Trabajos o actualiza la tabla para sincronizar el asistente.',
+        );
+      }
       return _textResponse('No encontré trabajos para resumir ahora mismo.');
     }
 
+    final customerNamesById = await _loadCustomerNamesById(customerService);
+    final includeTestJobs = _mentionsTestScope(normalized);
+    final summarySourceJobs = jobsAreCurrentView || includeTestJobs
+        ? sourceJobs
+        : sourceJobs
+            .where((job) => !_isTestJobForSummary(
+                  job,
+                  customerName: customerNamesById[job.customerId],
+                ))
+            .toList();
+    debugPrint(
+      '[AI_CTX][AIService.summary.scopeSource] before=${sourceJobs.length} '
+      'after=${summarySourceJobs.length} currentView=$jobsAreCurrentView '
+      'includeTest=$includeTestJobs jobs=[${_debugJobNumbers(summarySourceJobs)}]',
+    );
+
+    final today = _startOfLocalDay(DateTime.now());
     final asksForActive =
         normalized.contains('activo') || normalized.contains('activos');
-    final includeAll = !asksForActive &&
+    final includeAll = !asksForToday &&
+        !asksForActive &&
         (normalized.contains('todos') ||
             normalized.contains('todas') ||
             normalized.contains('historico') ||
@@ -1003,24 +1048,61 @@ ${hintLines.join('\n')}
             normalized.contains('finalizados') ||
             normalized.contains('entregados') ||
             normalized.contains('cancelados'));
-    final selectedJobs = includeAll
-        ? List<MechanicJob>.from(sourceJobs)
-        : sourceJobs.where(_isActiveJob).toList();
 
-    if (selectedJobs.isEmpty) {
-      return _textResponse('No encontré trabajos activos para resumir ahora.');
+    final List<MechanicJob> selectedJobs;
+    final String emptyMessage;
+    final String scopeLabel;
+    final String detailHeading;
+
+    if (asksForToday) {
+      selectedJobs = summarySourceJobs
+          .where((job) => _isSameLocalDay(job.arrivalDate, today))
+          .toList();
+      emptyMessage = 'No encontré trabajos ingresados hoy.';
+      scopeLabel = 'trabajos ingresados hoy';
+      detailHeading = 'Trabajos de hoy';
+    } else if (includeAll) {
+      selectedJobs = List<MechanicJob>.from(summarySourceJobs);
+      emptyMessage = 'No encontré trabajos para resumir ahora.';
+      scopeLabel = jobsAreCurrentView
+          ? jobSummaryScopeLabel ?? 'trabajos visibles'
+          : 'trabajos';
+      detailHeading = _jobSummaryDetailHeading(scopeLabel);
+    } else if (jobsAreCurrentView) {
+      selectedJobs = List<MechanicJob>.from(summarySourceJobs);
+      scopeLabel = jobSummaryScopeLabel ?? 'trabajos visibles';
+      emptyMessage = 'No encontré $scopeLabel para resumir ahora.';
+      detailHeading = _jobSummaryDetailHeading(scopeLabel);
+    } else {
+      selectedJobs = summarySourceJobs.where(_isActiveJob).toList();
+      emptyMessage = 'No encontré trabajos activos para resumir ahora.';
+      scopeLabel = 'trabajos activos';
+      detailHeading = _jobSummaryDetailHeading(scopeLabel);
     }
 
-    final customerNamesById = await _loadCustomerNamesById(customerService);
-    selectedJobs.sort(_compareJobsForSummary);
+    if (selectedJobs.isEmpty) {
+      debugPrint(
+        '[AI_CTX][AIService.summary.emptySelection] scope="$scopeLabel" '
+        'currentView=$jobsAreCurrentView source=${sourceJobs.length}',
+      );
+      return _textResponse(emptyMessage);
+    }
+
+    if (!jobsAreCurrentView) {
+      selectedJobs.sort(_compareJobsForSummary);
+    }
+    debugPrint(
+      '[AI_CTX][AIService.summary.selected] selected=${selectedJobs.length} '
+      'scope="$scopeLabel" currentView=$jobsAreCurrentView '
+      'asksToday=$asksForToday asksActive=$asksForActive includeAll=$includeAll '
+      'jobs=[${_debugJobNumbers(selectedJobs)}]',
+    );
 
     final statusCounts = <String, int>{};
     var highPriorityCount = 0;
     var overdueCount = 0;
     var dueSoonCount = 0;
     var totalValue = 0.0;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
     final soonLimit = today.add(const Duration(days: 2));
 
     for (final job in selectedJobs) {
@@ -1049,8 +1131,8 @@ ${hintLines.join('\n')}
     final statusSummary = statusCounts.entries
         .map((entry) => '${entry.key}: ${entry.value}')
         .join(', ');
-    final scopeLabel = includeAll ? 'trabajos' : 'trabajos activos';
-    final headline = 'Tienes ${selectedJobs.length} $scopeLabel.';
+    final headline =
+        'Tienes ${_jobCountPhrase(selectedJobs.length, scopeLabel)}.';
     final lines = <String>[
       headline,
       if (statusSummary.isNotEmpty) 'Por estado: $statusSummary.',
@@ -1080,29 +1162,165 @@ ${hintLines.join('\n')}
 
     final text = [
       lines.join('\n'),
-      if (detailLines.isNotEmpty)
-        'Trabajos destacados:\n${detailLines.join('\n')}',
+      if (detailLines.isNotEmpty) '$detailHeading:\n${detailLines.join('\n')}',
     ].join('\n\n');
 
     return _textResponse(text, cards: cards);
   }
 
+  bool _mentionsTodayScope(String normalizedMessage) {
+    return normalizedMessage.contains('hoy') ||
+        normalizedMessage.contains('del dia') ||
+        normalizedMessage.contains('de hoy') ||
+        normalizedMessage.contains('dia de hoy') ||
+        normalizedMessage.contains('este dia') ||
+        normalizedMessage.contains('jornada');
+  }
+
+  bool _mentionsTestScope(String normalizedMessage) {
+    return normalizedMessage.contains('test') ||
+        normalizedMessage.contains('tests') ||
+        normalizedMessage.contains('prueba') ||
+        normalizedMessage.contains('pruebas') ||
+        normalizedMessage.contains('sandbox') ||
+        normalizedMessage.contains('dummy');
+  }
+
+  bool _isTestJobForSummary(
+    MechanicJob job, {
+    String? customerName,
+  }) {
+    final customerLower = customerName?.trim().toLowerCase() ?? '';
+    if (customerLower == 'test' || customerLower.startsWith('test ')) {
+      return true;
+    }
+
+    final auditText = [
+      job.jobNumber,
+      job.clientRequest,
+      job.diagnosis,
+      job.workPerformed,
+      job.notes,
+    ].whereType<String>().join(' ').toLowerCase();
+
+    return auditText.contains('[test') ||
+        auditText.contains('test perfil') ||
+        auditText.contains('test data') ||
+        auditText.contains('sandbox') ||
+        auditText.contains('dummy');
+  }
+
+  String _jobCountPhrase(int count, String pluralScopeLabel) {
+    if (count != 1) {
+      return '$count $pluralScopeLabel';
+    }
+
+    switch (pluralScopeLabel) {
+      case 'trabajos ingresados hoy':
+        return '1 trabajo ingresado hoy';
+      case 'trabajos activos':
+        return '1 trabajo activo';
+      case 'trabajos completados':
+        return '1 trabajo completado';
+      case 'trabajos entregados':
+        return '1 trabajo entregado';
+      case 'trabajos de garantía completados':
+        return '1 trabajo de garantía completado';
+      case 'trabajos sin pagar':
+        return '1 trabajo sin pagar';
+      case 'trabajos visibles':
+        return '1 trabajo visible';
+      case 'trabajos':
+        return '1 trabajo';
+      default:
+        if (pluralScopeLabel.startsWith('trabajos ')) {
+          return '1 trabajo ${pluralScopeLabel.substring('trabajos '.length)}';
+        }
+        return '1 trabajo';
+    }
+  }
+
+  String _jobSummaryDetailHeading(String scopeLabel) {
+    switch (scopeLabel) {
+      case 'trabajos activos':
+        return 'Trabajos activos destacados';
+      case 'trabajos ingresados hoy':
+        return 'Trabajos de hoy';
+      case 'trabajos':
+        return 'Trabajos destacados';
+      default:
+        return 'Trabajos destacados';
+    }
+  }
+
+  String _debugJobNumbers(List<MechanicJob> jobs) {
+    final numbers = jobs
+        .take(12)
+        .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
+        .join(', ');
+    if (jobs.length <= 12) {
+      return numbers;
+    }
+    return '$numbers, ... +${jobs.length - 12}';
+  }
+
+  DateTime _startOfLocalDay(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  bool _isSameLocalDay(DateTime value, DateTime dayStart) {
+    final localDay = _startOfLocalDay(value);
+    return localDay.year == dayStart.year &&
+        localDay.month == dayStart.month &&
+        localDay.day == dayStart.day;
+  }
+
   Future<List<MechanicJob>> _loadJobsForSummary(
     List<MechanicJob>? jobs, {
     BikeshopService? bikeshopService,
+    bool useProvidedJobsOnly = false,
+    bool allowJobCacheFallback = true,
   }) async {
-    if (jobs != null && jobs.isNotEmpty) {
-      return jobs.where((job) => job.id != null).toList();
+    if (jobs != null && (jobs.isNotEmpty || useProvidedJobsOnly)) {
+      final providedJobs = jobs.where((job) => job.id != null).toList();
+      debugPrint(
+        '[AI_CTX][AIService.loadJobs] using provided jobs '
+        'provided=${jobs.length} filtered=${providedJobs.length} '
+        'useProvidedOnly=$useProvidedJobsOnly allowFallback=$allowJobCacheFallback '
+        'jobs=[${_debugJobNumbers(providedJobs)}]',
+      );
+      return providedJobs;
     }
 
-    if (bikeshopService == null) {
+    if (!allowJobCacheFallback) {
+      debugPrint(
+        '[AI_CTX][AIService.loadJobs] cache fallback disabled; '
+        'provided=${jobs?.length ?? 'null'} useProvidedOnly=$useProvidedJobsOnly',
+      );
       return const <MechanicJob>[];
     }
 
+    if (bikeshopService == null) {
+      debugPrint(
+        '[AI_CTX][AIService.loadJobs] no provided jobs and no BikeshopService',
+      );
+      return const <MechanicJob>[];
+    }
+
+    debugPrint(
+      '[AI_CTX][AIService.loadJobs] FALLBACK to BikeshopService '
+      'hasCache=${bikeshopService.hasJobsCache} useProvidedOnly=$useProvidedJobsOnly '
+      'allowFallback=$allowJobCacheFallback',
+    );
     final loadedJobs = bikeshopService.hasJobsCache
         ? bikeshopService.cachedJobs
         : await bikeshopService.getJobs();
-    return loadedJobs.where((job) => job.id != null).toList();
+    final fallbackJobs = loadedJobs.where((job) => job.id != null).toList();
+    debugPrint(
+      '[AI_CTX][AIService.loadJobs] fallback loaded=${fallbackJobs.length} '
+      'jobs=[${_debugJobNumbers(fallbackJobs)}]',
+    );
+    return fallbackJobs;
   }
 
   Future<Map<String, String>> _loadCustomerNamesById(
@@ -1125,9 +1343,28 @@ ${hintLines.join('\n')}
   }
 
   bool _isActiveJob(MechanicJob job) {
-    return job.status != JobStatus.finalizado &&
-        job.status != JobStatus.entregado &&
-        job.status != JobStatus.cancelado;
+    if (job.status == JobStatus.cancelado) {
+      return false;
+    }
+
+    final customStatusCode = job.customStatus?.code.toLowerCase();
+    final isDelivered = job.deliveredAt != null ||
+        job.status == JobStatus.entregado ||
+        customStatusCode == 'entregado';
+    final isInvoiced = job.invoiceId != null || job.isInvoiced;
+    final isPaid = job.isPaid;
+
+    if (isDelivered && isInvoiced && isPaid) {
+      return false;
+    }
+
+    if (job.isWarrantyJob &&
+        isDelivered &&
+        (job.totalCost <= 0 || (isInvoiced && isPaid))) {
+      return false;
+    }
+
+    return true;
   }
 
   int _compareJobsForSummary(MechanicJob a, MechanicJob b) {

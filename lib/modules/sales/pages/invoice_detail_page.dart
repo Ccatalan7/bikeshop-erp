@@ -81,10 +81,18 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     });
   }
 
+  double _effectiveBalance(Invoice invoice) {
+    final balance = invoice.balance > 0
+        ? invoice.balance
+        : (invoice.total - invoice.paidAmount);
+    if (balance.abs() < 1) return 0;
+    return balance < 0 ? 0 : balance;
+  }
+
   Future<void> _openPaymentForm() async {
     final salesService = context.read<SalesService>();
     final invoice = _findInvoice(salesService);
-    if (invoice == null || invoice.balance <= 0) {
+    if (invoice == null || _effectiveBalance(invoice) <= 0) {
       return;
     }
 
@@ -566,7 +574,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   )
                 : const Icon(Icons.picture_as_pdf),
           ),
-          if (invoice.balance > 0 && invoice.status == InvoiceStatus.confirmed)
+          if (_effectiveBalance(invoice) > 0 &&
+              invoice.status == InvoiceStatus.confirmed)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: OutlinedButton.icon(
@@ -607,7 +616,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           ],
           // Confirmed → Sent (only if no payments have been made yet)
           if (invoice.status == InvoiceStatus.confirmed &&
-              invoice.balance > 0 &&
+              _effectiveBalance(invoice) > 0 &&
               invoice.paidAmount == 0)
             OutlinedButton.icon(
               onPressed: _revertToSent,

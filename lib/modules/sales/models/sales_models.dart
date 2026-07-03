@@ -27,6 +27,8 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
   return fallback ?? DateTime.now();
 }
 
+double _clp(num value) => value.roundToDouble();
+
 class Invoice {
   final String? id;
   final String tenantId;
@@ -211,6 +213,14 @@ class Invoice {
   }
 
   Map<String, dynamic> toFirestoreMap() {
+    final totalClp = _clp(total);
+    final paidClp = _clp(paidAmount);
+    final netClp = taxTreatment == TaxTreatment.taxIncluded
+        ? _clp(totalClp / 1.19)
+        : totalClp;
+    final ivaClp =
+        taxTreatment == TaxTreatment.taxIncluded ? totalClp - netClp : 0.0;
+
     return {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
@@ -225,13 +235,13 @@ class Invoice {
           dueDate?.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'status': status.name,
-      'subtotal': subtotal,
-      'iva_amount': ivaAmount,
-      'total': total,
-      'paid_amount': paidAmount,
-      'balance': balance,
+      'subtotal': totalClp,
+      'iva_amount': ivaClp,
+      'total': totalClp,
+      'paid_amount': paidClp,
+      'balance': (totalClp - paidClp).clamp(0.0, double.infinity),
       'tax_treatment': taxTreatment.toValue(),
-      'net_amount': netAmount,
+      'net_amount': netClp,
       'items': items.map((item) => item.toFirestoreMap()).toList(),
       'invoice_type': invoiceType,
       if (bikeId != null) 'bike_id': bikeId,
@@ -457,6 +467,7 @@ class Payment {
   final String invoiceId; // uuid - references sales_invoices(id)
   final String? invoiceReference; // invoice number for display
   final String paymentMethodId; // uuid - references payment_methods(id)
+  final String? idempotencyKey; // client-generated duplicate-submit guard
   final double amount;
   final DateTime date;
   final String? reference; // bank reference, check number, etc.
@@ -477,6 +488,7 @@ class Payment {
     required this.invoiceId,
     this.invoiceReference,
     required this.paymentMethodId,
+    this.idempotencyKey,
     required this.amount,
     required this.date,
     this.reference,
@@ -505,6 +517,7 @@ class Payment {
     String? invoiceId,
     String? invoiceReference,
     String? paymentMethodId,
+    String? idempotencyKey,
     double? amount,
     DateTime? date,
     String? reference,
@@ -523,6 +536,7 @@ class Payment {
       invoiceId: invoiceId ?? this.invoiceId,
       invoiceReference: invoiceReference ?? this.invoiceReference,
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       amount: amount ?? this.amount,
       date: date ?? this.date,
       reference: reference ?? this.reference,
@@ -547,6 +561,7 @@ class Payment {
       invoiceId: json['invoice_id']?.toString() ?? '',
       invoiceReference: json['invoice_reference'] as String?,
       paymentMethodId: json['payment_method_id']?.toString() ?? '',
+      idempotencyKey: json['idempotency_key']?.toString(),
       amount: amount,
       date: _parseDate(json['date']),
       reference: json['reference'] as String?,
@@ -563,21 +578,27 @@ class Payment {
   }
 
   Map<String, dynamic> toFirestoreMap() {
+    final amountClp = _clp(amount);
+    final netClp =
+        taxTreatment == 'tax_included' ? _clp(amountClp / 1.19) : amountClp;
+    final ivaClp = taxTreatment == 'tax_included' ? amountClp - netClp : 0.0;
+
     return {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'invoice_id': invoiceId,
       'invoice_reference': invoiceReference,
       'payment_method_id': paymentMethodId,
-      'amount': amount,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      'amount': amountClp,
       'date': date.toUtc().toIso8601String(), // CRITICAL: Convert to UTC
       'reference': reference,
       'notes': notes,
       'deleted_at': deletedAt?.toUtc().toIso8601String(),
       'deleted_by': deletedBy,
       'tax_treatment': taxTreatment,
-      'net_amount': netAmount,
-      'iva_amount': ivaAmount,
+      'net_amount': netClp,
+      'iva_amount': ivaClp,
     };
   }
 
