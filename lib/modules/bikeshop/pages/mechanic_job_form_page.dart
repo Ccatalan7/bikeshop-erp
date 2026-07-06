@@ -2441,6 +2441,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     try {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
+      final taskService = Provider.of<SmartTaskService>(context, listen: false);
 
       await _persistPendingBikeProfileOverrides(bikeshopService);
 
@@ -2577,6 +2578,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // MULTI-BIKE: Save each bike tab as MechanicJobBike + its items
       // ============================================================
 
+      var existingJobBikesForSave = <MechanicJobBike>[];
+
       // First, delete all existing job items (we'll re-create them)
       if (widget.jobId != null) {
         final existingItems = await bikeshopService.getJobItems(jobId);
@@ -2589,8 +2592,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
         }
 
-        // Delete existing job bikes (we'll re-create them)
-        final existingJobBikes = await bikeshopService.getJobBikes(jobId);
+        // Delete existing job bikes (we'll re-create them). Keep a fresh
+        // snapshot first so narrative-only saves cannot wipe structured data.
+        existingJobBikesForSave = await bikeshopService.getJobBikes(
+          jobId,
+          forceRefresh: true,
+        );
+        final existingJobBikes = existingJobBikesForSave;
         for (final existingJB in existingJobBikes) {
           if (existingJB.id != null) {
             await bikeshopService.removeBikeFromJob(
@@ -2601,7 +2609,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      final taskService = Provider.of<SmartTaskService>(context, listen: false);
+      final existingJobBikeById = <String, MechanicJobBike>{
+        for (final jobBike in existingJobBikesForSave)
+          if (jobBike.id != null && jobBike.id!.isNotEmpty)
+            jobBike.id!: jobBike,
+      };
+      final existingJobBikeByBikeId = <String, MechanicJobBike>{
+        for (final jobBike in existingJobBikesForSave)
+          if (jobBike.bikeId.isNotEmpty) jobBike.bikeId: jobBike,
+      };
+
+      MechanicJobBike? existingJobBikeForTab(_BikeTabData tab) {
+        final tabJobBikeId = tab.jobBikeId;
+        if (tabJobBikeId != null && tabJobBikeId.isNotEmpty) {
+          final byId = existingJobBikeById[tabJobBikeId];
+          if (byId != null) return byId;
+        }
+
+        final tabBikeId = tab.bike?.id;
+        if (tabBikeId != null && tabBikeId.isNotEmpty) {
+          return existingJobBikeByBikeId[tabBikeId];
+        }
+
+        return null;
+      }
 
       // Save each bike tab
       for (int i = 0; i < _bikeTabs.length; i++) {
@@ -2662,8 +2693,29 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
 
         // Create MechanicJobBike record for this bike
-        final normalizedDiagnosisSheet =
+        final normalizedTabDiagnosisSheet =
             _normalizeDiagnosisSheetStatuses(tab.diagnosisSheet);
+        final existingJobBike = existingJobBikeForTab(tab);
+        final shouldPreserveExistingDiagnosisSheet =
+            !normalizedTabDiagnosisSheet.hasMeaningfulData &&
+                existingJobBike?.diagnosisSheet.hasMeaningfulData == true;
+        final normalizedDiagnosisSheet = shouldPreserveExistingDiagnosisSheet
+            ? existingJobBike!.diagnosisSheet
+            : normalizedTabDiagnosisSheet;
+        final diagnosisSheetUpdatedAt =
+            normalizedDiagnosisSheet.hasMeaningfulData
+                ? (shouldPreserveExistingDiagnosisSheet
+                    ? existingJobBike?.diagnosisSheetUpdatedAt
+                    : (tab.diagnosisSheetUpdatedAt ?? DateTime.now()))
+                : null;
+
+        if (shouldPreserveExistingDiagnosisSheet) {
+          debugPrint(
+            '[DiagnosisSave] Preserved structured diagnosis for '
+            '${tab.bike?.displayName ?? tab.bike?.id ?? 'bike'} while saving narrative/details.',
+          );
+        }
+
         final jobBike = MechanicJobBike(
           id: null, // Always create new (we deleted old ones)
           tenantId: tenantId,
@@ -2682,12 +2734,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           technicianNotes: tab.technicianNotesController.text.trim().isEmpty
               ? null
               : tab.technicianNotesController.text.trim(),
-          diagnosisSheetKey:
-              tab.diagnosisSheetKey ?? normalizedDiagnosisSheet.templateKey,
-          diagnosisSheet: normalizedDiagnosisSheet,
-          diagnosisSheetUpdatedAt: normalizedDiagnosisSheet.hasMeaningfulData
-              ? (tab.diagnosisSheetUpdatedAt ?? DateTime.now())
+          diagnosisSheetKey: normalizedDiagnosisSheet.hasMeaningfulData
+              ? (shouldPreserveExistingDiagnosisSheet
+                  ? (existingJobBike?.diagnosisSheetKey ??
+                      normalizedDiagnosisSheet.templateKey)
+                  : (tab.diagnosisSheetKey ??
+                      normalizedDiagnosisSheet.templateKey))
               : null,
+          diagnosisSheet: normalizedDiagnosisSheet,
+          diagnosisSheetUpdatedAt: diagnosisSheetUpdatedAt,
           isWarrantyWork: tab.isWarrantyWork,
           requiresApproval: tab.requiresApproval,
           approvedByCustomer: tab.approvedByCustomer,

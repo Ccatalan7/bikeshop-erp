@@ -12,6 +12,10 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 - User-facing HR copy must call staff `trabajador` / `trabajadores`, not `empleado` / `empleados`.
 - Legacy route names, database enum values, table/function names, and historical file names may still contain `pegas`, `pega`, or `employee` for compatibility. Do not surface those legacy terms in labels, headings, empty states, toasts, PDFs, AI responses, or new documentation unless explicitly explaining the legacy internal identifier.
 
+## Workshop Lifecycle Guardrail
+
+- For mechanic jobs, `delivered_at` is a timestamp for the current delivered lifecycle state, not an independent archive flag. Jobs should be treated as delivered only when the current legacy/custom status resolves to `ENTREGADO`; moving a job back to `FINALIZADO`/`Terminado` or any non-delivered state must clear `delivered_at` so `Trabajos: Activos` only hides currently delivered and paid jobs.
+
 ---
 
 # Platform Priority And Cross-Platform Usability
@@ -460,6 +464,7 @@ The v1 kernel may stay intentionally small, but when richer detail is added late
 Diagnosis and service customization must follow the same backbone:
 - diagnosis is the shared visit-truth layer for component state
 - visit narrative may be AI-assisted, but only as an editable human-readable projection of the already-defined structured diagnosis for that visit; it must not become a parallel diagnosis truth store and it must omit undefined fields instead of narrating placeholders
+- narrative-only writes may update `mechanic_job_bikes.diagnosis`, but they must not send empty `diagnosis_sheet_*` fields; partial updates without meaningful structured diagnosis data must omit `diagnosis_sheet_key`, `diagnosis_sheet_data`, and `diagnosis_sheet_updated_at`, and full job-form saves must preserve the persisted structured sheet when the current tab only carries narrative/details state
 - service wizards should be service-aware views over that same diagnosis target, plus a narrow set of service-execution-only fields
 - service-execution-only structured answers must persist on `mechanic_job_items.service_configuration_data`; do not strand them only in row notes or transient UI state
 - user-customized fields may propagate across wizards, product suggestions, bike profile promotion, or bike timeline automation only when mapped to a known semantic role from a controlled catalog
@@ -1066,9 +1071,20 @@ Rules for agents:
 
 - Run linked DB queries **sequentially**, never in parallel. Parallel `supabase db query --linked` calls can trigger Supabase temp-login auth failures or circuit breaker throttling.
 - If a linked query hits temp login throttling, stop starting new linked queries and wait before retrying.
+- On Windows, if the Supabase CLI fails while renaming `C:\Users\<user>\.supabase\telemetry.json` or a `telemetry.json.tmp.*` file with `EPERM`, rerun the same sequential command with telemetry disabled for that process, for example `$env:SUPABASE_TELEMETRY_DISABLED='1'; supabase db query --linked --output table "select now();"`.
 - Do not treat `supabase db push` skipping migrations as a blocker. Use `supabase db query --linked --file ...` for standalone deployment SQL.
 - Keep standalone SQL files idempotent and update their deployment status comment after the SQL actually runs on project `xzdvtzdqjeyqxnkqprtf`.
 - Never print DB passwords, service role keys, or full connection strings in terminal output or final responses.
+
+### Backup / PITR Inspection
+
+Use the CLI backup command for read-only backup availability checks:
+
+```bash
+supabase backups list --project-ref xzdvtzdqjeyqxnkqprtf --output json
+```
+
+`supabase backups list` does not accept `--output table`; use `json` or `pretty`. If the result shows `pitr_enabled: false` and `backups: null`, do not promise exact recovery of hard-deleted row contents from PITR/backups through the CLI. Fall back to live audit tables, related snapshots, local logs/cache, or an explicitly labeled reconstruction from surviving evidence.
 
 Use direct `psql` only when a valid DB password is available in the environment and the command can be run without exposing secrets:
 

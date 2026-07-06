@@ -394,6 +394,45 @@ class _PegasTablePageState extends State<PegasTablePage>
     return '$numbers, ... +${jobs.length - 12}';
   }
 
+  bool _isJobCurrentlyDelivered(MechanicJob job) {
+    return job.status == JobStatus.entregado ||
+        job.customStatus?.code.trim().toLowerCase() == 'entregado';
+  }
+
+  DateTime? _deliveredAtForStatus(JobStatus status, DateTime? currentValue) {
+    if (status != JobStatus.entregado) return null;
+    return currentValue ?? DateTime.now();
+  }
+
+  DateTime? _completedAtForStatus(JobStatus status, DateTime? currentValue) {
+    if (status == JobStatus.finalizado || status == JobStatus.entregado) {
+      return currentValue ?? DateTime.now();
+    }
+    return currentValue;
+  }
+
+  DateTime? _deliveredAtForCustomStatus(
+    JobStatusCustom status,
+    DateTime? currentValue,
+  ) {
+    final isDeliveryStatus = status.triggersDelivery ||
+        status.code.trim().toLowerCase() == 'entregado';
+    if (!isDeliveryStatus) return null;
+    return currentValue ?? DateTime.now();
+  }
+
+  DateTime? _completedAtForCustomStatus(
+    JobStatusCustom status,
+    DateTime? currentValue,
+  ) {
+    final isCompletionStatus = status.triggersCompletion ||
+        status.triggersDelivery ||
+        status.code.trim().toLowerCase() == 'finalizado' ||
+        status.code.trim().toLowerCase() == 'entregado';
+    if (isCompletionStatus) return currentValue ?? DateTime.now();
+    return currentValue;
+  }
+
   Color _statusFilterColor(String value) {
     switch (value) {
       case 'active':
@@ -1195,9 +1234,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       final isInvoicedEffective = _isJobInvoicedEffective(job);
       final isPaidEffective = _isJobPaidEffective(job, invoice: invoice);
 
-      final isDelivered = job.deliveredAt != null ||
-          job.status == JobStatus.entregado ||
-          (job.customStatus?.code.toLowerCase() == 'entregado');
+      final isDelivered = _isJobCurrentlyDelivered(job);
 
       // Warranty is archived immediately if Delivered + $0, OR if Delivered + Paid
       final isFinishedWarranty = job.isWarrantyJob &&
@@ -1221,10 +1258,6 @@ class _PegasTablePageState extends State<PegasTablePage>
           // Filter out only: Cancelados, and Entregados that are already paid.
           if (job.status == JobStatus.cancelado) return false;
 
-          final isDelivered = job.deliveredAt != null ||
-              job.status == JobStatus.entregado ||
-              (job.customStatus?.code.toLowerCase() == 'entregado');
-
           if (isDelivered && isInvoicedEffective && isPaidEffective) {
             return false;
           }
@@ -1244,7 +1277,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           }
           break;
         case 'delivered':
-          if (job.status != JobStatus.entregado) return false;
+          if (!isDelivered) return false;
           break;
         case 'unpaid':
           if (isPaidEffective || !isInvoicedEffective) return false;
@@ -1828,15 +1861,25 @@ class _PegasTablePageState extends State<PegasTablePage>
       final index = _jobs.indexWhere((j) => j.id == _selectedJob!.id);
       if (index != -1) {
         final job = _jobs[index];
-        _jobs[index] =
-            job.copyWith(status: newStatus, updatedAt: DateTime.now());
+        _jobs[index] = job.copyWith(
+          status: newStatus,
+          completedAt: _completedAtForStatus(newStatus, job.completedAt),
+          deliveredAt: _deliveredAtForStatus(newStatus, job.deliveredAt),
+          updatedAt: DateTime.now(),
+        );
         _selectedJob = _jobs[index];
       }
       _applyFiltersAndSort();
     });
 
     try {
-      final updatedJob = _selectedJob!.copyWith(status: newStatus);
+      final updatedJob = _selectedJob!.copyWith(
+        status: newStatus,
+        completedAt:
+            _completedAtForStatus(newStatus, _selectedJob!.completedAt),
+        deliveredAt:
+            _deliveredAtForStatus(newStatus, _selectedJob!.deliveredAt),
+      );
       await _databaseService.update(
         'mechanic_jobs',
         updatedJob.id!,
@@ -1897,14 +1940,32 @@ class _PegasTablePageState extends State<PegasTablePage>
                   // ... update job logic
                   final job = _jobs[index];
                   _jobs[index] = job.copyWith(
-                      status: newStatus, updatedAt: DateTime.now());
+                    status: newStatus,
+                    completedAt: _completedAtForStatus(
+                      newStatus,
+                      job.completedAt,
+                    ),
+                    deliveredAt:
+                        _deliveredAtForStatus(newStatus, job.deliveredAt),
+                    updatedAt: DateTime.now(),
+                  );
                   _selectedJob = _jobs[index];
                 }
                 _applyFiltersAndSort();
               });
 
               try {
-                final updatedJob = _selectedJob!.copyWith(status: newStatus);
+                final updatedJob = _selectedJob!.copyWith(
+                  status: newStatus,
+                  completedAt: _completedAtForStatus(
+                    newStatus,
+                    _selectedJob!.completedAt,
+                  ),
+                  deliveredAt: _deliveredAtForStatus(
+                    newStatus,
+                    _selectedJob!.deliveredAt,
+                  ),
+                );
                 await _databaseService.update(
                   'mechanic_jobs',
                   updatedJob.id!,
@@ -2052,49 +2113,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                         _jobs.indexWhere((j) => j.id == _selectedJob!.id);
                     if (index != -1) {
                       final job = _jobs[index];
-                      _jobs[index] = MechanicJob(
-                        id: job.id,
-                        tenantId: job.tenantId,
-                        jobNumber: job.jobNumber,
-                        customerId: job.customerId,
-                        bikeId: job.bikeId,
+                      _jobs[index] = job.copyWith(
                         status: newStatus,
-                        priority: job.priority,
-                        arrivalDate: job.arrivalDate,
-                        diagnosticDeadline: job.diagnosticDeadline,
-                        deliveryDeadline: job.deliveryDeadline,
-                        diagnosticSentAt: job.diagnosticSentAt,
-                        startedAt: job.startedAt,
-                        completedAt: job.completedAt,
-                        deliveredAt: job.deliveredAt,
-                        clientRequest: job.clientRequest,
-                        diagnosis: job.diagnosis,
-                        workPerformed: job.workPerformed,
-                        notes: job.notes,
-                        assignedTo: job.assignedTo,
-                        assignedTechnicianName: job.assignedTechnicianName,
-                        servicePackageId: job.servicePackageId,
-                        estimatedCost: job.estimatedCost,
-                        finalCost: job.finalCost,
-                        partsCost: job.partsCost,
-                        laborCost: job.laborCost,
-                        discountAmount: job.discountAmount,
-                        taxAmount: job.taxAmount,
-                        totalCost: job.totalCost,
-                        taxTreatment: job.taxTreatment,
-                        invoiceId: job.invoiceId,
-                        isInvoiced: job.isInvoiced,
-                        isPaid: job.isPaid,
-                        isWarrantyJob: job.isWarrantyJob,
-                        warrantyNotes: job.warrantyNotes,
-                        requiresApproval: job.requiresApproval,
-                        approvedByCustomer: job.approvedByCustomer,
-                        approvedAt: job.approvedAt,
-                        imageUrls: job.imageUrls,
-                        createdAt: job.createdAt,
+                        completedAt:
+                            _completedAtForStatus(newStatus, job.completedAt),
+                        deliveredAt:
+                            _deliveredAtForStatus(newStatus, job.deliveredAt),
                         updatedAt: DateTime.now(),
-                        deletedAt: job.deletedAt,
-                        deletedBy: job.deletedBy,
                       );
                       _selectedJob = _jobs[index];
                     }
@@ -2103,8 +2128,17 @@ class _PegasTablePageState extends State<PegasTablePage>
 
                   // Save in background
                   try {
-                    final updatedJob =
-                        _selectedJob!.copyWith(status: newStatus);
+                    final updatedJob = _selectedJob!.copyWith(
+                      status: newStatus,
+                      completedAt: _completedAtForStatus(
+                        newStatus,
+                        _selectedJob!.completedAt,
+                      ),
+                      deliveredAt: _deliveredAtForStatus(
+                        newStatus,
+                        _selectedJob!.deliveredAt,
+                      ),
+                    );
                     await _databaseService.update(
                       'mechanic_jobs',
                       updatedJob.id!,
@@ -7035,6 +7069,14 @@ class _PegasTablePageState extends State<PegasTablePage>
           statusId: newStatus.id,
           customStatus: newStatus,
           status: legacyStatus,
+          completedAt: _completedAtForCustomStatus(
+            newStatus,
+            job.completedAt,
+          ),
+          deliveredAt: _deliveredAtForCustomStatus(
+            newStatus,
+            job.deliveredAt,
+          ),
           updatedAt: DateTime.now(),
         );
       }
@@ -7843,6 +7885,14 @@ class _PegasTablePageState extends State<PegasTablePage>
             statusId: newCustomStatus.id,
             customStatus: newCustomStatus,
             status: legacyStatus,
+            completedAt: _completedAtForCustomStatus(
+              newCustomStatus,
+              job.completedAt,
+            ),
+            deliveredAt: _deliveredAtForCustomStatus(
+              newCustomStatus,
+              job.deliveredAt,
+            ),
             updatedAt: DateTime.now(),
           );
         }

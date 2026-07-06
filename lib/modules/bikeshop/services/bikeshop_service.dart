@@ -3187,9 +3187,12 @@ class BikeshopService extends ChangeNotifier {
   // ============================================================
 
   /// Get all bikes for a job (multi-bike support)
-  Future<List<MechanicJobBike>> getJobBikes(String jobId) async {
+  Future<List<MechanicJobBike>> getJobBikes(
+    String jobId, {
+    bool forceRefresh = false,
+  }) async {
     try {
-      if (isJobBikesCacheFresh && _cachedAllJobBikes != null) {
+      if (!forceRefresh && isJobBikesCacheFresh && _cachedAllJobBikes != null) {
         return List<MechanicJobBike>.from(
             _cachedAllJobBikes![jobId] ?? const []);
       }
@@ -3293,8 +3296,11 @@ class BikeshopService extends ChangeNotifier {
       if (jobBike.id == null || jobBike.id!.isEmpty) {
         throw Exception('ID de bicicleta de trabajo inválido');
       }
-      final data =
-          await _db.update('mechanic_job_bikes', jobBike.id!, jobBike.toJson());
+      final data = await _db.update(
+        'mechanic_job_bikes',
+        jobBike.id!,
+        jobBike.toJson(forUpdate: true),
+      );
       final updatedJobBike = MechanicJobBike.fromJson(data);
       _upsertJobBikeInCache(updatedJobBike);
       if (syncBikeMemory) {

@@ -333,12 +333,18 @@ class JobStatusService extends ChangeNotifier {
       if (status.triggersStart) {
         updates['started_at'] = now;
       }
-      if (status.triggersCompletion) {
+      final statusCode = status.code.trim().toUpperCase();
+      final isCompletionStatus = status.triggersCompletion ||
+          status.triggersDelivery ||
+          statusCode == 'FINALIZADO' ||
+          statusCode == 'ENTREGADO';
+      final isDeliveryStatus =
+          status.triggersDelivery || statusCode == 'ENTREGADO';
+
+      if (isCompletionStatus) {
         updates['completed_at'] = now;
       }
-      if (status.triggersDelivery) {
-        updates['delivered_at'] = now;
-      }
+      updates['delivered_at'] = isDeliveryStatus ? now : null;
 
       final response = await Supabase.instance.client
           .from('mechanic_jobs')

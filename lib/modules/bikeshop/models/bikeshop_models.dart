@@ -2648,7 +2648,7 @@ class MechanicJob {
     Object? diagnosticSentAt = _sentinel,
     DateTime? startedAt,
     DateTime? completedAt,
-    DateTime? deliveredAt,
+    Object? deliveredAt = _sentinel,
     JobStatus? status,
     JobPriority? priority,
     String? clientRequest,
@@ -2723,7 +2723,9 @@ class MechanicJob {
           : diagnosticSentAt as DateTime?,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
-      deliveredAt: deliveredAt ?? this.deliveredAt,
+      deliveredAt: deliveredAt == _sentinel
+          ? this.deliveredAt
+          : deliveredAt as DateTime?,
       status: status ?? this.status,
       statusId: statusId ?? this.statusId,
       customStatus: customStatus ?? this.customStatus,
@@ -3010,8 +3012,9 @@ class MechanicJobBike {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
+  Map<String, dynamic> toJson({bool forUpdate = false}) {
+    final hasStructuredDiagnosis = diagnosisSheet.hasMeaningfulData;
+    final json = <String, dynamic>{
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'job_id': jobId,
@@ -3022,15 +3025,6 @@ class MechanicJobBike {
       'work_requested': workRequested,
       'work_performed': workPerformed,
       'technician_notes': technicianNotes,
-      'diagnosis_sheet_key': diagnosisSheet.hasMeaningfulData
-          ? (diagnosisSheetKey ?? diagnosisSheet.templateKey)
-          : null,
-      'diagnosis_sheet_data': diagnosisSheet.hasMeaningfulData
-          ? diagnosisSheet.toJson()
-          : const <String, dynamic>{},
-      'diagnosis_sheet_updated_at': diagnosisSheet.hasMeaningfulData
-          ? (diagnosisSheetUpdatedAt ?? DateTime.now()).toIso8601String()
-          : null,
       // Note: parts_cost, labor_cost, subtotal are calculated by trigger
       'is_warranty_work': isWarrantyWork,
       'requires_approval': requiresApproval,
@@ -3038,6 +3032,20 @@ class MechanicJobBike {
       'approved_at': approvedAt?.toIso8601String(),
       'image_urls': imageUrls,
     };
+
+    if (!forUpdate || hasStructuredDiagnosis) {
+      json['diagnosis_sheet_key'] = hasStructuredDiagnosis
+          ? (diagnosisSheetKey ?? diagnosisSheet.templateKey)
+          : null;
+      json['diagnosis_sheet_data'] = hasStructuredDiagnosis
+          ? diagnosisSheet.toJson()
+          : const <String, dynamic>{};
+      json['diagnosis_sheet_updated_at'] = hasStructuredDiagnosis
+          ? (diagnosisSheetUpdatedAt ?? DateTime.now()).toIso8601String()
+          : null;
+    }
+
+    return json;
   }
 
   MechanicJobBike copyWith({

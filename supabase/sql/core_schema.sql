@@ -16748,6 +16748,32 @@ create trigger trg_mechanic_jobs_change
   after insert or update or delete on mechanic_jobs
   for each row execute procedure public.handle_mechanic_job_change();
 
+-- Keep delivered_at aligned with the current delivered status.
+create or replace function public.normalize_mechanic_job_lifecycle_timestamps()
+returns trigger
+language plpgsql
+as $$
+begin
+  if NEW.status = 'ENTREGADO' then
+    NEW.delivered_at := coalesce(NEW.delivered_at, now());
+    NEW.completed_at := coalesce(NEW.completed_at, NEW.delivered_at, now());
+  else
+    NEW.delivered_at := null;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_mechanic_jobs_lifecycle_timestamp_guard
+  on public.mechanic_jobs;
+
+create trigger trg_mechanic_jobs_lifecycle_timestamp_guard
+  before insert or update of status, status_id, completed_at, delivered_at
+  on public.mechanic_jobs
+  for each row
+  execute function public.normalize_mechanic_job_lifecycle_timestamps();
+
 -- Trigger function: Handle mechanic job items changes
 -- BEFORE trigger to calculate item total_price
 create or replace function public.calculate_mechanic_job_item_total()

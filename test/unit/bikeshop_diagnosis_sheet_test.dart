@@ -2,6 +2,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 
 void main() {
+  test(
+      'job bike update payload does not clear structured diagnosis on narrative-only update',
+      () {
+    final jobBike = MechanicJobBike(
+      id: 'job-bike-1',
+      tenantId: 'tenant-1',
+      jobId: 'job-1',
+      bikeId: 'bike-1',
+      diagnosis: 'Ficha narrativa actualizada',
+    );
+
+    final payload = jobBike.toJson(forUpdate: true);
+
+    expect(payload['diagnosis'], 'Ficha narrativa actualizada');
+    expect(payload.containsKey('diagnosis_sheet_key'), isFalse);
+    expect(payload.containsKey('diagnosis_sheet_data'), isFalse);
+    expect(payload.containsKey('diagnosis_sheet_updated_at'), isFalse);
+  });
+
+  test('job bike update payload includes meaningful structured diagnosis', () {
+    final jobBike = MechanicJobBike(
+      id: 'job-bike-1',
+      tenantId: 'tenant-1',
+      jobId: 'job-1',
+      bikeId: 'bike-1',
+      diagnosis: 'Ficha narrativa actualizada',
+      diagnosisSheet: const MechanicJobDiagnosisSheet(
+        drivetrain: DrivetrainDiagnosisSheet(
+          overallStatus: BikeSystemOverallStatus.attention,
+          cableCondition: 'frayed',
+        ),
+      ),
+    );
+
+    final payload = jobBike.toJson(forUpdate: true);
+
+    expect(payload['diagnosis'], 'Ficha narrativa actualizada');
+    expect(payload['diagnosis_sheet_key'], 'basic_workshop_v1');
+    expect(payload['diagnosis_sheet_data']['drivetrain']['overall_status'],
+        'attention');
+    expect(payload['diagnosis_sheet_data']['drivetrain']['cable_condition'],
+        'frayed');
+    expect(payload['diagnosis_sheet_updated_at'], isNotNull);
+  });
+
   test('diagnosis sheet round-trips structured wheel sections', () {
     const sheet = MechanicJobDiagnosisSheet(
       frontWheel: WheelDiagnosisSheet(
@@ -84,7 +129,8 @@ void main() {
     expect(restored.bottomBracket.noiseStatus, 'creaking');
     expect(restored.bottomBracket.notes, 'Ruido al pedalear en carga.');
     expect(restored.suspension.hasMeaningfulData, isTrue);
-    expect(restored.suspension.overallStatus, BikeSystemOverallStatus.attention);
+    expect(
+        restored.suspension.overallStatus, BikeSystemOverallStatus.attention);
     expect(restored.suspension.forkCondition, 'seal_leak');
     expect(restored.suspension.forkNoiseStatus, 'creaking');
     expect(restored.suspension.rearShockCondition, 'service');
