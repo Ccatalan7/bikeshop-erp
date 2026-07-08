@@ -328,6 +328,120 @@ class HRService extends ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getPlanningRoles() async {
+    try {
+      final response = await _client
+          .from('planning_roles')
+          .select('id, code, name, color')
+          .eq('is_active', true)
+          .order('sort_order')
+          .order('name');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error getting planning roles: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getEmployeeDefaultShiftBlocks(
+    String employeeId,
+  ) async {
+    try {
+      final response = await _client
+          .from('employee_default_shift_blocks')
+          .select('''
+            id,
+            employee_id,
+            planning_role_id,
+            day_of_week,
+            start_time,
+            end_time,
+            timezone,
+            source,
+            store_hours_validated,
+            outside_store_hours_reason,
+            planning_roles(name, color)
+          ''')
+          .eq('employee_id', employeeId)
+          .eq('is_active', true)
+          .order('day_of_week')
+          .order('start_time');
+
+      return (response as List).whereType<Map>().map((row) {
+        final map = Map<String, dynamic>.from(row);
+        final role = map['planning_roles'] is Map
+            ? Map<String, dynamic>.from(map['planning_roles'] as Map)
+            : const <String, dynamic>{};
+        return {
+          'id': map['id']?.toString(),
+          'employeeId': map['employee_id']?.toString(),
+          'planningRoleId': map['planning_role_id']?.toString(),
+          'planningRoleName': role['name']?.toString(),
+          'planningRoleColor': role['color']?.toString(),
+          'dayOfWeek': (map['day_of_week'] as num?)?.toInt(),
+          'startTime': map['start_time']?.toString(),
+          'endTime': map['end_time']?.toString(),
+          'timezone': map['timezone']?.toString() ?? 'America/Santiago',
+          'source': map['source']?.toString(),
+          'storeHoursValidated': map['store_hours_validated'] == true,
+          'outsideStoreHoursReason':
+              map['outside_store_hours_reason']?.toString(),
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('Error getting default shift blocks: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> replaceEmployeeDefaultShiftBlocks({
+    required String employeeId,
+    required List<Map<String, dynamic>> blocks,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No se encontro la tienda actual');
+
+    try {
+      await _client
+          .from('employee_default_shift_blocks')
+          .update({
+            'is_active': false,
+            'updated_by': _client.auth.currentUser?.id,
+          })
+          .eq('tenant_id', tenantId)
+          .eq('employee_id', employeeId)
+          .eq('is_active', true);
+
+      if (blocks.isEmpty) {
+        notifyListeners();
+        return;
+      }
+
+      final rows = blocks.map((block) {
+        final roleId = block['planningRoleId']?.toString().trim();
+        return {
+          'tenant_id': tenantId,
+          'employee_id': employeeId,
+          if (roleId != null && roleId.isNotEmpty) 'planning_role_id': roleId,
+          'day_of_week': block['dayOfWeek'],
+          'start_time': block['startTime'],
+          'end_time': block['endTime'],
+          'timezone': block['timezone'] ?? 'America/Santiago',
+          'source': 'profile',
+          'is_active': true,
+          'store_hours_validated': false,
+          'updated_by': _client.auth.currentUser?.id,
+        };
+      }).toList();
+
+      await _client.from('employee_default_shift_blocks').insert(rows);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error replacing default shift blocks: $e');
+      rethrow;
+    }
+  }
+
   // ============================================================================
   // WORK SCHEDULES
   // ============================================================================

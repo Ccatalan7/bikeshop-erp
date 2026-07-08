@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-type SupabaseClient = ReturnType<typeof createClient>
+type SupabaseClient = any
 
 interface RequestBody {
   action?: string
@@ -18,6 +18,7 @@ interface RequestBody {
   email?: string
   name?: string
   phone?: string
+  username?: string
   role?: string
   permissions?: Record<string, boolean>
   isActive?: boolean
@@ -127,6 +128,12 @@ Deno.serve(async (req) => {
         return json(await setInternalAccess(serviceClient, caller, body))
       case 'delete_internal_account':
         return json(await deleteInternalAccount(serviceClient, caller, body))
+      case 'create_worker_portal_account':
+        return json(await createWorkerPortalAccount(serviceClient, caller, body))
+      case 'reset_worker_portal_password':
+        return json(await resetWorkerPortalPassword(serviceClient, caller, body))
+      case 'set_worker_portal_access':
+        return json(await setWorkerPortalAccess(serviceClient, caller, body))
       case 'create_customer_account':
         return json(await createCustomerAccount(serviceClient, caller, body, req))
       case 'set_customer_access':
@@ -232,7 +239,7 @@ async function getStaffUsers(serviceClient: SupabaseClient, tenantId: string) {
   if (error) throw error
 
   const rows = data ?? []
-  return await Promise.all(rows.map(async (profile) => {
+  return await Promise.all(rows.map(async (profile: any) => {
     const authUser = await getAuthUser(serviceClient, profile.user_id)
     const employee = profile.employee_id
       ? await getEmployeeName(serviceClient, profile.employee_id, tenantId)
@@ -290,7 +297,7 @@ async function getCustomerAccounts(serviceClient: SupabaseClient, tenantId: stri
   if (error) throw error
 
   const rows = data ?? []
-  const customerAccounts = await Promise.all(rows.map(async (customer) => {
+  const customerAccounts = await Promise.all(rows.map(async (customer: any) => {
     const authUser = customer.auth_user_id
       ? await getAuthUser(serviceClient, customer.auth_user_id)
       : null
@@ -388,16 +395,24 @@ async function getLinkedCustomerAuthIds(serviceClient: SupabaseClient, tenantId:
     .limit(10000)
 
   if (error) throw error
-  return new Set((data ?? []).map((row) => row.auth_user_id).filter(Boolean))
+  return new Set((data ?? []).map((row: any) => row.auth_user_id).filter(Boolean))
 }
 
 async function getSummary(serviceClient: SupabaseClient, tenantId: string) {
-  const [staffCount, invitationCount, customerCount, linkedCustomerCount, orphanWebsiteAccountCount] = await Promise.all([
+  const [
+    staffCount,
+    invitationCount,
+    customerCount,
+    linkedCustomerCount,
+    orphanWebsiteAccountCount,
+    workerPortalAccountCount,
+  ] = await Promise.all([
     countRows(serviceClient, 'user_profiles', tenantId),
     countRows(serviceClient, 'user_invitations', tenantId, { status: 'pending' }),
     countRows(serviceClient, 'customers', tenantId),
     countRows(serviceClient, 'customers', tenantId, { auth_user_id: 'not-null' }),
     countOrphanWebsiteAuthAccounts(serviceClient, tenantId),
+    safeCountRows(serviceClient, 'employee_portal_accounts', tenantId),
   ])
 
   return {
@@ -406,6 +421,7 @@ async function getSummary(serviceClient: SupabaseClient, tenantId: string) {
     customerCount,
     linkedCustomerCount,
     orphanWebsiteAccountCount,
+    workerPortalAccountCount,
   }
 }
 
@@ -564,6 +580,176 @@ async function deleteInternalAccount(serviceClient: SupabaseClient, caller: Call
   const { error } = await serviceClient.auth.admin.deleteUser(userId)
   if (error) throw error
 
+  return { success: true }
+}
+
+async function createWorkerPortalAccount(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const employeeId = required(body.employeeId, 'employeeId')
+  const username = normalizeWorkerUsername(required(body.username, 'username'))
+  const temporaryPassword = body.password?.trim() || generatePassword()
+  const employee = await getEmployeeForPortal(serviceClient, caller.tenantId, employeeId)
+  const loginEmail = buildWorkerLoginEmail(caller.tenantId, username)
+
+  const { data: existingRows, error: existingError } = await serviceClient
+    .from('employee_portal_accounts')
+    .select('id, employee_id, auth_user_id, username, login_email, is_active')
+    .eq('tenant_id', caller.tenantId)
+    .or(`employee_id.eq.${employeeId},username.eq.${username}`)
+
+  if (existingError) throw existingError
+
+  const rows = existingRows ?? []
+  const usernameConflict = rows.find((row: any) => row.username === username && row.employee_id !== employeeId)
+  if (usernameConflict) {
+    throw new Error('Ese nombre de usuario ya esta asignado a otro trabajador')
+  }
+
+  const existingForEmployee = rows.find((row: any) => row.employee_id === employeeId) ?? null
+  let authUser = existingForEmployee?.auth_user_id
+    ? await getAuthUser(serviceClient, existingForEmployee.auth_user_id)
+    : null
+  authUser ??= await findAuthUserByEmail(serviceClient, loginEmail)
+
+  const metadata = {
+    account_type: 'worker_portal',
+    tenant_id: caller.tenantId,
+    employee_id: employeeId,
+    username,
+    role: 'worker',
+    name: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
+  }
+
+  if (!authUser) {
+    const { data, error } = await serviceClient.auth.admin.createUser({
+      email: loginEmail,
+      password: temporaryPassword,
+      email_confirm: true,
+      user_metadata: metadata,
+    })
+    if (error) throw error
+    authUser = data.user
+  } else {
+    const { error } = await serviceClient.auth.admin.updateUserById(authUser.id, {
+      email: loginEmail,
+      password: temporaryPassword,
+      email_confirm: true,
+      ban_duration: 'none',
+      user_metadata: {
+        ...(authUser.user_metadata ?? {}),
+        ...metadata,
+      },
+    })
+    if (error) throw error
+  }
+
+  const payload = {
+    tenant_id: caller.tenantId,
+    employee_id: employeeId,
+    auth_user_id: authUser.id,
+    username,
+    login_email: loginEmail,
+    is_active: true,
+    must_reset_password: true,
+    updated_at: new Date().toISOString(),
+  }
+
+  let portalAccountId: string
+  if (existingForEmployee) {
+    const { data, error } = await serviceClient
+      .from('employee_portal_accounts')
+      .update(payload)
+      .eq('id', existingForEmployee.id)
+      .eq('tenant_id', caller.tenantId)
+      .select('id')
+      .single()
+    if (error) throw error
+    portalAccountId = data.id
+  } else {
+    const { data, error } = await serviceClient
+      .from('employee_portal_accounts')
+      .insert({
+        ...payload,
+        created_by: caller.userId,
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    portalAccountId = data.id
+  }
+
+  return {
+    success: true,
+    portalAccountId,
+    authUserId: authUser.id,
+    employeeId,
+    username,
+    temporaryPassword,
+  }
+}
+
+async function resetWorkerPortalPassword(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const account = await getWorkerPortalAccount(serviceClient, caller.tenantId, body)
+  if (!account.auth_user_id) throw new Error('El trabajador no tiene usuario Auth vinculado')
+
+  const temporaryPassword = body.password?.trim() || generatePassword()
+  const { error } = await serviceClient.auth.admin.updateUserById(account.auth_user_id, {
+    password: temporaryPassword,
+    ban_duration: 'none',
+  })
+  if (error) throw error
+
+  const { error: updateError } = await serviceClient
+    .from('employee_portal_accounts')
+    .update({
+      must_reset_password: true,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', account.id)
+    .eq('tenant_id', caller.tenantId)
+  if (updateError) throw updateError
+
+  return {
+    success: true,
+    employeeId: account.employee_id,
+    username: account.username,
+    temporaryPassword,
+  }
+}
+
+async function setWorkerPortalAccess(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const account = await getWorkerPortalAccount(serviceClient, caller.tenantId, body)
+  const isActive = body.isActive === true
+
+  if (account.auth_user_id) {
+    const { error } = await serviceClient.auth.admin.updateUserById(account.auth_user_id, {
+      ban_duration: isActive ? 'none' : '876600h',
+    })
+    if (error) throw error
+  }
+
+  const { error } = await serviceClient
+    .from('employee_portal_accounts')
+    .update({
+      is_active: isActive,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', account.id)
+    .eq('tenant_id', caller.tenantId)
+
+  if (error) throw error
   return { success: true }
 }
 
@@ -1016,7 +1202,7 @@ async function findAuthUserByEmail(serviceClient: SupabaseClient, email: string)
   while (page <= 10) {
     const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 1000 })
     if (error) throw error
-    const found = data.users.find((user) => user.email?.toLowerCase() === email.toLowerCase())
+    const found = data.users.find((user: any) => user.email?.toLowerCase() === email.toLowerCase())
     if (found) return found
     if (data.users.length < 1000) return null
     page += 1
@@ -1034,6 +1220,44 @@ async function getEmployeeName(serviceClient: SupabaseClient, employeeId: string
 
   if (!data) return null
   return `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim() || null
+}
+
+async function getEmployeeForPortal(serviceClient: SupabaseClient, tenantId: string, employeeId: string) {
+  const { data, error } = await serviceClient
+    .from('employees')
+    .select('id, first_name, last_name, status')
+    .eq('id', employeeId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('Trabajador no encontrado para este tenant')
+  if (data.status !== 'active') throw new Error('Solo trabajadores activos pueden tener acceso movil')
+  return data
+}
+
+async function getWorkerPortalAccount(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  body: RequestBody,
+) {
+  let query = serviceClient
+    .from('employee_portal_accounts')
+    .select('id, employee_id, auth_user_id, username, login_email, is_active')
+    .eq('tenant_id', tenantId)
+
+  if (body.employeeId) {
+    query = query.eq('employee_id', body.employeeId)
+  } else if (body.username) {
+    query = query.eq('username', normalizeWorkerUsername(body.username))
+  } else {
+    throw new Error('employeeId or username is required')
+  }
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('Cuenta movil del trabajador no encontrada')
+  return data
 }
 
 async function countRows(
@@ -1054,6 +1278,27 @@ async function countRows(
   return count ?? 0
 }
 
+async function safeCountRows(
+  serviceClient: SupabaseClient,
+  table: string,
+  tenantId: string,
+  filters: Record<string, unknown> = {},
+) {
+  try {
+    return await countRows(serviceClient, table, tenantId, filters)
+  } catch (error) {
+    if (isMissingRelationError(error)) return 0
+    throw error
+  }
+}
+
+function isMissingRelationError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const value = error as { code?: unknown; message?: unknown }
+  return value.code === '42P01' ||
+    String(value.message ?? '').toLowerCase().includes('does not exist')
+}
+
 function normalizeRole(role: string) {
   const allowed = ['admin', 'manager', 'cashier', 'mechanic', 'accountant']
   if (!allowed.includes(role)) throw new Error(`Invalid role: ${role}`)
@@ -1064,6 +1309,23 @@ function normalizeEmail(email: string | null | undefined) {
   const normalized = email?.trim().toLowerCase()
   if (!normalized || !normalized.includes('@')) throw new Error('A valid email is required')
   return normalized
+}
+
+function normalizeWorkerUsername(username: string | null | undefined) {
+  const normalized = username?.trim().toLowerCase() ?? ''
+  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalized)) {
+    throw new Error('El usuario debe tener 3 a 32 caracteres: letras, numeros, punto, guion o guion bajo')
+  }
+  return normalized
+}
+
+function buildWorkerLoginEmail(tenantId: string, username: string) {
+  const tenantPrefix = tenantId.replaceAll('-', '').slice(0, 10)
+  const encodedUsername = btoa(username)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '')
+  return `wp-${tenantPrefix}-${encodedUsername}@worker-login.vinabike.app`
 }
 
 function getDisplayName(user: any) {

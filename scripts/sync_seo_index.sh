@@ -288,7 +288,28 @@ cat > "$INDEX_FILE" << HEREDOC
   <meta name="apple-mobile-web-app-title" content="$BUSINESS_NAME">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png" />
-  <link rel="manifest" href="manifest.json">
+  <script>
+    (function () {
+      var path = window.location.pathname || '';
+      var isWorkerPortal = path === '/worker' || path.indexOf('/worker/') === 0;
+      var manifest = document.createElement('link');
+      manifest.rel = 'manifest';
+      manifest.href = isWorkerPortal ? 'manifest-worker.json' : 'manifest.json';
+      document.head.appendChild(manifest);
+
+      if (!isWorkerPortal) return;
+
+      document.title = 'Viñabike Trabajadores';
+      var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (appleTitle) appleTitle.setAttribute('content', 'Viñabike Trabajadores');
+      var themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.setAttribute('content', '#0f4c5c');
+      var robots = document.createElement('meta');
+      robots.name = 'robots';
+      robots.content = 'noindex,nofollow';
+      document.head.appendChild(robots);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://vinabike-edge-cache.vinabike.workers.dev" crossorigin>
   <link rel="dns-prefetch" href="//vinabike-edge-cache.vinabike.workers.dev">

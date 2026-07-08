@@ -24,11 +24,14 @@ class AuthService extends ChangeNotifier {
           data.event == AuthChangeEvent.passwordRecovery ||
           data.event == AuthChangeEvent.userUpdated;
 
-      // Check staff profile on sign in
+      // Check access profiles on sign in
       if (data.event == AuthChangeEvent.signedIn && _currentUser != null) {
-        await _loadStaffProfile();
+        await _loadAccessProfiles();
       } else if (data.event == AuthChangeEvent.signedOut) {
         _staffProfile = null;
+        _workerProfile = null;
+        _isStaffProfileLoaded = false;
+        _isWorkerProfileLoaded = false;
       }
 
       // Only notify (and thus trigger GoRouter redirect) on real auth changes
@@ -45,7 +48,7 @@ class AuthService extends ChangeNotifier {
     // and load staff profile
     if (_session != null) {
       _isInitializing = false;
-      _loadStaffProfile(); // Load async, will notifyListeners when done
+      _loadAccessProfiles(); // Load async, will notifyListeners when done
     }
 
     // Auto-login for debug mode only
@@ -60,16 +63,24 @@ class AuthService extends ChangeNotifier {
   User? _currentUser;
   bool _isInitializing = true;
   Map<String, dynamic>? _staffProfile;
+  Map<String, dynamic>? _workerProfile;
   bool _isStaffProfileLoaded = false;
+  bool _isWorkerProfileLoaded = false;
 
   SupabaseClient get client => _client;
   Session? get currentSession => _session;
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _currentUser != null;
   bool get isInitializing => _isInitializing;
+  bool get isWorkerPortalAuthUser => _isWorkerPortalUser(_currentUser);
   bool get isStaff => _staffProfile != null;
+  bool get isWorker => _workerProfile != null;
   bool get isStaffProfileLoaded => _isStaffProfileLoaded;
+  bool get isWorkerProfileLoaded => _isWorkerProfileLoaded;
+  bool get isAccessProfileLoaded =>
+      _isStaffProfileLoaded && _isWorkerProfileLoaded;
   Map<String, dynamic>? get staffProfile => _staffProfile;
+  Map<String, dynamic>? get workerProfile => _workerProfile;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -82,13 +93,48 @@ class AuthService extends ChangeNotifier {
     _syncAuth(response.session, notify: false);
 
     // Load staff profile BEFORE notifying UI
-    await _loadStaffProfile();
-    // _loadStaffProfile calls notifyListeners() when done
+    await _loadAccessProfiles();
+    // _loadAccessProfiles calls notifyListeners() when done
 
     final user = response.user ?? _client.auth.currentUser;
     if (user == null) {
       throw const AuthException(
           'No se pudo obtener el usuario después del inicio de sesión.');
+    }
+    return user;
+  }
+
+  Future<User> signInWorkerWithUsername({
+    required String tenant,
+    required String username,
+    required String password,
+  }) async {
+    final resolved = await _client.rpc(
+      'resolve_worker_login',
+      params: {
+        'p_tenant': tenant.trim(),
+        'p_username': username.trim(),
+      },
+    );
+    final loginEmail = _extractWorkerLoginEmail(resolved);
+
+    if (loginEmail == null || loginEmail.isEmpty) {
+      throw const AuthException(
+        'No encontramos ese trabajador para esta tienda.',
+      );
+    }
+
+    final response = await _client.auth.signInWithPassword(
+      email: loginEmail,
+      password: password,
+    );
+    _syncAuth(response.session, notify: false);
+    await _loadAccessProfiles();
+
+    final user = response.user ?? _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException(
+          'No se pudo obtener el trabajador después del inicio de sesión.');
     }
     return user;
   }
@@ -166,15 +212,37 @@ class AuthService extends ChangeNotifier {
   Future<void> signOut() async {
     await _client.auth.signOut();
     _staffProfile = null;
+    _workerProfile = null;
     _isStaffProfileLoaded = false;
+    _isWorkerProfileLoaded = false;
     _syncAuth(_client.auth.currentSession);
   }
 
-  /// Load staff profile from user_profiles table
-  /// Returns null if user is not a staff member (Customer only)
-  Future<void> _loadStaffProfile() async {
+  Future<void> _loadAccessProfiles() async {
+    await _loadStaffProfile(notify: false);
+    await _loadWorkerProfile(notify: false);
+    notifyListeners();
+  }
+
+  /// Load staff profile from user_profiles table.
+  /// Returns null if user is not an ERP staff member.
+  Future<void> _loadStaffProfile({bool notify = true}) async {
     if (_currentUser == null) {
       _staffProfile = null;
+      _isStaffProfileLoaded = true;
+      if (notify) notifyListeners();
+      return;
+    }
+
+    if (isWorkerPortalAuthUser) {
+      _staffProfile = null;
+      _isStaffProfileLoaded = true;
+      if (kDebugMode) {
+        debugPrint(
+          'ℹ️ [AuthService] Worker portal auth user: skipping staff profile',
+        );
+      }
+      if (notify) notifyListeners();
       return;
     }
 
@@ -197,19 +265,60 @@ class AuthService extends ChangeNotifier {
         }
       }
 
-      notifyListeners(); // Notify Router to re-evaluate
+      if (notify) notifyListeners(); // Notify Router to re-evaluate
     } catch (e) {
       debugPrint('⚠️ [AuthService] Error loading staff profile: $e');
       _staffProfile = null;
       _isStaffProfileLoaded = true; // Still mark as loaded (failed check)
-      notifyListeners();
+      if (notify) notifyListeners();
+    }
+  }
+
+  /// Load worker portal context for username-based mobile/worker access.
+  Future<void> _loadWorkerProfile({bool notify = true}) async {
+    if (_currentUser == null) {
+      _workerProfile = null;
+      _isWorkerProfileLoaded = true;
+      if (notify) notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await _client.rpc('get_my_worker_portal_context');
+      if (response is Map && response.isNotEmpty) {
+        _workerProfile = Map<String, dynamic>.from(response);
+      } else {
+        _workerProfile = null;
+      }
+      _isWorkerProfileLoaded = true;
+
+      if (kDebugMode) {
+        if (_workerProfile != null) {
+          final employee = _workerProfile!['employee'];
+          final name = employee is Map ? employee['fullName'] : null;
+          debugPrint('✅ [AuthService] Worker profile loaded: $name');
+        } else {
+          debugPrint('ℹ️ [AuthService] No worker portal profile found');
+        }
+      }
+
+      if (notify) notifyListeners();
+    } catch (e) {
+      debugPrint('⚠️ [AuthService] Error loading worker profile: $e');
+      _workerProfile = null;
+      _isWorkerProfileLoaded = true;
+      if (notify) notifyListeners();
     }
   }
 
   /// Force reload staff profile (call after profile changes)
   Future<void> refreshStaffProfile() async {
-    await _loadStaffProfile();
-    notifyListeners();
+    await _loadAccessProfiles();
+  }
+
+  /// Force reload worker portal context after profile or shift settings change.
+  Future<void> refreshWorkerProfile() async {
+    await _loadWorkerProfile();
   }
 
   /// Send password reset email with redirect URL
@@ -286,7 +395,8 @@ class AuthService extends ChangeNotifier {
       );
 
       if (response.session != null) {
-        _syncAuth(response.session);
+        _syncAuth(response.session, notify: false);
+        await _loadAccessProfiles();
         debugPrint('✅ [AuthService] Auto-login successful!');
       } else {
         debugPrint('❌ [AuthService] Auto-login failed: No session returned');
@@ -295,6 +405,27 @@ class AuthService extends ChangeNotifier {
       debugPrint('❌ [AuthService] Auto-login error: $e');
       // Don't throw - just let user login manually if auto-login fails
     }
+  }
+
+  String? _extractWorkerLoginEmail(dynamic resolved) {
+    if (resolved is List && resolved.isNotEmpty) {
+      final first = resolved.first;
+      if (first is Map) return first['login_email']?.toString();
+      return first?.toString();
+    }
+    if (resolved is Map) {
+      return resolved['login_email']?.toString();
+    }
+    if (resolved is String && resolved.contains('@')) {
+      return resolved;
+    }
+    return null;
+  }
+
+  bool _isWorkerPortalUser(User? user) {
+    if (user == null) return false;
+    return user.userMetadata?['account_type'] == 'worker_portal' ||
+        user.appMetadata['account_type'] == 'worker_portal';
   }
 
   @override

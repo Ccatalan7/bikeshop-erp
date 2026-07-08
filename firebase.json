@@ -624,11 +624,6 @@
           "type": 301
         },
         {
-          "source": "/productos/082a4157-f33d-4f1e-80f8-79be8cbb60c7",
-          "destination": "/productos/niple-largo-cuadrado-m-14/NNV110",
-          "type": 301
-        },
-        {
           "source": "/productos/083d9540-d25e-468f-a388-650f3d29aa05",
           "destination": "/productos/kit-guia-cableado-interno-risk-1-5mt/NNV74",
           "type": 301
@@ -2889,11 +2884,6 @@
           "type": 301
         },
         {
-          "source": "/productos/4fa5e192-2b20-4c5a-a27d-faaf8576f6c3",
-          "destination": "/productos/rayo-257mm-nakasawa-negro/P002208016933",
-          "type": 301
-        },
-        {
           "source": "/productos/4fc4272a-f9d1-47a3-a3a9-6d3c2d9f7b82",
           "destination": "/productos/pata-para-cuadro-viking-tuff/P3723",
           "type": 301
@@ -3426,6 +3416,11 @@
         {
           "source": "/productos/61aa573c-2cea-4cbd-b9c5-8febe95d59b9",
           "destination": "/productos/llanta-weinmann-27-5-ojetill-32h-discbul-negra/L680",
+          "type": 301
+        },
+        {
+          "source": "/productos/61d33d07-cfb9-4f4c-a7ce-9c07c9fd1211",
+          "destination": "/productos/rayos-color-290-mm-x-14g-negro-huajiu-grs/8961",
           "type": 301
         },
         {
@@ -7355,7 +7350,7 @@
         },
         {
           "source": "/productos/e8413b00-3481-486d-9292-5c8fcc2db95b",
-          "destination": "/productos/neumatico-bicicleta-aro-20-x-2-25-berm-garbber-arisun/6927116100735",
+          "destination": "/productos/neumatico-bicicleta-aro-20-x-2-25-berm-grabber-arisun/6927116100735",
           "type": 301
         },
         {
@@ -8044,8 +8039,18 @@
           "type": 301
         },
         {
+          "source": "/productos/neumatico-bicicleta-aro-20-x-2-25-berm-garbber-arisun/6927116100735",
+          "destination": "/productos/neumatico-bicicleta-aro-20-x-2-25-berm-grabber-arisun/6927116100735",
+          "type": 301
+        },
+        {
           "source": "/productos/pastillas-freno-disco-semi-metal-ceramico-ds01-ztto/AE0292",
           "destination": "/productos/pastillas-freno-disco-semi-metal-ceramico-ms01b-ds01-ztto/AE0292",
+          "type": 301
+        },
+        {
+          "source": "/productos/prueba-de-nombre-holi/23511",
+          "destination": "/productos/neumatico-10ten-24x1-3-8-black/23511",
           "type": 301
         }
       ]

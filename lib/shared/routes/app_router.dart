@@ -98,6 +98,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         SalesReportsPage,
         SeoSettingsPage,
         SettingsPage,
+        ShiftPlanningPage,
         SmartPurchaseListPage,
         SpokeLengthCalculatorPage,
         SpreadsheetDashboardPage,
@@ -113,6 +114,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         WheelHubsPage,
         WheelRimsPage,
         WheelSpokesPage,
+        WorkerHomePage,
+        WorkerLoginPage,
         WorkshopCalendarPage,
         WorkspaceDemoPage;
 
@@ -580,12 +583,34 @@ class AppRouter {
         }
 
         final loggingIn = state.matchedLocation == '/login';
+        final workerLoggingIn = state.matchedLocation == '/worker/login';
+        final workerRoute = state.uri.path == '/worker' ||
+            state.uri.path.startsWith('/worker/');
         final resettingPassword = state.matchedLocation == '/reset-password';
         final acceptingInvitation =
             state.matchedLocation == '/accept-invitation';
 
         // Allow access to password reset and invitation acceptance without authentication
         if (resettingPassword || acceptingInvitation) {
+          return null;
+        }
+
+        if (workerLoggingIn) {
+          if (isLoggedIn &&
+              authService.isAccessProfileLoaded &&
+              authService.isWorker) {
+            return '/worker';
+          }
+          return null;
+        }
+
+        if (workerRoute) {
+          if (!isLoggedIn) {
+            return '/worker/login';
+          }
+          if (authService.isAccessProfileLoaded && !authService.isWorker) {
+            return '/worker/login?error=access_denied';
+          }
           return null;
         }
 
@@ -1262,6 +1287,26 @@ class AppRouter {
         // ========================================
 
         // Authentication
+        GoRoute(
+          path: '/worker/login',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.WorkerLoginPage(),
+          ),
+        ),
+
+        GoRoute(
+          path: '/worker',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.WorkerHomePage(),
+          ),
+        ),
+
         GoRoute(
           path: '/login',
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
@@ -2405,6 +2450,15 @@ class AppRouter {
             erp.loadLibrary(),
             () =>
                 erp.EmployeeDetailPage(employeeId: state.pathParameters['id']!),
+          ),
+        ),
+        GoRoute(
+          path: '/hr/planning',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            erp.loadLibrary(),
+            () => erp.ShiftPlanningPage(),
           ),
         ),
         GoRoute(

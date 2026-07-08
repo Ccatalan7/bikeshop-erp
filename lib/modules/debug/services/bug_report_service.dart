@@ -60,6 +60,7 @@ class BugReportService {
         'POS → Cobrar',
         // RR.HH.
         'RR.HH. → Trabajadores',
+        'RR.HH. → Planificación',
         'RR.HH. → Asistencias',
         'RR.HH. → Modo Kiosko',
         'RR.HH. → Licencias Médicas',

@@ -142,7 +142,9 @@ String getRouteTitle(String path) {
     // HR
     '/hr/employees': 'Trabajadores',
     '/hr/employees/new': 'Nuevo Trabajador',
+    '/hr/planning': 'Planificación',
     '/hr/attendance': 'Asistencia',
+    '/hr/attendances': 'Asistencias',
     '/hr/kiosk': 'Modo Kiosko',
     '/hr/medical-leaves': 'Licencias Médicas',
 

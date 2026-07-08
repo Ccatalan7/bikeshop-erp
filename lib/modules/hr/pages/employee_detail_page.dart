@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import '../../../shared/services/user_management_service.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -57,6 +59,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isWorkerPortalBusy = false;
   String? _error;
   // Salary/Hours state
   PaymentMethod _paymentMethod = PaymentMethod.transfer; // Keep for fallback
@@ -65,8 +68,12 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
   String? _salaryAccountId;
   List<Map<String, dynamic>> _salaryAccounts = []; // Available salary accounts
   List<Map<String, dynamic>> _paymentMethods = []; // Available payment methods
+  List<Map<String, dynamic>> _planningRoles = [];
+  List<Map<String, dynamic>> _defaultShiftBlocks = [];
   EmployeeHoursSummary? _hoursSummary;
   bool _isLoadingHours = false;
+  bool _isLoadingDefaultSchedule = false;
+  bool _isSavingDefaultSchedule = false;
   // Filtering
   DateFilterType _filterType = DateFilterType.weekly;
   late DateTimeRange _dateRange;
@@ -197,6 +204,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
     // Load hours summary and references (accounts, payment methods)
     _loadHoursSummary();
+    _loadDefaultShiftBlocks();
     _loadReferences(); // Renamed from _loadSalaryAccounts
   }
 
@@ -308,16 +316,79 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
       final results = await Future.wait([
         hrService.getSalaryAccounts(),
         hrService.getPaymentMethods(),
+        hrService.getPlanningRoles(),
       ]);
 
       if (mounted) {
         setState(() {
           _salaryAccounts = results[0];
           _paymentMethods = results[1];
+          _planningRoles = results[2];
         });
       }
     } catch (e) {
       debugPrint('Error loading references: $e');
+    }
+  }
+
+  Future<void> _loadDefaultShiftBlocks() async {
+    final employeeId = _employee?.id;
+    if (employeeId == null) return;
+
+    setState(() => _isLoadingDefaultSchedule = true);
+    try {
+      final blocks = await context
+          .read<HRService>()
+          .getEmployeeDefaultShiftBlocks(employeeId);
+      if (!mounted) return;
+      setState(() {
+        _defaultShiftBlocks = blocks;
+        _isLoadingDefaultSchedule = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading default shift blocks: $e');
+      if (mounted) setState(() => _isLoadingDefaultSchedule = false);
+    }
+  }
+
+  Future<void> _openDefaultScheduleEditor() async {
+    final employeeId = _employee?.id;
+    if (employeeId == null) return;
+    final hrService = context.read<HRService>();
+
+    final payload = await showDialog<List<Map<String, dynamic>>>(
+      context: context,
+      builder: (dialogContext) => _DefaultScheduleEditorDialog(
+        initialBlocks: _defaultShiftBlocks,
+        planningRoles: _planningRoles,
+      ),
+    );
+    if (payload == null) return;
+
+    setState(() => _isSavingDefaultSchedule = true);
+    try {
+      await hrService.replaceEmployeeDefaultShiftBlocks(
+        employeeId: employeeId,
+        blocks: payload,
+      );
+      await _loadDefaultShiftBlocks();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Horario base actualizado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar el horario base: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingDefaultSchedule = false);
     }
   }
 
@@ -400,6 +471,208 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _createWorkerPortalAccess() async {
+    final employee = _employee;
+    final employeeId = employee?.id;
+    if (employee == null || employeeId == null) return;
+
+    final input = await _showWorkerPortalDialog(
+      suggestedUsername: _suggestWorkerUsername(employee),
+    );
+    if (input == null) return;
+    if (!mounted) return;
+
+    final userManagementService = context.read<UserManagementService>();
+
+    setState(() => _isWorkerPortalBusy = true);
+
+    try {
+      final result = await userManagementService.createWorkerPortalAccount(
+        employeeId: employeeId,
+        username: input.username,
+        password: input.password,
+      );
+
+      if (!mounted) return;
+      await _showWorkerPortalResult(result);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo crear el acceso trabajador: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isWorkerPortalBusy = false);
+    }
+  }
+
+  Future<_WorkerPortalInput?> _showWorkerPortalDialog({
+    required String suggestedUsername,
+  }) async {
+    final formKey = GlobalKey<FormState>();
+    final usernameController = TextEditingController(text: suggestedUsername);
+    final passwordController = TextEditingController();
+
+    try {
+      return await showDialog<_WorkerPortalInput>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Acceso app trabajador'),
+            content: Form(
+              key: formKey,
+              child: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: usernameController,
+                      autofocus: true,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Usuario',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                      validator: (value) {
+                        final username = _normalizeWorkerUsername(value ?? '');
+                        if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}$')
+                            .hasMatch(username)) {
+                          return 'Usa 3 a 32 caracteres: letras, numeros, punto o guion';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Contraseña temporal opcional',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  if (!formKey.currentState!.validate()) return;
+                  Navigator.of(dialogContext).pop(
+                    _WorkerPortalInput(
+                      username: _normalizeWorkerUsername(
+                        usernameController.text,
+                      ),
+                      password: passwordController.text.trim().isEmpty
+                          ? null
+                          : passwordController.text.trim(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Crear acceso'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      usernameController.dispose();
+      passwordController.dispose();
+    }
+  }
+
+  Future<void> _showWorkerPortalResult(Map<String, dynamic> result) async {
+    final username = result['username']?.toString() ?? '';
+    final password = result['temporaryPassword']?.toString() ?? '';
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Acceso trabajador listo'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Usuario'),
+                const SizedBox(height: 4),
+                SelectableText(
+                  username,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                const Text('Contraseña temporal'),
+                const SizedBox(height: 4),
+                SelectableText(
+                  password,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Clipboard.setData(
+                  ClipboardData(text: 'Usuario: $username\nClave: $password'),
+                );
+                Navigator.of(dialogContext).pop();
+              },
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Copiar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Listo'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _suggestWorkerUsername(Employee employee) {
+    final first = employee.firstName.trim();
+    final last = employee.lastName.trim();
+    final base = '${first.isNotEmpty ? first[0] : ''}$last';
+    final fallback = 'trabajador${employee.employeeNumber}';
+    final normalized = _normalizeWorkerUsername(base);
+    return normalized.length >= 3
+        ? normalized
+        : _normalizeWorkerUsername(fallback).padRight(3, '0');
+  }
+
+  String _normalizeWorkerUsername(String value) {
+    var normalized = value.trim().toLowerCase();
+    const replacements = {
+      'á': 'a',
+      'é': 'e',
+      'í': 'i',
+      'ó': 'o',
+      'ú': 'u',
+      'ü': 'u',
+      'ñ': 'n',
+    };
+    for (final entry in replacements.entries) {
+      normalized = normalized.replaceAll(entry.key, entry.value);
+    }
+    normalized = normalized.replaceAll(RegExp(r'[^a-z0-9._-]+'), '');
+    normalized = normalized.replaceAll(RegExp(r'^[^a-z0-9]+'), '');
+    if (normalized.length > 32) normalized = normalized.substring(0, 32);
+    return normalized;
   }
 
   Future<void> _selectDate(BuildContext context,
@@ -713,6 +986,25 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             _buildQuickAction(theme, Icons.phone_outlined, 'Llamar', () {}),
             _buildQuickAction(theme, Icons.chat_bubble_outline, 'Chat', () {}),
           ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isWorkerPortalBusy ? null : _createWorkerPortalAccess,
+            icon: _isWorkerPortalBusy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.phone_iphone_outlined),
+            label: Text(
+              _isWorkerPortalBusy
+                  ? 'Creando acceso...'
+                  : 'Acceso app trabajador',
+            ),
+          ),
         ),
       ],
     );
@@ -1102,6 +1394,9 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
           const SizedBox(height: 32),
 
+          _buildDefaultScheduleSection(theme),
+          const SizedBox(height: 32),
+
           // 2. Payment Configuration (Compact)
           _buildSectionHeader(theme, 'Configuración de Pago'),
           const SizedBox(height: 16),
@@ -1162,6 +1457,58 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDefaultScheduleSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          theme,
+          'Horario base semanal',
+          action: OutlinedButton.icon(
+            onPressed:
+                _isSavingDefaultSchedule ? null : _openDefaultScheduleEditor,
+            icon: _isSavingDefaultSchedule
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.edit_calendar_outlined, size: 18),
+            label: Text(_isSavingDefaultSchedule ? 'Guardando...' : 'Editar'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: _isLoadingDefaultSchedule
+                ? const SizedBox(
+                    height: 96,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : Column(
+                    children: List.generate(7, (index) {
+                      final weekday = index + 1;
+                      return _DefaultScheduleProfileDayRow(
+                        weekday: weekday,
+                        blocks: _defaultScheduleBlocksForWeekday(
+                          _defaultShiftBlocks,
+                          weekday,
+                        ),
+                      );
+                    }),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1547,10 +1894,11 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 .toLowerCase();
             if (name.contains('efectivo')) {
               _paymentMethod = PaymentMethod.cash;
-            } else if (name.contains('cheque'))
+            } else if (name.contains('cheque')) {
               _paymentMethod = PaymentMethod.check;
-            else
+            } else {
               _paymentMethod = PaymentMethod.transfer;
+            }
           }
         });
       },
@@ -1613,4 +1961,520 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
       onChanged: (value) => setState(() => _salaryAccountId = value),
     );
   }
+}
+
+class _WorkerPortalInput {
+  const _WorkerPortalInput({
+    required this.username,
+    this.password,
+  });
+
+  final String username;
+  final String? password;
+}
+
+class _DefaultScheduleProfileDayRow extends StatelessWidget {
+  const _DefaultScheduleProfileDayRow({
+    required this.weekday,
+    required this.blocks,
+  });
+
+  final int weekday;
+  final List<Map<String, dynamic>> blocks;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 86,
+            child: Text(
+              _defaultScheduleWeekdayLabel(weekday),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: blocks.isEmpty
+                ? Text(
+                    'Libre',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.hintColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: blocks.map((block) {
+                      final roleName =
+                          _defaultScheduleCleanText(block['planningRoleName']);
+                      final color = _defaultScheduleRoleColor(
+                        block['planningRoleColor'],
+                      );
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.10),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.35),
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            roleName == null
+                                ? '${_defaultScheduleTimeText(block['startTime'])}-${_defaultScheduleTimeText(block['endTime'])}'
+                                : '${_defaultScheduleTimeText(block['startTime'])}-${_defaultScheduleTimeText(block['endTime'])} · $roleName',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DefaultScheduleEditorDialog extends StatefulWidget {
+  const _DefaultScheduleEditorDialog({
+    required this.initialBlocks,
+    required this.planningRoles,
+  });
+
+  final List<Map<String, dynamic>> initialBlocks;
+  final List<Map<String, dynamic>> planningRoles;
+
+  @override
+  State<_DefaultScheduleEditorDialog> createState() =>
+      _DefaultScheduleEditorDialogState();
+}
+
+class _DefaultScheduleEditorDialogState
+    extends State<_DefaultScheduleEditorDialog> {
+  late List<_DefaultScheduleDraft> _drafts;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _drafts = widget.initialBlocks
+        .map(_DefaultScheduleDraft.fromBlock)
+        .whereType<_DefaultScheduleDraft>()
+        .toList();
+  }
+
+  void _addBlock(int weekday) {
+    final dayDrafts = _drafts
+        .where((draft) => draft.dayOfWeek == weekday)
+        .toList()
+      ..sort((a, b) =>
+          _defaultScheduleMinutes(a.startTime) -
+          _defaultScheduleMinutes(b.startTime));
+    final lastEnd = dayDrafts.isEmpty ? null : dayDrafts.last.endTime;
+    final start = lastEnd ?? const TimeOfDay(hour: 10, minute: 0);
+    final end = _defaultScheduleAddHours(start, 4);
+
+    setState(() {
+      _drafts.add(
+        _DefaultScheduleDraft(
+          dayOfWeek: weekday,
+          startTime: start,
+          endTime: end,
+          planningRoleId: _defaultPlanningRoleId(),
+        ),
+      );
+      _error = null;
+    });
+  }
+
+  String _defaultPlanningRoleId() {
+    for (final role in widget.planningRoles) {
+      final id = _defaultScheduleCleanText(role['id']);
+      if (id != null) return id;
+    }
+    return '';
+  }
+
+  Future<void> _pickTime(
+    _DefaultScheduleDraft draft, {
+    required bool start,
+  }) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: start ? draft.startTime : draft.endTime,
+    );
+    if (picked == null) return;
+    setState(() {
+      if (start) {
+        draft.startTime = picked;
+      } else {
+        draft.endTime = picked;
+      }
+      _error = null;
+    });
+  }
+
+  void _submit() {
+    for (final draft in _drafts) {
+      if (_defaultScheduleMinutes(draft.startTime) >=
+          _defaultScheduleMinutes(draft.endTime)) {
+        setState(
+            () => _error = 'Cada bloque debe terminar despues de iniciar.');
+        return;
+      }
+    }
+
+    for (var weekday = 1; weekday <= 7; weekday++) {
+      final dayDrafts = _drafts
+          .where((draft) => draft.dayOfWeek == weekday)
+          .toList()
+        ..sort((a, b) =>
+            _defaultScheduleMinutes(a.startTime) -
+            _defaultScheduleMinutes(b.startTime));
+
+      for (var index = 1; index < dayDrafts.length; index++) {
+        if (_defaultScheduleMinutes(dayDrafts[index].startTime) <
+            _defaultScheduleMinutes(dayDrafts[index - 1].endTime)) {
+          setState(
+            () => _error =
+                'Hay bloques superpuestos en ${_defaultScheduleWeekdayLabel(weekday)}.',
+          );
+          return;
+        }
+      }
+    }
+
+    Navigator.of(context).pop(
+      _drafts.map((draft) => draft.toPayload()).toList(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar horario base'),
+      content: SizedBox(
+        width: 720,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var weekday = 1; weekday <= 7; weekday++)
+                  _DefaultScheduleEditorDay(
+                    weekday: weekday,
+                    drafts: _drafts
+                        .where((draft) => draft.dayOfWeek == weekday)
+                        .toList(),
+                    planningRoles: widget.planningRoles,
+                    onAdd: () => _addBlock(weekday),
+                    onPickTime: _pickTime,
+                    onRemove: (draft) {
+                      setState(() {
+                        _drafts.remove(draft);
+                        _error = null;
+                      });
+                    },
+                    onRoleChanged: (draft, roleId) {
+                      setState(() {
+                        draft.planningRoleId = roleId ?? '';
+                        _error = null;
+                      });
+                    },
+                  ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DefaultScheduleEditorDay extends StatelessWidget {
+  const _DefaultScheduleEditorDay({
+    required this.weekday,
+    required this.drafts,
+    required this.planningRoles,
+    required this.onAdd,
+    required this.onPickTime,
+    required this.onRemove,
+    required this.onRoleChanged,
+  });
+
+  final int weekday;
+  final List<_DefaultScheduleDraft> drafts;
+  final List<Map<String, dynamic>> planningRoles;
+  final VoidCallback onAdd;
+  final Future<void> Function(
+    _DefaultScheduleDraft draft, {
+    required bool start,
+  }) onPickTime;
+  final ValueChanged<_DefaultScheduleDraft> onRemove;
+  final void Function(_DefaultScheduleDraft draft, String? roleId)
+      onRoleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    drafts.sort(
+      (a, b) =>
+          _defaultScheduleMinutes(a.startTime) -
+          _defaultScheduleMinutes(b.startTime),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _defaultScheduleWeekdayLabel(weekday),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Agregar'),
+              ),
+            ],
+          ),
+          if (drafts.isEmpty)
+            Text(
+              'Libre',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...drafts.map(
+              (draft) => Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => onPickTime(draft, start: true),
+                      icon: const Icon(Icons.login_outlined, size: 18),
+                      label:
+                          Text(_defaultScheduleTimeOfDayText(draft.startTime)),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => onPickTime(draft, start: false),
+                      icon: const Icon(Icons.logout_outlined, size: 18),
+                      label: Text(_defaultScheduleTimeOfDayText(draft.endTime)),
+                    ),
+                    if (planningRoles.isNotEmpty)
+                      SizedBox(
+                        width: 220,
+                        child: DropdownButtonFormField<String>(
+                          initialValue:
+                              _validPlanningRoleId(draft.planningRoleId),
+                          decoration: const InputDecoration(
+                            labelText: 'Rol',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: '',
+                              child: Text('Sin rol'),
+                            ),
+                            ...planningRoles.map(
+                              (role) => DropdownMenuItem(
+                                value: role['id']?.toString() ?? '',
+                                child: Text(role['name']?.toString() ?? 'Rol'),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) => onRoleChanged(draft, value),
+                        ),
+                      ),
+                    IconButton(
+                      tooltip: 'Eliminar bloque',
+                      onPressed: () => onRemove(draft),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String? _validPlanningRoleId(String roleId) {
+    if (roleId.isEmpty) return null;
+    final exists =
+        planningRoles.any((role) => role['id']?.toString() == roleId);
+    return exists ? roleId : null;
+  }
+}
+
+class _DefaultScheduleDraft {
+  _DefaultScheduleDraft({
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+    required this.planningRoleId,
+  });
+
+  int dayOfWeek;
+  TimeOfDay startTime;
+  TimeOfDay endTime;
+  String planningRoleId;
+
+  static _DefaultScheduleDraft? fromBlock(Map<String, dynamic> block) {
+    final day = (block['dayOfWeek'] as num?)?.toInt();
+    final start = _defaultScheduleTimeOfDayFromValue(block['startTime']);
+    final end = _defaultScheduleTimeOfDayFromValue(block['endTime']);
+    if (day == null || start == null || end == null) return null;
+    return _DefaultScheduleDraft(
+      dayOfWeek: day,
+      startTime: start,
+      endTime: end,
+      planningRoleId: _defaultScheduleCleanText(block['planningRoleId']) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toPayload() {
+    return {
+      'dayOfWeek': dayOfWeek,
+      'startTime': _defaultScheduleTimeOfDayText(startTime),
+      'endTime': _defaultScheduleTimeOfDayText(endTime),
+      'timezone': 'America/Santiago',
+      if (planningRoleId.isNotEmpty) 'planningRoleId': planningRoleId,
+    };
+  }
+}
+
+List<Map<String, dynamic>> _defaultScheduleBlocksForWeekday(
+  List<Map<String, dynamic>> blocks,
+  int weekday,
+) {
+  final filtered = blocks.where((block) {
+    final day = (block['dayOfWeek'] as num?)?.toInt();
+    return day == weekday;
+  }).toList();
+  filtered.sort(
+    (a, b) => _defaultScheduleTimeText(a['startTime'])
+        .compareTo(_defaultScheduleTimeText(b['startTime'])),
+  );
+  return filtered;
+}
+
+String _defaultScheduleWeekdayLabel(int weekday) {
+  const labels = [
+    'Lunes',
+    'Martes',
+    'Miercoles',
+    'Jueves',
+    'Viernes',
+    'Sabado',
+    'Domingo',
+  ];
+  if (weekday < 1 || weekday > 7) return 'Dia';
+  return labels[weekday - 1];
+}
+
+String _defaultScheduleTimeText(dynamic value) {
+  final text = _defaultScheduleCleanText(value);
+  if (text == null) return '--:--';
+  final pieces = text.split(':');
+  if (pieces.length < 2) return text;
+  final hour = int.tryParse(pieces[0]);
+  final minute = int.tryParse(pieces[1]);
+  if (hour == null || minute == null) return text;
+  return '${hour.toString().padLeft(2, '0')}:'
+      '${minute.toString().padLeft(2, '0')}';
+}
+
+String _defaultScheduleTimeOfDayText(TimeOfDay value) =>
+    '${value.hour.toString().padLeft(2, '0')}:'
+    '${value.minute.toString().padLeft(2, '0')}';
+
+TimeOfDay? _defaultScheduleTimeOfDayFromValue(dynamic value) {
+  final text = _defaultScheduleTimeText(value);
+  if (text == '--:--') return null;
+  final pieces = text.split(':');
+  if (pieces.length < 2) return null;
+  final hour = int.tryParse(pieces[0]);
+  final minute = int.tryParse(pieces[1]);
+  if (hour == null || minute == null) return null;
+  return TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59));
+}
+
+int _defaultScheduleMinutes(TimeOfDay value) => value.hour * 60 + value.minute;
+
+TimeOfDay _defaultScheduleAddHours(TimeOfDay value, int hours) {
+  final minutes =
+      (_defaultScheduleMinutes(value) + hours * 60).clamp(0, 23 * 60 + 59);
+  return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
+}
+
+String? _defaultScheduleCleanText(dynamic value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty || text == 'null') return null;
+  return text;
+}
+
+Color _defaultScheduleRoleColor(dynamic value) {
+  final raw = _defaultScheduleCleanText(value)?.replaceAll('#', '');
+  final parsed = raw == null
+      ? null
+      : int.tryParse(raw.length == 6 ? 'FF$raw' : raw, radix: 16);
+  return parsed == null ? const Color(0xFF2563EB) : Color(parsed);
 }

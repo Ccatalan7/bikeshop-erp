@@ -602,6 +602,8 @@ class VinabikeApp extends StatelessWidget {
           final shouldPreload = !isPublicStoreHost &&
               !dataPreloadService.hasPreloaded &&
               authService.isAuthenticated &&
+              !authService.isWorkerPortalAuthUser &&
+              !authService.isWorker &&
               authService.isStaffProfileLoaded &&
               authService.isStaff; // Only preload for actual staff
 
@@ -648,6 +650,8 @@ class VinabikeApp extends StatelessWidget {
           // This prevents building the Workspace System for unauthorized users
           if (isPublicStoreHost ||
               !authService.isAuthenticated ||
+              authService.isWorkerPortalAuthUser ||
+              authService.isWorker ||
               (authService.isStaffProfileLoaded && !authService.isStaff)) {
             // Use the URL captured at startup (before usePathUrlStrategy modified it)
             // This is critical for MercadoPago redirects and direct URL navigation

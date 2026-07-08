@@ -195,6 +195,43 @@ class UserManagementService {
     });
   }
 
+  Future<Map<String, dynamic>> createWorkerPortalAccount({
+    required String employeeId,
+    required String username,
+    String? password,
+  }) {
+    return _invokeAdmin<Map<String, dynamic>>({
+      'action': 'create_worker_portal_account',
+      'employeeId': employeeId,
+      'username': username,
+      if (password != null && password.trim().isNotEmpty)
+        'password': password.trim(),
+    });
+  }
+
+  Future<Map<String, dynamic>> resetWorkerPortalPassword({
+    required String employeeId,
+    String? password,
+  }) {
+    return _invokeAdmin<Map<String, dynamic>>({
+      'action': 'reset_worker_portal_password',
+      'employeeId': employeeId,
+      if (password != null && password.trim().isNotEmpty)
+        'password': password.trim(),
+    });
+  }
+
+  Future<void> setWorkerPortalAccess({
+    required String employeeId,
+    required bool isActive,
+  }) {
+    return _invokeAdminVoid({
+      'action': 'set_worker_portal_access',
+      'employeeId': employeeId,
+      'isActive': isActive,
+    });
+  }
+
   Future<Map<String, dynamic>> sendPasswordReset(String email) {
     return _invokeAdmin<Map<String, dynamic>>({
       'action': 'send_password_reset',

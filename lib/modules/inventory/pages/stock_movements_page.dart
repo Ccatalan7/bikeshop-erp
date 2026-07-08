@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -35,6 +37,14 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   DateTime? _endDate;
   final TextEditingController _searchController = TextEditingController();
   StockMovementsViewMode _viewMode = StockMovementsViewMode.recent;
+  static const int _productPreviewPageSize = 80;
+  Timer? _productSearchDebounce;
+  List<Product>? _productSearchResults;
+  String _activeProductSearchQuery = '';
+  bool _isProductSearchLoading = false;
+  bool _isLoadingProductPreview = false;
+  bool _hasRequestedInitialProductPreview = false;
+  int _nextProductPreviewPage = 0;
 
   // Panel resizing
   static const double _minPanelWidth = 300.0;
@@ -65,11 +75,105 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   void initState() {
     super.initState();
     _loadPanelWidth();
-    // Load recent movements by default, and preload products for switching
+    _productListScrollController.addListener(_handleProductListScroll);
+    // Load recent movements by default. Products are loaded lazily when the
+    // user opens "Por Producto" so this module does not preload inventory.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StockMovementsService>().loadRecentMovements();
-      context.read<InventoryService>().getProducts();
     });
+  }
+
+  void _handleProductListScroll() {
+    if (_viewMode != StockMovementsViewMode.byProduct ||
+        _searchQuery.trim().isNotEmpty ||
+        !_productListScrollController.hasClients) {
+      return;
+    }
+
+    final position = _productListScrollController.position;
+    if (position.extentAfter < 480) {
+      _loadNextProductPreviewPage();
+    }
+  }
+
+  Future<void> _ensureInitialProductPreview() async {
+    if (_hasRequestedInitialProductPreview) return;
+    _hasRequestedInitialProductPreview = true;
+    await _loadNextProductPreviewPage();
+  }
+
+  Future<void> _loadNextProductPreviewPage({bool reset = false}) async {
+    if (!mounted || _isLoadingProductPreview) return;
+
+    final inventoryService = context.read<InventoryService>();
+    if (!reset && !inventoryService.hasMorePreviewPages) return;
+
+    setState(() => _isLoadingProductPreview = true);
+    try {
+      final page = reset ? 0 : _nextProductPreviewPage;
+      await inventoryService.loadProductPreviewPage(
+        page: page,
+        pageSize: _productPreviewPageSize,
+        reset: reset,
+      );
+      if (!mounted) return;
+      setState(() {
+        _nextProductPreviewPage = page + 1;
+      });
+    } catch (e) {
+      debugPrint('Error loading stock movement product preview: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingProductPreview = false);
+      }
+    }
+  }
+
+  void _onProductSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+
+    _productSearchDebounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _activeProductSearchQuery = '';
+        _productSearchResults = null;
+        _isProductSearchLoading = false;
+      });
+      _ensureInitialProductPreview();
+      return;
+    }
+
+    _productSearchDebounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _runProductSearch(query),
+    );
+  }
+
+  Future<void> _runProductSearch(String query) async {
+    if (!mounted) return;
+
+    setState(() {
+      _activeProductSearchQuery = query;
+      _isProductSearchLoading = true;
+    });
+
+    try {
+      final products =
+          await context.read<InventoryService>().searchProducts(query);
+      if (!mounted || _searchQuery.trim() != query) return;
+      setState(() {
+        _productSearchResults = products;
+        _isProductSearchLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error searching stock movement products: $e');
+      if (!mounted || _searchQuery.trim() != query) return;
+      setState(() {
+        _productSearchResults = const [];
+        _isProductSearchLoading = false;
+      });
+    }
   }
 
   Future<void> _loadPanelWidth() async {
@@ -333,6 +437,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                     setState(
                         () => _viewMode = StockMovementsViewMode.byProduct);
                     movementsService.setViewMode('by_product');
+                    _ensureInitialProductPreview();
                   },
                 ),
               ],
@@ -390,14 +495,29 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   Widget _buildProductList() {
     return Consumer<InventoryService>(
       builder: (context, inventoryService, _) {
-        if (inventoryService.isLoading) {
-          return const Center(child: BrandedLoading());
-        }
+        final isSearching = _searchQuery.trim().isNotEmpty;
+        final products = isSearching
+            ? (_productSearchResults ?? const <Product>[])
+            : inventoryService.products;
+        final showInitialLoading = products.isEmpty &&
+            ((isSearching && _isProductSearchLoading) ||
+                (!isSearching &&
+                    (inventoryService.isLoading || _isLoadingProductPreview)));
+        final canLoadMoreProducts = !isSearching &&
+            !inventoryService.hasLoaded &&
+            inventoryService.hasMorePreviewPages;
+        final showLoadingFooter = !isSearching &&
+            products.isNotEmpty &&
+            (_isLoadingProductPreview || canLoadMoreProducts);
 
-        // Filter products by search query
-        final filteredProducts = inventoryService.products.where((p) {
-          return _matchesTokenSearch(_searchQuery, p);
-        }).toList();
+        final countText = isSearching
+            ? (_isProductSearchLoading &&
+                    _activeProductSearchQuery == _searchQuery.trim()
+                ? 'Buscando...'
+                : '${products.length} resultados')
+            : inventoryService.hasLoaded
+                ? '${products.length} productos'
+                : '${products.length} productos cargados';
 
         return Column(
           children: [
@@ -407,9 +527,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               child: SearchBarWidget(
                 controller: _searchController,
                 hintText: 'Buscar producto por nombre o SKU...',
-                onChanged: (value) {
-                  setState(() => _searchQuery = value);
-                },
+                onChanged: _onProductSearchChanged,
               ),
             ),
             // Product count
@@ -418,7 +536,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
               child: Row(
                 children: [
                   Text(
-                    '${filteredProducts.length} productos',
+                    countText,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -431,13 +549,40 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             const Divider(height: 1),
             // Product list
             Expanded(
-              child: ListView.builder(
-                itemCount: filteredProducts.length,
-                itemBuilder: (context, index) {
-                  final product = filteredProducts[index];
-                  return _buildProductTile(product);
-                },
-              ),
+              child: showInitialLoading
+                  ? const Center(child: BrandedLoading())
+                  : products.isEmpty
+                      ? Center(
+                          child: Text(
+                            isSearching
+                                ? 'Sin resultados'
+                                : 'No hay productos cargados',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _productListScrollController,
+                          itemCount:
+                              products.length + (showLoadingFooter ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index >= products.length) {
+                              if (_isLoadingProductPreview) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(child: BrandedLoading()),
+                                );
+                              }
+                              return TextButton.icon(
+                                onPressed: _loadNextProductPreviewPage,
+                                icon: const Icon(Icons.expand_more),
+                                label: const Text('Cargar más productos'),
+                              );
+                            }
+
+                            final product = products[index];
+                            return _buildProductTile(product);
+                          },
+                        ),
             ),
           ],
         );
@@ -2319,27 +2464,14 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     );
   }
 
-  /// Token-based search: splits query into words and matches if ALL tokens found
-  bool _matchesTokenSearch(String query, Product product) {
-    if (query.isEmpty) return true;
-    final tokens = query.toLowerCase().split(RegExp(r'\s+'));
-    final searchableText = [
-      product.name.toLowerCase(),
-      product.sku.toLowerCase(),
-      product.supplierCode?.toLowerCase() ?? '',
-      product.brand?.toLowerCase() ?? '',
-      product.model?.toLowerCase() ?? '',
-      product.categoryName?.toLowerCase() ?? '',
-    ].join(' ');
-    // ALL tokens must be found in searchable text
-    return tokens.every((token) => searchableText.contains(token));
-  }
-
   final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _productListScrollController = ScrollController();
 
   @override
   void dispose() {
+    _productSearchDebounce?.cancel();
     _horizontalScrollController.dispose();
+    _productListScrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }

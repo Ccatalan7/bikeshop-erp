@@ -23,6 +23,10 @@ extension StockMovementsViewModeX on StockMovementsViewMode {
 class StockMovementsService extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
   final _tenantService = TenantService();
+  static const String _movementSelect =
+      'id,product_id,product_name,product_sku,transaction_date,movement_type,'
+      'source,reference_id,reference_number,quantity,stock_before,stock_after,'
+      'notes,adjustment_origin,created_by,created_at,tenant_id';
 
   List<StockMovement> _movements = [];
   bool _isLoading = false;
@@ -311,7 +315,7 @@ class StockMovementsService extends ChangeNotifier {
 
     var query = _supabase
         .from('stock_movements_view')
-        .select()
+        .select(_movementSelect)
         .eq('tenant_id', tenantId);
 
     if (productId != null && productId.isNotEmpty) {

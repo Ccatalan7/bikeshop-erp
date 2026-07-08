@@ -335,6 +335,8 @@ String _getTitleFromRoute(String route) {
     '/purchases/suppliers': 'Compras',
     '/pos': 'POS',
     '/hr/employees': 'Trabajadores',
+    '/hr/planning': 'Planificación',
+    '/hr/attendances': 'Asistencias',
     '/website': 'Sitio Web',
     '/website/product-visibility': 'Visibilidad de productos',
     '/website/orders': 'Órdenes / Notificaciones',
@@ -380,6 +382,11 @@ const List<MenuSubItem> _hrMenuItems = [
     icon: Icons.people_outlined,
     title: 'Trabajadores',
     route: '/hr/employees',
+  ),
+  MenuSubItem(
+    icon: Icons.calendar_month_outlined,
+    title: 'Planificación',
+    route: '/hr/planning',
   ),
   MenuSubItem(
     icon: Icons.access_time_outlined,

@@ -2,6 +2,8 @@
 export '../screens/login_screen.dart';
 export '../screens/reset_password_screen.dart';
 export '../screens/dashboard_screen.dart';
+export '../../modules/worker_portal/pages/worker_login_page.dart';
+export '../../modules/worker_portal/pages/worker_home_page.dart';
 
 // ERP / Admin Modules
 export '../../modules/auth/pages/accept_invitation_page.dart';
@@ -79,6 +81,7 @@ export '../../modules/settings/pages/notification_settings_page.dart';
 export '../../modules/label_printer/label_printer_page.dart';
 export '../../modules/hr/pages/employee_list_page.dart';
 export '../../modules/hr/pages/employee_detail_page.dart';
+export '../../modules/hr/pages/shift_planning_page.dart';
 export '../../modules/hr/pages/attendances_page.dart';
 export '../../modules/hr/pages/kiosk_mode_page.dart';
 export '../../modules/hr/pages/medical_leaves_page.dart';
