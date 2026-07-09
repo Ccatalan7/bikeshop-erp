@@ -656,6 +656,14 @@ class VinabikeApp extends StatelessWidget {
             // Use the URL captured at startup (before usePathUrlStrategy modified it)
             // This is critical for MercadoPago redirects and direct URL navigation
             final initialLocationOverride = () {
+              const debugInitialRoute =
+                  String.fromEnvironment('DEBUG_INITIAL_ROUTE');
+              if (debugInitialRoute.isNotEmpty) {
+                debugPrint(
+                  '🔍 [Main] Using debug initial route: $debugInitialRoute',
+                );
+                return debugInitialRoute;
+              }
               if (kIsWeb && _initialBrowserUrl != null) {
                 final uri = Uri.parse(_initialBrowserUrl!);
                 debugPrint(

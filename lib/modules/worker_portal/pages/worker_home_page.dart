@@ -2,12 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../shared/services/auth_service.dart';
+import '../../hr/widgets/attendance_week_calendar.dart';
+import '../../hr/widgets/shift_planning_calendar.dart';
 
 class WorkerHomePage extends StatefulWidget {
   const WorkerHomePage({super.key});
@@ -16,17 +19,54 @@ class WorkerHomePage extends StatefulWidget {
   State<WorkerHomePage> createState() => _WorkerHomePageState();
 }
 
+enum _WorkerPortalSection { resumen, planificacion, asistencias, perfil }
+
+extension _WorkerPortalSectionMeta on _WorkerPortalSection {
+  String get label {
+    return switch (this) {
+      _WorkerPortalSection.resumen => 'Resumen',
+      _WorkerPortalSection.planificacion => 'Planificacion',
+      _WorkerPortalSection.asistencias => 'Asistencias',
+      _WorkerPortalSection.perfil => 'Mi perfil',
+    };
+  }
+
+  String get description {
+    return switch (this) {
+      _WorkerPortalSection.resumen => 'Vista rapida de tu semana',
+      _WorkerPortalSection.planificacion =>
+        'Turnos, horario base y solicitudes',
+      _WorkerPortalSection.asistencias => 'Horas trabajadas y pago estimado',
+      _WorkerPortalSection.perfil => 'Datos laborales y contacto',
+    };
+  }
+
+  IconData get icon {
+    return switch (this) {
+      _WorkerPortalSection.resumen => Icons.dashboard_outlined,
+      _WorkerPortalSection.planificacion => Icons.calendar_month_outlined,
+      _WorkerPortalSection.asistencias => Icons.access_time_outlined,
+      _WorkerPortalSection.perfil => Icons.person_outline,
+    };
+  }
+}
+
 class _WorkerHomePageState extends State<WorkerHomePage> {
   late DateTime _weekStart;
   late Future<List<Map<String, dynamic>>> _shiftsFuture;
+  late Future<List<Map<String, dynamic>>> _planningCalendarFuture;
   late Future<List<Map<String, dynamic>>> _requestsFuture;
+  late Future<_WorkerAttendanceBundle> _attendanceBundleFuture;
+  _WorkerPortalSection _selectedSection = _WorkerPortalSection.resumen;
 
   @override
   void initState() {
     super.initState();
     _weekStart = _startOfWeek(DateTime.now());
     _shiftsFuture = _loadShifts();
+    _planningCalendarFuture = _loadPlanningCalendar();
     _requestsFuture = _loadRequests();
+    _attendanceBundleFuture = _loadAttendanceBundle();
   }
 
   DateTime _startOfWeek(DateTime date) {
@@ -53,6 +93,29 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
     return const [];
   }
 
+  Future<List<Map<String, dynamic>>> _loadPlanningCalendar() async {
+    final weekEnd = _weekStart.add(const Duration(days: 7));
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'get_worker_portal_planning_calendar',
+        params: {
+          'p_start_at': _weekStart.toIso8601String(),
+          'p_end_at': weekEnd.toIso8601String(),
+        },
+      );
+
+      return _mapsFromList(response);
+    } catch (error) {
+      debugPrint('[worker-portal][planning-calendar] fallback: $error');
+      final ownShifts = await _loadShifts();
+      return ownShifts.map((shift) {
+        final next = Map<String, dynamic>.from(shift);
+        next['is_my_shift'] = true;
+        return next;
+      }).toList();
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _loadRequests() async {
     final response =
         await Supabase.instance.client.from('shift_change_requests').select('''
@@ -72,22 +135,104 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
         .toList();
   }
 
+  Future<_WorkerAttendanceBundle> _loadAttendanceBundle() async {
+    final weekEnd = _weekStart.add(const Duration(days: 7));
+    final payrollEnd = weekEnd.subtract(const Duration(days: 1));
+    final attendances = await _loadWorkerAttendances(weekEnd);
+    final payrollRows = await _loadWorkerPayrollRows(payrollEnd);
+
+    return _WorkerAttendanceBundle(
+      attendances: attendances,
+      payrollRows: payrollRows,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadWorkerAttendances(
+    DateTime weekEnd,
+  ) async {
+    final client = Supabase.instance.client;
+    try {
+      final response = await client.rpc(
+        'get_my_worker_attendances',
+        params: {
+          'p_start_at': _weekStart.toIso8601String(),
+          'p_end_at': weekEnd.toIso8601String(),
+        },
+      );
+      return _mapsFromList(response);
+    } catch (error) {
+      debugPrint('[worker-portal][attendances] fallback: $error');
+      return _loadAttendanceFallbackFromShifts(weekEnd);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadWorkerPayrollRows(
+    DateTime payrollEnd,
+  ) async {
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'get_my_worker_payroll_for_period',
+        params: {
+          'p_start_date': DateFormat('yyyy-MM-dd').format(_weekStart),
+          'p_end_date': DateFormat('yyyy-MM-dd').format(payrollEnd),
+        },
+      );
+      return _mapsFromList(response);
+    } catch (error) {
+      debugPrint('[worker-portal][payroll] unavailable: $error');
+      return const [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAttendanceFallbackFromShifts(
+    DateTime weekEnd,
+  ) async {
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'get_my_worker_shifts',
+        params: {
+          'p_start_at': _weekStart.toIso8601String(),
+          'p_end_at': weekEnd.toIso8601String(),
+        },
+      );
+      return _mapsFromList(response)
+          .where((row) => row['first_check_in'] != null)
+          .map((row) {
+        return {
+          'id': 'shift-${row['id']}',
+          'check_in': row['first_check_in'],
+          'check_out': row['last_check_out'],
+          'status': row['last_check_out'] == null ? 'ongoing' : 'completed',
+        };
+      }).toList();
+    } catch (error) {
+      debugPrint('[worker-portal][attendance-fallback] failed: $error');
+      return const [];
+    }
+  }
+
   void _moveWeek(int delta) {
     setState(() {
       _weekStart = _weekStart.add(Duration(days: delta * 7));
       _shiftsFuture = _loadShifts();
+      _planningCalendarFuture = _loadPlanningCalendar();
       _requestsFuture = _loadRequests();
+      _attendanceBundleFuture = _loadAttendanceBundle();
     });
   }
 
   Future<void> _refresh() async {
     setState(() {
       _shiftsFuture = _loadShifts();
+      _planningCalendarFuture = _loadPlanningCalendar();
       _requestsFuture = _loadRequests();
+      _attendanceBundleFuture = _loadAttendanceBundle();
     });
     await Future.wait([
       _shiftsFuture,
+      _planningCalendarFuture,
       _requestsFuture,
+      _attendanceBundleFuture,
       context.read<AuthService>().refreshWorkerProfile(),
     ]);
   }
@@ -217,12 +362,54 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
       setState(() {
         _requestsFuture = _loadRequests();
         _shiftsFuture = _loadShifts();
+        _planningCalendarFuture = _loadPlanningCalendar();
+        _attendanceBundleFuture = _loadAttendanceBundle();
       });
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('No se pudo enviar la solicitud: $error'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateOwnShift(
+    String shiftId,
+    DateTime startAt,
+    DateTime endAt,
+  ) async {
+    if (!endAt.isAfter(startAt)) return;
+
+    try {
+      await Supabase.instance.client.rpc(
+        'update_my_worker_shift',
+        params: {
+          'p_shift_id': shiftId,
+          'p_start_at': startAt.toUtc().toIso8601String(),
+          'p_end_at': endAt.toUtc().toIso8601String(),
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _shiftsFuture = _loadShifts();
+        _planningCalendarFuture = _loadPlanningCalendar();
+        _attendanceBundleFuture = _loadAttendanceBundle();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Turno actualizado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar el turno: $error'),
           backgroundColor: Colors.red.shade700,
         ),
       );
@@ -280,7 +467,9 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
       if (!mounted) return;
       setState(() {
         _shiftsFuture = _loadShifts();
+        _planningCalendarFuture = _loadPlanningCalendar();
         _requestsFuture = _loadRequests();
+        _attendanceBundleFuture = _loadAttendanceBundle();
       });
       messenger.showSnackBar(
         SnackBar(
@@ -393,18 +582,29 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
               defaultShiftBlocks: defaultShiftBlocks,
               storeSchedule: storeSchedule,
               weekStart: _weekStart,
+              selectedSection: _selectedSection,
               shiftsFuture: _shiftsFuture,
+              planningCalendarFuture: _planningCalendarFuture,
               requestsFuture: _requestsFuture,
+              attendanceBundleFuture: _attendanceBundleFuture,
+              onSectionChanged: (section) {
+                setState(() => _selectedSection = section);
+              },
               onPreviousWeek: () => _moveWeek(-1),
               onNextWeek: () => _moveWeek(1),
               onRefresh: _refresh,
               onSignOut: _signOut,
               onRequestChange: _requestShiftChange,
               onRequestMove: _requestMoveShift,
+              onUpdateShift: _updateOwnShift,
               onMoveDefaultBlock: _moveDefaultShiftBlock,
               onEditDefaultSchedule: _editDefaultShiftBlocks,
               onRetryShifts: () {
-                setState(() => _shiftsFuture = _loadShifts());
+                setState(() {
+                  _shiftsFuture = _loadShifts();
+                  _planningCalendarFuture = _loadPlanningCalendar();
+                  _attendanceBundleFuture = _loadAttendanceBundle();
+                });
               },
             ),
           ),
@@ -425,14 +625,19 @@ class _WorkerPortalBody extends StatelessWidget {
     required this.defaultShiftBlocks,
     required this.storeSchedule,
     required this.weekStart,
+    required this.selectedSection,
     required this.shiftsFuture,
+    required this.planningCalendarFuture,
     required this.requestsFuture,
+    required this.attendanceBundleFuture,
+    required this.onSectionChanged,
     required this.onPreviousWeek,
     required this.onNextWeek,
     required this.onRefresh,
     required this.onSignOut,
     required this.onRequestChange,
     required this.onRequestMove,
+    required this.onUpdateShift,
     required this.onMoveDefaultBlock,
     required this.onEditDefaultSchedule,
     required this.onRetryShifts,
@@ -447,8 +652,12 @@ class _WorkerPortalBody extends StatelessWidget {
   final List<Map<String, dynamic>> defaultShiftBlocks;
   final Map<String, dynamic> storeSchedule;
   final DateTime weekStart;
+  final _WorkerPortalSection selectedSection;
   final Future<List<Map<String, dynamic>>> shiftsFuture;
+  final Future<List<Map<String, dynamic>>> planningCalendarFuture;
   final Future<List<Map<String, dynamic>>> requestsFuture;
+  final Future<_WorkerAttendanceBundle> attendanceBundleFuture;
+  final ValueChanged<_WorkerPortalSection> onSectionChanged;
   final VoidCallback onPreviousWeek;
   final VoidCallback onNextWeek;
   final Future<void> Function() onRefresh;
@@ -456,6 +665,11 @@ class _WorkerPortalBody extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRequestChange;
   final void Function(Map<String, dynamic> shift, DateTime targetDay)
       onRequestMove;
+  final Future<void> Function(
+    String shiftId,
+    DateTime startAt,
+    DateTime endAt,
+  ) onUpdateShift;
   final void Function(Map<String, dynamic> block, int targetWeekday)
       onMoveDefaultBlock;
   final VoidCallback onEditDefaultSchedule;
@@ -464,45 +678,239 @@ class _WorkerPortalBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxWidth = isDesktop ? 1480.0 : double.infinity;
+    final sectionChildren = _sectionChildren(isDesktop);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFF5F7F8),
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
-      child: ListView(
-        padding: EdgeInsets.all(isDesktop ? 28 : 16),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children:
-                    isDesktop ? _desktopChildren(context) : _mobileChildren(),
-              ),
+      child: isDesktop
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: _WorkerPortalNavigationPane(
+                    workerName: workerName,
+                    shopName: shopName,
+                    employee: employee,
+                    selectedSection: selectedSection,
+                    onSectionChanged: onSectionChanged,
+                    onSignOut: onSignOut,
+                  ),
+                ),
+                VerticalDivider(width: 1, color: Colors.grey.shade200),
+                Expanded(
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(28),
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: maxWidth),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: sectionChildren,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: maxWidth),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: sectionChildren,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: _WorkerPortalBottomNavigation(
+                      selectedSection: selectedSection,
+                      onSectionChanged: onSectionChanged,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
-  List<Widget> _mobileChildren() {
+  List<Widget> _sectionChildren(bool desktop) {
+    return switch (selectedSection) {
+      _WorkerPortalSection.resumen => _summaryChildren(desktop),
+      _WorkerPortalSection.planificacion => _planningChildren(desktop),
+      _WorkerPortalSection.asistencias => _attendanceChildren(desktop),
+      _WorkerPortalSection.perfil => _profileChildren(desktop),
+    };
+  }
+
+  List<Widget> _summaryChildren(bool desktop) {
+    final compact = !desktop;
+    final sidePanels = [
+      _RequestsFuturePanel(requestsFuture: requestsFuture, showEmpty: true),
+      const SizedBox(height: 12),
+      _StoreHoursSummary(schedule: storeSchedule),
+    ];
+
     return [
       _WorkerHeroPanel(
         workerName: workerName,
         shopName: shopName,
         employee: employee,
         account: account,
-        isDesktop: false,
+        isDesktop: desktop,
         onRefresh: onRefresh,
         onSignOut: onSignOut,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 16),
       _WeekMetricsPanel(
         shiftsFuture: shiftsFuture,
         requestsFuture: requestsFuture,
-        compact: true,
+        compact: compact,
+      ),
+      const SizedBox(height: 16),
+      _PortalSectionHeader(
+        section: _WorkerPortalSection.resumen,
+        trailing: OutlinedButton.icon(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Actualizar'),
+        ),
+      ),
+      const SizedBox(height: 12),
+      if (desktop)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: _WorkerAttendancePaySection(
+                weekStart: weekStart,
+                attendanceBundleFuture: attendanceBundleFuture,
+                employee: employee,
+                isDesktop: true,
+                compact: true,
+                onRetry: onRetryShifts,
+              ),
+            ),
+            const SizedBox(width: 14),
+            SizedBox(
+              width: 360,
+              child: Column(children: sidePanels),
+            ),
+          ],
+        )
+      else ...[
+        _WorkerAttendancePaySection(
+          weekStart: weekStart,
+          attendanceBundleFuture: attendanceBundleFuture,
+          employee: employee,
+          isDesktop: false,
+          compact: true,
+          onRetry: onRetryShifts,
+        ),
+        const SizedBox(height: 14),
+        ...sidePanels,
+      ],
+    ];
+  }
+
+  List<Widget> _planningChildren(bool desktop) {
+    final planner = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _WeekHeader(
+          weekStart: weekStart,
+          onPrevious: onPreviousWeek,
+          onNext: onNextWeek,
+        ),
+        const SizedBox(height: 12),
+        _WorkerPlanningCalendarSection(
+          weekStart: weekStart,
+          planningCalendarFuture: planningCalendarFuture,
+          employee: employee,
+          storeSchedule: storeSchedule,
+          isDesktop: desktop,
+          onRetry: onRetryShifts,
+          onUpdateShift: onUpdateShift,
+        ),
+      ],
+    );
+
+    return [
+      _PortalSectionHeader(
+        section: _WorkerPortalSection.planificacion,
+        trailing: OutlinedButton.icon(
+          onPressed: onEditDefaultSchedule,
+          icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+          label: const Text('Horario base'),
+        ),
+      ),
+      const SizedBox(height: 14),
+      if (desktop)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: planner),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 340,
+              child: Column(
+                children: [
+                  _DefaultSchedulePanel(
+                    defaultShiftBlocks: defaultShiftBlocks,
+                    onEdit: onEditDefaultSchedule,
+                  ),
+                  const SizedBox(height: 12),
+                  _RequestsFuturePanel(
+                    requestsFuture: requestsFuture,
+                    showEmpty: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        )
+      else ...[
+        planner,
+        const SizedBox(height: 14),
+        _DefaultSchedulePanel(
+          defaultShiftBlocks: defaultShiftBlocks,
+          onEdit: onEditDefaultSchedule,
+        ),
+        const SizedBox(height: 14),
+        _RequestsFuturePanel(requestsFuture: requestsFuture, showEmpty: true),
+      ],
+    ];
+  }
+
+  List<Widget> _attendanceChildren(bool desktop) {
+    return [
+      _PortalSectionHeader(
+        section: _WorkerPortalSection.asistencias,
+        trailing: OutlinedButton.icon(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Actualizar'),
+        ),
       ),
       const SizedBox(height: 14),
       _WeekHeader(
@@ -510,106 +918,283 @@ class _WorkerPortalBody extends StatelessWidget {
         onPrevious: onPreviousWeek,
         onNext: onNextWeek,
       ),
-      const SizedBox(height: 10),
-      _ShiftsFuturePlanner(
+      const SizedBox(height: 12),
+      _WorkerAttendancePaySection(
         weekStart: weekStart,
-        shiftsFuture: shiftsFuture,
-        defaultShiftBlocks: defaultShiftBlocks,
-        isDesktop: false,
-        onMoveDefaultBlock: onMoveDefaultBlock,
+        attendanceBundleFuture: attendanceBundleFuture,
+        employee: employee,
+        isDesktop: desktop,
+        compact: false,
         onRetry: onRetryShifts,
-        onRequestChange: onRequestChange,
-        onRequestMove: onRequestMove,
       ),
-      const SizedBox(height: 14),
+    ];
+  }
+
+  List<Widget> _profileChildren(bool desktop) {
+    final panels = [
       _ProfileSnapshotPanel(
         employee: employee,
         account: account,
         planningRoles: planningRoles,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 12),
       _DefaultSchedulePanel(
         defaultShiftBlocks: defaultShiftBlocks,
         onEdit: onEditDefaultSchedule,
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 12),
       _StoreHoursSummary(schedule: storeSchedule),
-      const SizedBox(height: 14),
-      _RequestsFuturePanel(requestsFuture: requestsFuture, showEmpty: true),
     ];
-  }
 
-  List<Widget> _desktopChildren(BuildContext context) {
     return [
+      const _PortalSectionHeader(section: _WorkerPortalSection.perfil),
+      const SizedBox(height: 14),
       _WorkerHeroPanel(
         workerName: workerName,
         shopName: shopName,
         employee: employee,
         account: account,
-        isDesktop: true,
+        isDesktop: desktop,
         onRefresh: onRefresh,
         onSignOut: onSignOut,
       ),
-      const SizedBox(height: 16),
-      _WeekMetricsPanel(
-        shiftsFuture: shiftsFuture,
-        requestsFuture: requestsFuture,
-        compact: false,
+      const SizedBox(height: 14),
+      if (desktop)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Column(children: panels.take(1).toList())),
+            const SizedBox(width: 14),
+            SizedBox(
+              width: 420,
+              child: Column(children: panels.skip(1).toList()),
+            ),
+          ],
+        )
+      else
+        ...panels,
+    ];
+  }
+}
+
+class _WorkerPortalNavigationPane extends StatelessWidget {
+  const _WorkerPortalNavigationPane({
+    required this.workerName,
+    required this.shopName,
+    required this.employee,
+    required this.selectedSection,
+    required this.onSectionChanged,
+    required this.onSignOut,
+  });
+
+  final String workerName;
+  final String shopName;
+  final Map<String, dynamic> employee;
+  final _WorkerPortalSection selectedSection;
+  final ValueChanged<_WorkerPortalSection> onSectionChanged;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 238,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
       ),
-      const SizedBox(height: 16),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 360,
-            child: Column(
-              children: [
-                _ProfileSnapshotPanel(
-                  employee: employee,
-                  account: account,
-                  planningRoles: planningRoles,
+          Row(
+            children: [
+              _WorkerAvatar(
+                photoUrl: _cleanText(employee['photoUrl']),
+                workerName: workerName,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      workerName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      shopName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                _DefaultSchedulePanel(
-                  defaultShiftBlocks: defaultShiftBlocks,
-                  onEdit: onEditDefaultSchedule,
-                ),
-                const SizedBox(height: 12),
-                _StoreHoursSummary(schedule: storeSchedule),
-                const SizedBox(height: 12),
-                _RequestsFuturePanel(
-                  requestsFuture: requestsFuture,
-                  showEmpty: true,
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ..._WorkerPortalSection.values.map(
+            (section) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _WorkerPortalNavItem(
+                section: section,
+                selected: selectedSection == section,
+                onTap: () => onSectionChanged(section),
+              ),
             ),
           ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              children: [
-                _WeekHeader(
-                  weekStart: weekStart,
-                  onPrevious: onPreviousWeek,
-                  onNext: onNextWeek,
-                ),
-                const SizedBox(height: 12),
-                _ShiftsFuturePlanner(
-                  weekStart: weekStart,
-                  shiftsFuture: shiftsFuture,
-                  defaultShiftBlocks: defaultShiftBlocks,
-                  isDesktop: true,
-                  onMoveDefaultBlock: onMoveDefaultBlock,
-                  onRetry: onRetryShifts,
-                  onRequestChange: onRequestChange,
-                  onRequestMove: onRequestMove,
-                ),
-              ],
-            ),
+          const Spacer(),
+          OutlinedButton.icon(
+            onPressed: onSignOut,
+            icon: const Icon(Icons.logout_outlined, size: 18),
+            label: const Text('Salir'),
           ),
         ],
       ),
-    ];
+    );
+  }
+}
+
+class _WorkerPortalNavItem extends StatelessWidget {
+  const _WorkerPortalNavItem({
+    required this.section,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _WorkerPortalSection section;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? const Color(0xFF0F6B63) : Colors.grey.shade700;
+    return Material(
+      color: selected ? const Color(0xFF0F6B63).withValues(alpha: 0.1) : null,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              Icon(section.icon, size: 20, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  section.label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkerPortalBottomNavigation extends StatelessWidget {
+  const _WorkerPortalBottomNavigation({
+    required this.selectedSection,
+    required this.onSectionChanged,
+  });
+
+  final _WorkerPortalSection selectedSection;
+  final ValueChanged<_WorkerPortalSection> onSectionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: NavigationBar(
+        selectedIndex: _WorkerPortalSection.values.indexOf(selectedSection),
+        onDestinationSelected: (index) {
+          onSectionChanged(_WorkerPortalSection.values[index]);
+        },
+        height: 66,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: _WorkerPortalSection.values
+            .map(
+              (section) => NavigationDestination(
+                icon: Icon(section.icon),
+                label: section.label,
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _PortalSectionHeader extends StatelessWidget {
+  const _PortalSectionHeader({
+    required this.section,
+    this.trailing,
+  });
+
+  final _WorkerPortalSection section;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(section.icon, color: const Color(0xFF0F6B63), size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                section.label,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                section.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 12),
+          trailing!,
+        ],
+      ],
+    );
   }
 }
 
@@ -674,6 +1259,48 @@ class _WorkerHeroPanel extends StatelessWidget {
         ),
       ],
     );
+    final identityBlock = Row(
+      children: [
+        _WorkerAvatar(photoUrl: photoUrl, workerName: workerName),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                workerName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isDesktop ? 22 : 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _HeroBadge(
+                    icon: Icons.storefront_outlined,
+                    text: shopName,
+                  ),
+                  _HeroBadge(
+                    icon: Icons.badge_outlined,
+                    text: employeeNumber,
+                  ),
+                  _HeroBadge(
+                    icon: Icons.account_circle_outlined,
+                    text: username,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -688,48 +1315,10 @@ class _WorkerHeroPanel extends StatelessWidget {
               ? CrossAxisAlignment.center
               : CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                _WorkerAvatar(photoUrl: photoUrl, workerName: workerName),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        workerName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isDesktop ? 22 : 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _HeroBadge(
-                            icon: Icons.storefront_outlined,
-                            text: shopName,
-                          ),
-                          _HeroBadge(
-                            icon: Icons.badge_outlined,
-                            text: employeeNumber,
-                          ),
-                          _HeroBadge(
-                            icon: Icons.account_circle_outlined,
-                            text: username,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            if (isDesktop)
+              Expanded(flex: 2, child: identityBlock)
+            else
+              identityBlock,
             SizedBox(width: isDesktop ? 24 : 0, height: isDesktop ? 0 : 14),
             if (isDesktop)
               Expanded(
@@ -1067,6 +1656,408 @@ class _MetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WorkerAttendancePaySection extends StatelessWidget {
+  const _WorkerAttendancePaySection({
+    required this.weekStart,
+    required this.attendanceBundleFuture,
+    required this.employee,
+    required this.isDesktop,
+    required this.compact,
+    required this.onRetry,
+  });
+
+  final DateTime weekStart;
+  final Future<_WorkerAttendanceBundle> attendanceBundleFuture;
+  final Map<String, dynamic> employee;
+  final bool isDesktop;
+  final bool compact;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_WorkerAttendanceBundle>(
+      future: attendanceBundleFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _PanelSurface(
+            icon: Icons.access_time_outlined,
+            title: 'Asistencias',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(minHeight: 3),
+                SizedBox(height: 12),
+                Text('Cargando asistencias...'),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _MessagePanel(
+            icon: Icons.error_outline,
+            text: 'No se pudieron cargar tus asistencias.',
+            actionLabel: 'Reintentar',
+            onAction: onRetry,
+          );
+        }
+
+        final bundle = snapshot.data ?? const _WorkerAttendanceBundle.empty();
+        final profileWorkerId = _cleanText(employee['id']);
+        final entries = _attendanceEntriesFromRows(
+          bundle.attendances,
+          fallbackWorkerId: profileWorkerId ?? 'worker',
+        );
+        final workerId = profileWorkerId ??
+            (entries.isEmpty ? 'worker' : entries.first.workerId);
+        final worker = _attendanceWorkerFromProfile(employee, workerId);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _WorkerPayrollStatusPanel(
+              weekStart: weekStart,
+              entries: entries,
+              payrollRows: bundle.payrollRows,
+              isDesktop: isDesktop,
+              compact: compact,
+            ),
+            if (!compact) ...[
+              const SizedBox(height: 14),
+              _PanelSurface(
+                icon: Icons.calendar_view_week_outlined,
+                title: 'Detalle semanal',
+                child: AttendanceWeekCalendar(
+                  weekStart: weekStart,
+                  workers: [worker],
+                  entriesByWorkerId: {workerId: entries},
+                  toDisplayTimeZone: _workerPortalAttendanceDisplayTime,
+                  padding: EdgeInsets.zero,
+                  workerColumnWidth: isDesktop ? 250 : 190,
+                  dayColumnWidth: isDesktop ? 168 : 138,
+                  rowHeight: isDesktop ? 104 : 96,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _WorkerPayrollStatusPanel extends StatelessWidget {
+  const _WorkerPayrollStatusPanel({
+    required this.weekStart,
+    required this.entries,
+    required this.payrollRows,
+    required this.isDesktop,
+    required this.compact,
+  });
+
+  final DateTime weekStart;
+  final List<AttendanceWeekEntry> entries;
+  final List<Map<String, dynamic>> payrollRows;
+  final bool isDesktop;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final workedMinutes =
+        entries.fold<num>(0, (sum, entry) => sum + entry.duration.inMinutes);
+    final primaryPayroll = payrollRows.isEmpty
+        ? null
+        : Map<String, dynamic>.from(payrollRows.first);
+    final status = _cleanText(primaryPayroll?['status']) ?? 'pending';
+    final amount = _number(primaryPayroll?['total_amount']);
+    final hours = _number(primaryPayroll?['worked_hours']);
+    final period = primaryPayroll == null
+        ? _weekRangeLabel(weekStart)
+        : _payrollPeriodLabel(primaryPayroll);
+
+    final tiles = [
+      _PayrollSummaryTile(
+        icon: Icons.fingerprint_outlined,
+        label: 'Trabajado',
+        value: _minutesAsHours(workedMinutes),
+        detail: entries.isEmpty ? 'Sin marcajes' : 'Marcajes semana',
+      ),
+      _PayrollSummaryTile(
+        icon: Icons.payments_outlined,
+        label: 'Nómina',
+        value: amount == null ? 'Sin nómina' : _moneyLabel(amount),
+        detail: primaryPayroll == null
+            ? 'Pendiente de generar'
+            : '${_numberLabel(hours)} h registradas',
+      ),
+      _PayrollSummaryTile(
+        icon: Icons.verified_outlined,
+        label: 'Estado',
+        value: _payrollStatusLabel(status),
+        detail: primaryPayroll == null
+            ? 'Sin comprobante'
+            : _cleanText(primaryPayroll['voucher_number']) ?? 'Comprobante',
+        statusColor: _payrollStatusColor(status),
+      ),
+      _PayrollSummaryTile(
+        icon: Icons.date_range_outlined,
+        label: 'Periodo',
+        value: period,
+        detail: _paymentMethodText(primaryPayroll),
+      ),
+    ];
+
+    return _PanelSurface(
+      icon: Icons.account_balance_wallet_outlined,
+      title: 'Horas y nómina',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GridView.count(
+            crossAxisCount: isDesktop && !compact ? 4 : 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: isDesktop ? 2.55 : 1.55,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: tiles,
+          ),
+          if (payrollRows.length > 1) ...[
+            const Divider(height: 24),
+            ...payrollRows.skip(1).take(3).map(_PayrollCompactLine.new),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PayrollSummaryTile extends StatelessWidget {
+  const _PayrollSummaryTile({
+    required this.label,
+    required this.value,
+    required this.detail,
+    required this.icon,
+    this.statusColor,
+  });
+
+  final String label;
+  final String value;
+  final String detail;
+  final IconData icon;
+  final Color? statusColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = statusColor ?? const Color(0xFF0F6B63);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: accent),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Text(
+              detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PayrollCompactLine extends StatelessWidget {
+  const _PayrollCompactLine(this.row);
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _cleanText(row['status']) ?? 'pending';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          _TinyTag(
+            text: _payrollStatusLabel(status),
+            color: _payrollStatusColor(status),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _payrollPeriodLabel(row),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          Text(
+            _moneyLabel(_number(row['total_amount']) ?? 0),
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkerAttendanceBundle {
+  const _WorkerAttendanceBundle({
+    required this.attendances,
+    required this.payrollRows,
+  });
+
+  const _WorkerAttendanceBundle.empty()
+      : attendances = const <Map<String, dynamic>>[],
+        payrollRows = const <Map<String, dynamic>>[];
+
+  final List<Map<String, dynamic>> attendances;
+  final List<Map<String, dynamic>> payrollRows;
+}
+
+List<AttendanceWeekEntry> _attendanceEntriesFromRows(
+  List<Map<String, dynamic>> rows, {
+  required String fallbackWorkerId,
+}) {
+  final entries = <AttendanceWeekEntry>[];
+  for (final row in rows) {
+    final checkIn = _parseDateTimeValue(row['check_in']);
+    if (checkIn == null) continue;
+    final checkOut = _parseDateTimeValue(row['check_out']);
+    final workerId = _cleanText(row['employee_id']) ?? fallbackWorkerId;
+    entries.add(
+      AttendanceWeekEntry(
+        id: _cleanText(row['id']) ??
+            '$workerId-${checkIn.toUtc().toIso8601String()}',
+        workerId: workerId,
+        checkIn: checkIn,
+        checkOut: checkOut,
+        status: _cleanText(row['status']) ??
+            (checkOut == null ? 'ongoing' : 'completed'),
+      ),
+    );
+  }
+  entries.sort((a, b) => a.checkIn.compareTo(b.checkIn));
+  return entries;
+}
+
+AttendanceWeekWorker _attendanceWorkerFromProfile(
+  Map<String, dynamic> employee,
+  String workerId,
+) {
+  final fullName = _profileText(employee, 'fullName', fallback: 'Trabajador');
+  return AttendanceWeekWorker(
+    id: workerId,
+    fullName: fullName,
+    initials: _initials(fullName),
+    jobTitle: _profileText(employee, 'jobTitle', fallback: 'Sin cargo'),
+    photoUrl: _cleanText(employee['photoUrl']),
+    color: const Color(0xFF0F6B63),
+  );
+}
+
+DateTime _workerPortalAttendanceDisplayTime(DateTime value) {
+  return _toWorkerTimeZone(value, 'America/Santiago');
+}
+
+DateTime? _parseDateTimeValue(dynamic value) {
+  final text = _cleanText(value);
+  if (text == null) return null;
+  return DateTime.tryParse(text);
+}
+
+String _payrollStatusLabel(String status) {
+  return switch (status) {
+    'draft' => 'Borrador',
+    'confirmed' => 'Confirmada',
+    'partial' => 'Parcial',
+    'paid' => 'Pagada',
+    'voided' => 'Anulada',
+    'pending' => 'Pendiente',
+    _ => status,
+  };
+}
+
+Color _payrollStatusColor(String status) {
+  return switch (status) {
+    'paid' => const Color(0xFF15803D),
+    'confirmed' => const Color(0xFF2563EB),
+    'partial' => const Color(0xFFD97706),
+    'voided' => const Color(0xFFB45309),
+    'draft' => const Color(0xFF4B5563),
+    _ => const Color(0xFF6B7280),
+  };
+}
+
+String _payrollPeriodLabel(Map<String, dynamic> row) {
+  final label = _cleanText(row['period_label']);
+  if (label != null) return label;
+  final start = _dateLabel(row['period_start']);
+  final end = _dateLabel(row['period_end']);
+  if (start != null && end != null) return '$start - $end';
+  return 'Periodo sin fecha';
+}
+
+String _paymentMethodText(Map<String, dynamic>? row) {
+  if (row == null) return 'Sin comprobante';
+  return _cleanText(row['payment_method_name']) ??
+      _paymentMethodLabel(row['payment_method']);
+}
+
+String _weekRangeLabel(DateTime weekStart) {
+  final end = weekStart.add(const Duration(days: 6));
+  return '${_formatDate(weekStart)} - ${_formatDate(end)}';
+}
+
+String _numberLabel(num? value) {
+  if (value == null) return '0';
+  final rounded = value.roundToDouble();
+  if ((value - rounded).abs() < 0.01) return rounded.toInt().toString();
+  return value.toStringAsFixed(1);
 }
 
 class _ProfileSnapshotPanel extends StatelessWidget {
@@ -1506,6 +2497,7 @@ class _RequestsFuturePanel extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ShiftsFuturePlanner extends StatelessWidget {
   const _ShiftsFuturePlanner({
     required this.weekStart,
@@ -1583,6 +2575,239 @@ class _ShiftsFuturePlanner extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _WorkerPlanningCalendarSection extends StatelessWidget {
+  const _WorkerPlanningCalendarSection({
+    required this.weekStart,
+    required this.planningCalendarFuture,
+    required this.employee,
+    required this.storeSchedule,
+    required this.isDesktop,
+    required this.onRetry,
+    required this.onUpdateShift,
+  });
+
+  final DateTime weekStart;
+  final Future<List<Map<String, dynamic>>> planningCalendarFuture;
+  final Map<String, dynamic> employee;
+  final Map<String, dynamic> storeSchedule;
+  final bool isDesktop;
+  final VoidCallback onRetry;
+  final Future<void> Function(
+    String shiftId,
+    DateTime startAt,
+    DateTime endAt,
+  ) onUpdateShift;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: planningCalendarFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            height: isDesktop ? 760 : 620,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _MessagePanel(
+            icon: Icons.error_outline,
+            text: 'No se pudieron cargar los turnos.',
+            actionLabel: 'Reintentar',
+            onAction: onRetry,
+          );
+        }
+
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        final currentWorkerId = _cleanText(employee['id']);
+        final workerById = _calendarWorkers(rows, currentWorkerId);
+        final shifts = rows
+            .map((row) => _calendarShift(row, currentWorkerId))
+            .whereType<PlanningCalendarShift>()
+            .toList();
+        final days =
+            List.generate(7, (index) => weekStart.add(Duration(days: index)));
+
+        return SizedBox(
+          height: isDesktop ? 760 : 620,
+          child: ShiftPlanningCalendar(
+            days: days,
+            shifts: shifts,
+            employeeById: workerById,
+            storePeriods: _storePeriodsFromSchedule(storeSchedule),
+            displayTimeZone: PlanningCalendarTimeZone.chile,
+            editableWorkerIds: currentWorkerId == null
+                ? const {'__no_worker__'}
+                : {currentWorkerId},
+            showWorkerSidebar: false,
+            allowCreateShift: false,
+            allowCreateShiftFromWorker: false,
+            allowAdministrativeActions: false,
+            onCreateShift: (_) {},
+            onCreateShiftFromWorker: (_, __, ___, ____) async {},
+            onEditShift: (shift) => _editShift(context, shift, rows),
+            onMoveShift: (shift, day, startMinutes) async {
+              if (!_isOwnShift(shift, currentWorkerId)) return;
+              final duration = shift.endAt.difference(shift.startAt);
+              final startAt = _zonedDateTime(
+                'America/Santiago',
+                day.year,
+                day.month,
+                day.day,
+                startMinutes ~/ 60,
+                startMinutes % 60,
+              );
+              await onUpdateShift(shift.id, startAt, startAt.add(duration));
+            },
+            onResizeShift: (
+              shift, {
+              required bool resizeStart,
+              required int deltaMinutes,
+            }) async {
+              if (!_isOwnShift(shift, currentWorkerId) || deltaMinutes == 0) {
+                return;
+              }
+              final startAt = resizeStart
+                  ? shift.startAt.add(Duration(minutes: deltaMinutes))
+                  : shift.startAt;
+              final endAt = resizeStart
+                  ? shift.endAt
+                  : shift.endAt.add(Duration(minutes: deltaMinutes));
+              await onUpdateShift(shift.id, startAt, endAt);
+            },
+            onPublishShift: (_) {},
+            onCancelShift: (_) {},
+            onDeleteShift: (_) {},
+          ),
+        );
+      },
+    );
+  }
+
+  Map<String, PlanningCalendarWorker> _calendarWorkers(
+    List<Map<String, dynamic>> rows,
+    String? currentWorkerId,
+  ) {
+    final workers = <String, PlanningCalendarWorker>{};
+    if (currentWorkerId != null) {
+      final name = _cleanText(employee['fullName']) ?? 'Trabajador';
+      workers[currentWorkerId] = PlanningCalendarWorker(
+        id: currentWorkerId,
+        fullName: name,
+        jobTitle: _cleanText(employee['jobTitle']) ?? '',
+        initials: _initials(name),
+        photoUrl: _cleanText(employee['photoUrl']),
+      );
+    }
+
+    for (final row in rows) {
+      final isMine = row['is_my_shift'] == true;
+      final workerId =
+          _cleanText(row['employee_id']) ?? (isMine ? currentWorkerId : null);
+      if (workerId == null) continue;
+      final name = _cleanText(row['employee_full_name']) ??
+          _cleanText(row['employee_name']) ??
+          _cleanText(row['worker_name']) ??
+          (isMine ? _cleanText(employee['fullName']) : null) ??
+          'Trabajador';
+      workers[workerId] = PlanningCalendarWorker(
+        id: workerId,
+        fullName: name,
+        jobTitle: _cleanText(row['employee_job_title']) ??
+            _cleanText(row['job_title']) ??
+            (isMine ? _cleanText(employee['jobTitle']) : null) ??
+            '',
+        initials: _initials(name),
+        photoUrl: _cleanText(row['employee_photo_url']) ??
+            (isMine ? _cleanText(employee['photoUrl']) : null),
+      );
+    }
+
+    return workers;
+  }
+
+  PlanningCalendarShift? _calendarShift(
+    Map<String, dynamic> row,
+    String? currentWorkerId,
+  ) {
+    final id = _cleanText(row['id']);
+    final startAt = _parseShiftDateTime(row['start_at'], _shiftTimezone(row));
+    final endAt = _parseShiftDateTime(row['end_at'], _shiftTimezone(row));
+    if (id == null || startAt == null || endAt == null) return null;
+    final isMine = row['is_my_shift'] == true;
+    return PlanningCalendarShift(
+      id: id,
+      employeeId:
+          _cleanText(row['employee_id']) ?? (isMine ? currentWorkerId : null),
+      title: _cleanText(row['title']),
+      startAt: startAt,
+      endAt: endAt,
+      status: _cleanText(row['status']) ?? 'published',
+      roleId: _cleanText(row['planning_role_id']),
+      roleName:
+          _cleanText(row['planning_role_name']) ?? _cleanText(row['role_name']),
+      roleColor: _cleanText(row['planning_role_color']) ??
+          _cleanText(row['role_color']),
+      storeHoursValidated: row['store_hours_validated'] != false,
+      outsideStoreHoursReason: _cleanText(row['outside_store_hours_reason']),
+    );
+  }
+
+  Future<void> _editShift(
+    BuildContext context,
+    PlanningCalendarShift shift,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final draft = await showDialog<_ShiftChangeDraft>(
+      context: context,
+      builder: (dialogContext) => _ShiftChangeDialog(
+        shift: _rowForShift(shift, rows),
+        title: 'Editar turno',
+        submitLabel: 'Guardar',
+        showNote: false,
+      ),
+    );
+    if (draft == null) return;
+    final startAt = _zonedDateTime(
+      'America/Santiago',
+      draft.startAt.year,
+      draft.startAt.month,
+      draft.startAt.day,
+      draft.startAt.hour,
+      draft.startAt.minute,
+    );
+    final endAt = _zonedDateTime(
+      'America/Santiago',
+      draft.endAt.year,
+      draft.endAt.month,
+      draft.endAt.day,
+      draft.endAt.hour,
+      draft.endAt.minute,
+    );
+    await onUpdateShift(shift.id, startAt, endAt);
+  }
+
+  Map<String, dynamic> _rowForShift(
+    PlanningCalendarShift shift,
+    List<Map<String, dynamic>> rows,
+  ) {
+    for (final row in rows) {
+      if (_cleanText(row['id']) == shift.id) return row;
+    }
+    return {
+      'id': shift.id,
+      'start_at': shift.startAt.toIso8601String(),
+      'end_at': shift.endAt.toIso8601String(),
+      'timezone': 'America/Santiago',
+    };
+  }
+
+  bool _isOwnShift(PlanningCalendarShift shift, String? currentWorkerId) {
+    return currentWorkerId != null && shift.employeeId == currentWorkerId;
   }
 }
 
@@ -2484,9 +3709,17 @@ class _OutsideStoreHoursNotice extends StatelessWidget {
 }
 
 class _ShiftChangeDialog extends StatefulWidget {
-  const _ShiftChangeDialog({required this.shift});
+  const _ShiftChangeDialog({
+    required this.shift,
+    this.title = 'Solicitar cambio',
+    this.submitLabel = 'Enviar',
+    this.showNote = true,
+  });
 
   final Map<String, dynamic> shift;
+  final String title;
+  final String submitLabel;
+  final bool showNote;
 
   @override
   State<_ShiftChangeDialog> createState() => _ShiftChangeDialogState();
@@ -2584,7 +3817,7 @@ class _ShiftChangeDialogState extends State<_ShiftChangeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Solicitar cambio'),
+      title: Text(widget.title),
       content: SizedBox(
         width: 360,
         child: Column(
@@ -2617,16 +3850,18 @@ class _ShiftChangeDialogState extends State<_ShiftChangeDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _noteController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Nota opcional',
-                prefixIcon: Icon(Icons.notes_outlined),
+            if (widget.showNote) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _noteController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Nota opcional',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
               ),
-            ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -2647,8 +3882,9 @@ class _ShiftChangeDialogState extends State<_ShiftChangeDialog> {
         ),
         FilledButton.icon(
           onPressed: _submit,
-          icon: const Icon(Icons.send_outlined),
-          label: const Text('Enviar'),
+          icon:
+              Icon(widget.showNote ? Icons.send_outlined : Icons.save_outlined),
+          label: Text(widget.submitLabel),
         ),
       ],
     );
@@ -3175,6 +4411,24 @@ String _minutesAsHours(num minutes) {
   return '$hours h $remainder min';
 }
 
+String _moneyLabel(num amount) {
+  return NumberFormat.currency(
+    locale: 'es_CL',
+    symbol: r'$',
+    decimalDigits: 0,
+  ).format(amount);
+}
+
+String _paymentMethodLabel(dynamic value) {
+  return switch (_cleanText(value)) {
+    'cash' => 'Efectivo',
+    'check' => 'Cheque',
+    'transfer' => 'Transferencia',
+    String text => text,
+    _ => 'Método no configurado',
+  };
+}
+
 List<Map<String, dynamic>> _blocksForWeekday(
   List<Map<String, dynamic>> blocks,
   int weekday,
@@ -3415,6 +4669,110 @@ String? _businessTimeLabel(dynamic rawTime) {
   final minutes = (time['minutes'] as num?)?.toInt() ?? 0;
   if (hours == null) return null;
   return _clockLabel(hours, minutes);
+}
+
+List<PlanningCalendarStorePeriod> _storePeriodsFromSchedule(
+  Map<String, dynamic> schedule,
+) {
+  final raw =
+      (schedule['businessHoursJson']?.toString().trim().isNotEmpty ?? false)
+          ? schedule['businessHoursJson'].toString()
+          : schedule['googleBusinessHoursJson']?.toString();
+  if (raw == null || raw.trim().isEmpty) return const [];
+
+  try {
+    final decoded = jsonDecode(raw);
+    final root = decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : const <String, dynamic>{};
+    final data = root['opening_hours'] is Map
+        ? Map<String, dynamic>.from(root['opening_hours'] as Map)
+        : root;
+    final periods = data['periods'] is List
+        ? List<dynamic>.from(data['periods'] as List)
+        : const <dynamic>[];
+    final result = <PlanningCalendarStorePeriod>[];
+
+    for (final rawPeriod in periods) {
+      if (rawPeriod is! Map) continue;
+      final period = Map<String, dynamic>.from(rawPeriod);
+      final open = _mapValue(period['open']);
+      final close = _mapValue(period['close']);
+      final weekday = period.containsKey('openDay')
+          ? _businessWeekdayNumber(period['openDay'])
+          : _placesWeekdayNumber(open?['day']);
+      final openMinutes = period.containsKey('openTime')
+          ? _businessMinutesValue(period['openTime'])
+          : _placesMinutesValue(open?['time']);
+      final closeMinutes = period.containsKey('closeTime')
+          ? _businessMinutesValue(period['closeTime'])
+          : _placesMinutesValue(close?['time']);
+
+      if (weekday == null || openMinutes == null || closeMinutes == null) {
+        continue;
+      }
+      if (closeMinutes <= openMinutes) continue;
+      result.add(
+        PlanningCalendarStorePeriod(
+          weekday: weekday,
+          openMinutes: openMinutes,
+          closeMinutes: closeMinutes,
+        ),
+      );
+    }
+
+    return result;
+  } catch (_) {
+    return const [];
+  }
+}
+
+int? _businessWeekdayNumber(dynamic rawDay) {
+  final day = rawDay?.toString().toUpperCase();
+  return switch (day) {
+    'MONDAY' => 1,
+    'TUESDAY' => 2,
+    'WEDNESDAY' => 3,
+    'THURSDAY' => 4,
+    'FRIDAY' => 5,
+    'SATURDAY' => 6,
+    'SUNDAY' => 7,
+    _ => null,
+  };
+}
+
+int? _placesWeekdayNumber(dynamic rawDay) {
+  final day = rawDay is num ? rawDay.toInt() : int.tryParse('$rawDay');
+  return switch (day) {
+    1 => 1,
+    2 => 2,
+    3 => 3,
+    4 => 4,
+    5 => 5,
+    6 => 6,
+    0 => 7,
+    _ => null,
+  };
+}
+
+int? _businessMinutesValue(dynamic rawTime) {
+  if (rawTime is String) return _placesMinutesValue(rawTime);
+  if (rawTime is! Map) return null;
+  final time = Map<String, dynamic>.from(rawTime);
+  final hours = (time['hours'] as num?)?.toInt();
+  final minutes = (time['minutes'] as num?)?.toInt() ?? 0;
+  if (hours == null) return null;
+  return hours.clamp(0, 23).toInt() * 60 + minutes.clamp(0, 59).toInt();
+}
+
+int? _placesMinutesValue(dynamic rawTime) {
+  final digits = rawTime?.toString().replaceAll(':', '').trim();
+  if (digits == null || digits.length < 3) return null;
+  final padded = digits.padLeft(4, '0');
+  final hours = int.tryParse(padded.substring(0, 2));
+  final minutes = int.tryParse(padded.substring(2, 4));
+  if (hours == null || minutes == null) return null;
+  return hours.clamp(0, 23).toInt() * 60 + minutes.clamp(0, 59).toInt();
 }
 
 String? _placesTimeLabel(dynamic rawTime) {

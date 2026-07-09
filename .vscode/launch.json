@@ -20,6 +20,20 @@
       "deviceId": "chrome"
     },
     {
+      "name": "👷 Worker Portal (Chrome • Local)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--web-port=5777",
+        "--web-launch-url=http://localhost:5777/",
+        "--dart-define=ENV=development",
+        "--dart-define=DEBUG_INITIAL_ROUTE=/worker/login"
+      ]
+    },
+    {
       "name": "🐞 Debug Vinabike Store (Chrome)",
       "request": "launch",
       "type": "dart",

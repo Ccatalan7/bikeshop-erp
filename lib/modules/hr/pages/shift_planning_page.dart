@@ -12,6 +12,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../widgets/shift_planning_calendar.dart';
 
 enum PlanningDisplayTimeZone { chile, local, utc }
 
@@ -716,6 +717,62 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
     );
   }
 
+  PlanningCalendarWorker _calendarWorker(Employee employee) {
+    return PlanningCalendarWorker(
+      id: employee.id,
+      fullName: employee.fullName,
+      jobTitle: employee.jobTitle,
+      initials: employee.initials,
+      photoUrl: employee.photoUrl,
+    );
+  }
+
+  PlanningCalendarShift _calendarShift(_PlannedShift shift) {
+    return PlanningCalendarShift(
+      id: shift.id,
+      employeeId: shift.employeeId,
+      startAt: shift.startAt,
+      endAt: shift.endAt,
+      status: shift.status,
+      roleId: shift.roleId,
+      roleName: shift.roleName,
+      roleColor: shift.roleColor,
+      storeHoursValidated: shift.storeHoursValidated,
+      outsideStoreHoursReason: shift.outsideStoreHoursReason,
+    );
+  }
+
+  PlanningCalendarStorePeriod _calendarStorePeriod(_StorePeriod period) {
+    return PlanningCalendarStorePeriod(
+      weekday: period.weekday,
+      openMinutes: period.openMinutes,
+      closeMinutes: period.closeMinutes,
+    );
+  }
+
+  PlanningCalendarTimeZone _calendarTimeZone() {
+    return switch (_displayTimeZone) {
+      PlanningDisplayTimeZone.chile => PlanningCalendarTimeZone.chile,
+      PlanningDisplayTimeZone.local => PlanningCalendarTimeZone.local,
+      PlanningDisplayTimeZone.utc => PlanningCalendarTimeZone.utc,
+    };
+  }
+
+  _PlannedShift? _shiftByCalendarId(String id) {
+    for (final shift in _shifts) {
+      if (shift.id == id) return shift;
+    }
+    return null;
+  }
+
+  Employee? _employeeByCalendarId(String? id) {
+    if (id == null) return null;
+    for (final employee in _employees) {
+      if (employee.id == id) return employee;
+    }
+    return null;
+  }
+
   Future<void> _openEditShiftDialog(_PlannedShift shift) async {
     final draft = await showDialog<_ShiftDraft>(
       context: context,
@@ -1209,6 +1266,12 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
       for (final employee in _employees)
         if (employee.id != null) employee.id!: employee,
     };
+    final calendarEmployeeById = {
+      for (final employee in _employees)
+        if (employee.id != null) employee.id!: _calendarWorker(employee),
+    };
+    final calendarStorePeriods =
+        _storePeriods.map(_calendarStorePeriod).toList();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1266,20 +1329,62 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
               ),
             ),
             Expanded(
-              child: _CalendarWeekView(
+              child: ShiftPlanningCalendar(
                 days: days,
-                shifts: _shifts,
-                employeeById: employeeById,
-                storePeriods: _storePeriods,
-                displayTimeZone: _displayTimeZone,
+                shifts: _shifts.map(_calendarShift).toList(),
+                employeeById: calendarEmployeeById,
+                storePeriods: calendarStorePeriods,
+                displayTimeZone: _calendarTimeZone(),
                 onCreateShift: (day) => _openNewShiftDialog(initialDay: day),
-                onCreateShiftFromWorker: _createShiftFromWorkerDrop,
-                onEditShift: _openEditShiftDialog,
-                onMoveShift: _moveShift,
-                onResizeShift: _resizeShift,
-                onPublishShift: _publishShift,
-                onCancelShift: _cancelShift,
-                onDeleteShift: _deleteShift,
+                onCreateShiftFromWorker: (
+                  worker,
+                  day,
+                  startMinutes,
+                  durationMinutes,
+                ) async {
+                  final employee = _employeeByCalendarId(worker.id);
+                  if (employee == null) return;
+                  await _createShiftFromWorkerDrop(
+                    employee,
+                    day,
+                    startMinutes,
+                    durationMinutes,
+                  );
+                },
+                onEditShift: (shift) {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift != null) _openEditShiftDialog(plannedShift);
+                },
+                onMoveShift: (shift, day, startMinutes) async {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift == null) return;
+                  await _moveShift(plannedShift, day, startMinutes);
+                },
+                onResizeShift: (
+                  shift, {
+                  required bool resizeStart,
+                  required int deltaMinutes,
+                }) async {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift == null) return;
+                  await _resizeShift(
+                    plannedShift,
+                    resizeStart: resizeStart,
+                    deltaMinutes: deltaMinutes,
+                  );
+                },
+                onPublishShift: (shift) {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift != null) _publishShift(plannedShift);
+                },
+                onCancelShift: (shift) {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift != null) _cancelShift(plannedShift);
+                },
+                onDeleteShift: (shift) {
+                  final plannedShift = _shiftByCalendarId(shift.id);
+                  if (plannedShift != null) _deleteShift(plannedShift);
+                },
               ),
             ),
           ],

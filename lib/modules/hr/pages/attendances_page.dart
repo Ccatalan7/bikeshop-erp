@@ -11,6 +11,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
+import '../widgets/attendance_week_calendar.dart';
 import '../widgets/payroll_voucher_dialog.dart';
 import '../pages/payroll_list_page.dart';
 
@@ -389,7 +390,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
           try {
             final hrService = context.read<HRService>();
             await hrService.updateAttendance(updatedAttendance);
-            if (!mounted) return;
+            if (!context.mounted) return;
             Navigator.of(context).pop();
             _loadData(); // Refresh data
             ScaffoldMessenger.of(context).showSnackBar(
@@ -399,7 +400,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
               ),
             );
           } catch (e) {
-            if (!mounted) return;
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error al actualizar: $e'),
@@ -420,7 +421,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
             navigator.pop();
 
             // Reload data
-            if (!mounted) return;
+            if (!context.mounted) return;
             await _loadData();
 
             // Show success message
@@ -431,8 +432,8 @@ class _AttendancesPageState extends State<AttendancesPage> {
               ),
             );
           } catch (e) {
+            if (!context.mounted) return;
             final messenger = ScaffoldMessenger.of(context);
-            if (!mounted) return;
             messenger.showSnackBar(
               SnackBar(
                 content: Text('Error al eliminar: $e'),
@@ -447,7 +448,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
             // TODO: Get current user ID properly
             await hrService.approveAttendance(
                 attendance.id!, 'current-user-id');
-            if (!mounted) return;
+            if (!context.mounted) return;
             Navigator.of(context).pop();
             _loadData(); // Refresh data
             ScaffoldMessenger.of(context).showSnackBar(
@@ -457,7 +458,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
               ),
             );
           } catch (e) {
-            if (!mounted) return;
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error al aprobar: $e'),
@@ -471,7 +472,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
             final hrService = context.read<HRService>();
             // TODO: Get current user ID properly
             await hrService.rejectAttendance(attendance.id!, 'current-user-id');
-            if (!mounted) return;
+            if (!context.mounted) return;
             Navigator.of(context).pop();
             _loadData(); // Refresh data
             ScaffoldMessenger.of(context).showSnackBar(
@@ -481,7 +482,7 @@ class _AttendancesPageState extends State<AttendancesPage> {
               ),
             );
           } catch (e) {
-            if (!mounted) return;
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error al rechazar: $e'),
@@ -796,6 +797,57 @@ class _AttendancesPageState extends State<AttendancesPage> {
 
     final dateRange = _getDateRangeForView();
     final List<DateTime> days = _getDaysInRange(dateRange);
+
+    if (_currentView == TimeView.week) {
+      final workers = _employees.asMap().entries.map((entry) {
+        final employee = entry.value;
+        return AttendanceWeekWorker(
+          id: employee.id ?? '',
+          fullName: employee.fullName,
+          initials: employee.initials,
+          jobTitle: employee.jobTitle,
+          photoUrl: employee.photoUrl,
+          color: _getEmployeeColor(entry.key),
+        );
+      }).toList();
+      final entriesByWorkerId = <String, List<AttendanceWeekEntry>>{};
+      for (final employee in _employees) {
+        final employeeId = employee.id ?? '';
+        entriesByWorkerId[employeeId] =
+            (_attendancesByEmployee[employeeId] ?? const <Attendance>[])
+                .map(
+                  (attendance) => AttendanceWeekEntry(
+                    id: attendance.id ??
+                        '${attendance.employeeId}-${attendance.checkIn.toIso8601String()}',
+                    workerId: attendance.employeeId,
+                    checkIn: attendance.checkIn,
+                    checkOut: attendance.checkOut,
+                    status: attendance.status.name,
+                  ),
+                )
+                .toList();
+      }
+
+      return AttendanceWeekCalendar(
+        weekStart: dateRange.start,
+        workers: workers,
+        entriesByWorkerId: entriesByWorkerId,
+        toDisplayTimeZone: _toDisplayTimeZone,
+        onEntryTap: (entry) {
+          Attendance? selectedAttendance;
+          for (final attendance in _attendancesByEmployee[entry.workerId] ??
+              const <Attendance>[]) {
+            if (attendance.id == entry.id) {
+              selectedAttendance = attendance;
+              break;
+            }
+          }
+          if (selectedAttendance != null) {
+            _showAttendanceDetailDialog(selectedAttendance);
+          }
+        },
+      );
+    }
 
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
