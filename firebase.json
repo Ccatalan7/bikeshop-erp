@@ -510,7 +510,7 @@
         },
         {
           "source": "/productos/05a00958-1c92-4240-a3e2-70944651bd7f",
-          "destination": "/productos/cubeta-de-motor-34-8mm-h-de-tope-cp-compatible-generico-min-de-venta-multiplos-d/AI001",
+          "destination": "/productos/cubeta-de-motor-34-8mm-h-de-tope-cp-compatible-generico/AI001",
           "type": 301
         },
         {
@@ -2406,11 +2406,6 @@
         {
           "source": "/productos/41dcb4b1-a15d-4476-8731-13f584d7fadb",
           "destination": "/productos/pinon-shimano-cs-hg200-8v-12-32/4524667393948",
-          "type": 301
-        },
-        {
-          "source": "/productos/42506cf7-f92a-48de-b001-29ae08ed8008",
-          "destination": "/productos/rayo-generico-bettabikes-28-5/NNV146",
           "type": 301
         },
         {
@@ -6654,6 +6649,11 @@
           "type": 301
         },
         {
+          "source": "/productos/cubeta-de-motor-34-8mm-h-de-tope-cp-compatible-generico-min-de-venta-multiplos-d/AI001",
+          "destination": "/productos/cubeta-de-motor-34-8mm-h-de-tope-cp-compatible-generico/AI001",
+          "type": 301
+        },
+        {
           "source": "/productos/d0389c09-35d8-4326-a53f-189b044ea8c5",
           "destination": "/productos/camara-bicicleta-aro-27-5-x-1-75-a-2-35-valvula-auto-arisun/6927116172435",
           "type": 301
@@ -7991,11 +7991,6 @@
         {
           "source": "/productos/febc585d-fa97-450d-81fa-e15d2526071f",
           "destination": "/productos/camara-chaoyang-26x1-95-2-125-f-v-48mm/6927116119065",
-          "type": 301
-        },
-        {
-          "source": "/productos/feebaf12-b699-46fa-8f85-bb78cbfeec7c",
-          "destination": "/productos/cubre-camara-para-media-pista-goma-compatible-generico/PO02574001987",
           "type": 301
         },
         {

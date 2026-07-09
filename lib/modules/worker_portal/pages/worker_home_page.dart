@@ -58,6 +58,7 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   late Future<List<Map<String, dynamic>>> _requestsFuture;
   late Future<_WorkerAttendanceBundle> _attendanceBundleFuture;
   _WorkerPortalSection _selectedSection = _WorkerPortalSection.resumen;
+  bool _planningSidePanelCollapsed = true;
 
   @override
   void initState() {
@@ -75,12 +76,13 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadShifts() async {
-    final weekEnd = _weekStart.add(const Duration(days: 7));
+    final weekStartAt = _workerWeekStartAtChile(_weekStart);
+    final weekEndAt = _workerWeekEndAtChile(_weekStart);
     final response = await Supabase.instance.client.rpc(
       'get_my_worker_shifts',
       params: {
-        'p_start_at': _weekStart.toIso8601String(),
-        'p_end_at': weekEnd.toIso8601String(),
+        'p_start_at': weekStartAt.toUtc().toIso8601String(),
+        'p_end_at': weekEndAt.toUtc().toIso8601String(),
       },
     );
 
@@ -94,13 +96,14 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadPlanningCalendar() async {
-    final weekEnd = _weekStart.add(const Duration(days: 7));
+    final weekStartAt = _workerWeekStartAtChile(_weekStart);
+    final weekEndAt = _workerWeekEndAtChile(_weekStart);
     try {
       final response = await Supabase.instance.client.rpc(
         'get_worker_portal_planning_calendar',
         params: {
-          'p_start_at': _weekStart.toIso8601String(),
-          'p_end_at': weekEnd.toIso8601String(),
+          'p_start_at': weekStartAt.toUtc().toIso8601String(),
+          'p_end_at': weekEndAt.toUtc().toIso8601String(),
         },
       );
 
@@ -136,9 +139,25 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   }
 
   Future<_WorkerAttendanceBundle> _loadAttendanceBundle() async {
-    final weekEnd = _weekStart.add(const Duration(days: 7));
-    final payrollEnd = weekEnd.subtract(const Duration(days: 1));
-    final attendances = await _loadWorkerAttendances(weekEnd);
+    final weekStartAt = _workerWeekStartAtChile(_weekStart);
+    final weekEndAt = _workerWeekEndAtChile(_weekStart);
+    final payrollEnd = weekEndAt.subtract(const Duration(days: 1));
+    final rawAttendances = await _loadWorkerAttendances(
+      weekStartAt,
+      weekEndAt,
+    );
+    final shiftAttendances = await _loadAttendanceFallbackFromShifts(
+      weekStartAt,
+      weekEndAt,
+    );
+    final attendances = _mergeAttendanceRows(rawAttendances, shiftAttendances);
+    debugPrint(
+      '[worker-portal][attendances] '
+      'week=${_workerChileDateString(weekStartAt)} '
+      'raw=${rawAttendances.length} '
+      'shiftFallback=${shiftAttendances.length} '
+      'merged=${attendances.length}',
+    );
     final payrollRows = await _loadWorkerPayrollRows(payrollEnd);
 
     return _WorkerAttendanceBundle(
@@ -148,21 +167,22 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadWorkerAttendances(
-    DateTime weekEnd,
+    DateTime weekStartAt,
+    DateTime weekEndAt,
   ) async {
     final client = Supabase.instance.client;
     try {
       final response = await client.rpc(
         'get_my_worker_attendances',
         params: {
-          'p_start_at': _weekStart.toIso8601String(),
-          'p_end_at': weekEnd.toIso8601String(),
+          'p_start_at': weekStartAt.toUtc().toIso8601String(),
+          'p_end_at': weekEndAt.toUtc().toIso8601String(),
         },
       );
       return _mapsFromList(response);
     } catch (error) {
       debugPrint('[worker-portal][attendances] fallback: $error');
-      return _loadAttendanceFallbackFromShifts(weekEnd);
+      return const [];
     }
   }
 
@@ -173,8 +193,8 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
       final response = await Supabase.instance.client.rpc(
         'get_my_worker_payroll_for_period',
         params: {
-          'p_start_date': DateFormat('yyyy-MM-dd').format(_weekStart),
-          'p_end_date': DateFormat('yyyy-MM-dd').format(payrollEnd),
+          'p_start_date': _workerChileDateString(_weekStart),
+          'p_end_date': _workerChileDateString(payrollEnd),
         },
       );
       return _mapsFromList(response);
@@ -185,14 +205,15 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadAttendanceFallbackFromShifts(
-    DateTime weekEnd,
+    DateTime weekStartAt,
+    DateTime weekEndAt,
   ) async {
     try {
       final response = await Supabase.instance.client.rpc(
         'get_my_worker_shifts',
         params: {
-          'p_start_at': _weekStart.toIso8601String(),
-          'p_end_at': weekEnd.toIso8601String(),
+          'p_start_at': weekStartAt.toUtc().toIso8601String(),
+          'p_end_at': weekEndAt.toUtc().toIso8601String(),
         },
       );
       return _mapsFromList(response)
@@ -587,6 +608,7 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
               planningCalendarFuture: _planningCalendarFuture,
               requestsFuture: _requestsFuture,
               attendanceBundleFuture: _attendanceBundleFuture,
+              planningSidePanelCollapsed: _planningSidePanelCollapsed,
               onSectionChanged: (section) {
                 setState(() => _selectedSection = section);
               },
@@ -599,6 +621,11 @@ class _WorkerHomePageState extends State<WorkerHomePage> {
               onUpdateShift: _updateOwnShift,
               onMoveDefaultBlock: _moveDefaultShiftBlock,
               onEditDefaultSchedule: _editDefaultShiftBlocks,
+              onTogglePlanningSidePanel: () {
+                setState(() {
+                  _planningSidePanelCollapsed = !_planningSidePanelCollapsed;
+                });
+              },
               onRetryShifts: () {
                 setState(() {
                   _shiftsFuture = _loadShifts();
@@ -630,6 +657,7 @@ class _WorkerPortalBody extends StatelessWidget {
     required this.planningCalendarFuture,
     required this.requestsFuture,
     required this.attendanceBundleFuture,
+    required this.planningSidePanelCollapsed,
     required this.onSectionChanged,
     required this.onPreviousWeek,
     required this.onNextWeek,
@@ -640,6 +668,7 @@ class _WorkerPortalBody extends StatelessWidget {
     required this.onUpdateShift,
     required this.onMoveDefaultBlock,
     required this.onEditDefaultSchedule,
+    required this.onTogglePlanningSidePanel,
     required this.onRetryShifts,
   });
 
@@ -657,6 +686,7 @@ class _WorkerPortalBody extends StatelessWidget {
   final Future<List<Map<String, dynamic>>> planningCalendarFuture;
   final Future<List<Map<String, dynamic>>> requestsFuture;
   final Future<_WorkerAttendanceBundle> attendanceBundleFuture;
+  final bool planningSidePanelCollapsed;
   final ValueChanged<_WorkerPortalSection> onSectionChanged;
   final VoidCallback onPreviousWeek;
   final VoidCallback onNextWeek;
@@ -673,6 +703,7 @@ class _WorkerPortalBody extends StatelessWidget {
   final void Function(Map<String, dynamic> block, int targetWeekday)
       onMoveDefaultBlock;
   final VoidCallback onEditDefaultSchedule;
+  final VoidCallback onTogglePlanningSidePanel;
   final VoidCallback onRetryShifts;
 
   @override
@@ -858,10 +889,30 @@ class _WorkerPortalBody extends StatelessWidget {
     return [
       _PortalSectionHeader(
         section: _WorkerPortalSection.planificacion,
-        trailing: OutlinedButton.icon(
-          onPressed: onEditDefaultSchedule,
-          icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-          label: const Text('Horario base'),
+        trailing: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onEditDefaultSchedule,
+              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+              label: const Text('Horario base'),
+            ),
+            if (desktop)
+              OutlinedButton.icon(
+                onPressed: onTogglePlanningSidePanel,
+                icon: Icon(
+                  planningSidePanelCollapsed
+                      ? Icons.keyboard_double_arrow_left
+                      : Icons.keyboard_double_arrow_right,
+                  size: 18,
+                ),
+                label: Text(
+                  planningSidePanelCollapsed ? 'Mostrar' : 'Ocultar',
+                ),
+              ),
+          ],
         ),
       ),
       const SizedBox(height: 14),
@@ -871,21 +922,12 @@ class _WorkerPortalBody extends StatelessWidget {
           children: [
             Expanded(flex: 3, child: planner),
             const SizedBox(width: 16),
-            SizedBox(
-              width: 340,
-              child: Column(
-                children: [
-                  _DefaultSchedulePanel(
-                    defaultShiftBlocks: defaultShiftBlocks,
-                    onEdit: onEditDefaultSchedule,
-                  ),
-                  const SizedBox(height: 12),
-                  _RequestsFuturePanel(
-                    requestsFuture: requestsFuture,
-                    showEmpty: true,
-                  ),
-                ],
-              ),
+            _PlanningSidePanel(
+              collapsed: planningSidePanelCollapsed,
+              defaultShiftBlocks: defaultShiftBlocks,
+              requestsFuture: requestsFuture,
+              onEditDefaultSchedule: onEditDefaultSchedule,
+              onToggle: onTogglePlanningSidePanel,
             ),
           ],
         )
@@ -2270,10 +2312,12 @@ class _DefaultSchedulePanel extends StatelessWidget {
   const _DefaultSchedulePanel({
     required this.defaultShiftBlocks,
     required this.onEdit,
+    this.onCollapse,
   });
 
   final List<Map<String, dynamic>> defaultShiftBlocks;
   final VoidCallback onEdit;
+  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -2305,6 +2349,15 @@ class _DefaultSchedulePanel extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onCollapse != null)
+                  IconButton(
+                    tooltip: 'Ocultar horario base',
+                    onPressed: onCollapse,
+                    icon: const Icon(
+                      Icons.keyboard_double_arrow_right,
+                      size: 20,
+                    ),
+                  ),
                 TextButton.icon(
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit_calendar_outlined, size: 18),
@@ -2493,6 +2546,121 @@ class _RequestsFuturePanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PlanningSidePanel extends StatelessWidget {
+  const _PlanningSidePanel({
+    required this.collapsed,
+    required this.defaultShiftBlocks,
+    required this.requestsFuture,
+    required this.onEditDefaultSchedule,
+    required this.onToggle,
+  });
+
+  final bool collapsed;
+  final List<Map<String, dynamic>> defaultShiftBlocks;
+  final Future<List<Map<String, dynamic>>> requestsFuture;
+  final VoidCallback onEditDefaultSchedule;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetWidth = collapsed ? 58.0 : 340.0;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      width: targetWidth,
+      child: ClipRect(
+        child: SizedBox(
+          width: targetWidth,
+          child: collapsed ? _collapsedRail(context) : _expandedPanel(),
+        ),
+      ),
+    );
+  }
+
+  Widget _expandedPanel() {
+    return Column(
+      key: const ValueKey('planning-side-expanded'),
+      children: [
+        _DefaultSchedulePanel(
+          defaultShiftBlocks: defaultShiftBlocks,
+          onEdit: onEditDefaultSchedule,
+          onCollapse: onToggle,
+        ),
+        const SizedBox(height: 12),
+        _RequestsFuturePanel(
+          requestsFuture: requestsFuture,
+          showEmpty: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _collapsedRail(BuildContext context) {
+    return DecoratedBox(
+      key: const ValueKey('planning-side-collapsed'),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Mostrar horario base',
+              onPressed: onToggle,
+              icon: const Icon(Icons.keyboard_double_arrow_left, size: 20),
+            ),
+            const SizedBox(height: 8),
+            Tooltip(
+              message: 'Horario base',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onToggle,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F6B63).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.date_range_outlined,
+                    color: Color(0xFF0F6B63),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            RotatedBox(
+              quarterTurns: 1,
+              child: Text(
+                'Horario base',
+                maxLines: 1,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            IconButton(
+              tooltip: 'Editar horario base',
+              onPressed: onEditDefaultSchedule,
+              icon: const Icon(Icons.edit_calendar_outlined, size: 20),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -4277,6 +4445,55 @@ class _MessagePanel extends StatelessWidget {
       ),
     );
   }
+}
+
+const String _workerChileTimeZone = 'America/Santiago';
+
+DateTime _workerWeekStartAtChile(DateTime weekStart) {
+  return tz.TZDateTime(
+    _workerTimeZoneLocation(_workerChileTimeZone),
+    weekStart.year,
+    weekStart.month,
+    weekStart.day,
+  );
+}
+
+DateTime _workerWeekEndAtChile(DateTime weekStart) {
+  return _workerWeekStartAtChile(weekStart).add(const Duration(days: 7));
+}
+
+String _workerChileDateString(DateTime date) {
+  return DateFormat(
+    'yyyy-MM-dd',
+  ).format(_toWorkerTimeZone(date, _workerChileTimeZone));
+}
+
+List<Map<String, dynamic>> _mergeAttendanceRows(
+  List<Map<String, dynamic>> rawRows,
+  List<Map<String, dynamic>> fallbackRows,
+) {
+  final merged = <Map<String, dynamic>>[];
+  final seenCheckIns = <String>{};
+
+  void addRow(Map<String, dynamic> row) {
+    final checkIn = _cleanText(row['check_in']);
+    if (checkIn == null || !seenCheckIns.add(checkIn)) return;
+    merged.add(row);
+  }
+
+  for (final row in rawRows) {
+    addRow(row);
+  }
+  for (final row in fallbackRows) {
+    addRow(row);
+  }
+
+  merged.sort((a, b) {
+    final left = _cleanText(a['check_in']) ?? '';
+    final right = _cleanText(b['check_in']) ?? '';
+    return left.compareTo(right);
+  });
+  return merged;
 }
 
 List<Map<String, dynamic>> _mapsFromList(dynamic value) {
