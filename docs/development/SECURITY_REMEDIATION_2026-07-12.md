@@ -10,6 +10,7 @@
 - Literal consumer inventory: 19 distinct fingerprints across 54 current occurrences. No value is recorded in this document.
 - Recoverable offline baseline: owner-only Git bundle, worktree/index patches, untracked archive, manifest, and checksums under `/Users/Claudio/Dev/bikeshop-erp-secure-backups/phase0-20260712-133941`.
 - After containment: zero Gitleaks findings in tracked working-tree files. The remaining local-only finding is the ignored `.env` Supabase anonymous/publishable value.
+- Alert classification: the three Google keys reported only in generated Firebase web/iOS/Android client configuration were resolved as intentional public client identifiers. Six alerts remain open: four historical `GEMINI_API_KEY` exposures and two legacy Supabase service-key exposures. They remain open until provider rotation/disablement is proven.
 
 ## Completed containment
 
