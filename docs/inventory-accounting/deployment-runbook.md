@@ -3,6 +3,8 @@
 **Release:** 2026-07-11 preventive kernel and inactive professional documents
 **Rule:** schema installation, client distribution, tenant activation, and historical repair are four separate approvals.
 
+Current Viñabike modes: purchase receipt `shadow`; purchase credit note, sales return, and sales credit note `enforce`. The verified web client and Windows release `windows-v1.0.1_3-37` are published.
+
 ## Installed Production Baseline
 
 Immediately before and after the atomic schema transaction:

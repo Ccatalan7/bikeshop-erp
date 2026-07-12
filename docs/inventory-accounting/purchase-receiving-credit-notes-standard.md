@@ -1,6 +1,6 @@
 # Purchase Receiving, Returns, and Credit Notes Standard
 
-**Status:** Architecture implemented and deployed inactive; no tenant workflow is activated
+**Status:** Implemented; Viñabike corrections enforced and purchase receiving in shadow
 **Rule:** Payment, physical custody, supplier/customer settlement, tax document, and stock disposition are separate events connected by one trace.
 
 ## Current Gap
@@ -8,7 +8,7 @@
 - Purchase receiving is currently a full-quantity `purchase_invoices.status = received` update.
 - The distributed application still uses the legacy full-receipt route until an updated build is released and the tenant control is deliberately activated.
 - The repository now includes guided receipt, supplier-return, customer-return/disposition, and sales/purchase credit-note workspaces.
-- The database documents and commands are installed in production but all four control tables contain zero rows, so installation changed no business workflow or balance.
+- The database documents and commands are installed. Sales returns and both credit-note families are enforced for Viñabike; purchase receipt remains shadow so older desktop builds cannot be blocked during normal receiving.
 
 The existing status toggle must remain in place until the replacement command and UI pass all gates. It must then delegate to the receipt command; it must never remain a second stock writer.
 
@@ -107,7 +107,7 @@ The SII workflow requires selecting the original electronic document being modif
 - Compatibility guards leave legacy receipt status behavior untouched while disabled, but block old-client receipt writes atomically once `enforce` is explicitly activated.
 - Physical returns own the inventory-value/COGS posting. Linked credit notes own AP/AR, revenue/purchase, and tax settlement and therefore do not duplicate inventory effects.
 - Customer quarantine is a valued held-inventory state. Release reclassifies it to available inventory; scrap reclassifies it to verified inventory loss. Both actions and voids remain linked and append-only.
-- Production installation on 2026-07-11 preserved all business counts and left zero stock-column drift, zero posting-ledger continuity breaks, zero current-ledger drift, and zero unbalanced journals. Existing negative stock and legacy evidence were not changed.
+- Production installation and controlled activation preserved all business counts and left zero stock-column drift, zero posting-ledger continuity breaks, zero current-ledger drift, and zero unbalanced journals. Existing negative stock and legacy evidence were not changed; activation created no business documents.
 - The clean canonical database suite passes 528 assertions across 32 files; all 180 Flutter tests and the ERP release web build pass. Activation still requires controlled tenant rollout.
 
 ## Primary Tax References

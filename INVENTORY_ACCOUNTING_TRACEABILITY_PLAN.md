@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel, posted-document guards, and inactive professional workflows deployed; 528 database and 180 Flutter assertions pass as of 2026-07-11. Updated client rollout, controlled tenant activation, observation, and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales returns and both credit-note families are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. 528 database and 180 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -248,7 +248,7 @@ Repository inspection on 2026-07-11 confirmed that purchase receiving is current
 
 **Gate P5A:** Partial receipts, shortages, damage, supplier returns, sales returns, and both credit-note families pass end-to-end inventory/accounting/trace tests and are available through clear guided UI.
 
-**Deployment progress:** The disabled-by-default receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed in production with guided UI in the updated app. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Installation left all control tables empty and created no document rows. Updated-client rollout and deliberate tenant activation remain separate gates; internal credit notes do not claim official SII issuance.
+**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. The verified web and Windows build 37 are published. Viñabike sales returns and both credit-note controls are `enforce`; purchase receipt is `shadow` until every receipt-capable desktop is updated. Activation created no document, movement, adjustment, or journal rows. Internal credit notes do not claim official SII issuance.
 
 ## Phase 6 — Required Transition Tests
 
@@ -279,7 +279,7 @@ Current safety baseline on 2026-07-11: 528/528 pgTAP assertions across all 32 da
 - [x] Make Firebase/desktop release jobs depend on the integrity workflow instead of deploying independently.
 - [x] Add database and client-contract fixtures for disabled-schema, legacy-client, enforced-writer, and pre-schema fallback behavior.
 - [x] Preserve N/N-1/N-2 database compatibility while controls are disabled; previous clients continue their current route.
-- [ ] Commit and distribute the verified updated app build; migration headers record the verified production schema deployment.
+- [x] Commit and distribute the verified web build and Windows build 37; migration headers record the verified production schema deployment.
 - [x] Take/confirm a recoverable database backup and save pre-deploy reconciliation results.
 - [x] Deploy trace capture without duplicating quantity effects; compare exact pre/post production reconciliation totals.
 - [x] Activate invoice, trace-kernel, manual-adjustment, and payment source changes one migration at a time.
