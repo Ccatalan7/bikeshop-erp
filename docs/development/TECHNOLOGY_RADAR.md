@@ -15,3 +15,5 @@ Last reviewed: 2026-07-12
 | Retire | Tracked venv/cache/screenshot archives | Generated or personal state, not source | Removed from Git tracking in cleanup batch 1 |
 
 Entries move rings only with representative test evidence under `UPGRADE_POLICY.md`.
+
+`.github/workflows/technology-radar.yml` runs weekly and updates one living GitHub issue from official Node/npm registries. It proposes reviews only; it cannot change dependencies or deploy production.

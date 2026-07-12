@@ -1,0 +1,33 @@
+name: Technology Radar
+
+on:
+  schedule:
+    - cron: '17 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+      - name: Generate current official-version report
+        run: node scripts/dev/technology_radar_report.mjs > technology-radar-report.md
+      - name: Update the single living radar issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create technology-radar --color 1D76DB --description "Controlled tool and SDK review" --force
+          issue="$(gh issue list --state open --label technology-radar --json number --jq '.[0].number // empty')"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file technology-radar-report.md
+          else
+            gh issue create --title "Technology radar review" --label technology-radar --body-file technology-radar-report.md
+          fi

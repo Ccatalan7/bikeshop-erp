@@ -13,13 +13,13 @@ This ledger records completed gates without redefining the original scope.
 | Phase | State | Verified result |
 |---|---|---|
 | 0 — Security containment | In progress | Private recovery baseline, HEAD sanitization, Gitleaks gate, database-password rotation, and protected secret storage completed. Historical purge and remaining provider-alert disposition remain. |
-| 1 — Governed delivery | Pending | Existing CI inventoried; branch governance has not yet been activated. |
+| 1 — Governed delivery | In progress | `main` is protected with required secret/integrity checks; staging/Production environments and reconciliation PR #2 exist. Canonical merge and production proof remain. |
 | 2 — Reproducible workstations | In progress | Pinned tool manifest, FVM/Volta/uv contracts, unified `just` commands, Mac/Windows bootstrap, and doctor scripts implemented. Mac doctor passes; clean-Windows proof remains. |
 | 3 — Staging/database | In progress | Replacement staging project and first canonical schema application completed. Idempotency replay must be repeated after the earlier network interruption. |
 | 4 — Test ladder | In progress | Secret and ERP integrity workflows exist; risk-based local verification command added. Browser/native coverage remains. |
 | 5 — Releases/rollback | Pending | Current workflows inventoried; governed promotion and rollback evidence remain. |
 | 6 — Repository cleanup | In progress | Confirmed caches, virtual environments, logs, and screenshot archives are being removed from Git while preserved locally. SQL/script/doc provenance batches remain. |
-| 7 — Technology radar | Pending | Policy is defined below; automation and living radar remain. |
+| 7 — Technology radar | In progress | Dependabot coverage, upgrade policy, living radar, and weekly issue automation are implemented. First scheduled run and controlled trial evidence remain. |
 
 ## Target outcome
 
