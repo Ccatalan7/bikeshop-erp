@@ -1,6 +1,6 @@
 # Workshop Job and Invoice ERP Ownership Standard
 
-**Status:** Shadow control deployed and verified in production on 2026-07-10; enforcement remains off.
+**Status:** Ownership enforcement activated for Viñabike on 2026-07-12 after a clean production shadow observation.
 **Rule:** The workshop job is operational. The linked sales invoice exclusively posts on-hand inventory and financial ledgers.
 
 ## Posting Ownership
@@ -54,3 +54,11 @@ Migration `20260710210000_add_workshop_invoice_shadow_controls.sql`:
 6. Enforcement activation receives its own backup, preview, and before/after audit.
 
 Historical corrections are outside this control and require independently proven repair evidence.
+
+## Production Enforcement Result — 2026-07-12
+
+- Since shadow installation, 9 jobs and 7 linked workshop invoices had real updates.
+- The observer recorded zero job-owned stock or revenue-journal attempts.
+- Viñabike was changed to `enforce`; rollback is the single settings change back to `shadow` and never deletes evidence.
+- Activation preserved 1,654 products, 2,471 movements, 1,203 adjustments, 2,136 journals, 771 sales invoices, and 400 jobs.
+- Stock-column drift, unbalanced journals, and workshop control events remained zero.

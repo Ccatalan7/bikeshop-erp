@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel and professional correction workflows deployed; sales returns and both credit-note families are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. Customer/supplier cash-settlement documents are installed inactive pending client rollout. 638 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, and customer/supplier cash settlement are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. 638 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -183,7 +183,7 @@ Rules:
 
 **Gate P3:** One tenant-safe query reconstructs a complete action from request through stock, accounting, reconciliation, reversal, or failure.
 
-**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop ownership is certified in shadow mode. Receipt shadow mode now appends compatibility evidence for every legacy status writer, so enforcement can be evidence-gated without changing current routing. Existing anomalies were not repaired. Optional future transfers/reservations, the receipt observation window/enforcement decision, and historical review remain open.
+**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop invoice ownership is enforced after a clean shadow observation with real job/invoice activity and zero job-owned posting attempts. Receipt shadow mode appends compatibility evidence for every legacy status writer, so enforcement can be evidence-gated without changing current routing. Existing anomalies were not repaired. Optional future transfers/reservations, the receipt observation window/enforcement decision, and historical review remain open.
 
 Payment extension: sales/purchase payment create, ±1 CLP edit, partial/full transitions, hard/soft undo, related invoice status, linked job paid state, current/legacy payment journal replacement, and the invariant that payment-only actions create zero stock movements are now connected locally. Ambiguous legacy journal duplicates block instead of silently double-posting. Multi-bike job payments are certified as one shared invoice/job balance; per-bike payment allocation does not exist.
 
@@ -248,7 +248,7 @@ Repository inspection on 2026-07-11 confirmed that purchase receiving is current
 
 **Gate P5A:** Partial receipts, shortages, damage, supplier returns, sales returns, and both credit-note families pass end-to-end inventory/accounting/trace tests and are available through clear guided UI.
 
-**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Customer/supplier cash-settlement documents now record only externally verified money movement, preserve gross original payments, post balanced cash/AR/AP journals, and never move stock; their independent controls default disabled. Viñabike sales returns and both credit-note controls are `enforce`; purchase receipt is `shadow` until every receipt-capable desktop is updated. Activation created no document, movement, adjustment, or journal rows. Internal credit notes do not claim official SII issuance.
+**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Customer/supplier cash-settlement documents record only externally verified money movement, preserve gross original payments, post balanced cash/AR/AP journals, and never move stock. After a rollback-only authenticated production smoke, both settlement controls were activated separately with unchanged business counts and zero drift/imbalance. Purchase receipt remains `shadow` until every receipt-capable desktop is updated. Internal credit notes do not claim official SII issuance.
 
 ## Phase 6 — Required Transition Tests
 

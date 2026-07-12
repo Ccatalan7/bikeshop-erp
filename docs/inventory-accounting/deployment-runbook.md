@@ -3,7 +3,7 @@
 **Release:** 2026-07-12 preventive kernel and inactive professional documents
 **Rule:** schema installation, client distribution, tenant activation, and historical repair are four separate approvals.
 
-Current Viñabike modes: purchase receipt `shadow`; purchase credit note, sales return, and sales credit note `enforce`; customer and supplier cash refunds `disabled` pending matching client rollout.
+Current Viñabike modes: workshop invoice ownership, purchase credit note, sales return, sales credit note, customer refund, and supplier refund `enforce`; purchase receipt `shadow` pending legacy-client observation.
 
 ## Installed Production Baseline
 

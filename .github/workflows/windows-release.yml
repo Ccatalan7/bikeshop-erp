@@ -52,6 +52,54 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Cache Firebase C++ SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\firebase_cpp_sdk_extract
+          key: firebase-cpp-sdk-windows-13.5.0
+
+      - name: Prepare Firebase C++ SDK with resumable download
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $sdkVersion = '13.5.0'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'firebase_cpp_sdk_extract'
+          $sdkDir = Join-Path $extractRoot 'firebase_cpp_sdk_windows'
+          $versionHeader = Join-Path $sdkDir 'include\firebase\version.h'
+
+          if (-not (Test-Path -LiteralPath $versionHeader)) {
+            $archive = Join-Path $env:RUNNER_TEMP "firebase_cpp_sdk_windows_$sdkVersion.zip"
+            $url = "https://dl.google.com/firebase/sdk/cpp/firebase_cpp_sdk_windows_$sdkVersion.zip"
+            $downloaded = $false
+
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              Write-Host "Firebase SDK download attempt $attempt of 4"
+              & curl.exe --fail --location --http1.1 `
+                --retry 5 --retry-all-errors --retry-delay 5 `
+                --continue-at - --output $archive $url
+              if ($LASTEXITCODE -eq 0) {
+                $downloaded = $true
+                break
+              }
+              Start-Sleep -Seconds (10 * $attempt)
+            }
+
+            if (-not $downloaded) {
+              throw 'Firebase C++ SDK download failed after resumable retries.'
+            }
+
+            Remove-Item -LiteralPath $extractRoot -Recurse -Force `
+              -ErrorAction SilentlyContinue
+            Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+          }
+
+          if (-not (Test-Path -LiteralPath $versionHeader)) {
+            throw "Firebase C++ SDK is incomplete: $versionHeader is missing."
+          }
+
+          "FIREBASE_CPP_SDK_DIR=$sdkDir" >> $env:GITHUB_ENV
+
       - name: Compute release metadata
         id: meta
         shell: pwsh

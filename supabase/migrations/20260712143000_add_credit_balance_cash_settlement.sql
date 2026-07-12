@@ -1,4 +1,5 @@
--- Deployment status: DEPLOYED inactive to production xzdvtzdqjeyqxnkqprtf on 2026-07-12.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-12;
+-- Viñabike controls activated separately after rollback-only authenticated smoke.
 -- Financial settlement of credit balances. These documents record money that
 -- staff already verified as paid/received externally; they never move stock or
 -- claim to execute a bank/provider transaction.

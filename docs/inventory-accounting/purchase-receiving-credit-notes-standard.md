@@ -1,6 +1,6 @@
 # Purchase Receiving, Returns, and Credit Notes Standard
 
-**Status:** Implemented; Viñabike corrections enforced, purchase receiving in shadow, and cash settlement installed inactive
+**Status:** Implemented; Viñabike corrections and cash settlement enforced, with purchase receiving in shadow
 **Rule:** Payment, physical custody, supplier/customer settlement, tax document, and stock disposition are separate events connected by one trace.
 
 ## Current Gap
