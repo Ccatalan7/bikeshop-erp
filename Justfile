@@ -52,6 +52,22 @@ db-trace environment kind id:
     #!/usr/bin/env bash
     exec bash scripts/db/trace.sh "{{environment}}" "{{kind}}" "{{id}}"
 
+db-fingerprint environment="local":
+    #!/usr/bin/env bash
+    exec bash scripts/db/query.sh "{{environment}}" --file supabase/manual_checks/diagnostics/schema_fingerprint.sql
+
+db-drift left="local" right="staging":
+    #!/usr/bin/env bash
+    exec bash scripts/db/drift.sh "{{left}}" "{{right}}"
+
+db-staging-schema-gate:
+    #!/usr/bin/env bash
+    exec bash scripts/db/staging_schema_gate.sh
+
+db-smoke environment="staging":
+    #!/usr/bin/env bash
+    exec bash scripts/db/smoke.sh "{{environment}}"
+
 e2e:
     #!/usr/bin/env bash
     exec npm run e2e

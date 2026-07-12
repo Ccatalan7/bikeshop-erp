@@ -45,12 +45,12 @@ done
 require_command psql
 psql_args=(-X -v ON_ERROR_STOP=1 -P pager=off)
 if [[ "$environment" == local ]]; then
-  bash "$DB_ROOT/scripts/db/ensure_local.sh"
+  bash "$DB_ROOT/scripts/db/ensure_local.sh" >/dev/null
   connection=("$(local_db_url)")
 elif [[ "$environment" == staging || "$environment" == production ]]; then
   configure_remote_pg "$environment"
   connection=("dbname=postgres")
-  export PGOPTIONS="-c statement_timeout=30000"
+  export PGOPTIONS="-c statement_timeout=30000 -c search_path=public,extensions"
   if [[ "$write" == false ]]; then
     export PGOPTIONS="$PGOPTIONS -c default_transaction_read_only=on"
   fi
@@ -67,8 +67,9 @@ fi
 
 if [[ -n "$file" ]]; then
   [[ -f "$file" ]] || die "SQL file not found: $file"
-  [[ "$format" == table ]] || die "--file currently supports table output; use --sql for csv/json"
-  if [[ "$environment" != local && "$write" == false ]]; then
+  if [[ "$format" != table ]]; then
+    sql="$(<"$file")"
+  elif [[ "$environment" != local && "$write" == false ]]; then
     if rg -n -i '^\s*(begin|commit|rollback|end|set\s+transaction)\b' "$file" >/dev/null; then
       die "Remote read-only SQL files cannot manage transactions"
     fi
@@ -79,8 +80,9 @@ if [[ -n "$file" ]]; then
     } |
       psql "${connection[@]}" "${psql_args[@]}" -q
     exit "${PIPESTATUS[1]}"
+  else
+    exec psql "${connection[@]}" "${psql_args[@]}" -f "$file"
   fi
-  exec psql "${connection[@]}" "${psql_args[@]}" -f "$file"
 fi
 
 sql="${sql%;}"

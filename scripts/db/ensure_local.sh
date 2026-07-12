@@ -22,12 +22,12 @@ sentinels_ready() {
 }
 
 if [[ "$mode" != "--reset" ]] && sentinels_ready; then
-  if [[ ! -f "$hash_file" ]]; then
+  if [[ ! -f "$hash_file" && "$mode" == "--adopt-existing" ]]; then
     printf '%s\n' "$current_hash" >"$hash_file"
     echo "Local database adopted: canonical ERP sentinel objects are present."
     exit 0
   fi
-  if [[ "$(<"$hash_file")" == "$current_hash" ]]; then
+  if [[ -f "$hash_file" && "$(<"$hash_file")" == "$current_hash" ]]; then
     echo "Local database ready: canonical schema hash unchanged."
     exit 0
   fi

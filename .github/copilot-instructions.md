@@ -847,6 +847,8 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 
 ## Staging Project
 
+Before any Supabase schema, trigger, RLS, Edge Function, inventory, payment, or accounting change, read and follow `docs/runbooks/STAGING_SUPABASE.md`. Staging is a required professional gate for those changes; it must not become an undocumented or abandoned parallel system.
+
 | Field | Value |
 |-------|-------|
 | **Project URL** | `https://bczzjhjrpmtpgwdvlbut.supabase.co` |

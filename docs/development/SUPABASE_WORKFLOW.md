@@ -12,7 +12,7 @@ just db-test stock_ledger_continuity sales_credit_note_kernel
 just db-query local "select count(*) from stock_movements"
 ```
 
-`db-start` reuses the running local stack when the canonical schema hash is unchanged. It rebuilds only when the schema changes, the expected ERP objects are absent, or `--reset` is requested. Detailed schema output goes to `.tmp/db/` instead of flooding the agent context.
+`db-start` reuses the running local stack when the recorded canonical schema hash is unchanged. It rebuilds when the schema changes, the expected ERP objects are absent, no verified hash exists, or `--reset` is requested. `--adopt-existing` is an explicit escape hatch, not the default. Detailed schema output goes to `.tmp/db/` instead of flooding the agent context.
 
 `db-test` accepts partial pgTAP filenames and prints exactly which files run. With no selector it runs all database tests against the already prepared local database.
 
@@ -38,3 +38,7 @@ Run `just db-gate` only for schema/trigger/function changes or a phase/release c
 Production mutation, repair, migration, and deployment remain separate reviewed operations with before/after invariants and the database backup runbook.
 
 `db-trace` returns analysis-ready JSON from the canonical operation trace, stock-movement audit, or tenant inconsistency views. UUID validation prevents SQL injection, results are capped, and hosted queries inherit the same read-only transaction and timeout guards.
+
+`just db-fingerprint local|staging|production` returns deterministic public-schema component counts and hashes without copying schema definitions into agent output. The hosted staging application gate requires `VINABIKE_STAGING_SCHEMA_CONFIRM=staging just db-staging-schema-gate`; it refuses the production ref, captures verbose SQL outside Git, and proves that tenant/product/document/movement/journal row counts did not change.
+
+`just db-drift local staging` and `just db-drift local production` compare application-owned columns, constraints, indexes, functions, views, and triggers. They print only a short summary/preview and keep the complete manifests and diff under ignored `.tmp/db/`. Set `VINABIKE_DRIFT_FAIL=1` when drift must fail CI.
