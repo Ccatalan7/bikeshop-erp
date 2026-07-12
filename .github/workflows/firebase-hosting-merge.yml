@@ -2,6 +2,9 @@
 # https://github.com/firebase/firebase-tools
 
 name: Deploy to Firebase Hosting on merge
+concurrency:
+  group: production-erp-${{ github.ref }}
+  cancel-in-progress: false
 on:
   push:
     branches:
@@ -13,6 +16,7 @@ jobs:
   build_and_deploy:
     needs: integrity
     runs-on: ubuntu-latest
+    environment: Production
     steps:
       - uses: actions/checkout@v4
       

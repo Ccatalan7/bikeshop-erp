@@ -4,7 +4,7 @@ name: Deploy Storefront to Firebase Hosting
 on:
   push:
     branches:
-      - ecommerce-module
+      - main
     paths:
       - 'lib/**'
       - 'web/**'
@@ -26,6 +26,10 @@ jobs:
   build_and_deploy:
     needs: integrity
     runs-on: ubuntu-latest
+    environment: Production
+    concurrency:
+      group: production-store-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
