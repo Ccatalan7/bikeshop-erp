@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, customer/supplier cash settlement, workshop invoice ownership, and the direct-product writer compatibility boundary are live for Viñabike, while purchase receiving remains in compatibility-safe shadow. 668 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, customer/supplier cash settlement, workshop invoice ownership, the direct-product writer boundary, and gradual professional purchase receiving are live for Viñabike. 690 database and 185 Flutter assertions pass. Receipt compatibility retirement and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -183,7 +183,7 @@ Rules:
 
 **Gate P3:** One tenant-safe query reconstructs a complete action from request through stock, accounting, reconciliation, reversal, or failure.
 
-**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop invoice ownership is enforced after a clean shadow observation with real job/invoice activity and zero job-owned posting attempts. Receipt shadow mode appends compatibility evidence for every legacy status writer, so enforcement can be evidence-gated without changing current routing. Repository audit also found old Zoho/admin product-column writers; migration `20260712150000` wraps application/service-role inserts and updates atomically, synchronizes both stock columns, rejects ambiguous/cross-tenant/negative writes, and records exact inventory/accounting lineage. Existing anomalies were not repaired. Optional future transfers/reservations, the receipt observation window/enforcement decision, and historical review remain open.
+**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop invoice ownership is enforced after a clean shadow observation with real job/invoice activity and zero job-owned posting attempts. Professional receiving is enforced for the current client; a temporary database bridge permits an old client to receive only an invoice with no professional receipt evidence, records that use append-only, and atomically rejects mixed ownership after any partial/full professional receipt. Repository audit also found old Zoho/admin product-column writers; migration `20260712150000` wraps application/service-role inserts and updates atomically, synchronizes both stock columns, rejects ambiguous/cross-tenant/negative writes, and records exact inventory/accounting lineage. Existing anomalies were not repaired. Optional future transfers/reservations, receipt compatibility retirement after observed client rollout, and historical review remain open.
 
 Payment extension: sales/purchase payment create, ±1 CLP edit, partial/full transitions, hard/soft undo, related invoice status, linked job paid state, current/legacy payment journal replacement, and the invariant that payment-only actions create zero stock movements are now connected locally. Ambiguous legacy journal duplicates block instead of silently double-posting. Multi-bike job payments are certified as one shared invoice/job balance; per-bike payment allocation does not exist.
 
@@ -248,7 +248,7 @@ Repository inspection on 2026-07-11 confirmed that purchase receiving is current
 
 **Gate P5A:** Partial receipts, shortages, damage, supplier returns, sales returns, and both credit-note families pass end-to-end inventory/accounting/trace tests and are available through clear guided UI.
 
-**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Customer/supplier cash-settlement documents record only externally verified money movement, preserve gross original payments, post balanced cash/AR/AP journals, and never move stock. After a rollback-only authenticated production smoke, both settlement controls were activated separately with unchanged business counts and zero drift/imbalance. Purchase receipt remains `shadow` until every receipt-capable desktop is updated. Internal credit notes do not claim official SII issuance.
+**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Customer/supplier cash-settlement documents record only externally verified money movement, preserve gross original payments, post balanced cash/AR/AP journals, and never move stock. After rollback-only authenticated production smokes, settlement controls and gradual purchase receiving were activated separately with unchanged business counts and zero drift/imbalance. Current clients use immutable partial/full receipts; old clients can temporarily use the legacy route only on untouched invoices, and every such use is recorded for retirement review. Internal credit notes do not claim official SII issuance.
 
 ## Phase 6 — Required Transition Tests
 
@@ -269,7 +269,7 @@ Use pgTAP in `supabase/tests/` and focused Flutter/Edge integration tests.
 
 Run at minimum: local schema reset, all pgTAP tests, affected Dart tests, analyzer on changed Dart files, and manual end-to-end checks on macOS plus affected Windows/web/mobile paths.
 
-Current safety baseline on 2026-07-12: 668/668 pgTAP assertions across all 37 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, direct-writer multi-row/service-role/cross-tenant regression tests, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
+Current safety baseline on 2026-07-12: 690/690 pgTAP assertions across all 38 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, direct-writer multi-row/service-role/cross-tenant regression tests, gradual-receipt N/N-1 compatibility plus create/void checkpoint-contract tests, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
 
 **Gate P5:** All tests pass against a clean local database and production-shaped fixtures; deliberate failure tests leave no partial business effects.
 
@@ -286,6 +286,8 @@ Current safety baseline on 2026-07-12: 668/668 pgTAP assertions across all 37 da
 - [x] After each activation, check object installation, stock/movement/adjustment totals, payment integrity, and journal balance.
 - [x] Keep source-specific controls disabled by default; rollback disables routing and preserves posted evidence. A pre-release production schema snapshot is retained outside the repository.
 - [x] Mark migration deployment status only after production verification.
+- [x] Activate gradual purchase receiving: professional receipt ownership for current clients, append-only observation for old untouched-invoice use, and atomic mixed-route rejection.
+- [ ] Observe 7-14 operating days with all receipt-capable workstations updated, then retire the temporary untouched-invoice compatibility bridge only if reviewed evidence is clean.
 - [x] Update `.github/copilot-instructions.md`; update `BIKE_WORKSHOP_MASTER_SCHEMA.md` in the same task when job/invoice data flow changes.
 
 **Gate P6:** No unexplained shadow/production differences during the agreed observation window.

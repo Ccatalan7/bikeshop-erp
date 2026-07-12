@@ -3,7 +3,7 @@
 **Release:** 2026-07-12 preventive kernel and inactive professional documents
 **Rule:** schema installation, client distribution, tenant activation, and historical repair are four separate approvals.
 
-Current Viñabike modes: workshop invoice ownership, purchase credit note, sales return, sales credit note, customer refund, and supplier refund `enforce`; purchase receipt `shadow` pending legacy-client observation.
+Current Viñabike modes: workshop invoice ownership, purchase credit note, sales return, sales credit note, customer refund, supplier refund, and purchase receipt `enforce`. Purchase receipt temporarily allows old-client status receiving only on invoices untouched by the professional receipt ledger.
 
 The direct-product writer compatibility boundary is always active for application/service-role traffic. It is not a tenant mode: supported commands bypass it with their server-controlled posting context, while unknown/old payloads are atomically traced instead of silently changing stock.
 
@@ -35,7 +35,7 @@ The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-2026
 1. `bash scripts/reset_local_supabase.sh` must pass the clean canonical bootstrap and all pgTAP files.
 2. `flutter test`, analyzer, and the ERP release web build must pass.
 3. Confirm the production counts and five invariants above before and after every rollout step.
-4. The verified web client was distributed on 2026-07-11. Distribute the matching desktop build before activation; previous clients remain compatible only while the receipt/return/credit controls are disabled.
+4. The verified web client and Windows build 40 were distributed. For purchase receipts, previous clients remain temporarily compatible only on invoices with no professional receipt evidence; update every workstation before retiring that bridge.
 5. Activate one tenant and one source family at a time. Record `activated_at` and `activated_by`; never activate all controls in one unobserved change.
 6. Exercise create, retry, partial, void, insufficient-stock, and read-back trace cases with supervised business documents.
 7. Observe operations, checkpoints, movement chains, settlement balances, and journals before expanding activation.
@@ -43,18 +43,18 @@ The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-2026
 ## Control Tables
 
 - `purchase_receipt_control_settings`
-- `purchase_receipt_compatibility_events` (append-only shadow evidence)
+- `purchase_receipt_compatibility_events` (append-only shadow/enforced-rollout evidence)
 - `purchase_credit_note_control_settings`
 - `sales_return_control_settings`
 - `sales_credit_note_control_settings`
 - `sales_customer_refund_control_settings`
 - `purchase_supplier_refund_control_settings`
 
-Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disabled. Only `enforce` routes business posting to the new command.
+Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disabled. Only `enforce` routes current clients to the new command. `legacy_untouched_compatibility=true` is a temporary purchase-receipt rollout bridge, never a second writer for an invoice that has professional receipt evidence.
 
 ## Safe Rollback
 
-- Before any posted document: set the affected tenant control back to `disabled`; previous-client routing remains available.
+- Before any posted receipt: changing purchase receipt back to `shadow` restores legacy routing for all clients without removing schema. After any professional receipt exists, keep mixed-route protection in force and correct through receipt/void commands rather than bypassing ownership.
 - After a posted receipt/return/credit: do not delete tables, movements, operations, or journals. Void through its command, verify the linked reversal, then disable routing.
 - For POS/Quick Sale client failure: roll the client back to the previous build. The additive database schema remains compatible; never remove a checkout that already committed.
 - Posted invoices cannot be deleted. Draft deletion remains available; posted corrections use cancellation, return, credit note, payment reversal, or document void. Legacy journal replacement first writes immutable header-and-line evidence.
@@ -66,4 +66,6 @@ Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disab
 
 Use the read-only baseline scripts under `supabase/manual_checks/`, plus the production checks for dual-column drift, posting-ledger continuity, current-vs-latest ledger balance, negative tracked stock, unbalanced journals, failed/abandoned operations, and control/document counts. A changed business count must be explained by a named source operation.
 
-Receipt enforcement additionally requires a clean, reviewed observation window in `purchase_receipt_compatibility_events`. Any row proves that a legacy client still uses direct invoice-status receiving; update that client and restart the window. The observer itself never changes invoice status, stock, movements, or journals.
+Receipt compatibility retirement requires 7-14 clean operating days in `purchase_receipt_compatibility_events` after every receipt-capable workstation is updated. Any enforced-mode row proves that an old client still used direct invoice-status receiving; identify/update it and restart the window. The observer itself never changes invoice status, stock, movements, or journals. When the reviewed window is clean, set `legacy_untouched_compatibility=false` in one checked transaction; do not change `control_mode='enforce'`.
+
+The 2026-07-12 gradual-receipt activation changed only its control row. The follow-up checkpoint-contract installation passed an authenticated rollback smoke proving exact stock/movement, full ordered phases, and an explicit zero-journal decision because purchase-invoice accounting already owns inventory value/AP/tax. Before and after: 1,654 products, 2,471 movements, 1,203 adjustments, 2,136 journals, 74 purchase invoices, zero professional receipts, and zero compatibility events. Stock-column drift, ledger arithmetic/continuity, current/latest drift, incomplete operations, and unbalanced journals were all zero.

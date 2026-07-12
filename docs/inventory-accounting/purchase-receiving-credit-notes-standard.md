@@ -1,16 +1,16 @@
 # Purchase Receiving, Returns, and Credit Notes Standard
 
-**Status:** Implemented; Viñabike corrections and cash settlement enforced, with purchase receiving in shadow
+**Status:** Implemented; Viñabike corrections, cash settlement, and gradual professional purchase receiving enforced
 **Rule:** Payment, physical custody, supplier/customer settlement, tax document, and stock disposition are separate events connected by one trace.
 
-## Current Gap
+## Current Rollout State
 
-- Purchase receiving is currently a full-quantity `purchase_invoices.status = received` update.
-- The distributed application still uses the legacy full-receipt route until an updated build is released and the tenant control is deliberately activated.
+- Current clients use the immutable receipt command and can record partial or full accepted quantities independently of payment status.
+- During the temporary rollout bridge, an old client may still use the legacy full-receipt status route only for an invoice with no professional receipt evidence.
 - The repository now includes guided receipt, supplier-return, customer-return/disposition, and sales/purchase credit-note workspaces.
-- The database documents and commands are installed. Sales returns and both credit-note families are enforced for Viñabike; purchase receipt remains shadow so older desktop builds cannot be blocked during normal receiving.
+- The database documents and commands are installed and enforced for Viñabike. Any professional receipt permanently assigns receipt ownership for that invoice to the command; a later old-client status write is rejected atomically.
 
-The existing status toggle must remain in place until the replacement command and UI pass all gates. It must then delegate to the receipt command; it must never remain a second stock writer.
+The legacy status toggle is temporary N/N-1 compatibility, not a concurrent stock owner. Its use is recorded append-only and will be retired after the reviewed observation window.
 
 ## Document Ownership
 
@@ -104,22 +104,22 @@ The SII workflow requires selecting the original electronic document being modif
 4. Shadow-compare derived receipt totals without moving stock.
 5. Activate the guided UI for one tenant after preflight.
 6. Remove direct receipt status writes only after the command is stable and old-client compatibility is handled.
-7. While control is `shadow`, record each legacy status-to-received transition in append-only compatibility evidence. Enforcement requires a reviewed window with no such events from supported clients.
-7. Activate one tenant only after a supervised no-surprise smoke; keep previous clients compatible during the observation window.
+7. Under gradual `enforce`, record each old-client status-to-received transition in append-only compatibility evidence and allow it only for an untouched invoice.
+8. Retire the bridge after 7-14 operating days with every workstation updated and no unexplained compatibility event.
 
-## Deployed Inactive Implementation
+## Deployed Implementation
 
 - `purchase_receipts`, receipt lines, and receipt-to-movement mappings preserve one commercial line while recording every physical product/component movement.
 - `purchase_supplier_returns`, return lines, and return-to-receipt movement mappings preserve the physical return independently from financial settlement.
 - Receipt and supplier-return voids append exact linked reversals; they never delete evidence.
 - A receipt cannot be voided while it has a posted downstream supplier return.
-- The guided receipt screen is connected locally from invoice detail and list actions. It calls the receipt command only in `enforce`; disabled, shadow, and older pre-schema backends retain the current behavior.
+- The guided receipt screen is connected from invoice detail and list actions and calls the receipt command in `enforce`; disabled, shadow, and older pre-schema backends retain the compatible legacy behavior.
 - The supplier-return workspace selects an original posted receipt, shows only stock-backed unreturned quantities, records the physical return separately from financial credit, shows immutable history, and voids through linked stock restoration.
-- Compatibility guards leave legacy receipt status behavior untouched while disabled, but block old-client receipt writes atomically once `enforce` is explicitly activated.
+- Compatibility guards allow an old-client receipt under gradual enforcement only for an invoice without professional receipt evidence and block mixed ownership atomically thereafter.
 - Physical returns own the inventory-value/COGS posting. Linked credit notes own AP/AR, revenue/purchase, and tax settlement and therefore do not duplicate inventory effects.
 - Customer quarantine is a valued held-inventory state. Release reclassifies it to available inventory; scrap reclassifies it to verified inventory loss. Both actions and voids remain linked and append-only.
 - Production installation and controlled activation preserved all business counts and left zero stock-column drift, zero posting-ledger continuity breaks, zero current-ledger drift, and zero unbalanced journals. Existing negative stock and legacy evidence were not changed; activation created no business documents.
-- The clean canonical database suite passes 638 assertions across 36 files; all 185 Flutter tests and the ERP release web build pass. Activation still requires controlled tenant rollout.
+- The clean canonical database suite passes 690 assertions across 38 files; all 185 Flutter tests and the ERP release web build pass. Receipt create and void traces record the full ordered checkpoint contract, including the explicit zero-journal decision owned by purchase-invoice accounting. Viñabike activation passed rollback-only route/mixed-ownership smoke and exact before/after production checks.
 
 ## Primary Tax References
 
