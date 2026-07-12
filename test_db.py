@@ -10,8 +10,8 @@ with open('.env', 'r') as f:
 
 url = f"{os.environ['SUPABASE_URL']}/rest/v1/"
 headers = {
-    "apikey": os.environ["SUPABASE_SERVICE_ROLE_KEY"],
-    "Authorization": f"Bearer {os.environ['SUPABASE_SERVICE_ROLE_KEY']}"
+    "apikey": os.environ["SUPABASE_SECRET_KEY"],
+    "Authorization": f"Bearer {os.environ['SUPABASE_SECRET_KEY']}"
 }
 
 print("Running NOTIFY pgrst to reload schema cache...")

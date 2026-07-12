@@ -1126,24 +1126,37 @@ PGPASSWORD="$SUPABASE_DB_PASSWORD" psql \
 
 ### REST API Inspection
 
-Use REST API with the service role key for table/view inspection and simple data checks. REST is **not** the right tool for arbitrary SQL DDL/function deployment unless a specific RPC already exists to do that work.
+Use REST API with the independently managed `sb_secret_...` key for table/view inspection and simple data checks. REST is **not** the right tool for arbitrary SQL DDL/function deployment unless a specific RPC already exists to do that work.
 
 ```bash
-# ✅ CORRECT: Use REST API with service role key from .env
+# ✅ CORRECT: Load the secret key from macOS Keychain, never a tracked file
+export SUPABASE_SECRET_KEY="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
 curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/TABLE_NAME?select=*" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq .
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
 
 # ✅ EXAMPLE: Query website_pages for Viñabike tenant
 curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/website_pages?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,slug,title" \
-  -H "apikey: $(grep SUPABASE_SERVICE_ROLE_KEY .env | cut -d= -f2)" \
-  -H "Authorization: Bearer $(grep SUPABASE_SERVICE_ROLE_KEY .env | cut -d= -f2)" | jq .
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
 
 # ❌ AVOID: psql connection (password issues)
 # psql "postgresql://postgres.xzdvtzdqjeyqxnkqprtf:..."  # Often fails with "Tenant or user not found"
 ```
 
-**Service Role Key Location:** use the fallback credential documented below. It is not currently present in `.env`; do not waste time repeatedly searching `.env` for it or claim that its absence blocks CLI-linked SQL.
+**Secret Key Location:** no production credential is stored in this repository. Use the authenticated linked CLI first. A secret-key or database-password fallback may be loaded only from the operating-system credential store after the credential has been rotated and registered there; never search tracked files or documentation for a value.
+
+### API key migration status (2026-07-12)
+
+- Project `xzdvtzdqjeyqxnkqprtf` has independently managed `sb_publishable_...` and `sb_secret_...` keys as well as the legacy JWT `anon` and `service_role` keys.
+- The legacy `service_role` JWT appeared in the public Git history and is compromised. Do not add it to any new consumer.
+- External maintenance scripts and storefront snapshot CI use `SUPABASE_SECRET_KEY`; the current unexposed secret key is stored in macOS Keychain as service `Vinabike ERP Supabase secret key`, account `supabase`, and in GitHub Actions as `SUPABASE_SECRET_KEY`.
+- The publishable key is stored in macOS Keychain as service `Vinabike ERP Supabase publishable key`, account `supabase`.
+- Do **not** disable the legacy keys yet. Client builds still contain the legacy anonymous JWT and Edge Functions still read the platform-provided `SUPABASE_SERVICE_ROLE_KEY`. First migrate and verify every client/Edge Function on staging, deploy the replacements, verify production, and only then disable/revoke legacy keys.
+- Never rotate the legacy JWT signing secret as a shortcut. That can invalidate client keys and active auth sessions immediately. Follow the official publishable/secret-key migration path with before/after checks.
+- The production database password was rotated on 2026-07-12 after proving that no app/runtime consumer used it. Direct PostgreSQL login and linked-CLI tenant counts were verified before/after. The current password is stored only in macOS Keychain as service `Vinabike ERP Supabase database password`, account `postgres`.
+- Supabase CLI `2.109.1` is installed from official Homebrew Core and matched the latest official release on 2026-07-12. If Homebrew warns that the old `supabase/tap` is untrusted, check `brew info supabase`; when `From` points to `homebrew-core`, the stale third-party tap is unnecessary and must not be broadly trusted just to silence the warning.
 
 ## 🔐 Autonomous Database Access For Agents (CRITICAL)
 
@@ -1169,16 +1182,17 @@ Use service-role REST queries for:
 - verifying cleanup results
 - tenant-scoped production checks
 
-**Current production service role key (local access for agents):**
+**macOS credential-store fallback (only when REST behavior specifically requires it):**
 ```bash
-export SUPABASE_SERVICE_ROLE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo'
+export SUPABASE_SECRET_KEY="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
 ```
 
 **Tested REST pattern:**
 ```bash
 curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/stock_adjustments?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,product_id,adjustment_type,quantity,stock_before,stock_after,reason,created_by,created_at&order=created_at.desc&limit=20" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq .
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
 ```
 
 ### 2. Direct Postgres Access (for arbitrary SQL / migrations / cleanup)
@@ -1189,14 +1203,15 @@ Use direct `psql` for:
 - exact forensic queries that are awkward through REST
 - incident response where raw SQL is faster than SQL Editor handoffs
 
-**Current production DB password (local access for agents):**
+**macOS credential-store fallback (only when direct PostgreSQL specifically requires it):**
 ```bash
-export PGPASSWORD='Vinabike2901'
+export PGPASSWORD="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
 ```
 
 **Tested direct connection string:**
 ```bash
-psql "postgresql://postgres:Vinabike2901@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres"
+psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres"
 ```
 
 **⚠️ CRITICAL:** The direct host that worked is:
@@ -1212,8 +1227,9 @@ Do **not** mistype the host. A wrong host like `db.xzdvtzdqeyqxnkqprtf...` will 
 
 Use this format for exact scalar checks:
 ```bash
-export PGPASSWORD='Vinabike2901'
-psql "postgresql://postgres:Vinabike2901@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
+export PGPASSWORD="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
+psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
   -P pager=off -Atqc "
 select count(*)
 from public.stock_adjustments
@@ -1227,8 +1243,9 @@ where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
 
 When the terminal wrapper may swallow earlier lines, prefer **one combined query** instead of many separate `SELECT`s:
 ```bash
-export PGPASSWORD='Vinabike2901'
-psql "postgresql://postgres:Vinabike2901@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
+export PGPASSWORD="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
+psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
   -P pager=off -Atqc "
 select metric || '=' || value
 from (
@@ -1251,8 +1268,9 @@ from (
 ### Deploy a migration file directly to production
 
 ```bash
-export PGPASSWORD='Vinabike2901'
-psql "postgresql://postgres:Vinabike2901@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
+export PGPASSWORD="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
+psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" \
   -v ON_ERROR_STOP=1 \
   -f supabase/migrations/YYYYMMDDHHMMSS_name.sql
 ```
@@ -1301,13 +1319,15 @@ Future agents should avoid these exact mistakes:
 
 ## ✅ Copy-Paste Access Bootstrap
 
-Use this exact bootstrap when an agent needs autonomous access fast:
+Use this bootstrap only when a task genuinely needs REST service-role behavior or direct PostgreSQL after the linked CLI path has been checked:
 
 ```bash
 cd /Users/Claudio/Dev/bikeshop-erp
 
-export SUPABASE_SERVICE_ROLE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo'
-export PGPASSWORD='Vinabike2901'
+export SUPABASE_SECRET_KEY="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase secret key' -a supabase -w)"
+export PGPASSWORD="$(security find-generic-password \
+  -s 'Vinabike ERP Supabase database password' -a postgres -w)"
 ```
 
 Then either:
@@ -1315,21 +1335,23 @@ Then either:
 ```bash
 # REST inspection
 curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/stock_adjustments?tenant_id=eq.5443b130-cc28-45af-a420-cd500b288890&select=id,product_id,quantity,reason,created_by,created_at&order=created_at.desc&limit=20" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq .
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq .
 
 # Direct SQL
-psql "postgresql://postgres:Vinabike2901@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" -P pager=off -Atqc "select now();"
+psql "postgresql://postgres:${PGPASSWORD}@db.xzdvtzdqjeyqxnkqprtf.supabase.co:5432/postgres" -P pager=off -Atqc "select now();"
 ```
 
 ## 🔒 Secret Handling Rule
 
-These credentials are documented here because agents repeatedly needed them for autonomous production investigation. Future agents should:
+Production credentials must never be documented in this repository, source code, examples, screenshots, logs, patches, or chat. Future agents must:
 
-- use them only for repository work on this machine/project
-- avoid printing them unnecessarily in chat
-- prefer environment variables in terminal commands instead of repeating raw secrets
-- never guess replacements or rotate them silently
+- use the authenticated Supabase/Firebase/GitHub CLI path first
+- load a required fallback only from the operating-system credential store or protected CI environment
+- print/check only presence, metadata, or a one-way fingerprint—never the value
+- rotate a credential only after mapping every consumer and defining before/after verification
+- update the credential store and dependent services immediately after an approved rotation
+- rerun Gitleaks before committing or pushing
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 
@@ -6174,13 +6196,13 @@ lifecycle_status text default 'active',
 ```bash
 # Get product current state
 source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" | jq '.[0] | {name, sku, gtin, mpn, barcode}'
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" | jq '.[0] | {name, sku, gtin, mpn, barcode}'
 
 # Update GTIN
 source .env && curl -s "https://xzdvtzdqjeyqxnkqprtf.supabase.co/rest/v1/products?id=eq.{PRODUCT_ID}" \
-  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "apikey: $SUPABASE_SECRET_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SECRET_KEY" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
   -X PATCH \

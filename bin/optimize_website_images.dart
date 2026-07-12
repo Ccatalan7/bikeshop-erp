@@ -23,20 +23,20 @@ const jpegQuality = 80;
 late final SupabaseClient supabase;
 
 String _getServiceRoleKey() {
-  final envKey = Platform.environment['SUPABASE_SERVICE_ROLE_KEY'];
+  final envKey = Platform.environment['SUPABASE_SECRET_KEY'];
   if (envKey != null && envKey.isNotEmpty) return envKey;
   
   final envFile = File('.env');
   if (envFile.existsSync()) {
     final lines = envFile.readAsLinesSync();
     for (final line in lines) {
-      if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
-        return line.substring('SUPABASE_SERVICE_ROLE_KEY='.length).trim();
+      if (line.startsWith('SUPABASE_SECRET_KEY=')) {
+        return line.substring('SUPABASE_SECRET_KEY='.length).trim();
       }
     }
   }
   
-  throw Exception('SUPABASE_SERVICE_ROLE_KEY not found!');
+  throw Exception('SUPABASE_SECRET_KEY not found!');
 }
 
 void main(List<String> args) async {

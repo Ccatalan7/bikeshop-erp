@@ -23,6 +23,7 @@ REQUIREMENTS:
 - Decision on which system is source of truth
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -52,9 +53,9 @@ import time
 # CONFIGURATION
 # ============================================================================
 
-ZOHO_CLIENT_ID = config.ZOHO_CLIENT_ID
-ZOHO_CLIENT_SECRET = config.ZOHO_CLIENT_SECRET
-ZOHO_REFRESH_TOKEN = config.ZOHO_REFRESH_TOKEN
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
 ZOHO_ORG_ID = config.ZOHO_ORG_ID
 ZOHO_API_DOMAIN = config.ZOHO_API_DOMAIN
 ZOHO_OAUTH_DOMAIN = getattr(config, 'ZOHO_OAUTH_DOMAIN', 'https://accounts.zoho.com')
@@ -62,7 +63,7 @@ ZOHO_OAUTH_DOMAIN = getattr(config, 'ZOHO_OAUTH_DOMAIN', 'https://accounts.zoho.
 ODOO_URL = config.ODOO_URL
 ODOO_DB = config.ODOO_DB
 ODOO_USERNAME = config.ODOO_USERNAME
-ODOO_API_KEY = config.ODOO_API_KEY
+ODOO_API_KEY = os.environ.get("ODOO_API_KEY", "")
 
 RATE_LIMIT_DELAY = config.RATE_LIMIT_DELAY
 

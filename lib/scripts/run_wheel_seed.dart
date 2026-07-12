@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'seed_wheel_building_data.dart';
@@ -6,25 +8,34 @@ import 'seed_wheel_building_data.dart';
 /// Run with: flutter run lib/scripts/run_wheel_seed.dart
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  final anonKey = Platform.environment['SUPABASE_ANON_KEY'] ?? '';
+  final email = Platform.environment['SEED_USER_EMAIL'] ?? '';
+  final password = Platform.environment['SEED_USER_PASSWORD'] ?? '';
+  if (anonKey.isEmpty || email.isEmpty || password.isEmpty) {
+    throw StateError(
+      'SUPABASE_ANON_KEY, SEED_USER_EMAIL, and SEED_USER_PASSWORD are required.',
+    );
+  }
+
   // Initialize Supabase
   await Supabase.initialize(
     url: 'https://xzdvtzdqjeyqxnkqprtf.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM',
+    anonKey: anonKey,
   );
-  
+
   // Sign in
-  print('🔐 Signing in as vinabikechile@gmail.com...');
+  print('🔐 Signing in as $email');
   await Supabase.instance.client.auth.signInWithPassword(
-    email: 'vinabikechile@gmail.com',
-    password: '000000',
+    email: email,
+    password: password,
   );
-  
+
   print('✅ Signed in successfully');
-  
+
   // Run the seed
   await seedWheelBuildingData();
-  
+
   print('');
   print('🎉 All done! You can close this now.');
 }

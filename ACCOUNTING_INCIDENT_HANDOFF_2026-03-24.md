@@ -579,7 +579,7 @@ La documentación del repo deja claro que para consultas productivas se prefiri�
 
 ### Obtener la key desde `.env`
 Variable usada:
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 
 ### Patrón Python usado en esta sesión
 
@@ -588,7 +588,7 @@ import json, pathlib, urllib.request
 root = pathlib.Path('/Users/Vinabike/dev/bikeshop-erp')
 key = None
 for line in (root / '.env').read_text().splitlines():
-    if line.startswith('SUPABASE_SERVICE_ROLE_KEY='):
+    if line.startswith('SUPABASE_SECRET_KEY='):
         key = line.split('=', 1)[1].strip().strip('"').strip("'")
         break
 

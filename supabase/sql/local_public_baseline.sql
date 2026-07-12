@@ -24121,7 +24121,7 @@ CREATE TRIGGER purchase_invoice_reversal_trigger BEFORE UPDATE OF status ON publ
 -- Name: messages push-on-message; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER "push-on-message" AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/push-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo"}', '{}', '5000');
+CREATE TRIGGER "push-on-message" AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/push-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer [REMOVED_LEGACY_SERVICE_ROLE_KEY]"}', '{}', '5000');
 
 
 --

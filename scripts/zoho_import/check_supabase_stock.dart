@@ -3,10 +3,18 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
+  final anonKey = Platform.environment['ZOHO_IMPORT_SUPABASE_ANON_KEY'] ?? '';
+  if (anonKey.isEmpty) {
+    stderr.writeln(
+      'Missing required ZOHO_IMPORT_SUPABASE_ANON_KEY environment variable.',
+    );
+    exit(64);
+  }
+
   // Initialize Supabase
   await Supabase.initialize(
     url: 'https://jhizdkvxumzipjmplmwo.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpoaXpka3Z4dW16aXBqbXBsbXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjgyNjg4MjksImV4cCI6MjA0Mzg0NDgyOX0.mYkfLnhQbwH75CYl-q5uTjIqp_i5uyaYI_nFqm4GhsE',
+    anonKey: anonKey,
   );
 
   // Load test SKUs
@@ -23,34 +31,41 @@ void main() async {
       .inFilter('sku', skus);
 
   final supabaseProducts = response as List;
-  
+
   print('📊 Found ${supabaseProducts.length} matching products in Supabase\n');
 
   // Compare stocks
   print('Stock Comparison (Supabase → Zoho):');
   print('─' * 80);
-  
+
   for (final zohoItem in testProducts) {
     final sku = zohoItem['sku'];
     final zohoStock = (zohoItem['available_stock'] as num).toInt();
     final zohoName = zohoItem['name'] as String;
-    
-    final supabaseItem = supabaseProducts.cast<Map<String, dynamic>>()
+
+    final supabaseItem = supabaseProducts
+        .cast<Map<String, dynamic>>()
         .firstWhere((p) => p['sku'] == sku, orElse: () => <String, dynamic>{});
-    
+
     if (supabaseItem.isEmpty) {
       print('❌ SKU: $sku - NOT FOUND in Supabase');
-      final displayName = zohoName.length > 50 ? '${zohoName.substring(0, 50)}...' : zohoName;
+      final displayName =
+          zohoName.length > 50 ? '${zohoName.substring(0, 50)}...' : zohoName;
       print('   Zoho: $displayName (Stock: $zohoStock)');
     } else {
       final currentStock = supabaseItem['stock_quantity'] as int;
       final diff = zohoStock - currentStock;
-      final symbol = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
-      
+      final symbol = diff > 0
+          ? '📈'
+          : diff < 0
+              ? '📉'
+              : '➡️';
+
       print('$symbol SKU: $sku');
       print('   Current: $currentStock → New: $zohoStock (Δ $diff)');
       final name = supabaseItem['name'] as String;
-      final displayName = name.length > 50 ? '${name.substring(0, 50)}...' : name;
+      final displayName =
+          name.length > 50 ? '${name.substring(0, 50)}...' : name;
       print('   Name: $displayName');
     }
     print('');

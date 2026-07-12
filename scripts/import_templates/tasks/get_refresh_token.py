@@ -1,11 +1,12 @@
 """
 Exchange grant code for refresh token - One-time use script
 """
+import os
 import requests
 
 # User provided credentials
-CLIENT_ID = "1000.LKVKZREYRMW7ZXKHF8O40ZDZ9XBR0A"
-CLIENT_SECRET = "cfc323be8f4cb6190356248b7a24cd12646009afe4"
+CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
 GRANT_CODE = "1000.20da5bace0b2b6976c8bdb938b8d7ba6.8334698f09dcb3491c570dcd3e7d82fa"
 ZOHO_ORG_ID = "788658742"
 

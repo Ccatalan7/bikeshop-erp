@@ -1,0 +1,10 @@
+# Firebase client configuration keys and the Supabase anonymous/publishable key
+# are intentionally distributed with the client applications. These exact
+# fingerprints are allowed; line/value changes must be reviewed again.
+android/app/google-services.json:gcp-api-key:31
+lib/firebase_options.dart:gcp-api-key:47
+lib/firebase_options.dart:gcp-api-key:56
+lib/firebase_options.dart:gcp-api-key:67
+lib/firebase_options.dart:gcp-api-key:75
+lib/shared/config/supabase_config.dart:jwt:18
+web/firebase-messaging-sw.js:gcp-api-key:9

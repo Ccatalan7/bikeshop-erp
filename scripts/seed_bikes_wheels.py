@@ -9,12 +9,26 @@ import os
 
 # Supabase credentials
 SUPABASE_URL = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjcyODY1NDksImV4cCI6MjA0Mjg2MjU0OX0.z1fZMoSzPL8Dt03d7i-xC4JFBxgIvXXBrYzpH9M3afo"
+SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
-EMAIL = "vinabikechile@gmail.com"
-PASSWORD = "000000"
+EMAIL = os.environ.get("SEED_USER_EMAIL", "")
+PASSWORD = os.environ.get("SEED_USER_PASSWORD", "")
 
 def main():
+    missing = [
+        name
+        for name, value in {
+            "SUPABASE_ANON_KEY": SUPABASE_KEY,
+            "SEED_USER_EMAIL": EMAIL,
+            "SEED_USER_PASSWORD": PASSWORD,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables: " + ", ".join(missing)
+        )
+
     print("🚀 Starting comprehensive bike & wheel seed...")
     
     # Initialize Supabase client

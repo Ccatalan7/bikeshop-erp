@@ -1,0 +1,18 @@
+title = "Vinabike ERP secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reproducible dependency and build caches"
+paths = [
+  '''(^|/)\.dart_tool/''',
+  '''(^|/)build/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)Pods/''',
+  '''(^|/)\.pub-cache/''',
+  '''(^|/)\.gradle/''',
+  '''(^|/)Flutter/ephemeral/''',
+  '''^tools/invoice-parser-service/venv/''',
+  '''^\.tools/''',
+]

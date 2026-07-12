@@ -3,13 +3,14 @@
 Test connection to Odoo and explore available data.
 """
 
+import os
 import xmlrpc.client
 
 # Odoo credentials
 ODOO_URL = "https://vinabike.odoo.com"
 ODOO_DB = "vinabike"
 ODOO_USERNAME = "vinabikechile@gmail.com"
-ODOO_API_KEY = "b9b8a246da7deeea272a4679e24baa68ebfb7e7e"
+ODOO_API_KEY = os.environ.get("ODOO_API_KEY", "")
 
 print("=" * 80)
 print("Testing Odoo Connection")

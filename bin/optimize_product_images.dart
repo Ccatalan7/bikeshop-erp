@@ -9,7 +9,7 @@
 ///   --dry-run   Show what would be done without making changes
 ///   --limit N   Only process N products (for testing)
 ///
-/// IMPORTANT: Requires SUPABASE_SERVICE_ROLE_KEY environment variable to bypass RLS
+/// IMPORTANT: Requires SUPABASE_SECRET_KEY environment variable to bypass RLS
 library;
 
 import 'dart:io';
@@ -30,7 +30,7 @@ late final SupabaseClient supabase;
 
 String _getServiceRoleKey() {
   // Try environment variable first
-  final envKey = Platform.environment['SUPABASE_SERVICE_ROLE_KEY'];
+  final envKey = Platform.environment['SUPABASE_SECRET_KEY'];
   if (envKey != null && envKey.isNotEmpty) {
     return envKey;
   }
@@ -40,14 +40,14 @@ String _getServiceRoleKey() {
   if (envFile.existsSync()) {
     final lines = envFile.readAsLinesSync();
     for (final line in lines) {
-      if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
-        return line.substring('SUPABASE_SERVICE_ROLE_KEY='.length).trim();
+      if (line.startsWith('SUPABASE_SECRET_KEY=')) {
+        return line.substring('SUPABASE_SECRET_KEY='.length).trim();
       }
     }
   }
   
   throw Exception(
-    'SUPABASE_SERVICE_ROLE_KEY not found!\n'
+    'SUPABASE_SECRET_KEY not found!\n'
     'Set it as environment variable or add to .env file.\n'
     'This key is required to bypass RLS for storage uploads.'
   );

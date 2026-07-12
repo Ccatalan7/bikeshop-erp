@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "C:\dev\VINABIKE\bikeshop-erp\scripts\import_templates\temp_gen_token.py", line 5, in <module>
-    from generate_zoho_tokens import generate_refresh_token
-  File "C:\dev\VINABIKE\bikeshop-erp\scripts\import_templates\generate_zoho_tokens.py", line 19, in <module>
-    import config
-ModuleNotFoundError: No module named 'config'

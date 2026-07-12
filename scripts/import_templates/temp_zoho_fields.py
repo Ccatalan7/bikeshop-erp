@@ -2,12 +2,13 @@
 Check what fields Zoho actually returns for items, including vendor/supplier info.
 Fetch 1 item from the LIST api and 1 from the DETAIL api to compare.
 """
+import os
 import requests
 import json
 
-ZOHO_CLIENT_ID = "1000.HEUWHSDCUE4GAN7CL3P045ICRU5V5B"
-ZOHO_CLIENT_SECRET = "ffd0bc79a8e2456cef492010e34c3653a55d82be43"
-ZOHO_REFRESH_TOKEN = "1000.1018c69651f1ca381b062c385a218e1d.72eb1094dbf04d5f018adee06494e3d1"
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
 ZOHO_ORG_ID = "788658742"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 ZOHO_OAUTH_DOMAIN = "https://accounts.zoho.com"

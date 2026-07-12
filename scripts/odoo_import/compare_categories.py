@@ -5,6 +5,7 @@ Odoo: 144 categories
 Supabase: 170 categories (claimed)
 """
 
+import os
 import xmlrpc.client
 from supabase import create_client, Client
 
@@ -12,12 +13,26 @@ from supabase import create_client, Client
 ODOO_URL = "https://vinabike.odoo.com"
 ODOO_DB = "vinabike"
 ODOO_USERNAME = "vinabikechile@gmail.com"
-ODOO_API_KEY = "b9b8a246da7deeea272a4679e24baa68ebfb7e7e"
+ODOO_API_KEY = os.environ.get("ODOO_API_KEY", "")
 
 # Supabase credentials
 SUPABASE_URL = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo"
+SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 TENANT_ID = "5443b130-cc28-45af-a420-cd500b288890"
+
+missing_credentials = [
+    name
+    for name, value in {
+        "ODOO_API_KEY": ODOO_API_KEY,
+        "SUPABASE_SECRET_KEY": SUPABASE_KEY,
+    }.items()
+    if not value
+]
+if missing_credentials:
+    raise RuntimeError(
+        "Missing required environment variables: "
+        + ", ".join(missing_credentials)
+    )
 
 print("=" * 80)
 print("Comparing Categories: Odoo vs Supabase")

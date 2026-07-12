@@ -7,7 +7,7 @@ void main() async {
   String? key;
   for (var line in lines) {
     if (line.startsWith('SUPABASE_URL=')) url = line.split('=')[1].trim();
-    if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) key = line.split('=')[1].trim();
+    if (line.startsWith('SUPABASE_SECRET_KEY=')) key = line.split('=')[1].trim();
   }
   
   const jobId = '19ca1b77-f2a1-4d83-9c38-ee5ea3100835';

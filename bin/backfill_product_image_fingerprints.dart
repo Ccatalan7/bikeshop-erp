@@ -10,9 +10,6 @@ import 'package:supabase/supabase.dart';
 import 'package:vinabike_erp/modules/inventory/services/product_image_fingerprint_service.dart';
 
 const _defaultSupabaseUrl = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
-const _documentedServiceRoleKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo';
-
 late final SupabaseClient supabase;
 late final http.Client httpClient;
 
@@ -37,11 +34,10 @@ Future<void> main(List<String> args) async {
   stdout.writeln('');
 
   final supabaseUrl = _getEnvValue('SUPABASE_URL') ?? _defaultSupabaseUrl;
-  final serviceRoleKey =
-      _getEnvValue('SUPABASE_SERVICE_ROLE_KEY') ?? _documentedServiceRoleKey;
+  final serviceRoleKey = _getEnvValue('SUPABASE_SECRET_KEY') ?? '';
 
   if (serviceRoleKey.isEmpty) {
-    stderr.writeln('❌ SUPABASE_SERVICE_ROLE_KEY is missing');
+    stderr.writeln('❌ SUPABASE_SECRET_KEY is missing');
     exit(64);
   }
 

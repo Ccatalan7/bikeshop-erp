@@ -14,6 +14,9 @@ migrate_working_dir/
 .tools/
 reports/product_image_pipeline*/
 .firebase/
+/.tmp/
+/tmp/
+**/__pycache__/
 
 # Installed dependencies and generated platform caches must stay local.
 # Commit lockfiles instead; every machine should install dependencies from the lockfile.
@@ -35,6 +38,14 @@ node_modules/
 # ⚠️ IMPORTANT: .vscode/launch.json contains DEBUG_EMAIL and DEBUG_PASSWORD
 # Use launch.json.example as template, copy to launch.json and add your credentials
 .vscode/launch.json
+
+# Local credential and OAuth output artifacts. Keep examples/templates only.
+/temp_token_out*
+/token_out.txt
+/scripts/zoho_import/zoho_tokens.json
+/scripts/import_templates/zoho_tokens.json
+/scripts/import_templates/.env
+/scripts/odoo_import/.env
 
 # Flutter/Dart/Pub related
 **/doc/api/

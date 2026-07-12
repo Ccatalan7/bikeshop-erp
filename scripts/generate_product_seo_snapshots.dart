@@ -1,9 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-const String _documentedServiceRoleKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo';
-
 const num _structuredDataMaxShippingRateClp = 30000;
 
 /// Generates static HTML "SEO snapshots" for product routes.
@@ -16,7 +13,7 @@ const num _structuredDataMaxShippingRateClp = 30000;
 /// This script:
 /// - Reads `build/web_store/index.html` as the base template (already synced by
 ///   `scripts/sync_seo_index.sh`).
-/// - Fetches products from Supabase via REST using `SUPABASE_SERVICE_ROLE_KEY`
+/// - Fetches products from Supabase via REST using `SUPABASE_SECRET_KEY`
 ///   from `.env` (never printed).
 /// - Writes canonical HTML files at `build/web_store/productos/<slug>/<sku>`
 ///   and legacy UUID snapshots that point crawlers to the canonical URL.
@@ -58,11 +55,10 @@ void main(List<String> args) async {
 
   final env = await _readDotEnv(File('.env'));
   final serviceRoleKey =
-      _resolveEnvValue('SUPABASE_SERVICE_ROLE_KEY', env: env) ??
-          _documentedServiceRoleKey;
+      _resolveEnvValue('SUPABASE_SECRET_KEY', env: env) ?? '';
   if (serviceRoleKey.isEmpty) {
     stderr.writeln(
-      '❌ SUPABASE_SERVICE_ROLE_KEY not found in environment or .env',
+      '❌ SUPABASE_SECRET_KEY not found in environment or .env',
     );
     exitCode = 2;
     return;

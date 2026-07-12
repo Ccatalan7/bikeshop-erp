@@ -5,6 +5,7 @@ Maps Zoho field 'cf_c_digo_proveedor' → Supabase column 'supplier_code'
 Matches products by SKU
 """
 
+import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -13,9 +14,9 @@ import requests
 from connections.supabase_connection import SupabaseConnection
 
 # Zoho credentials
-CLIENT_ID = "1000.LKVKZREYRMW7ZXKHF8O40ZDZ9XBR0A"
-CLIENT_SECRET = "cfc323be8f4cb6190356248b7a24cd12646009afe4"
-REFRESH_TOKEN = "1000.0dfaca4f7cece1a32d2e752eb855e2e5.0a5b064b44a904b0ad207c4a3edd2f06"
+CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
+REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
 ZOHO_ORG_ID = "788658742"
 
 

@@ -13,7 +13,7 @@ with open('/Users/Claudio/Dev/bikeshop-erp/.env') as f:
             k, v = line.split('=', 1)
             env[k.strip()] = v.strip()
 
-KEY = env['SUPABASE_SERVICE_ROLE_KEY']
+KEY = env['SUPABASE_SECRET_KEY']
 BASE = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co'
 
 def rest_get(path):

@@ -23,10 +23,19 @@ This will open a browser window to authenticate with your Cloudflare account.
 
 ```bash
 cd cloudflare-worker
-npm install
+npm ci
 ```
 
-### 4. Deploy the Worker
+### 4. Register the Supabase publishable key
+
+```bash
+npx wrangler secret put SUPABASE_ANON_KEY
+```
+
+Use the publishable/anonymous key for `xzdvtzdqjeyqxnkqprtf`. Never use the
+service-role key in this worker.
+
+### 5. Deploy the Worker
 
 ```bash
 npm run deploy
@@ -37,7 +46,7 @@ After deployment, you'll get a URL like:
 https://vinabike-edge-cache.YOUR_SUBDOMAIN.workers.dev
 ```
 
-### 5. Test the Worker
+### 6. Test the Worker
 
 ```bash
 # Test health endpoint
@@ -49,7 +58,7 @@ curl -X POST https://vinabike-edge-cache.YOUR_SUBDOMAIN.workers.dev/cache/public
   -d '{"p_tenant_id": "5443b130-cc28-45af-a420-cd500b288890"}'
 ```
 
-### 6. Update Flutter App
+### 7. Update Flutter App
 
 After deployment, update the Flutter app to use the cached endpoint.
 The WebsiteService will need to call the worker URL instead of Supabase directly.

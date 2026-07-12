@@ -3,21 +3,22 @@
 Full comparison between Zoho and Odoo products
 """
 
+import os
 import xmlrpc.client
 import requests
 
 # Zoho credentials
 ZOHO_ORG_ID = "788658742"
-ZOHO_REFRESH_TOKEN = "1000.5b73cc4d011ce72c562a005111500bbb.50ad2a91262bd56838118547a056c713"
-ZOHO_CLIENT_ID = "1000.0UQWCWHOVFP0GY6KF4HI4IO3UTNJJX"
-ZOHO_CLIENT_SECRET = "6e6c290e749847c5a98bde74ea906f392a4f35bc55"
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
 ZOHO_REGION = "com"
 
 # Odoo credentials
 ODOO_URL = "https://vinabike.odoo.com"
 ODOO_DB = "vinabike"
 ODOO_USERNAME = "vinabikechile@gmail.com"
-ODOO_API_KEY = "821be81bf75abeaf8508279b62e87f0fbab57b55"
+ODOO_API_KEY = os.environ.get("ODOO_API_KEY", "")
 
 print("=" * 100)
 print("ZOHO vs ODOO - FULL PRODUCT COMPARISON")

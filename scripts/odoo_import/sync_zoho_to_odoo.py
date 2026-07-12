@@ -6,6 +6,7 @@ Sync products from Zoho to Odoo:
 3. Update existing products in Odoo with latest Zoho data (stock, prices)
 """
 
+import os
 import xmlrpc.client
 import requests
 import time
@@ -13,16 +14,16 @@ from typing import Dict, List, Optional
 
 # Zoho credentials
 ZOHO_ORG_ID = "788658742"
-ZOHO_REFRESH_TOKEN = "1000.5b73cc4d011ce72c562a005111500bbb.50ad2a91262bd56838118547a056c713"
-ZOHO_CLIENT_ID = "1000.0UQWCWHOVFP0GY6KF4HI4IO3UTNJJX"
-ZOHO_CLIENT_SECRET = "6e6c290e749847c5a98bde74ea906f392a4f35bc55"
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
 ZOHO_REGION = "com"  # US region
 
 # Odoo credentials
 ODOO_URL = "https://vinabike.odoo.com"
 ODOO_DB = "vinabike"
 ODOO_USERNAME = "vinabikechile@gmail.com"
-ODOO_API_KEY = "b9b8a246da7deeea272a4679e24baa68ebfb7e7e"
+ODOO_API_KEY = os.environ.get("ODOO_API_KEY", "")
 
 # Global variables
 zoho_access_token = None

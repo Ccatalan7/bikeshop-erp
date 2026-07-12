@@ -5,13 +5,13 @@ void main() async {
   final lines = File('.env').readAsLinesSync();
   String? key;
   for (final line in lines) {
-    if (line.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
+    if (line.startsWith('SUPABASE_SECRET_KEY=')) {
       key = line.split('=')[1].trim();
     }
   }
 
   if (key == null) {
-    print('No SUPABASE_SERVICE_ROLE_KEY found in .env');
+    print('No SUPABASE_SECRET_KEY found in .env');
     return;
   }
 

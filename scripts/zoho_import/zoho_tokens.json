@@ -1,8 +1,0 @@
-{
-  "access_token": "1000.33786466ea2261ca13a49f731cbab079.eb10bddae7ed844fe5316db0b571ed67",
-  "refresh_token": "1000.ba67d503a3030cdb2774ed421a49ef04.6e5050231da991cb4307d6e4b6ae4261",
-  "scope": "ZohoInventory.FullAccess.all",
-  "api_domain": "https://www.zohoapis.com",
-  "token_type": "Bearer",
-  "expires_in": 3600
-}

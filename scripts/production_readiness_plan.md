@@ -9,7 +9,7 @@
 
 ### ✅ Current State
 - **Tenant:** testbike1 (subdomain: testbike1)
-- **User:** vinabikechile@gmail.com (password: 000000)
+- **User:** use the dedicated E2E account from the operating-system credential store; never document a login here.
 - **Products:** 84 items (imported from Zoho Books)
 - **Database:** https://xzdvtzdqjeyqxnkqprtf.supabase.co
 - **Tenant ID:** 5443b130-cc28-45af-a420-cd500b288890

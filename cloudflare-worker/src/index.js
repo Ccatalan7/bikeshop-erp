@@ -7,10 +7,6 @@
  * Deploy: npx wrangler deploy
  */
 
-// Configuration
-const SUPABASE_URL = 'https://xzdvtzdqjeyqxnkqprtf.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM';
-
 // Cache TTL: Balance between performance and freshness
 // - 300s (5 min) = good cache hit ratio, 90% of visitors get fast response
 // - 60s = updates visible within 1 minute, but more cache misses
@@ -33,7 +29,7 @@ export default {
 
         // Main endpoint: /cache/public-store-data
         if (url.pathname === '/cache/public-store-data' && request.method === 'POST') {
-            return handlePublicStoreData(request, ctx);
+            return handlePublicStoreData(request, env, ctx);
         }
 
         // Cache purge endpoint: /cache/purge
@@ -59,16 +55,17 @@ export default {
     // Cron trigger: Keep Supabase warm every 4 minutes
     async scheduled(event, env, ctx) {
         console.log('🔥 Warm-up cron triggered');
+        const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig(env);
 
         // Ping Supabase RPC for each allowed tenant to keep the function warm
         for (const tenantId of ALLOWED_TENANTS) {
             try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_store_data`, {
+                const response = await fetch(`${supabaseUrl}/rest/v1/rpc/get_public_store_data`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        'apikey': supabaseAnonKey,
+                        'Authorization': `Bearer ${supabaseAnonKey}`
                     },
                     body: JSON.stringify({ p_tenant_id: tenantId })
                 });
@@ -81,8 +78,9 @@ export default {
     }
 };
 
-async function handlePublicStoreData(request, ctx) {
+async function handlePublicStoreData(request, env, ctx) {
     try {
+        const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig(env);
         const body = await request.json();
         const tenantId = body.p_tenant_id;
 
@@ -125,12 +123,12 @@ async function handlePublicStoreData(request, ctx) {
         // Cache MISS - fetch from Supabase
         console.log(`Cache MISS for tenant ${tenantId}, fetching from Supabase`);
 
-        const supabaseResponse = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_store_data`, {
+        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/get_public_store_data`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                'apikey': supabaseAnonKey,
+                'Authorization': `Bearer ${supabaseAnonKey}`
             },
             body: JSON.stringify({ p_tenant_id: tenantId })
         });
@@ -178,6 +176,17 @@ async function handlePublicStoreData(request, ctx) {
             headers: corsHeaders()
         });
     }
+}
+
+function getSupabaseConfig(env) {
+    const supabaseUrl = env.SUPABASE_URL;
+    const supabaseAnonKey = env.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY worker binding');
+    }
+
+    return { supabaseUrl, supabaseAnonKey };
 }
 
 function corsHeaders() {

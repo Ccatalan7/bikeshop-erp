@@ -6,6 +6,7 @@ FINAL Sync: CSV (Zoho Export) -> Supabase (Flutter)
 - Upserts brand + supplier_name
 - NEVER touches stock_quantity or image_url
 """
+import os
 import csv
 import time
 import json
@@ -18,15 +19,15 @@ from supabase import create_client, Client
 # ============================================================================
 CSV_PATH = r"c:\dev\VINABIKE\bikeshop-erp\.github\Artículo - Item.csv"
 
-ZOHO_CLIENT_ID = "1000.HEUWHSDCUE4GAN7CL3P045ICRU5V5B"
-ZOHO_CLIENT_SECRET = "ffd0bc79a8e2456cef492010e34c3653a55d82be43"
-ZOHO_REFRESH_TOKEN = "1000.1018c69651f1ca381b062c385a218e1d.72eb1094dbf04d5f018adee06494e3d1"
+ZOHO_CLIENT_ID = os.environ.get("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET = os.environ.get("ZOHO_CLIENT_SECRET", "")
+ZOHO_REFRESH_TOKEN = os.environ.get("ZOHO_REFRESH_TOKEN", "")
 ZOHO_ORG_ID = "788658742"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 ZOHO_OAUTH_DOMAIN = "https://accounts.zoho.com"
 
 SUPABASE_URL = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDA2NDIzNSwiZXhwIjoyMDc1NjQwMjM1fQ.SJowIXSQY4n1TMQysRojCTZKZILJ5x8Mr2XAN7HBMBo"
+SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 TENANT_ID = "5443b130-cc28-45af-a420-cd500b288890"
 
 # ============================================================================

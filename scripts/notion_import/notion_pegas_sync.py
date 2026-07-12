@@ -19,15 +19,30 @@ from supabase import create_client, Client
 # ============================================
 
 # Notion API Configuration
-NOTION_API_KEY = ""  # Set this to your Notion integration token
-NOTION_DATABASE_ID = ""  # Set this to your Notion database ID (from URL)
+NOTION_API_KEY = os.environ.get("NOTION_API_KEY", "")
+NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 NOTION_API_VERSION = "2022-06-28"
 NOTION_BASE_URL = "https://api.notion.com/v1"
 
 # Supabase Configuration
 SUPABASE_URL = "https://wjkfhefvxucqtuxttlsz.supabase.co"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indqa2ZoZWZ2eHVjcXR1eHR0bHN6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNDE4MTM3NiwiZXhwIjoyMDM5NzU3Mzc2fQ.6XWO5a0bTLYE2LRB5G3AQ_c2w8mxIoTWAFGvxPPgYag"
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 TENANT_ID = "5443b130-cc28-45af-a420-cd500b288890"
+
+missing_credentials = [
+    name
+    for name, value in {
+        "NOTION_API_KEY": NOTION_API_KEY,
+        "NOTION_DATABASE_ID": NOTION_DATABASE_ID,
+        "SUPABASE_SECRET_KEY": SUPABASE_SERVICE_KEY,
+    }.items()
+    if not value
+]
+if missing_credentials:
+    raise RuntimeError(
+        "Missing required environment variables: "
+        + ", ".join(missing_credentials)
+    )
 
 # Column Mapping Configuration
 # Maps Notion property names to mechanic_jobs columns

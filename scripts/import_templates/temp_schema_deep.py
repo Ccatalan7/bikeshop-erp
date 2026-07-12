@@ -1,10 +1,11 @@
 """
 Deep analysis: Check supplier mapping between Zoho and Flutter
 """
+import os
 from supabase import create_client, Client
 
 SUPABASE_URL = "https://xzdvtzdqjeyqxnkqprtf.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM"
+SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 TENANT_ID = "5443b130-cc28-45af-a420-cd500b288890"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)

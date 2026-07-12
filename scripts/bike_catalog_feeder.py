@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://your-project.supabase.co')
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+SUPABASE_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
 
 class BikeIndexClient:
     """Client for Bike Index API V3"""

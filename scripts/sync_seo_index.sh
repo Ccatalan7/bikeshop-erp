@@ -14,14 +14,20 @@ INDEX_FILE="$PROJECT_ROOT/web/index.html"
 
 # Supabase configuration
 SUPABASE_URL="https://xzdvtzdqjeyqxnkqprtf.supabase.co"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"  # Viñabike production
+
+if [[ -z "$SUPABASE_ANON_KEY" ]]; then
+  echo "SUPABASE_ANON_KEY is required" >&2
+  exit 64
+fi
 
 echo "🔄 Syncing SEO settings from Supabase to index.html..."
 
 # Fetch SEO settings from Supabase
 SETTINGS=$(curl -s "${SUPABASE_URL}/rest/v1/website_settings?tenant_id=eq.${TENANT_ID}&select=key,value" \
-  -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM")
+  -H "apikey: ${SUPABASE_ANON_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
 
 # Parse settings using jq (with fallbacks)
 get_setting() {
