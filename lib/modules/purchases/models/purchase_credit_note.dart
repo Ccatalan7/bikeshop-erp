@@ -1,0 +1,216 @@
+enum PurchaseCreditDisposition { financialOnly, supplierReturn }
+
+extension PurchaseCreditDispositionX on PurchaseCreditDisposition {
+  String get databaseValue => switch (this) {
+        PurchaseCreditDisposition.financialOnly => 'financial_only',
+        PurchaseCreditDisposition.supplierReturn => 'supplier_return',
+      };
+}
+
+class PurchaseCreditNoteLineBalance {
+  const PurchaseCreditNoteLineBalance({
+    required this.lineIndex,
+    required this.sourceLineKey,
+    required this.productName,
+    this.productSku,
+    required this.purchaseTreatment,
+    required this.originalQuantity,
+    required this.originalNet,
+    required this.originalTax,
+    required this.creditedQuantity,
+    required this.creditedNet,
+    required this.creditedTax,
+    required this.remainingQuantity,
+    required this.remainingNet,
+    required this.remainingTax,
+  });
+
+  final int lineIndex;
+  final String sourceLineKey;
+  final String productName;
+  final String? productSku;
+  final String purchaseTreatment;
+  final int originalQuantity;
+  final int originalNet;
+  final int originalTax;
+  final int creditedQuantity;
+  final int creditedNet;
+  final int creditedTax;
+  final int remainingQuantity;
+  final int remainingNet;
+  final int remainingTax;
+
+  factory PurchaseCreditNoteLineBalance.fromJson(Map<String, dynamic> json) {
+    int amount(String key) => (json[key] as num?)?.round() ?? 0;
+    return PurchaseCreditNoteLineBalance(
+      lineIndex: amount('source_line_index'),
+      sourceLineKey: json['source_line_key']?.toString() ?? '',
+      productName: json['product_name']?.toString() ?? 'Producto',
+      productSku: json['product_sku']?.toString(),
+      purchaseTreatment: json['purchase_treatment']?.toString() ?? 'inventory',
+      originalQuantity: amount('original_quantity'),
+      originalNet: amount('original_allocated_net'),
+      originalTax: amount('original_allocated_tax'),
+      creditedQuantity: amount('credited_quantity'),
+      creditedNet: amount('credited_net'),
+      creditedTax: amount('credited_tax'),
+      remainingQuantity: amount('remaining_quantity'),
+      remainingNet: amount('remaining_net'),
+      remainingTax: amount('remaining_tax'),
+    );
+  }
+}
+
+class PurchaseCreditReturnOption {
+  const PurchaseCreditReturnOption({
+    required this.id,
+    required this.sourceLineKey,
+    required this.returnNumber,
+    required this.returnedQuantity,
+    required this.creditedQuantity,
+  });
+
+  final String id;
+  final String sourceLineKey;
+  final String returnNumber;
+  final int returnedQuantity;
+  final int creditedQuantity;
+  int get remainingQuantity => returnedQuantity - creditedQuantity;
+}
+
+class PurchaseCreditNoteLineDraft {
+  const PurchaseCreditNoteLineDraft({
+    required this.balance,
+    this.quantity = 0,
+    this.netAmount = 0,
+    this.taxAmount = 0,
+    this.disposition = PurchaseCreditDisposition.financialOnly,
+    this.supplierReturnLineId,
+  });
+
+  final PurchaseCreditNoteLineBalance balance;
+  final int quantity;
+  final int netAmount;
+  final int taxAmount;
+  final PurchaseCreditDisposition disposition;
+  final String? supplierReturnLineId;
+
+  int get totalAmount => netAmount + taxAmount;
+  bool get isSelected => totalAmount > 0;
+
+  PurchaseCreditNoteLineDraft withQuantity(int value) {
+    final quantity = value.clamp(0, balance.remainingQuantity);
+    final net = balance.originalQuantity == 0
+        ? 0
+        : (balance.originalNet * quantity / balance.originalQuantity).round();
+    final tax = balance.originalNet == 0
+        ? 0
+        : (balance.originalTax * net / balance.originalNet).round();
+    return copyWith(quantity: quantity, netAmount: net, taxAmount: tax);
+  }
+
+  String? validate({PurchaseCreditReturnOption? returnOption}) {
+    if (!isSelected) return 'Indica un monto para ${balance.productName}.';
+    if (quantity < 0 || quantity > balance.remainingQuantity) {
+      return 'La cantidad de ${balance.productName} supera el saldo original.';
+    }
+    if (netAmount < 0 ||
+        taxAmount < 0 ||
+        netAmount > balance.remainingNet ||
+        taxAmount > balance.remainingTax) {
+      return 'El monto de ${balance.productName} supera el saldo acreditable.';
+    }
+    if (disposition == PurchaseCreditDisposition.supplierReturn) {
+      if (supplierReturnLineId == null || quantity <= 0) {
+        return 'Vincula una devolución física para ${balance.productName}.';
+      }
+      if (returnOption == null || quantity > returnOption.remainingQuantity) {
+        return 'La cantidad supera la devolución física seleccionada.';
+      }
+    }
+    return null;
+  }
+
+  PurchaseCreditNoteLineDraft copyWith({
+    int? quantity,
+    int? netAmount,
+    int? taxAmount,
+    PurchaseCreditDisposition? disposition,
+    String? supplierReturnLineId,
+    bool clearSupplierReturn = false,
+  }) {
+    return PurchaseCreditNoteLineDraft(
+      balance: balance,
+      quantity: quantity ?? this.quantity,
+      netAmount: netAmount ?? this.netAmount,
+      taxAmount: taxAmount ?? this.taxAmount,
+      disposition: disposition ?? this.disposition,
+      supplierReturnLineId: clearSupplierReturn
+          ? null
+          : supplierReturnLineId ?? this.supplierReturnLineId,
+    );
+  }
+
+  Map<String, dynamic> toRpcJson() => {
+        'line_index': balance.lineIndex,
+        'credited_quantity': quantity,
+        'net_amount': netAmount,
+        'tax_amount': taxAmount,
+        'disposition': disposition.databaseValue,
+        if (supplierReturnLineId != null)
+          'supplier_return_line_id': supplierReturnLineId,
+      };
+}
+
+class PurchaseCreditNoteRecord {
+  const PurchaseCreditNoteRecord({
+    required this.id,
+    required this.number,
+    required this.status,
+    required this.officialStatus,
+    required this.issueDate,
+    required this.reason,
+    required this.totalAmount,
+    this.supplierNumber,
+    this.voidReason,
+  });
+
+  final String id;
+  final String number;
+  final String status;
+  final String officialStatus;
+  final DateTime issueDate;
+  final String reason;
+  final int totalAmount;
+  final String? supplierNumber;
+  final String? voidReason;
+  bool get canVoid => status == 'posted' && officialStatus != 'issued';
+
+  factory PurchaseCreditNoteRecord.fromJson(Map<String, dynamic> json) {
+    return PurchaseCreditNoteRecord(
+      id: json['id']?.toString() ?? '',
+      number: json['credit_note_number']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      officialStatus: json['official_dte_status']?.toString() ?? 'internal',
+      issueDate: DateTime.parse(json['issue_date'].toString()),
+      reason: json['reason']?.toString() ?? '',
+      totalAmount: (json['total_amount'] as num?)?.round() ?? 0,
+      supplierNumber: json['supplier_credit_note_number']?.toString(),
+      voidReason: json['void_reason']?.toString(),
+    );
+  }
+}
+
+class PurchaseCreditNoteResult {
+  const PurchaseCreditNoteResult(
+      {required this.id, required this.number, required this.replayed});
+  final String id;
+  final String number;
+  final bool replayed;
+  factory PurchaseCreditNoteResult.fromJson(Map<String, dynamic> json) =>
+      PurchaseCreditNoteResult(
+        id: json['purchase_credit_note_id']?.toString() ?? '',
+        number: json['credit_note_number']?.toString() ?? '',
+        replayed: json['replayed'] == true,
+      );
+}

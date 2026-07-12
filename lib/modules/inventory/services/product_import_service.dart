@@ -4,6 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mime/mime.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/database_service.dart';
@@ -405,6 +406,8 @@ class ProductImportService {
 
     var inserted = 0;
     var updated = 0;
+    final importBatchId = const Uuid().v4();
+    final importReference = 'product_import:$importBatchId';
     final errors = <ProductImportError>[];
     final supplierCache = <String, String>{};
 
@@ -426,6 +429,10 @@ class ProductImportService {
         final isInsert = await _upsertProduct(
           payload: payload,
           allowUpdates: allowUpdates,
+          stockWasProvided: fieldToHeader['inventory_qty'] != null &&
+              (row[fieldToHeader['inventory_qty']]?.trim().isNotEmpty ?? false),
+          importReference: importReference,
+          idempotencyKey: '$importBatchId:$rowNumber',
         );
         if (isInsert) {
           inserted += 1;
@@ -648,11 +655,26 @@ class ProductImportService {
   Future<bool> _upsertProduct({
     required Map<String, dynamic> payload,
     required bool allowUpdates,
+    required bool stockWasProvided,
+    required String importReference,
+    required String idempotencyKey,
   }) async {
     final sku = (payload['sku'] as String).trim();
     final existing = await _db.select('products', where: 'sku=$sku');
+    final targetStock = (payload['inventory_qty'] as num?)?.round() ?? 0;
     if (existing.isEmpty) {
-      await _db.insert('products', payload);
+      final insertPayload = Map<String, dynamic>.from(payload)
+        ..['inventory_qty'] = 0
+        ..['stock_quantity'] = 0;
+      final created = await _db.insert('products', insertPayload);
+      if (targetStock > 0) {
+        await _db.rpc('apply_product_import_stock', params: {
+          'p_product_id': created['id'].toString(),
+          'p_target_quantity': targetStock,
+          'p_import_reference': importReference,
+          'p_idempotency_key': idempotencyKey,
+        });
+      }
       return true;
     }
 
@@ -663,10 +685,30 @@ class ProductImportService {
     }
 
     final productId = existing.first['id'].toString();
+    final currentStock =
+        (existing.first['inventory_qty'] as num?)?.round() ?? 0;
+    final becomesNonStock = payload['product_type'] == 'service' ||
+        payload['track_stock'] == false ||
+        payload['purchase_treatment'] == 'workshop_consumable';
+    if (currentStock > 0 && becomesNonStock) {
+      throw ProductImportRowException(
+        'El SKU $sku tiene stock. Conviértelo a servicio/consumible desde el flujo de conversión trazable antes de importarlo.',
+      );
+    }
     final updatePayload = Map<String, dynamic>.from(payload)
       ..remove('sku')
-      ..remove('created_at');
+      ..remove('created_at')
+      ..remove('inventory_qty')
+      ..remove('stock_quantity');
     await _db.update('products', productId, updatePayload);
+    if (stockWasProvided && !becomesNonStock) {
+      await _db.rpc('apply_product_import_stock', params: {
+        'p_product_id': productId,
+        'p_target_quantity': targetStock,
+        'p_import_reference': importReference,
+        'p_idempotency_key': idempotencyKey,
+      });
+    }
     return false;
   }
 

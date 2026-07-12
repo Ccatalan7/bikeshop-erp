@@ -14,27 +14,27 @@ create temp table payment_integrity_results (
 insert into public.tenants (id, shop_name)
 values ('81111111-1111-4111-8111-111111111111', 'Payment Integrity Test');
 
-insert into public.accounts (id, tenant_id, code, name, type, category)
-values (
-  '82222222-2222-4222-8222-222222222222',
-  '81111111-1111-4111-8111-111111111111',
-  '1101',
-  'Caja',
-  'asset',
-  'currentAsset'
-);
-
 insert into public.payment_methods (
   id, tenant_id, code, name, account_id, default_tax_treatment
 )
 values (
   '83333333-3333-4333-8333-333333333333',
   '81111111-1111-4111-8111-111111111111',
-  'cash',
-  'Efectivo',
-  '82222222-2222-4222-8222-222222222222',
+  'payment_integrity_cash',
+  'Efectivo prueba integridad',
+  (
+    select id
+      from public.accounts
+     where tenant_id = '81111111-1111-4111-8111-111111111111'
+       and code = '1101'
+     limit 1
+  ),
   'no_tax'
 );
+
+-- Tenant bootstrap helpers can set a transaction-local JWT subject. This
+-- suite runs as postgres, so clear it before trace-enabled invoice writes.
+select set_config('request.jwt.claim.sub', '', true);
 
 insert into public.sales_invoices (
   id, tenant_id, invoice_number, customer_name, status, total, paid_amount, balance

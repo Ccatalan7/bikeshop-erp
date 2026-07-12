@@ -678,7 +678,7 @@ class BulkProductEditService {
       };
 
       try {
-        await _inventoryService.applyStockAdjustment(
+        final adjustment = await _inventoryService.applyStockAdjustment(
           productId: productId,
           quantity: delta.abs(),
           type: type,
@@ -699,6 +699,7 @@ class BulkProductEditService {
             beforeValues: beforeValues,
             afterValues: afterValues,
             changedFields: const ['stock'],
+            operationId: adjustment.operationId,
           ),
         );
       } catch (error) {
@@ -888,6 +889,7 @@ class BulkProductEditService {
       final afterValues = <String, dynamic>{};
       final changedFields = <String>[];
       int? targetStock;
+      String? childOperationId;
 
       try {
         final values = rowValues[productId] ?? const <String, dynamic>{};
@@ -996,7 +998,7 @@ class BulkProductEditService {
         }
         if (targetStock != null) {
           final delta = targetStock - product.inventoryQty;
-          await _inventoryService.applyStockAdjustment(
+          final adjustment = await _inventoryService.applyStockAdjustment(
             productId: productId,
             quantity: delta.abs(),
             type: delta > 0 ? 'IN' : 'OUT',
@@ -1005,6 +1007,7 @@ class BulkProductEditService {
             effectiveAt: DateTime.now(),
             adjustmentOrigin: StockAdjustmentOrigin.massEditPanel.value,
           );
+          childOperationId = adjustment.operationId;
         }
         succeeded += 1;
         items.add(
@@ -1022,6 +1025,7 @@ class BulkProductEditService {
             beforeValues: beforeValues,
             afterValues: afterValues,
             changedFields: changedFields,
+            operationId: childOperationId,
           ),
         );
       } catch (error) {
@@ -1067,7 +1071,7 @@ class BulkProductEditService {
     required Map<String, dynamic> configSnapshot,
     required BulkUpdateResult result,
   }) async {
-    await _db.insert(
+    final history = await _db.insert(
       'product_bulk_edit_history',
       {
         'operation': operation.name,
@@ -1087,6 +1091,13 @@ class BulkProductEditService {
       },
       applyTimestamps: false,
     );
+    await _db.rpc('link_product_bulk_edit_operations', params: {
+      'p_history_id': history['id'].toString(),
+      'p_child_operation_ids': result.items
+          .map((item) => item.operationId)
+          .whereType<String>()
+          .toList(growable: false),
+    });
   }
 
   Future<List<BulkProductEditHistoryEntry>> loadHistory(

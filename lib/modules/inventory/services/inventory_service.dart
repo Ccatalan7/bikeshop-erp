@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
@@ -614,7 +613,35 @@ class InventoryService extends ChangeNotifier {
             'La respuesta del ajuste no incluyó un identificador válido.');
       }
 
-      final detail = await getStockAdjustmentDetails(adjustmentId);
+      final loadedDetail = await getStockAdjustmentDetails(adjustmentId);
+      final detail = StockAdjustmentDetail.fromJson({
+        'id': loadedDetail.id,
+        'operation_id': result['operation_id'],
+        'product_id': loadedDetail.productId,
+        'product_name': loadedDetail.productName,
+        'product_sku': loadedDetail.productSku,
+        'adjustment_type': loadedDetail.adjustmentType,
+        'reference_number': loadedDetail.referenceNumber,
+        'quantity': loadedDetail.quantity,
+        'stock_before': loadedDetail.stockBefore,
+        'stock_after': loadedDetail.stockAfter,
+        'reason': loadedDetail.reason,
+        'adjustment_origin': loadedDetail.adjustmentOrigin,
+        'adjustment_date': loadedDetail.adjustmentDate.toIso8601String(),
+        'created_at': loadedDetail.createdAt.toIso8601String(),
+        'created_by': loadedDetail.createdBy,
+        'created_by_email': loadedDetail.createdByEmail,
+        'unit_cost': loadedDetail.unitCost,
+        'inventory_value': loadedDetail.inventoryValue,
+        'journal_entry_id': loadedDetail.journalEntryId,
+        'journal_entry_number': loadedDetail.journalEntryNumber,
+        'journal_entry_date': loadedDetail.journalEntryDate?.toIso8601String(),
+        'journal_entry_description': loadedDetail.journalEntryDescription,
+        'counterpart_account_code': loadedDetail.counterpartAccountCode,
+        'counterpart_account_name': loadedDetail.counterpartAccountName,
+        'counterpart_debit': loadedDetail.counterpartDebit,
+        'counterpart_credit': loadedDetail.counterpartCredit,
+      });
       _updateCachedProductStock(productId, detail.stockAfter);
       notifyListeners();
       return detail;
@@ -786,138 +813,6 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
-  Future<void> recordSale({
-    required String productId,
-    required int quantity,
-    required String reference,
-    double? salePrice,
-  }) async {
-    try {
-      final product = await getProductById(productId);
-      if (product == null) {
-        throw Exception('Producto no encontrado');
-      }
-
-      if (product.inventoryQty < quantity) {
-        throw Exception(
-            'Stock insuficiente. Disponible: ${product.inventoryQty}');
-      }
-
-      // Update product inventory
-      final newQuantity = product.inventoryQty - quantity;
-      await _db.update('products', productId, {
-        'inventory_qty': newQuantity,
-        'stock_quantity': newQuantity,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      // Create stock movement
-      await _createStockMovement(
-        productId: productId,
-        quantity: quantity,
-        type: StockMovementType.sale,
-        reference: reference,
-        unitCost: product.cost,
-      );
-
-      // Post accounting entry for sale
-      await _postSaleAccountingEntry(
-        productId: productId,
-        quantity: quantity,
-        costPerUnit: product.cost,
-        salePrice: salePrice ?? product.price,
-        reference: reference,
-      );
-
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error recording sale: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> recordPurchase({
-    required String productId,
-    required int quantity,
-    required String reference,
-    required double unitCost,
-  }) async {
-    try {
-      final product = await getProductById(productId);
-      if (product == null) {
-        throw Exception('Producto no encontrado');
-      }
-
-      // Update product inventory and cost
-      final newQuantity = product.inventoryQty + quantity;
-
-      // Calculate weighted average cost
-      final totalCurrentValue = product.cost * product.inventoryQty;
-      final totalNewValue = unitCost * quantity;
-      final newAverageCost = (totalCurrentValue + totalNewValue) / newQuantity;
-
-      await _db.update('products', productId, {
-        'inventory_qty': newQuantity,
-        'stock_quantity': newQuantity,
-        'cost': newAverageCost,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-
-      // Create stock movement
-      await _createStockMovement(
-        productId: productId,
-        quantity: quantity,
-        type: StockMovementType.purchase,
-        reference: reference,
-        unitCost: unitCost,
-      );
-
-      // Post accounting entry for purchase
-      await _postPurchaseAccountingEntry(
-        productId: productId,
-        quantity: quantity,
-        unitCost: unitCost,
-        reference: reference,
-      );
-
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error recording purchase: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> _createStockMovement({
-    required String productId,
-    required int quantity,
-    required StockMovementType type,
-    required String reference,
-    double? unitCost,
-    String? notes,
-  }) async {
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        throw Exception('User does not have a tenant_id. Cannot proceed.');
-      }
-
-      final movement = StockMovement(
-        productId: productId,
-        tenantId: tenantId,
-        quantity: quantity,
-        type: type,
-        reference: reference,
-        unitCost: unitCost,
-        notes: notes,
-      );
-
-      await _db.insert('stock_movements', movement.toJson());
-    } catch (e) {
-      if (kDebugMode) print('Error creating stock movement: $e');
-      // Don't rethrow as this is supplementary data
-    }
-  }
-
   // Stock movement history
   Future<List<StockMovement>> getStockMovements({
     String? productId,
@@ -1003,60 +898,6 @@ class InventoryService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) print('Error fetching low stock products: $e');
       return [];
-    }
-  }
-
-  // Accounting integration
-  Future<void> _postSaleAccountingEntry({
-    required String productId,
-    required int quantity,
-    required double costPerUnit,
-    required double salePrice,
-    required String reference,
-  }) async {
-    try {
-      final totalCost = costPerUnit * quantity;
-      final totalSale = salePrice * quantity;
-
-      // This would integrate with the accounting service
-      // For now, we'll just log the entry that should be created
-      if (kDebugMode) {
-        print('Accounting Entry for Sale:');
-        print('Reference: $reference');
-        print('Debit COGS: ${ChileanUtils.formatCurrency(totalCost)}');
-        print('Credit Inventory: ${ChileanUtils.formatCurrency(totalCost)}');
-        print('Debit Cash/AR: ${ChileanUtils.formatCurrency(totalSale)}');
-        print('Credit Sales: ${ChileanUtils.formatCurrency(totalSale)}');
-      }
-    } catch (e) {
-      if (kDebugMode) print('Error posting sale accounting entry: $e');
-      // Don't rethrow as this is supplementary
-    }
-  }
-
-  Future<void> _postPurchaseAccountingEntry({
-    required String productId,
-    required int quantity,
-    required double unitCost,
-    required String reference,
-  }) async {
-    try {
-      final totalCost = unitCost * quantity;
-      final ivaAmount = ChileanUtils.calculateIva(totalCost);
-
-      // This would integrate with the accounting service
-      // For now, we'll just log the entry that should be created
-      if (kDebugMode) {
-        print('Accounting Entry for Purchase:');
-        print('Reference: $reference');
-        print('Debit Inventory: ${ChileanUtils.formatCurrency(totalCost)}');
-        print('Debit IVA Credit: ${ChileanUtils.formatCurrency(ivaAmount)}');
-        print(
-            'Credit Accounts Payable: ${ChileanUtils.formatCurrency(totalCost + ivaAmount)}');
-      }
-    } catch (e) {
-      if (kDebugMode) print('Error posting purchase accounting entry: $e');
-      // Don't rethrow as this is supplementary
     }
   }
 

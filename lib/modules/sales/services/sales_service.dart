@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../../accounting/widgets/accounting_dashboard_section.dart';
 import '../models/sales_models.dart';
@@ -265,6 +266,56 @@ class SalesService extends ChangeNotifier {
       }
       throw Exception('No se pudo guardar la factura: $e');
     }
+  }
+
+  Future<Invoice> createAtomicCheckout({
+    required String source,
+    required String checkoutKey,
+    required DateTime saleDate,
+    required TaxTreatment taxTreatment,
+    required List<InvoiceItem> items,
+    required List<SalesCheckoutPayment> payments,
+    String? customerId,
+    String? customerName,
+    String? customerRut,
+    String? reference,
+  }) async {
+    final response = await _databaseService.supabase.rpc(
+      'create_atomic_sales_checkout',
+      params: {
+        'p_source': source,
+        'p_checkout_key': checkoutKey,
+        'p_customer_id': customerId,
+        'p_customer_name': customerName,
+        'p_customer_rut': customerRut,
+        'p_reference': reference,
+        'p_tax_treatment': taxTreatment.toValue(),
+        'p_items': items
+            .map((item) => {
+                  'product_id': item.productId,
+                  'quantity': item.quantity.round(),
+                  'unit_price': item.unitPrice.round(),
+                  'discount': item.discount.round(),
+                })
+            .toList(growable: false),
+        'p_payments':
+            payments.map((payment) => payment.toJson()).toList(growable: false),
+        'p_sale_date': saleDate.toUtc().toIso8601String(),
+      },
+    );
+    final payload = Map<String, dynamic>.from(response as Map);
+    final invoiceId = payload['invoice_id']?.toString();
+    if (invoiceId == null || invoiceId.isEmpty) {
+      throw StateError('El checkout no devolvió una factura válida.');
+    }
+    invalidateInvoicesCache();
+    invalidatePaymentsCache();
+    final invoice = await fetchInvoice(invoiceId, refresh: true);
+    if (invoice == null) {
+      throw StateError('La factura atómica no pudo volver a cargarse.');
+    }
+    await loadPayments(forceRefresh: true);
+    return invoice;
   }
 
   Future<void> deleteInvoice(String invoiceId) async {

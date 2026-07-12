@@ -17,8 +17,42 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Parse request body first to get tenant_id
-    const { order_id, order_number, total, items, payer, back_urls, notification_url, tenant_id } = await req.json()
+    const { order_id, back_urls, notification_url, tenant_id } = await req.json()
+
+    if (!order_id) {
+      throw new Error('order_id is required')
+    }
+
+    // Monetary values are always loaded from the server-side order snapshot.
+    // Client-supplied totals/items must never define a provider charge.
+    const { data: order, error: orderError } = await supabase
+      .from('online_orders')
+      .select('id, tenant_id, order_number, total, customer_email, customer_name, payment_method, status')
+      .eq('id', order_id)
+      .maybeSingle()
+
+    if (orderError) throw new Error(`Order lookup failed: ${orderError.message}`)
+    if (!order) throw new Error('Order not found')
+    if (tenant_id && tenant_id !== order.tenant_id) throw new Error('Order tenant mismatch')
+    if (order.payment_method !== 'mercadopago') throw new Error('Order is not configured for MercadoPago')
+    if (order.status === 'cancelled') throw new Error('Cancelled orders cannot be paid')
+
+    const { data: orderItems, error: itemError } = await supabase
+      .from('online_order_items')
+      .select('product_name, quantity, unit_price, subtotal')
+      .eq('order_id', order.id)
+      .eq('tenant_id', order.tenant_id)
+
+    if (itemError) throw new Error(`Order items lookup failed: ${itemError.message}`)
+    if (!orderItems?.length) throw new Error('Order has no items')
+
+    const itemTotal = orderItems.reduce(
+      (sum: number, item: any) => sum + Number(item.subtotal),
+      0,
+    )
+    if (Math.abs(itemTotal - Number(order.total)) > 0.01) {
+      throw new Error('Order item total does not match order total')
+    }
 
     // Get MercadoPago credentials from database (filtered by tenant_id)
     let query = supabase
@@ -26,9 +60,7 @@ serve(async (req) => {
       .select('key, value')
       .in('key', ['mercadopago_access_token', 'mercadopago_test_mode'])
     
-    if (tenant_id) {
-      query = query.eq('tenant_id', tenant_id)
-    }
+    query = query.eq('tenant_id', order.tenant_id)
     
     const { data: settings } = await query
 
@@ -47,21 +79,21 @@ serve(async (req) => {
         'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        items: items.map((item: any) => ({
-          title: item.title,
+        items: orderItems.map((item: any) => ({
+          title: item.product_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
           currency_id: 'CLP',
         })),
         payer: {
-          email: payer.email,
-          name: payer.name,
+          email: order.customer_email,
+          name: order.customer_name,
         },
         back_urls: back_urls,
         auto_return: 'approved',
         notification_url: notification_url,
-        external_reference: order_id,
-        statement_descriptor: `Pedido ${order_number}`,
+        external_reference: order.id,
+        statement_descriptor: `Pedido ${order.order_number}`,
       }),
     })
 
@@ -77,7 +109,9 @@ serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

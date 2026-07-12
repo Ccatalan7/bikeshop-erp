@@ -13,7 +13,10 @@ import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
+import '../models/purchase_receipt.dart';
+import '../services/purchase_receiving_service.dart';
 import '../services/purchase_service.dart';
+import 'purchase_receiving_page.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../shared/models/tax_treatment.dart';
@@ -63,6 +66,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   DateTime _paymentDate = DateTime.now();
   bool _isSavingPayment = false;
   bool _isLoadingPaymentMethods = false;
+  bool _isOpeningReceipt = false;
   String _inlinePaymentIdempotencyKey = const Uuid().v4();
   List<PaymentMethod> _paymentMethods = [];
   double _listPaneWidth = 600.0;
@@ -1587,6 +1591,66 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
   }
 
+  Future<void> _receiveProducts(PurchaseInvoice invoice) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || _isOpeningReceipt) return;
+    final purchaseService = context.read<PurchaseService>();
+    setState(() => _isOpeningReceipt = true);
+    try {
+      final receivingService = PurchaseReceivingService();
+      final mode = await receivingService.getControlMode();
+      if (!mode.acceptsCommands) {
+        if (mounted) setState(() => _isOpeningReceipt = false);
+        await _updateStatus(invoice, PurchaseInvoiceStatus.received);
+        return;
+      }
+
+      final fullInvoice =
+          await purchaseService.getPurchaseInvoice(invoiceId, refresh: true);
+      if (fullInvoice == null) {
+        throw StateError('No se pudo cargar la factura completa.');
+      }
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<PurchaseReceiptResult>(
+        MaterialPageRoute(
+          builder: (_) => PurchaseReceivingPage(
+            invoice: fullInvoice,
+            service: receivingService,
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        final refreshed =
+            await purchaseService.getPurchaseInvoice(invoiceId, refresh: true);
+        if (refreshed != null && mounted) {
+          setState(() {
+            _selectedInvoice = refreshed;
+            _primeAccountingContext(refreshed);
+          });
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Recepción ${result.receiptNumber} registrada'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo abrir la recepción: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningReceipt = false);
+    }
+  }
+
   Future<void> _openPaymentForm(PurchaseInvoice invoice) async {
     if (invoice.id == null) return;
     // Load payment methods
@@ -1855,8 +1919,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             nextActionLabel = 'Marcar como Recibida';
             subLabel =
                 'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
-            onActionPressed =
-                () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+            onActionPressed = () => _receiveProducts(invoice);
           } else {
             nextActionLabel = 'Registrar pago';
             subLabel =
@@ -1867,8 +1930,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           nextActionLabel = 'Marcar como Recibida';
           subLabel =
               'Confirma la recepción física para ingresar al inventario antes del pago.';
-          onActionPressed =
-              () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+          onActionPressed = () => _receiveProducts(invoice);
         }
         break;
 
@@ -1918,8 +1980,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           nextActionLabel = 'Marcar como Recibida';
           subLabel =
               'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
-          onActionPressed =
-              () => _updateStatus(invoice, PurchaseInvoiceStatus.received);
+          onActionPressed = () => _receiveProducts(invoice);
         }
 
         secondaryActions.add(

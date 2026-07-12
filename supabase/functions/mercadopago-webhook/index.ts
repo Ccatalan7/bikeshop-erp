@@ -254,7 +254,7 @@ async function processPayment(
 
   const { data: order, error: orderError } = await supabase
     .from('online_orders')
-    .select('id, tenant_id')
+    .select('id, tenant_id, total')
     .eq('id', orderId)
     .maybeSingle()
 
@@ -297,47 +297,35 @@ async function processPayment(
     status = payment.status
   }
 
-  let paymentStatus = 'pending'
-  if (status === 'approved') {
-    paymentStatus = 'paid'
-  } else if (status === 'rejected' || status === 'cancelled') {
-    paymentStatus = 'failed'
+  const amount = Number(payment.transaction_amount)
+  const currency = String(payment.currency_id ?? '')
+  if (!Number.isFinite(amount)) throw new Error('Payment amount is invalid')
+
+  console.log('💳 [PROCESS_PAYMENT] Step 2: Applying verified provider event atomically...')
+  const { data: eventResult, error: eventError } = await supabase.rpc(
+    'apply_mercadopago_payment_event',
+    {
+      p_order_id: orderId,
+      p_tenant_id: order.tenant_id,
+      p_payment_id: paymentId.toString(),
+      p_provider_status: status,
+      p_amount: amount,
+      p_currency: currency,
+      p_paid_at: payment.date_approved ?? null,
+      p_provider_payload: {
+        status_detail: payment.status_detail ?? null,
+        payment_type_id: payment.payment_type_id ?? null,
+        merchant_order_id: payment.order?.id ?? null,
+      },
+    },
+  )
+
+  if (eventError) {
+    console.error('💳 [PROCESS_PAYMENT] Step 2: ❌ Atomic event error:', eventError)
+    throw new Error(`Failed to apply payment event: ${eventError.message}`)
   }
-  console.log('💳 [PROCESS_PAYMENT] Step 2: Mapped status:', status, '->', paymentStatus)
 
-  // Update online order
-  console.log('💳 [PROCESS_PAYMENT] Step 3: Updating online_orders table...')
-  const { data: updateResult, error: updateError } = await supabase
-    .from('online_orders')
-    .update({
-      payment_status: paymentStatus,
-      payment_method: 'mercadopago',
-      payment_reference: paymentId.toString(),
-      paid_at: status === 'approved' ? new Date().toISOString() : null,
-    })
-    .eq('id', orderId)
-    .eq('tenant_id', order.tenant_id)
-    .select()
-
-  if (updateError) {
-    console.error('💳 [PROCESS_PAYMENT] Step 3: ❌ Update error:', updateError)
-    throw new Error(`Failed to update order: ${updateError.message}`)
-  }
-  console.log('💳 [PROCESS_PAYMENT] Step 3: ✅ Order updated:', updateResult?.length || 0, 'rows')
-
-  // If approved, process the order (create invoice + payment)
-  if (status === 'approved') {
-    console.log('💳 [PROCESS_PAYMENT] Step 4: Payment APPROVED - calling process_online_order...')
-    const { data: invoiceId, error: rpcError } = await supabase.rpc('process_online_order', { p_order_id: orderId })
-
-    if (rpcError) {
-      console.error('💳 [PROCESS_PAYMENT] Step 4: ❌ RPC error:', rpcError)
-      throw new Error(`Failed to process order: ${rpcError.message}`)
-    }
-    console.log('💳 [PROCESS_PAYMENT] Step 4: ✅ Invoice ID:', invoiceId)
-  } else {
-    console.log('💳 [PROCESS_PAYMENT] Step 4: ⚠️ Payment NOT approved (', status, ') - skipping invoice creation')
-  }
+  console.log('💳 [PROCESS_PAYMENT] Step 2: ✅ Event result:', eventResult)
 
   console.log('💳 [PROCESS_PAYMENT] ========== COMPLETE ==========')
 }

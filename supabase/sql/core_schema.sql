@@ -5240,7 +5240,16 @@ alter table public.sales_invoices
 
 -- Add source tracking for sales invoices (for stock movements)
 alter table public.sales_invoices
-  add column if not exists source text check (source in ('pos', 'manual_sale', 'ecommerce', 'mechanic_job'));
+  add column if not exists source text check (source in ('pos', 'quick_sale', 'manual_sale', 'ecommerce', 'mechanic_job'));
+
+do $$
+begin
+  alter table public.sales_invoices
+    drop constraint if exists sales_invoices_source_check;
+  alter table public.sales_invoices
+    add constraint sales_invoices_source_check
+    check (source in ('pos', 'quick_sale', 'manual_sale', 'ecommerce', 'mechanic_job'));
+end $$;
 
 -- Add created_by tracking for audit trail
 alter table public.sales_invoices
@@ -6753,43 +6762,16 @@ begin
     v_new_status := 'paid';
 
   elsif v_total > 0 and v_balance > 0 then
-    -- Partially paid
-    if v_invoice.prepayment_model then
-      -- Prepayment model: partial payment keeps it at 'paid' if was paid/received
-      if v_invoice.status IN ('paid', 'received') then
-        v_new_status := 'paid';
-      else
-        v_new_status := 'confirmed';
-      end if;
-    else
-      -- Standard model: partial payment keeps it at 'received' if was received/paid
-      if v_invoice.status IN ('received', 'paid') then
-        v_new_status := 'received';
-      else
-        v_new_status := 'confirmed';
-      end if;
-    end if;
+    -- A partially paid invoice cannot remain marked paid. Received invoices
+    -- were handled above and keep their physical receipt state.
+    v_new_status := 'confirmed';
 
   else
-    -- No payments (v_total = 0): revert to previous status in workflow
-    if v_invoice.prepayment_model then
-      -- Prepayment model: Confirmed→Paid→Received
-      if v_invoice.status IN ('paid', 'received') then
-        -- If was paid or received, revert to confirmed (no payment means not paid yet)
-        v_new_status := 'confirmed';
-      else
-        v_new_status := v_invoice.status;
-      end if;
-    else
-      -- Standard model: Confirmed→Received→Paid
-      if v_invoice.status = 'paid' then
-        -- If was paid, revert to received (goods received but payment removed)
-        v_new_status := 'received';
-      else
-        -- If at received/confirmed, stay there (never reached paid)
-        v_new_status := v_invoice.status;
-      end if;
-    end if;
+    -- No active payments: a non-received paid invoice returns to confirmed.
+    v_new_status := case
+      when v_invoice.status = 'paid' then 'confirmed'
+      else v_invoice.status
+    end;
   end if;
 
   update public.purchase_invoices
@@ -7007,6 +6989,87 @@ begin
 end;
 $$;
 
+create or replace function public.delete_purchase_payment_journal_entry(
+  p_payment_id uuid,
+  p_invoice_id uuid,
+  p_tenant_id uuid,
+  p_expected_amount numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice_number text;
+  v_id_journal_count integer;
+  v_legacy_journal_count integer;
+  v_matching_legacy_count integer;
+begin
+  if p_payment_id is null then
+    return;
+  end if;
+
+  select count(*)::integer
+    into v_id_journal_count
+    from public.journal_entries entry
+   where entry.tenant_id = p_tenant_id
+     and entry.source_module = 'purchase_payments'
+     and entry.source_reference = p_payment_id::text;
+
+  if v_id_journal_count > 1 then
+    raise exception 'Payment % has % current journal entries', p_payment_id, v_id_journal_count
+      using errcode = 'check_violation';
+  elsif v_id_journal_count = 1 then
+    delete from public.journal_entries entry
+     where entry.tenant_id = p_tenant_id
+       and entry.source_module = 'purchase_payments'
+       and entry.source_reference = p_payment_id::text;
+    return;
+  end if;
+
+  select invoice.invoice_number
+    into v_invoice_number
+    from public.purchase_invoices invoice
+   where invoice.id = p_invoice_id
+     and invoice.tenant_id = p_tenant_id;
+
+  if v_invoice_number is null then
+    return;
+  end if;
+
+  select
+    count(*)::integer,
+    count(*) filter (
+      where public.clp_round(entry.total_debit)
+            = public.clp_round(p_expected_amount)
+        and public.clp_round(entry.total_credit)
+            = public.clp_round(p_expected_amount)
+    )::integer
+    into v_legacy_journal_count, v_matching_legacy_count
+    from public.journal_entries entry
+   where entry.tenant_id = p_tenant_id
+     and entry.source_module = 'purchase_payments'
+     and entry.source_reference = v_invoice_number;
+
+  if v_legacy_journal_count = 0 then
+    return;
+  end if;
+
+  if v_legacy_journal_count <> 1 or v_matching_legacy_count <> 1 then
+    raise exception
+      'Legacy payment journals for invoice % are ambiguous (journals %, matching amount %); payment edit/undo stopped for audit review',
+      v_invoice_number, v_legacy_journal_count, v_matching_legacy_count
+      using errcode = 'check_violation';
+  end if;
+
+  delete from public.journal_entries entry
+   where entry.tenant_id = p_tenant_id
+     and entry.source_module = 'purchase_payments'
+     and entry.source_reference = v_invoice_number;
+end;
+$$;
+
 -- CRITICAL: Drop trigger FIRST, then function to clear cached type definition
 -- Using CASCADE to ensure all dependencies are dropped
 do $$
@@ -7031,11 +7094,15 @@ begin
     if NEW.invoice_id is distinct from OLD.invoice_id then
       perform public.recalculate_purchase_invoice_payments(OLD.invoice_id);
     end if;
-    perform public.delete_purchase_payment_journal_entry(OLD.id);
+    perform public.delete_purchase_payment_journal_entry(
+      OLD.id, OLD.invoice_id, OLD.tenant_id, OLD.amount
+    );
     perform public.create_purchase_payment_journal_entry(NEW.id);
     perform public.recalculate_purchase_invoice_payments(NEW.invoice_id);
   elsif TG_OP = 'DELETE' then
-    perform public.delete_purchase_payment_journal_entry(OLD.id);
+    perform public.delete_purchase_payment_journal_entry(
+      OLD.id, OLD.invoice_id, OLD.tenant_id, OLD.amount
+    );
     perform public.recalculate_purchase_invoice_payments(OLD.invoice_id);
   end if;
   return NULL;
@@ -7146,8 +7213,8 @@ begin
 
           -- Deduct Component Stock
           update public.products
-             set inventory_qty = coalesce(inventory_qty, 0) - v_qty_to_deduct,
-                 stock_quantity = greatest(coalesce(stock_quantity, 0) - v_qty_to_deduct, 0),
+             set inventory_qty = coalesce(stock_quantity, inventory_qty, 0) - v_qty_to_deduct,
+                 stock_quantity = coalesce(stock_quantity, inventory_qty, 0) - v_qty_to_deduct,
                  updated_at = now()
            where id = v_component.component_product_id;
 
@@ -7179,8 +7246,8 @@ begin
     else
       -- STANDARD LOGIC: NOT A SET
       update public.products
-         set inventory_qty = coalesce(inventory_qty, 0) - v_quantity_int,
-             stock_quantity = greatest(coalesce(stock_quantity, 0) - v_quantity_int, 0),
+         set inventory_qty = coalesce(stock_quantity, inventory_qty, 0) - v_quantity_int,
+             stock_quantity = coalesce(stock_quantity, inventory_qty, 0) - v_quantity_int,
              updated_at = now()
        where id = v_resolved_product_id
          and coalesce(is_service, false) = false
@@ -7752,6 +7819,30 @@ $$;
 
 grant execute on function public.ensure_sales_invoice_journal_entry(uuid) to authenticated;
 
+-- Stable comparison of only the invoice fields that can change physical stock.
+-- Price, tax, cost, notes, and line ordering must not create stock reversals.
+create or replace function public.invoice_inventory_signature(p_items jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select coalesce(
+    jsonb_agg(item_signature order by item_signature::text),
+    '[]'::jsonb
+  )
+  from (
+    select jsonb_build_object(
+      'product_id', nullif(item->>'product_id', ''),
+      'product_sku', nullif(item->>'product_sku', ''),
+      'quantity', coalesce(nullif(item->>'quantity', '')::numeric, 0),
+      'purchase_treatment', coalesce(nullif(item->>'purchase_treatment', ''), 'inventory'),
+      'is_service', coalesce(nullif(item->>'is_service', '')::boolean, false)
+    ) as item_signature
+    from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) item
+  ) normalized_items;
+$$;
+
 create or replace function public.handle_sales_invoice_change()
 returns trigger
 language plpgsql
@@ -7819,9 +7910,17 @@ begin
 
     -- Handle inventory changes based on status transition
     if v_old_posted and v_new_posted then
-      -- Posted -> posted edits must NOT move stock.
-      -- Inventory changes only happen on status transitions.
-      raise notice 'handle_sales_invoice_change: both posted, no inventory change';
+      -- A posted document remains the stock owner. If its item snapshot changes,
+      -- reverse the previously posted snapshot and apply the new one atomically.
+      -- Both helpers use the same invoice reference, so retries remain net-idempotent.
+      if public.invoice_inventory_signature(OLD.items)
+           is distinct from public.invoice_inventory_signature(NEW.items) then
+        raise notice 'handle_sales_invoice_change: posted items changed, replacing inventory snapshot';
+        perform public.restore_sales_invoice_inventory(OLD);
+        perform public.consume_sales_invoice_inventory(NEW);
+      else
+        raise notice 'handle_sales_invoice_change: both posted without item changes, no inventory change';
+      end if;
     elsif v_old_posted and not v_new_posted then
       -- Changed from posted to non-posted: restore inventory
       raise notice 'handle_sales_invoice_change: changed to non-posted, restore only';
@@ -8025,6 +8124,7 @@ alter table public.purchase_invoices
   add column if not exists tax_treatment text not null default 'no_tax' check (tax_treatment in ('no_tax', 'tax_included')),
   add column if not exists net_amount numeric(12,2) not null default 0,
   add column if not exists balance numeric(12,2) not null default 0,
+  add column if not exists discount_amount numeric(12,2) not null default 0,
   add column if not exists prepayment_model boolean not null default false,
   add column if not exists sent_date timestamp with time zone,
   add column if not exists confirmed_date timestamp with time zone,
@@ -10506,6 +10606,1454 @@ create table if not exists journal_lines (
   updated_at timestamp with time zone not null default now()
 );
 
+-- ============================================================================
+-- INVENTORY AND ACCOUNTING TRACE KERNEL (PHASE 1)
+-- Connects source-document actions, stock movements, adjustments, and journals.
+-- Historical rows remain nullable and are classified separately by audit tools.
+-- ============================================================================
+
+create table if not exists inventory_accounting_operations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  operation_key text not null,
+  source_channel text not null,
+  action text not null,
+  document_type text not null,
+  document_id uuid not null,
+  actor_id uuid references auth.users(id) on delete set null,
+  executor text not null default 'database_trigger',
+  old_status text,
+  new_status text,
+  before_snapshot jsonb,
+  after_snapshot jsonb,
+  context jsonb not null default '{}'::jsonb,
+  outcome text not null default 'started'
+    check (outcome in ('started', 'completed', 'failed', 'reversed', 'superseded')),
+  error_code text,
+  error_message text,
+  started_at timestamp with time zone not null default clock_timestamp(),
+  completed_at timestamp with time zone,
+  created_at timestamp with time zone not null default clock_timestamp(),
+  unique (tenant_id, id),
+  unique (tenant_id, operation_key)
+);
+
+create table if not exists inventory_accounting_checkpoints (
+  id bigint generated by default as identity primary key,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  operation_id uuid not null,
+  phase text not null check (phase in (
+    'accepted',
+    'source_snapshotted',
+    'inventory_planned',
+    'inventory_applied',
+    'movement_recorded',
+    'accounting_planned',
+    'journal_posted',
+    'journal_reversed',
+    'invariants_verified',
+    'completed'
+  )),
+  outcome text not null default 'completed'
+    check (outcome in ('started', 'completed', 'warning', 'failed')),
+  entity_type text,
+  entity_id uuid,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone not null default clock_timestamp(),
+  foreign key (tenant_id, operation_id)
+    references inventory_accounting_operations(tenant_id, id) on delete restrict
+);
+
+create index if not exists idx_inventory_operations_tenant_created
+  on inventory_accounting_operations(tenant_id, created_at desc);
+create index if not exists idx_inventory_operations_document
+  on inventory_accounting_operations(tenant_id, document_type, document_id, created_at desc);
+create index if not exists idx_inventory_operations_actor
+  on inventory_accounting_operations(actor_id, created_at desc);
+create index if not exists idx_inventory_checkpoints_operation
+  on inventory_accounting_checkpoints(operation_id, id);
+
+alter table inventory_accounting_operations enable row level security;
+alter table inventory_accounting_checkpoints enable row level security;
+
+drop policy if exists inventory_accounting_operations_select
+  on inventory_accounting_operations;
+create policy inventory_accounting_operations_select
+  on inventory_accounting_operations
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+drop policy if exists inventory_accounting_checkpoints_select
+  on inventory_accounting_checkpoints;
+create policy inventory_accounting_checkpoints_select
+  on inventory_accounting_checkpoints
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke all on inventory_accounting_operations from anon, authenticated;
+revoke all on inventory_accounting_checkpoints from anon, authenticated;
+grant select on inventory_accounting_operations to authenticated;
+grant select on inventory_accounting_checkpoints to authenticated;
+
+create or replace function public.prevent_inventory_checkpoint_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if current_setting('app.allow_inventory_trace_mutation', true) <> 'true' then
+    raise exception 'Inventory/accounting checkpoints are append-only'
+      using errcode = 'check_violation';
+  end if;
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+drop trigger if exists trg_inventory_checkpoints_immutable
+  on inventory_accounting_checkpoints;
+create trigger trg_inventory_checkpoints_immutable
+  before update or delete on inventory_accounting_checkpoints
+  for each row execute function public.prevent_inventory_checkpoint_mutation();
+
+create or replace function public.inventory_trace_document_snapshot(p_row jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'id', p_row->'id',
+    'status', p_row->'status',
+    'source', p_row->'source',
+    'invoice_number', p_row->'invoice_number',
+    'items', coalesce(p_row->'items', '[]'::jsonb),
+    'subtotal', p_row->'subtotal',
+    'net_amount', p_row->'net_amount',
+    'tax', coalesce(p_row->'tax', p_row->'iva_amount'),
+    'total', p_row->'total',
+    'paid_amount', p_row->'paid_amount',
+    'balance', p_row->'balance',
+    'prepayment_model', p_row->'prepayment_model',
+    'updated_at', p_row->'updated_at'
+  ));
+$$;
+
+create or replace function public.append_inventory_accounting_checkpoint(
+  p_operation_id uuid,
+  p_phase text,
+  p_outcome text default 'completed',
+  p_entity_type text default null,
+  p_entity_id uuid default null,
+  p_payload jsonb default '{}'::jsonb
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_checkpoint_id bigint;
+begin
+  insert into inventory_accounting_checkpoints (
+    tenant_id,
+    operation_id,
+    phase,
+    outcome,
+    entity_type,
+    entity_id,
+    payload
+  )
+  select
+    operation.tenant_id,
+    operation.id,
+    p_phase,
+    coalesce(p_outcome, 'completed'),
+    p_entity_type,
+    p_entity_id,
+    coalesce(p_payload, '{}'::jsonb)
+  from inventory_accounting_operations operation
+  where operation.id = p_operation_id
+  returning id into v_checkpoint_id;
+
+  if v_checkpoint_id is null then
+    raise exception 'Inventory/accounting operation % does not exist', p_operation_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  return v_checkpoint_id;
+end;
+$$;
+
+revoke all on function public.append_inventory_accounting_checkpoint(
+  uuid, text, text, text, uuid, jsonb
+) from public, anon, authenticated;
+
+create or replace function public.complete_inventory_accounting_operation(
+  p_operation_id uuid,
+  p_tenant_id uuid,
+  p_completion_payload jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_stock_column_drift integer := 0;
+  v_movement_arithmetic_errors integer := 0;
+  v_unbalanced_journals integer := 0;
+begin
+  if not exists (
+    select 1
+      from inventory_accounting_operations operation
+     where operation.id = p_operation_id
+       and operation.tenant_id = p_tenant_id
+  ) then
+    raise exception 'Inventory/accounting operation % does not belong to tenant %',
+      p_operation_id, p_tenant_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  select count(*)::integer
+    into v_stock_column_drift
+    from products product
+   where product.tenant_id = p_tenant_id
+     and product.id in (
+       select movement.product_id
+         from stock_movements movement
+        where movement.operation_id = p_operation_id
+     )
+     and coalesce(product.inventory_qty, 0)
+         <> coalesce(product.stock_quantity, 0);
+
+  select count(*)::integer
+    into v_movement_arithmetic_errors
+    from stock_movements movement
+   where movement.operation_id = p_operation_id
+     and (
+       movement.stock_before is null
+       or movement.stock_after is null
+       or round(
+         movement.stock_before + case
+           when movement.type in ('OUT', 'TRANSFER_OUT') then -abs(movement.quantity)
+           when movement.type in ('IN', 'TRANSFER_IN') then abs(movement.quantity)
+           else movement.quantity
+         end,
+         2
+       ) <> round(movement.stock_after, 2)
+     );
+
+  select count(*)::integer
+    into v_unbalanced_journals
+    from (
+      select entry.id
+        from journal_entries entry
+        left join journal_lines line
+          on line.entry_id = entry.id
+         and line.tenant_id = entry.tenant_id
+       where entry.operation_id = p_operation_id
+       group by entry.id
+      having round(coalesce(sum(line.debit_amount), 0), 2)
+          <> round(coalesce(sum(line.credit_amount), 0), 2)
+    ) broken;
+
+  perform public.append_inventory_accounting_checkpoint(
+    p_operation_id,
+    'invariants_verified',
+    case
+      when v_stock_column_drift = 0
+       and v_movement_arithmetic_errors = 0
+       and v_unbalanced_journals = 0 then 'completed'
+      else 'failed'
+    end,
+    null,
+    null,
+    jsonb_build_object(
+      'stock_column_drift', v_stock_column_drift,
+      'movement_arithmetic_errors', v_movement_arithmetic_errors,
+      'unbalanced_journals', v_unbalanced_journals
+    )
+  );
+
+  if v_stock_column_drift > 0
+     or v_movement_arithmetic_errors > 0
+     or v_unbalanced_journals > 0 then
+    raise exception
+      'Inventory/accounting invariants failed for operation % (stock drift %, movement errors %, unbalanced journals %)',
+      p_operation_id,
+      v_stock_column_drift,
+      v_movement_arithmetic_errors,
+      v_unbalanced_journals
+      using errcode = 'check_violation';
+  end if;
+
+  update inventory_accounting_operations
+     set outcome = 'completed',
+         completed_at = clock_timestamp()
+   where id = p_operation_id
+     and tenant_id = p_tenant_id;
+
+  perform public.append_inventory_accounting_checkpoint(
+    p_operation_id,
+    'completed',
+    'completed',
+    null,
+    null,
+    coalesce(p_completion_payload, '{}'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.complete_inventory_accounting_operation(uuid, uuid, jsonb)
+  from public, anon, authenticated;
+
+create or replace function public.begin_invoice_inventory_accounting_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_row jsonb;
+  v_new_row jsonb;
+  v_effective_row jsonb;
+  v_before_snapshot jsonb;
+  v_after_snapshot jsonb;
+  v_operation_id uuid;
+  v_operation_key text;
+  v_existing_operation text;
+  v_tenant_id uuid;
+  v_document_id uuid;
+  v_document_type text;
+  v_source_channel text;
+begin
+  v_existing_operation := nullif(
+    current_setting('app.inventory_operation_id', true),
+    ''
+  );
+
+  -- Nested invoice updates caused by payment recalculation or sync belong to
+  -- the already-active operation and must not start a disconnected trace.
+  if pg_trigger_depth() > 1 and v_existing_operation is not null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  if TG_OP = 'INSERT' then
+    v_new_row := to_jsonb(NEW);
+    v_effective_row := v_new_row;
+  elsif TG_OP = 'UPDATE' then
+    v_old_row := to_jsonb(OLD);
+    v_new_row := to_jsonb(NEW);
+    v_effective_row := v_new_row;
+  else
+    v_old_row := to_jsonb(OLD);
+    v_effective_row := v_old_row;
+  end if;
+
+  v_tenant_id := nullif(v_effective_row->>'tenant_id', '')::uuid;
+  v_document_id := nullif(v_effective_row->>'id', '')::uuid;
+
+  if v_tenant_id is null or v_document_id is null then
+    raise exception 'Inventory/accounting trace requires tenant_id and document id';
+  end if;
+
+  if TG_TABLE_NAME = 'sales_invoices' then
+    v_document_type := 'sales_invoice';
+    v_source_channel := coalesce(nullif(v_effective_row->>'source', ''), 'manual_sale');
+  elsif TG_TABLE_NAME = 'purchase_invoices' then
+    v_document_type := 'purchase_invoice';
+    v_source_channel := 'purchase_invoice';
+  else
+    raise exception 'Unsupported trace source table: %', TG_TABLE_NAME;
+  end if;
+
+  v_before_snapshot := case
+    when v_old_row is null then null
+    else public.inventory_trace_document_snapshot(v_old_row)
+  end;
+  v_after_snapshot := case
+    when v_new_row is null then null
+    else public.inventory_trace_document_snapshot(v_new_row)
+  end;
+
+  v_operation_key := coalesce(
+    nullif(current_setting('app.inventory_idempotency_key', true), ''),
+    gen_random_uuid()::text
+  );
+
+  insert into inventory_accounting_operations (
+    tenant_id,
+    operation_key,
+    source_channel,
+    action,
+    document_type,
+    document_id,
+    actor_id,
+    executor,
+    old_status,
+    new_status,
+    before_snapshot,
+    after_snapshot,
+    context
+  ) values (
+    v_tenant_id,
+    format('%s:%s:%s:%s', v_document_type, v_document_id, lower(TG_OP), v_operation_key),
+    v_source_channel,
+    lower(TG_OP),
+    v_document_type,
+    v_document_id,
+    auth.uid(),
+    'database_trigger',
+    v_old_row->>'status',
+    v_new_row->>'status',
+    v_before_snapshot,
+    v_after_snapshot,
+    jsonb_build_object(
+      'table', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME,
+      'trigger_depth', pg_trigger_depth(),
+      'transaction_id', txid_current()::text,
+      'before_hash', case when v_before_snapshot is null then null else md5(v_before_snapshot::text) end,
+      'after_hash', case when v_after_snapshot is null then null else md5(v_after_snapshot::text) end
+    )
+  )
+  returning id into v_operation_id;
+
+  perform set_config('app.inventory_operation_id', v_operation_id::text, true);
+  perform set_config('app.inventory_source_document_type', v_document_type, true);
+  perform set_config('app.inventory_source_document_id', v_document_id::text, true);
+  perform set_config('app.inventory_source_channel', v_source_channel, true);
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'accepted',
+    'started',
+    v_document_type,
+    v_document_id,
+    jsonb_build_object(
+      'action', lower(TG_OP),
+      'old_status', v_old_row->>'status',
+      'new_status', v_new_row->>'status'
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'source_snapshotted',
+    'completed',
+    v_document_type,
+    v_document_id,
+    jsonb_build_object(
+      'before', v_before_snapshot,
+      'after', v_after_snapshot
+    )
+  );
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+alter table stock_movements
+  add column if not exists operation_id uuid,
+  add column if not exists source_document_type text,
+  add column if not exists source_document_id uuid,
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists stock_before numeric(12,2),
+  add column if not exists stock_after numeric(12,2),
+  add column if not exists reversal_of_id uuid references stock_movements(id);
+
+alter table stock_adjustments
+  add column if not exists operation_id uuid,
+  add column if not exists source_document_type text,
+  add column if not exists source_document_id uuid;
+
+alter table journal_entries
+  add column if not exists operation_id uuid,
+  add column if not exists source_document_type text,
+  add column if not exists source_document_id uuid,
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists reversal_of_id uuid references journal_entries(id);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'stock_movements_inventory_operation_fkey'
+      and conrelid = 'public.stock_movements'::regclass
+  ) then
+    alter table stock_movements
+      add constraint stock_movements_inventory_operation_fkey
+      foreign key (tenant_id, operation_id)
+      references inventory_accounting_operations(tenant_id, id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'stock_adjustments_inventory_operation_fkey'
+      and conrelid = 'public.stock_adjustments'::regclass
+  ) then
+    alter table stock_adjustments
+      add constraint stock_adjustments_inventory_operation_fkey
+      foreign key (tenant_id, operation_id)
+      references inventory_accounting_operations(tenant_id, id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'journal_entries_inventory_operation_fkey'
+      and conrelid = 'public.journal_entries'::regclass
+  ) then
+    alter table journal_entries
+      add constraint journal_entries_inventory_operation_fkey
+      foreign key (tenant_id, operation_id)
+      references inventory_accounting_operations(tenant_id, id) on delete restrict;
+  end if;
+end $$;
+
+create index if not exists idx_stock_movements_operation
+  on stock_movements(tenant_id, operation_id) where operation_id is not null;
+create index if not exists idx_stock_movements_source_document
+  on stock_movements(tenant_id, source_document_type, source_document_id)
+  where source_document_id is not null;
+create index if not exists idx_stock_adjustments_operation
+  on stock_adjustments(tenant_id, operation_id) where operation_id is not null;
+create index if not exists idx_journal_entries_operation
+  on journal_entries(tenant_id, operation_id) where operation_id is not null;
+create index if not exists idx_journal_entries_source_document
+  on journal_entries(tenant_id, source_document_type, source_document_id)
+  where source_document_id is not null;
+
+create or replace function public.stamp_stock_movement_trace_context()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_text text;
+  v_document_text text;
+  v_stock_after numeric(12,2);
+  v_signed_delta numeric(12,2);
+begin
+  v_operation_text := nullif(current_setting('app.inventory_operation_id', true), '');
+  if v_operation_text is null then
+    return NEW;
+  end if;
+
+  v_document_text := nullif(current_setting('app.inventory_source_document_id', true), '');
+  NEW.operation_id := coalesce(NEW.operation_id, v_operation_text::uuid);
+  NEW.source_document_type := coalesce(
+    NEW.source_document_type,
+    nullif(current_setting('app.inventory_source_document_type', true), '')
+  );
+  NEW.source_document_id := coalesce(
+    NEW.source_document_id,
+    case when v_document_text is null then null else v_document_text::uuid end
+  );
+  NEW.created_by := coalesce(NEW.created_by, auth.uid());
+
+  select coalesce(p.stock_quantity, p.inventory_qty, 0)::numeric(12,2)
+    into v_stock_after
+    from products p
+   where p.id = NEW.product_id
+     and p.tenant_id = NEW.tenant_id;
+
+  v_signed_delta := case
+    when NEW.type in ('OUT', 'TRANSFER_OUT') then -abs(NEW.quantity)
+    when NEW.type in ('IN', 'TRANSFER_IN') then abs(NEW.quantity)
+    else NEW.quantity
+  end;
+
+  NEW.stock_after := coalesce(NEW.stock_after, v_stock_after);
+  NEW.stock_before := coalesce(NEW.stock_before, v_stock_after - v_signed_delta);
+  return NEW;
+end;
+$$;
+
+create or replace function public.stamp_document_trace_context()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_text text;
+  v_document_text text;
+begin
+  v_operation_text := nullif(current_setting('app.inventory_operation_id', true), '');
+  if v_operation_text is null then
+    return NEW;
+  end if;
+
+  v_document_text := nullif(current_setting('app.inventory_source_document_id', true), '');
+  NEW.operation_id := coalesce(NEW.operation_id, v_operation_text::uuid);
+  NEW.source_document_type := coalesce(
+    NEW.source_document_type,
+    nullif(current_setting('app.inventory_source_document_type', true), '')
+  );
+  NEW.source_document_id := coalesce(
+    NEW.source_document_id,
+    case when v_document_text is null then null else v_document_text::uuid end
+  );
+  NEW.created_by := coalesce(NEW.created_by, auth.uid());
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_stock_movements_trace_context on stock_movements;
+create trigger trg_stock_movements_trace_context
+  before insert on stock_movements
+  for each row execute function public.stamp_stock_movement_trace_context();
+
+drop trigger if exists trg_stock_adjustments_trace_context on stock_adjustments;
+create trigger trg_stock_adjustments_trace_context
+  before insert on stock_adjustments
+  for each row execute function public.stamp_document_trace_context();
+
+drop trigger if exists trg_journal_entries_trace_context on journal_entries;
+create trigger trg_journal_entries_trace_context
+  before insert on journal_entries
+  for each row execute function public.stamp_document_trace_context();
+
+create or replace function public.checkpoint_stock_movement_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if NEW.operation_id is null then
+    return NEW;
+  end if;
+
+  perform public.append_inventory_accounting_checkpoint(
+    NEW.operation_id,
+    'inventory_applied',
+    'completed',
+    'product',
+    NEW.product_id,
+    jsonb_build_object(
+      'stock_before', NEW.stock_before,
+      'stock_after', NEW.stock_after,
+      'movement_type', NEW.movement_type
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    NEW.operation_id,
+    'movement_recorded',
+    'completed',
+    'stock_movement',
+    NEW.id,
+    jsonb_build_object(
+      'product_id', NEW.product_id,
+      'type', NEW.type,
+      'quantity', NEW.quantity,
+      'stock_before', NEW.stock_before,
+      'stock_after', NEW.stock_after,
+      'reference', NEW.reference,
+      'reversal_of_id', NEW.reversal_of_id
+    )
+  );
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_stock_movements_trace_checkpoint on stock_movements;
+create trigger trg_stock_movements_trace_checkpoint
+  after insert on stock_movements
+  for each row execute function public.checkpoint_stock_movement_trace();
+
+create or replace function public.checkpoint_journal_entry_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_id uuid;
+  v_original_operation_id uuid;
+  v_context_operation_text text;
+  v_payload jsonb;
+begin
+  if TG_OP = 'DELETE' then
+    v_original_operation_id := OLD.operation_id;
+    v_context_operation_text := nullif(
+      current_setting('app.inventory_operation_id', true),
+      ''
+    );
+    v_operation_id := coalesce(
+      case
+        when v_context_operation_text is null then null
+        else v_context_operation_text::uuid
+      end,
+      v_original_operation_id
+    );
+  else
+    v_operation_id := NEW.operation_id;
+  end if;
+
+  if v_operation_id is null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  v_payload := case
+    when TG_OP = 'DELETE' then jsonb_build_object(
+      'entry_number', OLD.entry_number,
+      'source_module', OLD.source_module,
+      'source_reference', OLD.source_reference,
+      'total_debit', OLD.total_debit,
+      'total_credit', OLD.total_credit,
+      'reversed_journal_operation_id', v_original_operation_id,
+      'deleted_snapshot', to_jsonb(OLD)
+    )
+    else jsonb_build_object(
+      'entry_number', NEW.entry_number,
+      'source_module', NEW.source_module,
+      'source_reference', NEW.source_reference,
+      'total_debit', NEW.total_debit,
+      'total_credit', NEW.total_credit,
+      'reversal_of_id', NEW.reversal_of_id
+    )
+  end;
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    case when TG_OP = 'DELETE' then 'journal_reversed' else 'journal_posted' end,
+    'completed',
+    'journal_entry',
+    case when TG_OP = 'DELETE' then OLD.id else NEW.id end,
+    v_payload
+  );
+
+  -- Preserve the backward link on the original posting as well as the forward
+  -- link on the operation that caused the replacement.
+  if TG_OP = 'DELETE'
+     and v_original_operation_id is not null
+     and v_original_operation_id is distinct from v_operation_id then
+    perform public.append_inventory_accounting_checkpoint(
+      v_original_operation_id,
+      'journal_reversed',
+      'completed',
+      'journal_entry',
+      OLD.id,
+      jsonb_build_object(
+        'entry_number', OLD.entry_number,
+        'reversed_by_operation_id', v_operation_id
+      )
+    );
+  end if;
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+drop trigger if exists trg_journal_entries_trace_checkpoint_insert on journal_entries;
+create trigger trg_journal_entries_trace_checkpoint_insert
+  after insert on journal_entries
+  for each row execute function public.checkpoint_journal_entry_trace();
+
+drop trigger if exists trg_journal_entries_trace_checkpoint_delete on journal_entries;
+create trigger trg_journal_entries_trace_checkpoint_delete
+  after delete on journal_entries
+  for each row execute function public.checkpoint_journal_entry_trace();
+
+create or replace function public.complete_invoice_inventory_accounting_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_text text;
+  v_operation_id uuid;
+  v_tenant_id uuid;
+  v_stock_column_drift integer := 0;
+  v_movement_arithmetic_errors integer := 0;
+  v_unbalanced_journals integer := 0;
+begin
+  if pg_trigger_depth() > 1 then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  v_operation_text := nullif(current_setting('app.inventory_operation_id', true), '');
+  if v_operation_text is null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+  v_operation_id := v_operation_text::uuid;
+  v_tenant_id := case when TG_OP = 'DELETE' then OLD.tenant_id else NEW.tenant_id end;
+
+  select count(*)::integer
+    into v_stock_column_drift
+    from products p
+   where p.tenant_id = v_tenant_id
+     and p.id in (
+       select sm.product_id
+       from stock_movements sm
+       where sm.operation_id = v_operation_id
+     )
+     and coalesce(p.inventory_qty, 0) <> coalesce(p.stock_quantity, 0);
+
+  select count(*)::integer
+    into v_movement_arithmetic_errors
+    from stock_movements sm
+   where sm.operation_id = v_operation_id
+     and (
+       sm.stock_before is null
+       or sm.stock_after is null
+       or round(
+         sm.stock_before + case
+           when sm.type in ('OUT', 'TRANSFER_OUT') then -abs(sm.quantity)
+           when sm.type in ('IN', 'TRANSFER_IN') then abs(sm.quantity)
+           else sm.quantity
+         end,
+         2
+       ) <> round(sm.stock_after, 2)
+     );
+
+  select count(*)::integer
+    into v_unbalanced_journals
+    from (
+      select je.id
+      from journal_entries je
+      left join journal_lines jl
+        on jl.entry_id = je.id and jl.tenant_id = je.tenant_id
+      where je.operation_id = v_operation_id
+      group by je.id
+      having round(coalesce(sum(jl.debit_amount), 0), 2)
+          <> round(coalesce(sum(jl.credit_amount), 0), 2)
+    ) broken;
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'invariants_verified',
+    case
+      when v_stock_column_drift = 0
+       and v_movement_arithmetic_errors = 0
+       and v_unbalanced_journals = 0 then 'completed'
+      else 'failed'
+    end,
+    null,
+    null,
+    jsonb_build_object(
+      'stock_column_drift', v_stock_column_drift,
+      'movement_arithmetic_errors', v_movement_arithmetic_errors,
+      'unbalanced_journals', v_unbalanced_journals
+    )
+  );
+
+  if v_stock_column_drift > 0
+     or v_movement_arithmetic_errors > 0
+     or v_unbalanced_journals > 0 then
+    raise exception
+      'Inventory/accounting invariants failed for operation % (stock drift %, movement errors %, unbalanced journals %)',
+      v_operation_id,
+      v_stock_column_drift,
+      v_movement_arithmetic_errors,
+      v_unbalanced_journals
+      using errcode = 'check_violation';
+  end if;
+
+  update inventory_accounting_operations
+     set outcome = 'completed',
+         completed_at = clock_timestamp()
+   where id = v_operation_id;
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'completed',
+    'completed',
+    null,
+    null,
+    jsonb_build_object('trigger_operation', lower(TG_OP))
+  );
+
+  perform set_config('app.inventory_operation_id', '', true);
+  perform set_config('app.inventory_source_document_type', '', true);
+  perform set_config('app.inventory_source_document_id', '', true);
+  perform set_config('app.inventory_source_channel', '', true);
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+exception
+  when others then
+    perform set_config('app.inventory_operation_id', '', true);
+    perform set_config('app.inventory_source_document_type', '', true);
+    perform set_config('app.inventory_source_document_id', '', true);
+    perform set_config('app.inventory_source_channel', '', true);
+    raise;
+end;
+$$;
+
+drop trigger if exists zz_inventory_trace_begin_sales_invoice on sales_invoices;
+create trigger zz_inventory_trace_begin_sales_invoice
+  before insert or update or delete on sales_invoices
+  for each row execute function public.begin_invoice_inventory_accounting_trace();
+
+drop trigger if exists zzz_inventory_trace_complete_sales_invoice on sales_invoices;
+create trigger zzz_inventory_trace_complete_sales_invoice
+  after insert or update or delete on sales_invoices
+  for each row execute function public.complete_invoice_inventory_accounting_trace();
+
+drop trigger if exists zz_inventory_trace_begin_purchase_invoice on purchase_invoices;
+create trigger zz_inventory_trace_begin_purchase_invoice
+  before insert or update or delete on purchase_invoices
+  for each row execute function public.begin_invoice_inventory_accounting_trace();
+
+drop trigger if exists zzz_inventory_trace_complete_purchase_invoice on purchase_invoices;
+create trigger zzz_inventory_trace_complete_purchase_invoice
+  after insert or update or delete on purchase_invoices
+  for each row execute function public.complete_invoice_inventory_accounting_trace();
+
+create or replace function public.inventory_trace_payment_snapshot(p_row jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'id', p_row->'id',
+    'invoice_id', p_row->'invoice_id',
+    'payment_method_id', p_row->'payment_method_id',
+    'amount', p_row->'amount',
+    'date', p_row->'date',
+    'reference', p_row->'reference',
+    'idempotency_key', p_row->'idempotency_key',
+    'deleted_at', p_row->'deleted_at',
+    'deleted_by', p_row->'deleted_by',
+    'created_at', p_row->'created_at',
+    'updated_at', p_row->'updated_at'
+  ));
+$$;
+
+create or replace function public.begin_invoice_payment_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_row jsonb;
+  v_new_row jsonb;
+  v_effective_row jsonb;
+  v_payment_before jsonb;
+  v_payment_after jsonb;
+  v_invoice_before jsonb;
+  v_operation_id uuid;
+  v_operation_key text;
+  v_tenant_id uuid;
+  v_payment_id uuid;
+  v_invoice_id uuid;
+  v_document_type text;
+  v_invoice_type text;
+  v_source_channel text;
+begin
+  if TG_OP = 'INSERT' then
+    v_new_row := to_jsonb(NEW);
+    v_effective_row := v_new_row;
+  elsif TG_OP = 'UPDATE' then
+    if NEW.invoice_id is distinct from OLD.invoice_id then
+      raise exception 'A posted payment cannot be reassigned to another invoice; reverse it and create a new payment'
+        using errcode = 'check_violation';
+    end if;
+    v_old_row := to_jsonb(OLD);
+    v_new_row := to_jsonb(NEW);
+    v_effective_row := v_new_row;
+  else
+    v_old_row := to_jsonb(OLD);
+    v_effective_row := v_old_row;
+  end if;
+
+  v_tenant_id := nullif(v_effective_row->>'tenant_id', '')::uuid;
+  v_payment_id := nullif(v_effective_row->>'id', '')::uuid;
+  v_invoice_id := nullif(v_effective_row->>'invoice_id', '')::uuid;
+
+  if v_tenant_id is null or v_payment_id is null or v_invoice_id is null then
+    raise exception 'Payment trace requires tenant_id, payment id, and invoice_id';
+  end if;
+
+  if TG_TABLE_NAME = 'sales_payments' then
+    v_document_type := 'sales_payment';
+    v_invoice_type := 'sales_invoice';
+    select
+      coalesce(nullif(invoice.source, ''), 'manual_sale') || '_payment',
+      public.inventory_trace_document_snapshot(to_jsonb(invoice))
+      into v_source_channel, v_invoice_before
+      from sales_invoices invoice
+     where invoice.id = v_invoice_id
+       and invoice.tenant_id = v_tenant_id;
+  elsif TG_TABLE_NAME = 'purchase_payments' then
+    v_document_type := 'purchase_payment';
+    v_invoice_type := 'purchase_invoice';
+    v_source_channel := 'purchase_payment';
+    select public.inventory_trace_document_snapshot(to_jsonb(invoice))
+      into v_invoice_before
+      from purchase_invoices invoice
+     where invoice.id = v_invoice_id
+       and invoice.tenant_id = v_tenant_id;
+  else
+    raise exception 'Unsupported payment trace source table: %', TG_TABLE_NAME;
+  end if;
+
+  if v_invoice_before is null then
+    raise exception 'Payment invoice % does not belong to tenant %', v_invoice_id, v_tenant_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  v_payment_before := case
+    when v_old_row is null then null
+    else public.inventory_trace_payment_snapshot(v_old_row)
+  end;
+  v_payment_after := case
+    when v_new_row is null then null
+    else public.inventory_trace_payment_snapshot(v_new_row)
+  end;
+  v_operation_key := format(
+    '%s:%s:%s:%s',
+    v_document_type,
+    v_payment_id,
+    lower(TG_OP),
+    coalesce(
+      nullif(current_setting('app.inventory_idempotency_key', true), ''),
+      gen_random_uuid()::text
+    )
+  );
+
+  insert into inventory_accounting_operations (
+    tenant_id,
+    operation_key,
+    source_channel,
+    action,
+    document_type,
+    document_id,
+    actor_id,
+    executor,
+    before_snapshot,
+    after_snapshot,
+    context
+  ) values (
+    v_tenant_id,
+    v_operation_key,
+    v_source_channel,
+    lower(TG_OP),
+    v_document_type,
+    v_payment_id,
+    auth.uid(),
+    'database_trigger',
+    v_payment_before,
+    v_payment_after,
+    jsonb_build_object(
+      'table', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME,
+      'invoice_type', v_invoice_type,
+      'invoice_id', v_invoice_id,
+      'invoice_before', v_invoice_before,
+      'transaction_id', txid_current()::text
+    )
+  )
+  returning id into v_operation_id;
+
+  perform set_config('app.inventory_operation_id', v_operation_id::text, true);
+  perform set_config('app.inventory_source_document_type', v_document_type, true);
+  perform set_config('app.inventory_source_document_id', v_payment_id::text, true);
+  perform set_config('app.inventory_source_channel', v_source_channel, true);
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'accepted',
+    'started',
+    v_document_type,
+    v_payment_id,
+    jsonb_build_object(
+      'action', lower(TG_OP),
+      'invoice_type', v_invoice_type,
+      'invoice_id', v_invoice_id
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'source_snapshotted',
+    'completed',
+    v_document_type,
+    v_payment_id,
+    jsonb_build_object(
+      'payment_before', v_payment_before,
+      'payment_after', v_payment_after,
+      'invoice_before', v_invoice_before
+    )
+  );
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+create or replace function public.complete_invoice_payment_trace()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_operation_text text;
+  v_operation_id uuid;
+  v_tenant_id uuid;
+  v_payment_id uuid;
+  v_invoice_id uuid;
+  v_document_type text;
+  v_invoice_type text;
+  v_invoice_after jsonb;
+  v_invoice_total numeric;
+  v_invoice_paid numeric;
+  v_invoice_balance numeric;
+  v_invoice_status text;
+  v_received_date timestamp with time zone;
+  v_ledger_paid numeric;
+  v_expected_balance numeric;
+  v_payment_active boolean;
+  v_payment_journal_count integer;
+  v_stock_movement_count integer;
+  v_job_paid_mismatch integer := 0;
+begin
+  v_operation_text := nullif(current_setting('app.inventory_operation_id', true), '');
+  if v_operation_text is null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  v_operation_id := v_operation_text::uuid;
+  v_tenant_id := case when TG_OP = 'DELETE' then OLD.tenant_id else NEW.tenant_id end;
+  v_payment_id := case when TG_OP = 'DELETE' then OLD.id else NEW.id end;
+  v_invoice_id := case when TG_OP = 'DELETE' then OLD.invoice_id else NEW.invoice_id end;
+  v_payment_active := TG_OP <> 'DELETE' and NEW.deleted_at is null;
+
+  if TG_TABLE_NAME = 'sales_payments' then
+    v_document_type := 'sales_payment';
+    v_invoice_type := 'sales_invoice';
+    select
+      public.inventory_trace_document_snapshot(to_jsonb(invoice)),
+      public.clp_round(invoice.total),
+      public.clp_round(invoice.paid_amount),
+      public.clp_round(invoice.balance),
+      invoice.status,
+      null::timestamp with time zone
+      into v_invoice_after, v_invoice_total, v_invoice_paid,
+           v_invoice_balance, v_invoice_status, v_received_date
+      from sales_invoices invoice
+     where invoice.id = v_invoice_id and invoice.tenant_id = v_tenant_id;
+
+    select public.clp_round(coalesce(sum(payment.amount), 0))
+      into v_ledger_paid
+      from sales_payments payment
+     where payment.invoice_id = v_invoice_id
+       and payment.tenant_id = v_tenant_id
+       and payment.deleted_at is null;
+
+    select count(*)::integer
+      into v_job_paid_mismatch
+      from mechanic_jobs job
+     where job.tenant_id = v_tenant_id
+       and job.invoice_id = v_invoice_id
+       and job.is_paid is distinct from (lower(v_invoice_status) = 'paid');
+  else
+    v_document_type := 'purchase_payment';
+    v_invoice_type := 'purchase_invoice';
+    select
+      public.inventory_trace_document_snapshot(to_jsonb(invoice)),
+      public.clp_round(invoice.total),
+      public.clp_round(invoice.paid_amount),
+      public.clp_round(invoice.balance),
+      invoice.status,
+      invoice.received_date
+      into v_invoice_after, v_invoice_total, v_invoice_paid,
+           v_invoice_balance, v_invoice_status, v_received_date
+      from purchase_invoices invoice
+     where invoice.id = v_invoice_id and invoice.tenant_id = v_tenant_id;
+
+    select public.clp_round(coalesce(sum(payment.amount), 0))
+      into v_ledger_paid
+      from purchase_payments payment
+     where payment.invoice_id = v_invoice_id
+       and payment.tenant_id = v_tenant_id
+       and payment.deleted_at is null;
+  end if;
+
+  if v_invoice_after is null then
+    raise exception 'Payment trace could not reload related invoice %', v_invoice_id;
+  end if;
+
+  v_expected_balance := greatest(v_invoice_total - v_ledger_paid, 0);
+
+  select count(*)::integer
+    into v_payment_journal_count
+    from journal_entries entry
+   where entry.tenant_id = v_tenant_id
+     and entry.source_module = TG_TABLE_NAME
+     and entry.source_reference = v_payment_id::text;
+
+  select count(*)::integer
+    into v_stock_movement_count
+    from stock_movements movement
+   where movement.tenant_id = v_tenant_id
+     and movement.operation_id = v_operation_id;
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'source_snapshotted',
+    'completed',
+    v_invoice_type,
+    v_invoice_id,
+    jsonb_build_object(
+      'invoice_before', (
+        select operation.context->'invoice_before'
+          from inventory_accounting_operations operation
+         where operation.id = v_operation_id
+      ),
+      'invoice_after', v_invoice_after
+    )
+  );
+
+  if v_invoice_paid <> v_ledger_paid
+     or v_invoice_balance <> v_expected_balance
+     or v_stock_movement_count <> 0
+     or v_payment_journal_count <> (case when v_payment_active then 1 else 0 end)
+     or v_job_paid_mismatch <> 0
+     or (v_invoice_type = 'purchase_invoice'
+         and v_received_date is not null
+         and v_invoice_status <> 'received') then
+    raise exception
+      'Payment invariants failed for operation % (ledger %, invoice paid %, balance %, expected %, movements %, journals %, job mismatch %, status %)',
+      v_operation_id, v_ledger_paid, v_invoice_paid, v_invoice_balance,
+      v_expected_balance, v_stock_movement_count, v_payment_journal_count,
+      v_job_paid_mismatch, v_invoice_status
+      using errcode = 'check_violation';
+  end if;
+
+  perform public.complete_inventory_accounting_operation(
+    v_operation_id,
+    v_tenant_id,
+    jsonb_build_object(
+      'payment_id', v_payment_id,
+      'payment_active', v_payment_active,
+      'invoice_type', v_invoice_type,
+      'invoice_id', v_invoice_id,
+      'ledger_paid', v_ledger_paid,
+      'invoice_balance', v_invoice_balance,
+      'invoice_status', v_invoice_status,
+      'stock_movement_count', v_stock_movement_count,
+      'payment_journal_count', v_payment_journal_count,
+      'job_paid_mismatch', v_job_paid_mismatch
+    )
+  );
+
+  perform set_config('app.inventory_operation_id', '', true);
+  perform set_config('app.inventory_source_document_type', '', true);
+  perform set_config('app.inventory_source_document_id', '', true);
+  perform set_config('app.inventory_source_channel', '', true);
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+exception
+  when others then
+    perform set_config('app.inventory_operation_id', '', true);
+    perform set_config('app.inventory_source_document_type', '', true);
+    perform set_config('app.inventory_source_document_id', '', true);
+    perform set_config('app.inventory_source_channel', '', true);
+    raise;
+end;
+$$;
+
+drop trigger if exists zz_inventory_trace_begin_sales_payment on sales_payments;
+create trigger zz_inventory_trace_begin_sales_payment
+  before insert or update or delete on sales_payments
+  for each row execute function public.begin_invoice_payment_trace();
+
+drop trigger if exists zzz_inventory_trace_complete_sales_payment on sales_payments;
+create trigger zzz_inventory_trace_complete_sales_payment
+  after insert or update or delete on sales_payments
+  for each row execute function public.complete_invoice_payment_trace();
+
+drop trigger if exists zz_inventory_trace_begin_purchase_payment on purchase_payments;
+create trigger zz_inventory_trace_begin_purchase_payment
+  before insert or update or delete on purchase_payments
+  for each row execute function public.begin_invoice_payment_trace();
+
+drop trigger if exists zzz_inventory_trace_complete_purchase_payment on purchase_payments;
+create trigger zzz_inventory_trace_complete_purchase_payment
+  after insert or update or delete on purchase_payments
+  for each row execute function public.complete_invoice_payment_trace();
+
+comment on table inventory_accounting_operations is
+  'One tenant-scoped trace root per inventory/accounting source-document action.';
+comment on table inventory_accounting_checkpoints is
+  'Append-only ordered checkpoints connecting source actions, stock movements, and accounting effects.';
+
+drop view if exists public.inventory_accounting_operation_trace_view cascade;
+create view public.inventory_accounting_operation_trace_view
+with (security_invoker = on)
+as
+select
+  operation.id as operation_id,
+  operation.tenant_id,
+  operation.operation_key,
+  operation.source_channel,
+  operation.action,
+  operation.document_type,
+  operation.document_id,
+  operation.actor_id,
+  operation.executor,
+  operation.old_status,
+  operation.new_status,
+  operation.before_snapshot,
+  operation.after_snapshot,
+  operation.outcome,
+  operation.error_code,
+  operation.error_message,
+  operation.started_at,
+  operation.completed_at,
+  operation.created_at,
+  coalesce((
+    select jsonb_agg(
+      jsonb_build_object(
+        'id', checkpoint.id,
+        'phase', checkpoint.phase,
+        'outcome', checkpoint.outcome,
+        'entity_type', checkpoint.entity_type,
+        'entity_id', checkpoint.entity_id,
+        'payload', checkpoint.payload,
+        'created_at', checkpoint.created_at
+      )
+      order by checkpoint.id
+    )
+    from inventory_accounting_checkpoints checkpoint
+    where checkpoint.operation_id = operation.id
+  ), '[]'::jsonb) as checkpoints,
+  coalesce((
+    select jsonb_agg(
+      jsonb_build_object(
+        'id', movement.id,
+        'product_id', movement.product_id,
+        'type', movement.type,
+        'movement_type', movement.movement_type,
+        'quantity', movement.quantity,
+        'stock_before', movement.stock_before,
+        'stock_after', movement.stock_after,
+        'reference', movement.reference,
+        'reversal_of_id', movement.reversal_of_id,
+        'created_at', movement.created_at
+      )
+      order by movement.created_at, movement.id
+    )
+    from stock_movements movement
+    where movement.operation_id = operation.id
+  ), '[]'::jsonb) as stock_movements,
+  coalesce((
+    select jsonb_agg(
+      to_jsonb(entry) || jsonb_build_object(
+        'lines', coalesce((
+          select jsonb_agg(to_jsonb(line) order by line.created_at, line.id)
+          from journal_lines line
+          where line.entry_id = entry.id
+        ), '[]'::jsonb)
+      )
+      order by entry.created_at, entry.id
+    )
+    from journal_entries entry
+    where entry.operation_id = operation.id
+  ), '[]'::jsonb) as journal_entries
+from inventory_accounting_operations operation;
+
+grant select on public.inventory_accounting_operation_trace_view to authenticated;
+
+drop view if exists public.inventory_accounting_inconsistencies_view cascade;
+create view public.inventory_accounting_inconsistencies_view
+with (security_invoker = on)
+as
+select
+  operation.tenant_id,
+  operation.id as operation_id,
+  'operation_incomplete'::text as inconsistency_type,
+  'high'::text as severity,
+  operation.document_type as entity_type,
+  operation.document_id as entity_id,
+  'completed'::text as expected_value,
+  operation.outcome::text as actual_value,
+  operation.created_at as occurred_at
+from inventory_accounting_operations operation
+where operation.outcome = 'started'
+  and operation.created_at < clock_timestamp() - interval '5 minutes'
+
+union all
+
+select
+  movement.tenant_id,
+  movement.operation_id,
+  'movement_arithmetic'::text,
+  'critical'::text,
+  'stock_movement'::text,
+  movement.id,
+  round(
+    movement.stock_before + case
+      when movement.type in ('OUT', 'TRANSFER_OUT') then -abs(movement.quantity)
+      when movement.type in ('IN', 'TRANSFER_IN') then abs(movement.quantity)
+      else movement.quantity
+    end,
+    2
+  )::text,
+  movement.stock_after::text,
+  movement.created_at
+from stock_movements movement
+where movement.operation_id is not null
+  and (
+    movement.stock_before is null
+    or movement.stock_after is null
+    or round(
+      movement.stock_before + case
+        when movement.type in ('OUT', 'TRANSFER_OUT') then -abs(movement.quantity)
+        when movement.type in ('IN', 'TRANSFER_IN') then abs(movement.quantity)
+        else movement.quantity
+      end,
+      2
+    ) <> round(movement.stock_after, 2)
+  )
+
+union all
+
+select
+  product.tenant_id,
+  null::uuid,
+  'stock_column_drift'::text,
+  'critical'::text,
+  'product'::text,
+  product.id,
+  product.inventory_qty::text,
+  product.stock_quantity::text,
+  product.updated_at
+from products product
+where coalesce(product.track_stock, true)
+  and coalesce(product.product_type, 'product') <> 'service'
+  and coalesce(product.inventory_qty, 0) <> coalesce(product.stock_quantity, 0)
+
+union all
+
+select
+  entry.tenant_id,
+  entry.operation_id,
+  'journal_unbalanced'::text,
+  'critical'::text,
+  'journal_entry'::text,
+  entry.id,
+  round(coalesce(sum(line.debit_amount), 0), 2)::text,
+  round(coalesce(sum(line.credit_amount), 0), 2)::text,
+  entry.created_at
+from journal_entries entry
+left join journal_lines line
+  on line.entry_id = entry.id and line.tenant_id = entry.tenant_id
+group by
+  entry.tenant_id,
+  entry.operation_id,
+  entry.id,
+  entry.created_at
+having round(coalesce(sum(line.debit_amount), 0), 2)
+    <> round(coalesce(sum(line.credit_amount), 0), 2);
+
+grant select on public.inventory_accounting_inconsistencies_view to authenticated;
+
+-- END INVENTORY AND ACCOUNTING TRACE KERNEL (PHASE 1)
+
 create table if not exists payment_integrity_backfill_audit (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenants(id) on delete cascade,
@@ -10635,15 +12183,23 @@ with movement_documents as (
       else sm.quantity
     end as quantity,
     sm.notes,
-    null::uuid as created_by,
+    sm.created_by,
+    sm.stock_before as persisted_stock_before,
+    sm.stock_after as persisted_stock_after,
     sm.created_at,
     sm.tenant_id,
     case
+      when sm.source_document_id is not null then sm.source_document_id
       when coalesce(sm.reference, '') ~ '^sales_invoice:[0-9a-fA-F-]{36}$'
-      true,
+        then split_part(sm.reference, ':', 2)::uuid
+      when coalesce(sm.reference, '') ~ '^purchase_invoice:[0-9a-fA-F-]{36}$'
+        then split_part(sm.reference, ':', 2)::uuid
+      when coalesce(sm.reference, '') ~ '^mechanic_job:[0-9a-fA-F-]{36}$'
+        then split_part(sm.reference, ':', 2)::uuid
       else null::uuid
     end as document_id,
     case
+      when nullif(sm.source_document_type, '') is not null then sm.source_document_type
       when coalesce(sm.reference, '') like 'sales_invoice:%' then 'sales_invoice'
       when coalesce(sm.reference, '') like 'purchase_invoice:%' then 'purchase_invoice'
       when coalesce(sm.reference, '') like 'mechanic_job:%' then 'mechanic_job'
@@ -10704,6 +12260,8 @@ movements_with_resolution as (
     end as reference_number,
     md.quantity,
     md.notes,
+    md.persisted_stock_before,
+    md.persisted_stock_after,
     sa.adjustment_origin,
     coalesce(md.created_by, sa.created_by) as created_by,
     md.created_at,
@@ -10753,8 +12311,8 @@ select
   reference_id,
   reference_number,
   quantity,
-  (calculated_stock_after - quantity)::integer as stock_before,
-  calculated_stock_after as stock_after,
+  coalesce(persisted_stock_before, calculated_stock_after - quantity)::integer as stock_before,
+  coalesce(persisted_stock_after, calculated_stock_after)::integer as stock_after,
   notes,
   adjustment_origin,
   created_by,
@@ -10829,6 +12387,9 @@ declare
   v_adjustment_date timestamp with time zone := coalesce(p_effective_at, now());
   v_created_at timestamp with time zone := now();
   v_adjustment_id uuid;
+  v_operation_id uuid;
+  v_operation_key text;
+  v_source_channel text;
   v_movement_id uuid;
   v_inventory_account_id uuid;
   v_counterpart_account_id uuid;
@@ -10942,6 +12503,112 @@ begin
     else format('%s [%s] %s - %s', v_reason_label, v_adjustment_origin_label, v_reference, v_product.name)
   end;
 
+  v_adjustment_id := gen_random_uuid();
+  v_source_channel := coalesce(v_adjustment_origin, 'manual_stock_adjustment');
+  v_operation_key := format(
+    'stock_adjustment:%s:adjust_stock:%s',
+    v_adjustment_id,
+    coalesce(
+      nullif(current_setting('app.inventory_idempotency_key', true), ''),
+      gen_random_uuid()::text
+    )
+  );
+
+  insert into public.inventory_accounting_operations (
+    tenant_id,
+    operation_key,
+    source_channel,
+    action,
+    document_type,
+    document_id,
+    actor_id,
+    executor,
+    before_snapshot,
+    after_snapshot,
+    context
+  ) values (
+    v_product.tenant_id,
+    v_operation_key,
+    v_source_channel,
+    'adjust_stock',
+    'stock_adjustment',
+    v_adjustment_id,
+    auth.uid(),
+    'database_rpc',
+    jsonb_build_object(
+      'product_id', v_product.id,
+      'stock', v_stock_before,
+      'unit_cost', coalesce(v_product.cost, 0)
+    ),
+    jsonb_build_object(
+      'product_id', v_product.id,
+      'stock', v_stock_after,
+      'unit_cost', coalesce(v_product.cost, 0)
+    ),
+    jsonb_build_object(
+      'adjustment_type', v_adjustment_type,
+      'adjustment_origin', v_adjustment_origin,
+      'reason', v_reason,
+      'effective_at', v_adjustment_date,
+      'inventory_value', v_inventory_value,
+      'transaction_id', txid_current()::text
+    )
+  )
+  returning id into v_operation_id;
+
+  perform set_config('app.inventory_operation_id', v_operation_id::text, true);
+  perform set_config('app.inventory_source_document_type', 'stock_adjustment', true);
+  perform set_config('app.inventory_source_document_id', v_adjustment_id::text, true);
+  perform set_config('app.inventory_source_channel', v_source_channel, true);
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'accepted',
+    'started',
+    'stock_adjustment',
+    v_adjustment_id,
+    jsonb_build_object('action', 'adjust_stock', 'source_channel', v_source_channel)
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'source_snapshotted',
+    'completed',
+    'stock_adjustment',
+    v_adjustment_id,
+    jsonb_build_object(
+      'product_id', v_product.id,
+      'stock_before', v_stock_before,
+      'stock_after', v_stock_after,
+      'reason', v_reason
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'inventory_planned',
+    'completed',
+    'product',
+    v_product.id,
+    jsonb_build_object(
+      'signed_delta', v_delta,
+      'stock_before', v_stock_before,
+      'stock_after', v_stock_after
+    )
+  );
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_id,
+    'accounting_planned',
+    'completed',
+    'stock_adjustment',
+    v_adjustment_id,
+    jsonb_build_object(
+      'inventory_value', v_inventory_value,
+      'journal_expected', v_inventory_value > 0
+    )
+  );
+
   perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
 
   update public.products
@@ -10952,6 +12619,7 @@ begin
      and tenant_id = v_product.tenant_id;
 
   insert into public.stock_adjustments (
+    id,
     tenant_id,
     product_id,
     adjustment_type,
@@ -10965,6 +12633,7 @@ begin
     created_by,
     created_at
   ) values (
+    v_adjustment_id,
     v_product.tenant_id,
     v_product.id,
     v_adjustment_type,
@@ -11192,7 +12861,23 @@ begin
    order by sm.id desc
    limit 1;
 
+  perform public.complete_inventory_accounting_operation(
+    v_operation_id,
+    v_product.tenant_id,
+    jsonb_build_object(
+      'adjustment_id', v_adjustment_id,
+      'movement_id', v_movement_id,
+      'journal_entry_id', v_entry_id
+    )
+  );
+
+  perform set_config('app.inventory_operation_id', '', true);
+  perform set_config('app.inventory_source_document_type', '', true);
+  perform set_config('app.inventory_source_document_id', '', true);
+  perform set_config('app.inventory_source_channel', '', true);
+
   return jsonb_build_object(
+    'operation_id', v_operation_id,
     'adjustment_id', v_adjustment_id,
     'movement_id', v_movement_id,
     'reference_number', v_reference,
@@ -11215,6 +12900,10 @@ begin
 exception
   when others then
     perform set_config('app.skip_stock_adjustment_trigger', '', true);
+    perform set_config('app.inventory_operation_id', '', true);
+    perform set_config('app.inventory_source_document_type', '', true);
+    perform set_config('app.inventory_source_document_id', '', true);
+    perform set_config('app.inventory_source_channel', '', true);
     raise;
 end;
 $$;
@@ -12057,6 +13746,11 @@ begin
     return;
   end if;
 
+  -- Purchase restore is an automatic document operation, never a manual stock
+  -- adjustment. Without this guard, the products trigger creates phantom
+  -- "Ajuste Manual" rows alongside the real purchase reversal.
+  perform set_config('app.skip_stock_adjustment_trigger', 'true', true);
+
   v_reference := format('purchase_invoice:%s', p_invoice.id);
 
   -- DECREASE inventory (restore = undo IN movement) based on the current net ledger
@@ -12113,7 +13807,12 @@ begin
 
   end loop;
 
+  perform set_config('app.skip_stock_adjustment_trigger', '', true);
   raise notice 'restore_purchase_invoice_inventory: completed for invoice %', p_invoice.id;
+exception
+  when others then
+    perform set_config('app.skip_stock_adjustment_trigger', '', true);
+    raise;
 end;
 $$;
 
@@ -12530,15 +14229,20 @@ begin
         perform public.restore_purchase_invoice_inventory(OLD);
 
       elsif v_old_status = 'received' AND v_new_status = 'received' then
-        -- Staying at received but invoice data changed: update inventory
-        raise notice 'handle_purchase_invoice_change: [PREPAYMENT] staying at received, updating inventory';
-        perform public.restore_purchase_invoice_inventory(OLD);
-        perform public.consume_purchase_invoice_inventory(NEW);
+        -- Only physical item changes may replace the received stock snapshot.
+        if public.invoice_inventory_signature(OLD.items)
+             is distinct from public.invoice_inventory_signature(NEW.items) then
+          raise notice 'handle_purchase_invoice_change: [PREPAYMENT] received items changed, updating inventory';
+          perform public.restore_purchase_invoice_inventory(OLD);
+          perform public.consume_purchase_invoice_inventory(NEW);
+        else
+          raise notice 'handle_purchase_invoice_change: [PREPAYMENT] received without item changes, no inventory change';
+        end if;
       end if;
 
     else
       -- STANDARD MODEL: Inventory changes only when entering/leaving 'received' from/to non-paid statuses
-      if v_old_status NOT IN ('received', 'paid') AND v_new_status = 'received' then
+      if v_old_status <> 'received' AND v_new_status = 'received' then
         -- Transitioning TO received from confirmed/sent/draft: add inventory
         raise notice 'handle_purchase_invoice_change: [STANDARD] transitioning TO received from %, consuming inventory', v_old_status;
         perform public.consume_purchase_invoice_inventory(NEW);
@@ -12550,10 +14254,15 @@ begin
         perform public.restore_purchase_invoice_inventory(OLD);
 
       elsif v_old_status = 'received' AND v_new_status = 'received' then
-        -- Staying at received but invoice data changed: update inventory
-        raise notice 'handle_purchase_invoice_change: [STANDARD] staying at received, updating inventory';
-        perform public.restore_purchase_invoice_inventory(OLD);
-        perform public.consume_purchase_invoice_inventory(NEW);
+        -- Only physical item changes may replace the received stock snapshot.
+        if public.invoice_inventory_signature(OLD.items)
+             is distinct from public.invoice_inventory_signature(NEW.items) then
+          raise notice 'handle_purchase_invoice_change: [STANDARD] received items changed, updating inventory';
+          perform public.restore_purchase_invoice_inventory(OLD);
+          perform public.consume_purchase_invoice_inventory(NEW);
+        else
+          raise notice 'handle_purchase_invoice_change: [STANDARD] received without item changes, no inventory change';
+        end if;
       end if;
     end if;
 
@@ -14672,6 +16381,7 @@ create table if not exists mechanic_job_items (
   unit_price numeric(12,2) not null default 0,
   total_price numeric(12,2) not null default 0,
   notes text,
+  description text,
   service_configuration_data jsonb,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
@@ -14702,6 +16412,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'notes') then
     alter table mechanic_job_items add column notes text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'description') then
+    alter table mechanic_job_items add column description text;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_job_items' and column_name = 'service_configuration_data') then
     alter table mechanic_job_items add column service_configuration_data jsonb;
@@ -19524,6 +21237,12 @@ create trigger trg_sales_payment_erp_notification
 -- Notification source: WhatsApp catalog product approved (customer-visible)
 -- Fires only when status transitions INTO 'customer_visible'.
 -- ============================================================
+-- The canonical snapshot composes notification and catalog migrations. Ensure
+-- trigger-referenced product columns exist before creating the trigger.
+alter table public.products
+  add column if not exists whatsapp_catalog_sync_status text not null default 'not_synced',
+  add column if not exists whatsapp_catalog_title text;
+
 create or replace function public.create_whatsapp_catalog_erp_notification()
 returns trigger
 language plpgsql
@@ -19824,19 +21543,21 @@ where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
   and (is_home = true or slug in ('home', 'inicio'));
 
 insert into public.website_settings (tenant_id, key, value, description)
-values
+select tenant.id, setting.key, setting.value, setting.description
+from public.tenants tenant
+cross join (values
   (
-    '5443b130-cc28-45af-a420-cd500b288890',
     'seo_meta_title',
     'Tienda y Taller de Bicicletas en Viña del Mar | Viñabike',
     'Título SEO principal de la tienda'
   ),
   (
-    '5443b130-cc28-45af-a420-cd500b288890',
     'seo_meta_description',
     'Compra bicicletas, repuestos y accesorios en Viñabike. Taller especializado, mantenciones y reparaciones en Viña del Mar, con retiro en tienda y despacho.',
     'Descripción SEO principal de la tienda'
   )
+) as setting(key, value, description)
+where tenant.id = '5443b130-cc28-45af-a420-cd500b288890'
 on conflict (tenant_id, key) do update
 set
   value = excluded.value,
@@ -30638,33 +32359,12 @@ begin
   elsif v_balance = 0 and v_total > 0 then
     v_new_status := 'paid';
   elsif v_total > 0 and v_balance > 0 then
-    if v_invoice.prepayment_model then
-      if v_invoice.status IN ('paid', 'received') then
-        v_new_status := 'paid';
-      else
-        v_new_status := 'confirmed';
-      end if;
-    else
-      if v_invoice.status IN ('received', 'paid') then
-        v_new_status := 'received';
-      else
-        v_new_status := 'confirmed';
-      end if;
-    end if;
+    v_new_status := 'confirmed';
   else
-    if v_invoice.prepayment_model then
-      if v_invoice.status = 'paid' then
-        v_new_status := 'confirmed';
-      else
-        v_new_status := v_invoice.status;
-      end if;
-    else
-      if v_invoice.status = 'paid' then
-        v_new_status := 'received';
-      else
-        v_new_status := v_invoice.status;
-      end if;
-    end if;
+    v_new_status := case
+      when v_invoice.status = 'paid' then 'confirmed'
+      else v_invoice.status
+    end;
   end if;
 
   update public.purchase_invoices
@@ -30679,6 +32379,11 @@ $$ language plpgsql;
 -- Canonical payroll settlement ledger.
 -- Kept as an idempotent composed section because the payroll ledger migration
 -- is also the deployable source for existing databases.
+alter table public.employees
+  add column if not exists salary_account_id uuid
+  references public.accounts(id);
+create index if not exists idx_employees_salary_account
+  on public.employees(salary_account_id);
 \ir ../migrations/20260607150000_payroll_dated_partial_payments_and_advances.sql
 
 --------------------------------------------------------------------------------
@@ -32384,3 +34089,1112 @@ create policy shift_change_requests_update on public.shift_change_requests
 create policy shift_change_requests_delete on public.shift_change_requests
   for delete to authenticated
   using (tenant_id = public.user_tenant_id());
+
+-- ============================================================================
+-- WORKSHOP JOB -> SALES INVOICE ERP OWNERSHIP SHADOW CONTROL (2026-07-10)
+-- Job is the operational/reservation document. The linked sales invoice is the
+-- exclusive stock and revenue posting document. This section observes and can
+-- later enforce that boundary without rewriting existing business rows.
+-- ============================================================================
+
+create table if not exists public.workshop_invoice_control_settings (
+  tenant_id uuid primary key references public.tenants(id) on delete cascade,
+  control_mode text not null default 'shadow'
+    check (control_mode in ('shadow', 'enforce')),
+  expected_inventory_owner text not null default 'sales_invoice'
+    check (expected_inventory_owner = 'sales_invoice'),
+  activated_at timestamp with time zone,
+  activated_by uuid references auth.users(id),
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.workshop_invoice_control_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  job_id uuid,
+  invoice_id uuid,
+  operation_id uuid,
+  control_mode text not null check (control_mode in ('shadow', 'enforce')),
+  event_type text not null check (
+    event_type in ('job_stock_writer_attempt', 'job_journal_writer_attempt')
+  ),
+  actor_id uuid references auth.users(id),
+  transaction_id bigint not null default txid_current(),
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone not null default clock_timestamp()
+);
+
+-- Audit identifiers must remain immutable even if a legacy source document is
+-- later removed. Do not let FK actions null out historical linkage.
+alter table public.workshop_invoice_control_events
+  drop constraint if exists workshop_invoice_control_events_job_id_fkey;
+alter table public.workshop_invoice_control_events
+  drop constraint if exists workshop_invoice_control_events_invoice_id_fkey;
+
+create index if not exists idx_workshop_invoice_control_events_tenant_created
+  on public.workshop_invoice_control_events(tenant_id, created_at desc);
+create index if not exists idx_workshop_invoice_control_events_job
+  on public.workshop_invoice_control_events(tenant_id, job_id, created_at desc)
+  where job_id is not null;
+create index if not exists idx_workshop_invoice_control_events_invoice
+  on public.workshop_invoice_control_events(tenant_id, invoice_id, created_at desc)
+  where invoice_id is not null;
+
+alter table public.workshop_invoice_control_settings enable row level security;
+alter table public.workshop_invoice_control_events enable row level security;
+
+drop policy if exists workshop_invoice_control_settings_select
+  on public.workshop_invoice_control_settings;
+create policy workshop_invoice_control_settings_select
+  on public.workshop_invoice_control_settings
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+drop policy if exists workshop_invoice_control_events_select
+  on public.workshop_invoice_control_events;
+create policy workshop_invoice_control_events_select
+  on public.workshop_invoice_control_events
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke insert, update, delete on public.workshop_invoice_control_settings
+  from public, anon, authenticated;
+revoke insert, update, delete on public.workshop_invoice_control_events
+  from public, anon, authenticated;
+grant select on public.workshop_invoice_control_settings to authenticated;
+grant select on public.workshop_invoice_control_events to authenticated;
+
+comment on table public.workshop_invoice_control_settings is
+  'Tenant-scoped rollout gate. No row means shadow mode. Enforce is activated only after reviewed observations.';
+comment on table public.workshop_invoice_control_events is
+  'Append-only evidence of attempted workshop-owned stock or revenue postings. Business rows are never rewritten by this table.';
+
+create or replace function public.observe_workshop_owned_posting_attempt()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid;
+  v_job_id uuid;
+  v_invoice_id uuid;
+  v_mode text := 'shadow';
+  v_event_type text;
+  v_reference text;
+  v_operation_id uuid;
+begin
+  if TG_TABLE_NAME = 'stock_movements' then
+    v_reference := coalesce(NEW.reference, '');
+    if v_reference !~ '^mechanic_job:[0-9a-fA-F-]{36}(:reversed)?$' then
+      return NEW;
+    end if;
+
+    v_event_type := 'job_stock_writer_attempt';
+    v_tenant_id := NEW.tenant_id;
+    v_operation_id := NEW.operation_id;
+
+    if v_tenant_id is null then
+      select product.tenant_id
+        into v_tenant_id
+        from public.products product
+       where product.id = NEW.product_id;
+    end if;
+
+    begin
+      v_job_id := split_part(v_reference, ':', 2)::uuid;
+    exception when invalid_text_representation then
+      v_job_id := null;
+    end;
+  elsif TG_TABLE_NAME = 'journal_entries' then
+    if coalesce(NEW.source_module, '') <> 'mechanic_jobs' then
+      return NEW;
+    end if;
+
+    v_event_type := 'job_journal_writer_attempt';
+    v_tenant_id := NEW.tenant_id;
+    v_operation_id := NEW.operation_id;
+
+    select job.id, job.tenant_id, job.invoice_id
+      into v_job_id, v_tenant_id, v_invoice_id
+      from public.mechanic_jobs job
+     where (v_tenant_id is null or job.tenant_id = v_tenant_id)
+       and job.job_number = NEW.source_reference
+     order by job.created_at desc
+     limit 1;
+
+    if v_job_id is null and NEW.source_reference ~ '^[0-9a-fA-F-]{36}$' then
+      select job.id, job.tenant_id, job.invoice_id
+        into v_job_id, v_tenant_id, v_invoice_id
+        from public.mechanic_jobs job
+       where job.id = NEW.source_reference::uuid
+         and (v_tenant_id is null or job.tenant_id = v_tenant_id);
+    end if;
+  else
+    return NEW;
+  end if;
+
+  if v_job_id is not null and v_invoice_id is null then
+    select job.invoice_id
+      into v_invoice_id
+      from public.mechanic_jobs job
+     where job.id = v_job_id;
+  end if;
+
+  if v_tenant_id is null then
+    raise warning 'Workshop ownership shadow could not resolve tenant for %.%',
+      TG_TABLE_SCHEMA, TG_TABLE_NAME;
+    return NEW;
+  end if;
+
+  select setting.control_mode
+    into v_mode
+    from public.workshop_invoice_control_settings setting
+   where setting.tenant_id = v_tenant_id;
+  v_mode := coalesce(v_mode, 'shadow');
+
+  insert into public.workshop_invoice_control_events (
+    tenant_id,
+    job_id,
+    invoice_id,
+    operation_id,
+    control_mode,
+    event_type,
+    actor_id,
+    payload
+  ) values (
+    v_tenant_id,
+    v_job_id,
+    v_invoice_id,
+    v_operation_id,
+    v_mode,
+    v_event_type,
+    auth.uid(),
+    jsonb_build_object(
+      'table', TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME,
+      'operation', TG_OP,
+      'expected_inventory_owner', 'sales_invoice',
+      'attempted_row', to_jsonb(NEW)
+    )
+  );
+
+  if v_mode = 'enforce' then
+    raise log 'ERP_WORKSHOP_OWNERSHIP_BLOCK tenant=% job=% invoice=% event=%',
+      v_tenant_id, v_job_id, v_invoice_id, v_event_type;
+    raise exception
+      'Workshop jobs are operational documents; linked sales invoices exclusively own stock and revenue postings'
+      using errcode = 'check_violation';
+  end if;
+
+  return NEW;
+end;
+$$;
+
+revoke all on function public.observe_workshop_owned_posting_attempt()
+  from public, anon, authenticated;
+
+drop trigger if exists zz_workshop_invoice_owner_stock_shadow
+  on public.stock_movements;
+create trigger zz_workshop_invoice_owner_stock_shadow
+  before insert on public.stock_movements
+  for each row execute function public.observe_workshop_owned_posting_attempt();
+
+drop trigger if exists zz_workshop_invoice_owner_journal_shadow
+  on public.journal_entries;
+create trigger zz_workshop_invoice_owner_journal_shadow
+  before insert on public.journal_entries
+  for each row execute function public.observe_workshop_owned_posting_attempt();
+
+create or replace view public.workshop_invoice_ownership_control_view
+with (security_invoker = true)
+as
+select
+  job.tenant_id,
+  job.id as job_id,
+  job.job_number,
+  job.status as job_status,
+  job.invoice_id,
+  invoice.invoice_number,
+  invoice.status as invoice_status,
+  coalesce(setting.control_mode, 'shadow') as control_mode,
+  'sales_invoice'::text as expected_inventory_owner,
+  coalesce(job_stock.movement_count, 0) as job_stock_movement_count,
+  coalesce(job_journal.journal_count, 0) as job_journal_count,
+  coalesce(invoice_stock.movement_count, 0) as invoice_stock_movement_count,
+  coalesce(invoice_journal.journal_count, 0) as invoice_journal_count,
+  case
+    when coalesce(job_stock.movement_count, 0) > 0 then 'job_stock_writer_detected'
+    when coalesce(job_journal.journal_count, 0) > 0 then 'job_journal_writer_detected'
+    else 'compliant'
+  end as control_status,
+  job.created_at,
+  job.updated_at
+from public.mechanic_jobs job
+left join public.sales_invoices invoice
+  on invoice.id = job.invoice_id
+ and invoice.tenant_id = job.tenant_id
+left join public.workshop_invoice_control_settings setting
+  on setting.tenant_id = job.tenant_id
+left join lateral (
+  select count(*)::bigint as movement_count
+  from public.stock_movements movement
+  where movement.tenant_id = job.tenant_id
+    and movement.reference in (
+      'mechanic_job:' || job.id::text,
+      'mechanic_job:' || job.id::text || ':reversed'
+    )
+) job_stock on true
+left join lateral (
+  select count(*)::bigint as journal_count
+  from public.journal_entries entry
+  where entry.tenant_id = job.tenant_id
+    and entry.source_module = 'mechanic_jobs'
+    and entry.source_reference in (job.id::text, job.job_number)
+) job_journal on true
+left join lateral (
+  select count(*)::bigint as movement_count
+  from public.stock_movements movement
+  where job.invoice_id is not null
+    and movement.tenant_id = job.tenant_id
+    and movement.reference = 'sales_invoice:' || job.invoice_id::text
+) invoice_stock on true
+left join lateral (
+  select count(*)::bigint as journal_count
+  from public.journal_entries entry
+  where invoice.id is not null
+    and entry.tenant_id = job.tenant_id
+    and entry.source_module = 'sales_invoices'
+    and entry.source_reference in (invoice.id::text, invoice.invoice_number)
+) invoice_journal on true;
+
+grant select on public.workshop_invoice_ownership_control_view to authenticated;
+
+create or replace function public.checkpoint_workshop_invoice_ownership_shadow()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice_id uuid;
+  v_operation_text text;
+  v_control record;
+begin
+  v_invoice_id := case when TG_OP = 'DELETE' then OLD.id else NEW.id end;
+  v_operation_text := nullif(current_setting('app.inventory_operation_id', true), '');
+
+  if v_operation_text is null then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  select control.*
+    into v_control
+    from public.workshop_invoice_ownership_control_view control
+   where control.invoice_id = v_invoice_id
+   limit 1;
+
+  if not found then
+    return case when TG_OP = 'DELETE' then OLD else NEW end;
+  end if;
+
+  perform public.append_inventory_accounting_checkpoint(
+    v_operation_text::uuid,
+    'invariants_verified',
+    case when v_control.control_status = 'compliant' then 'completed' else 'failed' end,
+    'mechanic_job',
+    v_control.job_id,
+    jsonb_build_object(
+      'control_name', 'workshop_invoice_owner',
+      'job_number', v_control.job_number,
+      'invoice_id', v_control.invoice_id,
+      'invoice_number', v_control.invoice_number,
+      'expected_inventory_owner', v_control.expected_inventory_owner,
+      'control_mode', v_control.control_mode,
+      'control_status', v_control.control_status,
+      'job_stock_movement_count', v_control.job_stock_movement_count,
+      'job_journal_count', v_control.job_journal_count,
+      'invoice_stock_movement_count', v_control.invoice_stock_movement_count,
+      'invoice_journal_count', v_control.invoice_journal_count
+    )
+  );
+
+  return case when TG_OP = 'DELETE' then OLD else NEW end;
+end;
+$$;
+
+revoke all on function public.checkpoint_workshop_invoice_ownership_shadow()
+  from public, anon, authenticated;
+
+drop trigger if exists zzy_workshop_invoice_ownership_shadow
+  on public.sales_invoices;
+create trigger zzy_workshop_invoice_ownership_shadow
+  after insert or update or delete on public.sales_invoices
+  for each row execute function public.checkpoint_workshop_invoice_ownership_shadow();
+
+-- These legacy SECURITY DEFINER writers are trigger internals, not client RPCs.
+-- Removing direct client execution closes an unaudited stock/accounting bypass
+-- without changing trigger behavior or any persisted business row.
+revoke all on function public.consume_mechanic_job_inventory(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.restore_mechanic_job_inventory(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.create_mechanic_job_journal_entry(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.delete_mechanic_job_journal_entry(uuid)
+  from public, anon, authenticated, service_role;
+
+-- ============================================================================
+-- SALES CHANNEL ENTRYPOINT HARDENING
+-- Canonical mirror of 20260711123000_harden_sales_channel_entrypoints.sql.
+-- ============================================================================
+begin;
+
+alter table public.online_orders
+  add column if not exists checkout_idempotency_key text,
+  add column if not exists checkout_payload_hash text;
+
+create unique index if not exists idx_online_orders_checkout_idempotency
+  on public.online_orders(tenant_id, checkout_idempotency_key)
+  where checkout_idempotency_key is not null;
+
+comment on column public.online_orders.checkout_idempotency_key is
+  'Client-generated checkout attempt key. Replays return the original order.';
+comment on column public.online_orders.checkout_payload_hash is
+  'Server-computed fingerprint used to reject reuse of a checkout key with different content.';
+
+-- Preserve the already-deployed server-authoritative order creator as a private
+-- implementation, then expose an idempotent wrapper under the public API name.
+do $$
+begin
+  if to_regprocedure('public.create_public_online_order_unkeyed(jsonb,jsonb)') is null then
+    alter function public.create_public_online_order(jsonb, jsonb)
+      rename to create_public_online_order_unkeyed;
+  end if;
+end $$;
+
+revoke all on function public.create_public_online_order_unkeyed(jsonb, jsonb)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.create_public_online_order(
+  p_order_data jsonb,
+  p_order_items jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid;
+  v_checkout_key text;
+  v_payload_hash text;
+  v_existing_order record;
+  v_order_id uuid;
+  v_canonical_items jsonb;
+begin
+  if p_order_data is null or jsonb_typeof(p_order_data) <> 'object' then
+    raise exception 'Invalid order payload';
+  end if;
+
+  if p_order_items is null or jsonb_typeof(p_order_items) <> 'array'
+     or jsonb_array_length(p_order_items) = 0 then
+    raise exception 'Order must include at least one item';
+  end if;
+
+  v_tenant_id := nullif(p_order_data->>'tenant_id', '')::uuid;
+  if v_tenant_id is null then
+    raise exception 'Invalid tenant_id';
+  end if;
+
+  v_checkout_key := nullif(btrim(coalesce(p_order_data->>'checkout_idempotency_key', '')), '');
+  if v_checkout_key is not null and length(v_checkout_key) > 128 then
+    raise exception 'Checkout idempotency key is too long';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'product_id', item.value->>'product_id',
+        'quantity', item.value->>'quantity'
+      )
+      order by item.value->>'product_id', item.ordinality
+    ),
+    '[]'::jsonb
+  )
+  into v_canonical_items
+  from jsonb_array_elements(p_order_items) with ordinality as item(value, ordinality);
+
+  v_payload_hash := md5(jsonb_build_object(
+    'tenant_id', v_tenant_id,
+    'customer_id', nullif(p_order_data->>'customer_id', ''),
+    'customer_email', lower(btrim(coalesce(p_order_data->>'customer_email', ''))),
+    'customer_name', btrim(coalesce(p_order_data->>'customer_name', '')),
+    'customer_phone', btrim(coalesce(p_order_data->>'customer_phone', '')),
+    'customer_address', btrim(coalesce(p_order_data->>'customer_address', '')),
+    'delivery_type', lower(btrim(coalesce(p_order_data->>'delivery_type', 'shipping'))),
+    'payment_method', lower(btrim(coalesce(p_order_data->>'payment_method', 'transfer'))),
+    'shipping_address_line1', btrim(coalesce(p_order_data->>'shipping_address_line1', '')),
+    'shipping_address_line2', btrim(coalesce(p_order_data->>'shipping_address_line2', '')),
+    'shipping_city', btrim(coalesce(p_order_data->>'shipping_city', '')),
+    'shipping_state', btrim(coalesce(p_order_data->>'shipping_state', '')),
+    'shipping_postal_code', btrim(coalesce(p_order_data->>'shipping_postal_code', '')),
+    'shipping_country', btrim(coalesce(p_order_data->>'shipping_country', 'Chile')),
+    'customer_notes', left(btrim(coalesce(p_order_data->>'customer_notes', '')), 1000),
+    'items', v_canonical_items
+  )::text);
+
+  if v_checkout_key is not null then
+    -- Serializes same-key checkouts without locking unrelated tenants/orders.
+    perform pg_advisory_xact_lock(
+      hashtextextended(v_tenant_id::text || ':' || v_checkout_key, 0)
+    );
+
+    select id, checkout_payload_hash
+      into v_existing_order
+      from public.online_orders
+     where tenant_id = v_tenant_id
+       and checkout_idempotency_key = v_checkout_key;
+
+    if found then
+      if v_existing_order.checkout_payload_hash is distinct from v_payload_hash then
+        raise exception 'Checkout key was already used with different order content'
+          using errcode = 'integrity_constraint_violation';
+      end if;
+      return v_existing_order.id;
+    end if;
+  end if;
+
+  v_order_id := public.create_public_online_order_unkeyed(
+    p_order_data - 'order_number' - 'subtotal' - 'tax_amount'
+      - 'shipping_cost' - 'discount_amount' - 'total',
+    p_order_items
+  );
+
+  update public.online_orders
+     set checkout_idempotency_key = v_checkout_key,
+         checkout_payload_hash = v_payload_hash,
+         updated_at = now()
+   where id = v_order_id
+     and tenant_id = v_tenant_id;
+
+  return v_order_id;
+end;
+$$;
+
+revoke all on function public.create_public_online_order(jsonb, jsonb) from public;
+grant execute on function public.create_public_online_order(jsonb, jsonb)
+  to anon, authenticated, service_role;
+
+-- Keep existing callers on the same function name while enforcing tenant
+-- ownership before entering the original SECURITY DEFINER implementation.
+do $$
+begin
+  if to_regprocedure('public.process_online_order_internal(uuid)') is null then
+    alter function public.process_online_order(uuid)
+      rename to process_online_order_internal;
+  end if;
+end $$;
+
+revoke all on function public.process_online_order_internal(uuid)
+  from public, anon, authenticated, service_role;
+
+create or replace function public.process_online_order(p_order_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tenant_id uuid;
+begin
+  select tenant_id into v_tenant_id
+    from public.online_orders
+   where id = p_order_id;
+
+  if not found then
+    raise exception 'Order not found: %', p_order_id;
+  end if;
+
+  if auth.uid() is not null
+     and v_tenant_id is distinct from public.user_tenant_id() then
+    raise exception 'Order not found or access denied: %', p_order_id
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return public.process_online_order_internal(p_order_id);
+end;
+$$;
+
+-- Durable provider-event evidence. One row records each provider payment/status
+-- observation and connects it to the order, invoice, and invoice trace operation.
+create table if not exists public.sales_channel_payment_events (
+  id bigint generated by default as identity primary key,
+  tenant_id uuid not null references public.tenants(id) on delete restrict,
+  provider text not null,
+  external_payment_id text not null,
+  provider_status text not null,
+  order_id uuid not null references public.online_orders(id) on delete restrict,
+  invoice_id uuid references public.sales_invoices(id) on delete restrict,
+  operation_id uuid references public.inventory_accounting_operations(id) on delete restrict,
+  amount numeric(14,2),
+  currency text,
+  outcome text not null check (outcome in (
+    'applied',
+    'recorded_pending',
+    'recorded_failed',
+    'ignored_stale',
+    'rejected_amount',
+    'rejected_currency',
+    'rejected_conflicting_payment'
+  )),
+  validation_error text,
+  provider_payload jsonb not null default '{}'::jsonb,
+  created_at timestamp with time zone not null default clock_timestamp(),
+  unique (tenant_id, provider, external_payment_id, provider_status)
+);
+
+create index if not exists idx_sales_channel_payment_events_order
+  on public.sales_channel_payment_events(tenant_id, order_id, created_at desc);
+create index if not exists idx_sales_channel_payment_events_invoice
+  on public.sales_channel_payment_events(tenant_id, invoice_id, created_at desc)
+  where invoice_id is not null;
+
+alter table public.sales_channel_payment_events enable row level security;
+
+drop policy if exists sales_channel_payment_events_select
+  on public.sales_channel_payment_events;
+create policy sales_channel_payment_events_select
+  on public.sales_channel_payment_events
+  for select to authenticated
+  using (tenant_id = public.user_tenant_id());
+
+revoke all on public.sales_channel_payment_events from public, anon, authenticated;
+grant select on public.sales_channel_payment_events to authenticated;
+
+create or replace function public.prevent_sales_channel_payment_event_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'Sales channel payment events are append-only'
+    using errcode = 'check_violation';
+end;
+$$;
+
+drop trigger if exists trg_sales_channel_payment_events_immutable
+  on public.sales_channel_payment_events;
+create trigger trg_sales_channel_payment_events_immutable
+  before update or delete on public.sales_channel_payment_events
+  for each row execute function public.prevent_sales_channel_payment_event_mutation();
+
+create or replace function public.apply_mercadopago_payment_event(
+  p_order_id uuid,
+  p_tenant_id uuid,
+  p_payment_id text,
+  p_provider_status text,
+  p_amount numeric,
+  p_currency text,
+  p_paid_at timestamp with time zone default null,
+  p_provider_payload jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.online_orders%rowtype;
+  v_existing_event public.sales_channel_payment_events%rowtype;
+  v_status text := lower(btrim(coalesce(p_provider_status, '')));
+  v_currency text := upper(btrim(coalesce(p_currency, '')));
+  v_payment_id text := btrim(coalesce(p_payment_id, ''));
+  v_outcome text;
+  v_error text;
+  v_invoice_id uuid;
+  v_operation_id uuid;
+  v_payment_status text;
+begin
+  if p_order_id is null or p_tenant_id is null or v_payment_id = '' or v_status = '' then
+    raise exception 'MercadoPago event is missing required identifiers';
+  end if;
+
+  select * into v_order
+    from public.online_orders
+   where id = p_order_id
+     and tenant_id = p_tenant_id
+   for update;
+
+  if not found then
+    raise exception 'Online order not found for MercadoPago event';
+  end if;
+
+  select * into v_existing_event
+    from public.sales_channel_payment_events
+   where tenant_id = p_tenant_id
+     and provider = 'mercadopago'
+     and external_payment_id = v_payment_id
+     and provider_status = v_status;
+
+  if found then
+    return jsonb_build_object(
+      'event_id', v_existing_event.id,
+      'outcome', v_existing_event.outcome,
+      'order_id', v_existing_event.order_id,
+      'invoice_id', v_existing_event.invoice_id,
+      'replay', true
+    );
+  end if;
+
+  if v_currency <> 'CLP' then
+    v_outcome := 'rejected_currency';
+    v_error := format('Expected CLP, received %s', coalesce(nullif(v_currency, ''), '<empty>'));
+  elsif p_amount is null or round(p_amount, 2) <> round(v_order.total, 2) then
+    v_outcome := 'rejected_amount';
+    v_error := format('Expected %s CLP, received %s', v_order.total, coalesce(p_amount::text, '<null>'));
+  elsif v_status = 'approved'
+        and v_order.payment_status = 'paid'
+        and nullif(v_order.payment_reference, '') is distinct from v_payment_id then
+    v_outcome := 'rejected_conflicting_payment';
+    v_error := format('Order already paid by a different provider payment: %s', v_order.payment_reference);
+  elsif v_order.payment_status = 'paid' and v_status <> 'approved' then
+    v_outcome := 'ignored_stale';
+  elsif v_status = 'approved' then
+    update public.online_orders
+       set payment_status = 'paid',
+           payment_method = 'mercadopago',
+           payment_reference = v_payment_id,
+           paid_at = coalesce(p_paid_at, now()),
+           updated_at = now()
+     where id = v_order.id;
+
+    v_invoice_id := public.process_online_order(v_order.id);
+
+    update public.sales_payments
+       set idempotency_key = 'mercadopago:' || v_payment_id,
+           updated_at = now()
+     where invoice_id = v_invoice_id
+       and tenant_id = p_tenant_id
+       and deleted_at is null
+       and idempotency_key is null;
+
+    select operation.id into v_operation_id
+      from public.inventory_accounting_operations operation
+     where operation.tenant_id = p_tenant_id
+       and operation.document_type = 'sales_invoice'
+       and operation.document_id = v_invoice_id
+     order by operation.created_at desc
+     limit 1;
+
+    v_outcome := 'applied';
+  else
+    v_payment_status := case
+      when v_status in ('rejected', 'cancelled') then 'failed'
+      else 'pending'
+    end;
+
+    update public.online_orders
+       set payment_status = v_payment_status,
+           payment_method = 'mercadopago',
+           payment_reference = v_payment_id,
+           paid_at = null,
+           updated_at = now()
+     where id = v_order.id;
+
+    v_invoice_id := v_order.sales_invoice_id;
+    v_outcome := case when v_payment_status = 'failed'
+      then 'recorded_failed' else 'recorded_pending' end;
+  end if;
+
+  insert into public.sales_channel_payment_events (
+    tenant_id,
+    provider,
+    external_payment_id,
+    provider_status,
+    order_id,
+    invoice_id,
+    operation_id,
+    amount,
+    currency,
+    outcome,
+    validation_error,
+    provider_payload
+  ) values (
+    p_tenant_id,
+    'mercadopago',
+    v_payment_id,
+    v_status,
+    v_order.id,
+    coalesce(v_invoice_id, v_order.sales_invoice_id),
+    v_operation_id,
+    p_amount,
+    nullif(v_currency, ''),
+    v_outcome,
+    v_error,
+    coalesce(p_provider_payload, '{}'::jsonb)
+  )
+  returning id into v_existing_event.id;
+
+  return jsonb_build_object(
+    'event_id', v_existing_event.id,
+    'outcome', v_outcome,
+    'order_id', v_order.id,
+    'invoice_id', coalesce(v_invoice_id, v_order.sales_invoice_id),
+    'operation_id', v_operation_id,
+    'replay', false,
+    'validation_error', v_error
+  );
+end;
+$$;
+
+revoke all on function public.apply_mercadopago_payment_event(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) from public, anon, authenticated;
+grant execute on function public.apply_mercadopago_payment_event(
+  uuid, uuid, text, text, numeric, text, timestamp with time zone, jsonb
+) to service_role;
+
+-- These administrative/process functions were implicitly executable by PUBLIC.
+-- Keep only the roles that actually own each application path.
+revoke all on function public.process_online_order(uuid) from public, anon;
+grant execute on function public.process_online_order(uuid) to authenticated, service_role;
+
+revoke all on function public.confirm_online_order_payment(uuid, text, timestamp with time zone)
+  from public, anon;
+grant execute on function public.confirm_online_order_payment(uuid, text, timestamp with time zone)
+  to authenticated, service_role;
+
+revoke all on function public.cancel_online_order(uuid, text, numeric) from public, anon;
+grant execute on function public.cancel_online_order(uuid, text, numeric)
+  to authenticated, service_role;
+
+-- The unused legacy writer has never stored a production row and bypasses the
+-- movement ledger. Close it instead of allowing an untraceable stock mutation.
+alter table public.order_items disable trigger trg_order_item_insert;
+revoke insert, update, delete on public.orders from anon, authenticated, service_role;
+revoke insert, update, delete on public.order_items from anon, authenticated, service_role;
+
+-- ============================================================================
+-- INVENTORY TRACE ACTOR FOREIGN KEY DRIFT FIX
+-- Canonical mirror of 20260711190000_fix_inventory_actor_foreign_keys.sql.
+-- ============================================================================
+begin;
+
+alter table public.stock_movements
+  drop constraint if exists stock_movements_created_by_fkey;
+alter table public.stock_movements
+  add constraint stock_movements_created_by_fkey
+  foreign key (created_by) references auth.users(id) on delete set null;
+
+alter table public.journal_entries
+  drop constraint if exists journal_entries_created_by_fkey;
+alter table public.journal_entries
+  add constraint journal_entries_created_by_fkey
+  foreign key (created_by) references auth.users(id) on delete set null;
+
+commit;
+
+-- ============================================================================
+-- STOCK MOVEMENT AUDIT READ MODEL
+-- Canonical mirror of 20260711201500_add_stock_movement_audit_read_model.sql.
+-- ============================================================================
+
+begin;
+
+create or replace function public.sync_stock_adjustment_to_movement()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.stock_movements (
+    tenant_id,
+    product_id,
+    date,
+    type,
+    movement_type,
+    reference,
+    quantity,
+    notes,
+    created_at,
+    operation_id,
+    source_document_type,
+    source_document_id,
+    created_by,
+    stock_before,
+    stock_after
+  ) values (
+    NEW.tenant_id,
+    NEW.product_id,
+    coalesce(NEW.adjustment_date, NEW.created_at),
+    case when NEW.quantity >= 0 then 'IN' else 'OUT' end,
+    NEW.adjustment_type,
+    NEW.reference,
+    abs(NEW.quantity),
+    NEW.reason,
+    NEW.created_at,
+    NEW.operation_id,
+    'stock_adjustment',
+    NEW.id,
+    NEW.created_by,
+    NEW.stock_before,
+    NEW.stock_after
+  );
+  return NEW;
+end;
+$$;
+
+drop view if exists public.stock_movements_audit_view;
+create view public.stock_movements_audit_view
+with (security_invoker = on)
+as
+with movement_candidates as (
+  select
+    candidate.*,
+    count(*) over (partition by candidate.id) as source_match_count,
+    row_number() over (
+      partition by candidate.id
+      order by candidate.reference_id nulls last
+    ) as source_match_order
+  from public.stock_movements_view candidate
+),
+movement_base as (
+  select *
+  from movement_candidates
+  where source_match_order = 1
+)
+select
+  movement.id,
+  movement.product_id,
+  movement.product_name,
+  movement.product_sku,
+  movement.transaction_date,
+  movement.movement_type,
+  movement.source,
+  case
+    when movement.movement_type = 'adjustment'
+     and movement.source_match_count = 1
+      then coalesce(movement.reference_id, adjustment.id)
+    else movement.reference_id
+  end as reference_id,
+  movement.reference_number,
+  movement.quantity,
+  coalesce(
+    raw_movement.stock_before,
+    case when movement.source_match_count = 1 then adjustment.stock_before end,
+    collision_adjustment.stock_before,
+    movement.stock_before
+  )::integer as stock_before,
+  coalesce(
+    raw_movement.stock_after,
+    case when movement.source_match_count = 1 then adjustment.stock_after end,
+    collision_adjustment.stock_after,
+    movement.stock_after
+  )::integer as stock_after,
+  movement.notes,
+  movement.adjustment_origin,
+  movement.created_by,
+  movement.created_at,
+  movement.tenant_id,
+  movement.quantity::integer as raw_quantity,
+  (
+    coalesce(
+      raw_movement.stock_after,
+      case when movement.source_match_count = 1 then adjustment.stock_after end,
+      collision_adjustment.stock_after,
+      movement.stock_after
+    ) -
+    coalesce(
+      raw_movement.stock_before,
+      case when movement.source_match_count = 1 then adjustment.stock_before end,
+      collision_adjustment.stock_before,
+      movement.stock_before
+    )
+  )::integer as actual_stock_delta,
+  case
+    when collision_purchase.id is not null then 0
+    when collision_adjustment.id is not null then
+      (collision_adjustment.stock_after - collision_adjustment.stock_before)::integer
+    when adjustment.id is not null and movement.source_match_count = 1 then
+      (adjustment.stock_after - adjustment.stock_before)::integer
+    else movement.quantity::integer
+  end as reconciled_quantity,
+  case
+    when raw_movement.stock_before is not null and raw_movement.stock_after is not null
+      then 'persisted_movement'
+    when movement.source_match_count > 1 then 'legacy_ambiguous_reconstruction'
+    when adjustment.id is not null then 'stock_adjustment'
+    when collision_adjustment.id is not null then 'legacy_collision_adjustment'
+    else 'reconstructed'
+  end as balance_provenance,
+  case
+    when movement.source_match_count > 1 then 'legacy_ambiguous_adjustment_match'
+    when collision_purchase.id is not null then 'legacy_duplicate_footprint'
+    when collision_adjustment.id is not null then 'legacy_purchase_reversal_collision'
+    when raw_movement.stock_before is not null
+     and raw_movement.stock_after is not null
+     and raw_movement.stock_after - raw_movement.stock_before <> movement.quantity
+      then 'arithmetic_mismatch'
+    when raw_movement.stock_before is not null and raw_movement.stock_after is not null
+      then 'verified'
+    when adjustment.id is not null then 'verified_adjustment'
+    else 'legacy_reconstructed'
+  end as integrity_status,
+  (collision_purchase.id is not null) as is_summary_excluded,
+  case
+    when movement.source_match_count = 1
+      then coalesce(adjustment.id, collision_adjustment.id)
+    else collision_adjustment.id
+  end as linked_adjustment_id,
+  collision_purchase.id as canonical_movement_id,
+  raw_movement.operation_id,
+  raw_movement.source_document_type,
+  raw_movement.source_document_id
+from movement_base movement
+join public.stock_movements raw_movement
+  on raw_movement.id = movement.id
+ and raw_movement.tenant_id = movement.tenant_id
+left join public.stock_adjustments adjustment
+  on adjustment.tenant_id = movement.tenant_id
+ and adjustment.product_id = movement.product_id
+ and (
+   adjustment.id = movement.reference_id
+   or (
+     raw_movement.source_document_type = 'stock_adjustment'
+     and raw_movement.source_document_id = adjustment.id
+   )
+ )
+left join lateral (
+  select candidate.*
+  from public.stock_adjustments candidate
+  where movement.source = 'purchase_invoice_reversal'
+    and movement.created_at < timestamp with time zone '2026-07-10 12:30:00+00'
+    and candidate.tenant_id = movement.tenant_id
+    and candidate.product_id = movement.product_id
+    and candidate.created_at = movement.created_at
+    and candidate.quantity < 0
+  order by candidate.id
+  limit 1
+) collision_adjustment on true
+left join lateral (
+  select candidate.id
+  from public.stock_movements candidate
+  where movement.movement_type = 'adjustment'
+    and movement.created_at < timestamp with time zone '2026-07-10 12:30:00+00'
+    and candidate.tenant_id = movement.tenant_id
+    and candidate.product_id = movement.product_id
+    and candidate.created_at = movement.created_at
+    and candidate.movement_type = 'purchase_invoice_reversal'
+  order by candidate.id
+  limit 1
+) collision_purchase on true;
+
+grant select on public.stock_movements_audit_view to authenticated;
+
+commit;
+
+-- Continuous posting ledger. Effective dates and source balances remain audit
+-- evidence, while the primary Initial/Cambio/Final chain is ordered by posting.
+drop view if exists public.stock_movements_ledger_view;
+create view public.stock_movements_ledger_view
+with (security_invoker = on)
+as
+with evidence as (
+  select
+    audit.*,
+    audit.stock_before as evidence_stock_before,
+    audit.stock_after as evidence_stock_after,
+    audit.balance_provenance as evidence_balance_provenance,
+    audit.integrity_status as evidence_integrity_status,
+    greatest(coalesce(product.inventory_qty, 0), coalesce(product.stock_quantity, 0))::integer
+      as current_stock
+  from public.stock_movements_audit_view audit
+  join public.products product
+    on product.id = audit.product_id
+   and product.tenant_id = audit.tenant_id
+), ordered as (
+  select
+    evidence.*,
+    (
+      evidence.current_stock - coalesce(
+        sum(evidence.reconciled_quantity) over (
+          partition by evidence.tenant_id, evidence.product_id
+          order by evidence.created_at desc, evidence.id desc
+          rows between unbounded preceding and 1 preceding
+        ),
+        0
+      )
+    )::integer as ledger_stock_after
+  from evidence
+)
+select
+  ordered.id,
+  ordered.product_id,
+  ordered.product_name,
+  ordered.product_sku,
+  ordered.transaction_date,
+  ordered.movement_type,
+  ordered.source,
+  ordered.reference_id,
+  ordered.reference_number,
+  ordered.quantity,
+  (ordered.ledger_stock_after - ordered.reconciled_quantity)::integer as stock_before,
+  ordered.ledger_stock_after::integer as stock_after,
+  ordered.notes,
+  ordered.adjustment_origin,
+  ordered.created_by,
+  ordered.created_at,
+  ordered.tenant_id,
+  ordered.raw_quantity,
+  ordered.actual_stock_delta,
+  ordered.reconciled_quantity,
+  'current_stock_reconciled_ledger'::text as balance_provenance,
+  case
+    when ordered.is_summary_excluded then ordered.evidence_integrity_status
+    when ordered.evidence_integrity_status in (
+      'verified',
+      'verified_adjustment',
+      'legacy_purchase_reversal_collision'
+    ) and (
+      ordered.evidence_stock_before
+        <> ordered.ledger_stock_after - ordered.reconciled_quantity
+      or ordered.evidence_stock_after <> ordered.ledger_stock_after
+    ) then 'ledger_source_balance_mismatch'
+    else ordered.evidence_integrity_status
+  end as integrity_status,
+  ordered.is_summary_excluded,
+  ordered.linked_adjustment_id,
+  ordered.canonical_movement_id,
+  ordered.operation_id,
+  ordered.source_document_type,
+  ordered.source_document_id,
+  ordered.evidence_stock_before,
+  ordered.evidence_stock_after,
+  ordered.evidence_balance_provenance,
+  ordered.evidence_integrity_status
+from ordered;
+
+grant select on public.stock_movements_ledger_view to authenticated;
+
+-- Disabled-by-default professional purchase receipt kernel.
+\ir ../migrations/20260711233000_add_inactive_purchase_receipt_kernel.sql
+\ir ../migrations/20260711235000_add_purchase_receipt_void_command.sql
+\ir ../migrations/20260712001000_add_inactive_supplier_return_kernel.sql
+\ir ../migrations/20260712013000_guard_legacy_purchase_receiving_activation.sql
+\ir ../migrations/20260712030000_add_inactive_purchase_credit_note_kernel.sql
+\ir ../migrations/20260712050000_add_inactive_sales_return_kernel.sql
+\ir ../migrations/20260712053000_add_sales_return_void_command.sql
+\ir ../migrations/20260712070000_add_inactive_sales_credit_note_kernel.sql
+\ir ../migrations/20260712073000_add_sales_credit_note_void_guards.sql
+\ir ../migrations/20260712080000_post_return_inventory_value_journals.sql
+\ir ../migrations/20260712083000_add_sales_return_quarantine_resolution.sql
+\ir ../migrations/20260712090000_add_atomic_staff_sales_checkout.sql
+\ir ../migrations/20260712091000_prevent_negative_sales_inventory.sql
+\ir ../migrations/20260712093000_trace_product_conversion_operations.sql
+\ir ../migrations/20260712095000_add_product_import_stock_command.sql
+\ir ../migrations/20260712101000_link_bulk_edit_parent_operations.sql
+\ir ../migrations/20260712113000_preserve_posted_document_and_journal_evidence.sql
+
+commit;

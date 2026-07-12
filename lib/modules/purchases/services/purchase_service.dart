@@ -107,6 +107,8 @@ class PurchaseService extends ChangeNotifier {
       supplierInvoiceNumber: invoice.supplierInvoiceNumber,
       supplierInvoiceDate: invoice.supplierInvoiceDate,
       paidAmount: invoice.paidAmount,
+      creditedAmount: invoice.creditedAmount,
+      supplierCreditBalance: invoice.supplierCreditBalance,
       balance: invoice.balance,
     );
   }
@@ -484,31 +486,9 @@ class PurchaseService extends ChangeNotifier {
     try {
       final client = Supabase.instance.client;
 
-      // Delete associated journal entries first (if any)
-      debugPrint('🔍 Searching for journal entries...');
-      try {
-        final journalEntries = await client
-            .from('journal_entries')
-            .select()
-            .eq('source_module', 'purchases')
-            .eq('source_reference', id);
-
-        debugPrint('📊 Found ${journalEntries.length} journal entries');
-
-        if (journalEntries.isNotEmpty) {
-          debugPrint(
-              '🗑️ Deleting ${journalEntries.length} journal entries...');
-          for (final entry in journalEntries) {
-            debugPrint('  Deleting journal entry: ${entry['id']}');
-            await client.from('journal_entries').delete().eq('id', entry['id']);
-          }
-          debugPrint('✅ Journal entries deleted');
-        }
-      } catch (e) {
-        debugPrint('⚠️ Warning: Could not delete journal entries: $e');
-      }
-
-      // Delete the purchase invoice
+      // The database permits deletion only for drafts. Posted accounting and
+      // inventory evidence is reversed through document commands, never erased
+      // by the client.
       debugPrint('🗑️ Deleting purchase invoice from database...');
       final response = await client
           .from('purchase_invoices')

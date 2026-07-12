@@ -710,6 +710,7 @@ class BulkUpdateItemResult {
     required this.status,
     required this.summary,
     this.executionAt,
+    this.operationId,
     this.beforeValues = const {},
     this.afterValues = const {},
     this.changedFields = const [],
@@ -722,6 +723,7 @@ class BulkUpdateItemResult {
   final BulkUpdateItemStatus status;
   final String summary;
   final DateTime? executionAt;
+  final String? operationId;
   final Map<String, dynamic> beforeValues;
   final Map<String, dynamic> afterValues;
   final List<String> changedFields;
@@ -735,6 +737,7 @@ class BulkUpdateItemResult {
       'status': status.name,
       'summary': summary,
       'execution_at': executionAt?.toIso8601String(),
+      'operation_id': operationId,
       'before_values': beforeValues,
       'after_values': afterValues,
       'changed_fields': changedFields,
@@ -752,6 +755,7 @@ class BulkUpdateItemResult {
       executionAt: json['execution_at'] == null
           ? null
           : DateTime.parse(json['execution_at'].toString()),
+      operationId: json['operation_id']?.toString(),
       beforeValues: json['before_values'] is Map
           ? Map<String, dynamic>.from(json['before_values'] as Map)
           : const {},

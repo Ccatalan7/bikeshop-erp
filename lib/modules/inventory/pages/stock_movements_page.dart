@@ -70,6 +70,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
   StockAdjustmentDetail? _selectedStockAdjustment;
   bool _isLoadingLinkedDocument = false;
   String? _linkedDocumentError;
+  Map<String, dynamic>? _selectedOperationTrace;
+  bool _isLoadingOperationTrace = false;
 
   @override
   void initState() {
@@ -265,7 +267,10 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _selectedStockAdjustment = null;
       _linkedDocumentError = null;
       _isLoadingLinkedDocument = true;
+      _selectedOperationTrace = null;
+      _isLoadingOperationTrace = movement.operationId != null;
     });
+    unawaited(_loadOperationTrace(movement));
 
     try {
       if (movement.category == StockMovementCategory.adjustment) {
@@ -298,10 +303,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         return;
       }
 
-      final invoice = await context
-          .read<SalesService>()
-          .fetchInvoice(movement.referenceId!, refresh: true);
-      await context.read<SalesService>().loadPayments(forceRefresh: false);
+      final salesService = context.read<SalesService>();
+      final invoice = await salesService.fetchInvoice(
+        movement.referenceId!,
+        refresh: true,
+      );
+      await salesService.loadPayments(forceRefresh: false);
       if (!mounted) return;
 
       if (invoice == null) {
@@ -321,6 +328,23 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     }
   }
 
+  Future<void> _loadOperationTrace(StockMovement movement) async {
+    if (movement.operationId == null) return;
+    try {
+      final trace = await context
+          .read<StockMovementsService>()
+          .getOperationTrace(movement.operationId);
+      if (!mounted || _selectedLinkedMovement?.id != movement.id) return;
+      setState(() {
+        _selectedOperationTrace = trace;
+        _isLoadingOperationTrace = false;
+      });
+    } catch (_) {
+      if (!mounted || _selectedLinkedMovement?.id != movement.id) return;
+      setState(() => _isLoadingOperationTrace = false);
+    }
+  }
+
   void _closeLinkedDocument() {
     setState(() {
       _selectedLinkedMovement = null;
@@ -329,6 +353,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       _selectedStockAdjustment = null;
       _linkedDocumentError = null;
       _isLoadingLinkedDocument = false;
+      _selectedOperationTrace = null;
+      _isLoadingOperationTrace = false;
     });
   }
 
@@ -1144,8 +1170,151 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             ],
           ),
         ),
+        if (_selectedLinkedMovement != null)
+          _buildMovementAuditPanel(_selectedLinkedMovement!),
         Expanded(child: child),
       ],
+    );
+  }
+
+  Widget _buildMovementAuditPanel(StockMovement movement) {
+    final theme = Theme.of(context);
+    final warning = movement.hasIntegrityWarning;
+    final statusColor = warning ? Colors.orange[800]! : Colors.green[700]!;
+    final effectiveDate =
+        DateFormat('dd/MM/yyyy HH:mm').format(movement.transactionDate);
+    final recordedDate =
+        DateFormat('dd/MM/yyyy HH:mm').format(movement.createdAt);
+    final ledgerDelta = movement.reconciledQuantity;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.06),
+        border: Border(
+          bottom: BorderSide(color: statusColor.withValues(alpha: 0.25)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                warning ? Icons.warning_amber_rounded : Icons.verified_outlined,
+                size: 18,
+                color: statusColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                movement.integrityLabel,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${movement.stockBefore} ${ledgerDelta >= 0 ? '+' : '-'} ${ledgerDelta.abs()} = ${movement.stockAfter}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            movement.integrityExplanation,
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 16,
+            runSpacing: 4,
+            children: [
+              Text('Fecha efectiva: $effectiveDate',
+                  style: theme.textTheme.labelSmall),
+              Text('Registrado: $recordedDate',
+                  style: theme.textTheme.labelSmall),
+              if (movement.hasRawActualDifference)
+                Text(
+                  'Huella original: ${movement.rawQuantity >= 0 ? '+' : ''}${movement.rawQuantity}; cambio real: ${movement.actualStockDelta >= 0 ? '+' : ''}${movement.actualStockDelta}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              if (movement.isSummaryExcluded)
+                Text(
+                  'Excluido de totales para evitar doble conteo',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              if (movement.hasEvidenceBalanceDifference)
+                Text(
+                  'Evidencia fuente: ${movement.evidenceStockBefore} → ${movement.evidenceStockAfter}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildTriggerTrace(movement, theme, statusColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTriggerTrace(
+    StockMovement movement,
+    ThemeData theme,
+    Color statusColor,
+  ) {
+    if (movement.operationId == null) {
+      return Text(
+        'Disparador: no registrado históricamente. Este movimiento es anterior al sistema de trazas.',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: Colors.orange[800],
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    if (_isLoadingOperationTrace) {
+      return Text('Cargando acción disparadora…',
+          style: theme.textTheme.labelSmall);
+    }
+
+    final trace = _selectedOperationTrace;
+    if (trace == null) {
+      return Text(
+        'Traza ${movement.operationId}: no se pudo cargar el detalle.',
+        style: theme.textTheme.labelSmall?.copyWith(color: statusColor),
+      );
+    }
+
+    final action = trace['action']?.toString() ?? 'acción';
+    final documentType = trace['document_type']?.toString() ?? 'documento';
+    final oldStatus = trace['old_status']?.toString();
+    final newStatus = trace['new_status']?.toString();
+    final actor = trace['actor_id']?.toString();
+    final statusTransition = oldStatus != null || newStatus != null
+        ? ' • ${oldStatus ?? '∅'} → ${newStatus ?? '∅'}'
+        : '';
+    final actorText = actor == null ? '' : ' • actor $actor';
+
+    return Text(
+      'Disparador probado: $action de $documentType$statusTransition$actorText • operación ${movement.operationId}',
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.primary,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 
@@ -1166,8 +1335,12 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         '${detail.stockAfter}',
       ),
       _buildAdjustmentMetricCard(
-        'Valor inventario',
-        ChileanUtils.formatCurrency(detail.inventoryValue),
+        detail.unitCostLabel,
+        ChileanUtils.formatCurrency(detail.displayedUnitCost),
+      ),
+      _buildAdjustmentMetricCard(
+        detail.inventoryValueLabel,
+        ChileanUtils.formatCurrency(detail.displayedInventoryValue),
       ),
     ];
 
@@ -2396,13 +2569,22 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           ),
           const SizedBox(width: 24),
           _buildSummaryItem(
-            'Balance',
+            'Cambio neto',
             (summary['net_change'] ?? 0) >= 0
                 ? '+${summary['net_change']}'
                 : summary['net_change'].toString(),
             Icons.bar_chart,
             (summary['net_change'] ?? 0) >= 0 ? Colors.green : Colors.red,
           ),
+          if ((summary['warning_count'] ?? 0) > 0) ...[
+            const Spacer(),
+            _buildSummaryItem(
+              'Filas a revisar',
+              summary['warning_count'].toString(),
+              Icons.warning_amber_rounded,
+              Colors.orange,
+            ),
+          ],
         ],
       ),
     );
@@ -2418,14 +2600,18 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     var totalIncrease = 0;
     var totalDecrease = 0;
     var netChange = 0;
+    var warningCount = 0;
 
     for (final movement in movements) {
-      final quantity = movement.quantity;
+      final quantity = movement.summaryQuantity;
       netChange += quantity;
       if (quantity >= 0) {
         totalIncrease += quantity;
       } else {
         totalDecrease += quantity.abs();
+      }
+      if (movement.hasIntegrityWarning) {
+        warningCount++;
       }
     }
 
@@ -2434,6 +2620,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
       'total_increase': totalIncrease,
       'total_decrease': totalDecrease,
       'net_change': netChange,
+      'warning_count': warningCount,
     };
   }
 
@@ -2524,7 +2711,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           ],
           SizedBox(
             width: _colDateWidth,
-            child: Text('Fecha', style: headerStyle),
+            child: Text('Registrado', style: headerStyle),
           ),
           _buildResizeHandle((delta) => setState(() => _colDateWidth =
               (_colDateWidth + delta).clamp(_minColWidth, 200))),
@@ -2668,7 +2855,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           SizedBox(
             width: _colDateWidth,
             child: Text(
-              dateFormat.format(movement.transactionDate),
+              dateFormat.format(movement.createdAt),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
@@ -2710,9 +2897,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
           SizedBox(
             width: _colMovWidth,
             child: Text(
-              movement.quantity >= 0
-                  ? '+${movement.quantity}'
-                  : movement.quantity.toString(),
+              movement.displayQuantity >= 0
+                  ? '+${movement.displayQuantity}'
+                  : movement.displayQuantity.toString(),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color:
@@ -2797,6 +2984,26 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+        if (movement.hasIntegrityWarning) ...[
+          const SizedBox(height: 2),
+          Text(
+            movement.operationId == null &&
+                    movement.source == 'purchase_invoice_reversal'
+                ? 'Disparador histórico no registrado'
+                : movement.isLegacyDuplicateFootprint
+                    ? 'Huella duplicada'
+                    : movement.integrityStatus ==
+                            'legacy_purchase_reversal_collision'
+                        ? 'Cambio real conciliado'
+                        : 'Revisión histórica',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.orange[800],
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ],
     );
   }
@@ -2822,6 +3029,24 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        if (movement.hasIntegrityWarning)
+          Text(
+            movement.operationId == null &&
+                    movement.source == 'purchase_invoice_reversal'
+                ? 'Disparador histórico no registrado'
+                : movement.isLegacyDuplicateFootprint
+                    ? 'Huella duplicada'
+                    : movement.integrityStatus ==
+                            'legacy_purchase_reversal_collision'
+                        ? 'Cambio real conciliado'
+                        : 'Revisión histórica',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.orange[800],
+              fontWeight: FontWeight.w700,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -2921,7 +3146,7 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                 Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
-                  dateFormat.format(movement.transactionDate),
+                  dateFormat.format(movement.createdAt),
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(width: 16),
@@ -2965,9 +3190,9 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      movement.quantity >= 0
-                          ? '+${movement.quantity}'
-                          : '${movement.quantity}',
+                      movement.displayQuantity >= 0
+                          ? '+${movement.displayQuantity}'
+                          : '${movement.displayQuantity}',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,

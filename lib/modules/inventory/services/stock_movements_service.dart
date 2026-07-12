@@ -26,7 +26,12 @@ class StockMovementsService extends ChangeNotifier {
   static const String _movementSelect =
       'id,product_id,product_name,product_sku,transaction_date,movement_type,'
       'source,reference_id,reference_number,quantity,stock_before,stock_after,'
-      'notes,adjustment_origin,created_by,created_at,tenant_id';
+      'notes,adjustment_origin,created_by,created_at,tenant_id,raw_quantity,'
+      'actual_stock_delta,reconciled_quantity,balance_provenance,'
+      'integrity_status,is_summary_excluded,linked_adjustment_id,'
+      'canonical_movement_id,operation_id,source_document_type,'
+      'source_document_id,evidence_stock_before,evidence_stock_after,'
+      'evidence_balance_provenance,evidence_integrity_status';
 
   List<StockMovement> _movements = [];
   bool _isLoading = false;
@@ -249,10 +254,11 @@ class StockMovementsService extends ChangeNotifier {
     int totalDecrease = 0;
 
     for (var movement in _movements) {
-      if (movement.isIncrease) {
-        totalIncrease += movement.quantity;
+      final quantity = movement.summaryQuantity;
+      if (quantity > 0) {
+        totalIncrease += quantity;
       } else {
-        totalDecrease += movement.quantity.abs();
+        totalDecrease += quantity.abs();
       }
     }
 
@@ -314,7 +320,7 @@ class StockMovementsService extends ChangeNotifier {
     }
 
     var query = _supabase
-        .from('stock_movements_view')
+        .from('stock_movements_ledger_view')
         .select(_movementSelect)
         .eq('tenant_id', tenantId);
 
@@ -323,7 +329,6 @@ class StockMovementsService extends ChangeNotifier {
     }
 
     final orderedQuery = query
-        .order('transaction_date', ascending: false)
         .order('created_at', ascending: false)
         .order('id', ascending: false);
     final response =
@@ -331,5 +336,24 @@ class StockMovementsService extends ChangeNotifier {
 
     final rows = response as List;
     return rows.map((json) => StockMovement.fromJson(json)).toList();
+  }
+
+  Future<Map<String, dynamic>?> getOperationTrace(String? operationId) async {
+    if (operationId == null || operationId.isEmpty) return null;
+
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No tenant_id found');
+
+    final response = await _supabase
+        .from('inventory_accounting_operation_trace_view')
+        .select(
+          'operation_id,source_channel,action,document_type,document_id,'
+          'actor_id,executor,old_status,new_status,outcome,started_at,'
+          'completed_at,checkpoints',
+        )
+        .eq('tenant_id', tenantId)
+        .eq('operation_id', operationId)
+        .maybeSingle();
+    return response;
   }
 }

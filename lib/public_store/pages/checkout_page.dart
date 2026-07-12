@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
+import 'package:uuid/uuid.dart';
 import '../utils/web_utils.dart' as web_utils;
 import '../theme/public_store_theme.dart';
 import '../providers/cart_provider.dart';
@@ -62,6 +63,8 @@ class _CheckoutPageState extends State<CheckoutPage>
   bool _saveAddressToAccount = true;
   bool _createAccountAfterCheckout = false;
   bool _obscureAccountPassword = true;
+  // Stable for this checkout page so a timeout/retry returns the same order.
+  final String _checkoutIdempotencyKey = const Uuid().v4();
 
   // Keep this page alive in memory to prevent reloading on navigation
   @override
@@ -526,6 +529,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       // Create order data (database will generate id and orderNumber)
       final Map<String, dynamic> orderData = {
         'tenant_id': tenantId, // ⚠️ REQUIRED for multi-tenant isolation
+        'checkout_idempotency_key': _checkoutIdempotencyKey,
         'customer_email': _emailController.text.trim(),
         'customer_name': _nameController.text.trim(),
         'customer_phone': _phoneController.text.trim(),

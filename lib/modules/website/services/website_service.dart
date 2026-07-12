@@ -2170,56 +2170,19 @@ class WebsiteService extends ChangeNotifier {
     try {
       debugPrint('🛒 [WebsiteService] createOrder() called');
 
-      try {
-        final orderId =
-            await _supabase.rpc('create_public_online_order', params: {
+      final orderId = await _supabase.rpc(
+        'create_public_online_order',
+        params: {
           'p_order_data': orderData,
           'p_order_items': orderItems,
-        });
+        },
+      );
 
-        if (orderId is String && orderId.isNotEmpty) {
-          debugPrint(
-              '🛒 [WebsiteService] Secure order RPC created id: $orderId');
-          return orderId;
-        }
-      } on PostgrestException catch (e) {
-        if (e.code != '42883' &&
-            !e.message.contains('create_public_online_order')) {
-          rethrow;
-        }
-
-        debugPrint(
-            '🛒 [WebsiteService] Secure order RPC is not deployed yet; falling back to legacy insert.');
+      if (orderId is! String || orderId.isEmpty) {
+        throw StateError('Secure checkout did not return an order id');
       }
 
-      // Insert order and get the generated ID
-      final orderResponse = await _supabase
-          .from('online_orders')
-          .insert(orderData)
-          .select()
-          .single();
-
-      final orderId = orderResponse['id'] as String;
-      debugPrint('🛒 [WebsiteService] Order inserted, id: $orderId');
-
-      // Insert order items
-      final itemsToInsert = orderItems.map((item) {
-        return {
-          ...item,
-          'order_id': orderId,
-        };
-      }).toList();
-
-      await _supabase.from('online_order_items').insert(itemsToInsert);
-      debugPrint(
-          '🛒 [WebsiteService] Order items inserted: ${itemsToInsert.length}');
-
-      // DON'T call loadOrders() here - it causes a full rebuild of the widget tree
-      // which triggers navigation issues in the public store.
-      // The checkout page only needs the orderId to proceed.
-      // Admin pages can refresh orders list separately if needed.
-
-      debugPrint('🛒 [WebsiteService] ✅ createOrder() completed successfully');
+      debugPrint('🛒 [WebsiteService] Secure order id: $orderId');
       return orderId;
     } catch (e) {
       _error = 'Error al crear pedido: $e';

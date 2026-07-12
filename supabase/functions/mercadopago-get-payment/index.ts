@@ -92,37 +92,40 @@ serve(async (req) => {
       return jsonResponse({ error: 'Order not found for payment' }, 404)
     }
 
-    const paidAmount = Number(payment?.transaction_amount ?? 0)
-    const orderTotal = Number(order.total ?? 0)
-    if (payment.status === 'approved' && Math.abs(paidAmount - orderTotal) > 1) {
-      return jsonResponse({ error: 'Payment amount does not match order total' }, 409)
-    }
-
     const paymentStatus = mapPaymentStatus(payment.status)
-    const { error: updateError } = await supabase
-      .from('online_orders')
-      .update({
-        payment_status: paymentStatus,
-        payment_method: 'mercadopago',
-        payment_reference: payment_id.toString(),
-        paid_at: payment.status === 'approved' ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', order.id)
-      .eq('tenant_id', tenant_id)
-
-    if (updateError) {
-      throw new Error(`Order update failed: ${updateError.message}`)
+    const paidAmount = Number(payment?.transaction_amount)
+    if (!Number.isFinite(paidAmount)) {
+      return jsonResponse({ error: 'Payment amount is invalid' }, 409)
     }
 
-    if (payment.status === 'approved') {
-      const { error: rpcError } = await supabase.rpc('process_online_order', {
+    const { data: eventResult, error: eventError } = await supabase.rpc(
+      'apply_mercadopago_payment_event',
+      {
         p_order_id: order.id,
-      })
+        p_tenant_id: tenant_id,
+        p_payment_id: payment_id.toString(),
+        p_provider_status: payment.status,
+        p_amount: paidAmount,
+        p_currency: payment.currency_id?.toString() ?? '',
+        p_paid_at: payment.date_approved ?? null,
+        p_provider_payload: {
+          status_detail: payment.status_detail ?? null,
+          payment_type_id: payment.payment_type_id ?? null,
+          merchant_order_id: payment.order?.id ?? null,
+        },
+      },
+    )
 
-      if (rpcError) {
-        throw new Error(`Order processing failed: ${rpcError.message}`)
-      }
+    if (eventError) {
+      throw new Error(`Payment event failed: ${eventError.message}`)
+    }
+
+    const eventOutcome = eventResult?.outcome?.toString() ?? ''
+    if (eventOutcome.startsWith('rejected_')) {
+      return jsonResponse({
+        error: eventResult?.validation_error ?? 'Payment validation failed',
+        event: eventResult,
+      }, 409)
     }
 
     return jsonResponse({
@@ -131,6 +134,7 @@ serve(async (req) => {
       status_detail: payment.status_detail ?? null,
       external_reference: externalReference,
       payment_status: paymentStatus,
+      event: eventResult,
     })
   } catch (error) {
     console.error('[MercadoPago] Get payment error', error)

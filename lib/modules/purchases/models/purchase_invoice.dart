@@ -71,6 +71,8 @@ class PurchaseInvoice {
   final DateTime? supplierInvoiceDate;
   final double paidAmount;
   final double balance;
+  final double creditedAmount;
+  final double supplierCreditBalance;
 
   PurchaseInvoice({
     this.id,
@@ -105,6 +107,8 @@ class PurchaseInvoice {
     this.supplierInvoiceNumber,
     this.supplierInvoiceDate,
     this.paidAmount = 0,
+    this.creditedAmount = 0,
+    this.supplierCreditBalance = 0,
     double? balance,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
@@ -143,6 +147,8 @@ class PurchaseInvoice {
     String? supplierInvoiceNumber,
     DateTime? supplierInvoiceDate,
     double? paidAmount,
+    double? creditedAmount,
+    double? supplierCreditBalance,
     double? balance,
   }) {
     return PurchaseInvoice(
@@ -179,6 +185,9 @@ class PurchaseInvoice {
           supplierInvoiceNumber ?? this.supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate ?? this.supplierInvoiceDate,
       paidAmount: paidAmount ?? this.paidAmount,
+      creditedAmount: creditedAmount ?? this.creditedAmount,
+      supplierCreditBalance:
+          supplierCreditBalance ?? this.supplierCreditBalance,
       balance: balance ?? this.balance,
     );
   }
@@ -233,6 +242,9 @@ class PurchaseInvoice {
           ? _parseDate(json['supplier_invoice_date'])
           : null,
       paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+      creditedAmount: (json['credited_amount'] as num?)?.toDouble() ?? 0,
+      supplierCreditBalance:
+          (json['supplier_credit_balance'] as num?)?.toDouble() ?? 0,
       balance: (json['balance'] as num?)?.toDouble(),
     );
   }

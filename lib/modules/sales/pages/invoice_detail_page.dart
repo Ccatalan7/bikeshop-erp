@@ -15,6 +15,12 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../models/sales_models.dart';
+import '../models/sales_credit_note.dart';
+import '../models/sales_return.dart';
+import 'sales_credit_note_page.dart';
+import 'sales_return_page.dart';
+import '../services/sales_credit_note_service.dart';
+import '../services/sales_return_service.dart';
 import '../services/sales_service.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
@@ -34,6 +40,8 @@ class InvoiceDetailPage extends StatefulWidget {
 class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   bool _isLoading = true;
   bool _didRequestPayments = false;
+  bool _salesReturnsEnabled = false;
+  bool _salesCreditNotesEnabled = false;
 
   @override
   void initState() {
@@ -41,10 +49,58 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadInvoice();
       if (!mounted) return;
+      await _loadCorrectionCapabilities();
+      if (!mounted) return;
       if (widget.openPaymentOnLoad) {
         _openPaymentForm();
       }
     });
+  }
+
+  Future<void> _loadCorrectionCapabilities() async {
+    try {
+      final enabled = await Future.wait([
+        SalesReturnService().isEnabled(),
+        SalesCreditNoteService().isEnabled(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _salesReturnsEnabled = enabled[0];
+        _salesCreditNotesEnabled = enabled[1];
+      });
+    } catch (_) {
+      // Old backends remain compatible: correction actions stay hidden.
+    }
+  }
+
+  bool _isPosted(Invoice invoice) =>
+      invoice.status == InvoiceStatus.sent ||
+      invoice.status == InvoiceStatus.confirmed ||
+      invoice.status == InvoiceStatus.paid ||
+      invoice.status == InvoiceStatus.overdue;
+
+  Future<void> _openSalesReturn(Invoice invoice) async {
+    await Navigator.of(context).push<SalesReturnResult>(
+      MaterialPageRoute(
+        builder: (_) => SalesReturnPage(
+          invoice: invoice,
+          service: SalesReturnService(),
+        ),
+      ),
+    );
+    if (mounted) await _loadInvoice();
+  }
+
+  Future<void> _openSalesCreditNote(Invoice invoice) async {
+    await Navigator.of(context).push<SalesCreditNoteResult>(
+      MaterialPageRoute(
+        builder: (_) => SalesCreditNotePage(
+          invoice: invoice,
+          service: SalesCreditNoteService(),
+        ),
+      ),
+    );
+    if (mounted) await _loadInvoice();
   }
 
   Future<void> _loadInvoice() async {
@@ -574,6 +630,48 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   )
                 : const Icon(Icons.picture_as_pdf),
           ),
+          if (_isPosted(invoice) &&
+              (_salesReturnsEnabled || _salesCreditNotesEnabled))
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: PopupMenuButton<String>(
+                tooltip: 'Devoluciones y notas de crédito',
+                onSelected: (value) {
+                  if (value == 'return') _openSalesReturn(invoice);
+                  if (value == 'credit') _openSalesCreditNote(invoice);
+                },
+                itemBuilder: (context) => [
+                  if (_salesReturnsEnabled)
+                    const PopupMenuItem(
+                      value: 'return',
+                      child: ListTile(
+                        leading: Icon(Icons.assignment_return_outlined),
+                        title: Text('Devolución física'),
+                        subtitle: Text('Recepción, inspección o baja'),
+                      ),
+                    ),
+                  if (_salesCreditNotesEnabled)
+                    const PopupMenuItem(
+                      value: 'credit',
+                      child: ListTile(
+                        leading: Icon(Icons.receipt_long_outlined),
+                        title: Text('Nota de crédito'),
+                        subtitle: Text('Corrige saldo, IVA e ingresos'),
+                      ),
+                    ),
+                ],
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.sync_alt, size: 20),
+                    SizedBox(width: 8),
+                    Text('Correcciones'),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down),
+                  ]),
+                ),
+              ),
+            ),
           if (_effectiveBalance(invoice) > 0 &&
               invoice.status == InvoiceStatus.confirmed)
             Padding(
@@ -715,6 +813,17 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (invoice.creditedAmount > 0)
+                      Text(
+                        'Notas de crédito: ${ChileanUtils.formatCurrency(invoice.creditedAmount)}',
+                        style: const TextStyle(color: Colors.blueGrey),
+                      ),
+                    if (invoice.customerCreditBalance > 0)
+                      Text(
+                        'Saldo a favor del cliente: ${ChileanUtils.formatCurrency(invoice.customerCreditBalance)}',
+                        style: const TextStyle(
+                            color: Colors.teal, fontWeight: FontWeight.w600),
+                      ),
                   ],
                 ),
               ],

@@ -55,6 +55,21 @@ class StockMovement {
   final int stockBefore;
   final int quantity;
   final int stockAfter;
+  final int rawQuantity;
+  final int actualStockDelta;
+  final int reconciledQuantity;
+  final String balanceProvenance;
+  final String integrityStatus;
+  final bool isSummaryExcluded;
+  final String? linkedAdjustmentId;
+  final String? canonicalMovementId;
+  final String? operationId;
+  final String? sourceDocumentType;
+  final String? sourceDocumentId;
+  final int evidenceStockBefore;
+  final int evidenceStockAfter;
+  final String evidenceBalanceProvenance;
+  final String evidenceIntegrityStatus;
   final String? adjustmentOrigin;
   final String? notes;
   final String? createdBy;
@@ -74,6 +89,21 @@ class StockMovement {
     required this.stockBefore,
     required this.quantity,
     required this.stockAfter,
+    required this.rawQuantity,
+    required this.actualStockDelta,
+    required this.reconciledQuantity,
+    required this.balanceProvenance,
+    required this.integrityStatus,
+    required this.isSummaryExcluded,
+    this.linkedAdjustmentId,
+    this.canonicalMovementId,
+    this.operationId,
+    this.sourceDocumentType,
+    this.sourceDocumentId,
+    required this.evidenceStockBefore,
+    required this.evidenceStockAfter,
+    required this.evidenceBalanceProvenance,
+    required this.evidenceIntegrityStatus,
     this.adjustmentOrigin,
     this.notes,
     this.createdBy,
@@ -96,6 +126,38 @@ class StockMovement {
       stockBefore: (json['stock_before'] as num?)?.toInt() ?? 0,
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
       stockAfter: (json['stock_after'] as num?)?.toInt() ?? 0,
+      rawQuantity: (json['raw_quantity'] as num?)?.toInt() ??
+          (json['quantity'] as num?)?.toInt() ??
+          0,
+      actualStockDelta: (json['actual_stock_delta'] as num?)?.toInt() ??
+          (json['quantity'] as num?)?.toInt() ??
+          0,
+      reconciledQuantity: (json['reconciled_quantity'] as num?)?.toInt() ??
+          (json['quantity'] as num?)?.toInt() ??
+          0,
+      balanceProvenance:
+          json['balance_provenance'] as String? ?? 'reconstructed',
+      integrityStatus:
+          json['integrity_status'] as String? ?? 'legacy_reconstructed',
+      isSummaryExcluded: json['is_summary_excluded'] as bool? ?? false,
+      linkedAdjustmentId: json['linked_adjustment_id']?.toString(),
+      canonicalMovementId: json['canonical_movement_id']?.toString(),
+      operationId: json['operation_id']?.toString(),
+      sourceDocumentType: json['source_document_type'] as String?,
+      sourceDocumentId: json['source_document_id']?.toString(),
+      evidenceStockBefore: (json['evidence_stock_before'] as num?)?.toInt() ??
+          (json['stock_before'] as num?)?.toInt() ??
+          0,
+      evidenceStockAfter: (json['evidence_stock_after'] as num?)?.toInt() ??
+          (json['stock_after'] as num?)?.toInt() ??
+          0,
+      evidenceBalanceProvenance:
+          json['evidence_balance_provenance'] as String? ??
+              json['balance_provenance'] as String? ??
+              'reconstructed',
+      evidenceIntegrityStatus: json['evidence_integrity_status'] as String? ??
+          json['integrity_status'] as String? ??
+          'legacy_reconstructed',
       adjustmentOrigin: json['adjustment_origin'] as String?,
       notes: json['notes'] as String?,
       createdBy: json['created_by']?.toString(),
@@ -123,6 +185,21 @@ class StockMovement {
     int? stockBefore,
     int? quantity,
     int? stockAfter,
+    int? rawQuantity,
+    int? actualStockDelta,
+    int? reconciledQuantity,
+    String? balanceProvenance,
+    String? integrityStatus,
+    bool? isSummaryExcluded,
+    String? linkedAdjustmentId,
+    String? canonicalMovementId,
+    String? operationId,
+    String? sourceDocumentType,
+    String? sourceDocumentId,
+    int? evidenceStockBefore,
+    int? evidenceStockAfter,
+    String? evidenceBalanceProvenance,
+    String? evidenceIntegrityStatus,
     String? adjustmentOrigin,
     String? notes,
     String? createdBy,
@@ -142,6 +219,23 @@ class StockMovement {
       stockBefore: stockBefore ?? this.stockBefore,
       quantity: quantity ?? this.quantity,
       stockAfter: stockAfter ?? this.stockAfter,
+      rawQuantity: rawQuantity ?? this.rawQuantity,
+      actualStockDelta: actualStockDelta ?? this.actualStockDelta,
+      reconciledQuantity: reconciledQuantity ?? this.reconciledQuantity,
+      balanceProvenance: balanceProvenance ?? this.balanceProvenance,
+      integrityStatus: integrityStatus ?? this.integrityStatus,
+      isSummaryExcluded: isSummaryExcluded ?? this.isSummaryExcluded,
+      linkedAdjustmentId: linkedAdjustmentId ?? this.linkedAdjustmentId,
+      canonicalMovementId: canonicalMovementId ?? this.canonicalMovementId,
+      operationId: operationId ?? this.operationId,
+      sourceDocumentType: sourceDocumentType ?? this.sourceDocumentType,
+      sourceDocumentId: sourceDocumentId ?? this.sourceDocumentId,
+      evidenceStockBefore: evidenceStockBefore ?? this.evidenceStockBefore,
+      evidenceStockAfter: evidenceStockAfter ?? this.evidenceStockAfter,
+      evidenceBalanceProvenance:
+          evidenceBalanceProvenance ?? this.evidenceBalanceProvenance,
+      evidenceIntegrityStatus:
+          evidenceIntegrityStatus ?? this.evidenceIntegrityStatus,
       adjustmentOrigin: adjustmentOrigin ?? this.adjustmentOrigin,
       notes: notes ?? this.notes,
       createdBy: createdBy ?? this.createdBy,
@@ -163,6 +257,21 @@ class StockMovement {
       'stock_before': stockBefore,
       'quantity': quantity,
       'stock_after': stockAfter,
+      'raw_quantity': rawQuantity,
+      'actual_stock_delta': actualStockDelta,
+      'reconciled_quantity': reconciledQuantity,
+      'balance_provenance': balanceProvenance,
+      'integrity_status': integrityStatus,
+      'is_summary_excluded': isSummaryExcluded,
+      'linked_adjustment_id': linkedAdjustmentId,
+      'canonical_movement_id': canonicalMovementId,
+      'operation_id': operationId,
+      'source_document_type': sourceDocumentType,
+      'source_document_id': sourceDocumentId,
+      'evidence_stock_before': evidenceStockBefore,
+      'evidence_stock_after': evidenceStockAfter,
+      'evidence_balance_provenance': evidenceBalanceProvenance,
+      'evidence_integrity_status': evidenceIntegrityStatus,
       'adjustment_origin': adjustmentOrigin,
       'notes': notes,
       'created_by': createdBy,
@@ -170,8 +279,67 @@ class StockMovement {
     };
   }
 
-  bool get isIncrease => quantity > 0;
-  bool get isDecrease => quantity < 0;
+  bool get isIncrease => displayQuantity > 0;
+  bool get isDecrease => displayQuantity < 0;
+  int get displayQuantity => reconciledQuantity;
+  int get summaryQuantity => reconciledQuantity;
+  bool get hasIntegrityWarning =>
+      integrityStatus == 'arithmetic_mismatch' ||
+      integrityStatus == 'legacy_purchase_reversal_collision' ||
+      integrityStatus == 'legacy_duplicate_footprint' ||
+      integrityStatus == 'legacy_ambiguous_adjustment_match' ||
+      integrityStatus == 'ledger_source_balance_mismatch';
+  bool get isLegacyDuplicateFootprint =>
+      integrityStatus == 'legacy_duplicate_footprint';
+  bool get hasRawActualDifference => rawQuantity != actualStockDelta;
+  bool get hasEvidenceBalanceDifference =>
+      evidenceStockBefore != stockBefore || evidenceStockAfter != stockAfter;
+
+  String get integrityLabel {
+    switch (integrityStatus) {
+      case 'verified':
+      case 'verified_adjustment':
+        return 'Verificado';
+      case 'legacy_purchase_reversal_collision':
+        return 'Colisión histórica identificada';
+      case 'legacy_duplicate_footprint':
+        return 'Huella duplicada histórica';
+      case 'legacy_ambiguous_adjustment_match':
+        return 'Vínculo histórico ambiguo';
+      case 'arithmetic_mismatch':
+        return 'Error aritmético';
+      case 'ledger_source_balance_mismatch':
+        return 'Saldo fuente no encadenado';
+      case 'legacy_reconstructed':
+        return 'Historial encadenado';
+      default:
+        return 'Historial disponible';
+    }
+  }
+
+  String get integrityExplanation {
+    switch (integrityStatus) {
+      case 'verified':
+        return 'El movimiento conserva saldo inicial, cambio y saldo final grabados por la operación.';
+      case 'verified_adjustment':
+        return 'Los saldos provienen directamente del ajuste de inventario asociado.';
+      case 'legacy_purchase_reversal_collision':
+        return 'La reversión antigua emitió una cantidad técnica distinta del cambio real. Se muestra el cambio probado por el ajuste enlazado y se conserva la cantidad original como evidencia.';
+      case 'legacy_duplicate_footprint':
+        return 'Este ajuste fue emitido automáticamente por la misma reversión de compra. Se conserva como evidencia, pero se excluye de los totales para no contar dos veces la misma salida.';
+      case 'legacy_ambiguous_adjustment_match':
+        return 'Más de un ajuste histórico coincide con esta huella técnica. El sistema conserva un solo movimiento, no inventa un vínculo y marca el caso para revisión.';
+      case 'arithmetic_mismatch':
+        return 'Los saldos guardados no cumplen saldo inicial + cambio = saldo final.';
+      case 'ledger_source_balance_mismatch':
+        return 'El libro principal fue encadenado desde el stock actual. Los saldos históricos de la fuente no encajan en esa secuencia y se conservan abajo como evidencia para revisión.';
+      case 'legacy_reconstructed':
+        return 'Movimiento histórico válido para el libro continuo. La versión antigua no guardaba saldos inicial y final propios, por lo que fueron encadenados desde el stock actual.';
+      default:
+        return 'El movimiento forma parte del historial continuo de stock.';
+    }
+  }
+
   String? get adjustmentOriginDisplay =>
       stock_adjustment_origin.stockAdjustmentOriginDisplay(adjustmentOrigin);
   bool get hasAdjustmentOrigin => adjustmentOriginDisplay != null;
@@ -317,6 +485,8 @@ class StockMovement {
     switch (source) {
       case 'pos':
         return 'POS';
+      case 'quick_sale':
+        return 'Venta Rápida';
       case 'sale':
         return 'Venta';
       case 'manual_sale':

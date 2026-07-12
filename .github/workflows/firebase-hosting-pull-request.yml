@@ -8,12 +8,22 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
+  integrity:
+    uses: ./.github/workflows/erp-integrity-gate.yml
+
   build_and_preview:
+    needs: integrity
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: flutter build web --release
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build web --release --no-wasm-dry-run -t lib/main.dart -o build/web_erp
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

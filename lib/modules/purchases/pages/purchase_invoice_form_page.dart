@@ -28,7 +28,16 @@ import '../../../shared/widgets/ocr_cleanup_page.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_credit_note.dart';
+import '../models/purchase_receipt.dart';
+import '../models/purchase_supplier_return.dart';
+import '../services/purchase_receiving_service.dart';
+import '../services/purchase_credit_note_service.dart';
+import '../services/purchase_supplier_return_service.dart';
 import '../services/purchase_service.dart';
+import 'purchase_receiving_page.dart';
+import 'purchase_credit_note_page.dart';
+import 'purchase_supplier_return_page.dart';
 
 class PurchaseInvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
@@ -88,6 +97,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isSaving = false;
   bool _isUpdatingStatus = false;
   bool _isEditing = false; // Edit mode toggle (like sales invoice)
+  bool _professionalReceivingEnabled = false;
+  bool _purchaseCreditNotesEnabled = false;
 
   /// Payment model: true = Prepayment (pay before receive), false = Standard (receive before pay)
   /// Defaults to true (prepayment) for new invoices
@@ -176,6 +187,130 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _inventoryService.products.isNotEmpty &&
       (_inventoryService.hasLoaded ||
           _inventoryService.loadedPreviewPageCount > 0);
+
+  Future<void> _receiveProducts() async {
+    final invoice = _loadedInvoice;
+    final invoiceId = invoice?.id;
+    if (invoice == null || invoiceId == null || _isUpdatingStatus) return;
+
+    setState(() => _isUpdatingStatus = true);
+    try {
+      final receivingService = PurchaseReceivingService();
+      final mode = await receivingService.getControlMode();
+      if (!mode.acceptsCommands) {
+        if (mounted) setState(() => _isUpdatingStatus = false);
+        await _updateStatus(PurchaseInvoiceStatus.received);
+        return;
+      }
+
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<PurchaseReceiptResult>(
+        MaterialPageRoute(
+          builder: (_) => PurchaseReceivingPage(
+            invoice: invoice,
+            service: receivingService,
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        final refreshed = await _purchaseService.getPurchaseInvoice(
+          invoiceId,
+          refresh: true,
+        );
+        if (refreshed != null && mounted) {
+          setState(() => _loadedInvoice = refreshed);
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo abrir la recepción: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingStatus = false);
+    }
+  }
+
+  Future<void> _openSupplierReturn() async {
+    final invoice = _loadedInvoice;
+    if (invoice?.id == null || !_professionalReceivingEnabled) return;
+    try {
+      final result =
+          await Navigator.of(context).push<PurchaseSupplierReturnResult>(
+        MaterialPageRoute(
+          builder: (_) => PurchaseSupplierReturnPage(
+            invoice: invoice!,
+            service: PurchaseSupplierReturnService(),
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Devolución ${result.returnNumber} registrada'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo abrir la devolución: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openPurchaseCreditNote() async {
+    final invoice = _loadedInvoice;
+    final invoiceId = invoice?.id;
+    if (invoice == null || invoiceId == null || !_purchaseCreditNotesEnabled) {
+      return;
+    }
+    try {
+      final result = await Navigator.of(context).push<PurchaseCreditNoteResult>(
+        MaterialPageRoute(
+          builder: (_) => PurchaseCreditNotePage(
+            invoice: invoice,
+            service: PurchaseCreditNoteService(),
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        final refreshed = await _purchaseService.getPurchaseInvoice(
+          invoiceId,
+          refresh: true,
+        );
+        if (refreshed != null && mounted) {
+          setState(() => _loadedInvoice = refreshed);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${result.number} registrada'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo abrir la nota de crédito: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   void _replaceProductCache(Iterable<Product> products) {
     final filteredProducts = products
@@ -866,6 +1001,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           );
           _loadedInvoice = invoice;
           _applyInvoice(invoice);
+          final receivingMode =
+              await PurchaseReceivingService().getControlMode();
+          _professionalReceivingEnabled = receivingMode.acceptsCommands;
+          _purchaseCreditNotesEnabled =
+              await PurchaseCreditNoteService().isEnabled();
         }
       } else {
         // If preview number failed or wasn't loaded in parallel (shouldn't happen with above logic), fallback
@@ -1991,6 +2131,34 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             .add(Container(height: 24, width: 1, color: Colors.grey[300]));
         actionButtons.add(const SizedBox(width: 8));
 
+        if (_professionalReceivingEnabled &&
+            _status != PurchaseInvoiceStatus.draft &&
+            _status != PurchaseInvoiceStatus.sent &&
+            _status != PurchaseInvoiceStatus.cancelled) {
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: _openSupplierReturn,
+              icon: const Icon(Icons.local_shipping_outlined),
+              label: const Text('Devolver al proveedor'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
+        }
+
+        if (_purchaseCreditNotesEnabled &&
+            _status != PurchaseInvoiceStatus.draft &&
+            _status != PurchaseInvoiceStatus.sent &&
+            _status != PurchaseInvoiceStatus.cancelled) {
+          actionButtons.add(
+            OutlinedButton.icon(
+              onPressed: _openPurchaseCreditNote,
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('Nota de crédito'),
+            ),
+          );
+          actionButtons.add(const SizedBox(width: 8));
+        }
+
         if (_status == PurchaseInvoiceStatus.draft) {
           // Draft: Can edit (if not editing), send to supplier, or delete
 
@@ -2087,9 +2255,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             // Standard: Receive first, then pay
             actionButtons.add(
               FilledButton.icon(
-                onPressed: _isUpdatingStatus
-                    ? null
-                    : () => _updateStatus(PurchaseInvoiceStatus.received),
+                onPressed: _isUpdatingStatus ? null : _receiveProducts,
                 icon: _isUpdatingStatus
                     ? const SizedBox(
                         height: 16,
@@ -2155,9 +2321,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             actionButtons.add(const SizedBox(width: 8));
             actionButtons.add(
               FilledButton.icon(
-                onPressed: _isUpdatingStatus
-                    ? null
-                    : () => _updateStatus(PurchaseInvoiceStatus.received),
+                onPressed: _isUpdatingStatus ? null : _receiveProducts,
                 icon: _isUpdatingStatus
                     ? const SizedBox(
                         height: 16,

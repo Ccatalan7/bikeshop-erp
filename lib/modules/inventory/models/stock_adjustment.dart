@@ -8,6 +8,7 @@ class StockAdjustmentDetail {
   static final RegExp _hashReferencePattern = RegExp(r'#([A-Za-z0-9-]+)');
 
   final String id;
+  final String? operationId;
   final String productId;
   final String productName;
   final String? productSku;
@@ -35,6 +36,7 @@ class StockAdjustmentDetail {
 
   const StockAdjustmentDetail({
     required this.id,
+    this.operationId,
     required this.productId,
     required this.productName,
     this.productSku,
@@ -64,6 +66,7 @@ class StockAdjustmentDetail {
   factory StockAdjustmentDetail.fromJson(Map<String, dynamic> json) {
     return StockAdjustmentDetail(
       id: json['id']?.toString() ?? '',
+      operationId: json['operation_id']?.toString(),
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] as String? ?? '',
       productSku: json['product_sku'] as String?,
@@ -113,6 +116,16 @@ class StockAdjustmentDetail {
 
   double get counterpartAmount =>
       counterpartDebit > 0 ? counterpartDebit : counterpartCredit;
+  bool get hasPostedJournal => (journalEntryNumber ?? '').isNotEmpty;
+  double get displayedInventoryValue =>
+      hasPostedJournal ? counterpartAmount : inventoryValue;
+  double get displayedUnitCost =>
+      quantity == 0 ? unitCost : displayedInventoryValue / quantity.abs();
+  String get unitCostLabel =>
+      hasPostedJournal ? 'Costo unitario registrado' : 'Costo unitario actual';
+  String get inventoryValueLabel => hasPostedJournal
+      ? 'Impacto contable registrado'
+      : 'Estimación a costo actual';
 
   bool get _hasFriendlyStoredReference {
     final trimmed = referenceNumber.trim();

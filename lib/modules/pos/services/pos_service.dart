@@ -22,6 +22,7 @@ class POSService extends ChangeNotifier {
   PaymentMethodService _paymentMethodService;
   TenantService _tenantService;
   final Uuid _uuid = const Uuid();
+  String _checkoutIdempotencyKey = const Uuid().v4();
 
   // Current sale state
   final List<POSCartItem> _cartItems = [];
@@ -237,6 +238,7 @@ class POSService extends ChangeNotifier {
     _cartItems.clear();
     _selectedCustomer = null;
     _taxTreatment = TaxTreatment.noTax; // Reset to default
+    _checkoutIdempotencyKey = _uuid.v4();
     notifyListeners();
   }
 
@@ -307,6 +309,17 @@ class POSService extends ChangeNotifier {
   }
 
   // Checkout process
+  pm.PaymentMethod? _databasePaymentMethodFor(POSPayment payment) {
+    return switch (payment.method.type) {
+      PaymentType.cash => _paymentMethodService.getPaymentMethodByCode('cash'),
+      PaymentType.card => _paymentMethodService.getPaymentMethodByCode('card'),
+      PaymentType.transfer =>
+        _paymentMethodService.getPaymentMethodByCode('transfer'),
+      PaymentType.voucher =>
+        _paymentMethodService.getPaymentMethodByCode('cash'),
+    };
+  }
+
   Future<POSTransaction?> checkout(List<POSPayment> payments,
       {String? notes}) async {
     if (_cartItems.isEmpty) return null;
@@ -340,10 +353,6 @@ class POSService extends ChangeNotifier {
         throw Exception('Monto insuficiente para completar la venta.');
       }
 
-      // Generate invoice number using new sequential system
-      final numberService = NumberGenerationService();
-      final invoiceNumber = await numberService.nextSalesInvoiceNumber();
-
       final invoiceItems = _cartItems.map((item) {
         final discountAmount = item.discountAmount;
         return sales_models.InvoiceItem(
@@ -360,6 +369,70 @@ class POSService extends ChangeNotifier {
           isService: item.product?.isService ?? false,
         );
       }).toList();
+
+      final atomicPayments = <sales_models.SalesCheckoutPayment>[];
+      double atomicRemaining = cartTotal;
+      for (final payment in payments) {
+        if (atomicRemaining <= 0) break;
+        final method = _databasePaymentMethodFor(payment);
+        if (method == null) {
+          throw Exception(
+              'Método de pago "${payment.method.name}" no encontrado en la base de datos.');
+        }
+        final applied =
+            atomicRemaining < payment.amount ? atomicRemaining : payment.amount;
+        if (applied <= 0) continue;
+        atomicPayments.add(sales_models.SalesCheckoutPayment(
+          paymentMethodId: method.id,
+          amount: applied,
+          reference: payment.reference,
+        ));
+        atomicRemaining -= applied;
+      }
+
+      try {
+        final savedInvoice = await _salesService.createAtomicCheckout(
+          source: 'pos',
+          checkoutKey: _checkoutIdempotencyKey,
+          saleDate: timestamp,
+          taxTreatment: _taxTreatment,
+          items: invoiceItems,
+          payments: atomicPayments,
+          customerId: _selectedCustomer?.id,
+          customerName: _selectedCustomer?.name ?? 'Cliente Mostrador',
+          customerRut: _selectedCustomer?.rut,
+          reference: notes,
+        );
+        final transaction = POSTransaction(
+          id: savedInvoice.id!,
+          tenantId: tenantId,
+          cashierId: 'current_user',
+          customerId: _selectedCustomer?.id,
+          customer: _selectedCustomer,
+          items: List.from(_cartItems),
+          payments: payments,
+          subtotal: cartNetAmount,
+          taxAmount: cartTaxAmount,
+          discountAmount: cartDiscountAmount,
+          total: cartTotal,
+          status: POSTransactionStatus.completed,
+          notes: notes,
+          createdAt: timestamp,
+          completedAt: timestamp,
+          receiptNumber: savedInvoice.invoiceNumber,
+        );
+        clearCart();
+        _isProcessingSale = false;
+        notifyListeners();
+        return transaction;
+      } catch (error) {
+        if (!sales_models.isAtomicCheckoutUnavailable(error)) rethrow;
+        debugPrint(
+            '⚠️ Atomic POS RPC unavailable; using compatible legacy path.');
+      }
+
+      final numberService = NumberGenerationService();
+      final invoiceNumber = await numberService.nextSalesInvoiceNumber();
 
       final invoice = sales_models.Invoice(
         tenantId: tenantId,
@@ -416,38 +489,7 @@ class POSService extends ChangeNotifier {
         }
 
         // Map POS payment method to payment_method_id
-        pm.PaymentMethod? dbPaymentMethod;
-        switch (payment.method.type) {
-          case PaymentType.cash:
-            dbPaymentMethod =
-                _paymentMethodService.getPaymentMethodByCode('cash');
-            if (kDebugMode) {
-              print('POSService: Cash payment method: $dbPaymentMethod');
-            }
-            break;
-          case PaymentType.card:
-            dbPaymentMethod =
-                _paymentMethodService.getPaymentMethodByCode('card');
-            if (kDebugMode) {
-              print('POSService: Card payment method: $dbPaymentMethod');
-            }
-            break;
-          case PaymentType.transfer:
-            dbPaymentMethod =
-                _paymentMethodService.getPaymentMethodByCode('transfer');
-            if (kDebugMode) {
-              print('POSService: Transfer payment method: $dbPaymentMethod');
-            }
-            break;
-          case PaymentType.voucher:
-            dbPaymentMethod = _paymentMethodService
-                .getPaymentMethodByCode('cash'); // fallback
-            if (kDebugMode) {
-              print(
-                  'POSService: Voucher (cash fallback) payment method: $dbPaymentMethod');
-            }
-            break;
-        }
+        final dbPaymentMethod = _databasePaymentMethodFor(payment);
 
         if (dbPaymentMethod == null) {
           if (kDebugMode) {

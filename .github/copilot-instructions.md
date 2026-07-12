@@ -2129,6 +2129,23 @@ This protocol is the preferred way to get back to a trusted app baseline while p
   - non-posted → posted
   - posted → non-posted
   - posted → posted
+- ✅ For posted → posted edits, compare the inventory-bearing item signature, not the whole JSON payload:
+  - product/quantity/treatment changes must replace the posted stock snapshot exactly once
+  - price, tax, cost, notes, and line-order-only changes must create no stock movement
+- ✅ Every automatic restore/reapply helper must set `app.skip_stock_adjustment_trigger` while updating products; document-driven activity must never surface as `Ajuste Manual`.
+- ✅ New inventory/accounting writers must join the shared trace kernel: one `inventory_accounting_operations` root, ordered append-only checkpoints, and the same operation/document UUID on stock movements, adjustments, and journals.
+- ✅ Persist `stock_before` and `stock_after` when the movement is written. New code must not reconstruct authoritative balances backward from current stock.
+- ✅ Supported product-form and mass-edit stock changes must call `apply_inventory_stock_adjustment()`; normal product metadata saves must not write either stock column directly.
+- ✅ Preserve distinct source channels such as `pos`, `quick_sale`, `product_form`, and `mass_edit_panel` even when they delegate to the same posting owner.
+- ✅ Payment create/edit/delete is accounting-only: it may update paid amount, balance, invoice status, linked-job `is_paid`, and the payment journal, but it must create zero stock movements.
+- ✅ CLP invoice/payment amounts are whole pesos. A partial payment must never remain `paid`; reducing or deleting the final payment must return a non-received invoice to `confirmed`.
+- ✅ A purchase invoice with `received_date` keeps status `received` through partial/full payment and undo. Payment recalculation must not reverse/reapply received inventory.
+- ✅ Multi-bike jobs currently have one shared invoice/payment balance. `job_bike_id` attributes invoice lines and per-bike totals; it does not allocate payments to individual bicycles.
+- ✅ Workshop ERP ownership is explicit: `mechanic_jobs` is operational/reservation state; the linked `sales_invoices` document exclusively owns on-hand stock, revenue, COGS, receivable, and payment posting.
+- ✅ Never call or re-expose the legacy job stock/journal writer functions to clients or service APIs. New job-owned movement/journal attempts must surface through the workshop ownership control and must be eliminated before enforce mode is activated.
+- ✅ Existing workshop invoice variances are `legacy_unresolved`; shadow controls and new migrations must never backfill, recalculate, or "repair" them implicitly.
+- ✅ Public checkout must use `create_public_online_order()` with a stable `checkout_idempotency_key`; never restore the client direct-insert fallback.
+- ✅ MercadoPago preferences and payment application must use server-side order totals/items. Provider events go through `apply_mercadopago_payment_event()` with exact CLP/currency validation and append-only evidence.
 
 ### Testing mindset after inspection
 - ✅ First prove the bug with real rows.

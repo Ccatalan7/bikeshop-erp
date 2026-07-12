@@ -24,7 +24,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  integrity:
+    uses: ./.github/workflows/erp-integrity-gate.yml
+
   build:
+    needs: integrity
     name: Build and publish Windows zip
     runs-on: windows-2022
 
@@ -35,7 +39,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.6'
+          flutter-version: '3.38.5'
           channel: 'stable'
           cache: true
 

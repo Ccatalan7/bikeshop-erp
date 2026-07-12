@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../shared/models/product.dart'
     show PurchaseTreatment, parsePurchaseTreatment;
 import '../../../shared/models/tax_treatment.dart';
@@ -45,6 +47,8 @@ class Invoice {
   final double total;
   final double paidAmount;
   final double balance;
+  final double creditedAmount;
+  final double customerCreditBalance;
   final TaxTreatment taxTreatment; // actual tax choice for this invoice
   final double
       netAmount; // net amount before IVA (total÷1.19 when tax_included)
@@ -63,7 +67,8 @@ class Invoice {
   final bool isWarranty; // For trabajos: warranty work
   final String? workDescription; // For trabajos: work performed
   final String? notes; // Internal notes
-  final String? source; // 'pos', 'manual_sale', 'ecommerce', 'mechanic_job'
+  final String?
+      source; // 'pos', 'quick_sale', 'manual_sale', 'ecommerce', 'mechanic_job'
 
   Invoice({
     this.id,
@@ -81,6 +86,8 @@ class Invoice {
     this.total = 0,
     this.paidAmount = 0,
     this.balance = 0,
+    this.creditedAmount = 0,
+    this.customerCreditBalance = 0,
     this.taxTreatment = TaxTreatment.noTax,
     this.netAmount = 0,
     this.items = const [],
@@ -116,6 +123,8 @@ class Invoice {
     double? total,
     double? paidAmount,
     double? balance,
+    double? creditedAmount,
+    double? customerCreditBalance,
     TaxTreatment? taxTreatment,
     double? netAmount,
     List<InvoiceItem>? items,
@@ -149,6 +158,9 @@ class Invoice {
       total: total ?? this.total,
       paidAmount: paidAmount ?? this.paidAmount,
       balance: balance ?? this.balance,
+      creditedAmount: creditedAmount ?? this.creditedAmount,
+      customerCreditBalance:
+          customerCreditBalance ?? this.customerCreditBalance,
       taxTreatment: taxTreatment ?? this.taxTreatment,
       netAmount: netAmount ?? this.netAmount,
       items: items ?? this.items,
@@ -188,6 +200,9 @@ class Invoice {
       balance: (json['balance'] as num?)?.toDouble() ??
           ((json['total'] as num?)?.toDouble() ?? 0) -
               ((json['paid_amount'] as num?)?.toDouble() ?? 0),
+      creditedAmount: (json['credited_amount'] as num?)?.toDouble() ?? 0,
+      customerCreditBalance:
+          (json['customer_credit_balance'] as num?)?.toDouble() ?? 0,
       taxTreatment: TaxTreatment.fromString(json['tax_treatment']?.toString()),
       netAmount: (json['net_amount'] as num?)?.toDouble() ?? 0,
       items: rawItems
@@ -458,6 +473,29 @@ class InvoiceItem {
     };
   }
 }
+
+class SalesCheckoutPayment {
+  const SalesCheckoutPayment({
+    required this.paymentMethodId,
+    required this.amount,
+    this.reference,
+  });
+
+  final String paymentMethodId;
+  final double amount;
+  final String? reference;
+
+  Map<String, dynamic> toJson() => {
+        'payment_method_id': paymentMethodId,
+        'amount': amount.round(),
+        if (reference?.trim().isNotEmpty == true)
+          'reference': reference!.trim(),
+      };
+}
+
+bool isAtomicCheckoutUnavailable(Object error) =>
+    error is PostgrestException &&
+    const {'PGRST202', 'PGRST205', '42883'}.contains(error.code);
 
 /// Sales payment model matching sales_payments table in core_schema.sql
 /// CRITICAL: Uses payment_method_id (uuid) to reference payment_methods table

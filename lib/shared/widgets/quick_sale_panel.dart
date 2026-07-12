@@ -476,9 +476,6 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
       final tenantId = await tenantService.getTenantId();
       if (tenantId == null) throw Exception('No tenant');
 
-      final numberService = NumberGenerationService();
-      final invoiceNumber = await numberService.nextSalesInvoiceNumber();
-
       final invoiceItems = _cart
           .map((item) => InvoiceItem(
                 productId: item.product.id,
@@ -503,6 +500,41 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         ivaAmount = _total - netAmount;
       }
 
+      try {
+        final saved = await salesService.createAtomicCheckout(
+          source: 'quick_sale',
+          checkoutKey: _paymentIdempotencyKey,
+          saleDate: DateTime.now(),
+          taxTreatment: taxTreatment,
+          items: invoiceItems,
+          payments: [
+            SalesCheckoutPayment(
+              paymentMethodId: _selectedPaymentMethod!.id,
+              amount: _total,
+            ),
+          ],
+          customerName: 'Cliente Mostrador',
+        );
+        if (mounted) {
+          setState(() {
+            _invoiceNumber = saved.invoiceNumber;
+            _totalPaid = amount;
+            _change = amount - _total;
+            _savedInvoiceId = saved.id;
+            _step = _QuickSaleStep.confirmation;
+            _isProcessing = false;
+          });
+        }
+        return;
+      } catch (error) {
+        if (!isAtomicCheckoutUnavailable(error)) rethrow;
+        debugPrint(
+            '⚠️ Atomic Quick Sale RPC unavailable; using compatible legacy path.');
+      }
+
+      final numberService = NumberGenerationService();
+      final invoiceNumber = await numberService.nextSalesInvoiceNumber();
+
       // Step 1: Save as DRAFT (no journal entry yet) — mirrors normal invoice flow
       final invoice = Invoice(
         tenantId: tenantId,
@@ -518,7 +550,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
         taxTreatment: taxTreatment,
         items: invoiceItems,
         invoiceType: 'sale',
-        source: 'pos',
+        source: 'quick_sale',
       );
 
       final saved = await salesService.saveInvoice(invoice);

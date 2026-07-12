@@ -20,7 +20,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  integrity:
+    uses: ./.github/workflows/erp-integrity-gate.yml
+
   build_and_deploy:
+    needs: integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +32,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.6'
+          flutter-version: '3.38.5'
           channel: 'stable'
 
       - name: Install dependencies

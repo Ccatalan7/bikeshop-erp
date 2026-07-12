@@ -8,6 +8,34 @@ class FactoryResetService {
   final TenantService _tenantService = TenantService();
   final DatabaseService _databaseService = DatabaseService();
 
+  static void validateSelectiveResetSelection({
+    bool deleteSales = false,
+    bool deletePurchases = false,
+    required bool deleteInventory,
+    required bool deleteStockMovements,
+    bool deleteAccounting = false,
+  }) {
+    if (deleteSales ||
+        deletePurchases ||
+        deleteInventory ||
+        deleteStockMovements ||
+        deleteAccounting) {
+      throw StateError(
+        'El borrado de datos financieros o de inventario está deshabilitado '
+        'en la aplicación. Una depuración de ERP debe ejecutarse como una '
+        'operación administrativa atómica, respaldada y auditada.',
+      );
+    }
+
+    if (deleteStockMovements && !deleteInventory) {
+      throw StateError(
+        'No se puede eliminar el historial de movimientos sin eliminar '
+        'también el inventario. El libro de stock es evidencia contable e '
+        'inmutable; use un ajuste trazable para corregir existencias.',
+      );
+    }
+  }
+
   /// Get all saved reset configurations for current tenant
   Future<List<ResetConfiguration>> getConfigurations() async {
     final tenantId = await _tenantService.getTenantId();
@@ -71,6 +99,11 @@ class FactoryResetService {
   /// Performs a complete factory reset by deleting all data from CURRENT TENANT ONLY
   /// WARNING: This is irreversible!
   Future<void> performFactoryReset() async {
+    throw UnsupportedError(
+      'El restablecimiento financiero total está deshabilitado en el cliente. '
+      'Requiere una operación administrativa atómica, respaldada y auditada.',
+    );
+    // ignore: dead_code
     try {
       // CRITICAL: Get current user's tenant_id to ensure we ONLY delete THIS tenant's data
       final userId = _supabase.auth.currentUser?.id;
@@ -331,6 +364,14 @@ class FactoryResetService {
     required bool deleteEcommerce,
   }) async {
     try {
+      validateSelectiveResetSelection(
+        deleteSales: deleteSales,
+        deletePurchases: deletePurchases,
+        deleteInventory: deleteInventory,
+        deleteStockMovements: deleteStockMovements,
+        deleteAccounting: deleteAccounting,
+      );
+
       // Get current user's tenant_id
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
@@ -381,88 +422,7 @@ class FactoryResetService {
         print('✅ Inventory data deleted');
       }
 
-      // Delete stock movements only (without deleting products)
-      // BUT revert the stock adjustments first to restore original quantities
-      // ONLY if we're NOT also deleting inventory (if deleting inventory, products will be deleted anyway)
-      if (deleteStockMovements && !deleteInventory) {
-        // Step 1: Revert all stock adjustments by reading them and updating products
-        try {
-          final adjustmentsResponse = await _supabase
-              .from('stock_adjustments')
-              .select('product_id, quantity')
-              .eq('tenant_id', tenantId);
-
-          final adjustments = adjustmentsResponse as List<dynamic>;
-
-          if (adjustments.isNotEmpty) {
-            print('🔄 Reverting ${adjustments.length} stock adjustments...');
-
-            // Group adjustments by product_id to calculate total adjustment per product
-            final Map<String, int> productAdjustments = {};
-            for (final adj in adjustments) {
-              final productId = adj['product_id'] as String;
-              final quantity = adj['quantity'] as int;
-              productAdjustments[productId] =
-                  (productAdjustments[productId] ?? 0) + quantity;
-            }
-
-            // Update each product's inventory by reversing the adjustments
-            for (final entry in productAdjustments.entries) {
-              final productId = entry.key;
-              final totalAdjustment = entry.value;
-
-              try {
-                // Fetch current inventory
-                final productData = await _supabase
-                    .from('products')
-                    .select('inventory_qty')
-                    .eq('id', productId)
-                    .eq('tenant_id', tenantId)
-                    .maybeSingle();
-
-                if (productData == null) {
-                  print('  ⚠️ Product $productId not found, skipping revert');
-                  continue;
-                }
-
-                final currentQty = productData['inventory_qty'] as int;
-                final revertedQty =
-                    currentQty - totalAdjustment; // Subtract the adjustment
-
-                // Update product with reverted quantity
-                await _supabase
-                    .from('products')
-                    .update({
-                      'inventory_qty': revertedQty,
-                      'stock_quantity': revertedQty,
-                    })
-                    .eq('id', productId)
-                    .eq('tenant_id', tenantId);
-
-                print(
-                    '  ↩️ Product $productId: $currentQty → $revertedQty (reverted $totalAdjustment)');
-              } catch (e) {
-                print('  ⚠️ Error reverting product $productId: $e');
-                // Continue with next product
-              }
-            }
-
-            print(
-                '✅ Stock adjustments reverted for ${productAdjustments.length} products');
-          } else {
-            print(
-                'ℹ️ No stock adjustments to revert (history already deleted?)');
-          }
-        } catch (e) {
-          print('⚠️ Error reverting stock adjustments: $e');
-          // Continue with deletion even if revert fails
-        }
-
-        // Step 2: Now delete the records (even if there's no history, clean up what's left)
-        await safeDelete('stock_movements');
-        await safeDelete('stock_adjustments');
-        print('✅ Stock movements data deleted');
-      } else if (deleteStockMovements && deleteInventory) {
+      if (deleteStockMovements && deleteInventory) {
         // If deleting both, no need to revert - products will be deleted anyway
         print('ℹ️ Skipping stock revert (products will be deleted)');
         await safeDelete('stock_movements');
