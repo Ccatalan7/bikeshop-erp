@@ -8,6 +8,13 @@ select plan(9);
 insert into public.tenants (id, shop_name)
 values ('71111111-1111-4111-8111-111111111111', 'Payroll Ledger Test');
 
+-- Tenant bootstrap seeds the default chart and payment methods. This fixture
+-- uses deterministic IDs, so isolate it from those defaults inside the rollback.
+delete from public.payment_methods
+where tenant_id = '71111111-1111-4111-8111-111111111111';
+delete from public.accounts
+where tenant_id = '71111111-1111-4111-8111-111111111111';
+
 insert into public.accounts (id, tenant_id, code, name, type, category)
 values
   ('72222222-2222-4222-8222-222222222221', '71111111-1111-4111-8111-111111111111', '1102', 'Banco', 'asset', 'currentAsset'),

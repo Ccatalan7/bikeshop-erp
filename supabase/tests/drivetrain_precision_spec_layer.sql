@@ -51,7 +51,7 @@ select ok(
 );
 
 select ok(
-  exists(
+  not exists(
     select 1
     from public.spec_template_fields stf
     join public.spec_templates st on st.id = stf.template_id
@@ -60,7 +60,7 @@ select ok(
       and st.key = 'cassette'
       and sd.key = 'drivetrain_platform'
   ),
-  'cassette template exposes drivetrain_platform'
+  'cassette template does not expose broad drivetrain_platform semantics'
 );
 
 select ok(
