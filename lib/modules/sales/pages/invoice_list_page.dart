@@ -22,6 +22,7 @@ import '../../settings/services/appearance_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 import '../widgets/payment_form.dart' show PaymentForm;
+import '../widgets/sales_corrections_menu.dart';
 
 class InvoiceListPage extends StatefulWidget {
   const InvoiceListPage({
@@ -683,6 +684,23 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       invoiceId: invoiceId,
       invoiceNumber: invoice.invoiceNumber,
     );
+  }
+
+  Future<void> _refreshSelectedInvoiceAfterCorrection(Invoice invoice) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null) return;
+
+    final refreshed = await context.read<SalesService>().fetchInvoice(
+          invoiceId,
+          refresh: true,
+        );
+    if (!mounted || _selectedInvoice?.id != invoiceId) return;
+
+    setState(() {
+      final current = refreshed ?? invoice;
+      _selectedInvoice = current;
+      _primeAccountingContext(current);
+    });
   }
 
   void _openLinkedPayment(DocumentPaymentRecord payment) {
@@ -1941,6 +1959,14 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                       );
                     }
                   },
+                ),
+                const SizedBox(width: 8),
+
+                SalesCorrectionsMenu(
+                  invoice: invoice,
+                  dense: true,
+                  onChanged: () =>
+                      _refreshSelectedInvoiceAfterCorrection(invoice),
                 ),
                 const SizedBox(width: 8),
 

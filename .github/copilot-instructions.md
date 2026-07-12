@@ -10,15 +10,21 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ## Canonical Sales Invoice UI
 
+The repo-wide surface registry and implementation checklist live in
+`docs/architecture/canonical-ui-surfaces.md` and are mandatory for business
+workflow UI changes.
+
 - `/sales/invoices/:id` and `/sales/invoices/:id/edit` are rendered by
   `lib/modules/sales/pages/invoice_form_page.dart`.
 - Embedded and split-panel invoice views use
-  `lib/modules/sales/widgets/sales_invoice_editor.dart`.
+  `lib/modules/sales/widgets/sales_invoice_editor.dart`; the active list preview
+  is implemented in `lib/modules/sales/pages/invoice_list_page.dart`.
 - `/purchases/:id`, `/purchases/:id/detail`, and `/purchases/:id/edit` are
   rendered by `lib/modules/purchases/pages/purchase_invoice_form_page.dart`.
 - Shared post-sale actions must be implemented in reusable widgets consumed by
-  both surfaces. Do not create a second invoice detail page or add behavior to
-  an unrouted sales or purchase invoice presentation.
+  the full page, embedded editor, and list preview. Do not create a second
+  invoice detail page or add behavior to an unrouted sales or purchase invoice
+  presentation.
 
 ## Internal Accounting And Future SII Compatibility
 

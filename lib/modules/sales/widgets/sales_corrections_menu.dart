@@ -23,6 +23,7 @@ class SalesCorrectionsMenu extends StatefulWidget {
     super.key,
     required this.invoice,
     this.iconOnly = false,
+    this.dense = false,
     this.onChanged,
     this.returnCapabilityLoader,
     this.creditNoteCapabilityLoader,
@@ -32,6 +33,7 @@ class SalesCorrectionsMenu extends StatefulWidget {
 
   final Invoice invoice;
   final bool iconOnly;
+  final bool dense;
   final SalesCorrectionRefresh? onChanged;
   final SalesCorrectionCapabilityLoader? returnCapabilityLoader;
   final SalesCorrectionCapabilityLoader? creditNoteCapabilityLoader;
@@ -180,8 +182,10 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
           child: widget.iconOnly
               ? null
               : Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.dense ? 8 : 12,
+                    vertical: widget.dense ? 4 : 9,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: Theme.of(context).colorScheme.outline,
@@ -191,7 +195,7 @@ class _SalesCorrectionsMenuState extends State<SalesCorrectionsMenu> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sync_alt, size: 20),
+                      Icon(Icons.sync_alt, size: 18),
                       SizedBox(width: 8),
                       Text('Correcciones'),
                       SizedBox(width: 4),
