@@ -94,6 +94,7 @@ The SII workflow requires selecting the original electronic document being modif
 4. Shadow-compare derived receipt totals without moving stock.
 5. Activate the guided UI for one tenant after preflight.
 6. Remove direct receipt status writes only after the command is stable and old-client compatibility is handled.
+7. While control is `shadow`, record each legacy status-to-received transition in append-only compatibility evidence. Enforcement requires a reviewed window with no such events from supported clients.
 7. Activate one tenant only after a supervised no-surprise smoke; keep previous clients compatible during the observation window.
 
 ## Deployed Inactive Implementation

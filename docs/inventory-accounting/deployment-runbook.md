@@ -37,6 +37,7 @@ The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-2026
 ## Control Tables
 
 - `purchase_receipt_control_settings`
+- `purchase_receipt_compatibility_events` (append-only shadow evidence)
 - `purchase_credit_note_control_settings`
 - `sales_return_control_settings`
 - `sales_credit_note_control_settings`
@@ -55,3 +56,5 @@ Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disab
 ## Observation Queries
 
 Use the read-only baseline scripts under `supabase/manual_checks/`, plus the production checks for dual-column drift, posting-ledger continuity, current-vs-latest ledger balance, negative tracked stock, unbalanced journals, failed/abandoned operations, and control/document counts. A changed business count must be explained by a named source operation.
+
+Receipt enforcement additionally requires a clean, reviewed observation window in `purchase_receipt_compatibility_events`. Any row proves that a legacy client still uses direct invoice-status receiving; update that client and restart the window. The observer itself never changes invoice status, stock, movements, or journals.

@@ -35198,5 +35198,6 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260712113000_preserve_posted_document_and_journal_evidence.sql
 \ir ../migrations/20260712123000_preserve_online_order_cancellation_evidence.sql
 \ir ../migrations/20260712133000_harden_online_manual_payment_confirmation.sql
+\ir ../migrations/20260712140000_observe_legacy_purchase_receipt_compatibility.sql
 
 commit;
