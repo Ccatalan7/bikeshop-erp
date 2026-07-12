@@ -1,6 +1,6 @@
 # Purchase Receiving, Returns, and Credit Notes Standard
 
-**Status:** Implemented; Viñabike corrections enforced and purchase receiving in shadow
+**Status:** Implemented; Viñabike corrections enforced, purchase receiving in shadow, and cash settlement installed inactive
 **Rule:** Payment, physical custody, supplier/customer settlement, tax document, and stock disposition are separate events connected by one trace.
 
 ## Current Gap
@@ -76,6 +76,16 @@ Sales and purchase credit notes require:
 
 The SII workflow requires selecting the original electronic document being modified, and correction notes require a reference reason. An internal Vinabike document must not claim official issuance until it has been signed/sent through an approved DTE path.
 
+## Cash Settlement Of Credit Balances
+
+- A posted credit note creates a customer or supplier credit balance; it does not prove that cash moved.
+- `sales_customer_refunds` and `purchase_supplier_refunds` record only money staff already verified externally.
+- Every refund requires a whole-CLP amount, effective date, active cash/bank method, external reference, reason, actor, and idempotency key.
+- Original payment rows and gross paid totals remain intact. Separate refunded totals reduce the credit balance without rewriting history.
+- Customer refunds debit AR and credit the selected cash/bank account. Supplier refunds debit cash/bank and credit AP.
+- Refunds own zero stock movements. Voids append linked balanced reversal journals and restore the credit balance.
+- A credit note cannot be voided while it has a posted refund. Internal UI copy explicitly states that the ERP records but does not execute the bank movement.
+
 ## Required Tests Before Activation
 
 - full, partial, repeated, concurrent, backdated, and multi-receipt cases;
@@ -109,7 +119,7 @@ The SII workflow requires selecting the original electronic document being modif
 - Physical returns own the inventory-value/COGS posting. Linked credit notes own AP/AR, revenue/purchase, and tax settlement and therefore do not duplicate inventory effects.
 - Customer quarantine is a valued held-inventory state. Release reclassifies it to available inventory; scrap reclassifies it to verified inventory loss. Both actions and voids remain linked and append-only.
 - Production installation and controlled activation preserved all business counts and left zero stock-column drift, zero posting-ledger continuity breaks, zero current-ledger drift, and zero unbalanced journals. Existing negative stock and legacy evidence were not changed; activation created no business documents.
-- The clean canonical database suite passes 528 assertions across 32 files; all 180 Flutter tests and the ERP release web build pass. Activation still requires controlled tenant rollout.
+- The clean canonical database suite passes 638 assertions across 36 files; all 185 Flutter tests and the ERP release web build pass. Activation still requires controlled tenant rollout.
 
 ## Primary Tax References
 

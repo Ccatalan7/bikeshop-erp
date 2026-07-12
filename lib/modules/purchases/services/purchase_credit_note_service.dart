@@ -20,6 +20,19 @@ class PurchaseCreditNoteService {
     }
   }
 
+  Future<bool> isRefundEnabled() async {
+    try {
+      final row = await _client
+          .from('purchase_supplier_refund_control_settings')
+          .select('control_mode')
+          .maybeSingle();
+      return row?['control_mode'] == 'enforce';
+    } on PostgrestException catch (error) {
+      if (error.code == '42P01' || error.code == 'PGRST205') return false;
+      rethrow;
+    }
+  }
+
   Future<List<PurchaseCreditNoteLineBalance>> getLineBalances(
     String invoiceId,
   ) async {
@@ -77,14 +90,39 @@ class PurchaseCreditNoteService {
 
   Future<List<PurchaseCreditNoteRecord>> getHistory(String invoiceId) async {
     final rows = await _client
-        .from('purchase_credit_notes')
-        .select(
-            'id,credit_note_number,supplier_credit_note_number,status,official_dte_status,issue_date,reason,total_amount,void_reason')
+        .from('purchase_credit_note_refund_balance_view')
+        .select()
         .eq('purchase_invoice_id', invoiceId)
         .order('issue_date', ascending: false);
     return rows
         .map((row) =>
             PurchaseCreditNoteRecord.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<PurchaseSupplierRefundRecord>> getRefunds(
+      String invoiceId) async {
+    final rows = await _client
+        .from('purchase_supplier_refunds')
+        .select(
+            'id,purchase_credit_note_id,refund_number,status,refunded_at,amount,reference,reason,void_reason,payment_methods(name)')
+        .eq('purchase_invoice_id', invoiceId)
+        .order('refunded_at', ascending: false);
+    return rows
+        .map((row) => PurchaseSupplierRefundRecord.fromJson(
+            Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+  }
+
+  Future<List<PurchaseRefundPaymentMethod>> getRefundPaymentMethods() async {
+    final rows = await _client
+        .from('payment_methods')
+        .select('id,name,requires_reference')
+        .eq('is_active', true)
+        .order('sort_order');
+    return rows
+        .map((row) => PurchaseRefundPaymentMethod.fromJson(
+            Map<String, dynamic>.from(row)))
         .toList(growable: false);
   }
 
@@ -113,6 +151,38 @@ class PurchaseCreditNoteService {
   Future<void> voidNote(String id, String reason, String idempotencyKey) async {
     await _client.rpc('void_purchase_credit_note', params: {
       'p_credit_note_id': id,
+      'p_reason': reason.trim(),
+      'p_idempotency_key': idempotencyKey,
+    });
+  }
+
+  Future<PurchaseSupplierRefundResult> createRefund({
+    required String creditNoteId,
+    required DateTime refundedAt,
+    required String paymentMethodId,
+    required int amount,
+    required String reference,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    final response =
+        await _client.rpc('create_purchase_supplier_refund', params: {
+      'p_purchase_credit_note_id': creditNoteId,
+      'p_refunded_at': refundedAt.toUtc().toIso8601String(),
+      'p_payment_method_id': paymentMethodId,
+      'p_amount': amount,
+      'p_reference': reference.trim(),
+      'p_reason': reason.trim(),
+      'p_idempotency_key': idempotencyKey,
+    });
+    return PurchaseSupplierRefundResult.fromJson(
+        Map<String, dynamic>.from(response as Map));
+  }
+
+  Future<void> voidRefund(
+      String id, String reason, String idempotencyKey) async {
+    await _client.rpc('void_purchase_supplier_refund', params: {
+      'p_refund_id': id,
       'p_reason': reason.trim(),
       'p_idempotency_key': idempotencyKey,
     });

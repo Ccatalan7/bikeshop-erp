@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/widgets/credit_balance_refund_dialog.dart';
 import '../models/sales_credit_note.dart';
 import '../models/sales_models.dart';
 import '../services/sales_credit_note_service.dart';
@@ -27,9 +28,12 @@ class _SalesCreditNotePageState extends State<SalesCreditNotePage> {
   List<SalesCreditNoteLineDraft> _lines = const [];
   List<SalesCreditReturnOption> _returnOptions = const [];
   List<SalesCreditNoteRecord> _history = const [];
+  List<SalesCustomerRefundRecord> _refunds = const [];
+  List<SalesRefundPaymentMethod> _refundMethods = const [];
   String _reasonCode = 'goods_return';
   bool _loading = true;
   bool _submitting = false;
+  bool _refundEnabled = false;
   String? _error;
 
   @override
@@ -54,6 +58,9 @@ class _SalesCreditNotePageState extends State<SalesCreditNotePage> {
         _service.getLineBalances(id),
         _service.getReturnOptions(id),
         _service.getHistory(id),
+        _service.getRefunds(id),
+        _service.getRefundPaymentMethods(),
+        _service.isRefundEnabled(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -63,6 +70,9 @@ class _SalesCreditNotePageState extends State<SalesCreditNotePage> {
             .toList(growable: false);
         _returnOptions = results[1] as List<SalesCreditReturnOption>;
         _history = results[2] as List<SalesCreditNoteRecord>;
+        _refunds = results[3] as List<SalesCustomerRefundRecord>;
+        _refundMethods = results[4] as List<SalesRefundPaymentMethod>;
+        _refundEnabled = results[5] as bool;
         _loading = false;
         _error = null;
       });
@@ -185,6 +195,91 @@ class _SalesCreditNotePageState extends State<SalesCreditNotePage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _recordRefund(SalesCreditNoteRecord record) async {
+    if (_refundMethods.isEmpty) {
+      return _showError(
+          'Configura al menos un medio de pago activo antes de registrar el reembolso.');
+    }
+    final input = await showCreditBalanceRefundDialog(
+      context: context,
+      title: 'Registrar reembolso de ${record.number}',
+      counterpartyLabel: 'devuelto al cliente',
+      availableAmount: record.availableToRefund,
+      paymentMethods: _refundMethods
+          .map((method) => CreditRefundMethodOption(
+                id: method.id,
+                name: method.name,
+                requiresReference: method.requiresReference,
+              ))
+          .toList(growable: false),
+    );
+    if (input == null || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      final result = await _service.createRefund(
+        creditNoteId: record.id,
+        refundedAt: input.refundedAt,
+        paymentMethodId: input.paymentMethodId,
+        amount: input.amount,
+        reference: input.reference,
+        reason: input.reason,
+        idempotencyKey: const Uuid().v4(),
+      );
+      if (!mounted) return;
+      _showSuccess(result.replayed
+          ? 'El reembolso ya estaba registrado; no se duplicó.'
+          : '${result.number} registrado y contabilizado.');
+      setState(() => _loading = true);
+      await _load();
+    } catch (error) {
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _voidRefund(SalesCustomerRefundRecord refund) async {
+    final reason = await _askVoidReason('Anular reembolso ${refund.number}');
+    if (reason == null || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      await _service.voidRefund(refund.id, reason, const Uuid().v4());
+      if (!mounted) return;
+      _showSuccess('Reembolso anulado con asiento de reversión.');
+      setState(() => _loading = true);
+      await _load();
+    } catch (error) {
+      if (mounted) _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<String?> _askVoidReason(String title) async {
+    final controller = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Motivo obligatorio'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Anular con reversión')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return value == null || value.isEmpty ? null : value;
   }
 
   void _showError(String text) => ScaffoldMessenger.of(context).showSnackBar(
@@ -394,23 +489,87 @@ class _SalesCreditNotePageState extends State<SalesCreditNotePage> {
     );
   }
 
-  Widget _historyCard(SalesCreditNoteRecord record) => Card(
-        child: ListTile(
-          title: Text(
-              '${record.number} · ${ChileanUtils.formatCurrency(record.totalAmount.toDouble())}'),
-          subtitle: Text(
-              '${record.reason} · DTE ${record.officialStatus}${record.voidReason == null ? '' : ' · Anulada: ${record.voidReason}'}'),
-          trailing: record.canVoid
-              ? OutlinedButton.icon(
-                  onPressed: _submitting ? null : () => _void(record),
-                  icon: const Icon(Icons.undo, size: 18),
-                  label: const Text('Anular'))
-              : Chip(
-                  label: Text(record.status == 'voided'
-                      ? 'Anulada'
-                      : 'Requiere reversión DTE')),
-        ),
-      );
+  Widget _historyCard(SalesCreditNoteRecord record) {
+    final refunds = _refunds
+        .where((refund) => refund.salesCreditNoteId == record.id)
+        .toList(growable: false);
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            title: Text(
+                '${record.number} · ${ChileanUtils.formatCurrency(record.totalAmount.toDouble())}'),
+            subtitle: Text(
+              '${record.reason} · DTE ${record.officialStatus}\n'
+              'Reembolsado ${ChileanUtils.formatCurrency(record.refundedAmount.toDouble())} · '
+              'Disponible ${ChileanUtils.formatCurrency(record.availableToRefund.toDouble())}'
+              '${record.voidReason == null ? '' : ' · Anulada: ${record.voidReason}'}',
+            ),
+            isThreeLine: true,
+            trailing: Wrap(
+              spacing: 8,
+              children: [
+                if (record.canRefund && _refundEnabled)
+                  FilledButton.tonalIcon(
+                    onPressed: _submitting ? null : () => _recordRefund(record),
+                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    label: const Text('Registrar reembolso'),
+                  ),
+                if (record.canVoid)
+                  OutlinedButton.icon(
+                    onPressed: _submitting ? null : () => _void(record),
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('Anular nota'),
+                  )
+                else if (!record.canRefund || !_refundEnabled)
+                  Chip(label: Text(_noteStatusLabel(record))),
+              ],
+            ),
+          ),
+          ...refunds.map((refund) => Container(
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${refund.number} · ${refund.paymentMethodName} · '
+                        '${ChileanUtils.formatCurrency(refund.amount.toDouble())}\n'
+                        'Ref. ${refund.reference} · ${refund.reason}'
+                        '${refund.voidReason == null ? '' : ' · Anulado: ${refund.voidReason}'}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    if (refund.canVoid)
+                      TextButton(
+                        onPressed:
+                            _submitting ? null : () => _voidRefund(refund),
+                        child: const Text('Anular reembolso'),
+                      )
+                    else
+                      const Chip(label: Text('Anulado')),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  String _noteStatusLabel(SalesCreditNoteRecord record) {
+    if (record.status == 'voided') return 'Anulada';
+    if (!_refundEnabled && record.canRefund) {
+      return 'Reembolsos en habilitación';
+    }
+    if (record.refundedAmount > 0) return 'Reembolso registrado';
+    if (record.officialStatus == 'issued') return 'Requiere reversión DTE';
+    return 'Sin saldo por reembolsar';
+  }
 
   Widget _footer() => Material(
         elevation: 8,

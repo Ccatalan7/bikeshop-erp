@@ -75,4 +75,39 @@ void main() {
     });
     expect(record.canVoid, isFalse);
   });
+
+  test('supplier refund balance uses both note and invoice limits', () {
+    final record = PurchaseCreditNoteRecord.fromJson({
+      'id': 'credit-1',
+      'credit_note_number': 'NCC-00001',
+      'status': 'posted',
+      'official_dte_status': 'internal',
+      'issue_date': '2026-07-11T12:00:00Z',
+      'reason': 'Return',
+      'total_amount': 5000,
+      'refunded_amount': 1000,
+      'remaining_refundable': 4000,
+      'invoice_credit_balance': 3000,
+    });
+    expect(record.availableToRefund, 3000);
+    expect(record.canRefund, isTrue);
+    expect(record.canVoid, isFalse);
+  });
+
+  test('supplier refund evidence deserializes external reference', () {
+    final refund = PurchaseSupplierRefundRecord.fromJson({
+      'id': 'refund-1',
+      'purchase_credit_note_id': 'credit-1',
+      'refund_number': 'RP-1',
+      'status': 'posted',
+      'refunded_at': '2026-07-11T12:00:00Z',
+      'amount': 2200,
+      'reference': 'DEP-22',
+      'reason': 'Abono proveedor',
+      'payment_methods': {'name': 'Banco'},
+    });
+    expect(refund.paymentMethodName, 'Banco');
+    expect(refund.reference, 'DEP-22');
+    expect(refund.canVoid, isTrue);
+  });
 }

@@ -154,6 +154,9 @@ class SalesCreditNoteRecord {
     required this.issueDate,
     required this.reason,
     required this.totalAmount,
+    this.refundedAmount = 0,
+    this.remainingRefundable = 0,
+    this.invoiceCreditBalance = 0,
     this.voidReason,
   });
   final String id;
@@ -163,8 +166,16 @@ class SalesCreditNoteRecord {
   final DateTime issueDate;
   final String reason;
   final int totalAmount;
+  final int refundedAmount;
+  final int remainingRefundable;
+  final int invoiceCreditBalance;
   final String? voidReason;
-  bool get canVoid => status == 'posted' && officialStatus != 'issued';
+  int get availableToRefund => remainingRefundable < invoiceCreditBalance
+      ? remainingRefundable
+      : invoiceCreditBalance;
+  bool get canRefund => status == 'posted' && availableToRefund > 0;
+  bool get canVoid =>
+      status == 'posted' && officialStatus != 'issued' && refundedAmount == 0;
 
   factory SalesCreditNoteRecord.fromJson(Map<String, dynamic> json) =>
       SalesCreditNoteRecord(
@@ -175,7 +186,96 @@ class SalesCreditNoteRecord {
         issueDate: DateTime.parse(json['issue_date'].toString()),
         reason: json['reason']?.toString() ?? '',
         totalAmount: (json['total_amount'] as num?)?.round() ?? 0,
+        refundedAmount: (json['refunded_amount'] as num?)?.round() ?? 0,
+        remainingRefundable:
+            (json['remaining_refundable'] as num?)?.round() ?? 0,
+        invoiceCreditBalance:
+            (json['invoice_credit_balance'] as num?)?.round() ?? 0,
         voidReason: json['void_reason']?.toString(),
+      );
+}
+
+class SalesCustomerRefundRecord {
+  const SalesCustomerRefundRecord({
+    required this.id,
+    required this.salesCreditNoteId,
+    required this.number,
+    required this.status,
+    required this.refundedAt,
+    required this.paymentMethodName,
+    required this.amount,
+    required this.reference,
+    required this.reason,
+    this.voidReason,
+  });
+
+  final String id;
+  final String salesCreditNoteId;
+  final String number;
+  final String status;
+  final DateTime refundedAt;
+  final String paymentMethodName;
+  final int amount;
+  final String reference;
+  final String reason;
+  final String? voidReason;
+  bool get canVoid => status == 'posted';
+
+  factory SalesCustomerRefundRecord.fromJson(Map<String, dynamic> json) {
+    final method = json['payment_methods'];
+    final methodJson = method is Map
+        ? Map<String, dynamic>.from(method)
+        : const <String, dynamic>{};
+    return SalesCustomerRefundRecord(
+      id: json['id']?.toString() ?? '',
+      salesCreditNoteId: json['sales_credit_note_id']?.toString() ?? '',
+      number: json['refund_number']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      refundedAt: DateTime.parse(json['refunded_at'].toString()),
+      paymentMethodName: methodJson['name']?.toString() ?? 'Medio de pago',
+      amount: (json['amount'] as num?)?.round() ?? 0,
+      reference: json['reference']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      voidReason: json['void_reason']?.toString(),
+    );
+  }
+}
+
+class SalesRefundPaymentMethod {
+  const SalesRefundPaymentMethod({
+    required this.id,
+    required this.name,
+    required this.requiresReference,
+  });
+
+  final String id;
+  final String name;
+  final bool requiresReference;
+
+  factory SalesRefundPaymentMethod.fromJson(Map<String, dynamic> json) =>
+      SalesRefundPaymentMethod(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        requiresReference: json['requires_reference'] == true,
+      );
+}
+
+class SalesCustomerRefundResult {
+  const SalesCustomerRefundResult({
+    required this.id,
+    required this.number,
+    required this.replayed,
+  });
+
+  final String id;
+  final String number;
+  final bool replayed;
+
+  factory SalesCustomerRefundResult.fromJson(Map<String, dynamic> json) =>
+      SalesCustomerRefundResult(
+        id: json['refund_id']?.toString() ?? '',
+        number: json['refund_number']?.toString() ?? '',
+        replayed: json['replayed'] == true,
       );
 }
 

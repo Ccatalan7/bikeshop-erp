@@ -31,6 +31,7 @@ class PurchaseInvoice {
   static const String listPreviewSelect =
       'id,tenant_id,invoice_number,supplier_id,supplier_name,supplier_rut,'
       'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
+      'supplier_refunded_amount,credited_amount,supplier_credit_balance,'
       'prepayment_model,sent_date,confirmed_date,received_date,paid_date,'
       'created_at,updated_at';
 
@@ -70,6 +71,7 @@ class PurchaseInvoice {
   final String? supplierInvoiceNumber;
   final DateTime? supplierInvoiceDate;
   final double paidAmount;
+  final double supplierRefundedAmount;
   final double balance;
   final double creditedAmount;
   final double supplierCreditBalance;
@@ -107,6 +109,7 @@ class PurchaseInvoice {
     this.supplierInvoiceNumber,
     this.supplierInvoiceDate,
     this.paidAmount = 0,
+    this.supplierRefundedAmount = 0,
     this.creditedAmount = 0,
     this.supplierCreditBalance = 0,
     double? balance,
@@ -147,6 +150,7 @@ class PurchaseInvoice {
     String? supplierInvoiceNumber,
     DateTime? supplierInvoiceDate,
     double? paidAmount,
+    double? supplierRefundedAmount,
     double? creditedAmount,
     double? supplierCreditBalance,
     double? balance,
@@ -185,6 +189,8 @@ class PurchaseInvoice {
           supplierInvoiceNumber ?? this.supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate ?? this.supplierInvoiceDate,
       paidAmount: paidAmount ?? this.paidAmount,
+      supplierRefundedAmount:
+          supplierRefundedAmount ?? this.supplierRefundedAmount,
       creditedAmount: creditedAmount ?? this.creditedAmount,
       supplierCreditBalance:
           supplierCreditBalance ?? this.supplierCreditBalance,
@@ -242,6 +248,8 @@ class PurchaseInvoice {
           ? _parseDate(json['supplier_invoice_date'])
           : null,
       paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+      supplierRefundedAmount:
+          (json['supplier_refunded_amount'] as num?)?.toDouble() ?? 0,
       creditedAmount: (json['credited_amount'] as num?)?.toDouble() ?? 0,
       supplierCreditBalance:
           (json['supplier_credit_balance'] as num?)?.toDouble() ?? 0,

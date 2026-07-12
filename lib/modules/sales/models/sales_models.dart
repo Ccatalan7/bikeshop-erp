@@ -46,6 +46,7 @@ class Invoice {
   final double ivaAmount;
   final double total;
   final double paidAmount;
+  final double refundedAmount;
   final double balance;
   final double creditedAmount;
   final double customerCreditBalance;
@@ -85,6 +86,7 @@ class Invoice {
     this.ivaAmount = 0,
     this.total = 0,
     this.paidAmount = 0,
+    this.refundedAmount = 0,
     this.balance = 0,
     this.creditedAmount = 0,
     this.customerCreditBalance = 0,
@@ -122,6 +124,7 @@ class Invoice {
     double? ivaAmount,
     double? total,
     double? paidAmount,
+    double? refundedAmount,
     double? balance,
     double? creditedAmount,
     double? customerCreditBalance,
@@ -157,6 +160,7 @@ class Invoice {
       ivaAmount: ivaAmount ?? this.ivaAmount,
       total: total ?? this.total,
       paidAmount: paidAmount ?? this.paidAmount,
+      refundedAmount: refundedAmount ?? this.refundedAmount,
       balance: balance ?? this.balance,
       creditedAmount: creditedAmount ?? this.creditedAmount,
       customerCreditBalance:
@@ -197,6 +201,7 @@ class Invoice {
       ivaAmount: (json['iva_amount'] as num?)?.toDouble() ?? 0,
       total: (json['total'] as num?)?.toDouble() ?? 0,
       paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0,
+      refundedAmount: (json['refunded_amount'] as num?)?.toDouble() ?? 0,
       balance: (json['balance'] as num?)?.toDouble() ??
           ((json['total'] as num?)?.toDouble() ?? 0) -
               ((json['paid_amount'] as num?)?.toDouble() ?? 0),

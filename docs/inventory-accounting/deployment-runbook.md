@@ -1,9 +1,9 @@
 # Inventory and Accounting Release Runbook
 
-**Release:** 2026-07-11 preventive kernel and inactive professional documents
+**Release:** 2026-07-12 preventive kernel and inactive professional documents
 **Rule:** schema installation, client distribution, tenant activation, and historical repair are four separate approvals.
 
-Current Viñabike modes: purchase receipt `shadow`; purchase credit note, sales return, and sales credit note `enforce`. The verified web client and Windows release `windows-v1.0.1_3-37` are published.
+Current Viñabike modes: purchase receipt `shadow`; purchase credit note, sales return, and sales credit note `enforce`; customer and supplier cash refunds `disabled` pending matching client rollout.
 
 ## Installed Production Baseline
 
@@ -41,6 +41,8 @@ The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-2026
 - `purchase_credit_note_control_settings`
 - `sales_return_control_settings`
 - `sales_credit_note_control_settings`
+- `sales_customer_refund_control_settings`
+- `purchase_supplier_refund_control_settings`
 
 Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disabled. Only `enforce` routes business posting to the new command.
 

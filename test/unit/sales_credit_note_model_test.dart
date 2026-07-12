@@ -62,12 +62,14 @@ void main() {
       'status': 'paid',
       'total': 11900,
       'paid_amount': 11900,
+      'refunded_amount': 1190,
       'balance': 0,
       'credited_amount': 2380,
       'customer_credit_balance': 2380,
       'items': const [],
     });
     expect(invoice.creditedAmount, 2380);
+    expect(invoice.refundedAmount, 1190);
     expect(invoice.customerCreditBalance, 2380);
     expect(invoice.toFirestoreMap(), isNot(contains('credited_amount')));
     expect(
@@ -85,5 +87,41 @@ void main() {
       'total_amount': 1190,
     });
     expect(record.canVoid, isFalse);
+  });
+
+  test('refund balance limits actions and keeps note voiding safe', () {
+    final record = SalesCreditNoteRecord.fromJson({
+      'id': 'credit-1',
+      'credit_note_number': 'NCV-1',
+      'status': 'posted',
+      'official_dte_status': 'internal',
+      'issue_date': '2026-07-11T12:00:00Z',
+      'reason': 'Devolución',
+      'total_amount': 5000,
+      'refunded_amount': 1000,
+      'remaining_refundable': 4000,
+      'invoice_credit_balance': 2500,
+    });
+    expect(record.availableToRefund, 2500);
+    expect(record.canRefund, isTrue);
+    expect(record.canVoid, isFalse);
+  });
+
+  test('customer refund evidence deserializes payment and reversal state', () {
+    final refund = SalesCustomerRefundRecord.fromJson({
+      'id': 'refund-1',
+      'sales_credit_note_id': 'credit-1',
+      'refund_number': 'RC-1',
+      'status': 'voided',
+      'refunded_at': '2026-07-11T12:00:00Z',
+      'amount': 1000,
+      'reference': 'TRX-1',
+      'reason': 'Transferencia confirmada',
+      'void_reason': 'Referencia incorrecta',
+      'payment_methods': {'name': 'Banco'},
+    });
+    expect(refund.paymentMethodName, 'Banco');
+    expect(refund.amount, 1000);
+    expect(refund.canVoid, isFalse);
   });
 }

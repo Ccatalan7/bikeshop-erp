@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel and professional correction workflows deployed; sales returns and both credit-note families are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. 528 database and 180 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales returns and both credit-note families are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. Customer/supplier cash-settlement documents are installed inactive pending client rollout. 638 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -248,7 +248,7 @@ Repository inspection on 2026-07-11 confirmed that purchase receiving is current
 
 **Gate P5A:** Partial receipts, shortages, damage, supplier returns, sales returns, and both credit-note families pass end-to-end inventory/accounting/trace tests and are available through clear guided UI.
 
-**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. The verified web and Windows build 37 are published. Viñabike sales returns and both credit-note controls are `enforce`; purchase receipt is `shadow` until every receipt-capable desktop is updated. Activation created no document, movement, adjustment, or journal rows. Internal credit notes do not claim official SII issuance.
+**Deployment progress:** The receipt, supplier return, customer return/disposition, quarantine resolution, and sales/purchase credit-note commands are installed with guided UI. Physical and financial ownership are separate, retries are idempotent, limits are cumulative, sets map to exact component movements, and voids append reversals. Customer/supplier cash-settlement documents now record only externally verified money movement, preserve gross original payments, post balanced cash/AR/AP journals, and never move stock; their independent controls default disabled. Viñabike sales returns and both credit-note controls are `enforce`; purchase receipt is `shadow` until every receipt-capable desktop is updated. Activation created no document, movement, adjustment, or journal rows. Internal credit notes do not claim official SII issuance.
 
 ## Phase 6 — Required Transition Tests
 
@@ -269,7 +269,7 @@ Use pgTAP in `supabase/tests/` and focused Flutter/Edge integration tests.
 
 Run at minimum: local schema reset, all pgTAP tests, affected Dart tests, analyzer on changed Dart files, and manual end-to-end checks on macOS plus affected Windows/web/mobile paths.
 
-Current safety baseline on 2026-07-11: 528/528 pgTAP assertions across all 32 database test files and 180/180 Flutter tests pass. A clean canonical-schema rebuild, analyzer with no errors, and ERP release web build also pass. The repository has 604 pre-existing analyzer infos/warnings under the non-fatal baseline; changed critical modules introduced no analyzer errors.
+Current safety baseline on 2026-07-12: 638/638 pgTAP assertions across all 36 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
 
 **Gate P5:** All tests pass against a clean local database and production-shaped fixtures; deliberate failure tests leave no partial business effects.
 
