@@ -279,7 +279,7 @@ Current safety baseline on 2026-07-12: 668/668 pgTAP assertions across all 37 da
 - [x] Make Firebase/desktop release jobs depend on the integrity workflow instead of deploying independently.
 - [x] Add database and client-contract fixtures for disabled-schema, legacy-client, enforced-writer, and pre-schema fallback behavior.
 - [x] Preserve N/N-1/N-2 database compatibility while controls are disabled; previous clients continue their current route.
-- [x] Commit and distribute the verified web build and Windows build 37; migration headers record the verified production schema deployment.
+- [x] Commit and distribute the verified web build and Windows build 40; migration headers record the verified production schema deployment.
 - [x] Take/confirm a recoverable database backup and save pre-deploy reconciliation results.
 - [x] Deploy trace capture without duplicating quantity effects; compare exact pre/post production reconciliation totals.
 - [x] Activate invoice, trace-kernel, manual-adjustment, and payment source changes one migration at a time.

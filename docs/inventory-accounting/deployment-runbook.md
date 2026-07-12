@@ -26,6 +26,8 @@ Immediately before and after the atomic schema transaction:
 
 The 2026-07-12 direct-writer installation preserved the later live baseline exactly at 1,654 products, 2,471 movements, 1,203 adjustments, 2,136 journals, 771 sales invoices, 74 purchase invoices, 732 active sales payments, 71 active purchase payments, and 45 completed operations. An authenticated rollback-only smoke created exactly one temporary operation/adjustment/movement/journal and passed all checkpoints, then left zero rows after rollback. All seven quantity/accounting invariants remained zero.
 
+Client release evidence: the deployed web `main.dart.js` SHA-256 is `aada0784427123dd68410da909879e6e2c2cd6c195ac2227e7c8f27c321bf9cc`, identical locally and on Firebase with `max-age=0, must-revalidate`. GitHub Actions run `29184183654` independently passed the canonical DB suite, analyzer baseline, all Flutter tests, ERP web compilation, and Windows build, then published `windows-v1.0.1_3-40` from commit `61d6f0b5`; the Windows zip SHA-256 is `294d0778fb1a34a9c7a068c0b891f3cf76e707c59d2f80be7f7c65232ac19a7d`.
+
 The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-20260711.sql` on the deployment workstation. No historical correction was executed.
 
 ## Release Gates
