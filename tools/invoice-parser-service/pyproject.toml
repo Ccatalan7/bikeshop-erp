@@ -1,0 +1,21 @@
+[project]
+name = "vinabike-invoice-parser"
+version = "1.0.0"
+description = "FastAPI service for parsing Chilean supplier invoices"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.104.1",
+  "uvicorn[standard]==0.24.0",
+  "python-multipart==0.0.6",
+  "pdfplumber==0.10.3",
+  "invoice2data==0.4.4",
+  "python-dateutil==2.8.2",
+  "pyyaml==6.0.1",
+  "requests==2.31.0",
+]
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]

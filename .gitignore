@@ -25,6 +25,8 @@ node_modules/
 **/.dart_tool/
 **/build/
 **/Pods/
+**/.venv/
+**/venv/
 
 # IntelliJ related
 *.iml
@@ -56,6 +58,19 @@ node_modules/
 .pub/
 /build/
 /coverage/
+
+# Local screenshots and diagnostic captures belong outside source control.
+/Screenshots vinabikeProject/
+
+# Known generated command/report outputs retained locally when useful.
+/analyze_output.txt
+/build_log.txt
+/build_log_retry.txt
+/curl_out.txt
+/deploy.log
+/flutter_*.log
+/import_with_name_matching.log
+/scripts/zoho_import/import_output.log
 
 # Symbolication related
 app.*.symbols
@@ -95,3 +110,6 @@ flutter/
 !.env.example
 !assets/.env.example
 assets/.env
+
+# FVM Version Cache
+.fvm/

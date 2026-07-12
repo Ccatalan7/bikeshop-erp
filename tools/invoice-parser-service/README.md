@@ -26,15 +26,11 @@ Service runs at: `http://localhost:8000`
 ```bash
 cd tools/invoice-parser-service
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+# Recreate the pinned environment
+uv sync
 
 # Run service
-python main.py
+uv run python main.py
 ```
 
 ## Usage
@@ -107,7 +103,7 @@ To add support for a new invoice format, edit `main.py`:
 ### Run with hot reload
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Test with sample invoice

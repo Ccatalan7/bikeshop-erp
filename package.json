@@ -2,7 +2,31 @@
   "name": "vinabike-erp",
   "version": "1.0.0",
   "description": "Vinabike ERP - Flutter Web Application",
+  "private": true,
+  "engines": {
+    "node": "24.18.x",
+    "npm": "11.16.x"
+  },
+  "volta": {
+    "node": "24.18.0",
+    "npm": "11.16.0"
+  },
+  "scripts": {
+    "doctor": "bash scripts/dev/doctor.sh",
+    "verify:fast": "bash scripts/dev/verify.sh fast",
+    "verify": "bash scripts/dev/verify.sh full",
+    "secret:staged": "bash scripts/dev/check_secrets.sh staged",
+    "secret:working": "bash scripts/dev/check_secrets.sh working",
+    "db:test": "bash scripts/reset_local_supabase.sh",
+    "e2e": "playwright test"
+  },
   "dependencies": {
     "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "firebase-tools": "15.23.0",
+    "prettier": "3.9.5",
+    "supabase": "2.109.1"
   }
 }

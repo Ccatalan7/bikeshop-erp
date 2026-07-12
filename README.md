@@ -71,9 +71,12 @@ Supabase realtime channels keep invoice and payment views in sync without manual
 
 ## Local Development
 
-1. Configure Supabase credentials in `lib/shared/config/supabase_config.dart` or via `--dart-define` flags.
-2. Apply the SQL updates described above to your Supabase project.
-3. Run the app with `flutter run -d windows` (or any connected device).
+1. Follow `docs/development/SETUP_MACOS.md` or `docs/development/SETUP_WINDOWS.md`.
+2. Run `just doctor` and resolve any reported blocker.
+3. Configure local credentials through an owner-only `.env` or the platform credential store; never edit credentials into source files.
+4. Run `just verify-fast`, then start the pinned SDK with `scripts/dev/flutter.sh run`.
+
+The canonical commands and versions are documented in `docs/development/TOOLCHAIN.md`.
 
 ## Contributing
 

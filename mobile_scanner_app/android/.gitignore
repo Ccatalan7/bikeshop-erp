@@ -1,4 +1,4 @@
-gradle-wrapper.jar
+# The Gradle wrapper jar is a reproducible bootstrap dependency and is tracked.
 /.gradle
 /captures/
 /gradlew

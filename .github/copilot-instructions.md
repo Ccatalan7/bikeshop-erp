@@ -845,6 +845,21 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 | **Pooler Host** | `aws-1-sa-east-1.pooler.supabase.com` |
 | **Database Port** | `6543` (pooler) / `5432` (direct) |
 
+## Staging Project
+
+| Field | Value |
+|-------|-------|
+| **Project URL** | `https://bczzjhjrpmtpgwdvlbut.supabase.co` |
+| **Project ID** | `bczzjhjrpmtpgwdvlbut` |
+| **Project Name** | `vinabike-staging-2026` |
+| **Region** | AWS South America East 1 (`sa-east-1`) |
+| **Direct Database Host** | `db.bczzjhjrpmtpgwdvlbut.supabase.co` |
+
+- This replacement staging project was created on 2026-07-12 under the Free Plan's second active-project allowance. The prior project `kyvgmapifacpzuyreasy` was paused for more than 90 days and Supabase returned HTTP 400 stating that it cannot be restored.
+- The repository remains linked to production. Do not casually run `supabase link` against staging and leave the working copy pointed at the wrong project.
+- The staging project ref and database password are stored in macOS Keychain as `Vinabike ERP Supabase staging project ref` (account `supabase`) and `Vinabike ERP Supabase staging database password` (account `postgres`).
+- Destructive browser/database journeys belong on this staging project, never production. Staging must use synthetic tenant/user fixtures and must reject the production project ref in reset/cleanup tooling.
+
 ## Connection Strings
 
 **Pooler Connection (recommended for most operations):**

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "flutter": "3.38.5",
+  "node": "24.18.0",
+  "npm": "11.16.0",
+  "python": "3.12",
+  "java": "17",
+  "supabaseCli": "2.109.1",
+  "firebaseCli": "15.23.0",
+  "playwright": "1.61.1",
+  "wrangler": "4.110.0",
+  "fvm": "4.1.2",
+  "volta": "2.0.2",
+  "uv": "0.11.28",
+  "just": "1.56.0"
+}
