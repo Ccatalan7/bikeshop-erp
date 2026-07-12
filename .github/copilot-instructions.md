@@ -8,6 +8,28 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 # Product Language
 
+## Canonical Sales Invoice UI
+
+- `/sales/invoices/:id` and `/sales/invoices/:id/edit` are rendered by
+  `lib/modules/sales/pages/invoice_form_page.dart`.
+- Embedded and split-panel invoice views use
+  `lib/modules/sales/widgets/sales_invoice_editor.dart`.
+- `/purchases/:id`, `/purchases/:id/detail`, and `/purchases/:id/edit` are
+  rendered by `lib/modules/purchases/pages/purchase_invoice_form_page.dart`.
+- Shared post-sale actions must be implemented in reusable widgets consumed by
+  both surfaces. Do not create a second invoice detail page or add behavior to
+  an unrouted sales or purchase invoice presentation.
+
+## Internal Accounting And Future SII Compatibility
+
+- Viñabike currently uses invoices, credit notes, returns, IVA fields, payments,
+  and journals for internal business control. The ERP is not connected to SII
+  and must not present internal documents as electronically issued DTEs.
+- Exact stock, cash, balances, reversals, and audit traces are the current
+  acceptance criteria. Preserve clean document references and issuance-state
+  fields so a future certified SII integration remains possible, but do not
+  make SII connectivity a blocker or infer it as an active deliverable.
+
 - User-facing workshop copy must call mechanic jobs `trabajo` / `trabajos`, not `pega` / `pegas`.
 - User-facing HR copy must call staff `trabajador` / `trabajadores`, not `empleado` / `empleados`.
 - Legacy route names, database enum values, table/function names, and historical file names may still contain `pegas`, `pega`, or `employee` for compatibility. Do not surface those legacy terms in labels, headings, empty states, toasts, PDFs, AI responses, or new documentation unless explicitly explaining the legacy internal identifier.

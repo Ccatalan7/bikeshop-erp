@@ -186,7 +186,7 @@ Each invoice stores its selected model in the `prepayment_model` boolean field, 
 2. Sees status badge: Grey "Borrador"
 3. Clicks green button **[Marcar como Enviada]**
 
-**Frontend Action** (`PurchaseInvoiceDetailPage`):
+**Frontend Action** (`PurchaseInvoiceFormPage`):
 ```dart
 void _markAsSent() async {
   setState(() => _isLoading = true);
@@ -1449,7 +1449,7 @@ Cannot reverse invoice: insufficient inventory for some products
 
 #### **Borrador** (Grey Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Borrador status
+// PurchaseInvoiceFormPage - Borrador status
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1481,7 +1481,7 @@ Row(
 
 #### **Enviada** (Blue Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Enviada status
+// PurchaseInvoiceFormPage - Enviada status
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1513,7 +1513,7 @@ Row(
 
 #### **Confirmada** (Purple Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Confirmada status
+// PurchaseInvoiceFormPage - Confirmada status
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1545,7 +1545,7 @@ Row(
 
 #### **Recibida** (Green Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Recibida status
+// PurchaseInvoiceFormPage - Recibida status
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1577,7 +1577,7 @@ Row(
 
 #### **Pagada** (Blue Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Pagada status
+// PurchaseInvoiceFormPage - Pagada status
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [

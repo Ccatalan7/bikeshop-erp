@@ -26,6 +26,7 @@ import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import 'sales_corrections_menu.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'dart:io' show Platform, File;
@@ -1639,6 +1640,21 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           icon: Icon(Icons.add_task,
               color: Theme.of(context).colorScheme.primary),
           tooltip: 'Crear Tarea',
+        ),
+      );
+
+      actionButtons.add(const SizedBox(width: 8));
+      actionButtons.add(
+        SalesCorrectionsMenu(
+          invoice: _loadedInvoice!,
+          iconOnly: widget.isCompact,
+          onChanged: () async {
+            final invoiceId = _currentInvoiceId;
+            if (invoiceId == null) return;
+            final refreshed =
+                await _salesService.fetchInvoice(invoiceId, refresh: true);
+            if (refreshed != null && mounted) _applyInvoice(refreshed);
+          },
         ),
       );
 

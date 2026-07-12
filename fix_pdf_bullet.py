@@ -5,7 +5,6 @@ files_to_fix = [
     'lib/modules/sales/widgets/sales_invoice_editor.dart',
     'lib/modules/sales/pages/invoice_list_page.dart',
     'lib/modules/sales/pages/invoice_form_page.dart',
-    'lib/modules/sales/pages/invoice_detail_page.dart',
 ]
 
 for file_path in files_to_fix:

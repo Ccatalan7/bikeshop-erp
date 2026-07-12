@@ -63,7 +63,7 @@ The Supabase schema (`supabase/sql/core_schema.sql`) now includes:
 - **Service:** `SalesService` orchestrates invoices and payments, subscribes to Supabase realtime changes, recalculates invoice caches after each payment, and exposes helper queries for the UI.
 - **UI:**
 	- `InvoiceListPage` shows totals, paid amounts, and quick access to the detail view.
-	- `InvoiceDetailPage` renders invoice metadata, itemised lines, payment history, and contextual actions (Edit, Send, Pay).
+	- `InvoiceFormPage` is the canonical routed invoice detail/editor; `SalesInvoiceEditor` is its embedded counterpart, and shared workflow actions must be used by both.
 	- `PaymentForm` provides validation, method selection, reference fields, and balance safeguards.
 	- `PaymentsPage` lists all receipts with search and deep links back to the originating invoice.
 

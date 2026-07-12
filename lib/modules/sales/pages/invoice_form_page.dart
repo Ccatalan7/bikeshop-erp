@@ -35,6 +35,7 @@ import 'dart:io' show Platform, File;
 
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import '../widgets/sales_corrections_menu.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
 ///
@@ -1638,6 +1639,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.picture_as_pdf),
+              ),
+            );
+            if (!isMobile) actionButtons.add(const SizedBox(width: 8));
+
+            actionButtons.add(
+              SalesCorrectionsMenu(
+                invoice: _loadedInvoice!,
+                iconOnly: isMobile,
+                onChanged: () => _refreshInvoiceById(_loadedInvoice!.id!),
               ),
             );
             if (!isMobile) actionButtons.add(const SizedBox(width: 8));

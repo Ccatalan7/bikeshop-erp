@@ -25,6 +25,13 @@ The legacy status toggle is temporary N/N-1 compatibility, not a concurrent stoc
 | Sales credit note | Revenue/AR/tax correction | Automatic restock without inspected return |
 | Inventory loss | Owned stock written off after verified loss/damage | Supplier short-shipment correction |
 
+Sales credit notes are available only after the invoice is posted
+(`confirmed`, `paid`, or `overdue`). A merely sent invoice owns neither the
+inventory exit nor the accounting posting and cannot receive a credit note.
+For Viñabike's in-store consumer workflow, physical customer returns require a
+`paid` invoice because payment and bicycle delivery happen together. Confirmed
+but undelivered work can be financially corrected without recording a return.
+
 ## Goods Receipt Command
 
 One tenant-scoped, idempotent database command must:
@@ -74,7 +81,11 @@ Sales and purchase credit notes require:
 - an explicit physical-disposition link when stock is affected;
 - separate internal and official-DTE states.
 
-The SII workflow requires selecting the original electronic document being modified, and correction notes require a reference reason. An internal Vinabike document must not claim official issuance until it has been signed/sent through an approved DTE path.
+These documents currently support internal Viñabike business control; the ERP
+is not connected to SII and must not claim official DTE issuance. Original
+document references, correction reasons, and separate internal/official states
+remain structured so a future certified integration can be added without
+redesigning the inventory or accounting controls.
 
 ## Cash Settlement Of Credit Balances
 

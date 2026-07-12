@@ -3,11 +3,10 @@ import re
 
 files_to_fix = [
     r'lib\modules\purchases\pages\purchase_invoice_list_page.dart',
-    r'lib\modules\sales\pages\invoice_detail_page.dart',
     r'lib\modules\sales\pages\invoice_form_page.dart',
+    r'lib\modules\sales\widgets\sales_invoice_editor.dart',
     r'lib\modules\sales\pages\invoice_list_page.dart',
     r'lib\modules\bikeshop\widgets\smart_job_details_editor.dart',
-    r'lib\modules\sales\widgets\sales_invoice_editor.dart'
 ]
 
 cleaner_code = """

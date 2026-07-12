@@ -264,7 +264,7 @@ This is an **alternative model** to the standard "Pay After Receipt" flow. **The
 2. Sees status badge: Grey "Borrador"
 3. Clicks blue button **[Enviar a Proveedor]**
 
-**Frontend Action** (`PurchaseInvoiceDetailPage` - Prepayment Mode):
+**Frontend Action** (`PurchaseInvoiceFormPage` - Prepayment Mode):
 ```dart
 void _sendToSupplier() async {
   setState(() => _isLoading = true);
@@ -1376,7 +1376,7 @@ WHERE movement_type = 'purchase_invoice_prepaid'
 
 #### **Borrador** (Grey Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Prepayment Model - Borrador
+// PurchaseInvoiceFormPage - Prepayment Model - Borrador
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1408,7 +1408,7 @@ Row(
 
 #### **Enviada** (Blue Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Prepayment Model - Enviada
+// PurchaseInvoiceFormPage - Prepayment Model - Enviada
 Row(
   mainAxisAlignment: MainAxisAlignment.end,
   children: [
@@ -1440,7 +1440,7 @@ Row(
 
 #### **Confirmada** (Purple Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Prepayment Model - Confirmada
+// PurchaseInvoiceFormPage - Prepayment Model - Confirmada
 Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
@@ -1504,7 +1504,7 @@ Column(
 
 #### **Pagada** (Orange Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Prepayment Model - Pagada
+// PurchaseInvoiceFormPage - Prepayment Model - Pagada
 Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
@@ -1586,7 +1586,7 @@ Column(
 
 #### **Recibida** (Green Badge)
 ```dart
-// PurchaseInvoiceDetailPage - Prepayment Model - Recibida
+// PurchaseInvoiceFormPage - Prepayment Model - Recibida
 Column(
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [

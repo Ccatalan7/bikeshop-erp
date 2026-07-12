@@ -1,7 +1,7 @@
 begin;
 select set_config('request.jwt.claims','{}',true);
 select set_config('request.jwt.claim.sub','',true);
-select plan(39);
+select plan(41);
 
 insert into public.tenants(id,shop_name) values('99500000-0000-4000-8000-000000000001','Sales Return Test');
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
@@ -39,8 +39,15 @@ select is((select inventory_qty from public.products where id='99500000-0000-400
 select throws_ok($$select public.create_sales_return('99500000-0000-4000-8000-000000000010','[{"line_index":0,"returned_quantity":1,"disposition":"restock"}]'::jsonb,now(),'Disabled',null,'return-disabled')$$,
 'P0001','Sales return workflow is not active for this tenant','sales return is disabled by default');
 select is((select count(*)::integer from public.sales_returns),0,'disabled attempt leaves no return');
+insert into public.sales_payments(tenant_id,invoice_id,payment_method_id,idempotency_key,amount,tax_treatment,net_amount,iva_amount,date)
+select '99500000-0000-4000-8000-000000000001','99500000-0000-4000-8000-000000000010',id,'sales-return-payment',20500,'no_tax',20500,0,now()from public.payment_methods where tenant_id='99500000-0000-4000-8000-000000000001'order by created_at limit 1;
 insert into public.sales_return_control_settings(tenant_id,control_mode,activated_at,activated_by)
 values('99500000-0000-4000-8000-000000000001','enforce',now(),'99500000-0000-4000-8000-000000000099');
+
+insert into public.sales_invoices(id,tenant_id,invoice_number,customer_name,status,subtotal,net_amount,iva_amount,total,balance,tax_treatment,items)values('99500000-0000-4000-8000-000000000011','99500000-0000-4000-8000-000000000001','FV-RETURN-SENT','Return Customer','sent',2000,2000,0,2000,2000,'no_tax','[{"line_id":"sales-return-sent-line","product_id":"99500000-0000-4000-8000-000000000002","product_name":"Direct Sale Product","product_sku":"SALE-RETURN-DIRECT","quantity":1,"unit_price":2000,"price":2000,"cost":1000,"is_service":false}]');
+select throws_ok($$select public.create_sales_return('99500000-0000-4000-8000-000000000011','[{"line_index":0,"returned_quantity":1,"disposition":"restock"}]'::jsonb,now(),'Too early',null,'return-sent')$$,
+'P0001','Sales invoice must be paid before a physical return','sent invoice cannot receive a physical return');
+select is((select count(*)::integer from public.sales_returns),0,'blocked sent return leaves no evidence rows');
 
 create temp table direct_return on commit drop as select public.create_sales_return(
 '99500000-0000-4000-8000-000000000010','[{"line_index":0,"returned_quantity":2,"disposition":"restock"}]'::jsonb,
@@ -57,8 +64,8 @@ select ok(exists(
     and exists(select 1 from public.journal_lines line where line.entry_id=entry.id and line.account_code='1105' and line.debit_amount=2000)
     and exists(select 1 from public.journal_lines line where line.entry_id=entry.id and line.account_code='5100' and line.credit_amount=2000)
 ),'restocked sales return restores inventory value and reverses COGS exactly once');
-select is((select status from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),'confirmed','physical return leaves invoice status unchanged');
-select is((select balance from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),20500::numeric,'physical return leaves receivable unchanged');
+select is((select status from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),'paid','physical return leaves invoice status unchanged');
+select is((select balance from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),0::numeric,'physical return leaves the settled receivable unchanged');
 select ok(exists(select 1 from public.inventory_accounting_checkpoints where operation_id=((select payload->>'operation_id' from direct_return)::uuid) and phase='accounting_planned' and outcome='completed' and (payload->>'financial_credit_separate')::boolean),'return trace records separate pending financial credit and completed physical-value accounting');
 select ok((select contract_complete from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from direct_return)::uuid)),'sales return create has the full ordered trace contract');
 select ok((public.create_sales_return('99500000-0000-4000-8000-000000000010','[{"line_index":0,"returned_quantity":2}]'::jsonb,now(),'Retry',null,'return-direct-1')->>'replayed')::boolean,'return retry is idempotent');

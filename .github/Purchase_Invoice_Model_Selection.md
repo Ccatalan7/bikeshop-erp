@@ -246,7 +246,7 @@ Borrador → Enviada → Confirmada → Pagada → Recibida
 ### Button Visibility Logic
 
 ```dart
-// PurchaseInvoiceDetailPage
+// PurchaseInvoiceFormPage
 Widget _buildActionButtons() {
   final isPrepayment = _invoice.prepaymentModel;
   
@@ -331,7 +331,7 @@ $$ LANGUAGE plpgsql;
 Show the selected model in the invoice detail page:
 
 ```dart
-// PurchaseInvoiceDetailPage - Header section
+// PurchaseInvoiceFormPage - Header section
 Row(
   children: [
     // Status badge
@@ -433,7 +433,7 @@ Widget _buildTimeline() {
 ### Frontend
 - [ ] Create model selection dialog in PurchaseInvoiceListPage
 - [ ] Update PurchaseInvoiceFormPage to accept `isPrepayment` parameter
-- [ ] Update PurchaseInvoiceDetailPage to show model badge
+- [ ] Update PurchaseInvoiceFormPage to show model badge
 - [ ] Implement conditional button visibility based on model
 - [ ] Create model-specific timeline views
 - [ ] Add model filter in list page (optional)
