@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, customer/supplier cash settlement, workshop invoice ownership, the direct-product writer boundary, and gradual professional purchase receiving are live for Viñabike. 690 database and 185 Flutter assertions pass. Receipt compatibility retirement and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales/supplier returns, both credit-note families, customer/supplier cash settlement, workshop invoice ownership, the direct-product writer boundary, and gradual professional purchase receiving are live for Viñabike. 704 database and 185 Flutter assertions pass. Receipt compatibility retirement and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -269,7 +269,7 @@ Use pgTAP in `supabase/tests/` and focused Flutter/Edge integration tests.
 
 Run at minimum: local schema reset, all pgTAP tests, affected Dart tests, analyzer on changed Dart files, and manual end-to-end checks on macOS plus affected Windows/web/mobile paths.
 
-Current safety baseline on 2026-07-12: 690/690 pgTAP assertions across all 38 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, direct-writer multi-row/service-role/cross-tenant regression tests, gradual-receipt N/N-1 compatibility plus create/void checkpoint-contract tests, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
+Current safety baseline on 2026-07-12: 704/704 pgTAP assertions across all 38 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, direct-writer multi-row/service-role/cross-tenant regression tests, gradual-receipt N/N-1 compatibility, and full create/void contracts for receipts, supplier/customer returns, quarantine resolution, credit notes, and cash refunds also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
 
 **Gate P5:** All tests pass against a clean local database and production-shaped fixtures; deliberate failure tests leave no partial business effects.
 

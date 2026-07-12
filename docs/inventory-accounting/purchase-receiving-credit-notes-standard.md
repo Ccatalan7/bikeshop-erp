@@ -119,7 +119,7 @@ The SII workflow requires selecting the original electronic document being modif
 - Physical returns own the inventory-value/COGS posting. Linked credit notes own AP/AR, revenue/purchase, and tax settlement and therefore do not duplicate inventory effects.
 - Customer quarantine is a valued held-inventory state. Release reclassifies it to available inventory; scrap reclassifies it to verified inventory loss. Both actions and voids remain linked and append-only.
 - Production installation and controlled activation preserved all business counts and left zero stock-column drift, zero posting-ledger continuity breaks, zero current-ledger drift, and zero unbalanced journals. Existing negative stock and legacy evidence were not changed; activation created no business documents.
-- The clean canonical database suite passes 690 assertions across 38 files; all 185 Flutter tests and the ERP release web build pass. Receipt create and void traces record the full ordered checkpoint contract, including the explicit zero-journal decision owned by purchase-invoice accounting. Viñabike activation passed rollback-only route/mixed-ownership smoke and exact before/after production checks.
+- The clean canonical database suite passes 704 assertions across 38 files; all 185 Flutter tests and the ERP release web build pass. Receipt, supplier/customer return, quarantine resolution, credit-note, and cash-refund create/void traces record the full ordered checkpoint contract. Viñabike activation passed rollback-only route/mixed-ownership and eight-operation professional-correction smokes plus exact before/after production checks.
 
 ## Primary Tax References
 

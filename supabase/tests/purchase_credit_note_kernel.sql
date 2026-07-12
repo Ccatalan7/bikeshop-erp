@@ -1,7 +1,7 @@
 begin;
 select set_config('request.jwt.claims','{}',true);
 select set_config('request.jwt.claim.sub','',true);
-select plan(43);
+select plan(45);
 
 insert into public.tenants(id,shop_name) values('99400000-0000-4000-8000-000000000001','Purchase Credit Note Test');
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
@@ -43,6 +43,7 @@ select public.create_purchase_credit_note(
 '99400000-0000-4000-8000-000000000004',
 '[{"line_index":0,"credited_quantity":2,"disposition":"financial_only"},{"line_index":1,"credited_quantity":1,"disposition":"financial_only"}]'::jsonb,
 '2026-07-11 19:00:00+00','price_adjustment','Ajuste comercial parcial','NC-PROV-001','credit-first') payload;
+select is((select phase_contract from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from first_credit)::uuid)),(select expected_phase_contract from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from first_credit)::uuid)),'purchase credit note has the full ordered trace contract');
 select is((select total_amount from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from first_credit)::uuid)),3570::numeric,'mixed credit total uses original net and tax allocation');
 select is((select net_amount from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from first_credit)::uuid)),3000::numeric,'mixed credit stores exact net');
 select is((select tax_amount from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from first_credit)::uuid)),570::numeric,'mixed credit stores exact recoverable tax reversal');
@@ -92,6 +93,7 @@ select is((select total from public.purchase_invoices where id='99400000-0000-40
 
 create temp table linked_void on commit drop as
 select public.void_purchase_credit_note((select (payload->>'purchase_credit_note_id')::uuid from linked_credit),'Supplier rejected credit','credit-linked-void') payload;
+select is((select phase_contract from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from linked_void)::uuid)),(select expected_phase_contract from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from linked_void)::uuid)),'purchase credit-note void has the full ordered trace contract');
 select is((select status from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from linked_credit)::uuid)),'voided','credit void preserves document as voided');
 select is((select credited_amount from public.purchase_invoices where id='99400000-0000-4000-8000-000000000004'),3570::numeric,'credit void recalculates invoice credit total');
 select ok(exists(select 1 from public.journal_entries where id=(select void_journal_entry_id from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from linked_credit)::uuid)) and reversal_of_id=(select journal_entry_id from public.purchase_credit_notes where id=((select payload->>'purchase_credit_note_id' from linked_credit)::uuid)) and total_debit=total_credit),'credit void appends balanced linked journal reversal');

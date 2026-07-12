@@ -1,7 +1,7 @@
 begin;
 select set_config('request.jwt.claims','{}',true);
 select set_config('request.jwt.claim.sub','',true);
-select plan(24);
+select plan(26);
 
 insert into public.tenants(id,shop_name) values('99700000-0000-4000-8000-000000000001','Quarantine Resolution Test');
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
@@ -34,6 +34,7 @@ select is((select inventory_qty from public.products where id='99700000-0000-400
 select ok(exists(select 1 from public.journal_lines where entry_id=(select inventory_journal_entry_id from public.sales_returns where id=((select payload->>'sales_return_id' from quarantine_return)::uuid)) and account_code='1106' and debit_amount=3000),'held quarantine recognizes custody value');
 
 create temp table release_resolution on commit drop as select public.resolve_sales_return_quarantine((select id from q_record),'release',now(),'Inspection passed',null,'q-release') payload;
+select ok((select contract_complete from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from release_resolution)::uuid)),'quarantine resolution has the full ordered trace contract');
 select is((select status from q_record),'released','release records the inspection decision');
 select is((select inventory_qty from public.products where id='99700000-0000-4000-8000-000000000003'),9,'release restores component A');
 select is((select inventory_qty from public.products where id='99700000-0000-4000-8000-000000000004'),18,'release restores multiplied component B');
@@ -46,6 +47,7 @@ select is((select count(*)::integer from public.sales_return_quarantine_resoluti
 select throws_ok(format('select public.void_sales_return(%L::uuid,%L,%L)',(select payload->>'sales_return_id' from quarantine_return),'Blocked','q-return-blocked'),'P0001','Void quarantine resolutions before voiding this sales return','resolved quarantine protects the parent return');
 
 create temp table release_void on commit drop as select public.void_sales_return_quarantine_resolution((select (payload->>'resolution_id')::uuid from release_resolution),'Inspection correction','q-release-void') payload;
+select ok((select contract_complete from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from release_void)::uuid)),'quarantine resolution void has the full ordered trace contract');
 select is((select status from q_record),'held','voiding release returns the item to held quarantine');
 select is((select inventory_qty from public.products where id='99700000-0000-4000-8000-000000000003'),8,'release void removes component A from available stock');
 select is((select inventory_qty from public.products where id='99700000-0000-4000-8000-000000000004'),16,'release void removes component B from available stock');

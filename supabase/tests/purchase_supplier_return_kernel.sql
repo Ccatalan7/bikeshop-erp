@@ -2,7 +2,7 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(39);
+select plan(41);
 
 insert into public.tenants (id, shop_name)
 values ('99200000-0000-4000-8000-000000000001', 'Supplier Return Test');
@@ -144,9 +144,11 @@ select ok(exists(
   select 1 from public.inventory_accounting_checkpoints checkpoint
   where checkpoint.operation_id = (select (payload->>'operation_id')::uuid from direct_return)
     and checkpoint.phase = 'accounting_planned'
-    and checkpoint.outcome = 'warning'
+    and checkpoint.outcome = 'completed'
     and checkpoint.payload->>'reason' = 'awaiting_explicit_purchase_credit_note'
+    and (checkpoint.payload->>'financial_credit_separate')::boolean
 ), 'trace explicitly records that no financial credit was invented');
+select is((select phase_contract from public.professional_correction_trace_contract_view where operation_id=(select (payload->>'operation_id')::uuid from direct_return)),(select expected_phase_contract from public.professional_correction_trace_contract_view where operation_id=(select (payload->>'operation_id')::uuid from direct_return)),'supplier return create has the full ordered trace contract');
 select is((select status from public.purchase_invoices where id = '99200000-0000-4000-8000-000000000003'), 'confirmed', 'physical return leaves invoice status unchanged');
 select is((select balance::numeric from public.purchase_invoices where id = '99200000-0000-4000-8000-000000000003'), 16000::numeric, 'physical return leaves AP balance unchanged');
 select ok(exists(
@@ -265,6 +267,7 @@ select public.void_purchase_supplier_return(
   (select (payload->>'supplier_return_id')::uuid from set_return_two),
   'Shipment cancelled before pickup', 'supplier-return-set-void-002'
 ) as payload;
+select is((select phase_contract from public.professional_correction_trace_contract_view where operation_id=(select (payload->>'operation_id')::uuid from set_void)),(select expected_phase_contract from public.professional_correction_trace_contract_view where operation_id=(select (payload->>'operation_id')::uuid from set_void)),'supplier return void has the full ordered trace contract');
 select is((select inventory_qty from public.products where id = '99200000-0000-4000-8000-000000000006'), 1, 'voiding set return restores first component');
 select is((select inventory_qty from public.products where id = '99200000-0000-4000-8000-000000000007'), 2, 'voiding set return restores multiplied component');
 select is((select status from public.purchase_supplier_returns where id = (select (payload->>'supplier_return_id')::uuid from set_return_two)), 'voided', 'void preserves return evidence with voided status');

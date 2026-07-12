@@ -1,7 +1,7 @@
 begin;
 select set_config('request.jwt.claims','{}',true);
 select set_config('request.jwt.claim.sub','',true);
-select plan(37);
+select plan(39);
 
 insert into public.tenants(id,shop_name) values('99500000-0000-4000-8000-000000000001','Sales Return Test');
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
@@ -59,7 +59,8 @@ select ok(exists(
 ),'restocked sales return restores inventory value and reverses COGS exactly once');
 select is((select status from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),'confirmed','physical return leaves invoice status unchanged');
 select is((select balance from public.sales_invoices where id='99500000-0000-4000-8000-000000000010'),20500::numeric,'physical return leaves receivable unchanged');
-select ok(exists(select 1 from public.inventory_accounting_checkpoints where operation_id=((select payload->>'operation_id' from direct_return)::uuid) and phase='accounting_planned' and outcome='warning'),'return trace records pending financial credit');
+select ok(exists(select 1 from public.inventory_accounting_checkpoints where operation_id=((select payload->>'operation_id' from direct_return)::uuid) and phase='accounting_planned' and outcome='completed' and (payload->>'financial_credit_separate')::boolean),'return trace records separate pending financial credit and completed physical-value accounting');
+select ok((select contract_complete from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from direct_return)::uuid)),'sales return create has the full ordered trace contract');
 select ok((public.create_sales_return('99500000-0000-4000-8000-000000000010','[{"line_index":0,"returned_quantity":2}]'::jsonb,now(),'Retry',null,'return-direct-1')->>'replayed')::boolean,'return retry is idempotent');
 select is((select inventory_qty from public.products where id='99500000-0000-4000-8000-000000000002'),8,'return replay does not restock twice');
 
@@ -90,6 +91,7 @@ select ok(exists(select 1 from public.sales_return_line_movements where sales_re
 select ok(exists(select 1 from public.journal_lines where entry_id=(select inventory_journal_entry_id from public.sales_returns where id=((select payload->>'sales_return_id' from scrap_return)::uuid)) and account_code='5205' and debit_amount=700),'irreparable return classifies expected value as inventory loss');
 
 create temp table set_void on commit drop as select public.void_sales_return((select (payload->>'sales_return_id')::uuid from set_restock),'Return entered by mistake','void-set-restock') payload;
+select ok((select contract_complete from public.professional_correction_trace_contract_view where operation_id=((select payload->>'operation_id' from set_void)::uuid)),'sales return void has the full ordered trace contract');
 select is((select inventory_qty from public.products where id='99500000-0000-4000-8000-000000000004'),8,'void removes restocked first component');
 select is((select inventory_qty from public.products where id='99500000-0000-4000-8000-000000000005'),16,'void removes restocked multiplied component');
 select ok(exists(select 1 from public.stock_movements where operation_id=((select payload->>'operation_id' from set_void)::uuid) and movement_type='sales_return_reversal' and reversal_of_id is not null),'void appends linked stock reversals');

@@ -35203,5 +35203,6 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260712150000_trace_direct_product_stock_writers.sql
 \ir ../migrations/20260712153000_add_gradual_purchase_receipt_enforcement.sql
 \ir ../migrations/20260712160000_complete_purchase_receipt_checkpoint_contract.sql
+\ir ../migrations/20260712163000_complete_correction_checkpoint_contracts.sql
 
 commit;
