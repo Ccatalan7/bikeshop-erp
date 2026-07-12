@@ -25,6 +25,123 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   String _selectedStatus = 'all';
   String _selectedPaymentStatus = 'all';
 
+  Future<void> _handleCancellation(
+    OnlineOrder order,
+    WebsiteService websiteService,
+  ) async {
+    if (order.paymentStatus == 'paid' || order.paidAt != null) {
+      if (!mounted) return;
+      final openInvoice = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.account_balance_wallet_outlined),
+          title: const Text('Este pedido ya tiene un pago'),
+          content: Text(
+            order.salesInvoiceId == null
+                ? 'No se cancelará ni se marcará un reembolso automáticamente. '
+                    'Primero debe existir una factura para registrar la devolución, '
+                    'la nota de crédito y el reembolso con trazabilidad.'
+                : 'No se cancelará ni se marcará un reembolso automáticamente. '
+                    'Abra la factura y use Correcciones para registrar la devolución, '
+                    'la nota de crédito y el reembolso sin perder evidencia.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cerrar'),
+            ),
+            if (order.salesInvoiceId != null)
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.receipt_long),
+                label: const Text('Abrir factura'),
+              ),
+          ],
+        ),
+      );
+      if (openInvoice == true && mounted && order.salesInvoiceId != null) {
+        context.go('/sales/invoices/${order.salesInvoiceId}');
+      }
+      return;
+    }
+
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.cancel_outlined),
+        title: Text('Cancelar pedido ${order.orderNumber}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'La factura vinculada se conservará como cancelada. Si ya había '
+              'descontado stock, el sistema lo restaurará y dejará la operación '
+              'conectada a sus movimientos y evidencia contable.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              autofocus: true,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Motivo obligatorio',
+                hintText: 'Ej.: cliente desistió antes del pago',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Esta acción no registra ni ejecuta un reembolso de dinero.',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = reasonController.text.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Cancelar pedido'),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || !mounted) return;
+
+    try {
+      final result = await websiteService.cancelOrder(
+        order.id,
+        reason: reason,
+        refundAmount: 0,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result?['message']?.toString() ??
+                'Pedido cancelado con su evidencia preservada.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo cancelar: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -53,108 +170,49 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/website'),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Text('Pedidos Online',
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const Spacer(),
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              if (!widget.embedded) ...[
                 IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => websiteService.loadOrders(),
-                  tooltip: 'Actualizar',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/website'),
                 ),
+                const SizedBox(width: 8),
               ],
-            ),
+              Text('Pedidos Online',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => websiteService.loadOrders(),
+                tooltip: 'Actualizar',
+              ),
+            ],
           ),
-          // Filters
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-            child: ConstraintLayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 600) {
-                  // Mobile
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Estado del Pedido',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'confirmed', child: Text('Confirmado')),
-                          DropdownMenuItem(
-                              value: 'processing', child: Text('En Proceso')),
-                          DropdownMenuItem(
-                              value: 'shipped', child: Text('Enviado')),
-                          DropdownMenuItem(
-                              value: 'delivered', child: Text('Entregado')),
-                          DropdownMenuItem(
-                              value: 'cancelled', child: Text('Cancelado')),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _selectedStatus = value ?? 'all');
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedPaymentStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Estado de Pago',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'paid', child: Text('Pagado')),
-                          DropdownMenuItem(
-                              value: 'failed', child: Text('Fallido')),
-                          DropdownMenuItem(
-                              value: 'refunded', child: Text('Reembolsado')),
-                        ],
-                        onChanged: (value) {
-                          setState(
-                              () => _selectedPaymentStatus = value ?? 'all');
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '${orders.length} pedidos encontrados',
-                        style: theme.textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  );
-                }
-
-                // Desktop
-                return Row(
+        ),
+        // Filters
+        Container(
+          padding: const EdgeInsets.all(16),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          child: ConstraintLayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 600) {
+                // Mobile
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Estado: '),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: _selectedStatus,
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado del Pedido',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('Todos')),
                         DropdownMenuItem(
@@ -174,11 +232,14 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         setState(() => _selectedStatus = value ?? 'all');
                       },
                     ),
-                    const SizedBox(width: 24),
-                    const Text('Pago: '),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: _selectedPaymentStatus,
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedPaymentStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado de Pago',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('Todos')),
                         DropdownMenuItem(
@@ -193,48 +254,102 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         setState(() => _selectedPaymentStatus = value ?? 'all');
                       },
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 12),
                     Text(
-                      '${orders.length} pedidos',
+                      '${orders.length} pedidos encontrados',
                       style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 );
-              },
-            ),
-          ),
+              }
 
-          // Orders List
-          Expanded(
-            child: websiteService.isLoading
-                ? const Center(child: BrandedLoading())
-                : orders.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.shopping_bag_outlined,
-                                size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No hay pedidos online',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: orders.length,
-                        itemBuilder: (context, index) {
-                          final order = orders[index];
-                          return _buildOrderCard(context, order);
-                        },
-                      ),
+              // Desktop
+              return Row(
+                children: [
+                  const Text('Estado: '),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: _selectedStatus,
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('Todos')),
+                      DropdownMenuItem(
+                          value: 'pending', child: Text('Pendiente')),
+                      DropdownMenuItem(
+                          value: 'confirmed', child: Text('Confirmado')),
+                      DropdownMenuItem(
+                          value: 'processing', child: Text('En Proceso')),
+                      DropdownMenuItem(
+                          value: 'shipped', child: Text('Enviado')),
+                      DropdownMenuItem(
+                          value: 'delivered', child: Text('Entregado')),
+                      DropdownMenuItem(
+                          value: 'cancelled', child: Text('Cancelado')),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedStatus = value ?? 'all');
+                    },
+                  ),
+                  const SizedBox(width: 24),
+                  const Text('Pago: '),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: _selectedPaymentStatus,
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('Todos')),
+                      DropdownMenuItem(
+                          value: 'pending', child: Text('Pendiente')),
+                      DropdownMenuItem(value: 'paid', child: Text('Pagado')),
+                      DropdownMenuItem(value: 'failed', child: Text('Fallido')),
+                      DropdownMenuItem(
+                          value: 'refunded', child: Text('Reembolsado')),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedPaymentStatus = value ?? 'all');
+                    },
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${orders.length} pedidos',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              );
+            },
           ),
+        ),
+
+        // Orders List
+        Expanded(
+          child: websiteService.isLoading
+              ? const Center(child: BrandedLoading())
+              : orders.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.shopping_bag_outlined,
+                              size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No hay pedidos online',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: orders.length,
+                      itemBuilder: (context, index) {
+                        final order = orders[index];
+                        return _buildOrderCard(context, order);
+                      },
+                    ),
+        ),
       ],
     );
 
@@ -470,26 +585,30 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                     label: const Text('Ver Factura'),
                   ),
                 const Spacer(),
-                PopupMenuButton<String>(
-                  onSelected: (value) async {
-                    if (value == 'cancel') {
-                      await websiteService.updateOrderStatus(
-                          order.id, 'cancelled');
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'cancel',
-                      child: Row(
-                        children: [
-                          Icon(Icons.cancel, size: 16),
-                          SizedBox(width: 8),
-                          Text('Cancelar Pedido'),
-                        ],
+                if (order.status != 'cancelled')
+                  PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      if (value == 'cancel') {
+                        await _handleCancellation(order, websiteService);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'cancel',
+                        child: Row(
+                          children: <Widget>[
+                            const Icon(Icons.cancel, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              order.paymentStatus == 'paid'
+                                  ? 'Gestionar devolución / crédito'
+                                  : 'Cancelar pedido',
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ],
