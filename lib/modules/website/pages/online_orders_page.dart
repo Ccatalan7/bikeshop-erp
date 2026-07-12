@@ -142,6 +142,123 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
+  Future<void> _handlePaymentConfirmation(
+    OnlineOrder order,
+    WebsiteService websiteService,
+  ) async {
+    final referenceController = TextEditingController();
+    var selectedDate = DateTime.now();
+    final input = await showDialog<_ManualPaymentConfirmationInput>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          icon: const Icon(Icons.account_balance_outlined),
+          title: Text('Confirmar pago ${order.orderNumber}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Se registrará un pago por ${ChileanUtils.formatCurrency(order.total)} '
+                'y la factura descontará el inventario una sola vez.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: referenceController,
+                autofocus: true,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Referencia bancaria obligatoria',
+                  hintText: 'Ej.: transferencia BCI 123456',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.tag),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Fecha efectiva del pago'),
+                subtitle: Text(ChileanUtils.formatDate(selectedDate)),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: () async {
+                  final today = DateTime.now();
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(order.createdAt.year),
+                    lastDate: DateTime(today.year, today.month, today.day),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => selectedDate = picked);
+                  }
+                },
+              ),
+              Text(
+                'Confirme únicamente después de verificar el abono en el banco.',
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Volver'),
+            ),
+            FilledButton.icon(
+              onPressed: referenceController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        _ManualPaymentConfirmationInput(
+                          reference: referenceController.text.trim(),
+                          date: selectedDate,
+                        ),
+                      ),
+              icon: const Icon(Icons.verified_outlined),
+              label: const Text('Registrar pago'),
+            ),
+          ],
+        ),
+      ),
+    );
+    referenceController.dispose();
+    if (input == null || !mounted) return;
+
+    try {
+      final paymentId = await websiteService.confirmOrderPayment(
+        order.id,
+        paymentReference: input.reference,
+        paymentDate: input.date,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            paymentId == null
+                ? 'El pedido ya estaba pagado; no se duplicó el cobro.'
+                : 'Pago registrado con trazabilidad completa.',
+          ),
+          action: order.salesInvoiceId == null
+              ? null
+              : SnackBarAction(
+                  label: 'Ver factura',
+                  onPressed: () =>
+                      context.go('/sales/invoices/${order.salesInvoiceId}'),
+                ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo confirmar el pago: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -576,6 +693,20 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                       backgroundColor: Colors.green,
                     ),
                   ),
+                if (order.salesInvoiceId != null &&
+                    order.status != 'cancelled' &&
+                    order.paymentStatus != 'paid' &&
+                    order.paymentStatus != 'refunded' &&
+                    const {'transfer', 'transferencia', 'bank_transfer'}
+                        .contains(order.paymentMethod?.toLowerCase())) ...[
+                  FilledButton.icon(
+                    onPressed: () =>
+                        _handlePaymentConfirmation(order, websiteService),
+                    icon: const Icon(Icons.account_balance),
+                    label: const Text('Confirmar pago'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 if (order.salesInvoiceId != null)
                   OutlinedButton.icon(
                     onPressed: () {
@@ -677,4 +808,14 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         return Colors.grey;
     }
   }
+}
+
+class _ManualPaymentConfirmationInput {
+  const _ManualPaymentConfirmationInput({
+    required this.reference,
+    required this.date,
+  });
+
+  final String reference;
+  final DateTime date;
 }
