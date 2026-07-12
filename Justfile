@@ -24,9 +24,33 @@ verify:
     #!/usr/bin/env bash
     exec bash scripts/dev/verify.sh full
 
-db-test:
+db-start:
+    #!/usr/bin/env bash
+    exec bash scripts/db/ensure_local.sh
+
+db-status:
+    #!/usr/bin/env bash
+    exec bash scripts/db/status.sh
+
+db-test *tests:
+    #!/usr/bin/env bash
+    exec bash scripts/db/test.sh {{tests}}
+
+db-gate:
     #!/usr/bin/env bash
     exec bash scripts/reset_local_supabase.sh
+
+db-query environment query:
+    #!/usr/bin/env bash
+    exec bash scripts/db/query.sh "{{environment}}" --sql "{{query}}"
+
+db-query-file environment file:
+    #!/usr/bin/env bash
+    exec bash scripts/db/query.sh "{{environment}}" --file "{{file}}"
+
+db-trace environment kind id:
+    #!/usr/bin/env bash
+    exec bash scripts/db/trace.sh "{{environment}}" "{{kind}}" "{{id}}"
 
 e2e:
     #!/usr/bin/env bash

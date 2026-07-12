@@ -36,6 +36,8 @@ require_command just "run the platform bootstrap"
 require_command docker "run the platform bootstrap"
 require_command psql "run the platform bootstrap"
 require_command gitleaks "run the platform bootstrap"
+require_command supabase "run the platform bootstrap"
+require_command firebase "run the platform bootstrap"
 
 if command -v fvm >/dev/null 2>&1 && fvm flutter --version --machine >/tmp/vinabike_flutter_version.json 2>/dev/null; then
   expected="$(jq -r .flutter .fvmrc)"

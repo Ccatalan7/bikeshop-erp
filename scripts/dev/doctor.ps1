@@ -12,7 +12,7 @@ function Pass([string]$Message) { Write-Host "PASS  $Message" -ForegroundColor G
 function Warn([string]$Message) { $script:warnings++; Write-Host "WARN  $Message" -ForegroundColor Yellow }
 function Fail([string]$Message) { $script:errors++; Write-Host "FAIL  $Message" -ForegroundColor Red }
 
-foreach ($command in @('git','gh','fvm','volta','node','npm','uv','just','docker','psql','gitleaks')) {
+foreach ($command in @('git','gh','fvm','volta','node','npm','uv','just','docker','psql','gitleaks','supabase','firebase')) {
     $resolved = Get-Command $command -ErrorAction SilentlyContinue
     if ($resolved) { Pass "${command}: $($resolved.Source)" } else { Fail "$command missing - rerun scripts/bootstrap/bootstrap_windows.ps1" }
 }
