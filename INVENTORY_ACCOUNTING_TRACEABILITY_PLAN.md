@@ -1,6 +1,6 @@
 # Inventory and Accounting Traceability Plan
 
-**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, and customer/supplier cash settlement are enforced for Viñabike, while purchase receiving remains in compatibility-safe shadow. 638 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
+**Status:** Preventive kernel and professional correction workflows deployed; sales returns, both credit-note families, customer/supplier cash settlement, workshop invoice ownership, and the direct-product writer compatibility boundary are live for Viñabike, while purchase receiving remains in compatibility-safe shadow. 668 database and 185 Flutter assertions pass. Receipt enforcement observation and approved historical review remain.
 **Priority:** Inventory correctness first; accounting parity and complete lineage are mandatory
 **Scope:** Every code or database path that can change product quantity, inventory value, or inventory-linked accounting
 
@@ -127,7 +127,7 @@ For each row, identify exactly one **stock-posting owner** and one **accounting-
 
 **Gate P1:** Every repository write path is classified as authoritative, delegated, intentionally no-op, legacy-to-remove, or unresolved.
 
-**Gate P1 result:** Active writers are mapped in the source registry. POS/Quick Sale use one atomic checkout command; imports use a durable absolute-stock command; conversions and mass edits carry parent/child operation lineage; the legacy order writer is disabled; ledger-only factory reset is refused. Transfers/reservations are explicitly absent capabilities, not hidden stock sources.
+**Gate P1 result:** Active writers are mapped in the source registry. POS/Quick Sale use one atomic checkout command; imports use a durable absolute-stock command; conversions and mass edits carry parent/child operation lineage; the legacy order writer is disabled; ledger-only factory reset is refused. Old application/service-role product-column writers are caught at the database boundary and receive a complete operation, movement, value journal, actor/system identity, and invariant result without breaking their payload contract. Transfers/reservations are explicitly absent capabilities, not hidden stock sources.
 
 ## Phase 2 — Define and Run Integrity Checks
 
@@ -183,7 +183,7 @@ Rules:
 
 **Gate P3:** One tenant-safe query reconstructs a complete action from request through stock, accounting, reconciliation, reversal, or failure.
 
-**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop invoice ownership is enforced after a clean shadow observation with real job/invoice activity and zero job-owned posting attempts. Receipt shadow mode appends compatibility evidence for every legacy status writer, so enforcement can be evidence-gated without changing current routing. Existing anomalies were not repaired. Optional future transfers/reservations, the receipt observation window/enforcement decision, and historical review remain open.
+**Production progress:** The shared operation/checkpoint kernel covers invoices, payments, POS/Quick Sale, structured adjustments, bulk parent/child rows, imports, conversions, online cancellation, and manual online transfer confirmation. Workshop invoice ownership is enforced after a clean shadow observation with real job/invoice activity and zero job-owned posting attempts. Receipt shadow mode appends compatibility evidence for every legacy status writer, so enforcement can be evidence-gated without changing current routing. Repository audit also found old Zoho/admin product-column writers; migration `20260712150000` wraps application/service-role inserts and updates atomically, synchronizes both stock columns, rejects ambiguous/cross-tenant/negative writes, and records exact inventory/accounting lineage. Existing anomalies were not repaired. Optional future transfers/reservations, the receipt observation window/enforcement decision, and historical review remain open.
 
 Payment extension: sales/purchase payment create, ±1 CLP edit, partial/full transitions, hard/soft undo, related invoice status, linked job paid state, current/legacy payment journal replacement, and the invariant that payment-only actions create zero stock movements are now connected locally. Ambiguous legacy journal duplicates block instead of silently double-posting. Multi-bike job payments are certified as one shared invoice/job balance; per-bike payment allocation does not exist.
 
@@ -269,7 +269,7 @@ Use pgTAP in `supabase/tests/` and focused Flutter/Edge integration tests.
 
 Run at minimum: local schema reset, all pgTAP tests, affected Dart tests, analyzer on changed Dart files, and manual end-to-end checks on macOS plus affected Windows/web/mobile paths.
 
-Current safety baseline on 2026-07-12: 638/638 pgTAP assertions across all 36 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
+Current safety baseline on 2026-07-12: 668/668 pgTAP assertions across all 37 database test files and 185/185 Flutter tests pass. A clean canonical-schema rebuild, whole-repository analyzer with zero errors/warnings, focused changed-file analysis, refund-dialog lifecycle regression test, direct-writer multi-row/service-role/cross-tenant regression tests, and ERP release web build also pass. The repository retains 594 pre-existing analyzer infos under the non-fatal baseline; changed critical modules introduced no analyzer issue.
 
 **Gate P5:** All tests pass against a clean local database and production-shaped fixtures; deliberate failure tests leave no partial business effects.
 

@@ -1300,6 +1300,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     }
 
     final action = trace['action']?.toString() ?? 'acción';
+    final sourceChannel = trace['source_channel']?.toString();
+    final executor = trace['executor']?.toString();
     final documentType = trace['document_type']?.toString() ?? 'documento';
     final oldStatus = trace['old_status']?.toString();
     final newStatus = trace['new_status']?.toString();
@@ -1308,9 +1310,15 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
         ? ' • ${oldStatus ?? '∅'} → ${newStatus ?? '∅'}'
         : '';
     final actorText = actor == null ? '' : ' • actor $actor';
+    final sourceText = sourceChannel == null || sourceChannel.isEmpty
+        ? ''
+        : ' • canal $sourceChannel';
+    final executorText = executor == null || executor.isEmpty
+        ? ''
+        : ' • ejecutor $executor';
 
     return Text(
-      'Disparador probado: $action de $documentType$statusTransition$actorText • operación ${movement.operationId}',
+      'Disparador probado: $action de $documentType$sourceText$executorText$statusTransition$actorText • operación ${movement.operationId}',
       style: theme.textTheme.labelSmall?.copyWith(
         color: theme.colorScheme.primary,
         fontWeight: FontWeight.w700,

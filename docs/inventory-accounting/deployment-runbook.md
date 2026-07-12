@@ -5,6 +5,8 @@
 
 Current Viñabike modes: workshop invoice ownership, purchase credit note, sales return, sales credit note, customer refund, and supplier refund `enforce`; purchase receipt `shadow` pending legacy-client observation.
 
+The direct-product writer compatibility boundary is always active for application/service-role traffic. It is not a tenant mode: supported commands bypass it with their server-controlled posting context, while unknown/old payloads are atomically traced instead of silently changing stock.
+
 ## Installed Production Baseline
 
 Immediately before and after the atomic schema transaction:
@@ -21,6 +23,8 @@ Immediately before and after the atomic schema transaction:
 | Pre-existing negative tracked products | 20, unchanged |
 | New workflow control rows / documents | 0 / 0 |
 | New journal supersession evidence rows at install | 0 |
+
+The 2026-07-12 direct-writer installation preserved the later live baseline exactly at 1,654 products, 2,471 movements, 1,203 adjustments, 2,136 journals, 771 sales invoices, 74 purchase invoices, 732 active sales payments, 71 active purchase payments, and 45 completed operations. An authenticated rollback-only smoke created exactly one temporary operation/adjustment/movement/journal and passed all checkpoints, then left zero rows after rollback. All seven quantity/accounting invariants remained zero.
 
 The pre-release schema snapshot is `/tmp/bikeshop-erp-pre-inventory-release-20260711.sql` on the deployment workstation. No historical correction was executed.
 
@@ -53,6 +57,7 @@ Allowed modes are `disabled`, `shadow`, and `enforce`. Absence of a row is disab
 - For POS/Quick Sale client failure: roll the client back to the previous build. The additive database schema remains compatible; never remove a checkout that already committed.
 - Posted invoices cannot be deleted. Draft deletion remains available; posted corrections use cancellation, return, credit note, payment reversal, or document void. Legacy journal replacement first writes immutable header-and-line evidence.
 - For the sales negative-stock guard: investigate the rejected source. Do not disable it merely to force a sale; use a proven receipt or traced adjustment.
+- For the direct-product compatibility boundary: first stop the legacy writer. Emergency rollback drops `trg_prepare_direct_product_stock_trace`, `trg_00_restore_direct_product_stock_trace`, and `zz_finalize_direct_product_stock_trace`, then restores `trg_track_product_stock_changes` to `after insert or update of stock_quantity`; do not drop operation/movement/journal evidence already committed. Supported adjustment/import/invoice commands are independent of this boundary.
 - Historical repair is never part of operational rollback. It requires a separately approved discrepancy register.
 
 ## Observation Queries

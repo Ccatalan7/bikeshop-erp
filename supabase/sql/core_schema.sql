@@ -35200,5 +35200,6 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260712133000_harden_online_manual_payment_confirmation.sql
 \ir ../migrations/20260712140000_observe_legacy_purchase_receipt_compatibility.sql
 \ir ../migrations/20260712143000_add_credit_balance_cash_settlement.sql
+\ir ../migrations/20260712150000_trace_direct_product_stock_writers.sql
 
 commit;
