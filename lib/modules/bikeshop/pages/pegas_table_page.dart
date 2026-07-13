@@ -7642,7 +7642,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   /// Legacy status color mapping (for backward compatibility)
-  /// Colors match the database seeded values in DEPLOY_JOB_STATUSES.sql
+  /// Colors match the canonical database-seeded legacy status values.
   Color _getLegacyStatusColor(JobStatus status) {
     switch (status) {
       case JobStatus.pendiente:

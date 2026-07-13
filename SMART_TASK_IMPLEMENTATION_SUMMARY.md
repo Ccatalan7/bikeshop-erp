@@ -1,5 +1,9 @@
 # ✅ Smart Task System Implementation Complete
 
+> Historical implementation record. Do not run the archived standalone SQL;
+> current database behavior is governed by `supabase/sql/core_schema.sql` and
+> the forward migration stream.
+
 ## What Was Built
 
 A complete **smart to-do list system** for mechanics working on pegas (mechanic jobs). Tasks automatically sync with pega statuses and track work progress.
@@ -40,12 +44,12 @@ A complete **smart to-do list system** for mechanics working on pegas (mechanic 
 ## 📦 Files Created
 
 ### Database (SQL)
-1. **`DEPLOY_SMART_TASK_SYSTEM.sql`** (362 lines)
+1. **`supabase/manual_checks/archive/DEPLOY_SMART_TASK_SYSTEM.sql`** (historical, 362 lines)
    - Table: `mechanic_job_tasks`
    - 3 triggers for auto-generation and sync
    - RPC function: `get_job_task_summary()`
    - Complete RLS policies
-   - Ready to deploy to Supabase
+   - Retained for provenance; not a current deployment source
 
 2. **`core_schema.sql` updated** (Lines 9427-9726)
    - Integrated into main schema file
@@ -140,12 +144,9 @@ A complete **smart to-do list system** for mechanics working on pegas (mechanic 
 ### Step 1: Deploy Database Schema
 
 ```bash
-# Option A: Deploy standalone file
-# Copy content of DEPLOY_SMART_TASK_SYSTEM.sql
-# Paste into Supabase SQL Editor → Run
-
-# Option B: Deploy full core_schema.sql (includes this + everything else)
-# Run entire core_schema.sql in Supabase SQL Editor
+# Historical standalone rollout is archived and must not be rerun.
+# Use the governed schema/migration workflow documented in
+# docs/development/SUPABASE_WORKFLOW.md.
 ```
 
 ### Step 2: Verify Deployment
@@ -380,7 +381,7 @@ Before considering this complete:
 
 ## 📞 Next Steps
 
-1. **Deploy database** → Run `DEPLOY_SMART_TASK_SYSTEM.sql` in Supabase
+1. **Verify database contract** → Use the governed schema and database tests
 2. **Test SQL** → Follow testing section above
 3. **Register service** → Add to Flutter providers
 4. **Create UI** → Build task list widget for pega detail page
@@ -391,7 +392,7 @@ Before considering this complete:
 
 - **Full guide**: `SMART_TASK_SYSTEM_GUIDE.md` (15KB, 519 lines)
 - **Quick ref**: `SMART_TASK_SYSTEM_QUICKREF.md` (7KB, 223 lines)
-- **SQL deploy**: `DEPLOY_SMART_TASK_SYSTEM.sql` (13KB, 362 lines)
+- **Historical SQL evidence**: `supabase/manual_checks/archive/DEPLOY_SMART_TASK_SYSTEM.sql` (13KB, 362 lines; do not deploy)
 - **Location in core_schema**: Lines 9427-9726
 
 ---

@@ -2,7 +2,7 @@
 -- FIX: Drop rogue trigger that overwrites sales_invoices.items after save
 -- =============================================================================
 -- ROOT CAUSE:
---   FIX_CALENDAR_VIEW_SYNC.sql (deployed previously) created:
+--   manual_checks/archive/FIX_CALENDAR_VIEW_SYNC.sql (deployed previously) created:
 --     trg_mechanic_jobs_sync_invoice_update (statement-level AFTER UPDATE on mechanic_jobs)
 --   This trigger fires AFTER every mechanic_jobs UPDATE and calls sync_job_to_invoice().
 --

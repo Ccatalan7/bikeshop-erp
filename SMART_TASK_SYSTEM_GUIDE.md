@@ -1,5 +1,9 @@
 # Smart Task System for Mechanic Jobs (Pegas)
 
+> Historical guide. The standalone rollout SQL is archived provenance and must
+> not be executed; use the governed schema/migration workflow in
+> `docs/development/SUPABASE_WORKFLOW.md`.
+
 ## Overview
 
 The Smart Task System provides a dynamic to-do list for mechanics working on pegas (mechanic jobs). Tasks are automatically created when parts or services are added to a pega, and they sync with pega statuses to provide real-time workflow tracking.
@@ -437,7 +441,8 @@ print('Progress: ${summary.completionPercentage}%');
 
 ### Step 1: Deploy Database Schema
 
-Copy and run `DEPLOY_SMART_TASK_SYSTEM.sql` in Supabase SQL Editor.
+Do not rerun the archived standalone rollout. Verify/apply the current canonical
+database contract through the governed Supabase workflow.
 
 This will create:
 - `mechanic_job_tasks` table
@@ -530,6 +535,6 @@ For issues or questions:
 ---
 
 **Location in core_schema.sql:** Lines 9427-9726
-**Deployment file:** `DEPLOY_SMART_TASK_SYSTEM.sql`
+**Historical rollout evidence:** `supabase/manual_checks/archive/DEPLOY_SMART_TASK_SYSTEM.sql`
 **Flutter models:** `lib/modules/bikeshop/models/mechanic_job_task.dart`
 **Flutter service:** `lib/modules/bikeshop/services/mechanic_job_task_service.dart`

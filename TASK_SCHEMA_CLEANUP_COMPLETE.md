@@ -106,18 +106,15 @@ WHERE table_name = 'mechanic_job_tasks'
 - ✅ `supabase/sql/core_schema.sql` - Removed lines 9744-9978 (old trigger definitions)
 
 ## Files Created (Reference Only)
-- `FIX_TASK_SCHEMA_CONFLICT.sql` - Standalone migration (not needed now)
-- `EMERGENCY_DROP_TRIGGERS.sql` - Force drop script (only if deployment fails)
+- `supabase/manual_checks/archive/FIX_TASK_SCHEMA_CONFLICT.sql` - Historical standalone rollout (do not run)
+- `supabase/manual_checks/recovery/EMERGENCY_DROP_TRIGGERS.sql` - Quarantined destructive recovery evidence (do not run directly)
 - `TASK_SCHEMA_CLEANUP_COMPLETE.md` - This file
 
 ## If Errors Persist After Deployment
 
-1. **Run EMERGENCY_DROP_TRIGGERS.sql first**:
-```sql
--- Copy EMERGENCY_DROP_TRIGGERS.sql to SQL Editor
--- Run it to force-drop all old triggers
--- Then deploy core_schema.sql
-```
+Do not run the archived emergency script directly. Diagnose current trigger
+state read-only, follow the production incident runbook, take a backup, and use
+the governed schema/migration workflow.
 
 2. **Check trigger list**:
 ```sql

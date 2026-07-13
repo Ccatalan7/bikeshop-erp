@@ -18659,7 +18659,7 @@ create trigger trg_mechanic_job_items_sync_invoice_delete
   referencing old table as old_table
   for each statement execute procedure public.sync_job_items_to_invoice_statement();
 
--- GUARD: Drop rogue trigger from FIX_CALENDAR_VIEW_SYNC.sql that overwrites invoice items
+-- GUARD: Drop rogue trigger from the archived FIX_CALENDAR_VIEW_SYNC.sql rollout that overwrites invoice items
 -- This trigger was created by a standalone patch and causes invoice item loss race condition.
 -- See: supabase/migrations/20260320_drop_rogue_mechanic_jobs_sync_trigger.sql
 drop trigger if exists trg_mechanic_jobs_sync_invoice_update on mechanic_jobs;

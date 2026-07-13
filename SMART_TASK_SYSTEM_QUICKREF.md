@@ -1,5 +1,8 @@
 # Smart Task System - Quick Reference
 
+> Historical quick reference. Do not execute archived deployment SQL; use the
+> current governed Supabase workflow.
+
 ## 📋 What It Does
 
 Automatic to-do list for mechanics working on pegas (mechanic jobs). Tasks auto-create when parts/services are added and sync with pega statuses.
@@ -151,7 +154,7 @@ Container(
 
 | File | Purpose |
 |------|---------|
-| `DEPLOY_SMART_TASK_SYSTEM.sql` | SQL deployment script |
+| `supabase/manual_checks/archive/DEPLOY_SMART_TASK_SYSTEM.sql` | Historical rollout evidence (do not run) |
 | `SMART_TASK_SYSTEM_GUIDE.md` | Full documentation |
 | `lib/modules/bikeshop/models/mechanic_job_task.dart` | Dart model |
 | `lib/modules/bikeshop/services/mechanic_job_task_service.dart` | Dart service |
@@ -174,7 +177,7 @@ SELECT status FROM mechanic_job_tasks WHERE job_id = 'job-id';
 
 ## ✅ Deployment Checklist
 
-- [ ] Run `DEPLOY_SMART_TASK_SYSTEM.sql` in Supabase
+- [ ] Verify the current schema through `docs/development/SUPABASE_WORKFLOW.md`
 - [ ] Verify table created: `SELECT * FROM mechanic_job_tasks LIMIT 1;`
 - [ ] Verify triggers exist: `SELECT tgname FROM pg_trigger WHERE tgname LIKE '%task%';`
 - [ ] Add Flutter models to project
@@ -218,5 +221,5 @@ Check database logs, Flutter console, verify RLS policies working.
 
 ---
 
-**Quick Deploy:** Copy `DEPLOY_SMART_TASK_SYSTEM.sql` → Supabase SQL Editor → Run
+**Deployment:** use the governed schema/migration workflow; the standalone SQL is archived evidence only
 **Quick Test:** Add part to pega → Check `mechanic_job_tasks` table

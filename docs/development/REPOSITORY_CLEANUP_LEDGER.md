@@ -84,9 +84,26 @@ recovery evidence are retained until separately classified.
   diagnostics from quarantined recovery and archived deployment evidence and
   directs hosted reads through the enforced read-only query helper.
 
+### 2026-07-12 — root mutating and historical SQL quarantine
+
+- **Relocated without content changes:** all 74 remaining root SQL files. Fifty-
+  four superseded rollout/schema snapshots now live in
+  `supabase/manual_checks/archive/`; twenty data repair, emergency, reset, and
+  mutating test scripts now live in `supabase/manual_checks/recovery/`.
+- **Safety:** no SQL was executed and no historical SQL body was edited. The
+  recovery directory is explicitly non-authoritative and requires incident,
+  tenant, backup, preview, current-trigger, and before/after review before any
+  use. Archive SQL must never be used as a deployment source.
+- **References:** updated the workshop master schema, historical task-system
+  docs, the rogue-trigger migration/comment, and the one Dart provenance comment
+  so no live documentation points users at a root script or instructs them to
+  paste obsolete SQL into production.
+- **Verification:** all 74 pre/post Git blob hashes match, the repository root
+  contains zero SQL files, paths have no stale consumers, and the focused fast
+  repository gate is required before commit.
+
 ## Retained pending classification
 
-- root deployment/fix/recovery SQL;
 - old/legacy Dart files;
 - one-off Python/Dart mutation scripts and their historical inputs;
 - archived handoff documents whose unique doctrine has not yet been merged.
