@@ -20,6 +20,17 @@ recovery evidence are retained until separately classified.
 - **Verification:** `just verify-fast`, working-tree secret scan, and the full
   database/ERP gates remain required before merge.
 
+### 2026-07-12 — superseded root source mutators
+
+- **Removed:** 22 unreferenced Python/shell/text files that performed literal
+  one-time rewrites of Dart, SVG, or SQL source.
+- **Evidence:** every script had zero callers; each encoded a completed
+  replacement against a specific historical file shape or `/tmp` directory.
+  The only script input (`old_code.txt`) was removed with its sole consumer.
+- **Guard:** root `fix_*`, `update_*`, patch, replacement, and old-code patterns
+  are ignored. Maintained automation must live under `scripts/` and have a
+  documented command and safety contract.
+
 ## Retained pending classification
 
 - root deployment/fix/recovery SQL;

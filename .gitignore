@@ -77,6 +77,13 @@ node_modules/
 /temp_*
 /veryfi_out*.txt
 
+# One-off source mutators belong in reviewed migrations/commits, not repo root.
+/fix_*.py
+/old_code*.txt
+/patch_menu.sh
+/replace_script.py
+/update_*.py
+
 # Local screenshots and diagnostic captures belong outside source control.
 /Screenshots vinabikeProject/
 
