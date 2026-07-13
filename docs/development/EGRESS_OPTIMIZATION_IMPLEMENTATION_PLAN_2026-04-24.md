@@ -4,7 +4,7 @@
 Keep the ERP and public store crisp, snappy, and cheap to operate by making narrow payloads, server-side paging, targeted hydration, and live database verification the default pattern across the app.
 
 This plan continues the work documented in
-[`EGRESS_OPTIMIZATION_HANDOFF_2026-04-23.md`](docs/archive/2026-04/EGRESS_OPTIMIZATION_HANDOFF_2026-04-23.md).
+[`EGRESS_OPTIMIZATION_HANDOFF_2026-04-23.md`](../archive/2026-04/EGRESS_OPTIMIZATION_HANDOFF_2026-04-23.md).
 
 ## Current Baseline
 - Product and customer hot paths are moving to preview-first queries instead of full-row startup loads.

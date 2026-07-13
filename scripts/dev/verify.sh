@@ -12,6 +12,7 @@ mode="${1:-fast}"
 
 bash scripts/dev/check_secrets.sh working
 node -e "JSON.parse(require('fs').readFileSync('toolchain.json')); JSON.parse(require('fs').readFileSync('.fvmrc'))"
+node scripts/ci/check_local_markdown_links.mjs
 bash -n scripts/dev/*.sh scripts/bootstrap/*.sh
 
 if [[ "$mode" == "fast" ]]; then

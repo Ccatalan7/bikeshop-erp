@@ -8,6 +8,7 @@ architecture document, and the current code/schema.
 
 ## Index
 
+- `2025-10/`: historical ad-hoc item rollout report with paused/unimplemented phases.
 - `2025-11/`: historical Smart Tasks fixes, simplification, rollout summary, and task-schema cleanup.
 - `2025-12/`: completed Firebase-domain migration instructions.
 - `2026-01/`: website editor refactor handoff and completed Firebase loading-screen fix.

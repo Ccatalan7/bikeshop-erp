@@ -154,7 +154,7 @@ Read these exact files first, in this order:
 
 If the change touches historical context or prior implementation intent, also read:
 
-- `BIKE_WORKSHOP_CENTRAL_MEMORY_MODEL_2026-04-09.md`
+- `docs/architecture/BIKE_WORKSHOP_CENTRAL_MEMORY_MODEL_2026-04-09.md`
 - `/memories/repo/bike-workshop-central-memory-kernel.md`
 - `/memories/repo/bike-workshop-component-intelligence-correction.md`
 - `/memories/repo/bike-workshop-diagnosis-sheet-layer.md`
@@ -1569,6 +1569,7 @@ Important rule:
 - the brake-first compatibility scorer now consumes the already-existing `category_tech_mappings.technical_family` / `spec_templates.key` bridge as a coarse fallback for live brake families such as `rotor`, `rim_brake`, `hydraulic_disc_brake`, `brake_pad`, `brake_caliper`, and `brake_lever`; detailed `product_spec_values` still remain the stronger within-family refinement layer
 - live production inspection on 2026-04-20 confirmed that this bridge matters because real Viñabike product populations still rely on family-level mappings for categories such as `Pastillas`, `Calipers`, `Manillas`, `Herraduras`, `Rotores`, and `Frenos hidráulicos completos`
 - bike-aware compatibility ranking now flows through the shared mechanic-job line editor, the add-part row, and the legacy task-tab product dialogs: `SmartProductField` carries the same `ProductAutocompleteField` compatibility context for existing rows, and `tasks_tab_view.dart` now resolves the current job's primary bike/profile before opening its add/edit catalog pickers so those older detail/calendar surfaces do not bypass the same advisory ranking path
+- `SmartTaskService` is the sole active mechanic-job task service used by the provider graph, job form, and task tab; the unreferenced pre-three-way-sync `mechanic_job_task_service_legacy.dart` implementation was removed so future work cannot accidentally revive the obsolete model/service contract
 - brake/rim/disc-driven conditional forms are not yet fully implemented
 - bike record visibility is now more kernel-aligned, but some systems such as `cockpit` are still intentional placeholders and the read model is not yet a full schema-driven inspector layer
 
@@ -1916,7 +1917,7 @@ It should not ask the mechanic to restate those facts unless the system is expli
 
 ### Core documentation and memory
 
-- `BIKE_WORKSHOP_CENTRAL_MEMORY_MODEL_2026-04-09.md`
+- `docs/architecture/BIKE_WORKSHOP_CENTRAL_MEMORY_MODEL_2026-04-09.md`
 - `BIKE_WORKSHOP_MASTER_SCHEMA.md` (this file)
 - `/memories/repo/bike-workshop-central-memory-kernel.md`
 - `/memories/repo/bike-workshop-diagnosis-sheet-layer.md`

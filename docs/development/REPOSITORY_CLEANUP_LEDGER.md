@@ -140,9 +140,39 @@ recovery evidence are retained until separately classified.
   no reference to either helper exists, and the fast repository gate is
   required before commit.
 
+### 2026-07-12 — unreachable legacy Dart implementations
+
+- **Removed:** `dynamic_website_page_old.dart`, `public_home_page_old.dart`, and
+  `mechanic_job_task_service_legacy.dart` (2,018 lines / 66,091 bytes).
+- **Evidence:** none had a code import, route, provider, test, or script consumer.
+  The public-store routes use the current pages; mechanic jobs use the provider-
+  registered `SmartTaskService` from both the job form and task tab. Historical
+  handoff mentions remain archived as provenance, not consumers.
+- **Safety:** no live surface, model, database flow, or asset changed. The bike
+  workshop master now explicitly names the canonical task service so agents do
+  not recreate the deleted parallel contract.
+- **Verification:** analyzer/tests and ERP/store builds remain required before
+  this batch is accepted.
+
+### 2026-07-12 — living documentation layout
+
+- **Relocated without content loss:** fifteen active architecture/specification
+  documents to `docs/architecture/`, eleven operator/developer guides to
+  `docs/guides/`, the egress implementation plan to `docs/development/`, and
+  the unreferenced October 2025 ad-hoc rollout report—with explicitly paused
+  phases and links to documents that never existed—to `docs/archive/2025-10/`.
+- **Root contract:** only `README.md`, `AGENTS.md`,
+  `BIKE_WORKSHOP_MASTER_SCHEMA.md`, and
+  `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md` remain as root Markdown because they
+  are repository entry points or mandated workshop doctrine.
+- **References:** updated root pointers, cross-directory archive links, OCR
+  entry points, and archived Smart Tasks provenance. Same-directory architecture
+  and guide links remain valid after their groups moved together.
+- **Verification:** Git rename detection must account for all 28 sources, edits
+  are limited to corrected path references, and the permanent local Markdown
+  link check in `verify-fast` must pass before acceptance.
+
 ## Retained pending classification
 
-- old/legacy Dart files;
-- one-off Dart mutation/entry scripts and their historical inputs;
-- living root architecture/spec/guide documents that still require authority
-  and destination classification.
+- no further deletion candidate is approved; retained entry scripts and living
+  documents now have maintained locations or explicit repository-entry roles.

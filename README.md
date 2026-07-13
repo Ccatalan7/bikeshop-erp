@@ -22,9 +22,9 @@ The app now supports **Optical Character Recognition (OCR)** to automatically ex
 **Technology:** Google ML Kit Text Recognition v2 (free, offline on mobile, optimized for Chilean invoices)
 
 **Documentation:**
-- **User Guide:** `OCR_USER_GUIDE.md`
-- **Developer Guide:** `OCR_IMPLEMENTATION_GUIDE.md`
-- **Quick Reference:** `OCR_QUICK_REFERENCE.md`
+- **User Guide:** `docs/guides/OCR_USER_GUIDE.md`
+- **Developer Guide:** `docs/guides/OCR_IMPLEMENTATION_GUIDE.md`
+- **Quick Reference:** `docs/guides/OCR_QUICK_REFERENCE.md`
 
 **Platforms:** Android, iOS, Web (Desktop support coming soon)
 

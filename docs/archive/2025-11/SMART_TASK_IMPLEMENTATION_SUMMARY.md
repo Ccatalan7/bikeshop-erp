@@ -71,7 +71,7 @@ A complete **smart to-do list system** for mechanics working on pegas (mechanic 
    - Filtering methods (by status, priority, etc.)
 
 ### Documentation
-5. **`SMART_TASK_SYSTEM_GUIDE.md`** (519 lines)
+5. **`docs/guides/SMART_TASK_SYSTEM_GUIDE.md`** (519 lines)
    - Complete system overview
    - Feature descriptions
    - Database schema reference
@@ -81,7 +81,7 @@ A complete **smart to-do list system** for mechanics working on pegas (mechanic 
    - Testing checklist
    - Future enhancements
 
-6. **`SMART_TASK_SYSTEM_QUICKREF.md`** (223 lines)
+6. **`docs/guides/SMART_TASK_SYSTEM_QUICKREF.md`** (223 lines)
    - One-page quick reference
    - Key operations table
    - Common code snippets
@@ -192,7 +192,7 @@ Integrate task list into existing pega detail view:
 Consumer<MechanicJobTaskService>(
   builder: (context, taskService, child) {
     // Show task list, progress bar, etc.
-    // See SMART_TASK_SYSTEM_GUIDE.md for complete examples
+    // See docs/guides/SMART_TASK_SYSTEM_GUIDE.md for complete examples
   },
 )
 ```
@@ -390,8 +390,8 @@ Before considering this complete:
 
 ## 📚 Documentation
 
-- **Full guide**: `SMART_TASK_SYSTEM_GUIDE.md` (15KB, 519 lines)
-- **Quick ref**: `SMART_TASK_SYSTEM_QUICKREF.md` (7KB, 223 lines)
+- **Full guide**: `docs/guides/SMART_TASK_SYSTEM_GUIDE.md` (15KB, 519 lines)
+- **Quick ref**: `docs/guides/SMART_TASK_SYSTEM_QUICKREF.md` (7KB, 223 lines)
 - **Historical SQL evidence**: `supabase/manual_checks/archive/DEPLOY_SMART_TASK_SYSTEM.sql` (13KB, 362 lines; do not deploy)
 - **Location in core_schema**: Lines 9427-9726
 

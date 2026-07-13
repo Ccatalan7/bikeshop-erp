@@ -27,7 +27,7 @@ Reversals, retries, failures, and historical repairs must remain visible and lin
 
 ## Non-Negotiable Guardrails
 
-1. Read `.github/copilot-instructions.md` and `supabase/sql/core_schema.sql` before work. Read `BIKE_WORKSHOP_MASTER_SCHEMA.md` before changing job/invoice behavior.
+1. Read `.github/copilot-instructions.md` and `supabase/sql/core_schema.sql` before work. Read `../../BIKE_WORKSHOP_MASTER_SCHEMA.md` before changing job/invoice behavior.
 2. Inspect first, fix second. Production investigation is read-only and tenant-filtered; when using the SQL Editor interactively, run one query at a time.
 3. Inspect the live definitions with `pg_get_functiondef`, `pg_get_triggerdef`, and `pg_trigger`; do not assume production matches the repository.
 4. Treat `supabase/sql/core_schema.sql` as canonical. Mirror every migration there and keep both forms idempotent. Every standalone SQL file must state deployment status.
@@ -288,7 +288,7 @@ Current safety baseline on 2026-07-12: 704/704 pgTAP assertions across all 38 da
 - [x] Mark migration deployment status only after production verification.
 - [x] Activate gradual purchase receiving: professional receipt ownership for current clients, append-only observation for old untouched-invoice use, and atomic mixed-route rejection.
 - [ ] Observe 7-14 operating days with all receipt-capable workstations updated, then retire the temporary untouched-invoice compatibility bridge only if reviewed evidence is clean.
-- [x] Update `.github/copilot-instructions.md`; update `BIKE_WORKSHOP_MASTER_SCHEMA.md` in the same task when job/invoice data flow changes.
+- [x] Update `.github/copilot-instructions.md`; update `../../BIKE_WORKSHOP_MASTER_SCHEMA.md` in the same task when job/invoice data flow changes.
 
 **Gate P6:** No unexplained shadow/production differences during the agreed observation window.
 

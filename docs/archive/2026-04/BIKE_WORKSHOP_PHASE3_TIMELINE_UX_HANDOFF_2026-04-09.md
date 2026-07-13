@@ -8,7 +8,7 @@ It should not be treated as the full UX target for workshop intelligence.
 
 The stronger target is a `Sistemas`-style surface with clickable bicycle systems, current installed parts, and measurement evolution per system.
 
-Use this handoff together with [BIKE_WORKSHOP_PHASE3_COMPONENT_INTELLIGENCE_SPEC_2026-04-09.md](BIKE_WORKSHOP_PHASE3_COMPONENT_INTELLIGENCE_SPEC_2026-04-09.md).
+Use this handoff together with [BIKE_WORKSHOP_PHASE3_COMPONENT_INTELLIGENCE_SPEC_2026-04-09.md](../../architecture/BIKE_WORKSHOP_PHASE3_COMPONENT_INTELLIGENCE_SPEC_2026-04-09.md).
 
 ## Handoff Signatures
 

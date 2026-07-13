@@ -15,6 +15,7 @@
     "doctor": "bash scripts/dev/doctor.sh",
     "verify:fast": "bash scripts/dev/verify.sh fast",
     "verify": "bash scripts/dev/verify.sh full",
+    "docs:links": "node scripts/ci/check_local_markdown_links.mjs",
     "secret:staged": "bash scripts/dev/check_secrets.sh staged",
     "secret:working": "bash scripts/dev/check_secrets.sh working",
     "db:test": "bash scripts/reset_local_supabase.sh",
