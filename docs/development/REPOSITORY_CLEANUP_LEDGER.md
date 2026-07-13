@@ -59,16 +59,17 @@ recovery evidence are retained until separately classified.
   preview-only. No Netlify consumer was found.
 - **Changed:** removed `netlify.toml` and replaced the obsolete Vercel Flutter
   build configuration with an explicit supported `ignoreCommand` retirement
-  marker so the still-connected external project skips every build.
-- **Remaining owner action:** disconnect/archive the Vercel Git integration when
-  convenient; the marker prevents its failing build from competing with the
-  governed Firebase preview pipeline meanwhile.
+  marker while the external integration was being retired.
+- **External retirement completed:** disconnected the exact
+  `ccatalan7s-projects/vinabike-erp` project from
+  `Ccatalan7/bikeshop-erp` through Vercel CLI on 2026-07-12. The provider
+  confirmed that repository pushes will no longer create Vercel deployments.
+  Removed the temporary retirement marker afterward; Firebase remains the only
+  repository-controlled hosting path.
 
 ## Retained pending classification
 
 - root deployment/fix/recovery SQL;
 - old/legacy Dart files;
 - one-off Python/Dart mutation scripts and their historical inputs;
-- external Vercel project disconnection after the repository retirement marker
-  is observed as a skipped build;
 - archived handoff documents whose unique doctrine has not yet been merged.
