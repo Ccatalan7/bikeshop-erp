@@ -31,7 +31,7 @@ jobs:
       group: production-store-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2

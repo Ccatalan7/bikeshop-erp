@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'assets/**'
-      - 'lib/**'
-      - 'packages/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
-      - 'windows/**'
-      - 'windows_notification_stub/**'
-      - '.github/workflows/windows-release.yml'
-      - 'scripts/install_vinabike_erp.ps1'
+      - "assets/**"
+      - "lib/**"
+      - "packages/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "windows/**"
+      - "windows_notification_stub/**"
+      - ".github/workflows/windows-release.yml"
+      - "scripts/install_vinabike_erp.ps1"
   workflow_dispatch:
 
 permissions:
@@ -35,13 +35,13 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
-          channel: 'stable'
+          flutter-version: "3.38.5"
+          channel: "stable"
           cache: true
 
       - name: Show Flutter toolchain
