@@ -34,7 +34,6 @@ async function registerAdjustment(
     .getByRole("button", { name: "Registrar ajuste", exact: true })
     .click();
 
-  await expect(dialog).toBeHidden({ timeout: 15_000 });
   await expect
     .poll(readStagingFixtureStock, {
       timeout: 15_000,

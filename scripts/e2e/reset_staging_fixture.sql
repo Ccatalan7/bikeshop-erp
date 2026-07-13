@@ -112,4 +112,87 @@ begin
 end
 $$;
 
+delete from public.sales_payments
+where invoice_id = 'e2e00000-0000-4000-8000-000000000201'
+  and tenant_id = 'e2e00000-0000-4000-8000-000000000001';
+
+insert into public.sales_invoices (
+  id, tenant_id, invoice_number, customer_name, date, due_date, reference,
+  status, subtotal, iva_amount, total, paid_amount, balance, items,
+  tax_treatment, net_amount, source, created_by
+)
+select
+  'e2e00000-0000-4000-8000-000000000201',
+  'e2e00000-0000-4000-8000-000000000001',
+  'E2E-PAY-ROUNDING',
+  'Cliente E2E - Pago reversible',
+  now(),
+  now() + interval '30 days',
+  '[E2E] Partial whole-peso payment reversal',
+  'confirmed',
+  9000,
+  0,
+  9000,
+  0,
+  9000,
+  jsonb_build_array(jsonb_build_object(
+    'product_name', 'Servicio E2E sin movimiento de stock',
+    'description', 'Fixture sintético para pagos parciales',
+    'is_catalog_product', false,
+    'quantity', 1,
+    'unit_price', 9000,
+    'discount', 0,
+    'line_total', 9000,
+    'cost', 0,
+    'purchase_treatment', 'expense',
+    'is_service', true
+  )),
+  'no_tax',
+  9000,
+  'manual_sale',
+  user_account.id
+from auth.users user_account
+where lower(user_account.email) = lower('e2e-agent@staging.vinabike.invalid')
+on conflict (id) do update
+set invoice_number = excluded.invoice_number,
+    customer_name = excluded.customer_name,
+    date = excluded.date,
+    due_date = excluded.due_date,
+    reference = excluded.reference,
+    status = excluded.status,
+    subtotal = excluded.subtotal,
+    iva_amount = excluded.iva_amount,
+    total = excluded.total,
+    paid_amount = excluded.paid_amount,
+    balance = excluded.balance,
+    items = excluded.items,
+    tax_treatment = excluded.tax_treatment,
+    net_amount = excluded.net_amount,
+    source = excluded.source,
+    created_by = excluded.created_by
+where sales_invoices.tenant_id = excluded.tenant_id;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.sales_invoices invoice
+    where invoice.id = 'e2e00000-0000-4000-8000-000000000201'
+      and invoice.tenant_id = 'e2e00000-0000-4000-8000-000000000001'
+      and invoice.status = 'confirmed'
+      and invoice.total = 9000
+      and invoice.paid_amount = 0
+      and invoice.balance = 9000
+      and not exists (
+        select 1
+        from public.sales_payments payment
+        where payment.invoice_id = invoice.id
+          and payment.deleted_at is null
+      )
+  ) then
+    raise exception 'E2E payment fixture reset did not restore the unpaid baseline';
+  end if;
+end
+$$;
+
 commit;

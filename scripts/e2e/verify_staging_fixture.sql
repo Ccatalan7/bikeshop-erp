@@ -95,5 +95,39 @@ from evidence
 \echo 'Verified E2E stock 10 -> 9 -> 10 with balanced journals and complete traces.'
 \else
 \echo 'E2E inventory/accounting verification failed.'
-\quit 1
+select 1 / 0;
+\endif
+
+select
+  invoice.status = 'confirmed'
+    and invoice.total = 9000
+    and invoice.paid_amount = 0
+    and invoice.balance = 9000
+    and not exists (
+      select 1
+      from public.sales_payments payment
+      where payment.invoice_id = invoice.id
+        and payment.deleted_at is null
+    )
+    and not exists (
+      select 1
+      from public.journal_entries entry
+      where entry.source_module = 'sales_payments'
+        and entry.source_reference in (
+          select operation.document_id::text
+          from public.inventory_accounting_operations operation
+          where operation.document_type = 'sales_payment'
+            and operation.context->>'invoice_id' = invoice.id::text
+        )
+    ) as passed
+from public.sales_invoices invoice
+where invoice.id = 'e2e00000-0000-4000-8000-000000000201'
+  and invoice.tenant_id = 'e2e00000-0000-4000-8000-000000000001'
+\gset payment_
+
+\if :payment_passed
+\echo 'Verified E2E payment baseline: CLP 9,000 unpaid with no residual payment journal.'
+\else
+\echo 'E2E payment/accounting cleanup verification failed.'
+select 1 / 0;
 \endif
