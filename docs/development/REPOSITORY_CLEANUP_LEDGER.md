@@ -102,8 +102,23 @@ recovery evidence are retained until separately classified.
   contains zero SQL files, paths have no stale consumers, and the focused fast
   repository gate is required before commit.
 
+### 2026-07-12 — dated handoff archive
+
+- **Relocated without content changes:** eleven explicit handoff documents from
+  the repository root into `docs/archive/2026-01` through `2026-06`, based on
+  their recorded date or original Git creation date.
+- **References:** updated the three living documents that linked to moved
+  handoffs and added `docs/archive/README.md` as the archive index and safety
+  contract.
+- **Safety:** archived context remains searchable and attributable, but is
+  explicitly non-authoritative so old SQL/deployment instructions cannot be
+  mistaken for current operating procedure.
+- **Verification:** all eleven Git blob hashes are unchanged after relocation,
+  no handoff remains at repository root, and no old root link remains.
+
 ## Retained pending classification
 
 - old/legacy Dart files;
 - one-off Python/Dart mutation scripts and their historical inputs;
-- archived handoff documents whose unique doctrine has not yet been merged.
+- undated implementation/completion documents whose current doctrine has not
+  yet been classified.
