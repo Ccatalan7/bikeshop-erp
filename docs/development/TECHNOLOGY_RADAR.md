@@ -10,7 +10,7 @@ Last reviewed: 2026-07-12
 | Adopt | just | One cross-platform project command surface | Recipes and doctor proven on Mac; Windows proof pending |
 | Adopt | Gitleaks | Reject newly committed credentials | Local and GitHub checks active; review quarterly |
 | Adopt | actions/checkout v7 + setup-node v6 | Use supported Node 24 GitHub Action runtimes | Official v7.0.0/v6.4.0 releases reviewed; workflows upgraded after CI deprecation warnings |
-| Trial | Playwright | Browser workflow regression on Firebase preview/staging | Pinned; critical E2E suite pending |
+| Adopt | Playwright | Browser workflow regression on Firebase preview/staging | Pinned; navigation plus first deterministic mutating inventory/accounting journey proven locally and enforced in preview CI; expand the remaining document/payment matrix |
 | Trial | New Supabase publishable/secret keys | Replace legacy JWT keys without breaking Edge Functions | Staging migration pending |
 | Hold | Direct production deployment helpers | Bypass governed promotion and rollback evidence | Replace before further use |
 | Retire | Tracked venv/cache/screenshot archives | Generated or personal state, not source | Removed from Git tracking in cleanup batch 1 |

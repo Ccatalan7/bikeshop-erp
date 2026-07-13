@@ -64,6 +64,14 @@ fi
 if [[ "$environment" == staging && "$write" == true && "${VINABIKE_DB_WRITE_CONFIRM:-}" != staging ]]; then
   die "Staging writes require VINABIKE_DB_WRITE_CONFIRM=staging"
 fi
+if [[ "$environment" == staging && "$write" == true ]]; then
+  production_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"
+  staging_ref="${PGUSER#postgres.}"
+  [[ -n "$production_ref" && -n "$staging_ref" ]] ||
+    die "Cannot prove staging and production project identities"
+  [[ "$staging_ref" != "$production_ref" ]] ||
+    die "Staging project ref matches production; refusing write"
+fi
 
 if [[ -n "$file" ]]; then
   [[ -f "$file" ]] || die "SQL file not found: $file"

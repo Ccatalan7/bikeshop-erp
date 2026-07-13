@@ -38,4 +38,10 @@ export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:4173}"
 export E2E_EMAIL="$e2e_email"
 export E2E_PASSWORD="$e2e_password"
 
-exec npm run e2e
+VINABIKE_DB_WRITE_CONFIRM=staging bash scripts/db/query.sh staging \
+  --file scripts/e2e/reset_staging_fixture.sql --write
+
+npm run e2e -- "$@"
+
+bash scripts/db/query.sh staging \
+  --file scripts/e2e/verify_staging_fixture.sql
