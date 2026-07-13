@@ -62,7 +62,8 @@ db-drift left="local" right="staging":
 
 db-staging-schema-gate:
     #!/usr/bin/env bash
-    exec bash scripts/db/staging_schema_gate.sh
+    echo "Staging schema gate is suspended: staging is not production-authoritative." >&2
+    exit 64
 
 db-smoke environment="staging":
     #!/usr/bin/env bash
@@ -74,7 +75,8 @@ db-health environment="local":
 
 e2e:
     #!/usr/bin/env bash
-    exec bash scripts/e2e/run_staging.sh
+    echo "Staging E2E is suspended: staging is not production-authoritative." >&2
+    exit 64
 
 build-erp:
     #!/usr/bin/env bash

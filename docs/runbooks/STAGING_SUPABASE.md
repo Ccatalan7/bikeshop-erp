@@ -1,10 +1,30 @@
-# Supabase Staging Operating Contract
+# Supabase Staging Operating Contract — Suspended
+
+> **Current status (2026-07-13): non-authoritative.** Live read-only
+> manifests proved that this project matches the repository bootstrap but not
+> the production database, including material inventory/accounting drift.
+> Automated staging tests and staging-based release claims are suspended.
+> Do not spend time reconciling or rebuilding staging unless the owner
+> explicitly reactivates that project.
 
 Staging exists to prevent database, trigger, RLS, Edge Function, inventory, payment, and accounting mistakes from reaching production. It stays deliberately small: one hosted schema, synthetic fixtures, critical workflow smoke checks, and no copy of production customer/business data.
 
-## Mandatory use
+## Current use
 
-Use staging before production when a change affects:
+- Do not run `just e2e`, fixture resets, schema gates, or database mutation
+  tests against staging as part of normal development or CI.
+- Do not treat a staging pass as evidence of production behavior.
+- Keep the project isolated and dormant. It may be used for explicitly labeled
+  experiments, but its results are diagnostic only.
+- Use affected Flutter/unit tests, application builds, targeted SQL contract
+  review, and authenticated read-only production checks. Any production
+  mutation still requires an independently reviewed deployment and rollback
+  plan; automated tests must never mutate production.
+
+## Historical intended use (not active)
+
+The project was originally intended for use before production when a change
+affected:
 
 - tables, columns, constraints, indexes, functions, views, triggers, RLS or migrations;
 - invoice/payment/status transitions, stock movement sources, journals, returns, credit notes or receiving;
