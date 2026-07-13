@@ -68,6 +68,10 @@ db-smoke environment="staging":
     #!/usr/bin/env bash
     exec bash scripts/db/smoke.sh "{{environment}}"
 
+db-health environment="local":
+    #!/usr/bin/env bash
+    exec bash scripts/db/health.sh "{{environment}}"
+
 e2e:
     #!/usr/bin/env bash
     exec npm run e2e

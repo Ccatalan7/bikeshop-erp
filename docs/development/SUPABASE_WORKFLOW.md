@@ -42,3 +42,5 @@ Production mutation, repair, migration, and deployment remain separate reviewed 
 `just db-fingerprint local|staging|production` returns deterministic public-schema component counts and hashes without copying schema definitions into agent output. The hosted staging application gate requires `VINABIKE_STAGING_SCHEMA_CONFIRM=staging just db-staging-schema-gate`; it refuses the production ref, captures verbose SQL outside Git, and proves that tenant/product/document/movement/journal row counts did not change.
 
 `just db-drift local staging` and `just db-drift local production` compare application-owned columns, constraints, indexes, functions, views, and triggers. They print only a short summary/preview and keep the complete manifests and diff under ignored `.tmp/db/`. Set `VINABIKE_DRIFT_FAIL=1` when drift must fail CI.
+
+`just db-health production` runs the read-only professional inventory/accounting invariant dashboard. Critical violations fail the command; warnings such as ledger-reconciled historical negative stock remain visible for operational review and are never auto-corrected.

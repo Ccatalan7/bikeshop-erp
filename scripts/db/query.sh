@@ -88,7 +88,7 @@ fi
 sql="${sql%;}"
 original_sql="$sql"
 if [[ "$environment" != local && "$write" == false ]]; then
-  if printf '%s\n' "$sql" | rg -i '\b(begin|commit|rollback|end|set\s+transaction)\b' >/dev/null; then
+  if printf '%s\n' "$sql" | rg -i '(^|;)[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)' >/dev/null; then
     die "Remote read-only SQL cannot manage transactions"
   fi
   sql="begin read only; set local statement_timeout = '30s'; $sql; rollback"

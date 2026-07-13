@@ -23,39 +23,51 @@ function readManifest(path) {
 
 const left = readManifest(leftPath);
 const right = readManifest(rightPath);
-const components = new Set([...left.values(), ...right.values()].map((row) => row.component));
-const summary = [];
-const examples = {missing: [], extra: [], changed: []};
+const criticalPattern = /(stock|inventory|product|sales_(invoice|payment|return|credit)|purchase_(invoice|payment|receipt|return|credit)|journal|accounting|mechanic_job|operation_trace|checkpoint)/i;
 
-for (const component of [...components].sort()) {
-  const counts = {component, missing: 0, extra: 0, changed: 0};
-  for (const [key, row] of left) {
-    if (row.component !== component) continue;
-    const candidate = right.get(key);
-    if (!candidate) {
-      counts.missing += 1;
-      if (examples.missing.length < 10) examples.missing.push(`${component}: ${row.identity}`);
-    } else if (candidate.hash !== row.hash) {
-      counts.changed += 1;
-      if (examples.changed.length < 10) examples.changed.push(`${component}: ${row.identity}`);
+function compare(filter = () => true) {
+  const components = new Set([...left.values(), ...right.values()].filter(filter).map((row) => row.component));
+  const summary = [];
+  const examples = {missing: [], extra: [], changed: []};
+  for (const component of [...components].sort()) {
+    const counts = {component, missing: 0, extra: 0, changed: 0};
+    for (const [key, row] of left) {
+      if (row.component !== component || !filter(row)) continue;
+      const candidate = right.get(key);
+      if (!candidate) {
+        counts.missing += 1;
+        if (examples.missing.length < 10) examples.missing.push(`${component}: ${row.identity}`);
+      } else if (candidate.hash !== row.hash) {
+        counts.changed += 1;
+        if (examples.changed.length < 10) examples.changed.push(`${component}: ${row.identity}`);
+      }
     }
+    for (const [key, row] of right) {
+      if (row.component !== component || !filter(row) || left.has(key)) continue;
+      counts.extra += 1;
+      if (examples.extra.length < 10) examples.extra.push(`${component}: ${row.identity}`);
+    }
+    summary.push(counts);
   }
-  for (const [key, row] of right) {
-    if (row.component !== component || left.has(key)) continue;
-    counts.extra += 1;
-    if (examples.extra.length < 10) examples.extra.push(`${component}: ${row.identity}`);
-  }
-  summary.push(counts);
+  return {summary, examples};
 }
 
-console.log(`Application schema drift: ${leftName} → ${rightName}`);
-console.log('component\tmissing\textra\tchanged');
-for (const row of summary) console.log(`${row.component}\t${row.missing}\t${row.extra}\t${row.changed}`);
-for (const [kind, values] of Object.entries(examples)) {
-  if (!values.length) continue;
-  console.log(`\n${kind} examples:`);
-  for (const value of values) console.log(`- ${value}`);
+function printComparison(title, comparison) {
+  console.log(title);
+  console.log('component\tmissing\textra\tchanged');
+  for (const row of comparison.summary) console.log(`${row.component}\t${row.missing}\t${row.extra}\t${row.changed}`);
+  for (const [kind, values] of Object.entries(comparison.examples)) {
+    if (!values.length) continue;
+    console.log(`\n${kind} examples:`);
+    for (const value of values) console.log(`- ${value}`);
+  }
 }
 
-const drifted = summary.some((row) => row.missing || row.extra || row.changed);
+const all = compare();
+const critical = compare((row) => criticalPattern.test(row.identity));
+printComparison(`Application schema drift: ${leftName} → ${rightName}`, all);
+console.log('');
+printComparison('Critical inventory/accounting kernel subset', critical);
+
+const drifted = all.summary.some((row) => row.missing || row.extra || row.changed);
 process.exitCode = drifted ? 2 : 0;
