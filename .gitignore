@@ -62,6 +62,21 @@ node_modules/
 /playwright-report/
 /test-results/
 
+# Root one-off analysis/debug outputs (source fixtures belong under test/fixtures).
+/all_models.json
+/available_models.json
+/edit_target*.txt
+/*_debug.json
+/manual_import_failures.csv
+/missing_products_comparison*.csv
+/models.json
+/one_embedding.json
+/patch[0-9]*.js
+/query_embedding.json
+/rewrite_filters.patch
+/temp_*
+/veryfi_out*.txt
+
 # Local screenshots and diagnostic captures belong outside source control.
 /Screenshots vinabikeProject/
 

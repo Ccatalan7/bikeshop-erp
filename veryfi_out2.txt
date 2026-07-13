@@ -1,9 +1,0 @@
---- Standard ---
-Status: 401
-Error: {"status": "fail", "message": "Not Authorized"}
---- Standard lowercase ---
-Status: 401
-Error: {"status": "fail", "message": "Not Authorized"}
---- Secret as apikey ---
-Status: 401
-Error: {"status": "fail", "message": "Not Authorized"}
