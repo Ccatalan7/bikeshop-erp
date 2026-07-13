@@ -6,17 +6,17 @@ on:
     branches:
       - main
     paths:
-      - 'lib/**'
-      - 'web/**'
-      - 'assets/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
-      - 'analysis_options.yaml'
-      - 'firebase.json'
-      - 'scripts/generate_product_seo_snapshots.dart'
-      - 'scripts/generated_product_redirects.json'
-      - '.firebaserc'
-      - '.github/workflows/firebase-hosting-store.yml'
+      - "lib/**"
+      - "web/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "analysis_options.yaml"
+      - "firebase.json"
+      - "scripts/generate_product_seo_snapshots.dart"
+      - "scripts/generated_product_redirects.json"
+      - ".firebaserc"
+      - ".github/workflows/firebase-hosting-store.yml"
   workflow_dispatch:
 
 jobs:
@@ -36,14 +36,25 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
-          channel: 'stable'
+          flutter-version: "3.38.5"
+          channel: "stable"
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build storefront release
-        run: flutter build web --release --pwa-strategy=none -t lib/main_store.dart -o build/web_store
+        run: |
+          flutter build web --release --pwa-strategy=none \
+            --dart-define=VINABIKE_BUILD_TAG=${{ github.sha }} \
+            -t lib/main_store.dart -o build/web_store
+          jq -n \
+            --arg commit "${{ github.sha }}" \
+            --arg run "${{ github.run_id }}" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{commit: $commit, run: $run, built_at: $built_at, target: "store"}' \
+            > build/web_store/release.json
+          sha256sum build/web_store/main.dart.js build/web_store/release.json \
+            > build/web_store/release.sha256
 
       - name: Generate SEO snapshots, sitemap, and product redirects
         env:
@@ -62,6 +73,16 @@ jobs:
           test -s build/web_store/robots.txt
           node -e "const f=require('./firebase.json'); const s=f.hosting.find(x=>x.target==='store'); if (!s.redirects?.length) process.exit(1)"
 
+      - name: Retain storefront release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-release-evidence-${{ github.sha }}
+          path: |
+            build/web_store/release.json
+            build/web_store/release.sha256
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Deploy store target
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -70,3 +91,10 @@ jobs:
           channelId: live
           target: store
           projectId: project-vinabike
+
+      - name: Verify exact live storefront commit
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            -H 'Cache-Control: no-cache' \
+            "https://vinabike-store.web.app/release.json?commit=${{ github.sha }}" \
+            | jq -e --arg commit "${{ github.sha }}" '.commit == $commit'

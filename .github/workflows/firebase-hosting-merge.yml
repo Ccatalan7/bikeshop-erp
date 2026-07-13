@@ -19,19 +19,40 @@ jobs:
     environment: Production
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
-          channel: 'stable'
-      
+          flutter-version: "3.38.5"
+          channel: "stable"
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Build web release
-        run: flutter build web --release --no-wasm-dry-run -t lib/main.dart -o build/web_erp
-        
+        run: |
+          flutter build web --release --no-wasm-dry-run \
+            --dart-define=VINABIKE_BUILD_TAG=${{ github.sha }} \
+            -t lib/main.dart -o build/web_erp
+          jq -n \
+            --arg commit "${{ github.sha }}" \
+            --arg run "${{ github.run_id }}" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{commit: $commit, run: $run, built_at: $built_at, target: "erp"}' \
+            > build/web_erp/release.json
+          sha256sum build/web_erp/main.dart.js build/web_erp/release.json \
+            > build/web_erp/release.sha256
+
+      - name: Retain ERP release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-release-evidence-${{ github.sha }}
+          path: |
+            build/web_erp/release.json
+            build/web_erp/release.sha256
+          if-no-files-found: error
+          retention-days: 30
+
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -39,3 +60,15 @@ jobs:
           channelId: live
           target: erp
           projectId: project-vinabike
+
+      - name: Verify exact live ERP commit
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            -H 'Cache-Control: no-cache' \
+            "https://project-vinabike.web.app/release.json?commit=${{ github.sha }}" \
+            | jq -e --arg commit "${{ github.sha }}" '.commit == $commit'
+
+      - name: Verify read-only production ERP invariants
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bash scripts/db/health.sh production

@@ -17,7 +17,7 @@ This ledger records completed gates without redefining the original scope.
 | 2 — Reproducible workstations | In progress | Pinned tool manifest, FVM/Volta/uv contracts, unified `just` commands, Mac/Windows bootstrap, and doctor scripts implemented. Mac doctor passes; clean-Windows proof remains. |
 | 3 — Staging/database | In progress | Lean staging contract is mandatory; canonical hosted apply passed with unchanged business counts; local/staging application drift is zero; first-pass view idempotency and included-SQL cache invalidation are regression-tested. Browser discovery restored a missing dashboard RPC contract. Production/canonical historical drift remains classified but unresolved. |
 | 4 — Test ladder | In progress | Secret and ERP integrity workflows exist; the complete 724-assertion pgTAP suite passes; a staging-wired Playwright gate signs in and verifies routed inventory movements, sales invoices, and purchase invoices. Mutating browser journeys and native coverage remain. |
-| 5 — Releases/rollback | Pending | Current workflows inventoried; governed promotion and rollback evidence remain. |
+| 5 — Releases/rollback | In progress | Firebase web releases now embed/retain commit and checksum evidence, verify the exact live commit, and run post-deploy read-only ERP invariants. A practiced rollback and signing completion remain. |
 | 6 — Repository cleanup | In progress | Confirmed caches, virtual environments, logs, and screenshot archives are being removed from Git while preserved locally. SQL/script/doc provenance batches remain. |
 | 7 — Technology radar | In progress | Dependabot coverage, upgrade policy, living radar, and weekly issue automation are implemented. First scheduled run and controlled trial evidence remain. |
 
