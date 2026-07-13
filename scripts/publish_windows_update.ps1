@@ -164,6 +164,89 @@ function Get-WindowsWorkflowRuns {
     }
 }
 
+function Assert-ProductionReleaseBranch {
+    param([string]$Branch)
+
+    Write-Step "Checking Production release permission for branch: $Branch"
+
+    $environmentJson = gh api `
+        repos/Ccatalan7/bikeshop-erp/environments/Production
+    $environment = $environmentJson | ConvertFrom-Json
+    $policy = Get-ObjectProperty $environment 'deployment_branch_policy'
+
+    if ($null -eq $policy) {
+        Write-Host 'Production has no deployment branch restriction.'
+        return
+    }
+
+    $protectedBranchesOnly = Get-ObjectProperty $policy 'protected_branches'
+    if ($protectedBranchesOnly -eq $true) {
+        $escapedBranch = [uri]::EscapeDataString($Branch)
+        $branchJson = gh api "repos/Ccatalan7/bikeshop-erp/branches/$escapedBranch"
+        $branchDetails = $branchJson | ConvertFrom-Json
+        if ((Get-ObjectProperty $branchDetails 'protected') -ne $true) {
+            throw "Branch '$Branch' is not authorized by the Production environment. The Windows build was not started."
+        }
+
+        Write-Host 'Branch is protected and authorized for Production.'
+        return
+    }
+
+    $customPolicies = Get-ObjectProperty $policy 'custom_branch_policies'
+    if ($customPolicies -eq $true) {
+        $policiesJson = gh api --method GET `
+            repos/Ccatalan7/bikeshop-erp/environments/Production/deployment-branch-policies `
+            -f per_page=100
+        $policiesResponse = $policiesJson | ConvertFrom-Json
+        $policies = @(Get-ObjectProperty $policiesResponse 'branch_policies')
+
+        foreach ($branchPolicy in $policies) {
+            $policyType = Get-ObjectProperty $branchPolicy 'type'
+            $pattern = [string](Get-ObjectProperty $branchPolicy 'name')
+            if (($null -eq $policyType -or $policyType -eq 'branch') -and $Branch -like $pattern) {
+                Write-Host "Branch is authorized by Production policy '$pattern'."
+                return
+            }
+        }
+
+        throw "Branch '$Branch' is not authorized by the Production environment. The Windows build was not started."
+    }
+}
+
+function Show-WorkflowFailureDiagnostics {
+    param([string]$RunId)
+
+    try {
+        $jobsJson = gh api "repos/Ccatalan7/bikeshop-erp/actions/runs/$RunId/jobs"
+        $jobsResponse = $jobsJson | ConvertFrom-Json
+        $failedJobs = @(
+            (Get-ObjectProperty $jobsResponse 'jobs') |
+                Where-Object { (Get-ObjectProperty $_ 'conclusion') -eq 'failure' }
+        )
+
+        foreach ($job in $failedJobs) {
+            $jobId = Get-ObjectProperty $job 'id'
+            $jobName = Get-ObjectProperty $job 'name'
+            Write-Host "Failed job: $jobName"
+            if ($null -eq $jobId) {
+                continue
+            }
+
+            $annotationsJson = gh api `
+                "repos/Ccatalan7/bikeshop-erp/check-runs/$jobId/annotations"
+            $annotations = @($annotationsJson | ConvertFrom-Json)
+            foreach ($annotation in $annotations) {
+                $message = Get-ObjectProperty $annotation 'message'
+                if (-not [string]::IsNullOrWhiteSpace([string]$message)) {
+                    Write-Host "  $message"
+                }
+            }
+        }
+    } catch {
+        Write-Host "Could not load detailed failure diagnostics: $($_.Exception.Message)"
+    }
+}
+
 function Find-TriggeredWorkflowRun {
     param(
         [string]$Branch,
@@ -222,6 +305,8 @@ $branch = (git branch --show-current).Trim()
 if ([string]::IsNullOrWhiteSpace($branch)) {
     throw 'Could not determine the current Git branch.'
 }
+
+Assert-ProductionReleaseBranch -Branch $branch
 
 Write-Step 'Staging all Source Control changes'
 git add -A
@@ -329,6 +414,7 @@ do {
 
 if ($conclusion -ne 'success') {
     $viewUrl = Get-ObjectProperty $view 'url'
+    Show-WorkflowFailureDiagnostics -RunId $runId
     throw "Windows release workflow failed: $viewUrl"
 }
 

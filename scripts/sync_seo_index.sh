@@ -3,7 +3,7 @@
 # Sync SEO Settings from Supabase to index.html before deployment
 # This script reads SEO settings from the database and updates web/index.html
 #
-# Usage: ./scripts/sync_seo_index.sh
+# Usage: ./scripts/sync_seo_index.sh [--check]
 # Called automatically by the deploy workflow
 
 set -e
@@ -11,29 +11,89 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INDEX_FILE="$PROJECT_ROOT/web/index.html"
+CHECK_ONLY=false
+
+if [[ "${1:-}" == "--check" ]]; then
+  CHECK_ONLY=true
+elif [[ $# -gt 0 ]]; then
+  echo "Usage: $0 [--check]" >&2
+  exit 64
+fi
 
 # Supabase configuration
 SUPABASE_URL="https://xzdvtzdqjeyqxnkqprtf.supabase.co"
-SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 TENANT_ID="5443b130-cc28-45af-a420-cd500b288890"  # Viñabike production
 
-if [[ -z "$SUPABASE_ANON_KEY" ]]; then
-  echo "SUPABASE_ANON_KEY is required" >&2
+resolve_supabase_api_key() {
+  local key="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+
+  if [[ -n "$key" ]]; then
+    SUPABASE_API_KEY="$key"
+    SUPABASE_API_KEY_SOURCE="environment"
+    return 0
+  fi
+
+  if command -v security >/dev/null 2>&1; then
+    key="$(security find-generic-password \
+      -s 'Vinabike ERP Supabase publishable key' \
+      -a supabase -w 2>/dev/null || true)"
+    if [[ -n "$key" ]]; then
+      SUPABASE_API_KEY="$key"
+      SUPABASE_API_KEY_SOURCE="macOS Keychain"
+      return 0
+    fi
+  fi
+
+  if command -v supabase >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    key="$(supabase projects api-keys \
+      --project-ref xzdvtzdqjeyqxnkqprtf \
+      --output json 2>/dev/null \
+      | jq -r '[.[] | select(.type == "publishable") | .api_key][0] // empty')"
+    if [[ -n "$key" ]]; then
+      SUPABASE_API_KEY="$key"
+      SUPABASE_API_KEY_SOURCE="authenticated Supabase CLI"
+      return 0
+    fi
+  fi
+
+  echo "Could not load the Supabase publishable key." >&2
+  echo "Set SUPABASE_PUBLISHABLE_KEY, sign in with Supabase CLI, or install the documented OS credential." >&2
   exit 64
-fi
+}
+
+for required_command in curl jq; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    echo "$required_command is required for the SEO sync." >&2
+    exit 127
+  fi
+done
+
+resolve_supabase_api_key
 
 echo "🔄 Syncing SEO settings from Supabase to index.html..."
 
 # Fetch SEO settings from Supabase
-SETTINGS=$(curl -s "${SUPABASE_URL}/rest/v1/website_settings?tenant_id=eq.${TENANT_ID}&select=key,value" \
-  -H "apikey: ${SUPABASE_ANON_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+SETTINGS=$(curl --fail --show-error --silent \
+  "${SUPABASE_URL}/rest/v1/website_settings?tenant_id=eq.${TENANT_ID}&select=key,value" \
+  -H "apikey: ${SUPABASE_API_KEY}")
+
+if ! echo "$SETTINGS" | jq -e 'type == "array" and length > 0' >/dev/null; then
+  echo "Supabase returned no usable SEO settings; index.html was not changed." >&2
+  exit 65
+fi
+
+if [[ "$CHECK_ONLY" == true ]]; then
+  SETTINGS_COUNT=$(echo "$SETTINGS" | jq 'length')
+  echo "✅ SEO sync preflight passed (${SETTINGS_COUNT} settings via ${SUPABASE_API_KEY_SOURCE})."
+  exit 0
+fi
 
 # Parse settings using jq (with fallbacks)
 get_setting() {
   local key=$1
   local default=$2
-  local value=$(echo "$SETTINGS" | jq -r ".[] | select(.key == \"$key\") | .value // empty" 2>/dev/null)
+  local value
+  value=$(echo "$SETTINGS" | jq -r ".[] | select(.key == \"$key\") | .value // empty" 2>/dev/null)
   echo "${value:-$default}"
 }
 

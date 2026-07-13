@@ -25,6 +25,16 @@ Pulls SEO settings from Supabase and regenerates index.html with correct data.
 ./scripts/sync_seo_index.sh
 ```
 
+The script loads the public Supabase key without embedding it in the repo. It
+accepts `SUPABASE_PUBLISHABLE_KEY` (or the legacy `SUPABASE_ANON_KEY`), then
+falls back to the documented macOS Keychain entry or the authenticated
+Supabase CLI. To verify credentials and database access without changing
+`web/index.html`, run:
+
+```bash
+./scripts/sync_seo_index.sh --check
+```
+
 ### 2. Build the Store (Optimized - MUST USE main_store.dart!)
 // turbo
 Build the public store with the lightweight entry point.
