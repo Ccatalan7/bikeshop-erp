@@ -57,6 +57,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
   String? _error;
   List<Employee> _employees = [];
   List<_PlannedShift> _shifts = [];
+  List<_PlannedShift> _cancelledShifts = [];
   List<_StorePeriod> _storePeriods = [];
   List<_PlanningRole> _roles = [];
   List<_ShiftChangeRequest> _requests = [];
@@ -220,9 +221,17 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
       }
       if (!mounted) return;
 
+      final visibleShifts = shifts
+          .where((shift) => shift.status != 'cancelled')
+          .toList(growable: false);
+      final cancelledShifts = shifts
+          .where((shift) => shift.status == 'cancelled')
+          .toList(growable: false);
+
       setState(() {
         _employees = employees;
-        _shifts = shifts;
+        _shifts = visibleShifts;
+        _cancelledShifts = cancelledShifts;
         _storePeriods = storePeriods;
         _roles = results[3] as List<_PlanningRole>;
         _requests = results[4] as List<_ShiftChangeRequest>;
@@ -423,7 +432,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
       };
       final generatedShifts = await _generateDefaultShiftsForWeek(
         tenantId: tenantId,
-        existingShifts: _shifts,
+        existingShifts: [..._shifts, ..._cancelledShifts],
         defaultBlocks: defaultBlocks
             .where((block) => activeEmployeeIds.contains(block.employeeId))
             .toList(),
@@ -492,8 +501,13 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
       );
 
       final hasOverlap = workingShifts.any((shift) {
-        if (shift.status == 'cancelled') return false;
         if (shift.employeeId != block.employeeId) return false;
+
+        final isSameDefaultOccurrence = shift.source == 'default_schedule' &&
+            shift.startAt.isAtSameMomentAs(startAt) &&
+            shift.endAt.isAtSameMomentAs(endAt);
+        if (isSameDefaultOccurrence) return true;
+        if (shift.status == 'cancelled') return false;
         return shift.startAt.isBefore(endAt) && shift.endAt.isAfter(startAt);
       });
       if (hasOverlap) continue;
@@ -523,6 +537,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
         _PlannedShift(
           id: 'pending-default-${block.id}-${day.toIso8601String()}',
           employeeId: block.employeeId,
+          source: 'default_schedule',
           roleId: block.planningRoleId,
           startAt: startAt,
           endAt: endAt,
@@ -1004,17 +1019,29 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
   }
 
   Future<void> _deleteShift(_PlannedShift shift) async {
+    final employee = _employees.where((item) => item.id == shift.employeeId);
+    final workerName =
+        employee.isEmpty ? 'este trabajador' : employee.first.fullName;
+    final start = _toPlanningDisplayTimeZone(shift.startAt, _displayTimeZone);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Eliminar turno'),
-        content: const Text('Esta accion elimina el turno planificado.'),
+        content: Text(
+          'Se eliminará el turno de $workerName del '
+          '${_formatDate(start)} a las ${_formatTime(start)}. '
+          'Esta acción no se puede deshacer.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Eliminar'),
           ),
@@ -1024,8 +1051,24 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
     if (confirmed != true) return;
 
     try {
-      await _supabase.from('planned_shifts').delete().eq('id', shift.id);
+      final deleted = await _supabase
+          .from('planned_shifts')
+          .update({
+            'status': 'cancelled',
+            'updated_by': _supabase.auth.currentUser?.id,
+          })
+          .eq('id', shift.id)
+          .select('id')
+          .maybeSingle();
+      if (deleted == null) {
+        throw Exception(
+            'El turno no existe o no tienes permiso para eliminarlo');
+      }
       await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Turno eliminado')),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1299,6 +1342,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
                       storePeriod: _storePeriodForDay(day),
                       displayTimeZone: _displayTimeZone,
                       onCreateShift: () => _openNewShiftDialog(initialDay: day),
+                      onEditShift: _openEditShiftDialog,
                       onPublishShift: _publishShift,
                       onCancelShift: _cancelShift,
                       onDeleteShift: _deleteShift,
@@ -1395,10 +1439,13 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
 
   Widget _buildSummaryRow(BuildContext context) {
     final theme = Theme.of(context);
+    final activeShifts = _shifts
+        .where((shift) => shift.status != 'cancelled')
+        .toList(growable: false);
     final published =
-        _shifts.where((shift) => shift.status == 'published').length;
-    final draft = _shifts.where((shift) => shift.status == 'draft').length;
-    final plannedMinutes = _shifts.fold<int>(
+        activeShifts.where((shift) => shift.status == 'published').length;
+    final draft = activeShifts.where((shift) => shift.status == 'draft').length;
+    final plannedMinutes = activeShifts.fold<int>(
       0,
       (sum, shift) => sum + shift.endAt.difference(shift.startAt).inMinutes,
     );
@@ -1415,7 +1462,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
         _MetricTile(
           icon: Icons.event_available_outlined,
           label: 'Turnos semana',
-          value: _shifts.length.toString(),
+          value: activeShifts.length.toString(),
         ),
         _MetricTile(
           icon: Icons.publish_outlined,
@@ -4221,6 +4268,7 @@ class _DayColumn extends StatelessWidget {
     required this.storePeriod,
     required this.displayTimeZone,
     required this.onCreateShift,
+    required this.onEditShift,
     required this.onPublishShift,
     required this.onCancelShift,
     required this.onDeleteShift,
@@ -4232,6 +4280,7 @@ class _DayColumn extends StatelessWidget {
   final _StorePeriod? storePeriod;
   final PlanningDisplayTimeZone displayTimeZone;
   final VoidCallback onCreateShift;
+  final ValueChanged<_PlannedShift> onEditShift;
   final ValueChanged<_PlannedShift> onPublishShift;
   final ValueChanged<_PlannedShift> onCancelShift;
   final ValueChanged<_PlannedShift> onDeleteShift;
@@ -4301,6 +4350,7 @@ class _DayColumn extends StatelessWidget {
                     shift: shift,
                     employee: employeeById[shift.employeeId],
                     displayTimeZone: displayTimeZone,
+                    onEdit: () => onEditShift(shift),
                     onPublish: () => onPublishShift(shift),
                     onCancel: () => onCancelShift(shift),
                     onDelete: () => onDeleteShift(shift),
@@ -4361,6 +4411,7 @@ class _ShiftCard extends StatelessWidget {
     required this.shift,
     required this.employee,
     required this.displayTimeZone,
+    required this.onEdit,
     required this.onPublish,
     required this.onCancel,
     required this.onDelete,
@@ -4369,6 +4420,7 @@ class _ShiftCard extends StatelessWidget {
   final _PlannedShift shift;
   final Employee? employee;
   final PlanningDisplayTimeZone displayTimeZone;
+  final VoidCallback onEdit;
   final VoidCallback onPublish;
   final VoidCallback onCancel;
   final VoidCallback onDelete;
@@ -4402,11 +4454,16 @@ class _ShiftCard extends StatelessWidget {
                 PopupMenuButton<String>(
                   tooltip: 'Acciones',
                   onSelected: (value) {
+                    if (value == 'edit') onEdit();
                     if (value == 'publish') onPublish();
                     if (value == 'cancel') onCancel();
                     if (value == 'delete') onDelete();
                   },
                   itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Editar'),
+                    ),
                     if (shift.status == 'draft')
                       const PopupMenuItem(
                         value: 'publish',
@@ -4848,6 +4905,7 @@ class _PlannedShift {
     required this.endAt,
     required this.status,
     this.employeeId,
+    this.source = 'manual',
     this.roleId,
     this.roleName,
     this.roleColor,
@@ -4859,6 +4917,7 @@ class _PlannedShift {
 
   final String id;
   final String? employeeId;
+  final String source;
   final String? roleId;
   final DateTime startAt;
   final DateTime endAt;
@@ -4888,6 +4947,7 @@ class _PlannedShift {
       startAt: startAt ?? this.startAt,
       endAt: endAt ?? this.endAt,
       status: status ?? this.status,
+      source: source,
       roleName:
           identical(roleName, _unchanged) ? this.roleName : roleName as String?,
       roleColor: identical(roleColor, _unchanged)
@@ -4908,6 +4968,7 @@ class _PlannedShift {
     return _PlannedShift(
       id: map['id']?.toString() ?? '',
       employeeId: map['employee_id']?.toString(),
+      source: map['source']?.toString() ?? 'manual',
       roleId: map['planning_role_id']?.toString(),
       startAt: DateTime.parse(map['start_at'].toString()),
       endAt: DateTime.parse(map['end_at'].toString()),

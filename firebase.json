@@ -2031,6 +2031,11 @@
           "type": 301
         },
         {
+          "source": "/productos/3459d2f7-33cd-447c-86f2-68b58975f694",
+          "destination": "/productos/maxxis-alambre-27-5x2-25-rekon-race/7293",
+          "type": 301
+        },
+        {
           "source": "/productos/349116a7-048d-4919-bdfb-309eed70a4a8",
           "destination": "/productos/tija-sillin-carbono-27-2-400mm-toseek/AE0211",
           "type": 301
@@ -3298,6 +3303,11 @@
         {
           "source": "/productos/5c9f71b5-0765-42cd-ae72-1cd1dd3638e2",
           "destination": "/productos/manubrio-mtb-zoom-31-8mm-x-780mm/18973",
+          "type": 301
+        },
+        {
+          "source": "/productos/5caacb95-3346-4dcb-9d11-98c13909a939",
+          "destination": "/productos/pastillas-frenos-deore-xt-ezmtb/GZ0011",
           "type": 301
         },
         {
