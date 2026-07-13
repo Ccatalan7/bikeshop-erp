@@ -23,6 +23,31 @@ insert into public.sales_invoices(id,tenant_id,invoice_number,customer_name,stat
 values('99700000-0000-4000-8000-000000000010','99700000-0000-4000-8000-000000000001','FV-Q-001','Inspection Customer','draft',10000,10000,0,10000,10000,'no_tax',
 jsonb_build_array(jsonb_build_object('line_id','q-line','product_id','99700000-0000-4000-8000-000000000002','product_name','Inspection Set','product_sku','Q-SET','quantity',2,'unit_price',5000,'price',5000,'cost',3000,'purchase_treatment','inventory','is_service',false)));
 update public.sales_invoices set status='confirmed' where id='99700000-0000-4000-8000-000000000010';
+insert into public.sales_payments(
+  tenant_id,
+  invoice_id,
+  payment_method_id,
+  idempotency_key,
+  amount,
+  tax_treatment,
+  net_amount,
+  iva_amount,
+  date
+)
+select
+  '99700000-0000-4000-8000-000000000001',
+  '99700000-0000-4000-8000-000000000010',
+  id,
+  'quarantine-return-payment',
+  10000,
+  'no_tax',
+  10000,
+  0,
+  now()
+from public.payment_methods
+where tenant_id = '99700000-0000-4000-8000-000000000001'
+order by created_at
+limit 1;
 insert into public.sales_return_control_settings(tenant_id,control_mode,activated_at,activated_by)
 values('99700000-0000-4000-8000-000000000001','enforce',now(),'99700000-0000-4000-8000-000000000099');
 
