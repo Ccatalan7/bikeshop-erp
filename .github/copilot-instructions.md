@@ -2925,6 +2925,7 @@ Current external follow-up:
 - Step 1 of `/deploy_to_firebase` workflow
 - Must run BEFORE `flutter build web`
 - Use `./scripts/sync_seo_index.sh --check` to verify credential resolution and live read access without modifying `web/index.html`
+- `scripts/deploy.sh` and `scripts/deploy.ps1` must resolve `SUPABASE_SECRET_KEY` before either expensive Flutter build, then pass it only to `generate_product_seo_snapshots.dart`; do not reintroduce a late post-build credential failure or embed the key in a build define
 
 **API used:**
 ```bash

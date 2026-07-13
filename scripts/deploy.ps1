@@ -1,5 +1,42 @@
 $ErrorActionPreference = "Stop"
 
+function Resolve-SupabaseSecretKey {
+    if (-not [string]::IsNullOrWhiteSpace($env:SUPABASE_SECRET_KEY)) {
+        return $env:SUPABASE_SECRET_KEY
+    }
+
+    if (Test-Path -LiteralPath '.env') {
+        $secretLine = Get-Content -LiteralPath '.env' |
+            Where-Object { $_ -match '^\s*SUPABASE_SECRET_KEY\s*=' } |
+            Select-Object -First 1
+        if ($secretLine) {
+            $key = ($secretLine -split '=', 2)[1].Trim().Trim('"').Trim("'")
+            if (-not [string]::IsNullOrWhiteSpace($key)) {
+                return $key
+            }
+        }
+    }
+
+    if (Get-Command supabase -ErrorAction SilentlyContinue) {
+        $keysJson = supabase projects api-keys `
+            --project-ref xzdvtzdqjeyqxnkqprtf `
+            --reveal --output json 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $keys = @($keysJson | ConvertFrom-Json)
+            $secret = @($keys | Where-Object { $_.type -eq 'secret' }) |
+                Select-Object -First 1
+            if ($secret -and -not [string]::IsNullOrWhiteSpace($secret.api_key)) {
+                return $secret.api_key
+            }
+        }
+    }
+
+    throw 'Could not load SUPABASE_SECRET_KEY from the environment, .env, or authenticated Supabase CLI.'
+}
+
+# Fail before the expensive web builds when snapshot access is unavailable.
+$env:SUPABASE_SECRET_KEY = Resolve-SupabaseSecretKey
+
 Write-Host "Syncing SEO index..."
 # Run the shell script using bash if available, or just skip if it's simple replacements
 # Since it's a .sh file, likely needs bash. Git Bash is usually available.

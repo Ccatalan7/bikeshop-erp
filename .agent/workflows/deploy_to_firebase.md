@@ -35,6 +35,16 @@ Supabase CLI. To verify credentials and database access without changing
 ./scripts/sync_seo_index.sh --check
 ```
 
+The deploy launcher also resolves `SUPABASE_SECRET_KEY` before starting either
+Flutter build, because the product snapshot generator needs privileged catalog
+read access. macOS uses the documented Keychain entry with an authenticated
+Supabase CLI fallback; Windows accepts the process environment or ignored
+`.env`, then falls back to its authenticated Supabase CLI. The key is never
+printed or passed as a Dart define.
+
+Run `bash scripts/deploy.sh --check` for a fast preflight of both credentials
+before launching the full build/deploy task.
+
 ### 2. Build the Store (Optimized - MUST USE main_store.dart!)
 // turbo
 Build the public store with the lightweight entry point.
