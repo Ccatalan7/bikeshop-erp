@@ -128,9 +128,21 @@ recovery evidence are retained until separately classified.
 - **Verification:** all eight Git blob hashes are unchanged, each source had zero
   repository consumers, and the archive index records the added periods.
 
+### 2026-07-12 — completed stock-page rewrite helpers
+
+- **Removed:** `scripts/fix_purchase_inline.py` and
+  `scripts/fix_chilean_utils.py` (1,698 bytes total).
+- **Evidence:** both files had zero consumers and existed only to perform literal
+  one-time rewrites against `stock_movements_page.dart`; the second corrected a
+  duplicate token introduced by the first. Neither was a maintained test,
+  migration, build tool, or runtime input.
+- **Verification:** the target Dart source remains untouched by this cleanup,
+  no reference to either helper exists, and the fast repository gate is
+  required before commit.
+
 ## Retained pending classification
 
 - old/legacy Dart files;
-- one-off Python/Dart mutation scripts and their historical inputs;
+- one-off Dart mutation/entry scripts and their historical inputs;
 - living root architecture/spec/guide documents that still require authority
   and destination classification.
