@@ -12,7 +12,20 @@ ensure_docker
 mode="${1:-reuse}"
 schema="$DB_ROOT/supabase/sql/core_schema.sql"
 hash_file="$DB_CACHE_DIR/core-schema.sha256"
-current_hash="$(sha256_file "$schema")"
+schema_inputs_manifest="$DB_CACHE_DIR/core-schema-inputs.sha256"
+
+{
+  printf '%s  %s\n' "$(sha256_file "$schema")" "${schema#"$DB_ROOT/"}"
+  while IFS= read -r relative_path; do
+    included_path="$(dirname "$schema")/$relative_path"
+    [[ -f "$included_path" ]] || die "Canonical schema include is missing: $relative_path"
+    printf '%s  %s\n' \
+      "$(sha256_file "$included_path")" \
+      "${included_path#"$DB_ROOT/"}"
+  done < <(sed -n 's/^[[:space:]]*\\ir[[:space:]]\{1,\}\(.*\)$/\1/p' "$schema")
+} >"$schema_inputs_manifest"
+
+current_hash="$(sha256_file "$schema_inputs_manifest")"
 
 supabase status >/dev/null 2>&1 || supabase db start >/dev/null
 db_url="$(local_db_url)"

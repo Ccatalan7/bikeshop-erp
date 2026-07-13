@@ -35206,5 +35206,9 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260712163000_complete_correction_checkpoint_contracts.sql
 \ir ../migrations/20260712170000_require_posted_sales_corrections.sql
 \ir ../migrations/20260712210000_stabilize_products_with_sets_view.sql
+-- Dashboard expense drill-down existed as a historical migration but was
+-- missing from the canonical fresh-schema snapshot.
+\ir ../migrations/20260122000002_get_period_details.sql
+\ir ../migrations/20260712220000_fix_expense_period_details_contract.sql
 
 commit;

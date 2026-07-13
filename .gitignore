@@ -59,6 +59,8 @@ node_modules/
 .pub/
 /build/
 /coverage/
+/playwright-report/
+/test-results/
 
 # Local screenshots and diagnostic captures belong outside source control.
 /Screenshots vinabikeProject/

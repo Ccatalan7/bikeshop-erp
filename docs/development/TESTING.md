@@ -19,6 +19,9 @@ Verification is risk-based. Repeating every test after every file is wasteful; s
 - Run one full gate per coherent batch, not after each edit.
 - A failed targeted test must be understood before widening the test scope.
 - Browser exploration is discovery; convert a confirmed regression into a repeatable test.
+- `just e2e` is the repeatable staging browser gate. It always compiles
+  `lib/main.dart` (ERP, not the storefront), disables the service worker to
+  prevent stale test artifacts, and serves clean routes with the local SPA server.
 - Production smoke checks are authenticated and non-destructive.
 - Database tests use disposable local/staging data and must refuse the production project reference.
 - CI artifacts may retain screenshots/traces; personal screenshots do not belong in Git.

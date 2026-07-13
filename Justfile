@@ -74,7 +74,7 @@ db-health environment="local":
 
 e2e:
     #!/usr/bin/env bash
-    exec npm run e2e
+    exec bash scripts/e2e/run_staging.sh
 
 build-erp:
     #!/usr/bin/env bash

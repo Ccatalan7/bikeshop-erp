@@ -24,7 +24,19 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release --no-wasm-dry-run -t lib/main.dart -o build/web_erp
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Build staging-wired ERP and run browser smoke
+        env:
+          SUPABASE_STAGING_URL: ${{ vars.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_STAGING_PUBLISHABLE_KEY }}
+          E2E_EMAIL: ${{ vars.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: bash scripts/e2e/run_staging.sh
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

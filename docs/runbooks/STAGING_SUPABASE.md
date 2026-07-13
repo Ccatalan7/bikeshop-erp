@@ -31,6 +31,9 @@ Pure documentation, isolated formatting, and unit-tested UI changes do not requi
 5. Apply the smallest migration to staging. Use the complete schema gate only when establishing/recovering staging or proving canonical idempotency.
 6. Run `just db-drift local staging`; application-owned drift must be zero or explicitly explained.
 7. Run `just db-smoke staging` and the relevant synthetic workflow journey.
+   For routed ERP smoke coverage, run `just e2e`; it builds the ERP entry point
+   against staging, signs in with the synthetic staff account, and verifies the
+   inventory movements, sales invoices, and purchase invoices surfaces.
 8. Compare business counts and targeted inventory/accounting invariants after the change.
 9. Save the commit, migration, checks, timestamp and rollback reference in the deployment record.
 
@@ -47,6 +50,10 @@ Pure documentation, isolated formatting, and unit-tested UI changes do not requi
 - Tests must be rerunnable and clean up in their transaction or deterministic fixture reset.
 - Never import production customer names, emails, phone numbers, invoices, messages or credentials.
 - Browser automation uses a limited staging-only account, never the owner/coworker login.
+- On macOS, the browser account password and staging publishable key come from
+  Keychain. In CI they come only from the protected `staging` environment.
+- PR previews are built against staging, never the default production Supabase
+  URL embedded in the application fallback configuration.
 
 ## Evidence required for inventory/accounting work
 
