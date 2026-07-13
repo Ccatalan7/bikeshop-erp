@@ -67,6 +67,23 @@ recovery evidence are retained until separately classified.
   Removed the temporary retirement marker afterward; Firebase remains the only
   repository-controlled hosting path.
 
+### 2026-07-12 — root SQL diagnostics and terminal captures
+
+- **Relocated:** seven reusable, read-only accounting/workshop diagnostics from
+  the repository root to `supabase/manual_checks/diagnostics/`, with descriptive
+  names and unchanged SQL content.
+- **Removed:** ten unreferenced files / 43,142 bytes: two pasted `psql` table
+  captures that were not valid SQL, five hard-coded tenant investigation probes,
+  two one-line scratch checks (one invalid), and one generically named WhatsApp
+  scratch query.
+- **Evidence:** every removed file had zero repository consumers; the retained
+  diagnostics were checked for mutating statements before relocation. Mutating
+  recovery, test-data, and historical deployment SQL remains pending rather
+  than being bulk-deleted.
+- **Guard:** `supabase/manual_checks/README.md` now separates read-only
+  diagnostics from quarantined recovery and archived deployment evidence and
+  directs hosted reads through the enforced read-only query helper.
+
 ## Retained pending classification
 
 - root deployment/fix/recovery SQL;
