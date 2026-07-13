@@ -9,7 +9,7 @@ Last reviewed: 2026-07-12
 | Adopt | uv + Python 3.12 | Lock and recreate invoice-parser service | Import smoke passed; review monthly |
 | Adopt | just | One cross-platform project command surface | Recipes and doctor proven on Mac; Windows proof pending |
 | Adopt | Gitleaks | Reject newly committed credentials | Local and GitHub checks active; review quarterly |
-| Adopt | actions/checkout v7 | Use the supported Node 24 GitHub Action runtime | Official v7.0.0 release reviewed; all workflows upgraded after CI deprecation warning |
+| Adopt | actions/checkout v7 + setup-node v6 | Use supported Node 24 GitHub Action runtimes | Official v7.0.0/v6.4.0 releases reviewed; workflows upgraded after CI deprecation warnings |
 | Trial | Playwright | Browser workflow regression on Firebase preview/staging | Pinned; critical E2E suite pending |
 | Trial | New Supabase publishable/secret keys | Replace legacy JWT keys without breaking Edge Functions | Staging migration pending |
 | Hold | Direct production deployment helpers | Bypass governed promotion and rollback evidence | Replace before further use |

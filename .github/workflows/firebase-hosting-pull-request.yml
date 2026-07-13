@@ -24,7 +24,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "24.18.0"
           cache: npm
@@ -41,4 +41,5 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROJECT_VINABIKE }}
+          target: erp
           projectId: project-vinabike
