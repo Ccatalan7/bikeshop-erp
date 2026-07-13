@@ -51,11 +51,24 @@ recovery evidence are retained until separately classified.
 - **Guard:** root check/test probes are ignored. Maintained verification belongs
   in `test/`, `supabase/tests/`, or a documented read-only script directory.
 
+### 2026-07-12 — inactive hosting configurations
+
+- **Verified:** `vinabike.cl` resolves to Firebase Hosting and `www` points to
+  `vinabike-store.web.app`; repository workflows deploy Firebase ERP/store.
+  Vercel's last production deployment was 2025-10-16 and current activity is
+  preview-only. No Netlify consumer was found.
+- **Changed:** removed `netlify.toml` and replaced the obsolete Vercel Flutter
+  build configuration with an explicit supported `ignoreCommand` retirement
+  marker so the still-connected external project skips every build.
+- **Remaining owner action:** disconnect/archive the Vercel Git integration when
+  convenient; the marker prevents its failing build from competing with the
+  governed Firebase preview pipeline meanwhile.
+
 ## Retained pending classification
 
 - root deployment/fix/recovery SQL;
 - old/legacy Dart files;
 - one-off Python/Dart mutation scripts and their historical inputs;
-- Vercel/Netlify configuration while external integration/DNS provenance is
-  being confirmed;
+- external Vercel project disconnection after the repository retirement marker
+  is observed as a skipped build;
 - archived handoff documents whose unique doctrine has not yet been merged.
