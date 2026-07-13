@@ -11,6 +11,16 @@
 
 The bootstrap installs missing packages from `Brewfile` without broadly upgrading installed packages. It configures pinned Node/npm through Volta, pinned Flutter through FVM, the Python parser through uv, and a Colima Docker runtime when no runtime is active.
 
+If VS Code reports that the project's `.fvm/...` path is not a valid SDK immediately
+after a pull, run the lightweight repair instead of the full bootstrap:
+
+```bash
+bash scripts/bootstrap/ensure_flutter_sdk_macos.sh
+```
+
+Then reload the VS Code window. This activates the version from `.fvmrc` and
+runs `flutter pub get`; it does not change application or business data.
+
 ## Authentication
 
 Use interactive provider logins and the macOS Keychain:

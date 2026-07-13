@@ -54,6 +54,11 @@ or enabling it, reload the editor window so stale TypeScript problems are cleare
 
 ## 📝 Troubleshooting
 
+**Issue**: the project's `.fvm/...` path is not a valid SDK after pulling on macOS
+- Run `bash scripts/bootstrap/ensure_flutter_sdk_macos.sh`, or select `Terminal → Run Task → 🧰 Repair Flutter SDK (macOS)`.
+- Reload the VS Code window after it finishes.
+- Never put another user's absolute `/Users/...` Flutter path in shared settings.
+
 **Issue**: Auto-login not working
 - Verify credentials are correct in `launch.json`
 - Check console for: `✅ [AuthService] Auto-login successful!`
