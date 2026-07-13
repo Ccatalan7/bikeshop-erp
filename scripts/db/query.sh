@@ -78,7 +78,7 @@ if [[ -n "$file" ]]; then
   if [[ "$format" != table ]]; then
     sql="$(<"$file")"
   elif [[ "$environment" != local && "$write" == false ]]; then
-    if rg -n -i '^\s*(begin|commit|rollback|end|set\s+transaction)\b' "$file" >/dev/null; then
+    if grep -Eiq '^[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)' "$file"; then
       die "Remote read-only SQL files cannot manage transactions"
     fi
     {
@@ -96,7 +96,7 @@ fi
 sql="${sql%;}"
 original_sql="$sql"
 if [[ "$environment" != local && "$write" == false ]]; then
-  if printf '%s\n' "$sql" | rg -i '(^|;)[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)' >/dev/null; then
+  if printf '%s\n' "$sql" | grep -Eiq '(^|;)[[:space:]]*(begin|commit|rollback|end|set[[:space:]]+transaction)([[:space:];]|$)'; then
     die "Remote read-only SQL cannot manage transactions"
   fi
   sql="begin read only; set local statement_timeout = '30s'; $sql; rollback"

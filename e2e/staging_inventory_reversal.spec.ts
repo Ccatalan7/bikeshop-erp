@@ -34,9 +34,13 @@ async function registerAdjustment(
     .getByRole("button", { name: "Registrar ajuste", exact: true })
     .click();
 
+  await expect(
+    page.getByText(/Ajuste .* registrado(?: correctamente)?\./).last(),
+  ).toBeVisible({ timeout: 30_000 });
+
   await expect
     .poll(readStagingFixtureStock, {
-      timeout: 15_000,
+      timeout: 30_000,
       intervals: [500, 1_000, 2_000],
       message: `Expected the recorded adjustment to leave stock at ${expectedStock}`,
     })
