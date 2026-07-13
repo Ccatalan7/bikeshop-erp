@@ -35210,5 +35210,6 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- missing from the canonical fresh-schema snapshot.
 \ir ../migrations/20260122000002_get_period_details.sql
 \ir ../migrations/20260712220000_fix_expense_period_details_contract.sql
+\ir ../migrations/20260713101500_restore_staff_negative_stock_sales.sql
 
 commit;

@@ -820,6 +820,15 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       }
       return;
     }
+    final negativeStockWarnings = newStatus == InvoiceStatus.confirmed
+        ? await _salesService.previewNegativeStock(
+            _loadedInvoice?.items ??
+                _lineEntries
+                    .map((entry) => entry.toInvoiceItem())
+                    .toList(growable: false),
+          )
+        : const <SalesNegativeStockWarning>[];
+    if (!mounted) return;
     // 🚀 UNIFIED ATOMIC SAVE: We set the new status locally and then call _saveInvoice
     // This ensures that BOTH the new items AND the new status are sent in a single
     // transaction to the database, eliminating race conditions with triggers.
@@ -846,8 +855,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Factura marcada como ${newStatus.name}'),
-          backgroundColor: Colors.green,
+          content: Text(negativeStockWarnings.isEmpty
+              ? 'Factura marcada como ${newStatus.name}'
+              : formatSalesNegativeStockWarning(negativeStockWarnings)),
+          backgroundColor: negativeStockWarnings.isEmpty
+              ? Colors.green
+              : Colors.orange.shade800,
         ),
       );
     } catch (e) {
@@ -2329,11 +2342,27 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         LineColumn(
           width: _colQuantityWidth,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: TextField(
-            controller: entry.quantityController,
-            enabled: _canEditFields,
-            textAlign: TextAlign.center,
-            decoration: const InputDecoration(border: InputBorder.none),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextField(
+                controller: entry.quantityController,
+                enabled: _canEditFields,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(border: InputBorder.none),
+              ),
+              if (entry.product != null &&
+                  !entry.product!.isService &&
+                  entry.product!.trackStock &&
+                  entry.product!.stockQuantity < entry.line.quantity)
+                Text(
+                  'Quedará en ${(entry.product!.stockQuantity - entry.line.quantity).toInt()}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.orange.shade800,
+                    fontSize: 10,
+                  ),
+                ),
+            ],
           ),
         ),
         LineColumn(

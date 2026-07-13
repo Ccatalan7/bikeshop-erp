@@ -6,10 +6,34 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../../shared/models/tax_treatment.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../../accounting/widgets/accounting_dashboard_section.dart';
 import '../models/sales_models.dart';
+
+@immutable
+class SalesNegativeStockWarning {
+  const SalesNegativeStockWarning({
+    required this.productName,
+    required this.projectedStock,
+  });
+
+  final String productName;
+  final int projectedStock;
+}
+
+String formatSalesNegativeStockWarning(
+  List<SalesNegativeStockWarning> warnings,
+) {
+  final visible = warnings
+      .take(2)
+      .map((warning) => '${warning.productName} (${warning.projectedStock})')
+      .join(', ');
+  final remaining = warnings.length - 2;
+  return 'Factura confirmada. Stock negativo: $visible'
+      '${remaining > 0 ? ' y $remaining más' : ''}.';
+}
 
 class SalesService extends ChangeNotifier {
   static const _invoicesCollection = 'sales_invoices';
@@ -51,6 +75,65 @@ class SalesService extends ChangeNotifier {
       _payments.isNotEmpty && _paymentsCacheTime != null;
   bool get isInvoicesCacheFresh => _isCacheValid(_invoicesCacheTime);
   bool get isPaymentsCacheFresh => _isCacheValid(_paymentsCacheTime);
+
+  /// Non-blocking staff-sales warning. Database posting remains authoritative
+  /// and records the exact negative balance in the normal movement/trace flow.
+  Future<List<SalesNegativeStockWarning>> previewNegativeStock(
+    List<InvoiceItem> items,
+  ) async {
+    final requestedByProduct = <String, int>{};
+    for (final item in items) {
+      final productId = item.productId;
+      if (productId == null ||
+          !item.isCatalogProduct ||
+          item.isService ||
+          item.purchaseTreatment != PurchaseTreatment.inventory) {
+        continue;
+      }
+      final quantity = item.quantity.round();
+      if (quantity <= 0) continue;
+      requestedByProduct.update(
+        productId,
+        (current) => current + quantity,
+        ifAbsent: () => quantity,
+      );
+    }
+    if (requestedByProduct.isEmpty) return const [];
+
+    late final List<Map<String, dynamic>> products;
+    try {
+      products = await _databaseService.select(
+        'products',
+        selectColumns:
+            'id,name,inventory_qty,stock_quantity,track_stock,is_service',
+        where: 'id',
+        whereIn: requestedByProduct.keys.toList(growable: false),
+      );
+    } catch (error) {
+      debugPrint('Negative-stock preview unavailable (non-blocking): $error');
+      return const [];
+    }
+    final warnings = <SalesNegativeStockWarning>[];
+    for (final product in products) {
+      if (product['track_stock'] == false || product['is_service'] == true) {
+        continue;
+      }
+      final productId = product['id']?.toString();
+      final requested = requestedByProduct[productId];
+      if (productId == null || requested == null) continue;
+      final current = (product['inventory_qty'] as num?)?.round() ??
+          (product['stock_quantity'] as num?)?.round() ??
+          0;
+      final projected = current - requested;
+      if (projected < 0) {
+        warnings.add(SalesNegativeStockWarning(
+          productName: product['name']?.toString() ?? 'Producto',
+          projectedStock: projected,
+        ));
+      }
+    }
+    return warnings;
+  }
 
   /// Check if cache is still valid
   bool _isCacheValid(DateTime? cacheTime) {

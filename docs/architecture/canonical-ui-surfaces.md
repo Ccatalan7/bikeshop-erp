@@ -38,6 +38,11 @@ layouts are separate surfaces even when they display the same record.
 - `confirmed` / `overdue`: financial credit note only;
 - `paid`: financial credit note and physical customer return.
 
+Sales invoice confirmation on the list preview, full page, and embedded editor
+uses `SalesService.previewNegativeStock`: staff posting is never blocked by a
+negative projection, while a compact amber message identifies the affected
+products and the database preserves the normal movement/accounting trace.
+
 ## Change Checklist
 
 1. Identify all routes and constructor references for the business entity.

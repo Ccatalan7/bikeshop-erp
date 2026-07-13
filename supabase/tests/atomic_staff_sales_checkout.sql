@@ -46,14 +46,20 @@ select is((select count(*)::integer from public.sales_invoices where checkout_id
 select is((select inventory_qty from public.products where id='99800000-0000-4000-8000-000000000002'),3,'failed payment validation leaves stock unchanged');
 select throws_ok(format('select public.create_atomic_sales_checkout(%L,%L,null,%L,null,null,%L,%L::jsonb,%L::jsonb,now())','pos','bad-total','Cliente','no_tax','[{"product_id":"99800000-0000-4000-8000-000000000002","quantity":1,"unit_price":1190,"discount":0}]',jsonb_build_array(jsonb_build_object('payment_method_id',(select id from checkout_methods where ord=1),'amount',1189))::text),'P0001','Checkout payment total must equal invoice total','payment mismatch aborts before inventory');
 select throws_ok(format('select public.create_atomic_sales_checkout(%L,%L,null,%L,null,null,%L,%L::jsonb,%L::jsonb,now())','pos','fractional-item','Cliente','no_tax','[{"product_id":"99800000-0000-4000-8000-000000000002","quantity":1.5,"unit_price":1190,"discount":0}]',jsonb_build_array(jsonb_build_object('payment_method_id',(select id from checkout_methods where ord=1),'amount',1785))::text),'P0001','Checkout items require a product, positive whole units, and valid whole-CLP prices','fractional stock units are rejected');
-select throws_ok(format('select public.create_atomic_sales_checkout(%L,%L,null,%L,null,null,%L,%L::jsonb,%L::jsonb,now())','pos','insufficient-stock','Cliente','no_tax','[{"product_id":"99800000-0000-4000-8000-000000000002","quantity":4,"unit_price":1190,"discount":0}]',jsonb_build_array(jsonb_build_object('payment_method_id',(select id from checkout_methods where ord=1),'amount',4760))::text),'P0001','Insufficient stock for product Atomic Product: available 3, required additional 4','inventory failure rolls back the entire checkout');
-select is((select count(*)::integer from public.sales_invoices where checkout_idempotency_key='pos:insufficient-stock'),0,'inventory failure leaves no orphan invoice');
-select is((select inventory_qty from public.products where id='99800000-0000-4000-8000-000000000002'),3,'inventory failure leaves current stock unchanged');
+create temp table negative_stock_checkout on commit drop as
+select public.create_atomic_sales_checkout(
+ 'pos','negative-stock',null,'Cliente',null,null,'no_tax',
+ '[{"product_id":"99800000-0000-4000-8000-000000000002","quantity":4,"unit_price":1190,"discount":0}]',
+ jsonb_build_array(jsonb_build_object('payment_method_id',(select id from checkout_methods where ord=1),'amount',4760)),now()
+) payload;
+select is((select status from public.sales_invoices where id=((select payload->>'invoice_id'from negative_stock_checkout)::uuid)),'paid','staff checkout remains operational when stock crosses below zero');
+select is((select inventory_qty from public.products where id='99800000-0000-4000-8000-000000000002'),-1,'staff checkout records the exact negative stock balance');
+select ok(exists(select 1 from public.stock_movements where source_document_id=((select payload->>'invoice_id'from negative_stock_checkout)::uuid)and quantity=-4 and stock_before=3 and stock_after=-1),'negative stock sale keeps exact movement and source-document evidence');
 
 create temp table quick_checkout on commit drop as select public.create_atomic_sales_checkout('quick_sale','quick-1',null,'Cliente Mostrador',null,null,'no_tax','[{"product_id":"99800000-0000-4000-8000-000000000002","quantity":1,"unit_price":1190,"discount":0}]',jsonb_build_array(jsonb_build_object('payment_method_id',(select id from checkout_methods where ord=1),'amount',1190)),now())payload;
 select is((select source from public.sales_invoices where id=((select payload->>'invoice_id'from quick_checkout)::uuid)),'quick_sale','same atomic command preserves Quick Sale origin');
 select is((select status from public.sales_invoices where id=((select payload->>'invoice_id'from quick_checkout)::uuid)),'paid','Quick Sale invoice and payment commit together');
-select is((select inventory_qty from public.products where id='99800000-0000-4000-8000-000000000002'),2,'Quick Sale consumes stock exactly once');
+select is((select inventory_qty from public.products where id='99800000-0000-4000-8000-000000000002'),-2,'Quick Sale consumes stock exactly once from an already-negative balance');
 
 select * from finish();
 rollback;

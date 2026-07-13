@@ -2750,6 +2750,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
     final salesService = context.read<SalesService>();
     final messenger = ScaffoldMessenger.of(context);
+    final negativeStockWarnings =
+        await salesService.previewNegativeStock(invoice.items);
+    if (!mounted) return;
 
     try {
       final updated = await salesService.updateInvoiceStatus(
@@ -2761,9 +2764,13 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
           _primeAccountingContext(updated);
         });
         messenger.showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Factura confirmada - contabilizada y stock actualizado')),
+          SnackBar(
+            content: Text(negativeStockWarnings.isEmpty
+                ? 'Factura confirmada - contabilizada y stock actualizado'
+                : formatSalesNegativeStockWarning(negativeStockWarnings)),
+            backgroundColor:
+                negativeStockWarnings.isEmpty ? null : Colors.orange.shade800,
+          ),
         );
       }
     } catch (e) {

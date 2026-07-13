@@ -901,6 +901,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       return false;
     }
 
+    final negativeStockWarnings =
+        newStatus == InvoiceStatus.confirmed && _loadedInvoice != null
+            ? await _salesService.previewNegativeStock(_loadedInvoice!.items)
+            : const <SalesNegativeStockWarning>[];
+    if (!mounted) return false;
+
     // ⚠️ Smart validation: If paying with card but no tax → auto-fix
     if (newStatus == InvoiceStatus.confirmed &&
         _paymentMethodHint == 'card' &&
@@ -945,7 +951,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             message = 'Factura marcada como enviada';
             break;
           case InvoiceStatus.confirmed:
-            message = 'Factura confirmada - Stock deducido';
+            message = negativeStockWarnings.isEmpty
+                ? 'Factura confirmada - Stock deducido'
+                : formatSalesNegativeStockWarning(negativeStockWarnings);
             break;
           case InvoiceStatus.paid:
             message = 'Factura marcada como pagada';
@@ -960,7 +968,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: Colors.green,
+            backgroundColor: negativeStockWarnings.isEmpty
+                ? Colors.green
+                : Colors.orange.shade800,
           ),
         );
       }
@@ -3161,9 +3171,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Stock bajo: ${line.product!.stockQuantity.toInt()} disponibles',
+                          'Al confirmar quedará en ${(line.product!.stockQuantity - line.quantity).toInt()}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.red,
+                            color: Colors.orange.shade800,
                             fontSize: 10,
                           ),
                           maxLines: 2,
