@@ -35,6 +35,7 @@ import '../services/purchase_receiving_service.dart';
 import '../services/purchase_credit_note_service.dart';
 import '../services/purchase_supplier_return_service.dart';
 import '../services/purchase_service.dart';
+import '../widgets/purchase_receipt_history_panel.dart';
 import 'purchase_receiving_page.dart';
 import 'purchase_credit_note_page.dart';
 import 'purchase_supplier_return_page.dart';
@@ -99,6 +100,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isEditing = false; // Edit mode toggle (like sales invoice)
   bool _professionalReceivingEnabled = false;
   bool _purchaseCreditNotesEnabled = false;
+  int _receiptHistoryRevision = 0;
 
   /// Payment model: true = Prepayment (pay before receive), false = Standard (receive before pay)
   /// Defaults to true (prepayment) for new invoices
@@ -218,7 +220,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           refresh: true,
         );
         if (refreshed != null && mounted) {
-          setState(() => _loadedInvoice = refreshed);
+          setState(() {
+            _loadedInvoice = refreshed;
+            _receiptHistoryRevision++;
+          });
         }
       }
     } catch (error) {
@@ -233,6 +238,20 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     } finally {
       if (mounted) setState(() => _isUpdatingStatus = false);
     }
+  }
+
+  Future<void> _refreshAfterReceiptChange() async {
+    final invoiceId = _loadedInvoice?.id;
+    if (invoiceId == null) return;
+    final refreshed = await _purchaseService.getPurchaseInvoice(
+      invoiceId,
+      refresh: true,
+    );
+    if (!mounted) return;
+    setState(() {
+      if (refreshed != null) _loadedInvoice = refreshed;
+      _receiptHistoryRevision++;
+    });
   }
 
   Future<void> _openSupplierReturn() async {
@@ -2628,6 +2647,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                           title: 'Productos y servicios',
                           children: [_buildLineItemsSection(theme)],
                         ),
+                        if (_professionalReceivingEnabled &&
+                            widget.invoiceId != null) ...[
+                          const SizedBox(height: 16),
+                          _buildSectionCard(
+                            theme,
+                            icon: Icons.inventory_2_outlined,
+                            title: 'Recepciones físicas',
+                            children: [
+                              PurchaseReceiptHistoryPanel(
+                                key: ValueKey(_receiptHistoryRevision),
+                                invoiceId: widget.invoiceId!,
+                                onChanged: _refreshAfterReceiptChange,
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
@@ -2689,6 +2724,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   title: 'Productos y servicios',
                   children: [_buildLineItemsSection(theme)],
                 ),
+                if (_professionalReceivingEnabled &&
+                    widget.invoiceId != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    theme,
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Recepciones físicas',
+                    children: [
+                      PurchaseReceiptHistoryPanel(
+                        key: ValueKey(_receiptHistoryRevision),
+                        invoiceId: widget.invoiceId!,
+                        onChanged: _refreshAfterReceiptChange,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,

@@ -122,3 +122,29 @@ class PurchaseReceiptResult {
     );
   }
 }
+
+class PurchaseReceiptRecord {
+  const PurchaseReceiptRecord({
+    required this.id,
+    required this.number,
+    required this.status,
+    required this.receivedAt,
+    required this.acceptedQuantity,
+    required this.discrepancyQuantity,
+    this.deliveryReference,
+    this.locationLabel,
+    this.voidReason,
+  });
+
+  final String id;
+  final String number;
+  final String status;
+  final DateTime receivedAt;
+  final int acceptedQuantity;
+  final int discrepancyQuantity;
+  final String? deliveryReference;
+  final String? locationLabel;
+  final String? voidReason;
+
+  bool get canVoid => status == 'posted';
+}

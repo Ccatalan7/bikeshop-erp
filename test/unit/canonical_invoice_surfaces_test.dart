@@ -11,6 +11,9 @@ void main() {
         .readAsStringSync();
     final listPreview = File('lib/modules/sales/pages/invoice_list_page.dart')
         .readAsStringSync();
+    final purchaseForm =
+        File('lib/modules/purchases/pages/purchase_invoice_form_page.dart')
+            .readAsStringSync();
 
     expect(router, contains("path: '/sales/invoices/:id'"));
     expect(router, contains('erp.InvoiceFormPage('));
@@ -25,6 +28,7 @@ void main() {
 
     expect(router, contains("path: '/purchases/:id'"));
     expect(router, contains('erp.PurchaseInvoiceFormPage('));
+    expect(purchaseForm, contains('PurchaseReceiptHistoryPanel('));
     expect(
       File('lib/modules/purchases/pages/purchase_invoice_detail_page.dart')
           .existsSync(),

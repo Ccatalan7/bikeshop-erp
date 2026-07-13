@@ -40,6 +40,61 @@ class PurchaseReceivingService {
     return totals;
   }
 
+  Future<List<PurchaseReceiptRecord>> getHistory(String invoiceId) async {
+    final headers = await _client
+        .from('purchase_receipts')
+        .select(
+            'id,receipt_number,status,received_at,delivery_reference,location_label,void_reason')
+        .eq('purchase_invoice_id', invoiceId)
+        .order('received_at', ascending: false);
+    if (headers.isEmpty) return const [];
+
+    final ids = headers.map((row) => row['id'].toString()).toList();
+    final lines = await _client
+        .from('purchase_receipt_lines')
+        .select(
+            'receipt_id,accepted_quantity,damaged_quantity,rejected_quantity,shortage_quantity')
+        .inFilter('receipt_id', ids);
+    final accepted = <String, int>{};
+    final discrepancies = <String, int>{};
+    for (final row in lines) {
+      final id = row['receipt_id'].toString();
+      accepted[id] = (accepted[id] ?? 0) +
+          ((row['accepted_quantity'] as num?)?.round() ?? 0);
+      discrepancies[id] = (discrepancies[id] ?? 0) +
+          ((row['damaged_quantity'] as num?)?.round() ?? 0) +
+          ((row['rejected_quantity'] as num?)?.round() ?? 0) +
+          ((row['shortage_quantity'] as num?)?.round() ?? 0);
+    }
+
+    return headers.map((row) {
+      final id = row['id'].toString();
+      return PurchaseReceiptRecord(
+        id: id,
+        number: row['receipt_number']?.toString() ?? '',
+        status: row['status']?.toString() ?? '',
+        receivedAt: DateTime.parse(row['received_at'].toString()),
+        acceptedQuantity: accepted[id] ?? 0,
+        discrepancyQuantity: discrepancies[id] ?? 0,
+        deliveryReference: row['delivery_reference']?.toString(),
+        locationLabel: row['location_label']?.toString(),
+        voidReason: row['void_reason']?.toString(),
+      );
+    }).toList(growable: false);
+  }
+
+  Future<void> voidReceipt({
+    required String receiptId,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    await _client.rpc('void_purchase_goods_receipt', params: {
+      'p_receipt_id': receiptId,
+      'p_reason': reason.trim(),
+      'p_idempotency_key': idempotencyKey,
+    });
+  }
+
   Future<PurchaseReceiptResult> createReceipt({
     required String invoiceId,
     required List<PurchaseReceiptLineDraft> lines,
