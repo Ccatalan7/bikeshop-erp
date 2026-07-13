@@ -84,6 +84,22 @@ node_modules/
 /replace_script.py
 /update_*.py
 
+# Import/migration scratch probes and generated human reports.
+/scripts/import_templates/temp_*
+/scripts/odoo_import/*_COMPARISON.txt
+/scripts/odoo_import/*_PROGRESS.txt
+/scripts/odoo_import/*_READABLE.txt
+
+# Root probes are not maintained tests; real tests live in test/ or supabase/tests/.
+/check_*.dart
+/clean_pdf_text.py
+/get_logs.dart
+/inspect_svg.py
+/popover_test.dart
+/test_*.dart
+/test_db.js
+/test_db.py
+
 # Local screenshots and diagnostic captures belong outside source control.
 /Screenshots vinabikeProject/
 

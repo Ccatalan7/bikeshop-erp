@@ -31,6 +31,26 @@ recovery evidence are retained until separately classified.
   are ignored. Maintained automation must live under `scripts/` and have a
   documented command and safety contract.
 
+### 2026-07-12 — temporary import probes and generated reports
+
+- **Removed:** eight unreferenced `temp_*` Python probes and three generated
+  Odoo/Zoho comparison/progress text reports.
+- **Evidence:** the probes had no callers and encoded one-off token, schema,
+  supplier-fix, or verification sessions. The text files were generated human
+  reports with no consumers; referenced CSV migration inputs were retained.
+- **Guard:** temporary import probes and named generated report families are
+  ignored inside their original directories.
+
+### 2026-07-12 — root database/UI probes
+
+- **Removed:** eleven unreferenced Dart, Python, and JavaScript probes.
+- **Evidence:** these were empty placeholders or direct one-off reads against
+  specific production URLs, invoice numbers, job IDs, logs, `/tmp` SVG files,
+  or source-rewrite targets. None was called by CI, `just`, application code,
+  or maintained tests.
+- **Guard:** root check/test probes are ignored. Maintained verification belongs
+  in `test/`, `supabase/tests/`, or a documented read-only script directory.
+
 ## Retained pending classification
 
 - root deployment/fix/recovery SQL;
