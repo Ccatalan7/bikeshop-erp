@@ -8,10 +8,12 @@ architecture document, and the current code/schema.
 
 ## Index
 
-- `2026-01/`: website editor refactor handoff.
+- `2025-11/`: historical Smart Tasks fixes, simplification, rollout summary, and task-schema cleanup.
+- `2025-12/`: completed Firebase-domain migration instructions.
+- `2026-01/`: website editor refactor handoff and completed Firebase loading-screen fix.
 - `2026-02/`: historical Smart Tasks remaining-work handoff.
-- `2026-03/`: accounting incident, supplier portal, and WhatsApp Cloud API handoffs.
-- `2026-04/`: workshop timeline, inventory movements, consumables, and egress handoffs.
+- `2026-03/`: accounting incident, supplier portal, WhatsApp Cloud API, and historical sync context.
+- `2026-04/`: workshop timeline, inventory movements, consumables, egress, and completed bike-record redesign context.
 - `2026-05/`: online orders and internal messaging handoff.
 - `2026-06/`: WhatsApp catalog and commerce handoff.
 

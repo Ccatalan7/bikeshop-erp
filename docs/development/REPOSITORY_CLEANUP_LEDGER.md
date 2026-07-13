@@ -116,9 +116,21 @@ recovery evidence are retained until separately classified.
 - **Verification:** all eleven Git blob hashes are unchanged after relocation,
   no handoff remains at repository root, and no old root link remains.
 
+### 2026-07-12 — completed fix and migration summaries
+
+- **Relocated without content changes:** eight unreferenced documents explicitly
+  describing completed fixes, migrations, schema cleanup, redesign completion,
+  or a historical sync incident. Their Git creation dates place them under
+  `docs/archive/2025-11` through `2026-04`.
+- **Safety:** living architecture, feature specs, user guides, and active plans
+  were deliberately excluded from this batch. External documentation links in
+  the archived Firebase migration record remain valid.
+- **Verification:** all eight Git blob hashes are unchanged, each source had zero
+  repository consumers, and the archive index records the added periods.
+
 ## Retained pending classification
 
 - old/legacy Dart files;
 - one-off Python/Dart mutation scripts and their historical inputs;
-- undated implementation/completion documents whose current doctrine has not
-  yet been classified.
+- living root architecture/spec/guide documents that still require authority
+  and destination classification.
