@@ -56,64 +56,64 @@ class _PageManagementPageState extends State<PageManagementPage> {
 
     final body = Column(
       children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(color: theme.dividerColor),
-              ),
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(color: theme.dividerColor),
             ),
-            child: Row(
-              children: [
-                // Back button
-                if (!widget.embedded) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.pop(context),
-                    tooltip: 'Volver',
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                // Title
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Páginas del Sitio',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Administra las páginas de tu tienda online',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+          ),
+          child: Row(
+            children: [
+              // Back button
+              if (!widget.embedded) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Volver',
                 ),
-                // Add page button
-                FilledButton.icon(
-                  onPressed: () => _showPageDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Nueva Página'),
-                ),
+                const SizedBox(width: 16),
               ],
-            ),
+              // Title
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Páginas del Sitio',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Administra las páginas de tu tienda online',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Add page button
+              FilledButton.icon(
+                onPressed: () => _showPageDialog(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Nueva Página'),
+              ),
+            ],
           ),
+        ),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _pages.isEmpty
-                    ? _buildEmptyState(theme)
-                    : _buildPagesList(theme),
-          ),
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _pages.isEmpty
+                  ? _buildEmptyState(theme)
+                  : _buildPagesList(theme),
+        ),
       ],
     );
 
@@ -274,7 +274,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'URL: /${page.slug}',
+                      'URL: ${page.fullPath}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontFamily: 'monospace',
@@ -327,7 +327,8 @@ class _PageManagementPageState extends State<PageManagementPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _getTemplateColor(page.template).withValues(alpha: 0.1),
+                  color:
+                      _getTemplateColor(page.template).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -371,7 +372,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '/${page.slug}',
+                          page.fullPath,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             fontFamily: 'monospace',
@@ -571,7 +572,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
         }
         break;
       case 'copy_url':
-        final url = '${Uri.base.origin}/${page.slug}';
+        final url = '${Uri.base.origin}${page.fullPath}';
         await Clipboard.setData(ClipboardData(text: url));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -797,7 +798,9 @@ class _PageFormDialogState extends State<_PageFormDialog> {
                 Row(
                   children: [
                     Icon(
-                      isEditing ? Icons.edit_outlined : Icons.add_circle_outline,
+                      isEditing
+                          ? Icons.edit_outlined
+                          : Icons.add_circle_outline,
                       color: theme.colorScheme.primary,
                     ),
                     const SizedBox(width: 12),

@@ -81,6 +81,8 @@ class WebsiteBlockFieldSchema {
     this.mobileFocalPointYKey = 'mobileFocalPointY',
     this.altTextKey = 'altText',
     this.actionRole,
+    this.actionLabelKey,
+    this.actionVariantKey,
     this.migrationAliases = const [],
   });
 
@@ -110,6 +112,13 @@ class WebsiteBlockFieldSchema {
   final String mobileFocalPointYKey;
   final String altTextKey;
   final WebsiteActionRole? actionRole;
+
+  /// When set on a link field, the generic editor renders this destination and
+  /// its label as one [WebsiteActionEditor] instead of two unrelated inputs.
+  final String? actionLabelKey;
+
+  /// Optional legacy field that stores filled/outline/text presentation.
+  final String? actionVariantKey;
   final List<String> migrationAliases;
 
   WebsiteTextRole get resolvedTextRole {

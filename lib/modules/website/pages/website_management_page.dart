@@ -274,20 +274,20 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
               ),
               _buildManagementCard(
                 context: context,
-                title: 'Visibilidad de productos',
-                subtitle: 'Publica u oculta productos por filtros útiles',
-                icon: Icons.visibility_outlined,
+                title: 'Catálogo web',
+                subtitle: 'Publica productos y categorías del sitio',
+                icon: Icons.storefront_outlined,
                 color: Colors.indigo,
                 onTap: () => context.go('/website/product-visibility'),
               ),
-              // Content Management
+              // Canonical CTA and menu integrity view
               _buildManagementCard(
                 context: context,
-                title: 'Contenido',
-                subtitle: 'Textos, páginas y descripciones',
-                icon: Icons.article,
+                title: 'Destinos y enlaces',
+                subtitle: 'Revisa botones, páginas y rutas del sitio',
+                icon: Icons.account_tree_outlined,
                 color: Colors.blue,
-                onTap: () => context.go('/website/content'),
+                onTap: () => context.go('/website/destinations'),
               ),
               // Online Orders
               _buildManagementCard(

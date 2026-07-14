@@ -7,7 +7,10 @@ class DeferredCanvasBlock extends StatefulWidget {
   final Color accentColor;
   final void Function(String route)? onNavigate;
   final String? tenantId;
+  final String? headingFont;
   final String? bodyFont;
+  final bool fillAvailableHeight;
+  final bool clipContentToBounds;
 
   const DeferredCanvasBlock({
     super.key,
@@ -15,7 +18,10 @@ class DeferredCanvasBlock extends StatefulWidget {
     required this.accentColor,
     this.onNavigate,
     this.tenantId,
+    this.headingFont,
     this.bodyFont,
+    this.fillAvailableHeight = false,
+    this.clipContentToBounds = false,
   });
 
   @override
@@ -52,7 +58,10 @@ class _DeferredCanvasBlockState extends State<DeferredCanvasBlock> {
           accentColor: widget.accentColor,
           onNavigate: widget.onNavigate,
           tenantId: widget.tenantId,
+          headingFont: widget.headingFont,
           bodyFont: widget.bodyFont,
+          fillAvailableHeight: widget.fillAvailableHeight,
+          clipContentToBounds: widget.clipContentToBounds,
         );
       },
     );

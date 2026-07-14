@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../models/website_action.dart';
 import 'canvas_block_toolbar.dart';
+import 'website_action_button.dart';
 
 // Conditional import for web video backgrounds (reuses the video banner platform implementation).
 // Conditional import for web video backgrounds (reuses the video banner platform implementation).
@@ -28,8 +30,10 @@ import 'snap_result.dart';
 /// - activeElementId: string? (optional)
 /// - elements: List<Map> where each element has:
 ///   - id: string
-///   - type: "text" | "button"
+///   - type: "text" | "button" | "image" | "shape" | "product" |
+///     "productsGallery"
 ///   - x, y, w, h: numbers (px)
+///   - hideOnMobile/showOnMobile: responsive visibility (optional)
 ///   - ... type-specific fields
 class CanvasBlock extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -40,8 +44,11 @@ class CanvasBlock extends StatefulWidget {
   final ValueChanged<Size>? onCanvasSizeChanged;
   final void Function(String route)? onNavigate;
   final String? tenantId;
+  final String? headingFont;
   final String? bodyFont;
   final VoidCallback? onBackgroundTap;
+  final bool fillAvailableHeight;
+  final bool clipContentToBounds;
 
   const CanvasBlock({
     super.key,
@@ -53,8 +60,11 @@ class CanvasBlock extends StatefulWidget {
     this.onCanvasSizeChanged,
     this.onNavigate,
     this.tenantId,
+    this.headingFont,
     this.bodyFont,
     this.onBackgroundTap,
+    this.fillAvailableHeight = false,
+    this.clipContentToBounds = false,
   });
 
   @override
@@ -293,7 +303,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _setActive(String? id) {
-    if (_activeElementIdLocal == id) return;
+    if (_activeElementIdLocal == id) {
+      // Re-emit the selection so an already-active element can restore its
+      // parent block/inspector context after another surface cleared it.
+      widget.onActiveElementChanged?.call(id);
+      return;
+    }
     setState(() {
       _activeElementIdLocal = id;
     });
@@ -353,7 +368,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
   static const double _kReferenceWidth = 1200.0;
 
   double _computeDesignWidth(double canvasW) {
-    final raw = widget.data['designWidth'];
+    final raw = canvasW < 600 && widget.data['mobileDesignWidth'] != null
+        ? widget.data['mobileDesignWidth']
+        : widget.data['designWidth'];
     final explicit = raw is num ? raw.toDouble() : double.tryParse('$raw');
     if (explicit != null && explicit > 0) return explicit;
 
@@ -439,6 +456,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
           'h': 56.0,
           'label': 'Botón',
           'style': 'filled',
+          'inheritTheme': true,
           'bgColor': '#00A09D',
           'fgColor': '#FFFFFF',
           'radius': 12.0,
@@ -454,8 +472,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
           'w': 320.0,
           'h': 200.0,
           'imageUrl': '',
+          'productId': '',
           'fit': 'cover', // cover|contain
           'radius': 12.0,
+          'altText': '',
+        };
+      case 'shape':
+        return {
+          ...base,
+          'w': 320.0,
+          'h': 200.0,
+          'shape': 'rectangle', // rectangle|ellipse
+          'fillColor': '#1F2937',
+          'borderColor': '#1F2937',
+          'borderWidth': 0.0,
+          'radius': 0.0,
+          'rotation': 0.0,
         };
       case 'product':
         return {
@@ -487,8 +519,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
           'text': 'Texto',
           'fontSize': 28.0,
           'fontWeight': 'w700',
+          'fontRole': 'heading', // heading|body
           'color': '#111111',
           'align': 'left',
+          'letterSpacing': 0.0,
+          'lineHeight': 1.1,
+          'uppercase': false,
         };
     }
   }
@@ -894,10 +930,13 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
         // Scale the block height proportionally when width changes (zoom in/out)
         // This ensures the canvas maintains aspect ratio
-        final blockHeight = heightMode == 'viewport'
-            ? rawBlockHeight // Viewport mode: don't scale, use viewport percentage
-            : rawBlockHeight *
-                scaleX.clamp(0.5, 2.0); // Fixed mode: scale with width
+        final blockHeight = widget.fillAvailableHeight &&
+                outerConstraints.maxHeight.isFinite
+            ? outerConstraints.maxHeight
+            : heightMode == 'viewport'
+                ? rawBlockHeight // Viewport mode: don't scale, use viewport percentage
+                : rawBlockHeight *
+                    scaleX.clamp(0.5, 2.0); // Fixed mode: scale with width
 
         return SizedBox(
           height: blockHeight,
@@ -1039,16 +1078,30 @@ class _CanvasBlockState extends State<CanvasBlock> {
                         ),
                       ),
 
-                    // Elements
-                    for (final el in elements)
-                      _buildElement(
-                        context: context,
-                        el: el,
-                        isActive: _activeElementIdLocal != null &&
-                            el['id'] == _activeElementIdLocal,
-                        canvasW: canvasW,
-                        canvasH: canvasH,
+                    // Elements use their own clipping boundary so transformed
+                    // content can be contained by carousel slides without
+                    // clipping editor toolbars or standalone Canvas blocks.
+                    Positioned.fill(
+                      child: Stack(
+                        clipBehavior: widget.clipContentToBounds
+                            ? Clip.hardEdge
+                            : Clip.none,
+                        children: [
+                          for (final el in elements)
+                            if (!((canvasW < 600 &&
+                                    el['hideOnMobile'] == true) ||
+                                (canvasW >= 600 && el['showOnMobile'] == true)))
+                              _buildElement(
+                                context: context,
+                                el: el,
+                                isActive: _activeElementIdLocal != null &&
+                                    el['id'] == _activeElementIdLocal,
+                                canvasW: canvasW,
+                                canvasH: canvasH,
+                              ),
+                        ],
                       ),
+                    ),
 
                     // Guides
                     if (widget.editable && _guideX != null)
@@ -1175,10 +1228,21 @@ class _CanvasBlockState extends State<CanvasBlock> {
         overrideHeight; // Allow dynamic height (e.g., products gallery) when content drives size
     switch (type) {
       case 'button':
-        final label = (el['label'] ?? 'Botón').toString();
-        final style =
-            (el['style'] ?? 'filled').toString(); // filled|outline|text
-        final link = (el['link'] ?? '/').toString();
+        final action = WebsiteActionValue.resolvePrimary(
+              el,
+              labelKeys: const ['label'],
+              hrefKeys: const ['link'],
+              defaultLabel: 'Botón',
+              defaultHref: '/',
+              defaultVariant: WebsiteActionVariant.fromStorage(
+                el['style']?.toString(),
+              ),
+            ) ??
+            const WebsiteActionValue(label: 'Botón', href: '/');
+        final label = action.label;
+        final style = action.variant.storageValue;
+        final link = action.href;
+        final inheritTheme = el['inheritTheme'] != false;
         final fontSize = ((el['fontSize'] as num?)?.toDouble() ?? 14) * scale;
         final radius = ((el['radius'] as num?)?.toDouble() ?? 10) * scale;
         final bgColor =
@@ -1188,73 +1252,60 @@ class _CanvasBlockState extends State<CanvasBlock> {
         final uppercase = (el['uppercase'] as bool?) ?? false;
         final shadow = (el['shadow'] as bool?) ?? false;
 
-        final buttonStyle = switch (style) {
-          'outline' => OutlinedButton.styleFrom(
-              side: BorderSide(color: bgColor),
-              foregroundColor: bgColor,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(radius))),
-          'text' => TextButton.styleFrom(
-              foregroundColor: bgColor,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(radius))),
-          _ => ElevatedButton.styleFrom(
-              backgroundColor: bgColor,
-              foregroundColor: fgColor,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(radius))),
-        };
+        final ButtonStyle? buttonStyle = inheritTheme
+            ? null
+            : switch (style) {
+                'outline' => OutlinedButton.styleFrom(
+                    side: BorderSide(color: bgColor),
+                    foregroundColor: bgColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(radius))),
+                'text' => TextButton.styleFrom(
+                    foregroundColor: bgColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(radius))),
+                _ => ElevatedButton.styleFrom(
+                    backgroundColor: bgColor,
+                    foregroundColor: fgColor,
+                    elevation: shadow ? 6 : 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(radius))),
+              };
 
         void onPressed() {
           if (widget.editable) return;
           widget.onNavigate?.call(link);
         }
 
-        final labelText = uppercase ? label.toUpperCase() : label;
-        final labelStyle = TextStyle(
-          fontSize: fontSize,
-          letterSpacing: letterSpacing,
-          color: style == 'filled' ? fgColor : bgColor,
-          fontWeight: FontWeight.w600,
+        final labelText =
+            inheritTheme || !uppercase ? label : label.toUpperCase();
+        final labelStyle = inheritTheme
+            ? null
+            : TextStyle(
+                fontSize: fontSize,
+                letterSpacing: letterSpacing,
+                color: style == 'filled' ? fgColor : bgColor,
+                fontWeight: FontWeight.w600,
+              );
+        final button = WebsiteActionButton(
+          action: action.copyWith(label: labelText),
+          onPressed: onPressed,
+          textStyle: labelStyle,
+          style: buttonStyle,
         );
-
-        if (widget.editable) {
-          // In edit mode, render a button-like container (no real button to avoid stealing gestures).
-          content = DecoratedBox(
-            decoration: BoxDecoration(
-              color: style == 'filled' ? bgColor : Colors.transparent,
-              borderRadius: BorderRadius.circular(radius),
-              border: style == 'outline'
-                  ? Border.all(color: bgColor, width: 1.5)
-                  : null,
-              boxShadow: shadow && style == 'filled'
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
-                      )
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: Text(labelText, style: labelStyle),
-            ),
-          );
-        } else {
-          final child = Text(labelText, style: labelStyle);
-          content = switch (style) {
-            'outline' => OutlinedButton(
-                onPressed: onPressed, style: buttonStyle, child: child),
-            'text' => TextButton(
-                onPressed: onPressed, style: buttonStyle, child: child),
-            _ => ElevatedButton(
-                onPressed: onPressed, style: buttonStyle, child: child),
-          };
-        }
+        content = widget.editable ? IgnorePointer(child: button) : button;
         break;
       case 'image':
-        final imageUrl = (el['imageUrl'] ?? '').toString().trim();
+        final sourceProductId = (el['productId'] ?? '').toString().trim();
+        if (sourceProductId.isNotEmpty) {
+          _ensureProductsLoaded({sourceProductId});
+        }
+        final sourceProduct =
+            sourceProductId.isNotEmpty ? _productCache[sourceProductId] : null;
+        final productImageUrl = sourceProduct?['image_url']?.toString().trim();
+        final imageUrl = productImageUrl != null && productImageUrl.isNotEmpty
+            ? productImageUrl
+            : (el['imageUrl'] ?? '').toString().trim();
         final fitRaw = (el['fit'] ?? 'cover').toString();
         final fit = fitRaw == 'contain' ? BoxFit.contain : BoxFit.cover;
         final radius = ((el['radius'] as num?)?.toDouble() ?? 12) * scale;
@@ -1276,6 +1327,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
               : Image.network(
                   imageUrl,
                   fit: fit,
+                  semanticLabel: el['altText']?.toString(),
                   errorBuilder: (context, _, __) => Container(
                     color: Colors.black.withValues(alpha: 0.04),
                     child: Center(
@@ -1289,6 +1341,32 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     ),
                   ),
                 ),
+        );
+        break;
+      case 'shape':
+        final shape = (el['shape'] ?? 'rectangle').toString();
+        final fillColor = _parseHexColor(
+          el['fillColor']?.toString(),
+          const Color(0xFF1F2937),
+        );
+        final borderColor = _parseHexColor(
+          el['borderColor']?.toString(),
+          fillColor,
+        );
+        final borderWidth =
+            ((el['borderWidth'] as num?)?.toDouble() ?? 0) * scale;
+        final radius = ((el['radius'] as num?)?.toDouble() ?? 0) * scale;
+        content = DecoratedBox(
+          decoration: BoxDecoration(
+            color: fillColor,
+            shape: shape == 'ellipse' ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: shape == 'ellipse'
+                ? null
+                : BorderRadius.circular(radius.clamp(0, 999)),
+            border: borderWidth > 0
+                ? Border.all(color: borderColor, width: borderWidth)
+                : null,
+          ),
         );
         break;
       case 'product':
@@ -1468,7 +1546,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
         break;
       case 'text':
       default:
-        final text = (el['text'] ?? 'Texto').toString();
+        final sourceText = (el['text'] ?? 'Texto').toString();
+        final text =
+            el['uppercase'] == true ? sourceText.toUpperCase() : sourceText;
         final fontSize = (el['fontSize'] as num?)?.toDouble() ?? 24;
         final weight = (el['fontWeight'] as String?) ?? 'w600';
         final color = _parseHexColor(el['color'] as String?, Colors.black87);
@@ -1490,6 +1570,17 @@ class _CanvasBlockState extends State<CanvasBlock> {
         final decoration = (el['decoration'] == 'underline')
             ? TextDecoration.underline
             : TextDecoration.none;
+        final fontRole = (el['fontRole'] ?? 'heading').toString();
+        final explicitFontFamily = el['fontFamily']?.toString().trim();
+        final fontFamily =
+            explicitFontFamily != null && explicitFontFamily.isNotEmpty
+                ? explicitFontFamily
+                : fontRole == 'body'
+                    ? widget.bodyFont
+                    : widget.headingFont ?? widget.bodyFont;
+        final letterSpacing = (el['letterSpacing'] as num?)?.toDouble() ?? 0.0;
+        final lineHeight =
+            ((el['lineHeight'] as num?)?.toDouble() ?? 1.1).clamp(0.8, 2.0);
 
         if (isInlineEditing && _inlineEditingField == 'text') {
           content = Padding(
@@ -1504,7 +1595,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 fontStyle: fontStyle,
                 decoration: decoration,
                 color: color,
-                height: 1.1,
+                fontFamily: fontFamily,
+                letterSpacing: letterSpacing,
+                height: lineHeight,
               ),
               textAlign: textAlign,
               decoration: const InputDecoration(
@@ -1532,7 +1625,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 fontStyle: fontStyle,
                 decoration: decoration,
                 color: color,
-                height: 1.1,
+                fontFamily: fontFamily,
+                letterSpacing: letterSpacing,
+                height: lineHeight,
               ),
             ),
           );
@@ -1585,13 +1680,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
       ),
       child: SizedBox.expand(child: content),
     );
+    final rotationDegrees = (el['rotation'] as num?)?.toDouble() ?? 0.0;
+    Widget applyRotation(Widget child) => rotationDegrees == 0
+        ? child
+        : Transform.rotate(
+            angle: rotationDegrees * math.pi / 180,
+            child: child,
+          );
+    final transformed = applyRotation(decorated);
+    final publicTransformed = applyRotation(SizedBox.expand(child: content));
 
     // Always use a Stack in edit mode to maintain widget tree stability for gestures
     final decoratedWithHandles = widget.editable
         ? Stack(
             clipBehavior: Clip.none,
             children: [
-              Positioned.fill(child: decorated),
+              Positioned.fill(child: transformed),
               if (showResizeHandle)
                 Positioned(
                   right: 2,
@@ -1671,7 +1775,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 ),
             ],
           )
-        : decorated;
+        : transformed;
 
     final resolvedHeight = overrideHeight ?? effectiveH;
     final effectiveY = _effectiveTop(
@@ -1817,7 +1921,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 ),
               ),
             )
-          : SizedBox.expand(child: content),
+          : publicTransformed,
     );
   }
 

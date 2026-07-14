@@ -560,8 +560,33 @@ At the intake/UI layer, canonical compatibility values should also be captured t
 - `drivetrainConfig` and `drivetrainSpeeds` should be derived from front-chainring count x rear-cog count when the mechanic is confirming drivetrain layout, not typed manually as free text
 - `freehubType` should be treated as the rear-driver family field, not as a cassette-only label, so singlespeed/BMX/fixed cases are not forced into the wrong vocabulary
 - `freehubType` must support an explicit `unknown` state in the intake UI instead of staying blank, because drivetrain compatibility and wizard routing need to distinguish “not yet confirmed” from “never reviewed”
-- the bike form must not let quick-save bypass drivetrain kernel review before the technical step; when the mechanic saves early with unresolved transmission basics, route them back into the technical section instead of silently persisting another empty drivetrain profile
+- the bike form quick-save path may create the bicycle from the minimum identity set before drivetrain review, matching `BIKE_WORKSHOP_MASTER_SCHEMA.md`; any intake/technical values already entered must still be included in the same save and must never be discarded as an identity-only shortcut
 - wheel size, hub spacing, and spoke-hole counts should use standardized selectors where possible instead of open numeric/text entry by default
+
+Bike identity/profile persistence is one aggregate command even though truth
+remains normalized across `bikes` and `bike_profiles`:
+
+- full bicycle editors must load through `get_bike_aggregate` and save through
+  `save_bike_aggregate`; never restore the old client-side `bikes` request
+  followed by a separate `bike_profiles` request
+- reuse the same client operation key after an uncertain network outcome so the
+  server can replay the committed aggregate instead of creating a duplicate
+- while that outcome is unresolved, block edits and destructive/dismissal
+  actions so the only in-memory command key cannot be replaced or discarded;
+  do not claim crash-safe recovery until the pending command is stored in a
+  durable local outbox
+- pass the loaded bike/profile `updated_at` values and reject stale replacement
+  rather than overwriting newer upstream truth
+- distinguish profile `not found` from profile `load failed`; failed reads must
+  expose retry and block edits/save, never render editable defaults as if the
+  ficha were empty
+- `bike_aggregate_save_operations` is idempotency/audit evidence only, not a
+  parallel source of bike or technical truth
+- the aggregate RPC migration must be deployed before the RPC-dependent client;
+  never ship the client half first
+- profile-only promotion from a caller that lacks an authoritative profile id
+  must merge its narrow confirmed keys into current truth instead of replacing
+  the complete JSON maps
 
 Extended detail is allowed later, but it must enrich the same backbone instead of replacing or bypassing it.
 
@@ -1117,6 +1142,7 @@ supabase db query --linked --output table "select now();"
 Rules for agents:
 
 - Run linked DB queries **sequentially**, never in parallel. Parallel `supabase db query --linked` calls can trigger Supabase temp-login auth failures or circuit breaker throttling.
+- With CLI `2.109.1`, `supabase db query --local --file` can reject a multi-statement migration with `cannot insert multiple commands into a prepared statement`. For local validation only, use the password-free local URL reported by `supabase status` with `psql -v ON_ERROR_STOP=1 -f ...`; keep `supabase db query --linked` as the production inspection/deployment path.
 - If a linked query hits temp login throttling, stop starting new linked queries and wait before retrying.
 - On Windows, if the Supabase CLI fails while renaming `C:\Users\<user>\.supabase\telemetry.json` or a `telemetry.json.tmp.*` file with `EPERM`, rerun the same sequential command with telemetry disabled for that process, for example `$env:SUPABASE_TELEMETRY_DISABLED='1'; supabase db query --linked --output table "select now();"`.
 - Do not treat `supabase db push` skipping migrations as a blocker. Use `supabase db query --linked --file ...` for standalone deployment SQL.
@@ -4186,6 +4212,14 @@ Include the following modules:
 
 **CRITICAL: The Website Builder is a visual, block-based CMS. ALL content must be editable through the UI - NEVER hardcode content in code or SQL!**
 
+> **MANDATORY CURRENT CONTRACT:** Before any Website Builder, storefront,
+> campaign, editor-control, Preview, page-navigation, or public-renderer work,
+> read and follow
+> [`docs/architecture/website-editor-contract.md`](../docs/architecture/website-editor-contract.md)
+> and `docs/architecture/canonical-ui-surfaces.md`. The contract is the current
+> source of truth and supersedes older dated limitations or code snippets below
+> whenever they conflict.
+
 ## 🚨 MANDATORY: Editor-Owned Website Changes (June 2026)
 
 Any change to the public website/storefront must be owned by a real editor feature, setting, or data model that the user can later change without an agent.
@@ -4214,9 +4248,105 @@ A change is incomplete if any one of those parts is missing. Do not claim a visu
 
 When implementing a requested website change, set it through the same provider/schema/settings path that the user will use later. The code change may add the capability, but the resulting website state must not depend on a hidden constant or an agent-only code path.
 
+### Agent-created campaigns and periodic website content
+
+Requests to create or refresh banners, carousel slides, featured products,
+promotions, seasonal campaigns, announcements, landing-page sections, or other
+periodic website content are **CMS/editor operations**, not authorization to
+hardcode the requested result into the public storefront.
+
+- Prefer operating the active Website Editor itself and its normal global
+  `Guardar` / preview / publish workflow, just as a human website administrator
+  would.
+- If an agent uses an application service/provider path instead of clicking the
+  controls, it is acceptable only after verifying that it is the same canonical
+  path used by the editor and that the result round-trips completely through the
+  editor UI. Direct SQL, renderer-only code, hidden constants, or agent-only
+  mutations are not substitutes for an editor operation.
+- Every part of the finished result must be discoverable and adjustable later:
+  the block/slide/section, copy, media, linked products or categories, CTA and
+  destination, ordering, visibility, spacing, colors, typography, animation,
+  responsive/focal-point settings, alt data, and scheduling dates when those
+  capabilities apply.
+- Generated or externally prepared media is not integrated merely because a
+  public renderer can display it. Add it through the editor's normal media
+  storage/picker path and bind the saved editor record to that asset.
+- Product and promotion content must reference the ERP's real editable catalog
+  and promotion data. Do not copy product facts into hardcoded storefront
+  markup when an editor/catalog relationship is expected.
+- After the work, a user must be able to reload the editor, select the affected
+  object, see the values represented by their respective controls, reproduce
+  the public result from those values, and change or remove it without an
+  agent.
+- If the requested result cannot be represented by the current editor, stop
+  treating it as a content operation. Add or extend the editor schema, control,
+  persistence, and renderer first; then create the content through that newly
+  completed editor path. Never silently bypass a missing editor capability.
+
+The acceptance test is not only that the public website looks correct. The
+saved editor state must fully explain the public website result.
+
+### The editor canvas and management bar are one system
+
+Treat the visual canvas/right inspector and the black Website Builder
+management bar as connected parts of one CMS. A campaign can depend on both:
+the canvas owns its visible block/slide, while the management workspace owns
+real products, categories, featured collections, pages, navigation records,
+site settings, and publication state.
+
+- The management bar must switch task workspaces; do not embed a wide ERP
+  management table beside an unrelated block inspector. Only page composition
+  owns the persistent inspector. Catalog, structure, settings, and operations
+  use the full workspace while preserving the page draft.
+- Each concept has one canonical editable owner. Contextual shortcuts may open
+  that same owner, but must not implement a second control or stored value for
+  the same meaning.
+- Product category assignment in a product form is useful context, not a second
+  category-management system. Public category inclusion belongs to
+  `Catálogo web > Categorías`; menu placement belongs separately to
+  `Estructura > Navegación y menús` through `website_navigation`.
+- A normal product category already has a catalog destination. Do not create a
+  duplicate `website_pages` record just to link a banner to that category.
+- CTA and navigation placement are related but not identical. Never add every
+  campaign CTA to the header/footer automatically. All saved CTA destinations
+  must instead appear in `Estructura > Destinos y enlaces`, where their owning
+  page/category/product, publication readiness, usage, and optional menu
+  placement are visible together.
+- Internal CTA controls must prefer the typed Page, Category, Product, or
+  system destinations in `WebsiteLinkValueEditor`. A custom internal route is
+  an advanced compatibility option and must be visibly reported as unmanaged
+  until it resolves to a canonical entity.
+- Catalog campaigns that combine filters (for example Category + brand/search)
+  must use the `Destino especial > Catálogo > Filtros del catálogo` controls
+  and `WebsiteDestination.routeForCatalog`. Every selected filter must remain
+  visible when the CTA is reopened; do not collapse a combined destination
+  back to a plain category or hand-author the query string.
+- Contextual `Configurar página/categoría/producto` actions use
+  `WebsiteWorkspaceScope` to open the canonical full-width owner. Applying the
+  selected href happens before the handoff, and returning to the editor must
+  preserve the same page, block/slide selection, and draft.
+- For a category campaign, verify the category is publicly included and has
+  eligible public products, then select it through `WebsiteLinkValueEditor`.
+  The slide/button, category/catalog state, navigation (when requested), and
+  public CTA result must all be verified together.
+- Inventory/category edits must preserve website publication fields they do
+  not own. Renaming or changing an image must never silently unpublish the
+  category.
+- `website_navigation` is the only header/footer navigation owner.
+  `header_nav_links` is legacy ignored state and must not be written by editor
+  controls. The legacy `/website/content` surface redirects to canonical
+  destination integrity because `website_contents` is not a storefront block
+  source.
+
+The canonical routed and embedded owners are registered in
+`docs/architecture/canonical-ui-surfaces.md`; update that registry whenever a
+Website Builder surface or ownership boundary changes.
+
 ### Theme and typography rule
 
 - Website typography, colors, and base spacing must flow through the editor-backed theme settings and `WebsiteThemeBuilder`.
+- Global button shape and size are stored as `button_style` and `button_size`. Every public navigational CTA must inherit the resulting `ElevatedButtonTheme`, `OutlinedButtonTheme`, or `TextButtonTheme`; a block must not hardcode padding/radius that silently defeats the Tema controls.
+- A deliberate per-element override is allowed only when the editor exposes an explicit opt-out such as Canvas `inheritTheme = false`. The default is global-theme inheritance, and all override values must remain visible/editable.
 - Do not force public-store pages to a hardcoded `PublicStoreTheme.defaultHeadingFont`, `PublicStoreTheme.defaultBodyFont`, fixed color, or fixed spacing as the final behavior when the editor exposes a corresponding theme control.
 - `PublicStoreTheme` constants are acceptable as fallback defaults only. They must not override saved `website_settings` values.
 - If a new global visual option is needed, add the side-panel control, stage it in `WebsiteEditModeProvider`, save it through the global `Guardar` pipeline, and make every affected renderer/page consume the saved value.
@@ -4231,19 +4361,65 @@ When implementing a requested website change, set it through the same provider/s
 
 If a website editing capability already exists, agents must reuse or extend the most mature shared control instead of creating another block-specific control.
 
+The block inspector must follow the information architecture in
+`docs/architecture/website-editor-contract.md`: keep block identity/actions
+stable, separate Content / Design / Style, reset to Content and scroll-top when
+selection changes, and use progressive disclosure inside dense block controls.
+Inline text toolbars own content/typography; shared persisted transforms such as
+position, size, rotation, visibility, and layer order belong in the inspector
+and must be exposed for every supported Canvas element type.
+
+Schema-defined repeater fields must use the shared compact collection editor:
+show a scannable item overview and edit only one selected item at a time. Keep
+add, select, duplicate, reorder, and delete operations visible, and group that
+item's media, actions, nested collections, and advanced options behind
+progressive disclosure. Never dump every repeated item's complete form into the
+inspector; fix the shared schema renderer rather than patching one block.
+
 User-surfaced examples are symptoms, not the full scope. For any task about editor consistency, universal controls, missing controls, save behavior, or website refactors, audit every `WebsiteBlockType` and every affected capability before proposing or shipping a fix. The audit must cover at least: text/content editing, typography/style persistence, links/actions, media/focal point/alt data, colors/theme tokens, responsive behavior, animation, repeaters/lists, and save semantics.
 
 Current canonical controls/capabilities:
 
 - Links/destinations: `WebsiteLinkValueEditor`.
+- Visible CTA action (label, destination, presentation): `WebsiteActionValue`, `WebsiteActionEditor`, and `WebsiteActionButton`. Banner, carousel, pricing, products “Ver todos”, standalone, and Canvas buttons must use this contract rather than private label/link widgets or renderers.
 - Inline formatted text: `InlineEditableTextV2` + `TextFormattingToolbar` with explicit toolbar presets.
+- Layered campaign composition: `CanvasBlock` + `_CanvasBlockControls` + `DeferredCanvasBlock`. Carousel slides with `useComposition` must store their editable `elements` inside the slide and reuse this same renderer and inspector for text, images, shapes, products, galleries, and buttons. Never flatten a designed campaign into one poster image when copy, product imagery, geometry, or CTA can remain editor-native layers. Desktop/mobile variants use the same element schema and its editor-visible responsive visibility controls.
 - Click-to-replace images: `InlineEditableImage` / the shared image picker path, not ad-hoc URL-only controls.
 - Cover/background focal point: `FocalPointPicker`, promoted as the shared focal-point control for every cover/background image.
 - Block field controls: schema-driven `WebsiteBlockFieldSchema` rendering where the field type can describe the capability.
 - Add-block discovery: the registry-driven `AddBlockDialog`; do not maintain a separate hardcoded block list.
 - Public typography: the active `WebsiteThemeBuilder`/Flutter `Theme`; public widgets must inherit it rather than forcing `PublicStoreTheme.defaultHeadingFont/defaultBodyFont`.
 
+### Mandatory media picker rule
+
+Every website-editor control that creates, selects, or replaces an image **must
+provide the canonical visual image/media picker as the primary, immediately
+discoverable workflow**. A text field that only accepts an image URL is not a
+complete editor control and must not be shipped.
+
+- The primary action must let the user browse/search the existing website media
+  library and select an asset without copying or typing a URL. Upload/import may
+  be included in that same canonical picker when supported.
+- A raw image URL may exist only as a clearly secondary option such as
+  `Usar URL` / `Opción avanzada`; it must never be the default dialog, the only
+  path, or a replacement for the picker.
+- This applies universally to Canvas image elements, carousel slides, heroes,
+  banners, backgrounds, cards, galleries, logos, product/category imagery,
+  desktop/mobile variants, and every future block or schema image field.
+- Reuse or extend `InlineEditableImage` and the shared/schema-routed picker
+  capability. Do not create a private URL dialog or a block-specific media
+  browser. If a touched image field is URL-only, migrate it to the canonical
+  picker as part of the task rather than copying that pattern.
+- Agent-generated or externally sourced images must be added through the same
+  media storage/picker workflow and saved as editor-owned assets. Do not make
+  the user paste a generated, local, temporary, or external URL into a field.
+- The asset selected in the picker, its alt/focal/responsive metadata, the edit
+  preview, and the public renderer must round-trip through the same persisted
+  editor value.
+
 Do not add block-local duplicates such as a second link picker, a second text formatting toolbar, a block-only focal point picker, a local color picker, or a one-off image position control unless the task is explicitly to prototype a replacement. If a duplicate already exists and you touch that area, either migrate it to the canonical control or document why it remains temporarily as compatibility debt.
+
+Legacy CTA aliases (`ctaText`/`buttonText`, `ctaLink`/`buttonLink`, or a block's declared label/href fields) are compatibility storage only. `WebsiteActionValue.resolvePrimary` and `WebsiteService` own reconciliation, editor writes must update aliases plus the structured `actions` value atomically, and public navigation must render through `WebsiteActionButton`. Never let a stale hidden `actions` entry override the values shown in the editor.
 
 When a control becomes more developed in one block (for example carousel background repositioning), treat that as a candidate for a shared control and roll it out to every block with the same capability: hero, carousel, video banner, canvas background, banners, cards, galleries, and future cover-image blocks.
 
@@ -4427,45 +4603,21 @@ User saves → WebsiteService.saveBlocks()
 
 ---
 
-## ⚠️ KNOWN LIMITATION: Multi-Page Editing (Dec 2025)
+## ✅ Multi-page and system-page editing (current)
 
-**CURRENT STATE: Only HOME page supports inline editing!**
+The December 2025 home-only limitation is obsolete. The page menu in
+`PublicStoreLayout` is the canonical editor route controller for home, CMS,
+policy, and routed system pages. It preserves inline edit/preview context,
+tracks `currentPageId` / `currentPageSlug`, loads the correct page blocks or
+system-page data, and saves through the same global editor pipeline.
 
-### The Problem
-
-| Page Type | Editing Support | Why |
-|-----------|-----------------|-----|
-| Home Page (`/tienda`) | ✅ Full editing | Uses `public_home_page.dart` with `EditableBlockRenderer` |
-| Policy Pages (`/pagina/:slug`) | ❌ READ ONLY | Uses `dynamic_website_page.dart` with `WebsiteBlockRenderer` (no edit support) |
-
-### Root Cause
-
-`DynamicWebsitePage` (used for `/pagina/:slug` routes) does NOT:
-- Import `WebsiteEditModeProvider`
-- Use `EditableBlockRenderer`
-- Connect to the inline editor system
-
-It only uses `WebsiteBlockRenderer` which is **read-only**.
-
-### Future Implementation Required
-
-To enable editing on ALL pages:
-
-1. **Modify `DynamicWebsitePage`:**
-   - Import and watch `WebsiteEditModeProvider`
-   - When `isEditMode = true`, use `EditableBlockRenderer` instead of `WebsiteBlockRenderer`
-   - Load page-specific blocks into `editProvider` when entering edit mode
-
-2. **Modify `public_store_layout.dart`:**
-   - Detect current page slug from route
-   - Pass current page ID to `WebsiteEditorPanel`
-   - Load correct blocks for current page (not just home page)
-
-3. **Modify `WebsiteService`:**
-   - Track "current editing page" in state
-   - `saveBlocks()` should save to correct page_id
-
-**For now:** Edit policy pages via SQL or create a dedicated page editor (not inline).
+- Never edit page content through SQL as a substitute for the inline editor.
+- Never recreate a standalone `/website/editor` route.
+- Routed pages such as `/productos` must execute their normal initial data-load
+  and filter lifecycle inside the editor shell.
+- Page navigation must preserve drafts or show an explicit unsaved-change
+  guard and must normalize clean/public versus ERP-mounted routes through the
+  shared route controller.
 
 ---
 
@@ -4554,19 +4706,21 @@ Each block stores its configuration in `block_data` JSONB:
 ## 🎨 Visual Editor Features (MUST PRESERVE)
 
 ### 1. Inline Text Editing
-**Location:** `lib/modules/website/widgets/inline_editable_text.dart`
+**Location:** `lib/modules/website/widgets/inline_editable_text_v2.dart`
 
 Users can click on ANY text element and edit it directly in the preview:
 ```dart
-InlineEditableText(
+InlineEditableTextV2(
   text: data['title'] ?? '',
   isEditMode: true,  // Enable inline editing
-  onChanged: (newText) => _updateBlockData(block, 'title', newText),
-  style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+  onTextChanged: (newText) => _updateBlockData(block, 'title', newText),
+  baseStyle: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
 )
 ```
 
-**RULE:** Every text field in a block MUST use `InlineEditableText` for direct editing.
+**RULE:** Every directly editable text surface MUST use
+`InlineEditableTextV2` plus the shared formatting contract. Do not create a
+block-local text editor or revive the legacy `InlineEditableText` pattern.
 
 ### 2. Inline Image Editing
 **Location:** `lib/modules/website/widgets/inline_editable_image.dart`
@@ -4582,7 +4736,9 @@ InlineEditableImage(
 )
 ```
 
-**RULE:** Every image in a block MUST use `InlineEditableImage` for click-to-upload.
+**RULE:** Every image field MUST use `InlineEditableImage` or the shared
+schema-routed media picker for click-to-upload. A raw URL may be exposed only as
+a secondary advanced option, never as the only image control.
 
 ### 3. Block Field Schema System
 **Location:** `lib/modules/website/models/website_block_definition.dart`
@@ -4606,7 +4762,9 @@ WebsiteBlockDefinition(
     WebsiteBlockFieldSchema(
       key: 'buttonLink',
       label: 'Enlace del botón',
-      type: WebsiteBlockFieldType.text,
+      type: WebsiteBlockFieldType.link,
+      actionRole: WebsiteActionRole.primary,
+      actionLabelKey: 'buttonText',
     ),
     WebsiteBlockFieldSchema(
       key: 'backgroundImage',
@@ -4623,8 +4781,10 @@ enum WebsiteBlockFieldType {
   text,      // Single line text
   textarea,  // Multi-line text
   richtext,  // Rich text editor (HTML)
+  link,      // Typed WebsiteLinkValueEditor / WebsiteActionEditor destination
   color,     // Color picker
   image,     // Image upload
+  video,     // Video upload/selection
   number,    // Numeric input
   toggle,    // Boolean switch
   select,    // Dropdown options
@@ -4674,10 +4834,10 @@ Widget build(context) {
 // CORRECT: Read from block_data, editable through UI
 Widget build(context) {
   final title = data['title'] ?? 'Default Title';
-  return InlineEditableText(
+  return InlineEditableTextV2(
     text: title,
     isEditMode: isEditMode,
-    onChanged: (v) => onUpdateBlock('title', v),
+    onTextChanged: (v) => onUpdateBlock('title', v),
   );
 }
 ```
@@ -4726,7 +4886,13 @@ WebsiteBlockType.myNewBlock: WebsiteBlockDefinition(
     WebsiteBlockFieldSchema(key: 'content', label: 'Contenido', type: WebsiteBlockFieldType.textarea),
     WebsiteBlockFieldSchema(key: 'imageUrl', label: 'Imagen', type: WebsiteBlockFieldType.image),
     WebsiteBlockFieldSchema(key: 'buttonText', label: 'Texto del Botón', type: WebsiteBlockFieldType.text),
-    WebsiteBlockFieldSchema(key: 'buttonLink', label: 'Enlace', type: WebsiteBlockFieldType.text),
+    WebsiteBlockFieldSchema(
+      key: 'buttonLink',
+      label: 'Acción principal',
+      type: WebsiteBlockFieldType.link,
+      actionRole: WebsiteActionRole.primary,
+      actionLabelKey: 'buttonText',
+    ),
   ],
 ),
 ```
@@ -4762,13 +4928,18 @@ static Widget _buildMyNewBlock({
 ```
 
 ### 5. Add to Editor Preview
-The Odoo-style editor automatically handles preview if block is registered properly.
+Registration is necessary but does not guarantee parity. Wire the editable and
+public renderers to the same schema/value resolvers, then verify Edit, Preview,
+and published rendering with the mandatory matrix in
+`docs/architecture/website-editor-contract.md`.
 
 ---
 
 ## 🔗 Website Link System (STANDARD - Jan 2026)
 
-**The Website Editor is the ONLY source of truth for navigation.**
+**Navigation has canonical owners:** block/card CTA usage is editor-owned through
+the shared action/destination controls, while header/footer menu placement and
+hierarchy are owned only by `website_navigation`.
 
 If a UI element can navigate (button, card, menu item, footer link, banner CTA, “ver todos”, etc.), it MUST:
 1) Be configurable in the editor UI.
@@ -4802,12 +4973,14 @@ We standardize on a **single string href** (stored in whatever field key the blo
 - **Avoid legacy params:** do NOT generate `?categoria=mtb`. Prefer `q=` for tokens or `category=<uuid>` when we truly mean category ID.
 
 ### Data model rules (prevent “Frankenstein” drift)
-- For a given clickable element, there MUST be exactly one destination field.
+- For a given clickable element, there MUST be exactly one semantic destination
+  and one visible editor control.
   - Example: a Category Grid card must not have both `ctaLink` and `link` with different meanings.
 - If we must support legacy aliases temporarily:
-  - The editor MUST keep aliases in sync on save.
-  - `WebsiteService` MUST normalize on load.
-  - The renderer MUST read the canonical value (or explicitly resolve compat until migration is done).
+  - `WebsiteActionValue`, the provider, and `WebsiteService` MUST reconcile the
+    label/href/presentation aliases and structured `actions` value atomically.
+  - The renderer MUST use the shared resolved action; hidden stale aliases must
+    never override the visible editor control.
 - Never introduce a new “alias” key casually. If you rename a field, treat it as a migration.
 
 ### Renderer rules
@@ -4955,9 +5128,13 @@ theme_heading_size      - Base heading size (px)
 theme_body_size         - Base body size (px)
 theme_section_spacing   - Gap between blocks (px)
 theme_container_padding - Content padding (px)
+button_style           - Global button shape: sharp, rounded, or pill
+button_size            - Global button size: small, medium, or large
 ```
 
-All blocks inherit theme settings automatically.
+All blocks inherit theme settings automatically. Navigational CTAs render
+through `WebsiteActionButton`; Canvas buttons inherit the same theme unless the
+user explicitly disables `Usar estilo global del tema` for that element.
 
 ---
 
@@ -4971,11 +5148,11 @@ When creating ANY website feature:
 - [ ] **If this is an editor consistency task, did you audit every block/capability instead of only the examples in the prompt?**
 - [ ] **Does staged content/config save only through the global editor `Guardar`?** (No block-local direct-save buttons)
 - [ ] **Is all content editable?** (No hardcoded text/images)
-- [ ] **Does it use InlineEditableText?** (For text fields)
+- [ ] **Does it use InlineEditableTextV2?** (For directly editable text fields)
 - [ ] **Does it use InlineEditableImage?** (For images)
 - [ ] **Is there a block definition?** (In website_block_registry.dart)
 - [ ] **Are all fields defined?** (With proper types)
-- [ ] **Does it support buttons/links?** (buttonText + buttonLink)
+- [ ] **Does it use the shared action contract for buttons/links?** (`WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton`)
 - [ ] **Does it respect theme settings?** (Colors, fonts)
 - [ ] **Is it responsive?** (desktop/tablet/mobile visibility)
 - [ ] **Is there a renderer?** (In website_block_renderer.dart)
@@ -5003,7 +5180,7 @@ return GestureDetector(
   behavior: HitTestBehavior.opaque, // ⚠️ CRITICAL: Captures taps on empty space
   onTap: () => editProvider.selectBlock(widget.blockId),
   child: Stack(
-    clipBehavior: Clip.none,
+    clipBehavior: Clip.none, // Editor chrome may overflow this wrapper.
     children: [
       // Block content
       // Selection border (Positioned.fill)
@@ -5013,6 +5190,11 @@ return GestureDetector(
   ),
 );
 ```
+
+`Clip.none` is not permission for bounded content to paint into adjacent
+sections. Carousel/hero/card content must establish its own strict content
+boundary; layered carousel slides pass `clipContentToBounds: true`. Keep editor
+chrome outside that content clip when necessary.
 
 ### Block Height Categories
 

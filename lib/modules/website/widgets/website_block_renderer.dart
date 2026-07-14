@@ -17,6 +17,8 @@ import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_action.dart';
+import 'website_action_button.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
 import 'text_formatting_toolbar.dart';
@@ -40,43 +42,21 @@ class WebsiteBlockRenderer {
     return base.copyWith(fontFamily: family);
   }
 
-  static ({String label, String to})? _resolvePrimaryNavigateAction(
+  static WebsiteActionValue? _resolvePrimaryNavigateAction(
     Map<String, dynamic> data, {
     required String fallbackLabel,
     required String fallbackTo,
     bool enabled = true,
+    WebsiteActionVariant defaultVariant = WebsiteActionVariant.outline,
   }) {
-    if (!enabled) return null;
-
-    final actionsRaw = data['actions'];
-    if (actionsRaw is List) {
-      for (final item in actionsRaw) {
-        if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item);
-        final type = (map['type'] ?? '').toString().trim().toLowerCase();
-        // Treat empty type as navigate for forward-compat.
-        if (type.isNotEmpty && type != 'navigate') continue;
-
-        final to = (map['to'] ?? map['href'] ?? '').toString().trim();
-        if (to.isEmpty) continue;
-        final label =
-            (map['label'] ?? map['text'] ?? fallbackLabel).toString().trim();
-        return (
-          label: label.isNotEmpty
-              ? label
-              : (fallbackLabel.isNotEmpty ? fallbackLabel : 'Ver más'),
-          to: to,
-        );
-      }
-    }
-
-    final to = fallbackTo.trim();
-    if (to.isEmpty) return null;
-
-    final label = fallbackLabel.trim();
-    return (
-      label: label.isNotEmpty ? label : 'Ver más',
-      to: to,
+    return WebsiteActionValue.resolvePrimary(
+      data,
+      labelKeys: const ['ctaText', 'buttonText', 'label'],
+      hrefKeys: const ['ctaLink', 'buttonLink', 'link'],
+      defaultLabel: fallbackLabel,
+      defaultHref: fallbackTo,
+      defaultVariant: defaultVariant,
+      enabled: enabled,
     );
   }
 
@@ -125,6 +105,7 @@ class WebsiteBlockRenderer {
           headingSize: headingSize,
           bodySize: bodySize,
           onNavigate: onNavigate,
+          tenantId: tenantId,
         );
       case WebsiteBlockType.canvas:
         return _buildCanvas(
@@ -133,6 +114,7 @@ class WebsiteBlockRenderer {
           accentColor: accentColor,
           onNavigate: onNavigate,
           tenantId: tenantId,
+          headingFont: headingFont,
           bodyFont: bodyFont,
         );
       case WebsiteBlockType.text:
@@ -369,6 +351,7 @@ class WebsiteBlockRenderer {
     required Color accentColor,
     void Function(String route)? onNavigate,
     String? tenantId,
+    String? headingFont,
     String? bodyFont,
   }) {
     return DeferredCanvasBlock(
@@ -376,6 +359,7 @@ class WebsiteBlockRenderer {
       accentColor: accentColor,
       onNavigate: onNavigate,
       tenantId: tenantId,
+      headingFont: headingFont,
       bodyFont: bodyFont,
     );
   }
@@ -471,9 +455,22 @@ class WebsiteBlockRenderer {
     String? bodyFont,
     double? bodySize,
   }) {
-    final label = (data['label'] ?? 'Botón').toString();
-    final link = (data['link'] ?? '').toString().trim();
-    final style = (data['style'] ?? 'filled').toString();
+    final action = WebsiteActionValue.resolvePrimary(
+          data,
+          labelKeys: const ['label', 'text'],
+          hrefKeys: const ['link'],
+          defaultLabel: 'Botón',
+          defaultVariant: WebsiteActionVariant.fromStorage(
+            data['style']?.toString(),
+          ),
+        ) ??
+        WebsiteActionValue(
+          label: (data['label'] ?? 'Botón').toString(),
+          href: (data['link'] ?? '').toString(),
+          variant: WebsiteActionVariant.fromStorage(data['style']?.toString()),
+        );
+    final link = action.href;
+    final style = action.variant.storageValue;
 
     final textStyle = TextStyle(
       fontFamily: bodyFont,
@@ -486,42 +483,14 @@ class WebsiteBlockRenderer {
       onPressed = () => onNavigate(link);
     }
 
-    late final Widget button;
-
-    switch (style) {
-      case 'outline':
-        button = OutlinedButton(
-          onPressed: onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: accentColor,
-            side: BorderSide(color: accentColor),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          ),
-          child: Text(label, style: textStyle),
-        );
-        break;
-      case 'text':
-        button = TextButton(
-          onPressed: onPressed,
-          style: TextButton.styleFrom(
-            foregroundColor: accentColor,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          child: Text(label, style: textStyle),
-        );
-        break;
-      default:
-        button = ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: accentColor,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          ),
-          child: Text(label, style: textStyle.copyWith(color: Colors.white)),
-        );
-        break;
-    }
+    final button = WebsiteActionButton(
+      action: action,
+      onPressed: onPressed,
+      backgroundColor: accentColor,
+      foregroundColor: style == 'filled' ? Colors.white : accentColor,
+      outlineColor: accentColor,
+      textStyle: textStyle,
+    );
 
     final bool isEnabled = onPressed != null;
 
@@ -831,6 +800,23 @@ class WebsiteBlockRenderer {
     );
   }
 
+  /// Shared background contract used by the public renderer and editor preview.
+  static BoxDecoration resolveBackgroundDecoration({
+    required Map<String, dynamic> data,
+    required Color defaultColor,
+    String? imageUrl,
+    Alignment? imageAlignment,
+    bool skipImage = false,
+  }) {
+    return _resolveBackgroundDecoration(
+      data: data,
+      defaultColor: defaultColor,
+      imageUrl: imageUrl,
+      imageAlignmentParam: imageAlignment,
+      skipImage: skipImage,
+    );
+  }
+
   static Alignment _resolveFocalAlignment(
     Map<String, dynamic> data, {
     double? screenWidth,
@@ -1058,36 +1044,29 @@ class WebsiteBlockRenderer {
                   ),
                 ],
                 const SizedBox(height: 40),
-                OutlinedButton(
+                WebsiteActionButton(
+                  action: primaryAction ??
+                      WebsiteActionValue(
+                        label: legacyCtaText.isEmpty
+                            ? 'CHECK IT OUT'
+                            : legacyCtaText,
+                        href: legacyCtaLink,
+                        variant: WebsiteActionVariant.outline,
+                      ),
                   onPressed: previewMode
                       ? () {}
                       : () {
                           final route =
-                              (primaryAction?.to ?? '/productos').trim();
+                              (primaryAction?.href ?? '/productos').trim();
                           if (onNavigate != null) {
                             onNavigate(route);
                           }
                         },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(0),
-                    ),
-                  ),
-                  child: Text(
-                    ((primaryAction?.label ?? legacyCtaText).trim().isEmpty
-                            ? 'CHECK IT OUT'
-                            : (primaryAction?.label ?? legacyCtaText))
-                        .toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  outlineColor: Colors.white,
+                  uppercase: true,
+                  textStyle: const TextStyle(letterSpacing: 1.5),
                 ),
               ],
             ),
@@ -1138,6 +1117,7 @@ class WebsiteBlockRenderer {
     double? headingSize,
     double? bodySize,
     void Function(String route)? onNavigate,
+    String? tenantId,
   }) {
     // Use block ID as stable key to prevent rebuilds on every page mount
     // Falls back to a constant key if no ID is available
@@ -1154,6 +1134,7 @@ class WebsiteBlockRenderer {
       headingSize: headingSize,
       bodySize: bodySize,
       onNavigate: onNavigate,
+      tenantId: tenantId,
     );
   }
 
@@ -1559,38 +1540,29 @@ class WebsiteBlockRenderer {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  OutlinedButton(
+                  WebsiteActionButton(
+                    action: primaryAction ??
+                        WebsiteActionValue(
+                          label: legacyButtonText.isEmpty
+                              ? 'Contáctanos'
+                              : legacyButtonText,
+                          href: legacyButtonLink,
+                          variant: WebsiteActionVariant.outline,
+                        ),
                     onPressed: previewMode
                         ? () {}
                         : () {
                             final route =
-                                primaryAction?.to ?? '/tienda/contacto';
+                                primaryAction?.href ?? '/tienda/contacto';
                             if (onNavigate != null) {
                               onNavigate(route);
                             }
                           },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white, width: 1),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(0),
-                      ),
-                    ),
-                    child: Text(
-                      ((primaryAction?.label ?? legacyButtonText).isEmpty
-                              ? 'Contáctanos'
-                              : (primaryAction?.label ?? legacyButtonText))
-                          .toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
-                      ),
-                    ),
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.white,
+                    outlineColor: Colors.white,
+                    uppercase: true,
+                    textStyle: const TextStyle(letterSpacing: 1),
                   ),
                 ],
               ),
@@ -2086,8 +2058,12 @@ class WebsiteBlockRenderer {
     final name = (plan['name'] ?? 'Plan').toString().trim();
     final priceRaw = (plan['price'] ?? '0').toString().trim();
     final featuresRaw = plan['features'];
-    final ctaText = (plan['ctaText'] ?? 'Seleccionar').toString().trim();
-    final ctaLink = (plan['ctaLink'] ?? '').toString().trim();
+    final action = WebsiteActionValue.resolvePrimary(
+      plan,
+      labelKeys: const ['ctaText', 'buttonText'],
+      hrefKeys: const ['ctaLink', 'buttonLink'],
+      defaultLabel: 'Seleccionar',
+    );
     final isHighlighted =
         plan['highlighted'] == true || plan['isFeatured'] == true;
 
@@ -2195,16 +2171,16 @@ class WebsiteBlockRenderer {
                 ),
               ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: previewMode || ctaLink.isEmpty
+            WebsiteActionButton(
+              action: action ??
+                  const WebsiteActionValue(label: 'Seleccionar', href: ''),
+              onPressed: previewMode || action == null
                   ? null
-                  : () => onNavigate?.call(ctaLink),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isHighlighted ? accentColor : primaryColor,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(48),
-              ),
-              child: Text(ctaText.isEmpty ? 'Seleccionar' : ctaText),
+                  : () => onNavigate?.call(action.href),
+              backgroundColor: isHighlighted ? accentColor : primaryColor,
+              foregroundColor: Colors.white,
+              outlineColor: isHighlighted ? accentColor : primaryColor,
+              expand: true,
             ),
           ],
         ),
@@ -3213,7 +3189,8 @@ class WebsiteBlockRenderer {
       youtubeVideoId: youtubeVideoId,
       videoFileUrl: hasVideoFile ? videoFileUrl : null,
       ctaText: primaryAction?.label ?? legacyCtaText,
-      ctaLink: primaryAction?.to ?? legacyCtaLink,
+      ctaLink: primaryAction?.href ?? legacyCtaLink,
+      actionVariant: primaryAction?.variant ?? WebsiteActionVariant.outline,
       showCta: primaryAction != null,
       overlayOpacity: overlayOpacity,
       accentColor: accentColor,
@@ -3931,7 +3908,7 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
           padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
           child: Center(
             child: Text(
-              'Activa categorías en Tema > Categorías para mostrarlas aquí',
+              'Activa categorías en Catálogo web > Categorías para mostrarlas aquí',
               style: TextStyle(color: Colors.grey.shade500),
             ),
           ),
@@ -4333,6 +4310,7 @@ class _CarouselBanner extends StatefulWidget {
     this.headingSize,
     this.bodySize,
     this.onNavigate,
+    this.tenantId,
   });
 
   final Map<String, dynamic> data;
@@ -4344,6 +4322,7 @@ class _CarouselBanner extends StatefulWidget {
   final double? headingSize;
   final double? bodySize;
   final void Function(String route)? onNavigate;
+  final String? tenantId;
 
   @override
   State<_CarouselBanner> createState() => _CarouselBannerState();
@@ -4491,12 +4470,26 @@ class _CarouselBannerState extends State<_CarouselBanner> {
     final theme = Theme.of(context);
     final title = (slide['title'] ?? 'Título').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
-    final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
-    final ctaLink = (slide['ctaLink'] ?? '/productos').toString().trim();
+    final action = WebsiteActionValue.resolvePrimary(
+      slide,
+      labelKeys: const ['ctaText', 'buttonText'],
+      hrefKeys: const ['ctaLink', 'buttonLink'],
+      defaultLabel: 'Ver más',
+      defaultHref: '/productos',
+      defaultVariant: WebsiteActionVariant.outline,
+    );
     final imageUrl = slide['imageUrl'];
     final videoUrl = slide['videoUrl']?.toString() ?? '';
     final videoFileUrl = slide['videoFileUrl']?.toString() ?? '';
     final showOverlay = (slide['showOverlay'] ?? true) == true;
+    final compositionElements = slide['elements'] is List
+        ? (slide['elements'] as List)
+            .whereType<Map>()
+            .map((element) => Map<String, dynamic>.from(element))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final usesComposition =
+        slide['useComposition'] == true || compositionElements.isNotEmpty;
 
     double overlayOpacity = 0.55;
     final rawOverlay = slide['overlayOpacity'];
@@ -4555,7 +4548,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
       widget.bodyFont,
     );
 
-    // Content widget (text, buttons, overlay)
+    // Content widget. Layered slides reuse the universal Canvas element
+    // contract, so text, images, shapes, and CTA buttons remain editor-owned.
     Widget contentWidget = Container(
       decoration: showOverlay
           ? BoxDecoration(
@@ -4595,32 +4589,22 @@ class _CarouselBannerState extends State<_CarouselBanner> {
                   ),
                 ],
                 const SizedBox(height: 40),
-                if (ctaText.isNotEmpty)
-                  OutlinedButton(
+                if (action != null && action.label.isNotEmpty)
+                  WebsiteActionButton(
+                    action: action,
                     onPressed: widget.previewMode
                         ? () {}
                         : () {
-                            final route =
-                                ctaLink.isNotEmpty ? ctaLink : '/productos';
+                            final route = action.href;
                             if (widget.onNavigate != null) {
                               widget.onNavigate!(route);
                             }
                           },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white, width: 1),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 40,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(0),
-                      ),
-                    ),
-                    child: Text(
-                      ctaText.toUpperCase(),
-                      style: ctaTextStyle,
-                    ),
+                    backgroundColor: widget.accentColor,
+                    foregroundColor: Colors.white,
+                    outlineColor: Colors.white,
+                    uppercase: true,
+                    textStyle: ctaTextStyle,
                   ),
               ],
             ),
@@ -4628,6 +4612,47 @@ class _CarouselBannerState extends State<_CarouselBanner> {
         ),
       ),
     );
+
+    if (usesComposition) {
+      final compositionData = <String, dynamic>{
+        'backgroundColor': '#00000000',
+        'showGrid': false,
+        'snap': true,
+        'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
+        'mobileDesignWidth':
+            (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+        'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
+        'elements': compositionElements,
+      };
+      contentWidget = Stack(
+        fit: StackFit.expand,
+        children: [
+          if (showOverlay)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: overlayOpacity * 0.4),
+                    Colors.black.withValues(alpha: overlayOpacity * 0.7),
+                  ],
+                ),
+              ),
+            ),
+          DeferredCanvasBlock(
+            data: compositionData,
+            accentColor: widget.accentColor,
+            onNavigate: widget.onNavigate,
+            tenantId: widget.tenantId,
+            headingFont: widget.headingFont,
+            bodyFont: widget.bodyFont,
+            fillAvailableHeight: true,
+            clipContentToBounds: true,
+          ),
+        ],
+      );
+    }
 
     // If we have video, use Stack with video background
     if (hasVideo && video_platform.VideoBannerPlatform.isSupported) {
@@ -5222,6 +5247,15 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         (widget.data['title'] ?? 'Productos Destacados').toString().trim();
     final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final showViewAll = widget.data['showViewAll'] ?? true;
+    final viewAllAction = WebsiteActionValue.resolvePrimary(
+      widget.data,
+      labelKeys: const ['viewAllText'],
+      hrefKeys: const ['viewAllLink'],
+      defaultLabel: 'Ver todos los productos',
+      defaultHref: '/productos',
+      defaultVariant: WebsiteActionVariant.outline,
+      enabled: showViewAll == true,
+    );
     final layout = widget.data['layout']?.toString() ?? 'grid';
 
     int itemsPerRow = 3;
@@ -5422,34 +5456,23 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                             );
                           },
                         ),
-              if (showViewAll) ...[
+              if (viewAllAction != null) ...[
                 const SizedBox(height: 40),
                 Center(
-                  child: OutlinedButton(
+                  child: WebsiteActionButton(
+                    action: viewAllAction,
                     onPressed: widget.previewMode
                         ? () {}
                         : () {
                             if (widget.onNavigate != null) {
-                              widget.onNavigate!('/productos');
+                              widget.onNavigate!(viewAllAction.href);
                             }
                           },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.black,
-                      side: const BorderSide(color: Colors.black, width: 1),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(0),
-                      ),
-                    ),
-                    child: const Text(
-                      'VER TODOS LOS PRODUCTOS',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
-                      ),
-                    ),
+                    backgroundColor: widget.accentColor,
+                    foregroundColor: Colors.black,
+                    outlineColor: Colors.black,
+                    uppercase: true,
+                    textStyle: const TextStyle(letterSpacing: 1),
                   ),
                 ),
               ],
@@ -5512,6 +5535,7 @@ class _VideoBannerWidget extends StatefulWidget {
   final String? videoFileUrl;
   final String ctaText;
   final String ctaLink;
+  final WebsiteActionVariant actionVariant;
   final bool showCta;
   final double overlayOpacity;
   final Color accentColor;
@@ -5530,6 +5554,7 @@ class _VideoBannerWidget extends StatefulWidget {
     this.videoFileUrl,
     required this.ctaText,
     required this.ctaLink,
+    required this.actionVariant,
     required this.showCta,
     required this.overlayOpacity,
     required this.accentColor,
@@ -5650,22 +5675,18 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                           ),
                         if (widget.showCta && widget.ctaText.isNotEmpty) ...[
                           const SizedBox(height: 32),
-                          ElevatedButton(
+                          WebsiteActionButton(
+                            action: WebsiteActionValue(
+                              label: widget.ctaText,
+                              href: widget.ctaLink,
+                              variant: widget.actionVariant,
+                            ),
                             onPressed: widget.previewMode
                                 ? null
                                 : () => widget.onNavigate?.call(widget.ctaLink),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.accentColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            child: Text(widget.ctaText),
+                            backgroundColor: widget.accentColor,
+                            foregroundColor: Colors.white,
+                            outlineColor: Colors.white,
                           ),
                         ],
                       ],

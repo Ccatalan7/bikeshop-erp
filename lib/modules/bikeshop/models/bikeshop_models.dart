@@ -442,6 +442,85 @@ class BikeProfile {
       const [];
 }
 
+/// Authoritative read model for one bicycle and its optional upstream profile.
+///
+/// Identity and technical truth remain normalized in separate database tables,
+/// but callers load and save them as one aggregate so a failed profile request
+/// can never be mistaken for an empty technical sheet.
+class BikeAggregate {
+  final Bike bike;
+  final BikeProfile? profile;
+
+  const BikeAggregate({
+    required this.bike,
+    required this.profile,
+  });
+
+  factory BikeAggregate.fromJson(Map<String, dynamic> json) {
+    final bikeJson = json['bike'];
+    if (bikeJson is! Map) {
+      throw const FormatException('Bike aggregate is missing its bike row');
+    }
+
+    final profileJson = json['profile'];
+    if (profileJson != null && profileJson is! Map) {
+      throw const FormatException(
+        'Bike aggregate profile must be an object or null',
+      );
+    }
+    if (profileJson is Map) {
+      for (final field in const <String>[
+        'intake_profile',
+        'technical_profile',
+        'summary_snapshot',
+      ]) {
+        if (profileJson[field] is! Map) {
+          throw FormatException(
+            'Bike aggregate profile $field must be an object',
+          );
+        }
+      }
+    }
+    return BikeAggregate(
+      bike: Bike.fromJson(Map<String, dynamic>.from(bikeJson)),
+      profile: profileJson is Map
+          ? BikeProfile.fromJson(Map<String, dynamic>.from(profileJson))
+          : null,
+    );
+  }
+}
+
+class BikeAggregateSaveResult extends BikeAggregate {
+  final String operationId;
+  final bool replayed;
+
+  const BikeAggregateSaveResult({
+    required super.bike,
+    required super.profile,
+    required this.operationId,
+    required this.replayed,
+  });
+
+  factory BikeAggregateSaveResult.fromJson(Map<String, dynamic> json) {
+    final aggregate = BikeAggregate.fromJson(json);
+    final operationId = json['operation_id']?.toString() ?? '';
+    if (operationId.isEmpty) {
+      throw const FormatException('Bicycle save response has no operation id');
+    }
+    if (json['replayed'] is! bool) {
+      throw const FormatException(
+        'Bicycle save response has no replay status',
+      );
+    }
+    return BikeAggregateSaveResult(
+      bike: aggregate.bike,
+      profile: aggregate.profile,
+      operationId: operationId,
+      replayed: json['replayed'] == true,
+    );
+  }
+}
+
 const Map<String, String> _bikeProfileBrakeTypeLabels = {
   'rim': 'Llanta',
   'mechanical_disc': 'Disco mecanico',

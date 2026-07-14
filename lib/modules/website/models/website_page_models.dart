@@ -6,14 +6,19 @@ library;
 enum PageTemplate {
   /// Default page with block editor
   defaultTemplate,
+
   /// Landing page with full-width sections
   landing,
+
   /// Blog-style page with sidebar
   blog,
+
   /// Product listing page (system)
   productList,
+
   /// Product detail page (system)
   productDetail,
+
   /// Cart/checkout page (system)
   cart,
 }
@@ -218,8 +223,31 @@ class WebsitePage {
     );
   }
 
-  /// Full URL path for this page
-  String get fullPath => isHome ? '/' : '/$slug';
+  /// Full public route for this page.
+  ///
+  /// Only router-owned system pages use a top-level path. User-created pages
+  /// are rendered by `DynamicWebsitePage` at `/pagina/:slug`.
+  String get fullPath {
+    if (isHome) return '/';
+    const directSlugs = {
+      'productos',
+      'servicios',
+      'contacto',
+      'carrito',
+      'checkout',
+      'cuenta',
+      'nosotros',
+      'terminos',
+      'privacidad',
+      'devoluciones',
+      'envios',
+    };
+    final normalized = slug.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+    if (normalized.isEmpty) return '/';
+    return directSlugs.contains(normalized)
+        ? '/$normalized'
+        : '/pagina/$normalized';
+  }
 
   /// Display name for UI (uses meta_title if available)
   String get displayTitle => metaTitle?.isNotEmpty == true ? metaTitle! : title;
@@ -267,12 +295,16 @@ extension MenuLocationX on MenuLocation {
 enum NavLinkType {
   /// Links to a website page
   page,
+
   /// Links to an external URL
   external,
+
   /// Links to an anchor on the current page
   anchor,
+
   /// Links to a product category
   category,
+
   /// Triggers an action (e.g., 'open_cart', 'open_search')
   action,
 }
@@ -538,7 +570,7 @@ class WebsiteNavigation {
         // - legacy values stored only the category token
         // - newer UI may store a full internal href (e.g. '/productos?type=service&category=...')
         if (v.startsWith('/')) return v;
-        return '/productos?categoria=$v';
+        return '/productos?category=$v';
       case NavLinkType.action:
         return null; // Actions are handled by onClick
     }

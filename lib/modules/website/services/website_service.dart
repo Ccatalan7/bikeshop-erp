@@ -8,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_action.dart';
 import '../models/website_models.dart';
 import '../models/website_page_models.dart';
 import '../../../shared/models/product.dart';
@@ -86,6 +87,72 @@ class WebsiteService extends ChangeNotifier {
     // Schema version convention (noop-first; enables safe future migrations)
     normalized['schemaVersion'] =
         (normalized['schemaVersion'] as int?) ?? _currentBlockSchemaVersion;
+
+    void syncPrimaryAction(
+      Map<String, dynamic> target, {
+      Map<String, dynamic>? rawSource,
+      required List<String> labelKeys,
+      required List<String> hrefKeys,
+      String defaultLabel = 'Ver más',
+      String defaultHref = '',
+      WebsiteActionVariant defaultVariant = WebsiteActionVariant.filled,
+      bool enabled = true,
+      String? variantKey,
+    }) {
+      final source = rawSource ?? target;
+      final hasExplicitHref = hrefKeys.any(
+        (key) =>
+            source.containsKey(key) &&
+            (source[key]?.toString().trim().isNotEmpty ?? false),
+      );
+      final hasStructuredAction = source['actions'] is List &&
+          (source['actions'] as List).whereType<Map>().isNotEmpty;
+      final resolutionData = Map<String, dynamic>.from(target);
+      if (!hasExplicitHref && hasStructuredAction) {
+        for (final key in hrefKeys) {
+          resolutionData.remove(key);
+        }
+        for (final key in labelKeys) {
+          resolutionData.remove(key);
+        }
+        resolutionData['actions'] = source['actions'];
+      }
+
+      final action = WebsiteActionValue.resolvePrimary(
+        resolutionData,
+        labelKeys: labelKeys,
+        hrefKeys: hrefKeys,
+        defaultLabel: defaultLabel,
+        defaultHref: defaultHref,
+        defaultVariant: variantKey == null
+            ? defaultVariant
+            : WebsiteActionVariant.fromStorage(
+                target[variantKey]?.toString(),
+                fallback: defaultVariant,
+              ),
+        enabled: enabled,
+      );
+      final effective = action ??
+          WebsiteActionValue(
+            label: defaultLabel,
+            href: '',
+            variant: defaultVariant,
+          );
+      target['actions'] = WebsiteActionValue.mergePrimary(
+        target['actions'],
+        effective,
+      );
+      if (action == null) return;
+      for (final key in labelKeys) {
+        target[key] = action.label;
+      }
+      for (final key in hrefKeys) {
+        target[key] = action.href;
+      }
+      if (variantKey != null) {
+        target[variantKey] = action.variant.storageValue;
+      }
+    }
 
     // --- Targeted legacy migrations (keep minimal, safe) ---
     final rawTypeLower = blockTypeRaw.trim().toLowerCase();
@@ -230,51 +297,100 @@ class WebsiteService extends ChangeNotifier {
       }
     }
 
-    // --- Phase 3 groundwork: normalized actions (backwards-compatible) ---
-    // Keep legacy keys (buttonText/buttonLink, ctaText/ctaLink) but also
-    // provide a unified `actions` array for renderers to optionally use.
+    // Every visible CTA is normalized into the same action contract. Legacy
+    // aliases remain synchronized so old saved pages and newer editor controls
+    // cannot disagree about what the visitor clicks.
     if (rawTypeLower == 'hero' ||
         rawTypeLower == 'cta' ||
         rawTypeLower == 'videobanner') {
-      final showCta = rawTypeLower == 'videobanner'
-          ? (normalized['showCta'] != false)
-          : true;
+      syncPrimaryAction(
+        normalized,
+        rawSource: rawMap,
+        labelKeys: const ['ctaText', 'buttonText'],
+        hrefKeys: const ['ctaLink', 'buttonLink'],
+        defaultHref: rawTypeLower == 'cta' ? '/contacto' : '/productos',
+        defaultVariant: WebsiteActionVariant.outline,
+        enabled:
+            rawTypeLower != 'videobanner' || normalized['showCta'] != false,
+        variantKey: 'actionVariant',
+      );
+    } else if (rawTypeLower == 'button') {
+      syncPrimaryAction(
+        normalized,
+        rawSource: rawMap,
+        labelKeys: const ['label', 'text'],
+        hrefKeys: const ['link'],
+        defaultLabel: 'Botón',
+        defaultHref: '/productos',
+        variantKey: 'style',
+      );
+    } else if (rawTypeLower == 'products') {
+      syncPrimaryAction(
+        normalized,
+        rawSource: rawMap,
+        labelKeys: const ['viewAllText'],
+        hrefKeys: const ['viewAllLink'],
+        defaultLabel: 'Ver todos los productos',
+        defaultHref: '/productos',
+        defaultVariant: WebsiteActionVariant.outline,
+        enabled: normalized['showViewAll'] != false,
+        variantKey: 'actionVariant',
+      );
+    }
 
-      final legacyLabel =
-          (normalized['ctaText'] ?? normalized['buttonText'] ?? '')
-              .toString()
-              .trim();
-      final legacyTo = (normalized['ctaLink'] ?? normalized['buttonLink'] ?? '')
-          .toString()
-          .trim();
+    void syncNestedActions(
+      String collectionKey, {
+      required List<String> labelKeys,
+      required List<String> hrefKeys,
+      String defaultLabel = 'Ver más',
+      String defaultHref = '/productos',
+      WebsiteActionVariant defaultVariant = WebsiteActionVariant.filled,
+      String? variantKey,
+    }) {
+      final items = normalized[collectionKey];
+      if (items is! List) return;
+      final rawItems = rawMap[collectionKey] is List
+          ? rawMap[collectionKey] as List
+          : const <dynamic>[];
+      normalized[collectionKey] = <Map<String, dynamic>>[
+        for (var index = 0; index < items.length; index++)
+          if (items[index] is Map)
+            (() {
+              final item = Map<String, dynamic>.from(items[index] as Map);
+              final rawItem = index < rawItems.length && rawItems[index] is Map
+                  ? Map<String, dynamic>.from(rawItems[index] as Map)
+                  : item;
+              syncPrimaryAction(
+                item,
+                rawSource: rawItem,
+                labelKeys: labelKeys,
+                hrefKeys: hrefKeys,
+                defaultLabel: defaultLabel,
+                defaultHref: defaultHref,
+                defaultVariant: defaultVariant,
+                variantKey: variantKey,
+              );
+              return item;
+            })(),
+      ];
+    }
 
-      final existingActionsRaw = normalized['actions'];
-      final existingActions = <Map<String, dynamic>>[];
-      if (existingActionsRaw is List) {
-        for (final item in existingActionsRaw) {
-          if (item is Map) {
-            existingActions.add(Map<String, dynamic>.from(item));
-          }
-        }
-      }
-
-      // Only synthesize if missing/empty to avoid clobbering future editor-driven actions.
-      if (existingActions.isEmpty) {
-        if (showCta && legacyTo.isNotEmpty) {
-          normalized['actions'] = [
-            {
-              'type': 'navigate',
-              'label': legacyLabel.isNotEmpty ? legacyLabel : 'Ver más',
-              'to': legacyTo,
-            },
-          ];
-        } else {
-          normalized['actions'] = const <Map<String, dynamic>>[];
-        }
-      } else {
-        // Keep as-is but ensure it's a List<Map>.
-        normalized['actions'] = existingActions;
-      }
+    if (rawTypeLower == 'carousel') {
+      syncNestedActions(
+        'slides',
+        labelKeys: const ['ctaText', 'buttonText'],
+        hrefKeys: const ['ctaLink', 'buttonLink'],
+        defaultVariant: WebsiteActionVariant.outline,
+        variantKey: 'actionVariant',
+      );
+    } else if (rawTypeLower == 'pricing') {
+      syncNestedActions(
+        'plans',
+        labelKeys: const ['ctaText', 'buttonText'],
+        hrefKeys: const ['ctaLink', 'buttonLink'],
+        defaultLabel: 'Seleccionar',
+        variantKey: 'actionVariant',
+      );
     }
 
     return normalized;
@@ -2355,6 +2471,84 @@ class WebsiteService extends ChangeNotifier {
     } catch (e) {
       _error = 'Error al actualizar visibilidad del producto: $e';
       debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Canonical bulk command used by every Website Builder catalog surface.
+  /// Product publication owns both flags; inventory forms may display them but
+  /// must not implement a competing website-publisher workflow.
+  Future<void> updateProductWebsiteVisibilityBatch({
+    required String tenantId,
+    required Iterable<String> productIds,
+    required bool showOnWebsite,
+  }) async {
+    final ids = productIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return;
+
+    try {
+      const chunkSize = 200;
+      final now = DateTime.now().toUtc().toIso8601String();
+      for (var start = 0; start < ids.length; start += chunkSize) {
+        final chunk = ids.skip(start).take(chunkSize).toList(growable: false);
+        await _supabase
+            .from('products')
+            .update({
+              'show_on_website': showOnWebsite,
+              'is_published': showOnWebsite,
+              'updated_at': now,
+            })
+            .eq('tenant_id', tenantId)
+            .inFilter('id', chunk);
+      }
+      _safeNotifyListeners();
+    } catch (error) {
+      _error = 'Error al actualizar publicación web de productos: $error';
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Canonical replacement command for public category inclusion.
+  Future<void> replaceWebsiteCategoryVisibility({
+    required String tenantId,
+    required Iterable<String> visibleCategoryIds,
+  }) async {
+    final selected = visibleCategoryIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      await _supabase.from('product_categories').update({
+        'show_on_website': false,
+        'updated_at': now,
+      }).eq('tenant_id', tenantId);
+      if (selected.isNotEmpty) {
+        const chunkSize = 200;
+        for (var start = 0; start < selected.length; start += chunkSize) {
+          final chunk =
+              selected.skip(start).take(chunkSize).toList(growable: false);
+          await _supabase
+              .from('product_categories')
+              .update({
+                'show_on_website': true,
+                'updated_at': now,
+              })
+              .eq('tenant_id', tenantId)
+              .inFilter('id', chunk);
+        }
+      }
+      _safeNotifyListeners();
+    } catch (error) {
+      _error = 'Error al actualizar categorías públicas: $error';
       _safeNotifyListeners();
       rethrow;
     }

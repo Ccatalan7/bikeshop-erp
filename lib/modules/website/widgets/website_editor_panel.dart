@@ -14,12 +14,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
-import '../../inventory/models/category_models.dart' as cat_models;
-import '../../inventory/services/category_service.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_font_registry.dart';
+import '../models/website_action.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
@@ -29,6 +28,8 @@ import '../services/google_business_service.dart';
 import 'focal_point_picker.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_link_value_editor.dart';
+import 'website_action_editor.dart';
+import 'website_workspace_scope.dart';
 
 /// Sanitize filename for Supabase Storage (remove spaces and special chars)
 String _sanitizeFileName(String fileName) {
@@ -632,6 +633,11 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
               'canvas_el:image',
               labelOverride: 'Imagen',
               iconOverride: Icons.image_outlined,
+            ),
+            const _BlockOption(
+              'canvas_el:shape',
+              labelOverride: 'Forma',
+              iconOverride: Icons.rectangle_outlined,
             ),
             const _BlockOption(
               'canvas_el:product',
@@ -1429,16 +1435,59 @@ class _BlockOption {
   }
 }
 
-/// Tab for editing selected block - shows controls based on block type
-/// Also handles special elements: 'header' and 'footer'
-class _EditBlockTab extends StatelessWidget {
+enum _InspectorSection { content, layout, style }
+
+/// Inspector for the selected block.
+///
+/// Professional editors keep block identity and primary actions stable while
+/// separating content, layout and appearance. This also gives every selection
+/// a predictable starting point instead of preserving an unrelated scroll
+/// position from the previously selected block.
+class _EditBlockTab extends StatefulWidget {
   final WebsiteEditModeProvider editProvider;
 
   const _EditBlockTab({required this.editProvider});
 
   @override
+  State<_EditBlockTab> createState() => _EditBlockTabState();
+}
+
+class _EditBlockTabState extends State<_EditBlockTab> {
+  final ScrollController _scrollController = ScrollController();
+  _InspectorSection _section = _InspectorSection.content;
+  String? _lastSelectedId;
+
+  WebsiteEditModeProvider get editProvider => widget.editProvider;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncSelection(String? selectedId) {
+    if (_lastSelectedId == selectedId) return;
+    _lastSelectedId = selectedId;
+    _section = _InspectorSection.content;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    });
+  }
+
+  void _selectSection(_InspectorSection value) {
+    if (_section == value) return;
+    setState(() => _section = value);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final selectedId = editProvider.selectedBlockId;
+    _syncSelection(selectedId);
 
     if (selectedId == null) {
       return _buildNoSelection();
@@ -1464,34 +1513,163 @@ class _EditBlockTab extends StatelessWidget {
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
     final isVisible = block['is_visible'] ?? true;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildBlockHeader(blockType, isVisible, selectedId),
-          const SizedBox(height: 16),
-          _BlockHeightControl(
-              data: blockData,
-              blockId: selectedId,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: _buildBlockHeader(blockType, isVisible, selectedId),
+        ),
+        _buildSectionNavigation(),
+        const Divider(height: 1, color: Colors.white12),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            key: PageStorageKey<String>(
+              'website_inspector_${selectedId}_${_section.name}',
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+            child: _buildSectionContent(
               blockType: blockType,
-              provider: editProvider),
-          const SizedBox(height: 16),
-          _BlockSpacingControl(
-              data: blockData, blockId: selectedId, provider: editProvider),
-          const SizedBox(height: 20),
-          _buildBlockControls(blockType, blockData, selectedId),
-          const SizedBox(height: 24),
-          const Divider(color: Colors.white12),
-          const SizedBox(height: 16),
-          _BlockStyleControls(
-            blockId: selectedId,
-            provider: editProvider,
-            blockData: block,
+              blockData: blockData,
+              block: block,
+              blockId: selectedId,
+            ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionNavigation() {
+    const items = <(_InspectorSection, IconData, String)>[
+      (_InspectorSection.content, Icons.edit_note_rounded, 'Contenido'),
+      (_InspectorSection.layout, Icons.dashboard_customize_outlined, 'Diseño'),
+      (_InspectorSection.style, Icons.palette_outlined, 'Estilo'),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+        child: Row(
+          children: items.map((item) {
+            final selected = item.$1 == _section;
+            return Expanded(
+              child: Semantics(
+                button: true,
+                selected: selected,
+                label: 'Inspector: ${item.$3}',
+                child: InkWell(
+                  onTap: () => _selectSection(item.$1),
+                  borderRadius: BorderRadius.circular(7),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFF00A09D).withValues(alpha: 0.18)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF00A09D).withValues(alpha: 0.55)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          item.$2,
+                          size: 15,
+                          color: selected
+                              ? const Color(0xFF20C5C1)
+                              : Colors.white54,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            item.$3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: selected ? Colors.white : Colors.white54,
+                              fontSize: 11.5,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
+  }
+
+  Widget _buildSectionContent({
+    required String blockType,
+    required Map<String, dynamic> blockData,
+    required Map<String, dynamic> block,
+    required String blockId,
+  }) {
+    switch (_section) {
+      case _InspectorSection.content:
+        return _buildBlockControls(blockType, blockData, blockId);
+      case _InspectorSection.layout:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _InspectorIntro(
+              title: 'Disposición del bloque',
+              description:
+                  'Controla el tamaño y el espacio que ocupa este bloque en la página.',
+              icon: Icons.dashboard_customize_outlined,
+            ),
+            const SizedBox(height: 18),
+            _BlockHeightControl(
+              data: blockData,
+              blockId: blockId,
+              blockType: blockType,
+              provider: editProvider,
+            ),
+            const SizedBox(height: 18),
+            _BlockSpacingControl(
+              data: blockData,
+              blockId: blockId,
+              provider: editProvider,
+            ),
+          ],
+        );
+      case _InspectorSection.style:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _InspectorIntro(
+              title: 'Apariencia del bloque',
+              description:
+                  'Personaliza fondo, relleno, bordes y sombra sin alterar el contenido.',
+              icon: Icons.palette_outlined,
+            ),
+            const SizedBox(height: 18),
+            _BlockStyleControls(
+              blockId: blockId,
+              provider: editProvider,
+              blockData: block,
+              collapsible: false,
+            ),
+          ],
+        );
+    }
   }
 
   Widget _buildNoSelection() {
@@ -2063,6 +2241,18 @@ class _CarouselBlockControls extends StatefulWidget {
 class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   int _selectedSlideIndex = 0;
 
+  void _selectSlide(int index, {bool rebuild = true}) {
+    final count = _slides.length;
+    if (count <= 0) return;
+    final normalized = index.clamp(0, count - 1).toInt();
+    if (rebuild && mounted) {
+      setState(() => _selectedSlideIndex = normalized);
+    } else {
+      _selectedSlideIndex = normalized;
+    }
+    widget.provider.selectCarouselSlide(widget.blockId, normalized, count);
+  }
+
   List<Map<String, dynamic>> get _slides {
     final rawSlides = widget.data['slides'];
     if (rawSlides is List) {
@@ -2105,6 +2295,156 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     }
   }
 
+  void _updateSlideTransient(int index, String key, dynamic value) {
+    final slides = List<Map<String, dynamic>>.from(_slides);
+    if (index < 0 || index >= slides.length) return;
+    slides[index] = {...slides[index], key: value};
+    widget.provider.updateBlockData(
+      widget.blockId,
+      'slides',
+      slides,
+      saveHistory: false,
+    );
+  }
+
+  void _setCompositionEnabled(Map<String, dynamic> slide, bool enabled) {
+    if (!enabled) {
+      _updateSlide(_selectedSlideIndex, 'useComposition', false);
+      return;
+    }
+
+    final existing = slide['elements'];
+    if (existing is List && existing.isNotEmpty) {
+      _updateSlide(_selectedSlideIndex, 'useComposition', true);
+      return;
+    }
+
+    final title = (slide['title'] ?? 'Título del banner').toString();
+    final subtitle = (slide['subtitle'] ?? '').toString();
+    final action = WebsiteActionValue.resolvePrimary(
+          slide,
+          labelKeys: const ['ctaText', 'buttonText'],
+          hrefKeys: const ['ctaLink', 'buttonLink'],
+          defaultLabel: 'Ver más',
+          defaultHref: '/productos',
+          defaultVariant: WebsiteActionVariant.outline,
+        ) ??
+        const WebsiteActionValue(
+          label: 'Ver más',
+          href: '/productos',
+          variant: WebsiteActionVariant.outline,
+        );
+    Map<String, dynamic> textElement({
+      required String id,
+      required String text,
+      required double x,
+      required double y,
+      required double w,
+      required double h,
+      required double size,
+      required bool mobile,
+      String role = 'heading',
+      String weight = 'w700',
+    }) =>
+        {
+          'id': id,
+          'type': 'text',
+          'text': text,
+          'x': x,
+          'y': y,
+          'w': w,
+          'h': h,
+          'fontSize': size,
+          'fontWeight': weight,
+          'fontRole': role,
+          'color': '#FFFFFF',
+          'align': 'left',
+          'lineHeight': 1.05,
+          'letterSpacing': role == 'heading' ? 1.0 : 0.0,
+          'hideOnMobile': !mobile,
+          'showOnMobile': mobile,
+        };
+    Map<String, dynamic> buttonElement({
+      required String id,
+      required double x,
+      required double y,
+      required bool mobile,
+    }) =>
+        {
+          'id': id,
+          'type': 'button',
+          'x': x,
+          'y': y,
+          'w': 220.0,
+          'h': 56.0,
+          'label': action.label,
+          'link': action.href,
+          'style': action.variant.storageValue,
+          'inheritTheme': true,
+          'actions': WebsiteActionValue.mergePrimary(null, action),
+          'hideOnMobile': !mobile,
+          'showOnMobile': mobile,
+        };
+
+    final elements = <Map<String, dynamic>>[
+      textElement(
+        id: 'title_desktop',
+        text: title,
+        x: 120,
+        y: 190,
+        w: 620,
+        h: 130,
+        size: 58,
+        mobile: false,
+      ),
+      if (subtitle.isNotEmpty)
+        textElement(
+          id: 'subtitle_desktop',
+          text: subtitle,
+          x: 120,
+          y: 330,
+          w: 560,
+          h: 80,
+          size: 22,
+          mobile: false,
+          role: 'body',
+          weight: 'w400',
+        ),
+      buttonElement(id: 'button_desktop', x: 120, y: 430, mobile: false),
+      textElement(
+        id: 'title_mobile',
+        text: title,
+        x: 28,
+        y: 160,
+        w: 334,
+        h: 150,
+        size: 42,
+        mobile: true,
+      ),
+      if (subtitle.isNotEmpty)
+        textElement(
+          id: 'subtitle_mobile',
+          text: subtitle,
+          x: 28,
+          y: 320,
+          w: 334,
+          h: 90,
+          size: 18,
+          mobile: true,
+          role: 'body',
+          weight: 'w400',
+        ),
+      buttonElement(id: 'button_mobile', x: 28, y: 440, mobile: true),
+    ];
+
+    _updateSlideMultiple(_selectedSlideIndex, {
+      'useComposition': true,
+      'designWidth': 1200.0,
+      'mobileDesignWidth': 390.0,
+      'elements': elements,
+    });
+  }
+
   void _addSlide() {
     final slides = List<Map<String, dynamic>>.from(_slides);
     slides.add({
@@ -2118,6 +2458,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     });
     _updateSlides(slides);
     setState(() => _selectedSlideIndex = slides.length - 1);
+    widget.provider.selectCarouselSlide(
+      widget.blockId,
+      _selectedSlideIndex,
+      slides.length,
+    );
   }
 
   void _removeSlide(int index) {
@@ -2125,11 +2470,15 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     if (slides.length > 1 && index >= 0 && index < slides.length) {
       slides.removeAt(index);
       _updateSlides(slides);
-      setState(() {
-        if (_selectedSlideIndex >= slides.length) {
-          _selectedSlideIndex = slides.length - 1;
-        }
-      });
+      final nextIndex = _selectedSlideIndex >= slides.length
+          ? slides.length - 1
+          : _selectedSlideIndex;
+      setState(() => _selectedSlideIndex = nextIndex);
+      widget.provider.selectCarouselSlide(
+        widget.blockId,
+        nextIndex,
+        slides.length,
+      );
     }
   }
 
@@ -2149,217 +2498,295 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ? Map<String, dynamic>.from(slide['subtitleFormatting'] as Map)
           : null,
     );
+    final compositionElements = slide['elements'] is List
+        ? (slide['elements'] as List)
+            .whereType<Map>()
+            .map((element) => Map<String, dynamic>.from(element))
+            .toList()
+        : <Map<String, dynamic>>[];
+    final usesComposition =
+        slide['useComposition'] == true || compositionElements.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _EditorTextField(
-          label: 'Título',
-          value: slide['title']?.toString() ?? '',
-          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'title', v),
-        ),
-        const SizedBox(height: 8),
-        TextFormattingToolbar(
-          currentFormatting: titleFormatting,
-          preset: TextToolbarPreset.basic,
-          showAdvancedOptions: false,
-          onFormattingChanged: (value) => _updateSlide(
-            _selectedSlideIndex,
-            'titleFormatting',
-            value.toJson(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Subtítulo',
-          value: slide['subtitle']?.toString() ?? '',
-          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'subtitle', v),
-          maxLines: 2,
-        ),
-        const SizedBox(height: 8),
-        TextFormattingToolbar(
-          currentFormatting: subtitleFormatting,
-          preset: TextToolbarPreset.basic,
-          showAdvancedOptions: false,
-          onFormattingChanged: (value) => _updateSlide(
-            _selectedSlideIndex,
-            'subtitleFormatting',
-            value.toJson(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Texto del botón',
-          value: slide['ctaText']?.toString() ?? '',
-          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaText', v),
-        ),
-        const SizedBox(height: 12),
-        WebsiteLinkValueEditor(
-          label: 'Link del botón',
-          value: slide['ctaLink']?.toString() ?? '',
-          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'ctaLink', v),
-          dense: true,
-          darkStyle: true,
-        ),
-        const SizedBox(height: 20),
-
-        // Image section
-        const _SectionHeader('IMAGEN DE FONDO'),
-        const SizedBox(height: 8),
-        _ImagePicker(
-          currentUrl: slide['imageUrl']?.toString(),
-          onChanged: (url) =>
-              _updateSlide(_selectedSlideIndex, 'imageUrl', url),
-        ),
-        const SizedBox(height: 12),
-        const _SectionHeader('Foco de imagen'),
-        const SizedBox(height: 8),
-        FocalPointPicker(
-          imageUrl: slide['imageUrl']?.toString(),
-          focalX: (slide['focalPointX'] as num?)?.toDouble() ?? 0.5,
-          focalY: (slide['focalPointY'] as num?)?.toDouble() ?? 0.5,
-          onChanged: (x, y) {
-            _updateSlideMultiple(_selectedSlideIndex, {
-              'focalPointX': x,
-              'focalPointY': y,
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        const _SectionHeader('Foco móvil'),
-        const SizedBox(height: 8),
-        FocalPointPicker(
-          imageUrl: slide['imageUrl']?.toString(),
-          focalX: (slide['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
-          focalY: (slide['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
-          onChanged: (x, y) {
-            // Update both values atomically
-            _updateSlideMultiple(_selectedSlideIndex, {
-              'mobileFocalPointX': x,
-              'mobileFocalPointY': y,
-            });
-          },
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Texto alternativo',
-          value: slide['altText']?.toString() ?? '',
-          onChanged: (value) =>
-              _updateSlide(_selectedSlideIndex, 'altText', value),
-        ),
-
-        const SizedBox(height: 20),
-
-        // Video section
-        const _SectionHeader('VIDEO DE FONDO (OPCIONAL)'),
-        const SizedBox(height: 8),
-        const Text(
-          'Si se configura un video, se usará en vez de la imagen',
-          style: TextStyle(color: Colors.white38, fontSize: 11),
-        ),
-        const SizedBox(height: 12),
-
-        // YouTube URL option - use _EditorTextField like the title field
-        _EditorTextField(
-          label: 'URL de YouTube',
-          value: slide['videoUrl']?.toString() ?? '',
-          onChanged: (v) {
-            debugPrint('🎬 [CarouselSlide] YouTube URL changed: "$v"');
-            _updateSlide(_selectedSlideIndex, 'videoUrl', v);
-            // Clear file URL if entering YouTube URL
-            if (v.isNotEmpty) {
-              _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
-            }
-          },
-          hint: 'https://youtube.com/watch?v=...',
-        ),
-
-        const SizedBox(height: 12),
-
-        // Divider with "o"
-        const Row(
+        _CollapsibleSection(
+          title: 'Contenido del slide',
+          icon: Icons.edit_note_rounded,
+          initiallyExpanded: true,
           children: [
-            Expanded(child: Divider(color: Colors.white24)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('o',
-                  style: TextStyle(color: Colors.white38, fontSize: 12)),
+            _EditorToggle(
+              label: 'Diseño avanzado por capas',
+              value: usesComposition,
+              onChanged: (value) => _setCompositionEnabled(slide, value),
             ),
-            Expanded(child: Divider(color: Colors.white24)),
+            const SizedBox(height: 8),
+            Text(
+              usesComposition
+                  ? 'Cada texto, imagen, forma y botón es una capa editable. Arrástrala directamente sobre el slide.'
+                  : 'Actívalo para crear campañas con composición libre sin perder los controles del editor.',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            const SizedBox(height: 16),
+            if (usesComposition) ...[
+              _CanvasBlockControls(
+                data: <String, dynamic>{
+                  ...slide,
+                  'elements': compositionElements,
+                  'blockHeight':
+                      (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
+                },
+                blockId: widget.blockId,
+                provider: widget.provider,
+                elementsOnly: true,
+                onElementsChanged: (elements) =>
+                    _updateSlide(_selectedSlideIndex, 'elements', elements),
+                onActiveElementChanged: (elementId) => _updateSlideTransient(
+                  _selectedSlideIndex,
+                  'activeElementId',
+                  elementId,
+                ),
+              ),
+              const SizedBox(height: 20),
+            ] else ...[
+              _EditorTextField(
+                label: 'Título',
+                value: slide['title']?.toString() ?? '',
+                onChanged: (v) => _updateSlide(_selectedSlideIndex, 'title', v),
+              ),
+              const SizedBox(height: 8),
+              TextFormattingToolbar(
+                currentFormatting: titleFormatting,
+                preset: TextToolbarPreset.basic,
+                showAdvancedOptions: false,
+                onFormattingChanged: (value) => _updateSlide(
+                  _selectedSlideIndex,
+                  'titleFormatting',
+                  value.toJson(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _EditorTextField(
+                label: 'Subtítulo',
+                value: slide['subtitle']?.toString() ?? '',
+                onChanged: (v) =>
+                    _updateSlide(_selectedSlideIndex, 'subtitle', v),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 8),
+              TextFormattingToolbar(
+                currentFormatting: subtitleFormatting,
+                preset: TextToolbarPreset.basic,
+                showAdvancedOptions: false,
+                onFormattingChanged: (value) => _updateSlide(
+                  _selectedSlideIndex,
+                  'subtitleFormatting',
+                  value.toJson(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              WebsiteActionEditor(
+                showVariant: true,
+                value: WebsiteActionValue.resolvePrimary(
+                      slide,
+                      labelKeys: const ['ctaText', 'buttonText'],
+                      hrefKeys: const ['ctaLink', 'buttonLink'],
+                      defaultLabel: 'Ver más',
+                      defaultHref: '/productos',
+                      defaultVariant: WebsiteActionVariant.outline,
+                    ) ??
+                    const WebsiteActionValue(
+                      label: 'Ver más',
+                      href: '/productos',
+                      variant: WebsiteActionVariant.outline,
+                    ),
+                onChanged: (action) => _updateSlideMultiple(
+                  _selectedSlideIndex,
+                  {
+                    'ctaText': action.label,
+                    'buttonText': action.label,
+                    'ctaLink': action.href,
+                    'buttonLink': action.href,
+                    'actionVariant': action.variant.storageValue,
+                    'actions': WebsiteActionValue.mergePrimary(
+                      slide['actions'],
+                      action,
+                    ),
+                  },
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
           ],
         ),
-
-        const SizedBox(height: 12),
-
-        // Upload video file button
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _uploadSlideVideoFile,
-            icon: const Icon(Icons.upload_file, size: 18),
-            label: const Text('Subir archivo de video'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A09D),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+        _CollapsibleSection(
+          title: 'Imagen y encuadre',
+          icon: Icons.image_outlined,
+          initiallyExpanded: !usesComposition,
+          children: [
+            _ImagePicker(
+              currentUrl: slide['imageUrl']?.toString(),
+              onChanged: (url) =>
+                  _updateSlide(_selectedSlideIndex, 'imageUrl', url),
             ),
-          ),
+            const SizedBox(height: 12),
+            const _SectionHeader('Foco de imagen'),
+            const SizedBox(height: 8),
+            FocalPointPicker(
+              imageUrl: slide['imageUrl']?.toString(),
+              focalX: (slide['focalPointX'] as num?)?.toDouble() ?? 0.5,
+              focalY: (slide['focalPointY'] as num?)?.toDouble() ?? 0.5,
+              onChanged: (x, y) {
+                _updateSlideMultiple(_selectedSlideIndex, {
+                  'focalPointX': x,
+                  'focalPointY': y,
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            const _SectionHeader('Foco móvil'),
+            const SizedBox(height: 8),
+            FocalPointPicker(
+              imageUrl: slide['imageUrl']?.toString(),
+              focalX: (slide['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
+              focalY: (slide['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
+              onChanged: (x, y) {
+                // Update both values atomically
+                _updateSlideMultiple(_selectedSlideIndex, {
+                  'mobileFocalPointX': x,
+                  'mobileFocalPointY': y,
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Texto alternativo',
+              value: slide['altText']?.toString() ?? '',
+              onChanged: (value) =>
+                  _updateSlide(_selectedSlideIndex, 'altText', value),
+            ),
+          ],
         ),
-
-        // Show current video file if exists
-        if (hasVideoFile) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+        _CollapsibleSection(
+          title: 'Video de fondo',
+          icon: Icons.play_circle_outline_rounded,
+          initiallyExpanded:
+              hasVideoFile || (slide['videoUrl']?.toString() ?? '').isNotEmpty,
+          children: [
+            const Text(
+              'Si se configura un video, se usará en vez de la imagen',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
             ),
-            child: Row(
+            const SizedBox(height: 12),
+
+            // YouTube URL option - use _EditorTextField like the title field
+            _EditorTextField(
+              label: 'URL de YouTube',
+              value: slide['videoUrl']?.toString() ?? '',
+              onChanged: (v) {
+                debugPrint('🎬 [CarouselSlide] YouTube URL changed: "$v"');
+                _updateSlide(_selectedSlideIndex, 'videoUrl', v);
+                // Clear file URL if entering YouTube URL
+                if (v.isNotEmpty) {
+                  _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
+                }
+              },
+              hint: 'https://youtube.com/watch?v=...',
+            ),
+
+            const SizedBox(height: 12),
+
+            // Divider with "o"
+            const Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Archivo de video cargado',
-                    style: TextStyle(color: Colors.green, fontSize: 12),
-                  ),
+                Expanded(child: Divider(color: Colors.white24)),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('o',
+                      style: TextStyle(color: Colors.white38, fontSize: 12)),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 16, color: Colors.green),
-                  onPressed: () =>
-                      _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
+                Expanded(child: Divider(color: Colors.white24)),
               ],
             ),
-          ),
-        ],
 
-        const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
-        // Overlay settings
-        const _SectionHeader('OVERLAY'),
-        const SizedBox(height: 8),
-        _EditorToggle(
-          label: 'Mostrar overlay oscuro',
-          value: showOverlay,
-          onChanged: (v) => _updateSlide(_selectedSlideIndex, 'showOverlay', v),
+            // Upload video file button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _uploadSlideVideoFile,
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('Subir archivo de video'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00A09D),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+
+            // Show current video file if exists
+            if (hasVideoFile) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border:
+                      Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle,
+                        color: Colors.green, size: 16),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Archivo de video cargado',
+                        style: TextStyle(color: Colors.green, fontSize: 12),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close,
+                          size: 16, color: Colors.green),
+                      onPressed: () =>
+                          _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
-        if (showOverlay) ...[
-          const SizedBox(height: 12),
-          _EditorSlider(
-            label: 'Opacidad del overlay',
-            value: overlayOpacity,
-            min: 0.0,
-            max: 1.0,
-            divisions: 20,
-            onChanged: (v) =>
-                _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
-          ),
-        ],
+        _CollapsibleSection(
+          title: 'Overlay',
+          icon: Icons.gradient_outlined,
+          initiallyExpanded: false,
+          children: [
+            _EditorToggle(
+              label: 'Mostrar overlay oscuro',
+              value: showOverlay,
+              onChanged: (v) =>
+                  _updateSlide(_selectedSlideIndex, 'showOverlay', v),
+            ),
+            if (showOverlay) ...[
+              const SizedBox(height: 12),
+              _EditorSlider(
+                label: 'Opacidad del overlay',
+                value: overlayOpacity,
+                min: 0.0,
+                max: 1.0,
+                divisions: 20,
+                onChanged: (v) =>
+                    _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }
@@ -2441,6 +2868,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   @override
   Widget build(BuildContext context) {
     final slides = _slides;
+    final sharedSelection =
+        widget.provider.carouselSlideSelection(widget.blockId, slides.length);
+    if (sharedSelection != _selectedSlideIndex) {
+      _selectedSlideIndex = sharedSelection;
+    }
     final autoPlay = widget.data['autoPlay'] ?? true;
     final intervalSeconds =
         (widget.data['intervalSeconds'] as num?)?.toInt() ?? 5;
@@ -2451,183 +2883,195 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Carousel Settings Section
-        const _SectionHeader('Configuración'),
-        const SizedBox(height: 12),
-        _EditorToggle(
-          label: 'Reproducción automática',
-          value: autoPlay,
-          onChanged: (v) =>
-              widget.provider.updateBlockData(widget.blockId, 'autoPlay', v),
-        ),
-        const SizedBox(height: 12),
-        if (autoPlay) ...[
-          _EditorSlider(
-            label: 'Intervalo (segundos)',
-            value: intervalSeconds.toDouble(),
-            min: 2,
-            max: 15,
-            divisions: 13,
-            onChanged: (v) => widget.provider
-                .updateBlockData(widget.blockId, 'intervalSeconds', v.toInt()),
-          ),
-          const SizedBox(height: 12),
-        ],
-        _EditorSlider(
-          label: 'Duración animación (ms)',
-          value:
-              (widget.data['animationDurationMs'] as num?)?.toDouble() ?? 600,
-          min: 200,
-          max: 2000,
-          divisions: 18, // (2000-200)/100 = 18 steps of 100ms
-          onChanged: (v) => widget.provider.updateBlockDataMultiple(
-            widget.blockId,
-            {
-              'animationDurationMs': v.toInt(),
-              // Keep legacy field in sync until all persisted data is normalized.
-              'transitionDuration': v.toInt(),
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        _EditorDropdown(
-          label: 'Animación',
-          value: animation,
-          options: const [
-            ('slide', 'Deslizar'),
-            ('fade', 'Desvanecer'),
-            ('zoom', 'Zoom'),
-          ],
-          onChanged: (v) =>
-              widget.provider.updateBlockData(widget.blockId, 'animation', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorToggle(
-          label: 'Mostrar indicadores',
-          value: showIndicators,
-          onChanged: (v) => widget.provider
-              .updateBlockData(widget.blockId, 'showIndicators', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorToggle(
-          label: 'Mostrar flechas',
-          value: showArrows,
-          onChanged: (v) =>
-              widget.provider.updateBlockData(widget.blockId, 'showArrows', v),
-        ),
-
-        const SizedBox(height: 24),
-        // Slides Section
-        Row(
+        _CollapsibleSection(
+          title: 'Comportamiento del carrusel',
+          icon: Icons.motion_photos_auto_outlined,
+          initiallyExpanded: false,
           children: [
-            const Expanded(child: _SectionHeader('Slides')),
-            InkWell(
-              onTap: _addSlide,
-              borderRadius: BorderRadius.circular(4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00A09D).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add, size: 14, color: Color(0xFF00A09D)),
-                    SizedBox(width: 4),
-                    Text('Agregar',
-                        style:
-                            TextStyle(color: Color(0xFF00A09D), fontSize: 12)),
-                  ],
-                ),
+            _EditorToggle(
+              label: 'Reproducción automática',
+              value: autoPlay,
+              onChanged: (v) => widget.provider
+                  .updateBlockData(widget.blockId, 'autoPlay', v),
+            ),
+            const SizedBox(height: 12),
+            if (autoPlay) ...[
+              _EditorSlider(
+                label: 'Intervalo (segundos)',
+                value: intervalSeconds.toDouble(),
+                min: 2,
+                max: 15,
+                divisions: 13,
+                onChanged: (v) => widget.provider.updateBlockData(
+                    widget.blockId, 'intervalSeconds', v.toInt()),
               ),
+              const SizedBox(height: 12),
+            ],
+            _EditorSlider(
+              label: 'Duración animación (ms)',
+              value: (widget.data['animationDurationMs'] as num?)?.toDouble() ??
+                  600,
+              min: 200,
+              max: 2000,
+              divisions: 18, // (2000-200)/100 = 18 steps of 100ms
+              onChanged: (v) => widget.provider.updateBlockDataMultiple(
+                widget.blockId,
+                {
+                  'animationDurationMs': v.toInt(),
+                  // Keep legacy field in sync until all persisted data is normalized.
+                  'transitionDuration': v.toInt(),
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Animación',
+              value: animation,
+              options: const [
+                ('slide', 'Deslizar'),
+                ('fade', 'Desvanecer'),
+                ('zoom', 'Zoom'),
+              ],
+              onChanged: (v) => widget.provider
+                  .updateBlockData(widget.blockId, 'animation', v),
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'Mostrar indicadores',
+              value: showIndicators,
+              onChanged: (v) => widget.provider
+                  .updateBlockData(widget.blockId, 'showIndicators', v),
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'Mostrar flechas',
+              value: showArrows,
+              onChanged: (v) => widget.provider
+                  .updateBlockData(widget.blockId, 'showArrows', v),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-
-        // Slide tabs
-        if (slides.isNotEmpty) ...[
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: slides.length,
-              itemBuilder: (context, index) {
-                final isSelected = index == _selectedSlideIndex;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedSlideIndex = index),
+        _CollapsibleSection(
+          title: 'Slides (${slides.length})',
+          icon: Icons.view_carousel_outlined,
+          initiallyExpanded: true,
+          children: [
+            Row(
+              children: [
+                const Expanded(child: _SectionHeader('Slides')),
+                InkWell(
+                  onTap: _addSlide,
+                  borderRadius: BorderRadius.circular(4),
                   child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF00A09D)
-                          : Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
+                      color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    alignment: Alignment.center,
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Slide ${index + 1}',
-                          style: TextStyle(
-                            color: isSelected ? Colors.white70 : Colors.white70,
-                            fontSize: 13,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        if (slides.length > 1) ...[
-                          const SizedBox(width: 6),
-                          InkWell(
-                            onTap: () => _removeSlide(index),
-                            child: Icon(
-                              Icons.close,
-                              size: 14,
-                              color:
-                                  isSelected ? Colors.white70 : Colors.white38,
-                            ),
-                          ),
-                        ],
+                        Icon(Icons.add, size: 14, color: Color(0xFF00A09D)),
+                        SizedBox(width: 4),
+                        Text('Agregar',
+                            style: TextStyle(
+                                color: Color(0xFF00A09D), fontSize: 12)),
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-          // Selected slide editor - INLINE fields (not nested StatefulWidget)
-          if (_selectedSlideIndex < slides.length)
-            _buildSlideFields(slides[_selectedSlideIndex]),
-        ] else
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Icon(Icons.image_outlined,
-                      size: 40, color: Colors.white.withValues(alpha: 0.3)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No hay slides',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: _addSlide,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Agregar slide'),
-                  ),
-                ],
+            // Slide tabs
+            if (slides.isNotEmpty) ...[
+              SizedBox(
+                height: 40,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: slides.length,
+                  itemBuilder: (context, index) {
+                    final isSelected = index == _selectedSlideIndex;
+                    return GestureDetector(
+                      onTap: () => _selectSlide(index),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00A09D)
+                              : Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Slide ${index + 1}',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Colors.white70,
+                                fontSize: 13,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            if (slides.length > 1) ...[
+                              const SizedBox(width: 6),
+                              InkWell(
+                                onTap: () => _removeSlide(index),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: isSelected
+                                      ? Colors.white70
+                                      : Colors.white38,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ),
+              const SizedBox(height: 16),
+
+              // Selected slide editor - INLINE fields (not nested StatefulWidget)
+              if (_selectedSlideIndex < slides.length)
+                _buildSlideFields(slides[_selectedSlideIndex]),
+            ] else
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Icon(Icons.image_outlined,
+                          size: 40, color: Colors.white.withValues(alpha: 0.3)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No hay slides',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _addSlide,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Agregar slide'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -2919,17 +3363,35 @@ class _SlideEditorState extends State<_SlideEditor> {
         const SizedBox(height: 16),
         const _SectionHeader('Botón'),
         const SizedBox(height: 8),
-        _EditorTextField(
-          label: 'Texto del botón',
-          value: widget.slide['ctaText']?.toString() ?? '',
-          onChanged: (v) => widget.onUpdate('ctaText', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Enlace',
-          value: widget.slide['ctaLink']?.toString() ?? '',
-          onChanged: (v) => widget.onUpdate('ctaLink', v),
-          hint: '/productos',
+        WebsiteActionEditor(
+          showVariant: true,
+          value: WebsiteActionValue.resolvePrimary(
+                widget.slide,
+                labelKeys: const ['ctaText', 'buttonText'],
+                hrefKeys: const ['ctaLink', 'buttonLink'],
+                defaultLabel: 'Ver más',
+                defaultHref: '/productos',
+                defaultVariant: WebsiteActionVariant.outline,
+              ) ??
+              const WebsiteActionValue(
+                label: 'Ver más',
+                href: '/productos',
+                variant: WebsiteActionVariant.outline,
+              ),
+          onChanged: (action) {
+            widget.onUpdate('ctaText', action.label);
+            widget.onUpdate('buttonText', action.label);
+            widget.onUpdate('ctaLink', action.href);
+            widget.onUpdate('buttonLink', action.href);
+            widget.onUpdate('actionVariant', action.variant.storageValue);
+            widget.onUpdate(
+              'actions',
+              WebsiteActionValue.mergePrimary(
+                widget.slide['actions'],
+                action,
+              ),
+            );
+          },
         ),
       ],
     );
@@ -3039,137 +3501,176 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _EditorTextField(
-          label: 'Título de sección',
-          value: widget.data['title']?.toString() ?? '',
-          onChanged: (v) => _updateField('title', v),
-        ),
-        const SizedBox(height: 12),
-        _EditorTextField(
-          label: 'Subtítulo',
-          value: widget.data['subtitle']?.toString() ?? '',
-          onChanged: (v) => _updateField('subtitle', v),
-        ),
+        _CollapsibleSection(
+          title: 'Contenido y origen',
+          icon: Icons.inventory_2_outlined,
+          initiallyExpanded: true,
+          children: [
+            _EditorTextField(
+              label: 'Título de sección',
+              value: widget.data['title']?.toString() ?? '',
+              onChanged: (v) => _updateField('title', v),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Subtítulo',
+              value: widget.data['subtitle']?.toString() ?? '',
+              onChanged: (v) => _updateField('subtitle', v),
+            ),
 
-        const SizedBox(height: 20),
-        const _SectionHeader('FUENTE DE PRODUCTOS'),
-        const SizedBox(height: 12),
+            const SizedBox(height: 20),
+            const _SectionHeader('Fuente de productos'),
+            const SizedBox(height: 12),
 
-        // Product source selector
-        _buildSourceSelector(),
+            // Product source selector
+            _buildSourceSelector(),
 
-        const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-        // Conditional content based on source
-        if (_productSource == 'category') _buildCategorySelector(),
-        if (_productSource == 'manual') _buildProductSelector(),
-
-        const SizedBox(height: 20),
-        const SizedBox(height: 20),
-        const _SectionHeader('DISEÑO'),
-        const SizedBox(height: 12),
-        _EditorDropdown(
-          label: 'Diseño',
-          value: widget.data['layout']?.toString() ?? 'grid',
-          options: const [
-            ('grid', 'Cuadrícula'),
-            ('carousel', 'Carrusel'),
+            // Conditional content based on source
+            if (_productSource == 'category') _buildCategorySelector(),
+            if (_productSource == 'manual') _buildProductSelector(),
           ],
-          onChanged: (v) => _updateField('layout', v),
         ),
-        const SizedBox(height: 12),
+        _CollapsibleSection(
+          title: 'Diseño de productos',
+          icon: Icons.grid_view_rounded,
+          initiallyExpanded: false,
+          children: [
+            _EditorDropdown(
+              label: 'Diseño',
+              value: widget.data['layout']?.toString() ?? 'grid',
+              options: const [
+                ('grid', 'Cuadrícula'),
+                ('carousel', 'Carrusel'),
+              ],
+              onChanged: (v) => _updateField('layout', v),
+            ),
+            const SizedBox(height: 12),
 
-        // Items per row
-        const Text('Productos por fila',
-            style: TextStyle(
-                color: Colors.white54,
-                fontSize: 11,
-                fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Row(
-          children: [2, 3, 4].map((count) {
-            final isSelected = _itemsPerRow == count;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () => _updateField('itemsPerRow', count),
-                child: Container(
-                  width: 44,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF00A09D)
-                        : const Color(0xFF2D2D2D),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color:
-                          isSelected ? const Color(0xFF00A09D) : Colors.white24,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
-                        fontWeight: FontWeight.w600,
+            // Items per row
+            const Text('Productos por fila',
+                style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Row(
+              children: [2, 3, 4].map((count) {
+                final isSelected = _itemsPerRow == count;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => _updateField('itemsPerRow', count),
+                    child: Container(
+                      width: 44,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF00A09D)
+                            : const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF00A09D)
+                              : Colors.white24,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$count',
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 16),
+            _EditorSlider(
+              label: 'Máximo de productos',
+              value: _maxProducts.toDouble(),
+              min: 4,
+              max: 16,
+              divisions: 6,
+              onChanged: (v) => _updateField('maxProducts', v.toInt()),
+            ),
+          ],
+        ),
+        _CollapsibleSection(
+          title: 'Información visible',
+          icon: Icons.visibility_outlined,
+          initiallyExpanded: false,
+          children: [
+            _EditorToggle(
+              label: 'Mostrar precios',
+              value: widget.data['showPrice'] ?? true,
+              onChanged: (v) => _updateField('showPrice', v),
+            ),
+            const SizedBox(height: 8),
+            _EditorToggle(
+              label: 'Mostrar botón "Ver todos"',
+              value: widget.data['showViewAll'] ?? true,
+              onChanged: (v) => _updateField('showViewAll', v),
+            ),
+            const SizedBox(height: 8),
+            _EditorToggle(
+              label: 'Mostrar SKU',
+              value: widget.data['showSku'] ?? false,
+              onChanged: (v) => _updateField('showSku', v),
+            ),
+            const SizedBox(height: 8),
+            _EditorToggle(
+              label: 'Mostrar marca',
+              value: widget.data['showBrand'] ?? false,
+              onChanged: (v) => _updateField('showBrand', v),
+            ),
+          ],
+        ),
+        if (widget.data['showViewAll'] != false)
+          _CollapsibleSection(
+            title: 'Acción “Ver todos”',
+            icon: Icons.call_to_action_outlined,
+            initiallyExpanded: false,
+            children: [
+              WebsiteActionEditor(
+                title: 'Botón Ver todos',
+                showVariant: true,
+                value: WebsiteActionValue.resolvePrimary(
+                      widget.data,
+                      labelKeys: const ['viewAllText'],
+                      hrefKeys: const ['viewAllLink'],
+                      defaultLabel: 'Ver todos los productos',
+                      defaultHref: '/productos',
+                      defaultVariant: WebsiteActionVariant.outline,
+                    ) ??
+                    const WebsiteActionValue(
+                      label: 'Ver todos los productos',
+                      href: '/productos',
+                      variant: WebsiteActionVariant.outline,
+                    ),
+                onChanged: (action) {
+                  widget.provider.updateBlockDataMultiple(
+                    widget.blockId,
+                    {
+                      'viewAllText': action.label,
+                      'viewAllLink': action.href,
+                      'actionVariant': action.variant.storageValue,
+                      'actions': WebsiteActionValue.mergePrimary(
+                        widget.data['actions'],
+                        action,
+                      ),
+                    },
+                  );
+                },
               ),
-            );
-          }).toList(),
-        ),
-
-        const SizedBox(height: 16),
-        _EditorSlider(
-          label: 'Máximo de productos',
-          value: _maxProducts.toDouble(),
-          min: 4,
-          max: 16,
-          divisions: 6,
-          onChanged: (v) => _updateField('maxProducts', v.toInt()),
-        ),
-
-        const SizedBox(height: 20),
-        const _SectionHeader('MOSTRAR'),
-        const SizedBox(height: 12),
-
-        _EditorToggle(
-          label: 'Mostrar precios',
-          value: widget.data['showPrice'] ?? true,
-          onChanged: (v) => _updateField('showPrice', v),
-        ),
-        const SizedBox(height: 8),
-        _EditorToggle(
-          label: 'Mostrar botón "Ver todos"',
-          value: widget.data['showViewAll'] ?? true,
-          onChanged: (v) => _updateField('showViewAll', v),
-        ),
-        const SizedBox(height: 8),
-        _EditorToggle(
-          label: 'Mostrar SKU',
-          value: widget.data['showSku'] ?? false,
-          onChanged: (v) => _updateField('showSku', v),
-        ),
-        const SizedBox(height: 8),
-        _EditorToggle(
-          label: 'Mostrar marca',
-          value: widget.data['showBrand'] ?? false,
-          onChanged: (v) => _updateField('showBrand', v),
-        ),
-
-        // View all link
-        if (widget.data['showViewAll'] != false) ...[
-          const SizedBox(height: 16),
-          WebsiteLinkValueEditor(
-            label: 'Link "Ver todos"',
-            value: widget.data['viewAllLink']?.toString() ?? '/productos',
-            onChanged: (v) => _updateField('viewAllLink', v),
-            dense: true,
-            darkStyle: true,
+            ],
           ),
-        ],
       ],
     );
   }
@@ -3696,7 +4197,6 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
             // Search field
             TextField(
               style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -3933,6 +4433,331 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
 
 /// CTA block controls
 /// Generic block controls for types without specific UI
+typedef _RepeaterItemEditorBuilder = Widget Function(
+  BuildContext context,
+  int index,
+  Map<String, dynamic> item,
+  ValueChanged<Map<String, dynamic>> onChanged,
+);
+
+/// Compact, shared inspector for schema-defined collections.
+///
+/// A collection can contain many rich items (images, focal points, actions,
+/// nested collections, and so on). Rendering every item form at once makes the
+/// inspector impossible to scan, so this control keeps the collection overview
+/// visible while editing exactly one item at a time.
+class _SchemaRepeaterEditor extends StatefulWidget {
+  const _SchemaRepeaterEditor({
+    required this.field,
+    required this.items,
+    required this.onChanged,
+    required this.itemBuilder,
+  });
+
+  final WebsiteBlockFieldSchema field;
+  final List<Map<String, dynamic>> items;
+  final ValueChanged<List<Map<String, dynamic>>> onChanged;
+  final _RepeaterItemEditorBuilder itemBuilder;
+
+  @override
+  State<_SchemaRepeaterEditor> createState() => _SchemaRepeaterEditorState();
+}
+
+class _SchemaRepeaterEditorState extends State<_SchemaRepeaterEditor> {
+  int _selectedIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _SchemaRepeaterEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.items.isEmpty) {
+      _selectedIndex = 0;
+    } else if (_selectedIndex >= widget.items.length) {
+      _selectedIndex = widget.items.length - 1;
+    }
+  }
+
+  String _itemTitle(Map<String, dynamic> item, int index) {
+    const preferredKeys = [
+      'title',
+      'name',
+      'question',
+      'label',
+      'heading',
+      'value',
+    ];
+    for (final key in preferredKeys) {
+      final value = item[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '${widget.field.itemLabel ?? 'Item'} ${index + 1}';
+  }
+
+  void _selectAfterChange(int index) {
+    setState(() => _selectedIndex = index < 0 ? 0 : index);
+  }
+
+  void _addItem() {
+    final next = List<Map<String, dynamic>>.from(widget.items);
+    final seed = <String, dynamic>{};
+    for (final field in widget.field.itemFields) {
+      seed[field.key] = field.defaultValue;
+    }
+    next.add(seed);
+    widget.onChanged(next);
+    _selectAfterChange(next.length - 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.items;
+    final canAdd =
+        widget.field.maxItems == null || items.length < widget.field.maxItems!;
+    final safeIndex =
+        items.isEmpty ? 0 : _selectedIndex.clamp(0, items.length - 1).toInt();
+    const accent = Color(0xFF20C5C1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.field.label,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${items.length}',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              tooltip: 'Agregar ${widget.field.itemLabel ?? 'item'}',
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              color: accent,
+              onPressed: canAdd ? _addItem : null,
+              icon: const Icon(Icons.add_circle_outline_rounded),
+            ),
+          ],
+        ),
+        if (items.isEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.025),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'Todavía no hay elementos',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                if (canAdd) ...[
+                  const SizedBox(height: 8),
+                  _AddItemButton(
+                    label: 'Agregar ${widget.field.itemLabel ?? 'item'}',
+                    onPressed: _addItem,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(items.length, (index) {
+                final selected = index == safeIndex;
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index == items.length - 1 ? 0 : 6,
+                  ),
+                  child: Tooltip(
+                    message: _itemTitle(items[index], index),
+                    child: Material(
+                      color: selected
+                          ? accent.withValues(alpha: 0.16)
+                          : Colors.white.withValues(alpha: 0.045),
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedIndex = index),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 42,
+                            maxWidth: 132,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selected
+                                  ? accent.withValues(alpha: 0.65)
+                                  : Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Text(
+                            '${index + 1}  ${_itemTitle(items[index], index)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: selected ? Colors.white : Colors.white60,
+                              fontSize: 11.5,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF292929),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _itemTitle(items[safeIndex], safeIndex),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Mover hacia arriba',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: safeIndex > 0
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              final previous = next[safeIndex - 1];
+                              next[safeIndex - 1] = next[safeIndex];
+                              next[safeIndex] = previous;
+                              widget.onChanged(next);
+                              _selectAfterChange(safeIndex - 1);
+                            }
+                          : null,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Mover hacia abajo',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: safeIndex < items.length - 1
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items);
+                              final following = next[safeIndex + 1];
+                              next[safeIndex + 1] = next[safeIndex];
+                              next[safeIndex] = following;
+                              widget.onChanged(next);
+                              _selectAfterChange(safeIndex + 1);
+                            }
+                          : null,
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Duplicar',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      onPressed: canAdd
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items)
+                                    ..insert(
+                                      safeIndex + 1,
+                                      Map<String, dynamic>.from(
+                                        items[safeIndex],
+                                      ),
+                                    );
+                              widget.onChanged(next);
+                              _selectAfterChange(safeIndex + 1);
+                            }
+                          : null,
+                      icon: const Icon(Icons.copy_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Eliminar',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 16,
+                      color: Colors.red.shade300,
+                      onPressed: widget.field.minItems == null ||
+                              items.length > widget.field.minItems!
+                          ? () {
+                              final next =
+                                  List<Map<String, dynamic>>.from(items)
+                                    ..removeAt(safeIndex);
+                              widget.onChanged(next);
+                              _selectAfterChange(
+                                next.isEmpty
+                                    ? 0
+                                    : safeIndex.clamp(0, next.length - 1),
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
+                const Divider(height: 14, color: Colors.white10),
+                widget.itemBuilder(
+                  context,
+                  safeIndex,
+                  items[safeIndex],
+                  (nextItem) {
+                    final next = List<Map<String, dynamic>>.from(items);
+                    next[safeIndex] = nextItem;
+                    widget.onChanged(next);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _GenericBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;
@@ -4041,6 +4866,8 @@ class _GenericBlockControls extends StatelessWidget {
     required Map<String, dynamic> currentData,
     required void Function(dynamic value) setValue,
     required void Function(String key, dynamic value) setRelatedValue,
+    required void Function(Map<String, dynamic> values) setRelatedValues,
+    WebsiteBlockFieldSchema? actionLabelField,
   }) {
     dynamic raw = currentData[field.key];
     for (final alias in field.migrationAliases) {
@@ -4109,6 +4936,62 @@ class _GenericBlockControls extends StatelessWidget {
       case WebsiteBlockFieldType.link:
         final current =
             raw?.toString() ?? (field.defaultValue?.toString() ?? '');
+        final actionLabelKey = field.actionLabelKey;
+        if (actionLabelKey != null) {
+          final labelKeys = <String>[
+            actionLabelKey,
+            ...?actionLabelField?.migrationAliases,
+          ];
+          final hrefKeys = <String>[field.key, ...field.migrationAliases];
+          final label = labelKeys
+              .map((key) => currentData[key]?.toString().trim() ?? '')
+              .firstWhere((value) => value.isNotEmpty, orElse: () => 'Ver más');
+          final variantKey = field.actionVariantKey;
+          final fallbackVariant = WebsiteActionVariant.fromStorage(
+            variantKey == null ? null : currentData[variantKey]?.toString(),
+          );
+          final action = WebsiteActionValue.resolvePrimary(
+                currentData,
+                labelKeys: labelKeys,
+                hrefKeys: hrefKeys,
+                defaultLabel: label,
+                defaultHref: current,
+                defaultVariant: fallbackVariant,
+              ) ??
+              WebsiteActionValue(
+                label: label,
+                href: current,
+                variant: fallbackVariant,
+              );
+
+          return WebsiteActionEditor(
+            value: action,
+            darkStyle: true,
+            dense: true,
+            showVariant: variantKey != null,
+            onChanged: (next) {
+              final updates = <String, dynamic>{
+                field.key: next.href,
+                actionLabelKey: next.label,
+              };
+              for (final alias in field.migrationAliases) {
+                updates[alias] = next.href;
+              }
+              for (final alias
+                  in actionLabelField?.migrationAliases ?? const <String>[]) {
+                updates[alias] = next.label;
+              }
+              if (variantKey != null) {
+                updates[variantKey] = next.variant.storageValue;
+              }
+              updates['actions'] = WebsiteActionValue.mergePrimary(
+                currentData['actions'],
+                next,
+              );
+              setRelatedValues(updates);
+            },
+          );
+        }
         return WebsiteLinkValueEditor(
           label: label,
           value: current,
@@ -4343,157 +5226,150 @@ class _GenericBlockControls extends StatelessWidget {
         );
       case WebsiteBlockFieldType.repeater:
         final items = _toMapList(raw);
-        final itemLabel = field.itemLabel ?? 'Item';
+        final actionLabelKeys = field.itemFields
+            .where((itemField) => itemField.actionLabelKey != null)
+            .map((itemField) => itemField.actionLabelKey!)
+            .toSet();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SchemaRepeaterEditor(
+              field: field,
+              items: items,
+              onChanged: (next) => setValue(next),
+              itemBuilder: (
+                context,
+                index,
+                itemData,
+                onItemChanged,
+              ) {
+                final visibleFields = field.itemFields
+                    .where(
+                      (subField) => !actionLabelKeys.contains(subField.key),
+                    )
+                    .toList();
+                final contentFields = <WebsiteBlockFieldSchema>[];
+                final mediaFields = <WebsiteBlockFieldSchema>[];
+                final actionFields = <WebsiteBlockFieldSchema>[];
+                final collectionFields = <WebsiteBlockFieldSchema>[];
+                final optionFields = <WebsiteBlockFieldSchema>[];
 
-        Widget buildItemCard(int index) {
-          final itemData = items[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D2D2D),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '$itemLabel #${index + 1}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Subir',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      onPressed: index > 0
-                          ? () {
-                              final next =
-                                  List<Map<String, dynamic>>.from(items);
-                              final tmp = next[index - 1];
-                              next[index - 1] = next[index];
-                              next[index] = tmp;
-                              setValue(next);
-                            }
-                          : null,
-                      icon: const Icon(Icons.arrow_upward),
-                    ),
-                    IconButton(
-                      tooltip: 'Bajar',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      onPressed: index < items.length - 1
-                          ? () {
-                              final next =
-                                  List<Map<String, dynamic>>.from(items);
-                              final tmp = next[index + 1];
-                              next[index + 1] = next[index];
-                              next[index] = tmp;
-                              setValue(next);
-                            }
-                          : null,
-                      icon: const Icon(Icons.arrow_downward),
-                    ),
-                    IconButton(
-                      tooltip: 'Duplicar',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      onPressed: field.maxItems == null ||
-                              items.length < field.maxItems!
-                          ? () {
-                              final next =
-                                  List<Map<String, dynamic>>.from(items);
-                              next.insert(
-                                index + 1,
-                                Map<String, dynamic>.from(itemData),
-                              );
-                              setValue(next);
-                            }
-                          : null,
-                      icon: const Icon(Icons.copy_outlined),
-                    ),
-                    IconButton(
-                      tooltip: 'Eliminar',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 16,
-                      color: Colors.red.shade300,
-                      onPressed: field.minItems == null ||
-                              items.length > field.minItems!
-                          ? () {
-                              final next =
-                                  List<Map<String, dynamic>>.from(items);
-                              next.removeAt(index);
-                              setValue(next);
-                            }
-                          : null,
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                ...field.itemFields.map((subField) {
+                for (final subField in visibleFields) {
+                  if (subField.type == WebsiteBlockFieldType.image ||
+                      subField.type == WebsiteBlockFieldType.video) {
+                    mediaFields.add(subField);
+                  } else if (subField.type == WebsiteBlockFieldType.link) {
+                    actionFields.add(subField);
+                  } else if (subField.type == WebsiteBlockFieldType.repeater) {
+                    collectionFields.add(subField);
+                  } else if (subField.group == 'style' ||
+                      subField.group == 'layout' ||
+                      subField.type == WebsiteBlockFieldType.color) {
+                    optionFields.add(subField);
+                  } else {
+                    contentFields.add(subField);
+                  }
+                }
+
+                Widget buildSubField(WebsiteBlockFieldSchema subField) {
+                  WebsiteBlockFieldSchema? actionLabelField;
+                  final actionLabelKey = subField.actionLabelKey;
+                  if (actionLabelKey != null) {
+                    for (final candidate in field.itemFields) {
+                      if (candidate.key == actionLabelKey) {
+                        actionLabelField = candidate;
+                        break;
+                      }
+                    }
+                  }
+
+                  void updateValue(dynamic value) {
+                    final nextItem = Map<String, dynamic>.from(itemData);
+                    nextItem[subField.key] = value;
+                    for (final alias in subField.migrationAliases) {
+                      nextItem[alias] = value;
+                    }
+                    onItemChanged(nextItem);
+                  }
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _buildSchemaField(
                       context: context,
                       field: subField,
                       currentData: itemData,
-                      setValue: (v) {
-                        final nextItems =
-                            List<Map<String, dynamic>>.from(items);
-                        final nextItem = Map<String, dynamic>.from(itemData);
-                        nextItem[subField.key] = v;
-                        for (final alias in subField.migrationAliases) {
-                          nextItem[alias] = v;
-                        }
-                        nextItems[index] = nextItem;
-                        setValue(nextItems);
-                      },
+                      setValue: updateValue,
                       setRelatedValue: (key, value) {
-                        final nextItems =
-                            List<Map<String, dynamic>>.from(items);
                         final nextItem = Map<String, dynamic>.from(itemData);
                         nextItem[key] = value;
-                        nextItems[index] = nextItem;
-                        setValue(nextItems);
+                        onItemChanged(nextItem);
                       },
+                      setRelatedValues: (values) {
+                        final nextItem = Map<String, dynamic>.from(itemData)
+                          ..addAll(values);
+                        onItemChanged(nextItem);
+                      },
+                      actionLabelField: actionLabelField,
                     ),
                   );
-                }),
-              ],
-            ),
-          );
-        }
+                }
 
-        final canAdd = field.maxItems == null || items.length < field.maxItems!;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 10),
-            ...List.generate(items.length, buildItemCard),
-            if (canAdd)
-              _AddItemButton(
-                label: 'Agregar $itemLabel',
-                onPressed: () {
-                  final next = List<Map<String, dynamic>>.from(items);
-                  final seed = <String, dynamic>{};
-                  for (final sub in field.itemFields) {
-                    seed[sub.key] = sub.defaultValue;
-                  }
-                  next.add(seed);
-                  setValue(next);
-                },
-              ),
+                Widget buildGroup({
+                  required String title,
+                  required IconData icon,
+                  required List<WebsiteBlockFieldSchema> fields,
+                  required bool expanded,
+                }) {
+                  return _CollapsibleSection(
+                    title: title,
+                    icon: icon,
+                    initiallyExpanded: expanded,
+                    children: fields.map(buildSubField).toList(),
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (contentFields.isNotEmpty)
+                      buildGroup(
+                        title: 'Texto y datos',
+                        icon: Icons.text_fields_rounded,
+                        fields: contentFields,
+                        expanded: true,
+                      ),
+                    if (mediaFields.isNotEmpty)
+                      buildGroup(
+                        title: 'Imagen y medios',
+                        icon: Icons.image_outlined,
+                        fields: mediaFields,
+                        expanded: false,
+                      ),
+                    if (actionFields.isNotEmpty)
+                      buildGroup(
+                        title: 'Acción y enlace',
+                        icon: Icons.ads_click_rounded,
+                        fields: actionFields,
+                        expanded: false,
+                      ),
+                    if (collectionFields.isNotEmpty)
+                      buildGroup(
+                        title: 'Elementos relacionados',
+                        icon: Icons.format_list_bulleted_rounded,
+                        fields: collectionFields,
+                        expanded: false,
+                      ),
+                    if (optionFields.isNotEmpty)
+                      buildGroup(
+                        title: 'Opciones',
+                        icon: Icons.tune_rounded,
+                        fields: optionFields,
+                        expanded: false,
+                      ),
+                  ],
+                );
+              },
+            ),
             _helpText(field.helpText),
           ],
         );
@@ -4527,18 +5403,25 @@ class _GenericBlockControls extends StatelessWidget {
     if (definition != null && fields.isNotEmpty) {
       final sections = definition.controlSections;
       final fieldByKey = {for (final f in fields) f.key: f};
+      final actionLabelKeys = fields
+          .where((field) => field.actionLabelKey != null)
+          .map((field) => field.actionLabelKey!)
+          .toSet();
       final usedKeys = <String>{};
 
       final sectionWidgets = <Widget>[];
       if (sections.isNotEmpty) {
         for (final section in sections) {
-          final sectionFields = section.fieldKeys
+          final allSectionFields = section.fieldKeys
               .map((k) => fieldByKey[k])
               .whereType<WebsiteBlockFieldSchema>()
               .toList();
+          final sectionFields = allSectionFields
+              .where((field) => !actionLabelKeys.contains(field.key))
+              .toList();
 
           if (sectionFields.isEmpty) continue;
-          usedKeys.addAll(sectionFields.map((f) => f.key));
+          usedKeys.addAll(allSectionFields.map((f) => f.key));
 
           sectionWidgets.add(
             _CollapsibleSection(
@@ -4564,6 +5447,11 @@ class _GenericBlockControls extends StatelessWidget {
                     currentData: data,
                     setValue: (v) => setSchemaFieldValue(f, v),
                     setRelatedValue: setFieldValue,
+                    setRelatedValues: (values) =>
+                        provider.updateBlockDataMultiple(blockId, values),
+                    actionLabelField: f.actionLabelKey == null
+                        ? null
+                        : fieldByKey[f.actionLabelKey],
                   );
                   yield const SizedBox(height: 16);
                 }),
@@ -4574,8 +5462,10 @@ class _GenericBlockControls extends StatelessWidget {
         }
       }
 
-      final remainingFields =
-          fields.where((f) => !usedKeys.contains(f.key)).toList();
+      final remainingFields = fields
+          .where((f) => !usedKeys.contains(f.key))
+          .where((f) => !actionLabelKeys.contains(f.key))
+          .toList();
       if (remainingFields.isNotEmpty) {
         sectionWidgets.add(
           _CollapsibleSection(
@@ -4589,6 +5479,11 @@ class _GenericBlockControls extends StatelessWidget {
                   currentData: data,
                   setValue: (v) => setSchemaFieldValue(f, v),
                   setRelatedValue: setFieldValue,
+                  setRelatedValues: (values) =>
+                      provider.updateBlockDataMultiple(blockId, values),
+                  actionLabelField: f.actionLabelKey == null
+                      ? null
+                      : fieldByKey[f.actionLabelKey],
                 );
                 yield const SizedBox(height: 16);
               }),
@@ -4658,11 +5553,17 @@ class _CanvasBlockControls extends StatelessWidget {
   final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
+  final bool elementsOnly;
+  final ValueChanged<List<Map<String, dynamic>>>? onElementsChanged;
+  final ValueChanged<String?>? onActiveElementChanged;
 
   const _CanvasBlockControls({
     required this.data,
     required this.blockId,
     required this.provider,
+    this.elementsOnly = false,
+    this.onElementsChanged,
+    this.onActiveElementChanged,
   });
 
   List<Map<String, dynamic>> _elements() {
@@ -4684,12 +5585,20 @@ class _CanvasBlockControls extends StatelessWidget {
   }
 
   void _setActive(String? id) {
+    if (onActiveElementChanged != null) {
+      onActiveElementChanged!(id);
+      return;
+    }
     // Don't save to history for transient activeElementId changes
     provider.updateBlockData(blockId, 'activeElementId', id,
         saveHistory: false);
   }
 
   void _setElements(List<Map<String, dynamic>> elements) {
+    if (onElementsChanged != null) {
+      onElementsChanged!(elements);
+      return;
+    }
     provider.updateBlockData(blockId, 'elements', elements);
   }
 
@@ -4736,26 +5645,75 @@ class _CanvasBlockControls extends StatelessWidget {
       'type': type,
       'x': 24.0,
       'y': 24.0,
-      'w': type == 'button' ? 220.0 : 360.0,
-      'h': type == 'button' ? 56.0 : 72.0,
+      'w': switch (type) {
+        'button' => 220.0,
+        'image' => 320.0,
+        'shape' => 320.0,
+        'product' => 280.0,
+        'productsGallery' => 520.0,
+        _ => 360.0,
+      },
+      'h': switch (type) {
+        'button' => 56.0,
+        'image' => 200.0,
+        'shape' => 200.0,
+        'product' => 320.0,
+        'productsGallery' => 360.0,
+        _ => 72.0,
+      },
+      'anim': 'none',
     };
     if (type == 'button') {
       next.addAll({
         'label': 'Botón',
         'style': 'filled', // filled|outline|text
+        'inheritTheme': true,
         'bgColor': '#00A09D',
         'fgColor': '#FFFFFF',
         'radius': 12.0,
         'fontSize': 14.0,
         'link': '/',
       });
+    } else if (type == 'image') {
+      next.addAll({
+        'imageUrl': '',
+        'productId': '',
+        'fit': 'contain',
+        'radius': 0.0,
+        'altText': '',
+      });
+    } else if (type == 'shape') {
+      next.addAll({
+        'shape': 'rectangle',
+        'fillColor': '#1F2937',
+        'borderColor': '#1F2937',
+        'borderWidth': 0.0,
+        'radius': 0.0,
+        'rotation': 0.0,
+      });
+    } else if (type == 'product') {
+      next.addAll({'productId': '', 'showPrice': true});
+    } else if (type == 'productsGallery') {
+      next.addAll({
+        'mode': 'latest',
+        'productIds': <String>[],
+        'maxProducts': 6,
+        'layout': 'grid',
+        'columns': 3,
+        'cardWidth': 300,
+        'showPrice': true,
+      });
     } else {
       next.addAll({
         'text': 'Texto',
         'fontSize': 28.0,
         'fontWeight': 'w700',
+        'fontRole': 'heading',
         'color': '#111111',
         'align': 'left',
+        'letterSpacing': 0.0,
+        'lineHeight': 1.1,
+        'uppercase': false,
       });
     }
     elements.add(next);
@@ -4801,223 +5759,226 @@ class _CanvasBlockControls extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ========== BLOCK SETTINGS ==========
-        _CollapsibleSection(
-          title: 'Block Settings',
-          icon: Icons.settings_rounded,
-          initiallyExpanded:
-              active == null, // Only expanded when no element selected
-          children: [
-            _EditorToggle(
-              label: 'Full-bleed (sin padding)',
-              value: fullBleed,
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'fullBleed', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorDropdown(
-              label: 'Altura',
-              value: heightMode,
-              options: const [
-                ('fixed', 'Fija'),
-                ('viewport', 'Viewport (pantalla)'),
-              ],
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'heightMode', v),
-            ),
-            const SizedBox(height: 12),
-            if (heightMode == 'viewport') ...[
-              _EditorSlider(
-                label: 'Viewport height',
-                value: vhPct.clamp(0.2, 1.0),
-                min: 0.2,
-                max: 1.0,
-                divisions: 16,
-                valueLabel: '${(vhPct * 100).toStringAsFixed(0)}%',
-                onChanged: (v) => provider.updateBlockData(blockId, 'vhPct', v),
-              ),
-            ] else ...[
-              _EditorSlider(
-                label: 'Altura del canvas',
-                value: height.clamp(220, 1600),
-                min: 220,
-                max: 1600,
-                divisions: 69,
-                valueLabel: '${height.toStringAsFixed(0)}px',
+        if (!elementsOnly) ...[
+          // ========== BLOCK SETTINGS ==========
+          _CollapsibleSection(
+            title: 'Block Settings',
+            icon: Icons.settings_rounded,
+            initiallyExpanded:
+                active == null, // Only expanded when no element selected
+            children: [
+              _EditorToggle(
+                label: 'Full-bleed (sin padding)',
+                value: fullBleed,
                 onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'blockHeight', v),
+                    provider.updateBlockData(blockId, 'fullBleed', v),
+              ),
+              const SizedBox(height: 12),
+              _EditorDropdown(
+                label: 'Altura',
+                value: heightMode,
+                options: const [
+                  ('fixed', 'Fija'),
+                  ('viewport', 'Viewport (pantalla)'),
+                ],
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'heightMode', v),
+              ),
+              const SizedBox(height: 12),
+              if (heightMode == 'viewport') ...[
+                _EditorSlider(
+                  label: 'Viewport height',
+                  value: vhPct.clamp(0.2, 1.0),
+                  min: 0.2,
+                  max: 1.0,
+                  divisions: 16,
+                  valueLabel: '${(vhPct * 100).toStringAsFixed(0)}%',
+                  onChanged: (v) =>
+                      provider.updateBlockData(blockId, 'vhPct', v),
+                ),
+              ] else ...[
+                _EditorSlider(
+                  label: 'Altura del canvas',
+                  value: height.clamp(220, 1600),
+                  min: 220,
+                  max: 1600,
+                  divisions: 69,
+                  valueLabel: '${height.toStringAsFixed(0)}px',
+                  onChanged: (v) =>
+                      provider.updateBlockData(blockId, 'blockHeight', v),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _EditorTextField(
+                label: 'Color de fondo (hex)',
+                value: bg,
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'backgroundColor', v),
               ),
             ],
-            const SizedBox(height: 12),
-            _EditorTextField(
-              label: 'Color de fondo (hex)',
-              value: bg,
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'backgroundColor', v),
-            ),
-          ],
-        ),
+          ),
 
-        // ========== BACKGROUND & OVERLAY ==========
-        _CollapsibleSection(
-          title: 'Background & Overlay',
-          icon: Icons.image_rounded,
-          initiallyExpanded: false, // Always collapsed unless manually opened
-          children: [
-            _ImagePicker(
-              currentUrl: backgroundImageUrl,
-              onChanged: (url) =>
-                  provider.updateBlockData(blockId, 'backgroundImageUrl', url),
-            ),
-            if (backgroundImageUrl.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const _SectionHeader('Foco de imagen'),
-              const SizedBox(height: 8),
-              FocalPointPicker(
-                imageUrl: backgroundImageUrl,
-                focalX: focalPointX,
-                focalY: focalPointY,
-                onChanged: (x, y) => provider.updateBlockDataMultiple(
-                  blockId,
-                  {'focalPointX': x, 'focalPointY': y},
-                ),
+          // ========== BACKGROUND & OVERLAY ==========
+          _CollapsibleSection(
+            title: 'Background & Overlay',
+            icon: Icons.image_rounded,
+            initiallyExpanded: false, // Always collapsed unless manually opened
+            children: [
+              _ImagePicker(
+                currentUrl: backgroundImageUrl,
+                onChanged: (url) => provider.updateBlockData(
+                    blockId, 'backgroundImageUrl', url),
               ),
-              const SizedBox(height: 12),
-              const _SectionHeader('Foco móvil'),
-              const SizedBox(height: 8),
-              FocalPointPicker(
-                imageUrl: backgroundImageUrl,
-                focalX: mobileFocalPointX,
-                focalY: mobileFocalPointY,
-                onChanged: (x, y) => provider.updateBlockDataMultiple(
-                  blockId,
-                  {'mobileFocalPointX': x, 'mobileFocalPointY': y},
+              if (backgroundImageUrl.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const _SectionHeader('Foco de imagen'),
+                const SizedBox(height: 8),
+                FocalPointPicker(
+                  imageUrl: backgroundImageUrl,
+                  focalX: focalPointX,
+                  focalY: focalPointY,
+                  onChanged: (x, y) => provider.updateBlockDataMultiple(
+                    blockId,
+                    {'focalPointX': x, 'focalPointY': y},
+                  ),
                 ),
+                const SizedBox(height: 12),
+                const _SectionHeader('Foco móvil'),
+                const SizedBox(height: 8),
+                FocalPointPicker(
+                  imageUrl: backgroundImageUrl,
+                  focalX: mobileFocalPointX,
+                  focalY: mobileFocalPointY,
+                  onChanged: (x, y) => provider.updateBlockDataMultiple(
+                    blockId,
+                    {'mobileFocalPointX': x, 'mobileFocalPointY': y},
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Texto alternativo',
+                  value: (data['backgroundImageAltText'] ?? '').toString(),
+                  onChanged: (value) => provider.updateBlockData(
+                    blockId,
+                    'backgroundImageAltText',
+                    value,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _EditorTextField(
+                label: 'Video URL (mp4/webm) (opcional)',
+                value: backgroundVideoUrl,
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'backgroundVideoUrl', v),
               ),
               const SizedBox(height: 12),
               _EditorTextField(
-                label: 'Texto alternativo',
-                value: (data['backgroundImageAltText'] ?? '').toString(),
-                onChanged: (value) => provider.updateBlockData(
-                  blockId,
-                  'backgroundImageAltText',
-                  value,
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            _EditorTextField(
-              label: 'Video URL (mp4/webm) (opcional)',
-              value: backgroundVideoUrl,
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'backgroundVideoUrl', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorTextField(
-              label: 'YouTube URL / ID (opcional)',
-              value: backgroundYoutubeId,
-              onChanged: (v) {
-                String id = v;
-                // Try to extract ID if it looks like a URL
-                if (v.contains('youtube.com') || v.contains('youtu.be')) {
-                  final regExp = RegExp(
-                    r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
-                  );
-                  final match = regExp.firstMatch(v);
-                  if (match != null && match.groupCount >= 7) {
-                    final extracted = match.group(7);
-                    if (extracted != null && extracted.isNotEmpty) {
-                      id = extracted;
+                label: 'YouTube URL / ID (opcional)',
+                value: backgroundYoutubeId,
+                onChanged: (v) {
+                  String id = v;
+                  // Try to extract ID if it looks like a URL
+                  if (v.contains('youtube.com') || v.contains('youtu.be')) {
+                    final regExp = RegExp(
+                      r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
+                    );
+                    final match = regExp.firstMatch(v);
+                    if (match != null && match.groupCount >= 7) {
+                      final extracted = match.group(7);
+                      if (extracted != null && extracted.isNotEmpty) {
+                        id = extracted;
+                      }
                     }
                   }
-                }
-                provider.updateBlockData(blockId, 'backgroundYoutubeId', id);
-              },
-              hint: 'Pegue enlace de YouTube o ID',
-            ),
-            const SizedBox(height: 12),
-            _EditorDropdown(
-              label: 'Fit',
-              value: backgroundFit,
-              options: const [
-                ('cover', 'Cover'),
-                ('contain', 'Contain'),
-              ],
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'backgroundFit', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorToggle(
-              label: 'Overlay',
-              value: overlayEnabled,
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'overlayEnabled', v),
-            ),
-            if (overlayEnabled) ...[
+                  provider.updateBlockData(blockId, 'backgroundYoutubeId', id);
+                },
+                hint: 'Pegue enlace de YouTube o ID',
+              ),
               const SizedBox(height: 12),
-              _EditorTextField(
-                label: 'Overlay color (hex)',
-                value: overlayColor,
+              _EditorDropdown(
+                label: 'Fit',
+                value: backgroundFit,
+                options: const [
+                  ('cover', 'Cover'),
+                  ('contain', 'Contain'),
+                ],
                 onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'overlayColor', v),
+                    provider.updateBlockData(blockId, 'backgroundFit', v),
+              ),
+              const SizedBox(height: 12),
+              _EditorToggle(
+                label: 'Overlay',
+                value: overlayEnabled,
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'overlayEnabled', v),
+              ),
+              if (overlayEnabled) ...[
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Overlay color (hex)',
+                  value: overlayColor,
+                  onChanged: (v) =>
+                      provider.updateBlockData(blockId, 'overlayColor', v),
+                ),
+                const SizedBox(height: 12),
+                _EditorSlider(
+                  label: 'Opacidad overlay',
+                  value: overlayOpacity.clamp(0.0, 0.9),
+                  min: 0.0,
+                  max: 0.9,
+                  divisions: 18,
+                  valueLabel: overlayOpacity.toStringAsFixed(2),
+                  onChanged: (v) =>
+                      provider.updateBlockData(blockId, 'overlayOpacity', v),
+                ),
+              ],
+            ],
+          ),
+
+          // ========== GRID & SNAPPING ==========
+          _CollapsibleSection(
+            title: 'Grid & Snapping',
+            icon: Icons.grid_on_rounded,
+            initiallyExpanded: false, // Always collapsed unless manually opened
+            children: [
+              _EditorToggle(
+                label: 'Mostrar grid',
+                value: showGrid,
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'showGrid', v),
+              ),
+              const SizedBox(height: 12),
+              _EditorToggle(
+                label: 'Snapping',
+                value: snap,
+                onChanged: (v) => provider.updateBlockData(blockId, 'snap', v),
               ),
               const SizedBox(height: 12),
               _EditorSlider(
-                label: 'Opacidad overlay',
-                value: overlayOpacity.clamp(0.0, 0.9),
-                min: 0.0,
-                max: 0.9,
-                divisions: 18,
-                valueLabel: overlayOpacity.toStringAsFixed(2),
+                label: 'Tamaño grid',
+                value: gridSize.clamp(4, 24),
+                min: 4,
+                max: 24,
+                divisions: 20,
+                valueLabel: '${gridSize.toStringAsFixed(0)}px',
                 onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'overlayOpacity', v),
+                    provider.updateBlockData(blockId, 'gridSize', v),
+              ),
+              const SizedBox(height: 12),
+              _EditorSlider(
+                label: 'Distancia snap',
+                value: snapDistance.clamp(2, 16),
+                min: 2,
+                max: 16,
+                divisions: 14,
+                valueLabel: '${snapDistance.toStringAsFixed(0)}px',
+                onChanged: (v) =>
+                    provider.updateBlockData(blockId, 'snapDistance', v),
               ),
             ],
-          ],
-        ),
-
-        // ========== GRID & SNAPPING ==========
-        _CollapsibleSection(
-          title: 'Grid & Snapping',
-          icon: Icons.grid_on_rounded,
-          initiallyExpanded: false, // Always collapsed unless manually opened
-          children: [
-            _EditorToggle(
-              label: 'Mostrar grid',
-              value: showGrid,
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'showGrid', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorToggle(
-              label: 'Snapping',
-              value: snap,
-              onChanged: (v) => provider.updateBlockData(blockId, 'snap', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorSlider(
-              label: 'Tamaño grid',
-              value: gridSize.clamp(4, 24),
-              min: 4,
-              max: 24,
-              divisions: 20,
-              valueLabel: '${gridSize.toStringAsFixed(0)}px',
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'gridSize', v),
-            ),
-            const SizedBox(height: 12),
-            _EditorSlider(
-              label: 'Distancia snap',
-              value: snapDistance.clamp(2, 16),
-              min: 2,
-              max: 16,
-              divisions: 14,
-              valueLabel: '${snapDistance.toStringAsFixed(0)}px',
-              onChanged: (v) =>
-                  provider.updateBlockData(blockId, 'snapDistance', v),
-            ),
-          ],
-        ),
+          ),
+        ],
 
         // ========== CANVAS ELEMENTS ==========
         _CollapsibleSection(
@@ -5045,6 +6006,26 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addElement('image'),
+                    icon: const Icon(Icons.image_outlined, size: 18),
+                    label: const Text('Imagen'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addElement('shape'),
+                    icon: const Icon(Icons.rectangle_outlined, size: 18),
+                    label: const Text('Forma'),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             if (elements.isEmpty)
               Text(
@@ -5056,9 +6037,17 @@ class _CanvasBlockControls extends StatelessWidget {
                 children: elements.map((e) {
                   final id = e['id']?.toString() ?? '';
                   final type = (e['type'] ?? 'text').toString();
-                  final title = type == 'button'
-                      ? (e['label'] ?? 'Botón').toString()
-                      : (e['text'] ?? 'Texto').toString();
+                  final title = switch (type) {
+                    'button' => (e['label'] ?? 'Botón').toString(),
+                    'image' =>
+                      (e['altText'] ?? 'Imagen').toString().trim().isEmpty
+                          ? 'Imagen'
+                          : e['altText'].toString(),
+                    'shape' => 'Forma',
+                    'product' => 'Producto',
+                    'productsGallery' => 'Galería de productos',
+                    _ => (e['text'] ?? 'Texto').toString(),
+                  };
                   final isActive = id == activeId;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -5074,9 +6063,14 @@ class _CanvasBlockControls extends StatelessWidget {
                     child: ListTile(
                       dense: true,
                       leading: Icon(
-                        type == 'button'
-                            ? Icons.smart_button_rounded
-                            : Icons.text_fields_rounded,
+                        switch (type) {
+                          'button' => Icons.smart_button_rounded,
+                          'image' => Icons.image_outlined,
+                          'shape' => Icons.rectangle_outlined,
+                          'product' => Icons.inventory_2_outlined,
+                          'productsGallery' => Icons.grid_view_rounded,
+                          _ => Icons.text_fields_rounded,
+                        },
                         color: Colors.white70,
                         size: 18,
                       ),
@@ -5111,11 +6105,22 @@ class _CanvasBlockControls extends StatelessWidget {
         // ========== ELEMENT EDITOR (when element is selected) ==========
         if (active != null) ...[
           _CollapsibleSection(
-            title:
-                'Edit: ${activeType == "button" ? (active["label"] ?? "Botón") : (active["text"] ?? "Texto")}',
-            icon: activeType == 'button'
-                ? Icons.smart_button_rounded
-                : Icons.text_fields_rounded,
+            title: switch (activeType) {
+              'button' => 'Editar: ${active["label"] ?? "Botón"}',
+              'image' => 'Editar: Imagen',
+              'shape' => 'Editar: Forma',
+              'product' => 'Editar: Producto',
+              'productsGallery' => 'Editar: Galería',
+              _ => 'Editar: ${active["text"] ?? "Texto"}',
+            },
+            icon: switch (activeType) {
+              'button' => Icons.smart_button_rounded,
+              'image' => Icons.image_outlined,
+              'shape' => Icons.rectangle_outlined,
+              'product' => Icons.inventory_2_outlined,
+              'productsGallery' => Icons.grid_view_rounded,
+              _ => Icons.text_fields_rounded,
+            },
             initiallyExpanded: true,
             children: [
               if (activeType == 'text') ...[
@@ -5136,6 +6141,16 @@ class _CanvasBlockControls extends StatelessWidget {
                   valueLabel:
                       '${((active['fontSize'] as num?)?.toDouble() ?? 24).toStringAsFixed(0)}px',
                   onChanged: (v) => _updateElement(activeId!, {'fontSize': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorDropdown(
+                  label: 'Tipografía del tema',
+                  value: (active['fontRole'] ?? 'heading').toString(),
+                  options: const [
+                    ('heading', 'Títulos'),
+                    ('body', 'Texto general'),
+                  ],
+                  onChanged: (v) => _updateElement(activeId!, {'fontRole': v}),
                 ),
                 const SizedBox(height: 12),
                 _EditorDropdown(
@@ -5168,6 +6183,40 @@ class _CanvasBlockControls extends StatelessWidget {
                   onChanged: (v) => _updateElement(activeId!, {'color': v}),
                 ),
                 const SizedBox(height: 12),
+                _EditorSlider(
+                  label: 'Espaciado de letras',
+                  value: ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
+                      .clamp(-1, 8),
+                  min: -1,
+                  max: 8,
+                  divisions: 18,
+                  valueLabel:
+                      ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
+                          .toStringAsFixed(1),
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'letterSpacing': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorSlider(
+                  label: 'Interlineado',
+                  value: ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
+                      .clamp(0.8, 2.0),
+                  min: 0.8,
+                  max: 2.0,
+                  divisions: 12,
+                  valueLabel:
+                      ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
+                          .toStringAsFixed(1),
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'lineHeight': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorToggle(
+                  label: 'MAYÚSCULAS',
+                  value: active['uppercase'] == true,
+                  onChanged: (v) => _updateElement(activeId!, {'uppercase': v}),
+                ),
+                const SizedBox(height: 12),
                 _EditorDropdown(
                   label: 'Animación',
                   value: (active['anim'] ?? 'none').toString(),
@@ -5179,80 +6228,93 @@ class _CanvasBlockControls extends StatelessWidget {
                   onChanged: (v) => _updateElement(activeId!, {'anim': v}),
                 ),
               ] else if (activeType == 'button') ...[
-                _EditorTextField(
-                  label: 'Texto del botón',
-                  value: active['label']?.toString() ?? '',
-                  onChanged: (v) => _updateElement(activeId!, {'label': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorDropdown(
-                  label: 'Estilo',
-                  value: (active['style'] ?? 'filled').toString(),
-                  options: const [
-                    ('filled', 'Relleno'),
-                    ('outline', 'Borde'),
-                    ('text', 'Texto'),
-                  ],
-                  onChanged: (v) => _updateElement(activeId!, {'style': v}),
-                ),
-                const SizedBox(height: 12),
-                WebsiteLinkValueEditor(
-                  label: 'Link',
-                  value: (active['link'] ?? '/').toString(),
-                  dense: true,
-                  darkStyle: true,
-                  onChanged: (v) => _updateElement(activeId!, {'link': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Color fondo (hex)',
-                  value: (active['bgColor'] ?? '#00A09D').toString(),
-                  onChanged: (v) => _updateElement(activeId!, {'bgColor': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Color texto (hex)',
-                  value: (active['fgColor'] ?? '#FFFFFF').toString(),
-                  onChanged: (v) => _updateElement(activeId!, {'fgColor': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Radio',
-                  value: ((active['radius'] as num?)?.toDouble() ?? 12)
-                      .clamp(0, 32),
-                  min: 0,
-                  max: 32,
-                  divisions: 32,
-                  valueLabel:
-                      '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
-                  onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+                WebsiteActionEditor(
+                  showVariant: true,
+                  value: WebsiteActionValue.resolvePrimary(
+                        active,
+                        labelKeys: const ['label'],
+                        hrefKeys: const ['link'],
+                        defaultLabel: 'Botón',
+                        defaultHref: '/',
+                        defaultVariant: WebsiteActionVariant.fromStorage(
+                          active['style']?.toString(),
+                        ),
+                      ) ??
+                      const WebsiteActionValue(
+                        label: 'Botón',
+                        href: '/',
+                      ),
+                  onChanged: (action) => _updateElement(activeId!, {
+                    'label': action.label,
+                    'link': action.href,
+                    'style': action.variant.storageValue,
+                    'actions': WebsiteActionValue.mergePrimary(
+                      active['actions'],
+                      action,
+                    ),
+                  }),
                 ),
                 const SizedBox(height: 12),
                 _EditorToggle(
-                  label: 'Sombra',
-                  value: (active['shadow'] as bool?) ?? false,
-                  onChanged: (v) => _updateElement(activeId!, {'shadow': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorToggle(
-                  label: 'MAYÚSCULAS',
-                  value: (active['uppercase'] as bool?) ?? false,
-                  onChanged: (v) => _updateElement(activeId!, {'uppercase': v}),
-                ),
-                const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Letter spacing',
-                  value: ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                      .clamp(0, 6),
-                  min: 0,
-                  max: 6,
-                  divisions: 12,
-                  valueLabel:
-                      ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                          .toStringAsFixed(1),
+                  label: 'Usar estilo global del tema',
+                  value: active['inheritTheme'] != false,
                   onChanged: (v) =>
-                      _updateElement(activeId!, {'letterSpacing': v}),
+                      _updateElement(activeId!, {'inheritTheme': v}),
                 ),
+                if (active['inheritTheme'] == false) ...[
+                  const SizedBox(height: 12),
+                  _EditorTextField(
+                    label: 'Color fondo (hex)',
+                    value: (active['bgColor'] ?? '#00A09D').toString(),
+                    onChanged: (v) => _updateElement(activeId!, {'bgColor': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorTextField(
+                    label: 'Color texto (hex)',
+                    value: (active['fgColor'] ?? '#FFFFFF').toString(),
+                    onChanged: (v) => _updateElement(activeId!, {'fgColor': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Radio',
+                    value: ((active['radius'] as num?)?.toDouble() ?? 12)
+                        .clamp(0, 32),
+                    min: 0,
+                    max: 32,
+                    divisions: 32,
+                    valueLabel:
+                        '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
+                    onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorToggle(
+                    label: 'Sombra',
+                    value: (active['shadow'] as bool?) ?? false,
+                    onChanged: (v) => _updateElement(activeId!, {'shadow': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorToggle(
+                    label: 'MAYÚSCULAS',
+                    value: (active['uppercase'] as bool?) ?? false,
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'uppercase': v}),
+                  ),
+                  const SizedBox(height: 12),
+                  _EditorSlider(
+                    label: 'Letter spacing',
+                    value:
+                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
+                            .clamp(0, 6),
+                    min: 0,
+                    max: 6,
+                    divisions: 12,
+                    valueLabel:
+                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
+                            .toStringAsFixed(1),
+                    onChanged: (v) =>
+                        _updateElement(activeId!, {'letterSpacing': v}),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 _EditorDropdown(
                   label: 'Animación',
@@ -5265,10 +6327,31 @@ class _CanvasBlockControls extends StatelessWidget {
                   onChanged: (v) => _updateElement(activeId!, {'anim': v}),
                 ),
               ] else if (activeType == 'image') ...[
+                const _SectionHeader('Producto vinculado (opcional)'),
+                const SizedBox(height: 8),
+                _CanvasProductSelector(
+                  currentProductId: (active['productId'] ?? '').toString(),
+                  onChanged: (id) =>
+                      _updateElement(activeId!, {'productId': id}),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Si seleccionas un producto, la capa usa su imagen actual del catálogo. La imagen manual queda como respaldo.',
+                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+                const SizedBox(height: 12),
+                const _SectionHeader('Imagen manual / respaldo'),
+                const SizedBox(height: 8),
                 _ImagePicker(
                   currentUrl: (active['imageUrl'] ?? '').toString(),
                   onChanged: (url) =>
                       _updateElement(activeId!, {'imageUrl': url}),
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Texto alternativo',
+                  value: (active['altText'] ?? '').toString(),
+                  onChanged: (v) => _updateElement(activeId!, {'altText': v}),
                 ),
                 const SizedBox(height: 12),
                 _EditorDropdown(
@@ -5303,6 +6386,55 @@ class _CanvasBlockControls extends StatelessWidget {
                   ],
                   onChanged: (v) => _updateElement(activeId!, {'anim': v}),
                 ),
+              ] else if (activeType == 'shape') ...[
+                _EditorDropdown(
+                  label: 'Forma',
+                  value: (active['shape'] ?? 'rectangle').toString(),
+                  options: const [
+                    ('rectangle', 'Rectángulo'),
+                    ('ellipse', 'Elipse'),
+                  ],
+                  onChanged: (v) => _updateElement(activeId!, {'shape': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Color de relleno (hex)',
+                  value: (active['fillColor'] ?? '#1F2937').toString(),
+                  onChanged: (v) => _updateElement(activeId!, {'fillColor': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorTextField(
+                  label: 'Color de borde (hex)',
+                  value: (active['borderColor'] ?? '#1F2937').toString(),
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'borderColor': v}),
+                ),
+                const SizedBox(height: 12),
+                _EditorSlider(
+                  label: 'Borde',
+                  value: ((active['borderWidth'] as num?)?.toDouble() ?? 0)
+                      .clamp(0, 16),
+                  min: 0,
+                  max: 16,
+                  divisions: 16,
+                  valueLabel:
+                      '${((active['borderWidth'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'borderWidth': v}),
+                ),
+                const SizedBox(height: 12),
+                if ((active['shape'] ?? 'rectangle') == 'rectangle')
+                  _EditorSlider(
+                    label: 'Radio',
+                    value: ((active['radius'] as num?)?.toDouble() ?? 0)
+                        .clamp(0, 80),
+                    min: 0,
+                    max: 80,
+                    divisions: 40,
+                    valueLabel:
+                        '${((active['radius'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
+                    onChanged: (v) => _updateElement(activeId!, {'radius': v}),
+                  ),
               ] else if (activeType == 'product') ...[
                 _CanvasProductSelector(
                   currentProductId: (active['productId'] ?? '').toString(),
@@ -5496,6 +6628,49 @@ class _CanvasBlockControls extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              _EditorSlider(
+                label: 'Rotación',
+                value: ((active['rotation'] as num?)?.toDouble() ?? 0)
+                    .clamp(-180, 180),
+                min: -180,
+                max: 180,
+                divisions: 360,
+                valueLabel:
+                    '${((active['rotation'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}°',
+                onChanged: (v) => _updateElement(activeId!, {'rotation': v}),
+              ),
+              if (((active['rotation'] as num?)?.toDouble() ?? 0).abs() > 0.01)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _updateElement(activeId!, {'rotation': 0}),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const Text('Restablecer rotación'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF20C5C1),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              _EditorDropdown(
+                label: 'Visibilidad adaptable',
+                value: active['showOnMobile'] == true
+                    ? 'mobile'
+                    : active['hideOnMobile'] == true
+                        ? 'desktop'
+                        : 'all',
+                options: const [
+                  ('all', 'Escritorio y móvil'),
+                  ('desktop', 'Solo escritorio'),
+                  ('mobile', 'Solo móvil'),
+                ],
+                onChanged: (value) => _updateElement(activeId!, {
+                  'hideOnMobile': value == 'desktop',
+                  'showOnMobile': value == 'mobile',
+                }),
               ),
               const SizedBox(height: 12),
               const Divider(color: Colors.white12),
@@ -6590,18 +7765,6 @@ class _ThemeTabState extends State<_ThemeTab> {
                 Icons.wallpaper,
                 'background',
               ),
-              _buildMenuItem(
-                'Transiciones',
-                'Animaciones de página',
-                Icons.animation,
-                'transitions',
-              ),
-              _buildMenuItem(
-                'Categorías',
-                'Categorías visibles en la tienda',
-                Icons.category_outlined,
-                'categories',
-              ),
             ],
           ),
         ),
@@ -6645,12 +7808,6 @@ class _ThemeTabState extends State<_ThemeTab> {
         break;
       case 'background':
         title = 'Fondo';
-        break;
-      case 'transitions':
-        title = 'Transiciones';
-        break;
-      case 'categories':
-        title = 'Categorías';
         break;
     }
 
@@ -6871,29 +8028,6 @@ class _ThemeTabState extends State<_ThemeTab> {
           ],
         );
 
-      case 'transitions':
-        return const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.construction, color: Colors.white24, size: 48),
-              SizedBox(height: 16),
-              Text(
-                'Próximamente',
-                style: TextStyle(color: Colors.white54),
-              ),
-              Text(
-                'Configuración de transiciones entre páginas',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        );
-
-      case 'categories':
-        return _WebsiteCategoriesEditor();
-
       default:
         return const SizedBox.shrink();
     }
@@ -6982,276 +8116,6 @@ class _ThemeTabState extends State<_ThemeTab> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Widget to select which categories appear on the website navigation
-class _WebsiteCategoriesEditor extends StatefulWidget {
-  @override
-  State<_WebsiteCategoriesEditor> createState() =>
-      _WebsiteCategoriesEditorState();
-}
-
-class _WebsiteCategoriesEditorState extends State<_WebsiteCategoriesEditor> {
-  List<cat_models.Category> _rootCategories = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCategories();
-  }
-
-  Future<void> _loadCategories() async {
-    try {
-      final categoryService = context.read<CategoryService>();
-      final editProvider = context.read<WebsiteEditModeProvider>();
-      final pendingChanges = editProvider.pendingCategoryVisibility;
-
-      var categories = await categoryService.getRootCategories();
-
-      // Apply any pending (unsaved) visibility changes from the provider
-      if (pendingChanges.isNotEmpty) {
-        categories = categories.map((cat) {
-          if (cat.id != null && pendingChanges.containsKey(cat.id)) {
-            return cat.copyWith(showOnWebsite: pendingChanges[cat.id]!);
-          }
-          return cat;
-        }).toList();
-      }
-
-      if (mounted) {
-        setState(() {
-          _rootCategories = categories;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-      debugPrint('Error loading categories: $e');
-    }
-  }
-
-  Future<void> _toggleCategory(cat_models.Category category) async {
-    final editProvider = context.read<WebsiteEditModeProvider>();
-
-    // Check current effective value (pending or from DB)
-    final currentValue =
-        editProvider.getEffectiveCategoryVisibility(category.id!) ??
-            category.showOnWebsite;
-    final newValue = !currentValue;
-
-    // Optimistic update for UI
-    setState(() {
-      final index = _rootCategories.indexWhere((c) => c.id == category.id);
-      if (index >= 0) {
-        _rootCategories[index] = category.copyWith(showOnWebsite: newValue);
-      }
-    });
-
-    // Update provider - will be saved when user clicks Guardar
-    editProvider.updateCategoryVisibility(category.id!, newValue);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF00A09D)),
-      );
-    }
-
-    if (_rootCategories.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.category_outlined, color: Colors.white24, size: 48),
-            SizedBox(height: 16),
-            Text(
-              'No hay categorías',
-              style: TextStyle(color: Colors.white54),
-            ),
-            Text(
-              'Crea categorías en Inventario > Categorías',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    final enabledCount = _rootCategories.where((c) => c.showOnWebsite).length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header info
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.info_outline, color: Color(0xFF00A09D), size: 18),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Selecciona qué categorías aparecen en la barra de navegación de la tienda.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Stats
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00A09D).withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$enabledCount activas',
-                style: const TextStyle(
-                  color: Color(0xFF00A09D),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'de ${_rootCategories.length} categorías',
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Category list
-        ..._rootCategories.map((category) => _buildCategoryTile(category)),
-      ],
-    );
-  }
-
-  Widget _buildCategoryTile(cat_models.Category category) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: category.showOnWebsite
-            ? const Color(0xFF00A09D).withValues(alpha: 0.1)
-            : const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: category.showOnWebsite
-              ? const Color(0xFF00A09D).withValues(alpha: 0.3)
-              : Colors.white10,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        leading: Icon(
-          category.showOnWebsite ? Icons.visibility : Icons.visibility_off,
-          color:
-              category.showOnWebsite ? const Color(0xFF00A09D) : Colors.white38,
-          size: 20,
-        ),
-        title: Text(
-          category.name,
-          style: TextStyle(
-            color: category.showOnWebsite ? Colors.white : Colors.white54,
-            fontWeight:
-                category.showOnWebsite ? FontWeight.w500 : FontWeight.normal,
-          ),
-        ),
-        subtitle:
-            category.description != null && category.description!.isNotEmpty
-                ? Text(
-                    category.description!,
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  )
-                : null,
-        trailing: Switch(
-          value: category.showOnWebsite,
-          onChanged: (_) => _toggleCategory(category),
-          activeThumbColor: const Color(0xFF00A09D),
-          activeTrackColor: const Color(0xFF00A09D).withValues(alpha: 0.3),
-          inactiveThumbColor: Colors.white38,
-          inactiveTrackColor: Colors.white12,
-        ),
-        onTap: () => _toggleCategory(category),
-      ),
-    );
-  }
-}
-
-/// Navigation link tile for the header editor
-class _NavLinkTile extends StatelessWidget {
-  final String label;
-  final String url;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _NavLinkTile({
-    super.key,
-    required this.label,
-    required this.url,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3D3D3D),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-        leading: const Icon(Icons.drag_handle, color: Colors.white38, size: 18),
-        title: Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-        ),
-        subtitle: Text(
-          url,
-          style: const TextStyle(color: Colors.white38, fontSize: 11),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit, color: Colors.white54, size: 16),
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              padding: EdgeInsets.zero,
-            ),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              padding: EdgeInsets.zero,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -7515,7 +8379,65 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Collapsible section for grouping related controls
+class _InspectorIntro extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+
+  const _InspectorIntro({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00A09D).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF20C5C1)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Collapsible section for progressive disclosure in the inspector.
 class _CollapsibleSection extends StatefulWidget {
   final String title;
   final List<Widget> children;
@@ -7555,52 +8477,65 @@ class _CollapsibleSectionState extends State<_CollapsibleSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(
-              children: [
-                Icon(
-                  _isExpanded
-                      ? Icons.expand_more_rounded
-                      : Icons.chevron_right_rounded,
-                  color: Colors.white.withValues(alpha: 0.7),
-                  size: 20,
-                ),
-                const SizedBox(width: 6),
-                if (widget.icon != null) ...[
-                  Icon(
-                    widget.icon,
-                    color: const Color(0xFF00A09D),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: Text(
-                    widget.title.toUpperCase(),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.025),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+              child: Row(
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(
+                      widget.icon,
+                      color: const Color(0xFF20C5C1),
+                      size: 17,
+                    ),
+                    const SizedBox(width: 9),
+                  ],
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.15,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  Icon(
+                    _isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        if (_isExpanded) ...[
-          const SizedBox(height: 12),
-          ...widget.children,
-          const SizedBox(height: 16),
+          if (_isExpanded) ...[
+            const Divider(height: 1, color: Colors.white10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: widget.children,
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -8723,7 +9658,7 @@ class _CategoryGridBlockControls extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Las categorías se cargan automáticamente desde Tema > Categorías',
+                  'Las categorías se administran desde Catálogo web > Categorías',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 12,
@@ -10072,8 +11007,6 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   String _headerColorMode = 'light';
   bool _showTopBanner = false;
   bool _headerShadow = true;
-  List<Map<String, String>> _navLinks = [];
-
   bool _loaded = false;
   bool _hasLocalChanges = false;
 
@@ -10124,7 +11057,6 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       'header_show_top_banner': _showTopBanner.toString(),
       'header_shadow': _headerShadow.toString(),
       'header_bg_color': _headerBgColorController.text,
-      'header_nav_links': jsonEncode(_navLinks),
     });
   }
 
@@ -10154,28 +11086,6 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     debugPrint(
         '🔧 [HeaderSettings] _loadSettings: rawBannerValue="$rawBannerValue" → _showTopBanner=$_showTopBanner');
     _headerShadow = service.getSetting('header_shadow', 'true') == 'true';
-
-    // Parse nav links from JSON
-    final navLinksJson = service.getSetting('header_nav_links', '');
-    if (navLinksJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(navLinksJson) as List;
-        _navLinks =
-            decoded.map((e) => Map<String, String>.from(e as Map)).toList();
-      } catch (_) {
-        _navLinks = _getDefaultNavLinks();
-      }
-    } else {
-      _navLinks = _getDefaultNavLinks();
-    }
-  }
-
-  List<Map<String, String>> _getDefaultNavLinks() {
-    return [
-      {'label': 'Inicio', 'url': '/tienda'},
-      {'label': 'Productos', 'url': '/productos'},
-      {'label': 'Contacto', 'url': '/tienda/contacto'},
-    ];
   }
 
   @override
@@ -10339,10 +11249,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
           const SizedBox(height: 24),
 
-          // ========== NAVIGATION LINKS SECTION ==========
-          const _SectionHeader('Links de navegación'),
+          // Navigation records belong to website_navigation, not header settings.
+          const _SectionHeader('Navegación'),
           const SizedBox(height: 12),
-
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -10353,64 +11262,31 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Icon(Icons.menu, color: Colors.white70, size: 16),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    Icon(Icons.menu, color: Colors.white70, size: 17),
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        'Menú de navegación',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                        'El header y el footer usan el menú central del sitio.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: _addNavLink,
-                      icon: const Icon(Icons.add,
-                          color: Colors.white70, size: 18),
-                      tooltip: 'Agregar link',
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                      padding: EdgeInsets.zero,
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                if (_navLinks.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'Sin links. Haz clic en + para agregar.',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                  )
-                else
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _navLinks.length,
-                    onReorder: (oldIndex, newIndex) {
-                      setState(() {
-                        if (newIndex > oldIndex) newIndex--;
-                        final item = _navLinks.removeAt(oldIndex);
-                        _navLinks.insert(newIndex, item);
-                      });
-                      _markChanged();
-                    },
-                    itemBuilder: (context, index) {
-                      final link = _navLinks[index];
-                      return _NavLinkTile(
-                        key: ValueKey(
-                            'nav_${link['url'] ?? ''}|${link['label'] ?? ''}'),
-                        label: link['label'] ?? '',
-                        url: link['url'] ?? '',
-                        onEdit: () => _editNavLink(index),
-                        onDelete: () {
-                          setState(() => _navLinks.removeAt(index));
-                          _markChanged();
-                        },
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      WebsiteWorkspaceScope.maybeOf(context)?.open(
+                        WebsiteWorkspacePanel.navigation,
                       );
                     },
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Administrar navegación'),
                   ),
+                ),
               ],
             ),
           ),
@@ -10557,94 +11433,6 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ],
-    );
-  }
-
-  void _addNavLink() {
-    _showNavLinkDialog(
-      onSave: (label, url) {
-        setState(() => _navLinks.add({'label': label, 'url': url}));
-        _markChanged();
-      },
-    );
-  }
-
-  void _editNavLink(int index) {
-    final link = _navLinks[index];
-    _showNavLinkDialog(
-      initialLabel: link['label'] ?? '',
-      initialUrl: link['url'] ?? '',
-      onSave: (label, url) {
-        setState(() => _navLinks[index] = {'label': label, 'url': url});
-        _markChanged();
-      },
-    );
-  }
-
-  void _showNavLinkDialog({
-    String initialLabel = '',
-    String initialUrl = '',
-    required void Function(String label, String url) onSave,
-  }) {
-    final labelController = TextEditingController(text: initialLabel);
-    final urlController = TextEditingController(text: initialUrl);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text('Link de navegación',
-            style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: labelController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Texto del link',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF00A09D))),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: urlController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'URL (ej: /productos)',
-                labelStyle: TextStyle(color: Colors.white60),
-                enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF00A09D))),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancelar', style: TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (labelController.text.isNotEmpty &&
-                  urlController.text.isNotEmpty) {
-                onSave(labelController.text, urlController.text);
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00A09D)),
-            child: const Text('Aplicar'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -13074,11 +13862,13 @@ class _BlockStyleControls extends StatefulWidget {
   final String blockId;
   final WebsiteEditModeProvider provider;
   final Map<String, dynamic> blockData;
+  final bool collapsible;
 
   const _BlockStyleControls({
     required this.blockId,
     required this.provider,
     required this.blockData,
+    this.collapsible = true,
   });
 
   @override
@@ -13103,82 +13893,91 @@ class _BlockStyleControlsState extends State<_BlockStyleControls> {
 
   @override
   Widget build(BuildContext context) {
+    final controls = <Widget>[
+      // Background
+      const _SectionHeader('Fondo del bloque'),
+      const SizedBox(height: 8),
+      _BackgroundTypeControl(
+        style: _style,
+        onChanged: (key, value) => _updateStyle(key, value),
+      ),
+      const SizedBox(height: 20),
+
+      // Padding
+      const _SectionHeader('Relleno (Padding)'),
+      const SizedBox(height: 12),
+      _FullPaddingControl(
+        paddingTop: (_style['paddingTop'] as num?)?.toDouble() ?? 40.0,
+        paddingRight: (_style['paddingRight'] as num?)?.toDouble() ?? 20.0,
+        paddingBottom: (_style['paddingBottom'] as num?)?.toDouble() ?? 40.0,
+        paddingLeft: (_style['paddingLeft'] as num?)?.toDouble() ?? 20.0,
+        linked: _paddingLinked,
+        onLinkedChanged: (v) => setState(() => _paddingLinked = v),
+        onChanged: (top, right, bottom, left) {
+          final newStyle = Map<String, dynamic>.from(_style);
+          newStyle['paddingTop'] = top;
+          newStyle['paddingRight'] = right;
+          newStyle['paddingBottom'] = bottom;
+          newStyle['paddingLeft'] = left;
+          widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+        },
+      ),
+      const SizedBox(height: 24),
+
+      // Border
+      const _SectionHeader('Borde'),
+      const SizedBox(height: 12),
+      _BorderControl(
+        borderWidth: (_style['borderWidth'] as num?)?.toDouble() ?? 0.0,
+        borderColor: _style['borderColor']?.toString() ?? '#E0E0E0',
+        borderStyle: _style['borderStyle']?.toString() ?? 'solid',
+        borderRadius: (_style['borderRadius'] as num?)?.toDouble() ?? 0.0,
+        onChanged: (width, color, borderStyle, radius) {
+          final newStyle = Map<String, dynamic>.from(_style);
+          newStyle['borderWidth'] = width;
+          newStyle['borderColor'] = color;
+          newStyle['borderStyle'] = borderStyle;
+          newStyle['borderRadius'] = radius;
+          widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+        },
+      ),
+      const SizedBox(height: 24),
+
+      // Shadow
+      const _SectionHeader('Sombra'),
+      const SizedBox(height: 12),
+      _BoxShadowControl(
+        enabled: _style['shadowEnabled'] == true,
+        offsetX: (_style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0,
+        offsetY: (_style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0,
+        blur: (_style['shadowBlur'] as num?)?.toDouble() ?? 12.0,
+        spread: (_style['shadowSpread'] as num?)?.toDouble() ?? 0.0,
+        color: _style['shadowColor']?.toString() ?? 'rgba(0,0,0,0.15)',
+        onChanged: (enabled, offsetX, offsetY, blur, spread, color) {
+          final newStyle = Map<String, dynamic>.from(_style);
+          newStyle['shadowEnabled'] = enabled;
+          newStyle['shadowOffsetX'] = offsetX;
+          newStyle['shadowOffsetY'] = offsetY;
+          newStyle['shadowBlur'] = blur;
+          newStyle['shadowSpread'] = spread;
+          newStyle['shadowColor'] = color;
+          widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
+        },
+      ),
+    ];
+
+    if (!widget.collapsible) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: controls,
+      );
+    }
+
     return _CollapsibleSection(
-      title: 'DISEÑO Y ESTILO',
+      title: 'Diseño y estilo',
       icon: Icons.brush_outlined,
       initiallyExpanded: false,
-      children: [
-        // Background
-        const _SectionHeader('Fondo del bloque'),
-        const SizedBox(height: 8),
-        _BackgroundTypeControl(
-          style: _style,
-          onChanged: (key, value) => _updateStyle(key, value),
-        ),
-        const SizedBox(height: 20),
-
-        // Padding
-        const _SectionHeader('Relleno (Padding)'),
-        const SizedBox(height: 12),
-        _FullPaddingControl(
-          paddingTop: (_style['paddingTop'] as num?)?.toDouble() ?? 40.0,
-          paddingRight: (_style['paddingRight'] as num?)?.toDouble() ?? 20.0,
-          paddingBottom: (_style['paddingBottom'] as num?)?.toDouble() ?? 40.0,
-          paddingLeft: (_style['paddingLeft'] as num?)?.toDouble() ?? 20.0,
-          linked: _paddingLinked,
-          onLinkedChanged: (v) => setState(() => _paddingLinked = v),
-          onChanged: (top, right, bottom, left) {
-            final newStyle = Map<String, dynamic>.from(_style);
-            newStyle['paddingTop'] = top;
-            newStyle['paddingRight'] = right;
-            newStyle['paddingBottom'] = bottom;
-            newStyle['paddingLeft'] = left;
-            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
-          },
-        ),
-        const SizedBox(height: 24),
-
-        // Border
-        const _SectionHeader('Borde'),
-        const SizedBox(height: 12),
-        _BorderControl(
-          borderWidth: (_style['borderWidth'] as num?)?.toDouble() ?? 0.0,
-          borderColor: _style['borderColor']?.toString() ?? '#E0E0E0',
-          borderStyle: _style['borderStyle']?.toString() ?? 'solid',
-          borderRadius: (_style['borderRadius'] as num?)?.toDouble() ?? 0.0,
-          onChanged: (width, color, borderStyle, radius) {
-            final newStyle = Map<String, dynamic>.from(_style);
-            newStyle['borderWidth'] = width;
-            newStyle['borderColor'] = color;
-            newStyle['borderStyle'] = borderStyle;
-            newStyle['borderRadius'] = radius;
-            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
-          },
-        ),
-        const SizedBox(height: 24),
-
-        // Shadow
-        const _SectionHeader('Sombra'),
-        const SizedBox(height: 12),
-        _BoxShadowControl(
-          enabled: _style['shadowEnabled'] == true,
-          offsetX: (_style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0,
-          offsetY: (_style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0,
-          blur: (_style['shadowBlur'] as num?)?.toDouble() ?? 12.0,
-          spread: (_style['shadowSpread'] as num?)?.toDouble() ?? 0.0,
-          color: _style['shadowColor']?.toString() ?? 'rgba(0,0,0,0.15)',
-          onChanged: (enabled, offsetX, offsetY, blur, spread, color) {
-            final newStyle = Map<String, dynamic>.from(_style);
-            newStyle['shadowEnabled'] = enabled;
-            newStyle['shadowOffsetX'] = offsetX;
-            newStyle['shadowOffsetY'] = offsetY;
-            newStyle['shadowBlur'] = blur;
-            newStyle['shadowSpread'] = spread;
-            newStyle['shadowColor'] = color;
-            widget.provider.updateBlockData(widget.blockId, 'style', newStyle);
-          },
-        ),
-      ],
+      children: controls,
     );
   }
 

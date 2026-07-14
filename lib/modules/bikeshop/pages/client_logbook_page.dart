@@ -1555,12 +1555,12 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
                     return TextButton.icon(
                       onPressed: () async {
                         if (MediaQuery.of(context).size.width < 900) {
-                          final ok = await showDialog<bool>(
+                          final savedBike = await showDialog<Bike>(
                             context: context,
                             builder: (_) =>
                                 BikeFormDialog(customerId: widget.customerId),
                           );
-                          if (ok == true) _loadData();
+                          if (savedBike != null) _loadData();
                         } else {
                           _openNewBikePane();
                         }

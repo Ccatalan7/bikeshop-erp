@@ -16,6 +16,9 @@ import '../services/website_service.dart';
 
 enum _CatalogKindFilter { all, products, services }
 
+/// Public sections exposed by the unified Website Catalog workspace.
+enum WebsiteCatalogSection { products, categories }
+
 extension on _CatalogKindFilter {
   String get label {
     switch (this) {
@@ -160,9 +163,11 @@ class ProductWebsiteVisibilityPage extends StatefulWidget {
   const ProductWebsiteVisibilityPage({
     super.key,
     this.embedded = false,
+    this.section = WebsiteCatalogSection.products,
   });
 
   final bool embedded;
+  final WebsiteCatalogSection section;
 
   @override
   State<ProductWebsiteVisibilityPage> createState() =>
@@ -214,9 +219,26 @@ class _ProductWebsiteVisibilityPageState
   @override
   void initState() {
     super.initState();
+    _showCategorySelectionPage =
+        widget.section == WebsiteCatalogSection.categories;
     _searchController.addListener(_applyFilters);
     _categorySearchController.addListener(_refreshCategorySelectionPage);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
+  }
+
+  @override
+  void didUpdateWidget(ProductWebsiteVisibilityPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section == widget.section) return;
+    setState(() {
+      _showCategorySelectionPage =
+          widget.section == WebsiteCatalogSection.categories;
+      if (_showCategorySelectionPage && _websiteCategories.isNotEmpty) {
+        _categoryDraftSelection
+          ..clear()
+          ..addAll(_visibleWebsiteCategoryIds);
+      }
+    });
   }
 
   @override
@@ -281,6 +303,14 @@ class _ProductWebsiteVisibilityPageState
         _tenantId = tenantId;
         _products = rows;
         _websiteCategories = categories;
+        if (widget.section == WebsiteCatalogSection.categories) {
+          _categoryDraftSelection
+            ..clear()
+            ..addAll(categories
+                .where((category) => category.showOnWebsite)
+                .map((category) => category.id));
+          _showCategorySelectionPage = true;
+        }
         _visibilityPolicy =
             PublicProductVisibilityPolicy.fromSettings(settings);
         _selectedProductIds.removeWhere(
@@ -563,20 +593,11 @@ class _ProductWebsiteVisibilityPageState
     required bool visible,
     required String tenantId,
   }) async {
-    const chunkSize = 200;
-    final now = DateTime.now().toUtc().toIso8601String();
-    for (var start = 0; start < ids.length; start += chunkSize) {
-      final chunk = ids.skip(start).take(chunkSize).toList(growable: false);
-      await _supabase
-          .from('products')
-          .update({
-            'show_on_website': visible,
-            'is_published': visible,
-            'updated_at': now,
-          })
-          .eq('tenant_id', tenantId)
-          .inFilter('id', chunk);
-    }
+    await context.read<WebsiteService>().updateProductWebsiteVisibilityBatch(
+          tenantId: tenantId,
+          productIds: ids,
+          showOnWebsite: visible,
+        );
   }
 
   void _updateRowsLocally(Set<String> ids, {required bool visible}) {
@@ -654,7 +675,6 @@ class _ProductWebsiteVisibilityPageState
       _websiteCategories,
     );
     final selected = Set<String>.from(categoryIds);
-    final now = DateTime.now().toUtc().toIso8601String();
 
     setState(() {
       _isSavingRules = true;
@@ -667,21 +687,10 @@ class _ProductWebsiteVisibilityPageState
     _applyFilters();
 
     try {
-      await _supabase.from('product_categories').update({
-        'show_on_website': false,
-        'updated_at': now,
-      }).eq('tenant_id', tenantId);
-
-      if (selected.isNotEmpty) {
-        await _supabase
-            .from('product_categories')
-            .update({
-              'show_on_website': true,
-              'updated_at': now,
-            })
-            .eq('tenant_id', tenantId)
-            .inFilter('id', selected.toList(growable: false));
-      }
+      await context.read<WebsiteService>().replaceWebsiteCategoryVisibility(
+            tenantId: tenantId,
+            visibleCategoryIds: selected,
+          );
 
       await _clearProductCaches(tenantId);
       _showSnackBar('Categorías públicas actualizadas.');
@@ -710,6 +719,7 @@ class _ProductWebsiteVisibilityPageState
   }
 
   Future<void> _closeCategorySelectionPage() async {
+    if (widget.section == WebsiteCatalogSection.categories) return;
     if (!_categoryDraftHasChanges) {
       setState(() => _showCategorySelectionPage = false);
       return;
@@ -742,9 +752,20 @@ class _ProductWebsiteVisibilityPageState
 
   Future<void> _saveCategorySelectionPage() async {
     final saved = await _saveWebsiteCategories(_categoryDraftSelection);
-    if (saved && mounted) {
+    if (saved && mounted && widget.section == WebsiteCatalogSection.products) {
       setState(() => _showCategorySelectionPage = false);
     }
+  }
+
+  void _discardCategorySelectionChanges() {
+    setState(() {
+      _categoryDraftSelection
+        ..clear()
+        ..addAll(_visibleWebsiteCategoryIds);
+      if (widget.section == WebsiteCatalogSection.products) {
+        _showCategorySelectionPage = false;
+      }
+    });
   }
 
   Future<void> _saveWebsiteSettings(
@@ -973,7 +994,8 @@ class _ProductWebsiteVisibilityPageState
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(theme),
+        if (widget.section == WebsiteCatalogSection.products)
+          _buildHeader(theme),
         if (_isLoading)
           const Expanded(child: Center(child: BrandedLoading()))
         else if (_error != null)
@@ -1463,12 +1485,14 @@ class _ProductWebsiteVisibilityPageState
         children: [
           Row(
             children: [
-              IconButton(
-                tooltip: 'Volver a visibilidad',
-                onPressed: saving ? null : _closeCategorySelectionPage,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              const SizedBox(width: 4),
+              if (widget.section == WebsiteCatalogSection.products) ...[
+                IconButton(
+                  tooltip: 'Volver a productos',
+                  onPressed: saving ? null : _closeCategorySelectionPage,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1490,16 +1514,7 @@ class _ProductWebsiteVisibilityPageState
                 ),
               ),
               TextButton(
-                onPressed: saving
-                    ? null
-                    : () {
-                        setState(() {
-                          _categoryDraftSelection
-                            ..clear()
-                            ..addAll(_visibleWebsiteCategoryIds);
-                          _showCategorySelectionPage = false;
-                        });
-                      },
+                onPressed: saving ? null : _discardCategorySelectionChanges,
                 child: const Text('Descartar'),
               ),
               const SizedBox(width: 8),

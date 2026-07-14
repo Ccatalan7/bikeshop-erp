@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-07-10
+Last updated: 2026-07-14
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
 
@@ -898,6 +898,73 @@ Important meaning:
 - `technical_profile.sources` = where each technical fact came from
 - `technical_profile.confirmed` = whether the fact is confirmed or still suggestive
 - `bikes.bike_type` is the active visual platform selector for workshop diagrams; it now includes `mountain_hardtail` so the base identity form can distinguish hardtail from generic mountain/full-suspension flows without a second subtype field
+
+### 3A. Atomic bicycle aggregate persistence boundary
+
+Implementation status (2026-07-14): implemented and verified against the
+disposable local canonical schema, but **not deployed or active in
+production**. The database migration must be installed before any client that
+requires these RPCs is released.
+
+`bikes` and `bike_profiles` remain normalized sources of truth, but the full
+bicycle form must persist them as one logical aggregate command.
+
+Canonical command/read contract:
+
+- `public.get_bike_aggregate(bike_id)` returns the tenant-owned `bikes` row and
+  its optional `bike_profiles` row in one authenticated read.
+- `public.save_bike_aggregate(...)` creates or updates the bike, optionally
+  creates/updates its profile, appends the corresponding bike events, and
+  stores the command receipt inside one PostgreSQL transaction.
+- the client supplies a stable bike UUID and operation key before the request;
+  an uncertain response must reuse that key so committed work is replayed
+  instead of duplicated.
+- the command compares the loaded `updated_at` values before replacing either
+  row. A stale editor must reload rather than overwrite newer profile truth.
+- a null profile payload means "preserve the current profile," not "replace it
+  with empty JSON."
+- full-profile editors must preserve technical/intake keys they do not render.
+  Narrow downstream promotion without an authoritative profile id must merge
+  into current truth instead of replacing the whole ficha.
+
+Load-state contract for every existing-bike editor:
+
+- distinguish `loading`, `loaded with profile`, `loaded without profile`, and
+  `failed`;
+- `loaded without profile` is the only state that may be presented as no ficha;
+- `failed` must show retry and block editing/saving, because network failure is
+  not evidence that the profile is empty;
+- optional catalog enrichment runs after persisted profile hydration and may
+  not suppress already-loaded technical truth.
+- an uncertain transport outcome enters a blocking `outcome unknown` state;
+  the same in-memory bike id, payload, expected versions, and operation key
+  must be retried before fields, delete, cancel, or route dismissal are enabled.
+
+`bike_aggregate_save_operations` is durable idempotency/forensic evidence. It
+is not a parallel bike truth store and must never be read as the current ficha;
+current identity stays in `bikes` and current upstream technical truth stays in
+`bike_profiles`.
+
+Known boundary limitations before wider rollout:
+
+- operation recovery is durable on the server but the pending client command
+  is currently retained only while `BikeFormDialog` remains alive. The UI
+  blocks dismissal during an uncertain outcome, but a browser/process crash is
+  not yet backed by a local durable outbox.
+- image bytes are uploaded before the PostgreSQL command. Successfully
+  uploaded URLs are retained across conflict reloads, but abandoning the form
+  before a database commit can still leave an orphaned Storage object.
+- receipt rows prove committed commands only. Offline attempts and rejected or
+  stale commands intentionally create no success receipt; support-grade failure
+  diagnosis still needs structured client attempt/outcome telemetry.
+- the aggregate boundary covers bicycle identity + ficha. It does not make the
+  surrounding mechanic job, job photos, or pending service-wizard promotions
+  one transaction.
+
+Quick save still follows the existing intake policy: it may create the bike
+from the minimum identity set before the technical kernel is reviewed. If the
+mechanic has entered intake/technical values, those values are part of the same
+atomic command; quick save is never an identity-only excuse to discard them.
 
 ### 4. Why this layer is the true base
 
@@ -1827,6 +1894,34 @@ Brake example:
 
 This strengthens centralization because diagnosis, service guidance, product suggestions, and bike memory all operate on one component-centric visit model instead of parallel questionnaires.
 
+## Recent Continuity Note (2026-07-14)
+
+- bicycle identity and ficha persistence now have one proposed server command:
+  `save_bike_aggregate` commits `bikes`, optional `bike_profiles`, save events,
+  and an idempotency receipt together or rolls them all back.
+- retry ambiguity is explicit: the Flutter form keeps a stable bike id and
+  operation key, checks the durable receipt after a transport error, and a
+  same-key replay returns the already-committed aggregate without duplicates.
+- existing-bike profile loading now uses the aggregate reader and has explicit
+  loading/present/absent/failed states. A failed read blocks edits and save and
+  exposes `Reintentar`; optional catalog lookup can no longer prevent persisted
+  technical values from hydrating.
+- the full editor preserves technical/intake keys it does not render and sends
+  loaded bike/profile timestamps so stale forms cannot erase newer truth.
+- id-less profile promotions in `BikeshopService.upsertBikeProfile` now merge
+  into the current stored maps, closing the destructive fallback where a
+  transient read failure later replaced an existing ficha with a partial
+  service-wizard profile.
+- the canonical surface registry now names every host of `BikeFormDialog` and
+  requires them to consume the same aggregate contract.
+- production was inspected read-only only for schema/current-shape evidence;
+  the screenshot supplied for this investigation was an example and was not
+  treated as the affected incident record. No production mutation was made.
+
+This strengthens centralization: normalized `bikes`/`bike_profiles` ownership
+does not change, while the persistence boundary now matches the employee's one
+logical save action and refuses to turn missing connectivity into empty truth.
+
 ## Recent Continuity Note (2026-07-03)
 
 - mechanic job delivery is now treated as a current lifecycle state, not as any row that merely has an old `delivered_at` timestamp. `delivered_at` is set only while the current legacy/custom status resolves to `ENTREGADO`, and is cleared when a job moves back to `FINALIZADO`/`Terminado` or any other non-delivered state.
@@ -1852,16 +1947,19 @@ This strengthens centralization because diagnosis, service guidance, product sug
 
 This strengthens centralization around bike profile truth because real service flows can now create the first durable `bike_profiles.technical_profile.values` record for bikes that previously had no profile at all, while historical data remains untouched until there is real structured evidence worth promoting. It also strengthens validation discipline because compatibility/backbone work now has a repeatable hidden debug harness instead of relying on production-visible test UI or repeated manual setup.
 
-## Next Session Priority Queue (2026-05-14)
+## Next Session Priority Queue (2026-07-14)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
-1. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
-2. Finish the next bottom-bracket / crankset seam after the richer service-flow carry-through: the bike form/read model/debug harness and bottom-bracket service wizards now round-trip `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface`, but the broader chainline, mounting, crank-length, and exact shell/adapter seams remain open before compatibility population.
-3. Do not start broad compatibility population yet. Only after the bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
-4. When validating bike reassignment from a work row, prove both paths: direct bike-profile opening from the table and the guarded title dropdown reassignment that keeps `mechanic_jobs.bike_id` and any single `mechanic_job_bikes` row aligned.
+1. Review `20260714120000_add_atomic_bike_aggregate_save.sql` and decide the rollout gate for the documented crash-only client-outbox limitation. Install the database migration before releasing the RPC-dependent client, then verify create, edit, lost-response replay, profile-only stale rejection, and failed-load retry through the normal employee job flow. Staging remains suspended/non-authoritative.
+2. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
+3. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
+4. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
+5. Finish the next bottom-bracket / crankset seam after the richer service-flow carry-through: the bike form/read model/debug harness and bottom-bracket service wizards now round-trip `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface`, but the broader chainline, mounting, crank-length, and exact shell/adapter seams remain open before compatibility population.
+6. Do not start broad compatibility population yet. Only after the bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
+7. When validating bike reassignment from a work row, prove both paths: direct bike-profile opening from the table and the guarded title dropdown reassignment that keeps `mechanic_jobs.bike_id` and any single `mechanic_job_bikes` row aligned.
 
 ## The Most Important Direction From Here
 

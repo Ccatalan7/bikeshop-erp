@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
@@ -2602,14 +2603,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       throw Exception('No se pudo preparar la bicicleta de prueba');
     }
 
-    if (request.scenario.technicalValues.isNotEmpty) {
-      await _ensureDebugBikeProfile(
-        tenantId: tenantId,
-        bike: bike,
-        scenario: request.scenario,
-      );
-    }
-
     final now = DateTime.now();
     final timing = _debugTimingForStage(request.stage, now);
     final debugTag =
@@ -2706,12 +2699,22 @@ class _PegasTablePageState extends State<PegasTablePage>
       );
     }
 
+    BikeAggregate? existingAggregate;
+    if (existingBike?.id != null) {
+      existingAggregate =
+          await _bikeshopService.getBikeAggregate(existingBike!.id!);
+      existingBike = existingAggregate.bike;
+    }
+
     final serialNumber = scenario.reuseBike
         ? scenario.fixtureSerial
         : '${scenario.fixtureSerial}-${DateTime.now().millisecondsSinceEpoch}';
     final desiredBike = Bike(
+      id: existingBike?.id ?? const Uuid().v4(),
       tenantId: tenantId,
       customerId: customerId,
+      brandId: existingBike?.brandId,
+      modelId: existingBike?.modelId,
       brand: scenario.brand,
       model: scenario.model,
       year: scenario.year,
@@ -2720,27 +2723,91 @@ class _PegasTablePageState extends State<PegasTablePage>
       frameSize: scenario.frameSize,
       wheelSize: scenario.wheelSize,
       bikeType: scenario.bikeType,
+      frontHubSpacingMm: existingBike?.frontHubSpacingMm,
+      rearHubSpacingMm: existingBike?.rearHubSpacingMm,
+      spokeCount: existingBike?.spokeCount,
+      factoryRimId: existingBike?.factoryRimId,
+      purchaseDate: existingBike?.purchaseDate,
+      purchasePrice: existingBike?.purchasePrice,
+      warrantyUntil: existingBike?.warrantyUntil,
+      qrCode: existingBike?.qrCode,
       notes: '[test fixture:${scenario.id}] ${scenario.description}',
+      imageUrl: existingBike?.imageUrl,
+      imageUrls: existingBike?.imageUrls ?? const [],
+      isActive: existingBike?.isActive ?? true,
+      createdAt: existingBike?.createdAt,
+      updatedAt: existingBike?.updatedAt,
     );
 
-    if (existingBike != null) {
-      return _bikeshopService.updateBike(
-        existingBike.copyWith(
-          customerId: customerId,
-          brand: desiredBike.brand,
-          model: desiredBike.model,
-          year: desiredBike.year,
-          serialNumber: desiredBike.serialNumber,
-          color: desiredBike.color,
-          frameSize: desiredBike.frameSize,
-          wheelSize: desiredBike.wheelSize,
-          bikeType: desiredBike.bikeType,
-          notes: desiredBike.notes,
-        ),
+    BikeProfile? desiredProfile;
+    if (scenario.technicalValues.isNotEmpty) {
+      final existingProfile = existingAggregate?.profile;
+      final mergedValues = {
+        ...?existingProfile?.technicalValues,
+        ...scenario.technicalValues,
+      };
+      final mergedSources = {
+        ...?existingProfile?.technicalSources,
+        for (final key in scenario.technicalValues.keys) key: 'debug_fixture',
+      };
+      final mergedConfirmed = {
+        ...?existingProfile?.technicalConfirmed,
+        for (final key in scenario.technicalValues.keys) key: true,
+      };
+      final technicalProfile = Map<String, dynamic>.from(
+        existingProfile?.technicalProfile ?? const {},
+      )
+        ..['values'] = mergedValues
+        ..['sources'] = mergedSources
+        ..['confirmed'] = mergedConfirmed;
+      final summarySnapshot = Map<String, dynamic>.from(
+        existingProfile?.summarySnapshot ?? const {},
+      )
+        ..['identityLine'] = desiredBike.displayName
+        ..['technicalHighlights'] = scenario.technicalHighlights
+        ..['warnings'] = const ['Fixture de depuracion'];
+
+      desiredProfile = BikeProfile(
+        id: existingProfile?.id,
+        tenantId: tenantId,
+        bikeId: desiredBike.id!,
+        catalogBikeId: existingProfile?.catalogBikeId,
+        intakeProfile: existingProfile?.intakeProfile ?? const {},
+        technicalProfile: technicalProfile,
+        summarySnapshot: summarySnapshot,
+        lastConfirmedAt: DateTime.now(),
+        createdAt: existingProfile?.createdAt,
+        updatedAt: existingProfile?.updatedAt,
       );
     }
 
-    return _bikeshopService.createBike(desiredBike);
+    final operationVersion = existingAggregate?.bike.updatedAt
+            .toUtc()
+            .microsecondsSinceEpoch
+            .toString() ??
+        'create';
+    final operationKey =
+        'debug-bike:${scenario.id}:${desiredBike.id}:$operationVersion';
+    BikeAggregateSaveResult? result;
+    try {
+      result = await _bikeshopService.saveBikeAggregate(
+        bike: desiredBike,
+        profile: desiredProfile,
+        operationKey: operationKey,
+        expectedBikeUpdatedAt: existingAggregate?.bike.updatedAt,
+        expectedProfileUpdatedAt: existingAggregate?.profile?.updatedAt,
+      );
+    } catch (error) {
+      final isServerRejection = error is PostgrestException &&
+          error.code != null &&
+          error.code!.isNotEmpty;
+      if (isServerRejection) rethrow;
+      result = await _bikeshopService.getBikeAggregateSaveOperation(
+        operationKey,
+      );
+      if (result == null) rethrow;
+    }
+    return result.bike;
   }
 
   Bike? _findBikeBySerial(Iterable<Bike> bikes, String serialNumber) {
@@ -2751,52 +2818,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     }
     return null;
-  }
-
-  Future<void> _ensureDebugBikeProfile({
-    required String tenantId,
-    required Bike bike,
-    required _DebugBikeScenario scenario,
-  }) async {
-    final bikeId = bike.id;
-    if (bikeId == null || bikeId.isEmpty || scenario.technicalValues.isEmpty) {
-      return;
-    }
-
-    final existingProfile = await _bikeshopService.getBikeProfile(bikeId);
-    final mergedValues = {
-      ...?existingProfile?.technicalValues,
-      ...scenario.technicalValues,
-    };
-    final mergedSources = {
-      ...?existingProfile?.technicalSources,
-      for (final key in scenario.technicalValues.keys) key: 'debug_fixture',
-    };
-    final mergedConfirmed = {
-      ...?existingProfile?.technicalConfirmed,
-      for (final key in scenario.technicalValues.keys) key: true,
-    };
-
-    final profile = (existingProfile ??
-            BikeProfile(
-              tenantId: tenantId,
-              bikeId: bikeId,
-            ))
-        .copyWith(
-      technicalProfile: {
-        'values': mergedValues,
-        'sources': mergedSources,
-        'confirmed': mergedConfirmed,
-      },
-      summarySnapshot: {
-        'identityLine': bike.displayName,
-        'technicalHighlights': scenario.technicalHighlights,
-        'warnings': const ['Fixture de depuracion'],
-      },
-      lastConfirmedAt: DateTime.now(),
-    );
-
-    await _bikeshopService.upsertBikeProfile(profile);
   }
 
   _DebugJobTiming _debugTimingForStage(

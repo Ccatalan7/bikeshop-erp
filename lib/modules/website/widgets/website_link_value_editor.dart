@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/tenant_service.dart';
+import '../models/website_destination.dart';
+import 'website_workspace_scope.dart';
 
 // ==============================================================================
 // PUBLIC WIDGET: The "Button" that opens the configuration dialog
@@ -47,7 +49,8 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     bool allowAnchor = true,
     bool darkStyle = false,
   }) {
-    return showDialog<String>(
+    final workspace = WebsiteWorkspaceScope.maybeOf(context);
+    return showDialog<_WebsiteLinkPickerResult>(
       context: context,
       builder: (context) => Theme(
         data: darkStyle ? ThemeData.dark() : Theme.of(context),
@@ -56,9 +59,19 @@ class WebsiteLinkValueEditor extends StatelessWidget {
           allowInternal: allowInternal,
           allowExternal: allowExternal,
           allowAnchor: allowAnchor,
+          hasWorkspaceScope: workspace != null,
         ),
       ),
-    );
+    ).then((result) {
+      if (result == null) return null;
+      final panel = result.openPanel;
+      if (panel != null && workspace != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          workspace.open(panel);
+        });
+      }
+      return result.href;
+    });
   }
 
   @override
@@ -170,9 +183,29 @@ class WebsiteLinkValueEditor extends StatelessWidget {
   }
 
   String _summarizeLink(String href) {
-    if (href.isEmpty) return 'Sin enlace';
-    if (href.startsWith('http')) return 'Externo: $href';
-    if (href.startsWith('#')) return 'Ancla: $href';
+    final destination = WebsiteDestination.parse(href);
+    if (destination.kind == WebsiteDestinationKind.none) return 'Sin enlace';
+    if (destination.kind == WebsiteDestinationKind.external) {
+      return 'Externo: ${destination.href}';
+    }
+    if (destination.kind == WebsiteDestinationKind.anchor) {
+      return 'Sección: #${destination.reference ?? ''}';
+    }
+    if (destination.kind == WebsiteDestinationKind.page) {
+      return 'Página: ${destination.reference ?? destination.href}';
+    }
+    if (destination.kind == WebsiteDestinationKind.category) {
+      final uri = Uri.tryParse(destination.href);
+      final query =
+          (uri?.queryParameters['q'] ?? uri?.queryParameters['search'] ?? '')
+              .trim();
+      return query.isEmpty
+          ? 'Categoría del catálogo'
+          : 'Catálogo filtrado: categoría + "$query"';
+    }
+    if (destination.kind == WebsiteDestinationKind.product) {
+      return 'Producto específico';
+    }
 
     // Check special mapping
     const specialMap = _WebsiteLinkConfigurator._specialDestinations;
@@ -194,7 +227,7 @@ class WebsiteLinkValueEditor extends StatelessWidget {
 
         final cat =
             uri.queryParameters['category'] ?? uri.queryParameters['cat'];
-        if (cat != null) return 'Catálogo: Categoria #$cat';
+        if (cat != null) return 'Catálogo: categoría seleccionada';
       }
       return 'Catálogo';
     }
@@ -209,12 +242,16 @@ class WebsiteLinkValueEditor extends StatelessWidget {
   }
 
   IconData _getLinkIcon(String href) {
-    if (href.isEmpty) return Icons.link_off;
-    if (href.startsWith('http')) return Icons.open_in_new;
-    if (href.startsWith('#')) return Icons.tag;
-    if (href.startsWith('/productos')) return Icons.shopping_bag_outlined;
-    if (href.startsWith('/pagina')) return Icons.article_outlined;
-    return Icons.link;
+    return switch (WebsiteDestination.parse(href).kind) {
+      WebsiteDestinationKind.none => Icons.link_off,
+      WebsiteDestinationKind.external => Icons.open_in_new,
+      WebsiteDestinationKind.anchor => Icons.tag,
+      WebsiteDestinationKind.page => Icons.article_outlined,
+      WebsiteDestinationKind.category => Icons.category_outlined,
+      WebsiteDestinationKind.product => Icons.inventory_2_outlined,
+      WebsiteDestinationKind.system => Icons.route_outlined,
+      WebsiteDestinationKind.custom => Icons.code,
+    };
   }
 }
 
@@ -231,6 +268,8 @@ enum WebsiteLinkEditMode {
 enum _InternalDestinationType {
   special,
   page,
+  category,
+  product,
   custom,
 }
 
@@ -243,11 +282,66 @@ enum _CatalogTypeFilter {
 class _CategoryOption {
   final String id;
   final String name;
+  final String fullPath;
+  final bool showOnWebsite;
+  final int markedWebProductCount;
 
   const _CategoryOption({
     required this.id,
     required this.name,
+    required this.fullPath,
+    required this.showOnWebsite,
+    required this.markedWebProductCount,
   });
+
+  String get label => fullPath.trim().isEmpty ? name : fullPath;
+  bool get isReady => showOnWebsite && markedWebProductCount > 0;
+}
+
+class _PageOption {
+  const _PageOption({
+    required this.id,
+    required this.title,
+    required this.slug,
+    required this.href,
+    required this.isPublished,
+    required this.isHome,
+  });
+
+  final String id;
+  final String title;
+  final String slug;
+  final String href;
+  final bool isPublished;
+  final bool isHome;
+}
+
+class _ProductOption {
+  const _ProductOption({
+    required this.id,
+    required this.name,
+    required this.sku,
+    required this.isActive,
+    required this.isPublished,
+    required this.showOnWebsite,
+  });
+
+  final String id;
+  final String name;
+  final String sku;
+  final bool isActive;
+  final bool isPublished;
+  final bool showOnWebsite;
+
+  bool get isReady => isActive && isPublished && showOnWebsite;
+  String get label => name.trim().isEmpty ? sku : name;
+}
+
+class _WebsiteLinkPickerResult {
+  const _WebsiteLinkPickerResult(this.href, {this.openPanel});
+
+  final String href;
+  final WebsiteWorkspacePanel? openPanel;
 }
 
 class _WebsiteLinkConfigurator extends StatefulWidget {
@@ -255,12 +349,14 @@ class _WebsiteLinkConfigurator extends StatefulWidget {
   final bool allowInternal;
   final bool allowExternal;
   final bool allowAnchor;
+  final bool hasWorkspaceScope;
 
   const _WebsiteLinkConfigurator({
     required this.initialValue,
     required this.allowInternal,
     required this.allowExternal,
     required this.allowAnchor,
+    required this.hasWorkspaceScope,
   });
 
   static const Map<String, String> _specialDestinations = {
@@ -290,6 +386,9 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
   _InternalDestinationType _internalType = _InternalDestinationType.special;
   String _selectedSpecialHref = '/';
   String _selectedPageHref = '';
+  _PageOption? _selectedPage;
+  bool _loadingSelectedPage = false;
+  bool _selectedPageLookupComplete = false;
   String _customInternalHref = '';
 
   // Catalog filters
@@ -308,6 +407,12 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
   bool _loadingCategories = false;
   List<_CategoryOption> _categories = const [];
   String? _categoriesError;
+
+  bool _loadingProducts = false;
+  List<_ProductOption> _products = const [];
+  String? _productsError;
+  String? _selectedProductId;
+  String? _validationMessage;
 
   @override
   void initState() {
@@ -343,9 +448,20 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
     _mode = WebsiteLinkEditMode.internal;
 
-    final uri = Uri.tryParse(v);
-    final path = uri?.path ?? v;
+    final normalizedValue = WebsiteDestination.normalizeHref(v);
+    final destination = WebsiteDestination.parse(normalizedValue);
+    final uri = Uri.tryParse(normalizedValue);
+    final path = uri?.path ?? normalizedValue;
     final isCatalogPath = path == '/productos' || path == '/tienda/productos';
+    final catalogParameters = uri?.queryParameters ?? const <String, String>{};
+    final hasCompositeCatalogFilter = isCatalogPath &&
+        [
+          catalogParameters['q'],
+          catalogParameters['search'],
+          catalogParameters['type'],
+          catalogParameters['product_type'],
+          catalogParameters['tipo'],
+        ].any((value) => value?.trim().isNotEmpty == true);
 
     // Internal type: special
     final normalized = _normalizeInternalHref(v);
@@ -360,6 +476,30 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _selectedSpecialHref = specialKey;
       _selectedPageHref = '';
       _customInternalHref = '';
+    } else if (hasCompositeCatalogFilter) {
+      // A category plus search/type is one filtered-catalog destination. Keep
+      // it in the catalog-filter editor so every filter remains visible and
+      // survives reopening the CTA control.
+      _internalType = _InternalDestinationType.special;
+      _selectedSpecialHref = '/productos';
+      _selectedPageHref = '';
+      _customInternalHref = '';
+    } else if (destination.kind == WebsiteDestinationKind.category) {
+      _internalType = _InternalDestinationType.category;
+      _catalogCategoryId = destination.reference;
+      _selectedSpecialHref = '/productos';
+      _selectedPageHref = '';
+      _customInternalHref = '';
+      _isCatalog = false;
+      _ensureCategoriesLoaded();
+    } else if (destination.kind == WebsiteDestinationKind.product) {
+      _internalType = _InternalDestinationType.product;
+      _selectedProductId = destination.reference;
+      _selectedSpecialHref = '/productos';
+      _selectedPageHref = '';
+      _customInternalHref = '';
+      _isCatalog = false;
+      _ensureProductsLoaded();
     } else if (isCatalogPath) {
       _internalType = _InternalDestinationType.special;
       _selectedSpecialHref = '/productos';
@@ -367,18 +507,20 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _customInternalHref = '';
     } else if (path.startsWith('/pagina/') || path.startsWith('/shop/')) {
       _internalType = _InternalDestinationType.page;
-      _selectedPageHref = v;
+      _selectedPageHref = normalizedValue;
       _selectedSpecialHref = '/';
       _customInternalHref = '';
+      _ensureSelectedPageLoaded();
     } else {
       _internalType = _InternalDestinationType.custom;
-      _customInternalHref = v;
+      _customInternalHref = normalizedValue;
       _selectedSpecialHref = '/';
       _selectedPageHref = '';
     }
 
     // Catalog filter parsing.
-    _isCatalog = path == '/productos' || path == '/tienda/productos';
+    _isCatalog =
+        isCatalogPath && _internalType == _InternalDestinationType.special;
     if (_isCatalog) {
       final qp = uri?.queryParameters ?? const <String, String>{};
       final q = (qp['q'] ?? qp['search'] ?? '').trim();
@@ -397,7 +539,9 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         'service' || 'servicio' || 'servicios' => _CatalogTypeFilter.service,
         _ => _CatalogTypeFilter.any,
       };
-      _catalogCategoryId = category.isEmpty ? null : category;
+      if (_internalType != _InternalDestinationType.category) {
+        _catalogCategoryId = category.isEmpty ? null : category;
+      }
 
       // We only try to load categories if the user is editing catalog filters.
       _ensureCategoriesLoaded();
@@ -450,15 +594,24 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     final category = (_catalogCategoryId ?? '').trim();
     if (category.isNotEmpty) qp['category'] = category;
 
-    final uri =
-        Uri(path: '/productos', queryParameters: qp.isEmpty ? null : qp);
-    return uri.toString();
+    return WebsiteDestination.routeForCatalog(
+      categoryId: qp['category'],
+      searchQuery: qp['q'],
+      productType: qp['type'],
+    );
   }
 
   String _currentInternalHref() {
     return switch (_internalType) {
       _InternalDestinationType.special => _selectedSpecialHref,
       _InternalDestinationType.page => _selectedPageHref,
+      _InternalDestinationType.category => _catalogCategoryId == null
+          ? ''
+          : WebsiteDestination.routeForCatalog(
+              categoryId: _catalogCategoryId,
+            ),
+      _InternalDestinationType.product =>
+        _selectedProductId == null ? '' : '/productos/$_selectedProductId',
       _InternalDestinationType.custom => _customInternalHref,
     };
   }
@@ -498,23 +651,45 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         throw Exception('No se pudo determinar tenant_id');
       }
 
-      // Load from product_categories table
       final rows = await Supabase.instance.client
           .from('product_categories')
-          .select('id,name,is_active')
+          .select('id,name,full_path,is_active,show_on_website')
           .eq('tenant_id', tenantId)
           .order('name', ascending: true);
+      final productRows = await Supabase.instance.client
+          .from('products')
+          .select('category_id')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .eq('is_published', true)
+          .eq('show_on_website', true);
+
+      final markedWebCounts = <String, int>{};
+      for (final row in (productRows as List)) {
+        final categoryId =
+            (row as Map<String, dynamic>)['category_id']?.toString();
+        if (categoryId == null || categoryId.isEmpty) continue;
+        markedWebCounts[categoryId] = (markedWebCounts[categoryId] ?? 0) + 1;
+      }
 
       final parsed = <_CategoryOption>[];
       for (final row in (rows as List)) {
         final map = row as Map<String, dynamic>;
         final id = map['id']?.toString();
         final name = map['name']?.toString();
+        final fullPath = map['full_path']?.toString();
         final isActive = map['is_active'] == true;
         if (id == null || id.isEmpty || name == null || name.isEmpty) continue;
         if (!isActive) continue;
-        parsed.add(_CategoryOption(id: id, name: name));
+        parsed.add(_CategoryOption(
+          id: id,
+          name: name,
+          fullPath: fullPath ?? name,
+          showOnWebsite: map['show_on_website'] == true,
+          markedWebProductCount: markedWebCounts[id] ?? 0,
+        ));
       }
+      parsed.sort((a, b) => a.label.compareTo(b.label));
 
       if (!mounted) return;
       setState(() {
@@ -533,7 +708,160 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     }
   }
 
-  Future<String?> _pickWebsitePageHref(BuildContext context) async {
+  Future<void> _ensureProductsLoaded() async {
+    if (_loadingProducts || _products.isNotEmpty) return;
+    setState(() {
+      _loadingProducts = true;
+      _productsError = null;
+    });
+
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        throw Exception('No se pudo determinar tenant_id');
+      }
+      final rows = await Supabase.instance.client
+          .from('products')
+          .select('id,name,sku,is_active,is_published,show_on_website')
+          .eq('tenant_id', tenantId)
+          .order('name', ascending: true)
+          .limit(2000);
+      final parsed = (rows as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .map(
+            (row) => _ProductOption(
+              id: (row['id'] ?? '').toString(),
+              name: (row['name'] ?? '').toString(),
+              sku: (row['sku'] ?? '').toString(),
+              isActive: row['is_active'] == true,
+              isPublished: row['is_published'] == true,
+              showOnWebsite: row['show_on_website'] == true,
+            ),
+          )
+          .where((product) => product.id.isNotEmpty)
+          .toList(growable: false);
+      if (!mounted) return;
+      setState(() {
+        _products = parsed;
+        _loadingProducts = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _productsError = error.toString();
+        _loadingProducts = false;
+      });
+      if (kDebugMode) {
+        debugPrint('❌ [WebsiteLinkValueEditor] load products failed: $error');
+      }
+    }
+  }
+
+  Future<void> _pickProduct(BuildContext context) async {
+    await _ensureProductsLoaded();
+    if (!mounted || !context.mounted) return;
+    if (_productsError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error cargando productos: $_productsError')),
+      );
+      return;
+    }
+
+    final selected = await showDialog<_ProductOption>(
+      context: context,
+      builder: (dialogContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = query.isEmpty
+                ? _products
+                : _products.where((product) {
+                    final term = query.toLowerCase();
+                    return product.name.toLowerCase().contains(term) ||
+                        product.sku.toLowerCase().contains(term);
+                  }).toList(growable: false);
+            return AlertDialog(
+              title: const Text('Elegir producto'),
+              content: SizedBox(
+                width: 540,
+                height: 520,
+                child: Column(
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Buscar por nombre o SKU…',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (value) {
+                        setDialogState(() => query = value.trim());
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final product = filtered[index];
+                          return ListTile(
+                            dense: true,
+                            leading: Icon(
+                              Icons.inventory_2_outlined,
+                              color: product.isReady
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.amber.shade700,
+                            ),
+                            title: Text(product.label),
+                            subtitle: Text(
+                              product.isReady
+                                  ? 'SKU ${product.sku} · Publicado en web'
+                                  : 'SKU ${product.sku} · No disponible en web',
+                            ),
+                            trailing: Icon(
+                              product.isReady
+                                  ? Icons.check_circle_outline
+                                  : Icons.warning_amber_rounded,
+                              size: 19,
+                              color: product.isReady
+                                  ? Colors.green.shade600
+                                  : Colors.amber.shade700,
+                            ),
+                            onTap: () => Navigator.pop(dialogContext, product),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _selectedProductId = selected.id);
+  }
+
+  _ProductOption? get _selectedProductOption {
+    final id = _selectedProductId;
+    if (id == null || id.isEmpty) return null;
+    for (final product in _products) {
+      if (product.id == id || product.sku == id) return product;
+    }
+    return null;
+  }
+
+  Future<_PageOption?> _pickWebsitePage(BuildContext context) async {
     final tenantId = await TenantService().getTenantId();
     if (tenantId == null) return null;
 
@@ -541,7 +869,6 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
         .from('website_pages')
         .select('id,slug,title,is_home,is_published,is_system')
         .eq('tenant_id', tenantId)
-        .eq('is_published', true)
         .order('is_home', ascending: false)
         .order('title', ascending: true);
 
@@ -553,22 +880,20 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           final slug = (e['slug'] ?? '').toString();
           final title = (e['title'] ?? '').toString();
           final isHome = e['is_home'] == true;
-          return (slug: slug, title: title, isHome: isHome);
+          return _PageOption(
+            id: (e['id'] ?? '').toString(),
+            slug: slug,
+            title: title,
+            isHome: isHome,
+            isPublished: e['is_published'] == true,
+            href: WebsiteDestination.routeForPage(
+              slug: slug,
+              isHome: isHome,
+            ),
+          );
         })
         .where((p) => p.isHome || p.slug.isNotEmpty)
         .toList(growable: false);
-
-    String routeForSlug({required String slug, required bool isHome}) {
-      if (isHome) return '/';
-      const systemSlugToPath = {
-        'nosotros': '/nosotros',
-        'terminos': '/terminos',
-        'privacidad': '/privacidad',
-        'devoluciones': '/devoluciones',
-        'envios': '/envios',
-      };
-      return systemSlugToPath[slug] ?? '/pagina/$slug';
-    }
 
     // Capture theme from parent to ensure dark mode persists in dialog
     final parentTheme = Theme.of(context);
@@ -613,7 +938,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           )
         : parentTheme;
 
-    final selected = await showDialog<String>(
+    final selected = await showDialog<_PageOption>(
       context: context,
       builder: (context) {
         final searchController = TextEditingController();
@@ -685,10 +1010,6 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                 const Divider(height: 1, indent: 64),
                             itemBuilder: (context, index) {
                               final p = filtered[index];
-                              final href = routeForSlug(
-                                slug: p.slug,
-                                isHome: p.isHome,
-                              );
                               return ListTile(
                                 leading: Container(
                                   width: 40,
@@ -716,20 +1037,34 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                       fontWeight: FontWeight.w500),
                                 ),
                                 subtitle: Text(
-                                  href,
+                                  p.isPublished
+                                      ? p.href
+                                      : '${p.href} · Borrador',
                                   style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.5)
-                                        : Colors.grey[600],
+                                    color: p.isPublished
+                                        ? (isDark
+                                            ? Colors.white
+                                                .withValues(alpha: 0.5)
+                                            : Colors.grey[600])
+                                        : Colors.amber.shade700,
                                     fontSize: 12,
                                   ),
+                                ),
+                                trailing: Icon(
+                                  p.isPublished
+                                      ? Icons.check_circle_outline
+                                      : Icons.edit_note_outlined,
+                                  size: 19,
+                                  color: p.isPublished
+                                      ? Colors.green.shade600
+                                      : Colors.amber.shade700,
                                 ),
                                 hoverColor: isDark
                                     ? Colors.white.withValues(alpha: 0.05)
                                     : null,
                                 contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16, vertical: 4),
-                                onTap: () => Navigator.pop(context, href),
+                                onTap: () => Navigator.pop(context, p),
                               );
                             },
                           ),
@@ -746,6 +1081,63 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
     );
 
     return selected;
+  }
+
+  Future<void> _ensureSelectedPageLoaded() async {
+    final destination = WebsiteDestination.parse(_selectedPageHref);
+    final slug = destination.kind == WebsiteDestinationKind.page
+        ? destination.reference
+        : null;
+    if (slug == null || slug.isEmpty || _loadingSelectedPage) return;
+    setState(() => _loadingSelectedPage = true);
+    try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null) {
+        if (mounted) {
+          setState(() {
+            _selectedPageLookupComplete = true;
+            _loadingSelectedPage = false;
+          });
+        }
+        return;
+      }
+      final rows = await Supabase.instance.client
+          .from('website_pages')
+          .select('id,slug,title,is_home,is_published')
+          .eq('tenant_id', tenantId)
+          .eq('slug', slug)
+          .limit(1);
+      final list = rows as List;
+      _PageOption? page;
+      if (list.isNotEmpty) {
+        final row = Map<String, dynamic>.from(list.first as Map);
+        final pageSlug = (row['slug'] ?? '').toString();
+        final isHome = row['is_home'] == true;
+        page = _PageOption(
+          id: (row['id'] ?? '').toString(),
+          title: (row['title'] ?? '').toString(),
+          slug: pageSlug,
+          href: WebsiteDestination.routeForPage(
+            slug: pageSlug,
+            isHome: isHome,
+          ),
+          isPublished: row['is_published'] == true,
+          isHome: isHome,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _selectedPage = page;
+        _selectedPageLookupComplete = true;
+        _loadingSelectedPage = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _selectedPageLookupComplete = true;
+        _loadingSelectedPage = false;
+      });
+    }
   }
 
   Future<void> _pickCategory(BuildContext context) async {
@@ -841,7 +1233,8 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                           filtered = _categories;
                         } else {
                           filtered = _categories
-                              .where((c) => c.name.toLowerCase().contains(term))
+                              .where(
+                                  (c) => c.label.toLowerCase().contains(term))
                               .toList(growable: false);
                         }
                       });
@@ -890,17 +1283,28 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                                         : Colors.blue,
                                   ),
                                 ),
-                                title: Text(c.name,
+                                title: Text(c.label,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w500)),
                                 subtitle: Text(
-                                  c.id,
+                                  c.showOnWebsite
+                                      ? '${c.markedWebProductCount} productos marcados para web'
+                                      : 'Oculta del catálogo público',
                                   style: TextStyle(
                                     color: isDark
                                         ? Colors.white.withValues(alpha: 0.5)
                                         : Colors.grey[600],
                                     fontSize: 12,
                                   ),
+                                ),
+                                trailing: Icon(
+                                  c.isReady
+                                      ? Icons.check_circle_outline
+                                      : Icons.warning_amber_rounded,
+                                  color: c.isReady
+                                      ? Colors.green.shade600
+                                      : Colors.amber.shade700,
+                                  size: 20,
                                 ),
                                 hoverColor: isDark
                                     ? Colors.white.withValues(alpha: 0.05)
@@ -925,6 +1329,15 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
     if (selected == null) return;
     setState(() => _catalogCategoryId = selected.id);
+  }
+
+  _CategoryOption? get _selectedCategoryOption {
+    final id = _catalogCategoryId;
+    if (id == null || id.isEmpty) return null;
+    for (final category in _categories) {
+      if (category.id == id) return category;
+    }
+    return null;
   }
 
   InputDecoration _decoration(String label) {
@@ -996,6 +1409,16 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                 )
               else
                 _buildInternalSection(),
+              if (_validationMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _validationMessage!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1006,13 +1429,318 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           child: const Text('Cancelar'),
         ),
         FilledButton(
-          onPressed: () {
-            final url = _generateUrl();
-            Navigator.of(context).pop(url);
-          },
+          onPressed: _apply,
           child: const Text('Aplicar'),
         ),
       ],
+    );
+  }
+
+  void _apply({WebsiteWorkspacePanel? openPanel}) {
+    final url = _generateUrl().trim();
+    if (url.isEmpty) {
+      setState(() => _validationMessage = 'Selecciona un destino.');
+      return;
+    }
+    if (_mode == WebsiteLinkEditMode.external &&
+        !url.startsWith('http://') &&
+        !url.startsWith('https://')) {
+      setState(() => _validationMessage =
+          'La URL externa debe comenzar con http:// o https://.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _WebsiteLinkPickerResult(url, openPanel: openPanel),
+    );
+  }
+
+  Widget _buildPageDestination() {
+    final page = _selectedPage;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InputDecorator(
+          decoration: _decoration('Página').copyWith(
+            suffixIcon: IconButton(
+              tooltip: 'Quitar página',
+              onPressed: _selectedPageHref.isEmpty
+                  ? null
+                  : () {
+                      setState(() {
+                        _selectedPageHref = '';
+                        _selectedPage = null;
+                        _selectedPageLookupComplete = false;
+                      });
+                    },
+              icon: const Icon(Icons.clear),
+            ),
+          ),
+          child: InkWell(
+            onTap: () async {
+              final selected = await _pickWebsitePage(context);
+              if (!mounted || selected == null) return;
+              setState(() {
+                _selectedPage = selected;
+                _selectedPageHref = selected.href;
+                _selectedPageLookupComplete = true;
+                _validationMessage = null;
+              });
+            },
+            child: Row(
+              children: [
+                const Icon(Icons.article_outlined, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    page?.title ??
+                        (_selectedPageHref.isEmpty
+                            ? 'Elegir una página…'
+                            : _selectedPageHref),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontStyle: _selectedPageHref.isEmpty
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_loadingSelectedPage) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(minHeight: 2),
+        ] else if (_selectedPageHref.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _buildReadinessCard(
+            ready: page?.isPublished ?? false,
+            message: page == null && _selectedPageLookupComplete
+                ? 'No existe una página CMS con esta ruta.'
+                : page == null
+                    ? 'Comprobando la página seleccionada…'
+                    : page.isPublished
+                        ? 'Página publicada y lista para recibir visitas.'
+                        : 'La página existe, pero todavía está en borrador.',
+            actionLabel: 'Administrar página',
+            panel: WebsiteWorkspacePanel.pages,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCategoryDestination() {
+    final category = _selectedCategoryOption;
+    final missingSelection = !_loadingCategories &&
+        _catalogCategoryId != null &&
+        _categories.isNotEmpty &&
+        category == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String?>(
+                initialValue: category?.id,
+                isExpanded: true,
+                decoration: _decoration('Categoría'),
+                hint: Text(_loadingCategories
+                    ? 'Cargando categorías…'
+                    : 'Seleccionar categoría'),
+                items: _categories
+                    .map(
+                      (option) => DropdownMenuItem<String?>(
+                        value: option.id,
+                        child: Text(
+                          option.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: _loadingCategories
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _catalogCategoryId = value;
+                          _validationMessage = null;
+                        });
+                      },
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.outlined(
+              tooltip: 'Buscar categoría',
+              onPressed:
+                  _loadingCategories ? null : () => _pickCategory(context),
+              icon: _loadingCategories
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search),
+            ),
+          ],
+        ),
+        if (_categoriesError != null) ...[
+          const SizedBox(height: 8),
+          Text('No se pudieron cargar las categorías.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+        if (category != null || missingSelection) ...[
+          const SizedBox(height: 8),
+          _buildReadinessCard(
+            ready: category?.isReady ?? false,
+            message: missingSelection
+                ? 'La categoría guardada ya no existe o no está activa.'
+                : category!.isReady
+                    ? 'Categoría visible con ${category.markedWebProductCount} productos marcados para web.'
+                    : category.showOnWebsite
+                        ? 'La categoría está visible, pero no tiene productos marcados para web.'
+                        : 'La categoría está oculta del catálogo público.',
+            actionLabel: 'Configurar categoría',
+            panel: WebsiteWorkspacePanel.catalogCategories,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildProductDestination() {
+    final product = _selectedProductOption;
+    final missingSelection = !_loadingProducts &&
+        _selectedProductId != null &&
+        _products.isNotEmpty &&
+        product == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InputDecorator(
+          decoration: _decoration('Producto').copyWith(
+            suffixIcon: IconButton(
+              tooltip: 'Buscar producto',
+              onPressed: _loadingProducts ? null : () => _pickProduct(context),
+              icon: _loadingProducts
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search),
+            ),
+          ),
+          child: InkWell(
+            onTap: _loadingProducts ? null : () => _pickProduct(context),
+            child: Row(
+              children: [
+                const Icon(Icons.inventory_2_outlined, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    product?.label ??
+                        (_selectedProductId == null
+                            ? 'Elegir un producto…'
+                            : _selectedProductId!),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontStyle: _selectedProductId == null
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_productsError != null) ...[
+          const SizedBox(height: 8),
+          Text('No se pudieron cargar los productos.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+        if (product != null || missingSelection) ...[
+          const SizedBox(height: 8),
+          _buildReadinessCard(
+            ready: product?.isReady ?? false,
+            message: missingSelection
+                ? 'El producto guardado ya no existe.'
+                : product!.isReady
+                    ? 'Producto publicado y disponible para enlaces web.'
+                    : 'El producto existe, pero no está publicado en la web.',
+            actionLabel: 'Configurar producto',
+            panel: WebsiteWorkspacePanel.catalogProducts,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAdvancedDestination() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          initialValue: _customInternalHref,
+          decoration: _decoration('Ruta interna')
+              .copyWith(prefixIcon: const Icon(Icons.code)),
+          onChanged: (value) => _customInternalHref = value,
+        ),
+        const SizedBox(height: 8),
+        _buildReadinessCard(
+          ready: false,
+          message:
+              'Usa esta opción solo para rutas especiales. No crea una página CMS ni un elemento de navegación.',
+          actionLabel: 'Revisar destinos',
+          panel: WebsiteWorkspacePanel.destinations,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReadinessCard({
+    required bool ready,
+    required String message,
+    required String actionLabel,
+    required WebsiteWorkspacePanel panel,
+  }) {
+    final theme = Theme.of(context);
+    final background = ready
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.32)
+        : Colors.amber.withValues(alpha: 0.12);
+    final foreground =
+        ready ? theme.colorScheme.primary : Colors.amber.shade800;
+    final canManage = widget.hasWorkspaceScope;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: foreground.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            ready ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+            size: 18,
+            color: foreground,
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
+          if (canManage) ...[
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: () => _apply(openPanel: panel),
+              child: Text(actionLabel),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1033,13 +1761,31 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               child: Text('Página del sitio'),
             ),
             DropdownMenuItem(
+              value: _InternalDestinationType.category,
+              child: Text('Categoría del catálogo'),
+            ),
+            DropdownMenuItem(
+              value: _InternalDestinationType.product,
+              child: Text('Producto específico'),
+            ),
+            DropdownMenuItem(
               value: _InternalDestinationType.custom,
-              child: Text('Ruta personalizada'),
+              child: Text('Ruta interna avanzada'),
             ),
           ],
           onChanged: (v) {
             if (v == null) return;
-            setState(() => _internalType = v);
+            setState(() {
+              _internalType = v;
+              _validationMessage = null;
+              _isCatalog = v == _InternalDestinationType.special &&
+                  _selectedSpecialHref == '/productos';
+            });
+            if (v == _InternalDestinationType.category) {
+              _ensureCategoriesLoaded();
+            } else if (v == _InternalDestinationType.product) {
+              _ensureProductsLoaded();
+            }
           },
         ),
         const SizedBox(height: 16),
@@ -1082,70 +1828,13 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             },
           )
         else if (_internalType == _InternalDestinationType.page)
-          InputDecorator(
-            decoration: _decoration('Página').copyWith(
-              suffixIcon: IconButton(
-                onPressed: () {
-                  setState(() => _selectedPageHref = '');
-                },
-                icon: const Icon(Icons.clear),
-              ),
-            ),
-            child: InkWell(
-              onTap: () async {
-                final href = await _pickWebsitePageHref(context);
-                if (!mounted) return;
-                if (href == null || href.trim().isEmpty) return;
-                setState(() {
-                  _selectedPageHref = href;
-                  _isCatalog = href.startsWith('/productos');
-                  if (_isCatalog) _ensureCategoriesLoaded();
-                });
-              },
-              child: Row(
-                children: [
-                  const Icon(Icons.article_outlined, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _selectedPageHref.isEmpty
-                          ? 'Toca para elegir página...'
-                          : _selectedPageHref,
-                      style: TextStyle(
-                        fontStyle: _selectedPageHref.isEmpty
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
+          _buildPageDestination()
+        else if (_internalType == _InternalDestinationType.category)
+          _buildCategoryDestination()
+        else if (_internalType == _InternalDestinationType.product)
+          _buildProductDestination()
         else
-          TextFormField(
-            initialValue: _customInternalHref,
-            decoration: _decoration('Ruta interna')
-                .copyWith(prefixIcon: const Icon(Icons.link)),
-            onChanged: (v) {
-              _customInternalHref = v;
-              final uri = Uri.tryParse(v.trim());
-              final path = uri?.path ?? v.trim();
-              final nextIsCatalog =
-                  path == '/productos' || path == '/tienda/productos';
-              if (nextIsCatalog && !_isCatalog) {
-                setState(() => _isCatalog = true);
-                _ensureCategoriesLoaded();
-              } else if (!nextIsCatalog && _isCatalog) {
-                setState(() {
-                  _isCatalog = false;
-                  _catalogSearchController.clear();
-                  _catalogType = _CatalogTypeFilter.any;
-                  _catalogCategoryId = null;
-                });
-              }
-            },
-          ),
+          _buildAdvancedDestination(),
         if (_isCatalog) ...[
           const SizedBox(height: 24),
           const Divider(),
@@ -1188,10 +1877,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String?>(
-                  initialValue: (_catalogCategoryId != null &&
-                          _catalogCategoryId!.isNotEmpty)
-                      ? _catalogCategoryId
-                      : null,
+                  initialValue: _selectedCategoryOption?.id,
                   decoration: _decoration('Categoría'),
                   items: [
                     const DropdownMenuItem<String?>(
@@ -1201,7 +1887,11 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
                     ..._categories.map(
                       (c) => DropdownMenuItem<String?>(
                         value: c.id,
-                        child: Text(c.name),
+                        child: Text(
+                          c.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ],
@@ -1225,6 +1915,47 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               ),
             ],
           ),
+          if (_selectedCategoryOption case final category?) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: category.isReady
+                    ? Colors.green.withValues(alpha: 0.08)
+                    : Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: category.isReady
+                      ? Colors.green.withValues(alpha: 0.35)
+                      : Colors.amber.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    category.isReady
+                        ? Icons.check_circle_outline
+                        : Icons.warning_amber_rounded,
+                    size: 18,
+                    color: category.isReady
+                        ? Colors.green.shade700
+                        : Colors.amber.shade800,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      category.isReady
+                          ? 'Categoría visible con ${category.markedWebProductCount} productos marcados para web.'
+                          : category.showOnWebsite
+                              ? 'La categoría está visible, pero no tiene productos marcados para web.'
+                              : 'La categoría está oculta. Publícala en Catálogo web > Categorías antes de usar este enlace.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ],
     );

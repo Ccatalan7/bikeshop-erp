@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'dart:typed_data';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../config/brake_canonical_data.dart';
 import '../config/bottom_bracket_canonical_data.dart';
@@ -15,6 +19,16 @@ import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
+
+enum _BikeAggregateLoadState {
+  creating,
+  loading,
+  loadedWithoutProfile,
+  loadedWithProfile,
+  failed,
+  conflicted,
+  outcomeUnknown,
+}
 
 const Map<String, String> _suspensionLayoutOptions = {
   'rigid': 'Rigida',
@@ -255,12 +269,20 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   // Image handling
   List<String> _imageUrls = [];
   final List<({Uint8List bytes, String name})> _newImages = [];
+  final Set<String> _pendingUploadedImageUrls = {};
   bool _isUploadingImage = false;
 
   BikeProfile? _existingProfile;
+  Bike? _authoritativeBike;
   BikeCatalogEntry? _selectedCatalogBike;
+  bool _catalogLinkExplicitlyCleared = false;
   List<BikeCatalogEntry> _catalogMatches = [];
-  bool _isLoadingProfile = false;
+  _BikeAggregateLoadState _aggregateLoadState =
+      _BikeAggregateLoadState.creating;
+  late final String _draftBikeId;
+  String? _pendingSaveOperationKey;
+  String? _pendingSaveContentSignature;
+  bool _pendingSaveAllowsIncompleteTechnicalKernel = false;
   bool _isLoadingCatalogMatches = false;
   bool _isChangingJobBike = false;
 
@@ -299,6 +321,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   void initState() {
     super.initState();
 
+    _draftBikeId = widget.bike?.id ?? const Uuid().v4();
+    _authoritativeBike = widget.bike;
+    _aggregateLoadState = widget.bike?.id == null
+        ? _BikeAggregateLoadState.creating
+        : _BikeAggregateLoadState.loading;
+
     // Initialize controllers with existing bike data if editing
     _yearController =
         TextEditingController(text: widget.bike?.year?.toString() ?? '');
@@ -326,35 +354,62 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _applyBikeTypeDefaults();
     }
 
-    // Load brands and initialize selection
-    _loadBrands();
-
     if (widget.bike?.id != null) {
-      _loadBikeProfile();
+      _loadBikeAggregate();
+    } else {
+      // New bicycles have no aggregate to hydrate before reference data loads.
+      _loadNewBikeReferences();
     }
   }
 
-  Future<void> _loadBikeProfile() async {
+  bool get _aggregateLoadBlocksEditing =>
+      _aggregateLoadState == _BikeAggregateLoadState.loading ||
+      _aggregateLoadState == _BikeAggregateLoadState.failed ||
+      _aggregateLoadState == _BikeAggregateLoadState.conflicted ||
+      _aggregateLoadState == _BikeAggregateLoadState.outcomeUnknown;
+
+  Future<void> _loadBikeAggregate() async {
     if (widget.bike?.id == null) return;
 
-    setState(() => _isLoadingProfile = true);
+    setState(() {
+      _aggregateLoadState = _BikeAggregateLoadState.loading;
+    });
     try {
       final service = context.read<BikeshopService>();
-      final profile = await service.getBikeProfile(widget.bike!.id!);
-      if (profile == null || !mounted) return;
+      final aggregate = await service.getBikeAggregate(widget.bike!.id!);
+      if (!mounted) return;
+
+      final profile = aggregate.profile;
+      if (profile == null) {
+        setState(() {
+          _authoritativeBike = aggregate.bike;
+          _hydrateBikeIdentity(aggregate.bike);
+          _existingProfile = null;
+          _selectedCatalogBike = null;
+          _catalogMatches = [];
+          _catalogLinkExplicitlyCleared = false;
+        });
+        await _loadBrands(
+          propagateErrors: true,
+          resetSelection: true,
+        );
+        if (!mounted) return;
+        setState(() {
+          _aggregateLoadState = _BikeAggregateLoadState.loadedWithoutProfile;
+        });
+        return;
+      }
 
       final technicalValues = profile.technicalValues;
       final intakeValues = profile.intakeProfile;
 
-      BikeCatalogEntry? catalogBike;
-      if (profile.catalogBikeId != null && profile.catalogBikeId!.isNotEmpty) {
-        catalogBike =
-            await _bikeCatalogService.getBikeById(profile.catalogBikeId!);
-      }
-
       setState(() {
+        _authoritativeBike = aggregate.bike;
+        _hydrateBikeIdentity(aggregate.bike);
         _existingProfile = profile;
-        _selectedCatalogBike = catalogBike;
+        _selectedCatalogBike = null;
+        _catalogMatches = [];
+        _catalogLinkExplicitlyCleared = false;
         _suspensionLayout = technicalValues['suspensionLayout']?.toString();
         _brakeType = technicalValues['brakeType']?.toString();
         _rimBrakeFamily = _brakeType == 'rim'
@@ -388,11 +443,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             : _parseNullableIntValue(technicalValues['rearRotorSizeMm']);
         _frontSpokeHolesController.text =
             technicalValues['frontSpokeHoles']?.toString() ??
-                widget.bike?.spokeCount?.toString() ??
+                aggregate.bike.spokeCount?.toString() ??
                 '';
         _rearSpokeHolesController.text =
             technicalValues['rearSpokeHoles']?.toString() ??
-                widget.bike?.spokeCount?.toString() ??
+                aggregate.bike.spokeCount?.toString() ??
                 '';
         _hydrateDrivetrainState(
           configRaw: technicalValues['drivetrainConfig']?.toString(),
@@ -417,13 +472,87 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         );
         _applyBikeTypeDefaults();
       });
-    } catch (e) {
-      debugPrint('Error loading bike profile: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingProfile = false);
+
+      await _loadBrands(
+        propagateErrors: true,
+        resetSelection: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aggregateLoadState = _BikeAggregateLoadState.loadedWithProfile;
+      });
+
+      // Catalog enrichment is optional. The persisted profile is authoritative
+      // and has already been hydrated, so a catalog/network failure cannot make
+      // the technical sheet appear empty.
+      if (profile.catalogBikeId != null && profile.catalogBikeId!.isNotEmpty) {
+        try {
+          final catalogBike =
+              await _bikeCatalogService.getBikeById(profile.catalogBikeId!);
+          if (mounted &&
+              _selectedCatalogBike == null &&
+              !_catalogLinkExplicitlyCleared) {
+            setState(() {
+              _selectedCatalogBike = catalogBike;
+              _catalogLinkExplicitlyCleared = false;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error enriching bike profile from catalog: $e');
+        }
       }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _aggregateLoadState = _BikeAggregateLoadState.failed;
+        });
+      }
+      debugPrint('Error loading bike aggregate: $e');
     }
+  }
+
+  Future<void> _loadNewBikeReferences() async {
+    setState(() {
+      _aggregateLoadState = _BikeAggregateLoadState.loading;
+    });
+    try {
+      await _loadBrands(
+        propagateErrors: true,
+        resetSelection: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _aggregateLoadState = _BikeAggregateLoadState.creating;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _aggregateLoadState = _BikeAggregateLoadState.failed;
+      });
+      debugPrint('Error loading new bicycle reference data: $e');
+    }
+  }
+
+  void _hydrateBikeIdentity(Bike bike) {
+    _yearController.text = bike.year?.toString() ?? '';
+    _serialNumberController.text = bike.serialNumber ?? '';
+    _colorController.text = bike.color ?? '';
+    _frameSizeController.text = bike.frameSize ?? '';
+    _wheelSizeController.text = bike.wheelSize ?? '';
+    _frontHubSpacingController.text = bike.frontHubSpacingMm?.toString() ?? '';
+    _rearHubSpacingController.text = bike.rearHubSpacingMm?.toString() ?? '';
+    final spokeCountText = bike.spokeCount?.toString() ?? '';
+    _frontSpokeHolesController.text = spokeCountText;
+    _rearSpokeHolesController.text = spokeCountText;
+    _notesController.text = bike.notes ?? '';
+    _selectedType = bike.bikeType ?? BikeType.mountainHardtail;
+    _purchaseDate = bike.purchaseDate;
+    _warrantyUntil = bike.warrantyUntil;
+    _imageUrls = <String>{
+      ...bike.imageUrls,
+      ..._pendingUploadedImageUrls,
+    }.toList();
+    _applyBikeTypeDefaults();
   }
 
   Future<void> _searchCatalogMatches() async {
@@ -495,6 +624,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   void _applyCatalogMatch(BikeCatalogEntry entry) {
     setState(() {
       _selectedCatalogBike = entry;
+      _catalogLinkExplicitlyCleared = false;
       _catalogMatches = _catalogMatches.isEmpty ? [entry] : _catalogMatches;
 
       if (_yearController.text.trim().isEmpty) {
@@ -1295,54 +1425,105 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         : 'Driver / freehub trasero';
   }
 
-  Future<void> _loadBrands() async {
+  Future<void> _loadBrands({
+    bool propagateErrors = false,
+    bool resetSelection = false,
+  }) async {
     setState(() => _loadingBrands = true);
     try {
       final service = context.read<BikeshopService>();
-      _brands = await service.getBikeBrands(activeOnly: true);
+      final sourceBike = _authoritativeBike ?? widget.bike;
+      if (resetSelection) {
+        _selectedBrand = null;
+        _selectedModel = null;
+        _models = [];
+      }
 
-      // If editing, find and set the selected brand by name
-      if (widget.bike != null &&
-          widget.bike!.brand != null &&
-          widget.bike!.brand!.isNotEmpty) {
-        try {
-          _selectedBrand = _brands.firstWhere(
-            (b) => b.name.toLowerCase() == widget.bike!.brand!.toLowerCase(),
+      _brands = await service.getBikeBrands(activeOnly: true);
+      if (!mounted) return;
+
+      final sourceBrandId = sourceBike?.brandId;
+      if (sourceBrandId != null &&
+          !_brands.any((brand) => brand.id == sourceBrandId)) {
+        final persistedBrand = await service.getBikeBrandById(sourceBrandId);
+        if (!mounted) return;
+        if (persistedBrand != null) {
+          _brands.add(persistedBrand);
+          _brands.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
-          if (_selectedBrand != null) {
-            await _loadModels(_selectedBrand!.id!);
-            // Find and set the selected model by name
-            if (widget.bike!.model != null && widget.bike!.model!.isNotEmpty) {
-              try {
-                _selectedModel = _models.firstWhere(
-                  (m) =>
-                      m.name.toLowerCase() == widget.bike!.model!.toLowerCase(),
-                );
-              } catch (e) {
-                // Model not found, leave null
-              }
+        }
+      }
+
+      // Existing editors resolve selections from the authoritative aggregate,
+      // never from the potentially stale list-row snapshot passed by a host.
+      if (sourceBike != null) {
+        for (final brand in _brands) {
+          final matches = sourceBike.brandId != null
+              ? brand.id == sourceBike.brandId
+              : sourceBike.brand != null &&
+                  brand.name.toLowerCase() == sourceBike.brand!.toLowerCase();
+          if (matches) {
+            _selectedBrand = brand;
+            break;
+          }
+        }
+
+        if (_selectedBrand?.id != null) {
+          await _loadModels(
+            _selectedBrand!.id!,
+            persistedModelId: sourceBike.modelId,
+            propagateErrors: propagateErrors,
+          );
+          if (!mounted) return;
+          for (final model in _models) {
+            final matches = sourceBike.modelId != null
+                ? model.id == sourceBike.modelId
+                : sourceBike.model != null &&
+                    model.name.toLowerCase() == sourceBike.model!.toLowerCase();
+            if (matches) {
+              _selectedModel = model;
+              break;
             }
           }
-        } catch (e) {
-          // Brand not found, leave null
         }
       }
     } catch (e) {
       debugPrint('Error loading brands: $e');
+      if (propagateErrors) rethrow;
     } finally {
-      setState(() => _loadingBrands = false);
+      if (mounted) {
+        setState(() => _loadingBrands = false);
+      }
     }
   }
 
-  Future<void> _loadModels(String brandId) async {
+  Future<void> _loadModels(
+    String brandId, {
+    String? persistedModelId,
+    bool propagateErrors = false,
+  }) async {
     setState(() => _loadingModels = true);
     try {
       final service = context.read<BikeshopService>();
       _models = await service.getBikeModels(brandId: brandId, activeOnly: true);
+      if (persistedModelId != null &&
+          !_models.any((model) => model.id == persistedModelId)) {
+        final persistedModel = await service.getBikeModelById(persistedModelId);
+        if (persistedModel != null && persistedModel.brandId == brandId) {
+          _models.add(persistedModel);
+          _models.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+        }
+      }
     } catch (e) {
       debugPrint('Error loading models: $e');
+      if (propagateErrors) rethrow;
     } finally {
-      setState(() => _loadingModels = false);
+      if (mounted) {
+        setState(() => _loadingModels = false);
+      }
     }
   }
 
@@ -1587,12 +1768,25 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _transportMethod != null;
   }
 
-  Future<void> _saveBikeProfile(Bike savedBike, String tenantId) async {
+  BikeProfile? _buildBikeProfileForSave(Bike savedBike, String tenantId) {
     if (!_hasProfileData() && _existingProfile == null) {
-      return;
+      return null;
     }
 
-    final intakeProfile = <String, dynamic>{
+    const managedIntakeKeys = <String>{
+      'acquisitionCondition',
+      'declaredMaintenanceHistory',
+      'primaryUse',
+      'usageFrequency',
+      'accidentHistory',
+      'storageCondition',
+      'weatherExposure',
+      'transportMethod',
+    };
+    final intakeProfile = Map<String, dynamic>.from(
+      _existingProfile?.intakeProfile ?? const {},
+    )..removeWhere((key, _) => managedIntakeKeys.contains(key));
+    intakeProfile.addAll(<String, dynamic>{
       if (_acquisitionCondition != null)
         'acquisitionCondition': _acquisitionCondition,
       if (_maintenanceHistory != null)
@@ -1603,9 +1797,32 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (_storageCondition != null) 'storageCondition': _storageCondition,
       if (_weatherExposure != null) 'weatherExposure': _weatherExposure,
       if (_transportMethod != null) 'transportMethod': _transportMethod,
-    };
+    });
 
-    final technicalValues = <String, dynamic>{
+    const managedTechnicalKeys = <String>{
+      'suspensionLayout',
+      'brakeType',
+      'rimBrakeFamily',
+      'freehubType',
+      'valveType',
+      'bottomBracketFamily',
+      'bbShellWidthMm',
+      'bb_shell_width_mm',
+      'bbShellDiameterMm',
+      'bb_shell_diameter_mm',
+      'spindleInterface',
+      'spindle_interface',
+      'frontSpokeHoles',
+      'rearSpokeHoles',
+      'frontRotorSizeMm',
+      'rearRotorSizeMm',
+      'drivetrainSpeeds',
+      'drivetrainConfig',
+    };
+    final technicalValues = Map<String, dynamic>.from(
+      _existingProfile?.technicalValues ?? const {},
+    )..removeWhere((key, _) => managedTechnicalKeys.contains(key));
+    technicalValues.addAll(<String, dynamic>{
       if (_suspensionLayout != null) 'suspensionLayout': _suspensionLayout,
       if (_brakeType != null) 'brakeType': _brakeType,
       if (_showRimBrakeFamilyField && _rimBrakeFamily != null)
@@ -1635,34 +1852,83 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (_effectiveDrivetrainConfig != null &&
           _effectiveDrivetrainConfig!.isNotEmpty)
         'drivetrainConfig': _effectiveDrivetrainConfig,
+    });
+
+    final technicalSources = Map<String, dynamic>.from(_technicalSources)
+      ..removeWhere((key, _) =>
+          managedTechnicalKeys.contains(key) &&
+          !technicalValues.containsKey(key));
+    final technicalConfirmed = Map<String, dynamic>.from(_technicalConfirmed)
+      ..removeWhere((key, _) =>
+          managedTechnicalKeys.contains(key) &&
+          !technicalValues.containsKey(key));
+
+    final confirmedAt = DateTime.now().toUtc();
+    final summarySnapshot = <String, dynamic>{
+      ...?_existingProfile?.summarySnapshot,
+      ...BikeProfileSummaryBuilder.buildSummarySnapshot(
+        bike: savedBike,
+        intakeProfile: intakeProfile,
+        technicalValues: technicalValues,
+        lastConfirmedAt: confirmedAt,
+      ),
     };
 
-    final summarySnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
-      bike: savedBike,
-      intakeProfile: intakeProfile,
-      technicalValues: technicalValues,
-      lastConfirmedAt: DateTime.now(),
-    );
+    final technicalProfile = Map<String, dynamic>.from(
+      _existingProfile?.technicalProfile ?? const {},
+    )
+      ..['values'] = technicalValues
+      ..['sources'] = technicalSources
+      ..['confirmed'] = technicalConfirmed;
 
-    final profile = BikeProfile(
+    return BikeProfile(
       id: _existingProfile?.id,
       tenantId: tenantId,
       bikeId: savedBike.id!,
-      catalogBikeId: _selectedCatalogBike?.id,
+      catalogBikeId: _catalogLinkExplicitlyCleared
+          ? null
+          : _selectedCatalogBike?.id ?? _existingProfile?.catalogBikeId,
       intakeProfile: intakeProfile,
-      technicalProfile: {
-        'values': technicalValues,
-        'sources': _technicalSources,
-        'confirmed': _technicalConfirmed,
-      },
+      technicalProfile: technicalProfile,
       summarySnapshot: summarySnapshot,
-      lastConfirmedAt: DateTime.now(),
+      lastConfirmedAt: confirmedAt,
       createdAt: _existingProfile?.createdAt,
+      updatedAt: _existingProfile?.updatedAt,
     );
+  }
 
-    final service = context.read<BikeshopService>();
-    final savedProfile = await service.upsertBikeProfile(profile);
-    _existingProfile = savedProfile;
+  String _operationKeyForSave(Bike bike, BikeProfile? profile) {
+    final bikePayload = Map<String, dynamic>.from(bike.toJson())
+      ..remove('id')
+      ..remove('tenant_id')
+      ..remove('customer_id')
+      ..remove('created_at')
+      ..remove('updated_at');
+    final profileSignature = profile == null
+        ? null
+        : <String, dynamic>{
+            'id': profile.id,
+            'catalog_bike_id': profile.catalogBikeId,
+            'intake_profile': profile.intakeProfile,
+            'technical_profile': profile.technicalProfile,
+          };
+    final signature = jsonEncode(<String, dynamic>{
+      'bike_id': bike.id,
+      'customer_id': bike.customerId,
+      'expected_bike_updated_at':
+          _authoritativeBike?.updatedAt.toUtc().toIso8601String(),
+      'expected_profile_updated_at':
+          _existingProfile?.updatedAt.toUtc().toIso8601String(),
+      'bike': bikePayload,
+      'profile': profileSignature,
+    });
+
+    if (_pendingSaveOperationKey == null ||
+        _pendingSaveContentSignature != signature) {
+      _pendingSaveOperationKey = const Uuid().v4();
+      _pendingSaveContentSignature = signature;
+    }
+    return _pendingSaveOperationKey!;
   }
 
   Future<void> _selectDate(BuildContext context, bool isPurchaseDate) async {
@@ -1726,12 +1992,30 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (isNew) {
         _newImages.removeAt(index);
       } else {
-        _imageUrls.removeAt(index);
+        final removedUrl = _imageUrls.removeAt(index);
+        _pendingUploadedImageUrls.remove(removedUrl);
       }
     });
   }
 
   Future<void> _saveBike({bool allowIncompleteTechnicalKernel = false}) async {
+    if (_aggregateLoadBlocksEditing) {
+      final message = switch (_aggregateLoadState) {
+        _BikeAggregateLoadState.loading =>
+          'Espera a que termine de cargar la ficha antes de guardar.',
+        _BikeAggregateLoadState.conflicted =>
+          'La bicicleta cambió desde que abriste el formulario. Recarga los datos antes de volver a guardar.',
+        _BikeAggregateLoadState.outcomeUnknown =>
+          'Primero confirma la operación pendiente; no cambies los datos mientras su resultado sea incierto.',
+        _ =>
+          'No se puede guardar porque la ficha no se cargó. Reintenta la carga primero.',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.orange[800]),
+      );
+      return;
+    }
+
     if (allowIncompleteTechnicalKernel) {
       final identityValidationMessage = _identityMinimumValidationMessage();
       if (identityValidationMessage != null) {
@@ -1762,6 +2046,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _isSaving = true;
     });
 
+    var aggregateCommandWasSent = false;
     try {
       // Upload new images to Supabase Storage
       List<String> uploadedUrls = List.from(_imageUrls);
@@ -1771,7 +2056,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           _isUploadingImage = true;
         });
 
-        for (var imageData in _newImages) {
+        final pendingImages = List.of(_newImages);
+        for (final imageData in pendingImages) {
           try {
             final timestamp = DateTime.now().millisecondsSinceEpoch;
             final fileName = 'bike_${widget.customerId}_$timestamp.jpg';
@@ -1783,12 +2069,24 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               folder: widget.customerId,
             );
 
-            if (url != null) {
-              uploadedUrls.add(url);
+            if (url == null) {
+              throw Exception(
+                  'El servidor no confirmó la foto ${imageData.name}');
+            }
+
+            uploadedUrls.add(url);
+            if (mounted) {
+              setState(() {
+                _imageUrls.add(url);
+                _pendingUploadedImageUrls.add(url);
+                _newImages.remove(imageData);
+              });
             }
           } catch (e) {
             debugPrint('Error uploading image: $e');
-            // Continue with other images even if one fails
+            throw Exception(
+              'No se pudo guardar la foto ${imageData.name}. La bicicleta aún no fue enviada.',
+            );
           }
         }
 
@@ -1807,8 +2105,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
       final derivedSpokeCount = _deriveBikeSpokeCount();
 
+      final baseBike = _authoritativeBike ?? widget.bike;
       final bike = Bike(
-        id: widget.bike?.id,
+        id: _draftBikeId,
         tenantId: tenantId,
         customerId: widget.customerId,
         brandId: _selectedBrand?.id,
@@ -1836,24 +2135,64 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ? null
             : double.tryParse(_rearHubSpacingController.text.trim()),
         spokeCount: derivedSpokeCount,
+        factoryRimId: baseBike?.factoryRimId,
         purchaseDate: _purchaseDate,
+        purchasePrice: baseBike?.purchasePrice,
         warrantyUntil: _warrantyUntil,
+        qrCode: baseBike?.qrCode,
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        imageUrl: baseBike?.imageUrl,
         imageUrls: uploadedUrls,
+        isActive: baseBike?.isActive ?? true,
+        createdAt: baseBike?.createdAt,
+        updatedAt: baseBike?.updatedAt,
       );
 
-      Bike savedBike;
-      if (widget.bike == null) {
-        // Create new bike
-        savedBike = await bikeshopService.createBike(bike);
-      } else {
-        // Update existing bike
-        savedBike = await bikeshopService.updateBike(bike);
+      final profile = _buildBikeProfileForSave(bike, tenantId);
+      final operationKey = _operationKeyForSave(bike, profile);
+      _pendingSaveAllowsIncompleteTechnicalKernel =
+          allowIncompleteTechnicalKernel;
+
+      BikeAggregateSaveResult? saveResult;
+      Object? saveError;
+      try {
+        aggregateCommandWasSent = true;
+        saveResult = await bikeshopService.saveBikeAggregate(
+          bike: bike,
+          profile: profile,
+          operationKey: operationKey,
+          expectedBikeUpdatedAt: _authoritativeBike?.updatedAt,
+          expectedProfileUpdatedAt: _existingProfile?.updatedAt,
+        );
+      } catch (e) {
+        saveError = e;
+        if (_isTransportAmbiguity(e)) {
+          // A connection can disappear after PostgreSQL commits but before the
+          // response arrives. Resolve only transport ambiguity through the
+          // durable command receipt; server rejections have no committed result.
+          try {
+            saveResult = await bikeshopService.getBikeAggregateSaveOperation(
+              operationKey,
+            );
+          } catch (receiptError) {
+            debugPrint(
+                'Could not reconcile bicycle save receipt: $receiptError');
+          }
+        }
       }
 
-      await _saveBikeProfile(savedBike, tenantId);
+      if (saveResult == null) {
+        throw saveError ?? Exception('No se pudo confirmar el guardado');
+      }
+
+      final savedBike = saveResult.bike;
+      _authoritativeBike = savedBike;
+      _existingProfile = saveResult.profile;
+      _pendingUploadedImageUrls.clear();
+      _pendingSaveOperationKey = null;
+      _pendingSaveContentSignature = null;
 
       if (widget.isEmbedded) {
         widget.onSaved?.call(savedBike);
@@ -1870,17 +2209,83 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       );
     } catch (e) {
       if (!mounted) return;
+      final isConflict = _isAggregateConflict(e);
+      final isOutcomeUnknown =
+          aggregateCommandWasSent && _isTransportAmbiguity(e);
       setState(() {
         _isSaving = false;
         _isUploadingImage = false;
+        if (isConflict) {
+          _aggregateLoadState = _BikeAggregateLoadState.conflicted;
+        } else if (isOutcomeUnknown) {
+          _aggregateLoadState = _BikeAggregateLoadState.outcomeUnknown;
+        }
       });
 
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Error al guardar bicicleta: $e'),
+          content: Text(isConflict
+              ? 'Otra persona o proceso cambió esta bicicleta. El guardado fue rechazado para proteger la ficha; recarga los datos antes de intentarlo otra vez.'
+              : e is PostgrestException
+                  ? 'El servidor rechazó el guardado y no aplicó cambios. ${e.message}'
+                  : isOutcomeUnknown
+                      ? 'No se pudo confirmar el guardado. Revisa la conexión y usa Confirmar guardado; se reutilizará la misma operación sin duplicar la bicicleta.\n$e'
+                      : 'No se pudo completar el guardado. $e'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
         ),
       );
+    }
+  }
+
+  bool _isTransportAmbiguity(Object error) {
+    return error is! PostgrestException ||
+        error.code == null ||
+        error.code!.isEmpty;
+  }
+
+  bool _isAggregateConflict(Object error) {
+    return error is PostgrestException &&
+        (error.code == '40001' ||
+            error.message.contains('changed since it was loaded'));
+  }
+
+  void _retryUnknownSaveOutcome() {
+    setState(() {
+      _aggregateLoadState = widget.bike?.id == null
+          ? _BikeAggregateLoadState.creating
+          : _existingProfile == null
+              ? _BikeAggregateLoadState.loadedWithoutProfile
+              : _BikeAggregateLoadState.loadedWithProfile;
+    });
+    _saveBike(
+      allowIncompleteTechnicalKernel:
+          _pendingSaveAllowsIncompleteTechnicalKernel,
+    );
+  }
+
+  Future<void> _confirmConflictReload() async {
+    final shouldReload = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recargar datos más nuevos'),
+        content: const Text(
+          'Recargar reemplazará los cambios locales que todavía no se guardaron. La operación rechazada no modificó la base de datos.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Conservar por ahora'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Recargar'),
+          ),
+        ],
+      ),
+    );
+    if (shouldReload == true && mounted) {
+      await _loadBikeAggregate();
     }
   }
 
@@ -2086,7 +2491,22 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           _modelFieldKey = UniqueKey();
         });
         if (selection.id != null) {
-          await _loadModels(selection.id!);
+          try {
+            await _loadModels(
+              selection.id!,
+              propagateErrors: true,
+            );
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'No se pudieron cargar los modelos. Revisa la conexión e intenta seleccionar la marca nuevamente. $e',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       },
       fieldViewBuilder: (
@@ -4266,8 +4686,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _selectedCatalogBike = null),
+                    onPressed: () => setState(() {
+                      _selectedCatalogBike = null;
+                      _catalogLinkExplicitlyCleared = true;
+                    }),
                     icon: const Icon(Icons.clear, size: 16),
                     label: const Text('Limpiar'),
                     style: TextButton.styleFrom(
@@ -4327,6 +4749,105 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         ],
       ),
     );
+  }
+
+  Widget _buildAggregateLoadStatus(ThemeData theme) {
+    switch (_aggregateLoadState) {
+      case _BikeAggregateLoadState.loading:
+        return const LinearProgressIndicator();
+      case _BikeAggregateLoadState.failed:
+      case _BikeAggregateLoadState.conflicted:
+        final isConflict =
+            _aggregateLoadState == _BikeAggregateLoadState.conflicted;
+        final isNewBikeReferenceFailure =
+            !isConflict && widget.bike?.id == null;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: theme.colorScheme.errorContainer,
+          child: Row(
+            children: [
+              Icon(
+                isConflict
+                    ? Icons.sync_problem_outlined
+                    : Icons.cloud_off_outlined,
+                size: 20,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isConflict
+                      ? 'La bicicleta cambió mientras este formulario estaba abierto. El guardado fue bloqueado para no sobrescribir datos más nuevos; recarga antes de continuar.'
+                      : isNewBikeReferenceFailure
+                          ? 'No se pudieron cargar las marcas y modelos. El formulario queda bloqueado para no confundir una falla de conexión con listas vacías.'
+                          : 'No se pudo cargar la ficha técnica. Los campos no se muestran como vacíos y el guardado queda bloqueado hasta recuperar la información.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: isConflict
+                    ? _confirmConflictReload
+                    : isNewBikeReferenceFailure
+                        ? _loadNewBikeReferences
+                        : _loadBikeAggregate,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(isConflict ? 'Recargar' : 'Reintentar'),
+              ),
+            ],
+          ),
+        );
+      case _BikeAggregateLoadState.outcomeUnknown:
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: theme.colorScheme.tertiaryContainer,
+          child: Row(
+            children: [
+              Icon(
+                Icons.cloud_sync_outlined,
+                size: 20,
+                color: theme.colorScheme.onTertiaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'La conexión se perdió durante el guardado y todavía no sabemos si el servidor alcanzó a confirmar la operación. Los campos quedan bloqueados para conservar exactamente el mismo reintento.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onTertiaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: _retryUnknownSaveOutcome,
+                icon: const Icon(Icons.sync, size: 18),
+                label: const Text('Confirmar guardado'),
+              ),
+            ],
+          ),
+        );
+      case _BikeAggregateLoadState.loadedWithoutProfile:
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Text(
+            'Esta bicicleta todavía no tiene ficha técnica guardada. Al guardar se creará junto con los datos ingresados.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      case _BikeAggregateLoadState.creating:
+      case _BikeAggregateLoadState.loadedWithProfile:
+        return const SizedBox.shrink();
+    }
   }
 
   @override
@@ -4485,13 +5006,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                   Icons.close,
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                                onPressed: () {
-                                  if (widget.isEmbedded) {
-                                    widget.onCanceled?.call();
-                                  } else {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
+                                onPressed: _aggregateLoadState ==
+                                        _BikeAggregateLoadState.outcomeUnknown
+                                    ? null
+                                    : () {
+                                        if (widget.isEmbedded) {
+                                          widget.onCanceled?.call();
+                                        } else {
+                                          Navigator.of(context).pop();
+                                        }
+                                      },
                               ),
                             ),
                         ],
@@ -4508,13 +5032,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             child: IconButton(
                               icon: Icon(Icons.close,
                                   color: theme.colorScheme.onSurfaceVariant),
-                              onPressed: () {
-                                if (widget.isEmbedded) {
-                                  widget.onCanceled?.call();
-                                } else {
-                                  Navigator.of(context).pop();
-                                }
-                              },
+                              onPressed: _aggregateLoadState ==
+                                      _BikeAggregateLoadState.outcomeUnknown
+                                  ? null
+                                  : () {
+                                      if (widget.isEmbedded) {
+                                        widget.onCanceled?.call();
+                                      } else {
+                                        Navigator.of(context).pop();
+                                      }
+                                    },
                             ),
                           ),
                         Column(
@@ -4534,7 +5061,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                       ],
                     ),
 
-                  if (_isLoadingProfile) const LinearProgressIndicator(),
+                  _buildAggregateLoadStatus(theme),
 
                   // Content Area
                   Expanded(
@@ -4545,17 +5072,20 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         isMobile ? 24 : 36,
                         0,
                       ),
-                      child: Form(
-                        key: _formKey,
-                        child: PageView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          controller: _pageController,
-                          itemCount: steps.length,
-                          itemBuilder: (context, index) {
-                            final builder =
-                                steps[index]['builder'] as Widget Function();
-                            return builder();
-                          },
+                      child: AbsorbPointer(
+                        absorbing: _aggregateLoadBlocksEditing,
+                        child: Form(
+                          key: _formKey,
+                          child: PageView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            controller: _pageController,
+                            itemCount: steps.length,
+                            itemBuilder: (context, index) {
+                              final builder =
+                                  steps[index]['builder'] as Widget Function();
+                              return builder();
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -4588,7 +5118,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           children: [
                             if (widget.bike != null)
                               TextButton.icon(
-                                onPressed: _isSaving ? null : _confirmDelete,
+                                onPressed:
+                                    _isSaving || _aggregateLoadBlocksEditing
+                                        ? null
+                                        : _confirmDelete,
                                 icon:
                                     const Icon(Icons.delete, color: Colors.red),
                                 label: const Text('Eliminar',
@@ -4603,25 +5136,29 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                           children: [
                             if (_currentStep > 0)
                               TextButton(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          _currentStep--;
-                                          _pageController.previousPage(
-                                            duration: const Duration(
-                                                milliseconds: 350),
-                                            curve: Curves.easeOutCubic,
-                                          );
-                                        });
-                                      },
+                                onPressed:
+                                    _isSaving || _aggregateLoadBlocksEditing
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _currentStep--;
+                                              _pageController.previousPage(
+                                                duration: const Duration(
+                                                    milliseconds: 350),
+                                                curve: Curves.easeOutCubic,
+                                              );
+                                            });
+                                          },
                                 child: const Text('Atrás',
                                     style:
                                         TextStyle(fontWeight: FontWeight.w600)),
                               )
                             else
                               TextButton(
-                                onPressed: _isSaving
+                                onPressed: _isSaving ||
+                                        _aggregateLoadState ==
+                                            _BikeAggregateLoadState
+                                                .outcomeUnknown
                                     ? null
                                     : () {
                                         if (widget.isEmbedded) {
@@ -4637,7 +5174,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             const SizedBox(width: 16),
                             if (_currentStep < steps.length - 1) ...[
                               FilledButton.tonalIcon(
-                                onPressed: _isSaving
+                                onPressed: _isSaving ||
+                                        _aggregateLoadBlocksEditing
                                     ? null
                                     : () {
                                         _saveBike(
@@ -4657,25 +5195,26 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                               ),
                               const SizedBox(width: 12),
                               FilledButton.icon(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () {
-                                        // Validate before proceeding from Identidad
-                                        if (_currentStep == 0) {
-                                          if (!_formKey.currentState!
-                                              .validate()) {
-                                            return;
-                                          }
-                                        }
-                                        setState(() {
-                                          _currentStep++;
-                                          _pageController.nextPage(
-                                            duration: const Duration(
-                                                milliseconds: 350),
-                                            curve: Curves.easeOutCubic,
-                                          );
-                                        });
-                                      },
+                                onPressed:
+                                    _isSaving || _aggregateLoadBlocksEditing
+                                        ? null
+                                        : () {
+                                            // Validate before proceeding from Identidad
+                                            if (_currentStep == 0) {
+                                              if (!_formKey.currentState!
+                                                  .validate()) {
+                                                return;
+                                              }
+                                            }
+                                            setState(() {
+                                              _currentStep++;
+                                              _pageController.nextPage(
+                                                duration: const Duration(
+                                                    milliseconds: 350),
+                                                curve: Curves.easeOutCubic,
+                                              );
+                                            });
+                                          },
                                 icon: const Icon(Icons.arrow_forward),
                                 label: const Text('Siguiente',
                                     style:
@@ -4689,7 +5228,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                               )
                             ] else
                               FilledButton.icon(
-                                onPressed: _isSaving ? null : _saveBike,
+                                onPressed:
+                                    _isSaving || _aggregateLoadBlocksEditing
+                                        ? null
+                                        : _saveBike,
                                 icon: _isSaving
                                     ? const SizedBox(
                                         width: 16,
@@ -4732,31 +5274,34 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       );
     }
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      backgroundColor: Colors.transparent,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1240, maxHeight: 860),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 40,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 100,
-                spreadRadius: 20,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: content,
+    return PopScope(
+      canPop: _aggregateLoadState != _BikeAggregateLoadState.outcomeUnknown,
+      child: Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1240, maxHeight: 860),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 100,
+                  spreadRadius: 20,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: content,
+            ),
           ),
         ),
       ),

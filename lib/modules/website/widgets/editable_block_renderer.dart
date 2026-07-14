@@ -11,6 +11,7 @@ import '../widgets/text_formatting_toolbar.dart';
 import '../widgets/canvas_block.dart';
 import '../widgets/website_link_value_editor.dart';
 import '../models/website_font_registry.dart';
+import '../models/website_action.dart';
 import 'website_block_renderer.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
@@ -143,43 +144,19 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
 
-  ({String label, String to})? _resolvePrimaryNavigateAction(
+  WebsiteActionValue? _resolvePrimaryNavigateAction(
     Map<String, dynamic> data, {
     required String fallbackLabel,
     required String fallbackTo,
     bool enabled = true,
   }) {
-    if (!enabled) return null;
-
-    final actionsRaw = data['actions'];
-    if (actionsRaw is List) {
-      for (final item in actionsRaw) {
-        if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item);
-        final type = (map['type'] ?? '').toString().trim().toLowerCase();
-        if (type.isNotEmpty && type != 'navigate') continue;
-
-        final to = (map['to'] ?? map['href'] ?? '').toString().trim();
-        if (to.isEmpty) continue;
-        final label =
-            (map['label'] ?? map['text'] ?? fallbackLabel).toString().trim();
-
-        return (
-          label: label.isNotEmpty
-              ? label
-              : (fallbackLabel.isNotEmpty ? fallbackLabel : 'Ver más'),
-          to: to,
-        );
-      }
-    }
-
-    final to = fallbackTo.trim();
-    if (to.isEmpty) return null;
-
-    final label = fallbackLabel.trim();
-    return (
-      label: label.isNotEmpty ? label : 'Ver más',
-      to: to,
+    return WebsiteActionValue.resolvePrimary(
+      data,
+      labelKeys: const ['ctaText', 'buttonText', 'label'],
+      hrefKeys: const ['ctaLink', 'buttonLink', 'link'],
+      defaultLabel: fallbackLabel,
+      defaultHref: fallbackTo,
+      enabled: enabled,
     );
   }
 
@@ -300,9 +277,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Wrap with selection and action bar
     // Resize handles are INSIDE the Stack so they don't add extra space
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque, // Capture taps on empty space too
-      onTap: () => editProvider.selectBlock(widget.blockId),
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      // Pointer-down participates in event propagation instead of the gesture
+      // arena, so clicking inline text, a CTA, or a Canvas layer always selects
+      // its owning block before the nested editor handles the same pointer.
+      onPointerDown: (_) => editProvider.selectBlock(widget.blockId),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -805,6 +785,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       accentColor: widget.accentColor,
       onNavigate: widget.onNavigate,
       tenantId: widget.tenantId,
+      headingFont: widget.headingFont,
       bodyFont: widget.bodyFont,
       // Don't auto-set designWidth from viewport - use fixed reference width for WYSIWYG consistency
       onBackgroundTap: () {
@@ -901,9 +882,24 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
   Widget _buildEditableButton(BuildContext context) {
     final editProvider = context.read<WebsiteEditModeProvider>();
-    final label = (widget.data['label'] ?? 'Botón').toString();
-    final link = (widget.data['link'] ?? '').toString().trim();
-    final style = (widget.data['style'] ?? 'filled').toString();
+    final action = WebsiteActionValue.resolvePrimary(
+          widget.data,
+          labelKeys: const ['label', 'text'],
+          hrefKeys: const ['link'],
+          defaultLabel: 'Botón',
+          defaultVariant: WebsiteActionVariant.fromStorage(
+            widget.data['style']?.toString(),
+          ),
+        ) ??
+        WebsiteActionValue(
+          label: (widget.data['label'] ?? 'Botón').toString(),
+          href: (widget.data['link'] ?? '').toString(),
+          variant: WebsiteActionVariant.fromStorage(
+              widget.data['style']?.toString()),
+        );
+    final label = action.label;
+    final link = action.href;
+    final style = action.variant.storageValue;
 
     VoidCallback? onPressed;
     if (link.isNotEmpty && widget.onNavigate != null) {
@@ -916,8 +912,16 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       baseStyle: const TextStyle(fontWeight: FontWeight.w600),
       placeholder: 'Botón',
       toolbarPreset: TextToolbarPreset.textOnly,
-      onTextChanged: (v) =>
-          editProvider.updateBlockData(widget.blockId, 'label', v),
+      onTextChanged: (v) => editProvider.updateBlockDataMultiple(
+        widget.blockId,
+        {
+          'label': v,
+          'actions': WebsiteActionValue.mergePrimary(
+            widget.data['actions'],
+            action.copyWith(label: v),
+          ),
+        },
+      ),
     );
 
     switch (style) {
@@ -927,7 +931,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           style: OutlinedButton.styleFrom(
             foregroundColor: widget.accentColor,
             side: BorderSide(color: widget.accentColor),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           ),
           child: child,
         );
@@ -936,7 +939,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           onPressed: onPressed,
           style: TextButton.styleFrom(
             foregroundColor: widget.accentColor,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
           child: child,
         );
@@ -946,7 +948,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           style: ElevatedButton.styleFrom(
             backgroundColor: widget.accentColor,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
           ),
           child: DefaultTextStyle.merge(
             style: const TextStyle(color: Colors.white),
@@ -1028,6 +1029,10 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     }
     final animationDuration =
         Duration(milliseconds: math.max(1, animationDurationMs));
+    final selectedSlideIndex = context.select<WebsiteEditModeProvider, int>(
+      (provider) =>
+          provider.carouselSlideSelection(widget.blockId, slides.length),
+    );
 
     // Use LayoutBuilder to get live height from parent constraints (for smooth resize)
     return ConstraintLayoutBuilder(
@@ -1050,6 +1055,12 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           blockId: widget.blockId,
           blockHeight: blockHeight,
           animationDuration: animationDuration,
+          selectedSlideIndex: selectedSlideIndex,
+          onSlideSelected: (index) => editProvider.selectCarouselSlide(
+            widget.blockId,
+            index,
+            slides.length,
+          ),
           onSlideUpdated: (index, field, value) {
             debugPrint(
                 '🔄 [EditableCarousel] Slide update: index=$index, field=$field');
@@ -1063,7 +1074,43 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   widget.blockId, 'slides', updatedSlides);
             }
           },
+          onSlideTransientUpdated: (index, field, value) {
+            final updatedSlides = List<Map<String, dynamic>>.from(slides);
+            if (index >= updatedSlides.length) return;
+            updatedSlides[index] = {
+              ...Map<String, dynamic>.from(updatedSlides[index]),
+              field: value,
+            };
+            editProvider.updateBlockData(
+              widget.blockId,
+              'slides',
+              updatedSlides,
+              saveHistory: false,
+            );
+          },
+          onSlideActionUpdated: (index, action) {
+            final updatedSlides = List<Map<String, dynamic>>.from(slides);
+            if (index >= updatedSlides.length) return;
+            final current = Map<String, dynamic>.from(updatedSlides[index]);
+            updatedSlides[index] = <String, dynamic>{
+              ...current,
+              'ctaText': action.label,
+              'buttonText': action.label,
+              'ctaLink': action.href,
+              'buttonLink': action.href,
+              'actions': WebsiteActionValue.mergePrimary(
+                current['actions'],
+                action,
+              ),
+            };
+            editProvider.updateBlockData(
+              widget.blockId,
+              'slides',
+              updatedSlides,
+            );
+          },
           onNavigate: widget.onNavigate,
+          tenantId: widget.tenantId,
         );
       },
     );
@@ -1080,6 +1127,19 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             .toString();
     final ctaLink =
         (widget.data['ctaLink'] ?? widget.data['buttonLink'] ?? '').toString();
+    final heroAction = WebsiteActionValue.resolvePrimary(
+          widget.data,
+          labelKeys: const ['ctaText', 'buttonText'],
+          hrefKeys: const ['ctaLink', 'buttonLink'],
+          defaultLabel: 'Ver más',
+          defaultHref: ctaLink,
+          defaultVariant: WebsiteActionVariant.outline,
+        ) ??
+        WebsiteActionValue(
+          label: ctaText.isEmpty ? 'Ver más' : ctaText,
+          href: ctaLink,
+          variant: WebsiteActionVariant.outline,
+        );
     final imageUrl =
         (widget.data['imageUrl'] ?? widget.data['backgroundImage'])?.toString();
 
@@ -1258,22 +1318,27 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
                       // Editable button with click handler
                       _EditableButton(
-                        text: ctaText.isEmpty ? 'Ver más' : ctaText,
-                        link: ctaLink,
+                        text: heroAction.label,
+                        link: heroAction.href,
                         backgroundColor: widget.accentColor,
-                        onTextChanged: (value) =>
+                        actionVariant: heroAction.variant,
+                        onActionChanged: (action) =>
                             editProvider.updateBlockDataMultiple(
                           widget.blockId,
-                          {'ctaText': value, 'buttonText': value},
+                          {
+                            'ctaText': action.label,
+                            'buttonText': action.label,
+                            'ctaLink': action.href,
+                            'buttonLink': action.href,
+                            'actions': WebsiteActionValue.mergePrimary(
+                              widget.data['actions'],
+                              action,
+                            ),
+                          },
                         ),
-                        onLinkChanged: (value) =>
-                            editProvider.updateBlockDataMultiple(
-                          widget.blockId,
-                          {'ctaLink': value, 'buttonLink': value},
-                        ),
-                        onNavigate: ctaLink.isNotEmpty
+                        onNavigate: heroAction.href.isNotEmpty
                             ? () {
-                                widget.onNavigate?.call(ctaLink);
+                                widget.onNavigate?.call(heroAction.href);
                               }
                             : null,
                       ),
@@ -1499,21 +1564,28 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         ),
         const SizedBox(height: 32),
         _EditableButton(
-          text: buttonText.isEmpty ? 'Contactar' : buttonText,
-          link: buttonLink,
+          text: primaryAction?.label ??
+              (buttonText.isEmpty ? 'Contactar' : buttonText),
+          link: primaryAction?.href ?? buttonLink,
           backgroundColor: Colors.white,
           foregroundColor: widget.primaryColor,
-          onTextChanged: (value) => editProvider.updateBlockDataMultiple(
+          actionVariant: primaryAction?.variant ?? WebsiteActionVariant.outline,
+          onActionChanged: (action) => editProvider.updateBlockDataMultiple(
             widget.blockId,
-            {'buttonText': value, 'ctaText': value},
+            {
+              'buttonText': action.label,
+              'ctaText': action.label,
+              'buttonLink': action.href,
+              'ctaLink': action.href,
+              'actions': WebsiteActionValue.mergePrimary(
+                widget.data['actions'],
+                action,
+              ),
+            },
           ),
-          onLinkChanged: (value) => editProvider.updateBlockDataMultiple(
-            widget.blockId,
-            {'buttonLink': value, 'ctaLink': value},
-          ),
-          onNavigate: (primaryAction?.to ?? buttonLink).isNotEmpty
+          onNavigate: (primaryAction?.href ?? buttonLink).isNotEmpty
               ? () {
-                  widget.onNavigate?.call(primaryAction?.to ?? buttonLink);
+                  widget.onNavigate?.call(primaryAction?.href ?? buttonLink);
                 }
               : null,
         ),
@@ -2442,6 +2514,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     final price = (plan['price'] ?? '').toString();
     final description = (plan['description'] ?? '').toString();
     final isHighlighted = plan['highlighted'] == true;
+    final action = WebsiteActionValue.resolvePrimary(
+          plan,
+          labelKeys: const ['ctaText', 'buttonText'],
+          hrefKeys: const ['ctaLink', 'buttonLink'],
+          defaultLabel: 'Reservar',
+          defaultHref: '/productos',
+        ) ??
+        const WebsiteActionValue(label: 'Reservar', href: '/productos');
 
     return Container(
       width: 300,
@@ -2523,6 +2603,38 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 },
               ),
               const SizedBox(height: 16),
+              _EditableButton(
+                text: action.label,
+                link: action.href,
+                backgroundColor:
+                    isHighlighted ? widget.accentColor : widget.primaryColor,
+                foregroundColor: Colors.white,
+                actionVariant: action.variant,
+                onActionChanged: (nextAction) {
+                  final updated = List<Map<String, dynamic>>.from(allPlans);
+                  updated[index] = {
+                    ...Map<String, dynamic>.from(updated[index]),
+                    'ctaText': nextAction.label,
+                    'buttonText': nextAction.label,
+                    'ctaLink': nextAction.href,
+                    'buttonLink': nextAction.href,
+                    'actionVariant': nextAction.variant.storageValue,
+                    'actions': WebsiteActionValue.mergePrimary(
+                      plan['actions'],
+                      nextAction,
+                    ),
+                  };
+                  editProvider.updateBlockData(
+                    widget.blockId,
+                    'plans',
+                    updated,
+                  );
+                },
+                onNavigate: action.href.isEmpty
+                    ? null
+                    : () => widget.onNavigate?.call(action.href),
+              ),
+              const SizedBox(height: 12),
               // Toggle highlight
               TextButton(
                 onPressed: () {
@@ -3390,8 +3502,10 @@ class _EditableButton extends StatefulWidget {
   final String link;
   final Color backgroundColor;
   final Color? foregroundColor;
-  final ValueChanged<String> onTextChanged;
-  final ValueChanged<String> onLinkChanged;
+  final ValueChanged<String>? onTextChanged;
+  final ValueChanged<String>? onLinkChanged;
+  final ValueChanged<WebsiteActionValue>? onActionChanged;
+  final WebsiteActionVariant actionVariant;
   final VoidCallback? onNavigate;
 
   const _EditableButton({
@@ -3399,8 +3513,10 @@ class _EditableButton extends StatefulWidget {
     required this.link,
     required this.backgroundColor,
     this.foregroundColor,
-    required this.onTextChanged,
-    required this.onLinkChanged,
+    this.onTextChanged,
+    this.onLinkChanged,
+    this.onActionChanged,
+    this.actionVariant = WebsiteActionVariant.filled,
     this.onNavigate,
   });
 
@@ -3429,7 +3545,10 @@ class _EditableButtonState extends State<_EditableButton> {
         : Colors.white;
   }
 
-  bool get _isOutlineStyle => widget.backgroundColor == Colors.transparent;
+  bool get _isOutlineStyle =>
+      widget.actionVariant == WebsiteActionVariant.outline;
+
+  bool get _isTextStyle => widget.actionVariant == WebsiteActionVariant.text;
 
   @override
   void initState() {
@@ -3468,8 +3587,19 @@ class _EditableButtonState extends State<_EditableButton> {
 
   void _closeEditing([bool save = false]) {
     if (save) {
-      widget.onTextChanged(_textController.text);
-      widget.onLinkChanged(_linkController.text);
+      final onActionChanged = widget.onActionChanged;
+      if (onActionChanged != null) {
+        onActionChanged(
+          WebsiteActionValue(
+            label: _textController.text,
+            href: _linkController.text,
+            variant: widget.actionVariant,
+          ),
+        );
+      } else {
+        widget.onTextChanged?.call(_textController.text);
+        widget.onLinkChanged?.call(_linkController.text);
+      }
     }
     _removeOverlay();
     if (mounted) {
@@ -3565,6 +3695,20 @@ class _EditableButtonState extends State<_EditableButton> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final globalButtonStyle = switch (widget.actionVariant) {
+      WebsiteActionVariant.outline => theme.outlinedButtonTheme.style,
+      WebsiteActionVariant.text => theme.textButtonTheme.style,
+      WebsiteActionVariant.filled => theme.elevatedButtonTheme.style,
+    };
+    final resolvedShape = globalButtonStyle?.shape?.resolve({});
+    final resolvedRadius = resolvedShape is RoundedRectangleBorder
+        ? resolvedShape.borderRadius
+        : BorderRadius.circular(8);
+    final resolvedPadding = globalButtonStyle?.padding?.resolve({}) ??
+        const EdgeInsets.symmetric(horizontal: 20, vertical: 12);
+    final resolvedTextStyle = globalButtonStyle?.textStyle?.resolve({});
+
     // Always render the button visuals so layout doesn't jump
     return CompositedTransformTarget(
       link: _layerLink,
@@ -3577,11 +3721,10 @@ class _EditableButtonState extends State<_EditableButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
-              color:
-                  _isOutlineStyle ? Colors.transparent : widget.backgroundColor,
-              borderRadius: _isOutlineStyle
-                  ? BorderRadius.zero
-                  : BorderRadius.circular(8),
+              color: _isOutlineStyle || _isTextStyle
+                  ? Colors.transparent
+                  : widget.backgroundColor,
+              borderRadius: resolvedRadius,
               border: _isSelected
                   ? Border.all(color: Colors.blue, width: 2)
                   : _isHovering
@@ -3601,10 +3744,7 @@ class _EditableButtonState extends State<_EditableButton> {
             child: Stack(
               children: [
                 Padding(
-                  padding: _isOutlineStyle
-                      ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
-                      : const EdgeInsets.symmetric(
-                          horizontal: 48, vertical: 20),
+                  padding: resolvedPadding,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -3614,10 +3754,10 @@ class _EditableButtonState extends State<_EditableButton> {
                             : (_isOutlineStyle
                                 ? widget.text.toUpperCase()
                                 : widget.text),
-                        style: TextStyle(
+                        style:
+                            (resolvedTextStyle ?? const TextStyle()).copyWith(
                           color: _textColor,
                           fontWeight: FontWeight.w600,
-                          fontSize: _isOutlineStyle ? 13 : 16,
                           letterSpacing: _isOutlineStyle ? 1.5 : 0,
                         ),
                       ),
@@ -3856,8 +3996,15 @@ class _EditableCarouselWidget extends StatefulWidget {
   final String blockId;
   final double? blockHeight; // Custom height from resize handle
   final Duration animationDuration;
+  final int selectedSlideIndex;
+  final ValueChanged<int> onSlideSelected;
   final void Function(int index, String field, dynamic value) onSlideUpdated;
+  final void Function(int index, String field, dynamic value)
+      onSlideTransientUpdated;
+  final void Function(int index, WebsiteActionValue action)
+      onSlideActionUpdated;
   final void Function(String route)? onNavigate;
+  final String? tenantId;
 
   const _EditableCarouselWidget({
     required this.slides,
@@ -3872,8 +4019,13 @@ class _EditableCarouselWidget extends StatefulWidget {
     required this.blockId,
     this.blockHeight,
     required this.animationDuration,
+    required this.selectedSlideIndex,
+    required this.onSlideSelected,
     required this.onSlideUpdated,
+    required this.onSlideTransientUpdated,
+    required this.onSlideActionUpdated,
     this.onNavigate,
+    this.tenantId,
   });
 
   @override
@@ -3883,6 +4035,22 @@ class _EditableCarouselWidget extends StatefulWidget {
 
 class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.selectedSlideIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditableCarouselWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final maxIndex = widget.slides.isEmpty ? 0 : widget.slides.length - 1;
+    final selected = widget.selectedSlideIndex.clamp(0, maxIndex).toInt();
+    if (_currentIndex != selected) {
+      _currentIndex = selected;
+    }
+  }
 
   /// Apply font family via CSS font-family instead of GoogleFonts package
   /// (GoogleFonts adds ~6.5MB to bundle with all font metadata)
@@ -3894,22 +4062,21 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
   }
 
   void _nextSlide() {
-    setState(() {
-      _currentIndex = (_currentIndex + 1) % widget.slides.length;
-    });
+    final next = (_currentIndex + 1) % widget.slides.length;
+    setState(() => _currentIndex = next);
+    widget.onSlideSelected(next);
   }
 
   void _previousSlide() {
-    setState(() {
-      _currentIndex =
-          (_currentIndex - 1 + widget.slides.length) % widget.slides.length;
-    });
+    final previous =
+        (_currentIndex - 1 + widget.slides.length) % widget.slides.length;
+    setState(() => _currentIndex = previous);
+    widget.onSlideSelected(previous);
   }
 
   void _goToSlide(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+    setState(() => _currentIndex = index);
+    widget.onSlideSelected(index);
   }
 
   @override
@@ -4025,10 +4192,29 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
 
     final title = (slide['title'] ?? 'Título').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
-    final ctaText = (slide['ctaText'] ?? 'Ver más').toString().trim();
-    final ctaLink = (slide['ctaLink'] ?? '/productos').toString().trim();
+    final action = WebsiteActionValue.resolvePrimary(
+          slide,
+          labelKeys: const ['ctaText', 'buttonText'],
+          hrefKeys: const ['ctaLink', 'buttonLink'],
+          defaultLabel: 'Ver más',
+          defaultHref: '/productos',
+          defaultVariant: WebsiteActionVariant.outline,
+        ) ??
+        const WebsiteActionValue(
+          label: 'Ver más',
+          href: '/productos',
+          variant: WebsiteActionVariant.outline,
+        );
     final imageUrl = slide['imageUrl'];
     final showOverlay = (slide['showOverlay'] ?? true) == true;
+    final compositionElements = slide['elements'] is List
+        ? (slide['elements'] as List)
+            .whereType<Map>()
+            .map((element) => Map<String, dynamic>.from(element))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final usesComposition =
+        slide['useComposition'] == true || compositionElements.isNotEmpty;
 
     double overlayOpacity = 0.55;
     final rawOverlay = slide['overlayOpacity'];
@@ -4111,35 +4297,14 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
         fit: StackFit.expand,
         children: [
           // Background image with alignment (NOT inline-editable; keep selection UX clean)
-          if (hasImage)
-            Image.network(
-              imageUrl.toString(),
-              fit: BoxFit.cover,
-              alignment: bgAlignment,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (context, error, stackTrace) => Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      widget.primaryColor,
-                      widget.accentColor.withValues(alpha: 0.85)
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    widget.primaryColor,
-                    widget.accentColor.withValues(alpha: 0.85)
-                  ],
-                ),
-              ),
+          DecoratedBox(
+            decoration: WebsiteBlockRenderer.resolveBackgroundDecoration(
+              data: slide,
+              defaultColor: widget.primaryColor,
+              imageUrl: hasImage ? imageUrl.toString() : null,
+              imageAlignment: bgAlignment,
             ),
+          ),
 
           // Overlay
           if (showOverlay)
@@ -4156,81 +4321,118 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
               ),
             ),
 
-          // Content with editable text
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Editable title
-                    InlineEditableTextV2(
-                      text: title.isEmpty
-                          ? 'Título del Banner'
-                          : title.toUpperCase(),
-                      baseStyle: headingStyle,
-                      textAlign: TextAlign.center,
-                      isEditMode: true,
-                      placeholder: 'TÍTULO DEL BANNER',
-                      formatting: titleFormatting,
-                      fieldKey: '${widget.blockId}_slide_${index}_title',
-                      onTextChanged: (value) =>
-                          widget.onSlideUpdated(index, 'title', value),
-                      onFormattingChanged: (formatting) =>
-                          widget.onSlideUpdated(
-                        index,
-                        'titleFormatting',
-                        formatting.toJson(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Editable subtitle
-                    InlineEditableTextV2(
-                      text: subtitle,
-                      baseStyle: subtitleStyle,
-                      textAlign: TextAlign.center,
-                      isEditMode: true,
-                      placeholder: 'Subtítulo descriptivo',
-                      formatting: subtitleFormatting,
-                      fieldKey: '${widget.blockId}_slide_${index}_subtitle',
-                      onTextChanged: (value) =>
-                          widget.onSlideUpdated(index, 'subtitle', value),
-                      onFormattingChanged: (formatting) =>
-                          widget.onSlideUpdated(
-                        index,
-                        'subtitleFormatting',
-                        formatting.toJson(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // Editable button
-                    if (ctaText.isNotEmpty)
-                      _EditableButton(
-                        text: ctaText,
-                        link: ctaLink,
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
+          // Layered campaigns reuse the same Canvas elements and inspector as
+          // standalone Canvas blocks. Legacy slides keep their inline stack.
+          if (usesComposition)
+            CanvasBlock(
+              data: <String, dynamic>{
+                'backgroundColor': '#00000000',
+                'showGrid': true,
+                'snap': true,
+                'designWidth':
+                    (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
+                'mobileDesignWidth':
+                    (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+                'blockHeight':
+                    (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
+                'activeElementId': slide['activeElementId'],
+                'elements': compositionElements,
+              },
+              editable: true,
+              accentColor: widget.accentColor,
+              onElementsChanged: (elements) =>
+                  widget.onSlideUpdated(index, 'elements', elements),
+              onActiveElementChanged: (elementId) {
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .selectBlock(widget.blockId);
+                widget.onSlideTransientUpdated(
+                    index, 'activeElementId', elementId);
+              },
+              onBackgroundTap: () => context
+                  .read<WebsiteEditModeProvider>()
+                  .selectBlock(widget.blockId),
+              onNavigate: widget.onNavigate,
+              tenantId: widget.tenantId,
+              headingFont: widget.headingFont,
+              bodyFont: widget.bodyFont,
+              fillAvailableHeight: true,
+              clipContentToBounds: true,
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Editable title
+                      InlineEditableTextV2(
+                        text: title.isEmpty
+                            ? 'Título del Banner'
+                            : title.toUpperCase(),
+                        baseStyle: headingStyle,
+                        textAlign: TextAlign.center,
+                        isEditMode: true,
+                        placeholder: 'TÍTULO DEL BANNER',
+                        formatting: titleFormatting,
+                        fieldKey: '${widget.blockId}_slide_${index}_title',
                         onTextChanged: (value) =>
-                            widget.onSlideUpdated(index, 'ctaText', value),
-                        onLinkChanged: (value) =>
-                            widget.onSlideUpdated(index, 'ctaLink', value),
-                        onNavigate: ctaLink.isNotEmpty
-                            ? () {
-                                widget.onNavigate?.call(ctaLink);
-                              }
-                            : null,
+                            widget.onSlideUpdated(index, 'title', value),
+                        onFormattingChanged: (formatting) =>
+                            widget.onSlideUpdated(
+                          index,
+                          'titleFormatting',
+                          formatting.toJson(),
+                        ),
                       ),
-                  ],
+
+                      const SizedBox(height: 20),
+
+                      // Editable subtitle
+                      InlineEditableTextV2(
+                        text: subtitle,
+                        baseStyle: subtitleStyle,
+                        textAlign: TextAlign.center,
+                        isEditMode: true,
+                        placeholder: 'Subtítulo descriptivo',
+                        formatting: subtitleFormatting,
+                        fieldKey: '${widget.blockId}_slide_${index}_subtitle',
+                        onTextChanged: (value) =>
+                            widget.onSlideUpdated(index, 'subtitle', value),
+                        onFormattingChanged: (formatting) =>
+                            widget.onSlideUpdated(
+                          index,
+                          'subtitleFormatting',
+                          formatting.toJson(),
+                        ),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // Editable button
+                      if (action.label.isNotEmpty)
+                        _EditableButton(
+                          text: action.label,
+                          link: action.href,
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          actionVariant: action.variant,
+                          onActionChanged: (value) =>
+                              widget.onSlideActionUpdated(index, value),
+                          onNavigate: action.href.isNotEmpty
+                              ? () {
+                                  widget.onNavigate?.call(action.href);
+                                }
+                              : null,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
 
           // Image edit button (bottom-right corner)
           Positioned(
@@ -4265,6 +4467,8 @@ class _SlideImageEditButton extends StatefulWidget {
 class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
   bool _isHovered = false;
   bool _isEditing = false;
+  bool _showUrlOption = false;
+  String? _urlError;
   final TextEditingController _urlController = TextEditingController();
 
   @override
@@ -4287,20 +4491,49 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
     super.dispose();
   }
 
+  void _setImage(String url) {
+    final normalized = url.trim();
+    _urlController.text = normalized;
+    widget.onImageChanged(normalized);
+    if (!mounted) return;
+    setState(() {
+      _showUrlOption = false;
+      _urlError = null;
+    });
+  }
+
+  void _applyUrl() {
+    final value = _urlController.text.trim();
+    final uri = Uri.tryParse(value);
+    if (value.isNotEmpty &&
+        (uri == null ||
+            !uri.hasScheme ||
+            (uri.scheme != 'https' && uri.scheme != 'http') ||
+            uri.host.isEmpty)) {
+      setState(() {
+        _urlError =
+            'Ingresa una URL válida que comience con http:// o https://';
+      });
+      return;
+    }
+    _setImage(value);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isEditing) {
       return Container(
-        width: 320,
-        padding: const EdgeInsets.all(12),
+        width: 360,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -4310,65 +4543,151 @@ class _SlideImageEditButtonState extends State<_SlideImageEditButton> {
           children: [
             Row(
               children: [
-                const Icon(Icons.image, size: 16, color: Colors.grey),
+                const Icon(
+                  Icons.photo_library_outlined,
+                  size: 18,
+                  color: Color(0xFF008A87),
+                ),
                 const SizedBox(width: 8),
                 const Text(
-                  'URL de imagen',
+                  'Imagen del slide',
                   style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
                 ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close, size: 16),
-                  onPressed: () => setState(() => _isEditing = false),
+                  tooltip: 'Cerrar',
+                  onPressed: () => setState(() {
+                    _isEditing = false;
+                    _showUrlOption = false;
+                    _urlError = null;
+                  }),
                   padding: EdgeInsets.zero,
                   constraints:
                       const BoxConstraints(minWidth: 24, minHeight: 24),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _urlController,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                hintText: 'https://ejemplo.com/imagen.jpg',
-                hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+            const SizedBox(height: 4),
+            const Text(
+              'Elige una imagen desde tu equipo. Se subirá y quedará guardada en el editor.',
+              style: TextStyle(fontSize: 11, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 154,
+              width: double.infinity,
+              child: InlineEditableImage(
+                imageUrl: widget.currentImageUrl,
+                width: double.infinity,
+                height: 154,
+                fit: BoxFit.cover,
+                isEditMode: true,
+                onChanged: _setImage,
+                borderRadius: BorderRadius.circular(8),
+                placeholder: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7F7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_open_outlined,
+                        color: Color(0xFF008A87),
+                        size: 32,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Elegir imagen',
+                        style: TextStyle(
+                          color: Color(0xFF006D6A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'JPG, PNG o WebP',
+                        style: TextStyle(color: Colors.black45, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              onSubmitted: (value) {
-                widget.onImageChanged(value);
-                setState(() => _isEditing = false);
-              },
             ),
             const SizedBox(height: 8),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => setState(() => _isEditing = false),
-                  child: const Text('Cancelar', style: TextStyle(fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onImageChanged(_urlController.text);
-                    setState(() => _isEditing = false);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                if ((widget.currentImageUrl ?? '').isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _setImage(''),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Quitar'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
                   ),
-                  child: const Text('Aplicar', style: TextStyle(fontSize: 12)),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _showUrlOption = !_showUrlOption;
+                    _urlError = null;
+                  }),
+                  icon: const Icon(Icons.link, size: 16),
+                  label: Text(
+                    _showUrlOption ? 'Ocultar URL' : 'Usar URL (avanzado)',
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.black54,
+                    textStyle: const TextStyle(fontSize: 11),
+                  ),
                 ),
               ],
             ),
+            if (_showUrlOption) ...[
+              const SizedBox(height: 6),
+              TextField(
+                controller: _urlController,
+                autofocus: true,
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  hintText: 'https://ejemplo.com/imagen.jpg',
+                  hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                  errorText: _urlError,
+                ),
+                onSubmitted: (_) => _applyUrl(),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _applyUrl,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF008A87),
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  ),
+                  child: const Text(
+                    'Aplicar URL',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       );

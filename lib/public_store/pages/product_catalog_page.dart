@@ -313,7 +313,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
       Future<void>? categoryCountsFuture;
       Future<PublicProductPage>? productPageFuture;
-      final canStartPageBeforeCategories = !editProvider.isInEditorContext &&
+      final canStartPageBeforeCategories = !editProvider.isEditMode &&
           _pendingRouteCategoryValue == null &&
           _selectedCategoryId == null;
       if (canStartPageBeforeCategories) {
@@ -372,8 +372,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         }
       }
 
-      if (editProvider.isInEditorContext) {
-        // Editor/preview still needs the full editable product set.
+      if (editProvider.isEditMode) {
+        // Active editing can inspect the complete editable product set. Plain
+        // preview deliberately stays on the public, server-paged path so the
+        // editor shows exactly what a customer can browse.
         final products = await publicInventoryService.getProductsForTenant(
           tenantId: tenantId,
           onlyInStock: false,
@@ -570,7 +572,20 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   void _handleFiltersChanged({bool debounce = false}) {
     final editProvider = context.read<WebsiteEditModeProvider>();
-    if (editProvider.isInEditorContext) {
+    if (editProvider.isEditMode) {
+      // The editor uses the complete product set and filters it locally, but
+      // there is nothing to filter on the first visit until that set has been
+      // fetched. Previously this branch returned immediately and left
+      // `_isLoading` true forever when the page selector opened /productos.
+      if (!_hasLoadedInitialProducts) {
+        // didChangeDependencies can run again while the initial request is in
+        // flight. Keep one request active, while still allowing a retry if a
+        // tenant was not ready and the previous attempt stopped loading.
+        if (_loadToken == 0 || !_isLoading) {
+          unawaited(_loadProducts(resetPage: true));
+        }
+        return;
+      }
       _applyLocalFilters();
       return;
     }
@@ -1186,7 +1201,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   Widget _buildCategoryFilters() {
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final sourceProducts = editProvider.isInEditorContext
+    final sourceProducts = editProvider.isEditMode
         ? (_selectedProductType == null
             ? _allProducts
             : _allProducts
@@ -1573,10 +1588,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       );
     }
 
-    // Calculate pagination. Public mode is already paged by the database;
-    // editor mode still uses local pagination over the full editable set.
-    final isServerPaged =
-        !context.read<WebsiteEditModeProvider>().isInEditorContext;
+    // Public and preview modes are already paged by the database; active edit
+    // mode uses local pagination over the complete editable set.
+    final isServerPaged = !context.read<WebsiteEditModeProvider>().isEditMode;
     final totalProducts =
         isServerPaged ? _totalProductCount : _filteredProducts.length;
     final totalPages = (totalProducts / _itemsPerPage).ceil();
@@ -1662,7 +1676,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     scrollState.requestScrollToTopForPath(currentUri.path);
 
     final editProvider = context.read<WebsiteEditModeProvider>();
-    if (!editProvider.isInEditorContext) {
+    if (!editProvider.isEditMode) {
       _loadProducts();
     }
   }

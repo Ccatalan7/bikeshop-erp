@@ -28,6 +28,7 @@ class PersistentEditorShell extends StatelessWidget {
     // Watch edit mode to show/hide the editor panel
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isEditMode = editProvider.isEditMode;
+    final showEditorPanel = isEditMode && editProvider.isPageEditorWorkspace;
 
     // Preload editor-only deferred code so returning to Home in edit mode
     // doesn't pay the deferred-load cost (which feels like a slowdown).
@@ -53,7 +54,7 @@ class PersistentEditorShell extends StatelessWidget {
           ),
           // Persistent editor panel (fixed width on the right)
           // Only rendered when in edit mode, but Stack structure is always present
-          if (isEditMode)
+          if (showEditorPanel)
             Positioned(
               top: _editorTopBarHeight,
               right: 0,

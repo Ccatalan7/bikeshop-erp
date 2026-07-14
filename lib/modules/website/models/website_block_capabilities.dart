@@ -98,9 +98,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.coverMedia,
         WebsiteEditorCapability.responsiveFocalPoint,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.carousel: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.carousel,
@@ -120,7 +118,6 @@ class WebsiteBlockCapabilityRegistry {
       },
       gaps: <WebsiteEditorGap>{
         WebsiteEditorGap.shallowRepeater,
-        WebsiteEditorGap.missingActionModel,
       },
     ),
     WebsiteBlockType.canvas: WebsiteBlockCapabilityProfile(
@@ -143,7 +140,6 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorGap.blockLocalTextToolbar,
         WebsiteEditorGap.nonPersistedTextFormatting,
         WebsiteEditorGap.missingTextStyleInspector,
-        WebsiteEditorGap.missingActionModel,
         WebsiteEditorGap.missingResponsiveOverrides,
       },
     ),
@@ -171,9 +167,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.textOnly,
         WebsiteEditorCapability.linkAction,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.divider: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.divider,
@@ -199,8 +193,6 @@ class WebsiteBlockCapabilityRegistry {
       },
       gaps: <WebsiteEditorGap>{
         WebsiteEditorGap.missingExplicitEditableRenderer,
-        WebsiteEditorGap.incompleteThemeConsumption,
-        WebsiteEditorGap.missingActionModel,
       },
     ),
     WebsiteBlockType.services: WebsiteBlockCapabilityProfile(
@@ -278,9 +270,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.coverMedia,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.missingActionModel,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.gallery: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.gallery,
@@ -343,7 +333,6 @@ class WebsiteBlockCapabilityRegistry {
       },
       gaps: <WebsiteEditorGap>{
         WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingActionModel,
         WebsiteEditorGap.shallowRepeater,
       },
     ),
@@ -426,7 +415,6 @@ class WebsiteBlockCapabilityRegistry {
       },
       gaps: <WebsiteEditorGap>{
         WebsiteEditorGap.missingExplicitEditableRenderer,
-        WebsiteEditorGap.missingActionModel,
       },
     ),
     WebsiteBlockType.partnersBanner: WebsiteBlockCapabilityProfile(

@@ -28,6 +28,8 @@ class WebsiteThemeBuilder {
     String? bodyFont,
     double? headingSize,
     double? bodySize,
+    String buttonStyle = 'rounded',
+    String buttonSize = 'medium',
   }) {
     final baseTextTheme = base.textTheme;
 
@@ -60,6 +62,33 @@ class WebsiteThemeBuilder {
       labelSmall: bodyTextTheme.labelSmall,
     );
 
+    final buttonRadius = switch (buttonStyle.trim().toLowerCase()) {
+      'sharp' => 0.0,
+      'pill' => 999.0,
+      _ => 8.0,
+    };
+    final (buttonPadding, buttonMinimumSize) =
+        switch (buttonSize.trim().toLowerCase()) {
+      'small' => (
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          const Size(56, 36),
+        ),
+      'large' => (
+          const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          const Size(80, 52),
+        ),
+      _ => (
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          const Size(64, 44),
+        ),
+    };
+    final buttonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(buttonRadius),
+    );
+    final buttonTextStyle = composedTextTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+
     return base.copyWith(
       textTheme: composedTextTheme,
       primaryColor: primaryColor,
@@ -68,6 +97,30 @@ class WebsiteThemeBuilder {
         primary: primaryColor,
         secondary: accentColor,
         surface: backgroundColor,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          padding: buttonPadding,
+          minimumSize: buttonMinimumSize,
+          shape: buttonShape,
+          textStyle: buttonTextStyle,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          padding: buttonPadding,
+          minimumSize: buttonMinimumSize,
+          shape: buttonShape,
+          textStyle: buttonTextStyle,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          padding: buttonPadding,
+          minimumSize: buttonMinimumSize,
+          shape: buttonShape,
+          textStyle: buttonTextStyle,
+        ),
       ),
     );
   }

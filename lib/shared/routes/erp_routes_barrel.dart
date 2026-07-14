@@ -88,6 +88,7 @@ export '../../modules/hr/pages/medical_leaves_page.dart';
 export '../../modules/website/pages/website_management_page.dart';
 export '../../modules/website/pages/page_management_page.dart';
 export '../../modules/website/pages/navigation_management_page.dart';
+export '../../modules/website/pages/website_destination_management_page.dart';
 export '../../modules/website/pages/integrations_page.dart';
 export '../../modules/website/pages/featured_products_page.dart';
 export '../../modules/website/pages/product_website_visibility_page.dart';

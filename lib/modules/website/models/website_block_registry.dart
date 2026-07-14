@@ -66,6 +66,8 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.link,
           defaultValue: '/productos',
           actionRole: WebsiteActionRole.primary,
+          actionLabelKey: 'ctaText',
+          actionVariantKey: 'actionVariant',
           migrationAliases: ['buttonLink'],
         ),
         WebsiteBlockFieldSchema(
@@ -262,6 +264,8 @@ class WebsiteBlockRegistry {
           defaultValue: '/productos',
           group: 'content',
           actionRole: WebsiteActionRole.primary,
+          actionLabelKey: 'label',
+          actionVariantKey: 'style',
         ),
         WebsiteBlockFieldSchema(
           key: 'style',
@@ -342,6 +346,17 @@ class WebsiteBlockRegistry {
         'showPrice': true,
         'showStock': false,
         'productIds': <int>[],
+        'showViewAll': true,
+        'viewAllText': 'Ver todos los productos',
+        'viewAllLink': '/productos',
+        'actions': [
+          {
+            'type': 'navigate',
+            'label': 'Ver todos los productos',
+            'to': '/productos',
+            'variant': 'outline',
+          }
+        ],
       },
       usesCustomEditor: true,
     ),
@@ -673,6 +688,8 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.link,
           defaultValue: '/contacto',
           actionRole: WebsiteActionRole.primary,
+          actionLabelKey: 'buttonText',
+          actionVariantKey: 'actionVariant',
           migrationAliases: ['ctaLink'],
         ),
         WebsiteBlockFieldSchema(
@@ -962,6 +979,8 @@ class WebsiteBlockRegistry {
               type: WebsiteBlockFieldType.link,
               defaultValue: '/productos',
               actionRole: WebsiteActionRole.primary,
+              actionLabelKey: 'ctaText',
+              actionVariantKey: 'actionVariant',
             ),
             WebsiteBlockFieldSchema(
               key: 'features',
@@ -1148,6 +1167,8 @@ class WebsiteBlockRegistry {
           type: WebsiteBlockFieldType.link,
           defaultValue: '/productos',
           actionRole: WebsiteActionRole.primary,
+          actionLabelKey: 'ctaText',
+          actionVariantKey: 'actionVariant',
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayOpacity',

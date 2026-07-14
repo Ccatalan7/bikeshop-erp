@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/website_page_models.dart';
+import '../models/website_action.dart';
 
 const _uuid = Uuid();
 
@@ -10,6 +11,19 @@ enum DevicePreviewMode {
   desktop,
   tablet,
   mobile,
+}
+
+/// The active task surface inside the Website Builder.
+///
+/// Page composition is the only workspace that owns the persistent block
+/// inspector. Management workspaces use the full viewport while preserving the
+/// editor draft in this provider.
+enum WebsiteWorkspaceMode {
+  pageEditor,
+  catalog,
+  structure,
+  settings,
+  operations,
 }
 
 /// Provider for website inline edit mode state.
@@ -26,11 +40,13 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   bool _isPreviewMode = false; // Preview with top bar
   bool _isEditMode = false; // Full edit with side panel
+  WebsiteWorkspaceMode _workspaceMode = WebsiteWorkspaceMode.pageEditor;
   DevicePreviewMode _devicePreviewMode =
       DevicePreviewMode.desktop; // Persist preview options
 
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
+  final Map<String, int> _carouselSlideSelections = {};
   bool _hasUnsavedChanges = false;
   bool _hasHeaderChanges = false; // Track header-specific changes
   List<Map<String, dynamic>> _blocks = [];
@@ -103,9 +119,31 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool get isEditMode => _isEditMode;
   bool get isInEditorContext =>
       _isPreviewMode || _isEditMode; // Either preview or edit
+  WebsiteWorkspaceMode get workspaceMode => _workspaceMode;
+  bool get isPageEditorWorkspace =>
+      _workspaceMode == WebsiteWorkspaceMode.pageEditor;
+  bool get isManagementWorkspace => !isPageEditorWorkspace;
   DevicePreviewMode get devicePreviewMode => _devicePreviewMode;
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
+
+  /// Transient inspector/canvas selection. This is UI state and must never be
+  /// persisted into block data or mark the page as changed.
+  int carouselSlideSelection(String blockId, int slideCount) {
+    if (slideCount <= 0) return 0;
+    return (_carouselSlideSelections[blockId] ?? 0)
+        .clamp(0, slideCount - 1)
+        .toInt();
+  }
+
+  void selectCarouselSlide(String blockId, int index, int slideCount) {
+    if (slideCount <= 0) return;
+    final normalized = index.clamp(0, slideCount - 1).toInt();
+    if (_carouselSlideSelections[blockId] == normalized) return;
+    _carouselSlideSelections[blockId] = normalized;
+    notifyListeners();
+  }
+
   bool get hasUnsavedChanges =>
       _hasUnsavedChanges ||
       _hasHeaderChanges ||
@@ -151,6 +189,17 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   String? get currentPageId => _currentPageId;
   String? get currentPageSlug => _currentPageSlug;
   bool get isEditingHomePage => _currentPageId == null;
+
+  /// Switch task surfaces without reloading or clearing the current page draft.
+  void openWorkspace(WebsiteWorkspaceMode mode) {
+    if (_workspaceMode == mode) return;
+    _workspaceMode = mode;
+    notifyListeners();
+  }
+
+  void returnToPageEditor() {
+    openWorkspace(WebsiteWorkspaceMode.pageEditor);
+  }
 
   /// Update the current page context without resetting blocks/settings.
   ///
@@ -629,6 +678,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pendingCategoryVisibility.clear();
     _pendingPageSeo.clear();
     _selectedFooterNavId = null;
+    _carouselSlideSelections.clear();
   }
 
   /// Restore the editor state from the last loaded/saved snapshot.
@@ -658,6 +708,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }) {
     _isPreviewMode = true;
     _isEditMode = false;
+    _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
     _clearPendingEditorChanges();
@@ -680,6 +731,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         '🥶 [FREEZE_DEBUG] WebsiteEditModeProvider.enterEditMode START path=${pageSlug ?? "home"}');
     _isPreviewMode = false;
     _isEditMode = true;
+    _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _blocks = blocks.map((b) => Map<String, dynamic>.from(b)).toList();
     _settings = Map<String, dynamic>.from(settings);
     _clearPendingEditorChanges();
@@ -701,6 +753,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void switchToEditMode() {
     _isPreviewMode = false;
     _isEditMode = true;
+    _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     notifyListeners();
   }
 
@@ -708,6 +761,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void switchToPreviewMode() {
     _isEditMode = false;
     _isPreviewMode = true;
+    _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _selectedBlockId = null;
     notifyListeners();
   }
@@ -724,6 +778,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     _isPreviewMode = false;
     _isEditMode = false;
+    _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _selectedBlockId = null;
     _clearPendingEditorChanges();
     _blocks = [];
@@ -828,6 +883,13 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'buttonLink',
       'showCta',
       'actions',
+      'label',
+      'link',
+      'style',
+      'viewAllText',
+      'viewAllLink',
+      'showViewAll',
+      'actionVariant',
     };
     if (changedKeys.intersection(ctaKeys).isNotEmpty) {
       _syncDerivedActions(
@@ -856,58 +918,64 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     required Map<String, dynamic> blockData,
   }) {
     final typeLower = blockType.trim().toLowerCase();
-    final isCtaLike =
-        typeLower == 'hero' || typeLower == 'cta' || typeLower == 'videobanner';
+    final isCtaLike = typeLower == 'hero' ||
+        typeLower == 'cta' ||
+        typeLower == 'videobanner' ||
+        typeLower == 'button' ||
+        typeLower == 'products';
     if (!isCtaLike) return;
 
     // If user edits actions directly in the future, don't fight it.
     if (updatedKey == 'actions') return;
 
-    final showCta =
-        typeLower == 'videobanner' ? (blockData['showCta'] != false) : true;
-
-    final label = (blockData['ctaText'] ?? blockData['buttonText'] ?? '')
-        .toString()
-        .trim();
-    final to = (blockData['ctaLink'] ?? blockData['buttonLink'] ?? '')
-        .toString()
-        .trim();
-
-    // Normalize existing actions (if any) to a mutable list of maps.
-    final rawActions = blockData['actions'];
-    final actions = <Map<String, dynamic>>[];
-    if (rawActions is List) {
-      for (final item in rawActions) {
-        if (item is Map) {
-          actions.add(Map<String, dynamic>.from(item));
+    final labelKeys = switch (typeLower) {
+      'button' => const ['label', 'text'],
+      'products' => const ['viewAllText'],
+      _ => const ['ctaText', 'buttonText'],
+    };
+    final hrefKeys = switch (typeLower) {
+      'button' => const ['link'],
+      'products' => const ['viewAllLink'],
+      _ => const ['ctaLink', 'buttonLink'],
+    };
+    final enabled = switch (typeLower) {
+      'videobanner' => blockData['showCta'] != false,
+      'products' => blockData['showViewAll'] != false,
+      _ => true,
+    };
+    final action = WebsiteActionValue.resolvePrimary(
+      blockData,
+      labelKeys: labelKeys,
+      hrefKeys: hrefKeys,
+      defaultLabel:
+          typeLower == 'products' ? 'Ver todos los productos' : 'Ver más',
+      defaultVariant: typeLower == 'button'
+          ? WebsiteActionVariant.fromStorage(blockData['style']?.toString())
+          : WebsiteActionVariant.outline,
+      enabled: enabled,
+    );
+    final effective = action ?? const WebsiteActionValue(label: '', href: '');
+    blockData['actions'] =
+        WebsiteActionValue.mergePrimary(blockData['actions'], effective);
+    if (action == null) {
+      if (enabled) {
+        for (final key in hrefKeys) {
+          blockData[key] = '';
         }
       }
-    }
-
-    if (!showCta || to.isEmpty) {
-      // Hide CTA => clear actions.
-      blockData['actions'] = const <Map<String, dynamic>>[];
       return;
     }
-
-    if (actions.isEmpty) {
-      blockData['actions'] = [
-        {
-          'type': 'navigate',
-          'label': label.isNotEmpty ? label : 'Ver más',
-          'to': to,
-        },
-      ];
-      return;
+    for (final key in labelKeys) {
+      blockData[key] = action.label;
     }
-
-    // Update first action in-place (leave any additional actions untouched).
-    final first = Map<String, dynamic>.from(actions.first);
-    first['type'] = (first['type'] ?? 'navigate').toString();
-    first['label'] = label.isNotEmpty ? label : (first['label'] ?? 'Ver más');
-    first['to'] = to;
-    actions[0] = first;
-    blockData['actions'] = actions;
+    for (final key in hrefKeys) {
+      blockData[key] = action.href;
+    }
+    if (typeLower == 'button') {
+      blockData['style'] = action.variant.storageValue;
+    } else {
+      blockData['actionVariant'] = action.variant.storageValue;
+    }
   }
 
   /// Convenience: add a Canvas element to the currently selected Canvas block.
@@ -946,6 +1014,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'w': switch (elementType) {
         'button' => 220.0,
         'image' => 320.0,
+        'shape' => 320.0,
         'product' => 280.0,
         'productsGallery' => 520.0,
         _ => 360.0,
@@ -953,6 +1022,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       'h': switch (elementType) {
         'button' => 56.0,
         'image' => 200.0,
+        'shape' => 200.0,
         'product' => 320.0,
         'productsGallery' => 360.0,
         _ => 72.0,
@@ -964,6 +1034,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       next.addAll({
         'label': 'Botón',
         'style': 'filled', // filled|outline|text
+        'inheritTheme': true,
         'bgColor': '#00A09D',
         'fgColor': '#FFFFFF',
         'radius': 12.0,
@@ -976,8 +1047,19 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     } else if (elementType == 'image') {
       next.addAll({
         'imageUrl': '',
+        'productId': '',
         'fit': 'cover', // cover|contain
         'radius': 12.0,
+        'altText': '',
+      });
+    } else if (elementType == 'shape') {
+      next.addAll({
+        'shape': 'rectangle',
+        'fillColor': '#1F2937',
+        'borderColor': '#1F2937',
+        'borderWidth': 0.0,
+        'radius': 0.0,
+        'rotation': 0.0,
       });
     } else if (elementType == 'product') {
       next.addAll({
@@ -1000,8 +1082,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         'text': 'Texto',
         'fontSize': 28.0,
         'fontWeight': 'w700',
+        'fontRole': 'heading',
         'color': '#111111',
         'align': 'left',
+        'letterSpacing': 0.0,
+        'lineHeight': 1.1,
+        'uppercase': false,
       });
     }
 
@@ -1316,6 +1402,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
               'h': 56.0,
               'label': 'Botón',
               'style': 'filled',
+              'inheritTheme': true,
               'bgColor': '#00A09D',
               'fgColor': '#FFFFFF',
               'radius': 12.0,

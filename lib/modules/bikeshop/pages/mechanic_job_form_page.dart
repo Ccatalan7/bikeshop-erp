@@ -805,6 +805,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Customer? _selectedCustomer;
   Bike? _selectedBike; // Legacy - now use _bikeTabs
   BikeProfile? _selectedBikeProfile;
+  bool _selectedBikeProfileLoadFailed = false;
   final Map<String, BikeProfile> _pendingBikeProfileOverrides = {};
   final Map<String, Map<String, dynamic>> _pendingServiceWizardAnswers = {};
   JobPriority _selectedPriority = JobPriority.normal;
@@ -1726,16 +1727,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       setState(() {
         _selectedBikeProfile = null;
         _isLoadingSelectedBikeProfile = false;
+        _selectedBikeProfileLoadFailed = false;
       });
       return;
     }
 
-    setState(() => _isLoadingSelectedBikeProfile = true);
+    setState(() {
+      _selectedBikeProfile = null;
+      _isLoadingSelectedBikeProfile = true;
+      _selectedBikeProfileLoadFailed = false;
+    });
 
     try {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
-      final profile = await bikeshopService.getBikeProfile(bike!.id!);
+      final aggregate = await bikeshopService.getBikeAggregate(bike!.id!);
+      final profile = aggregate.profile;
       final effectiveProfile =
           _pendingBikeProfileOverrides[bike.id!] ?? profile;
       final tabForBike = _bikeTabForBike(bike);
@@ -1755,6 +1762,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       setState(() {
         _selectedBikeProfile = effectiveProfile;
+        _selectedBikeProfileLoadFailed = false;
         if (tabForBike != null && hydratedPartItems != null) {
           tabForBike.partItems
             ..clear()
@@ -1770,6 +1778,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
     } catch (e) {
       debugPrint('⚠️ Error loading selected bike profile: $e');
+      if (mounted && _selectedBike?.id == bike?.id) {
+        setState(() => _selectedBikeProfileLoadFailed = true);
+      }
     } finally {
       if (mounted && _selectedBike?.id == bike?.id) {
         setState(() => _isLoadingSelectedBikeProfile = false);
@@ -1930,6 +1941,38 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           const SizedBox(height: 10),
           if (_isLoadingSelectedBikeProfile)
             const LinearProgressIndicator()
+          else if (_selectedBikeProfileLoadFailed)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.cloud_off_outlined,
+                    size: 18,
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No se pudo cargar la ficha. No se tratará como vacía.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _loadSelectedBikeProfile(_selectedBike),
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            )
           else ...[
             if (!snapshot.hasStructuredProfile)
               Padding(
@@ -4735,6 +4778,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     required ServiceWizardProfile? serviceProfile,
     required Map<String, dynamic> answers,
   }) {
+    if (_isLoadingSelectedBikeProfile || _selectedBikeProfileLoadFailed) {
+      return null;
+    }
+
     final currentTab = _currentBikeTab;
     final bike = currentTab?.bike;
     final currentProfile = _bikeProfileForCurrentTab();
@@ -4928,22 +4975,27 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
 
     final confirmedAt = DateTime.now();
-    final summarySnapshot = BikeProfileSummaryBuilder.buildSummarySnapshot(
-      bike: bike,
-      intakeProfile: effectiveProfile.intakeProfile,
-      technicalValues: technicalValues,
-      lastConfirmedAt: confirmedAt,
-    );
+    final summarySnapshot = <String, dynamic>{
+      ...effectiveProfile.summarySnapshot,
+      ...BikeProfileSummaryBuilder.buildSummarySnapshot(
+        bike: bike,
+        intakeProfile: effectiveProfile.intakeProfile,
+        technicalValues: technicalValues,
+        lastConfirmedAt: confirmedAt,
+      ),
+    };
+    final technicalProfile = <String, dynamic>{
+      ...effectiveProfile.technicalProfile,
+      'values': technicalValues,
+      'sources': technicalSources,
+      'confirmed': technicalConfirmed,
+    };
 
     return effectiveProfile.copyWith(
-      technicalProfile: {
-        'values': technicalValues,
-        'sources': technicalSources,
-        'confirmed': technicalConfirmed,
-      },
+      technicalProfile: technicalProfile,
       summarySnapshot: summarySnapshot,
       lastConfirmedAt: confirmedAt,
-      updatedAt: confirmedAt,
+      updatedAt: effectiveProfile.updatedAt,
     );
   }
 

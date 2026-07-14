@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../services/website_service.dart';
 import '../models/website_page_models.dart';
+import '../models/website_destination.dart';
 import '../widgets/website_link_value_editor.dart';
 import '../../inventory/services/category_service.dart';
 import '../../inventory/models/category_models.dart' as cat_models;
@@ -1217,6 +1218,10 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
       // If that's true, it DOES NOT create the `link` passed in, it only creates the subcategories.
       // So we can safely pass a dummy link here.
 
+      final effectiveLinkType = _linkType == NavLinkType.page
+          ? WebsiteDestination.navigationTypeForHref(linkValue)
+          : _linkType;
+
       final nav = WebsiteNavigation(
         id: widget.link?.id ?? '',
         tenantId: widget.link?.tenantId ?? '',
@@ -1224,7 +1229,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         label: _labelController.text.trim().isEmpty
             ? 'BULK_ADD_PLACEHOLDER'
             : _labelController.text.trim(),
-        linkType: _linkType,
+        linkType: effectiveLinkType,
         linkValue: linkValue,
         orderIndex: widget.link?.orderIndex ?? 0,
         isVisible: _isVisible,

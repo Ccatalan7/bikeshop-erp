@@ -25,13 +25,14 @@ import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/website_link_value_editor.dart';
+import '../../modules/website/widgets/website_workspace_scope.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../../modules/website/models/website_destination.dart';
 import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
     show
         AnalyticsDashboardPage,
-        ContentManagementPage,
         FeaturedProductsPage,
         HierarchicalCategoryPage,
         IntegrationsPage,
@@ -40,8 +41,9 @@ import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
         PageManagementPage,
         PaymentMethodsSettingsPage,
         ProductWebsiteVisibilityPage,
-        ProductListPage,
+        WebsiteCatalogSection,
         SeoSettingsPage,
+        WebsiteDestinationManagementPage,
         WebsiteManagementPage,
         WebsiteSettingsPage;
 import '../../shared/services/tenant_service.dart';
@@ -137,16 +139,14 @@ class PublicStoreLayout extends StatefulWidget {
 
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const double _externalEditorPanelWidth = 380;
+  static const String _actionPageEditorWorkspace = 'workspace_page_editor';
+  static const String _actionEcomCatalog = 'ecom_catalog';
   static const String _actionSitePages = 'site_pages';
   static const String _actionSiteNavigation = 'site_navigation';
-  static const String _actionSiteContent = 'site_content';
+  static const String _actionSiteDestinations = 'site_destinations';
   static const String _actionSiteSettings = 'site_settings';
   static const String _actionSiteOpenWebsiteHub = 'site_hub';
 
-  static const String _actionEcomProducts = 'ecom_products';
-  static const String _actionEcomVisibility = 'ecom_visibility';
-  static const String _actionEcomCategories = 'ecom_categories';
-  static const String _actionEcomFeatured = 'ecom_featured';
   static const String _actionEcomOrders = 'ecom_orders';
   static const String _actionEcomGoogle = 'ecom_google';
 
@@ -170,6 +170,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   bool _isConfigHubOpen = false;
   _EditorConfigHubTab _configHubTab = _EditorConfigHubTab.siteHub;
+  _EditorCatalogTab _catalogTab = _EditorCatalogTab.products;
+  _EditorCategoryTab _categoryTab = _EditorCategoryTab.publication;
 
   Future<void>? _erpLibraryFuture;
 
@@ -325,12 +327,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final href = pickedHref.trim();
     if (href.isEmpty) return;
 
-    final inferredType =
-        href.startsWith('http://') || href.startsWith('https://')
-            ? NavLinkType.external
-            : href.startsWith('#')
-                ? NavLinkType.anchor
-                : NavLinkType.page;
+    final inferredType = WebsiteDestination.navigationTypeForHref(href);
 
     var openInNewTab = effective.openInNewTab;
     if (inferredType == NavLinkType.external) {
@@ -812,6 +809,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             )
           : websiteService.getSetting('theme_body_size', ''),
     );
+    String getThemeSetting(String key, String fallback) {
+      return isInEditorContext
+          ? editProvider.getEffectiveThemeSetting(
+              key,
+              websiteService.getSetting(key, fallback),
+            )
+          : websiteService.getSetting(key, fallback);
+    }
 
     final websiteTheme = WebsiteThemeBuilder.build(
       base: Theme.of(context),
@@ -822,6 +827,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       bodyFont: bodyFont,
       headingSize: headingSize,
       bodySize: bodySize,
+      buttonStyle: getThemeSetting('button_style', 'rounded'),
+      buttonSize: getThemeSetting('button_size', 'medium'),
     );
 
     // Header settings (DJI-style customization)
@@ -1213,7 +1220,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
       final shouldReserveRightSpaceForExternalPanel =
           widget.useExternalEditorPanel &&
-              devicePreviewMode == DevicePreviewMode.desktop;
+              devicePreviewMode == DevicePreviewMode.desktop &&
+              !_isConfigHubOpen;
 
       Widget overlayLayer = _buildConfigHubOverlay();
       if (shouldReserveRightSpaceForExternalPanel) {
@@ -1252,23 +1260,24 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 ],
               ),
             ),
-            DeferredWebsiteEditorPanel(
-              onSave: () async {
-                await _saveChanges(context, editProvider, websiteService);
-                if (context.mounted) {
+            if (!_isConfigHubOpen)
+              DeferredWebsiteEditorPanel(
+                onSave: () async {
+                  await _saveChanges(context, editProvider, websiteService);
+                  if (context.mounted) {
+                    editProvider.switchToPreviewMode();
+                  }
+                },
+                onRestoreComplete: () => _reloadEditorAfterBackupRestore(
+                  context,
+                  editProvider,
+                  websiteService,
+                ),
+                onDiscard: () {
+                  editProvider.discardPendingChanges();
                   editProvider.switchToPreviewMode();
-                }
-              },
-              onRestoreComplete: () => _reloadEditorAfterBackupRestore(
-                context,
-                editProvider,
-                websiteService,
+                },
               ),
-              onDiscard: () {
-                editProvider.discardPendingChanges();
-                editProvider.switchToPreviewMode();
-              },
-            ),
           ],
         );
       }
@@ -1408,9 +1417,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       ),
     );
 
-    return Theme(
-      data: websiteTheme,
-      child: mainContent,
+    return WebsiteWorkspaceScope(
+      onOpen: _openWorkspacePanel,
+      child: Theme(
+        data: websiteTheme,
+        child: mainContent,
+      ),
     );
   }
 
@@ -1447,117 +1459,76 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ],
           ),
           const SizedBox(width: 24),
-          // Navigation items
+          // Task-oriented workspace navigation. Management screens replace the
+          // canvas instead of competing with the block inspector.
+          _buildPreviewWorkspaceButton(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Editar página',
+            icon: Icons.edit_outlined,
+            actionId: _actionPageEditorWorkspace,
+            isActive:
+                editProvider.workspaceMode == WebsiteWorkspaceMode.pageEditor,
+          ),
+          _buildPreviewWorkspaceButton(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Catálogo web',
+            icon: Icons.storefront_outlined,
+            actionId: _actionEcomCatalog,
+            isActive:
+                editProvider.workspaceMode == WebsiteWorkspaceMode.catalog,
+          ),
           _buildPreviewNavMenu(
             context: context,
             editProvider: editProvider,
             websiteService: websiteService,
-            label: 'Sitio',
-            isActive: true,
+            label: 'Estructura',
+            isActive:
+                editProvider.workspaceMode == WebsiteWorkspaceMode.structure,
             actions: const [
               _PreviewNavAction(
                 id: _actionSitePages,
-                label: 'Páginas (administrar)',
+                label: 'Páginas',
                 icon: Icons.description_outlined,
               ),
               _PreviewNavAction(
                 id: _actionSiteNavigation,
-                label: 'Navegación / Menú',
+                label: 'Navegación y menús',
                 icon: Icons.menu,
               ),
               _PreviewNavAction(
-                id: _actionSiteContent,
-                label: 'Contenido (banners / textos)',
-                icon: Icons.collections_outlined,
+                id: _actionSiteDestinations,
+                label: 'Destinos y enlaces',
+                icon: Icons.account_tree_outlined,
               ),
+            ],
+          ),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Ajustes',
+            isActive:
+                editProvider.workspaceMode == WebsiteWorkspaceMode.settings,
+            actions: const [
               _PreviewNavAction(
                 id: _actionSiteSettings,
-                label: 'Ajustes del sitio (tema / header / footer)',
+                label: 'Sitio, tema y contacto',
                 icon: Icons.tune,
               ),
               _PreviewNavAction(
-                id: _actionSiteOpenWebsiteHub,
-                label: 'Centro del Sitio Web',
-                icon: Icons.dashboard_outlined,
-              ),
-            ],
-          ),
-          _buildPreviewNavMenu(
-            context: context,
-            editProvider: editProvider,
-            websiteService: websiteService,
-            label: 'Tienda',
-            isActive: false,
-            actions: const [
-              _PreviewNavAction(
-                id: _actionEcomProducts,
-                label: 'Productos (publicar en web)',
-                icon: Icons.inventory_2_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionEcomVisibility,
-                label: 'Visibilidad de productos',
-                icon: Icons.visibility_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionEcomCategories,
-                label: 'Categorías',
-                icon: Icons.category_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionEcomFeatured,
-                label: 'Productos destacados (home)',
-                icon: Icons.star_outline,
-              ),
-              _PreviewNavAction(
-                id: _actionEcomOrders,
-                label: 'Pedidos online',
-                icon: Icons.shopping_bag_outlined,
-              ),
-            ],
-          ),
-          _buildPreviewNavMenu(
-            context: context,
-            editProvider: editProvider,
-            websiteService: websiteService,
-            label: 'Google',
-            isActive: false,
-            actions: const [
-              _PreviewNavAction(
                 id: _actionConfigWebsiteSettings,
-                label: 'SEO (Merchant / Search)',
+                label: 'SEO',
                 icon: Icons.manage_search_outlined,
               ),
               _PreviewNavAction(
                 id: _actionConfigIntegrations,
-                label: 'Integraciones (Google Merchant)',
+                label: 'Integraciones',
                 icon: Icons.extension_outlined,
               ),
-              _PreviewNavAction(
-                id: _actionGoogleOpenMerchantFeed,
-                label: 'Abrir feed de productos',
-                icon: Icons.feed_outlined,
-              ),
-              _PreviewNavAction(
-                id: _actionGoogleCopyMerchantFeed,
-                label: 'Copiar feed de productos',
-                icon: Icons.copy,
-              ),
-              _PreviewNavAction.divider(),
-              _PreviewNavAction(
-                id: _actionReportsAnalytics,
-                label: 'Analytics (Google)',
-                icon: Icons.analytics_outlined,
-              ),
-            ],
-          ),
-          _buildPreviewNavMenu(
-            context: context,
-            editProvider: editProvider,
-            websiteService: websiteService,
-            label: 'Configuración',
-            isActive: false,
-            actions: const [
               _PreviewNavAction(
                 id: _actionConfigDomain,
                 label: 'Dominio y URL',
@@ -1567,6 +1538,42 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 id: _actionConfigPaymentMethods,
                 label: 'Métodos de pago',
                 icon: Icons.payments_outlined,
+              ),
+            ],
+          ),
+          _buildPreviewNavMenu(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            label: 'Más',
+            isActive:
+                editProvider.workspaceMode == WebsiteWorkspaceMode.operations,
+            actions: const [
+              _PreviewNavAction(
+                id: _actionEcomOrders,
+                label: 'Pedidos online',
+                icon: Icons.shopping_bag_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionReportsAnalytics,
+                label: 'Analytics',
+                icon: Icons.analytics_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionSiteOpenWebsiteHub,
+                label: 'Centro del Sitio Web',
+                icon: Icons.dashboard_outlined,
+              ),
+              _PreviewNavAction.divider(),
+              _PreviewNavAction(
+                id: _actionGoogleOpenMerchantFeed,
+                label: 'Abrir feed de productos',
+                icon: Icons.feed_outlined,
+              ),
+              _PreviewNavAction(
+                id: _actionGoogleCopyMerchantFeed,
+                label: 'Copiar feed de productos',
+                icon: Icons.copy,
               ),
             ],
           ),
@@ -1620,127 +1627,133 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
           const SizedBox(width: 16),
 
-          // Mobile preview button
-          PopupMenuButton<DevicePreviewMode>(
-            tooltip: 'Vista (dispositivo)',
-            initialValue: editProvider.devicePreviewMode,
-            onSelected: (mode) => editProvider.setDevicePreviewMode(mode),
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: DevicePreviewMode.desktop,
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.desktop_windows_outlined),
-                  title: Text('Desktop'),
+          if (editProvider.isPageEditorWorkspace) ...[
+            // Device preview belongs to page composition, not management.
+            PopupMenuButton<DevicePreviewMode>(
+              tooltip: 'Vista (dispositivo)',
+              initialValue: editProvider.devicePreviewMode,
+              onSelected: (mode) => editProvider.setDevicePreviewMode(mode),
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: DevicePreviewMode.desktop,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.desktop_windows_outlined),
+                    title: Text('Desktop'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: DevicePreviewMode.tablet,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.tablet_mac_outlined),
+                    title: Text('Tablet'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: DevicePreviewMode.mobile,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(Icons.phone_android_outlined),
+                    title: Text('Móvil'),
+                  ),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(
+                  editProvider.devicePreviewMode == DevicePreviewMode.desktop
+                      ? Icons.desktop_windows
+                      : editProvider.devicePreviewMode ==
+                              DevicePreviewMode.tablet
+                          ? Icons.tablet_mac
+                          : Icons.phone_android,
+                  color: Colors.white70,
+                  size: 20,
                 ),
               ),
-              PopupMenuItem(
-                value: DevicePreviewMode.tablet,
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.tablet_mac_outlined),
-                  title: Text('Tablet'),
-                ),
+            ),
+            const SizedBox(width: 4),
+
+            // Screenshot button
+            IconButton(
+              onPressed: _isCapturingScreenshot
+                  ? null
+                  : () => _captureFullPageScreenshot(context, editProvider),
+              icon: _isCapturingScreenshot
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white70,
+                      ),
+                    )
+                  : const Icon(Icons.camera_alt_outlined,
+                      color: Colors.white70, size: 20),
+              tooltip: 'Capturar página',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+            const SizedBox(width: 8),
+
+            // New page button
+            TextButton(
+              onPressed: () => _showQuickCreatePageDialog(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
-              PopupMenuItem(
-                value: DevicePreviewMode.mobile,
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(Icons.phone_android_outlined),
-                  title: Text('Móvil'),
-                ),
+              child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
+            ),
+            const SizedBox(width: 8),
+
+            // Main mode button (Preview -> Edit, Edit -> Preview)
+            ElevatedButton(
+              onPressed: () {
+                // IMPORTANT: Mode is controlled by BOTH provider state and URL query params.
+                // If we only flip provider state while the URL still has ?edit=true,
+                // the page will immediately force edit mode again (bounce).
+                final state = GoRouterState.of(context);
+                final currentUri = state.uri;
+
+                final qp = Map<String, String>.from(currentUri.queryParameters);
+                qp.remove('edit');
+                qp.remove('preview');
+
+                if (isEditMode) {
+                  // Go to preview mode (remove edit=true)
+                  qp['preview'] = 'true';
+                  editProvider.switchToPreviewMode();
+                } else {
+                  // Go to edit mode (remove preview=true)
+                  qp['edit'] = 'true';
+                  editProvider.switchToEditMode();
+                }
+
+                final nextUri = Uri(
+                  path: currentUri.path,
+                  queryParameters: qp.isEmpty ? null : qp,
+                );
+                context.go(_routeForPublicStore(nextUri.toString()));
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
               ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Icon(
-                editProvider.devicePreviewMode == DevicePreviewMode.desktop
-                    ? Icons.desktop_windows
-                    : editProvider.devicePreviewMode == DevicePreviewMode.tablet
-                        ? Icons.tablet_mac
-                        : Icons.phone_android,
-                color: Colors.white70,
-                size: 20,
+              child: Text(
+                isEditMode ? 'Vista previa' : 'Editar',
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-
-          // Screenshot button
-          IconButton(
-            onPressed: _isCapturingScreenshot
-                ? null
-                : () => _captureFullPageScreenshot(context, editProvider),
-            icon: _isCapturingScreenshot
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white70,
-                    ),
-                  )
-                : const Icon(Icons.camera_alt_outlined,
-                    color: Colors.white70, size: 20),
-            tooltip: 'Capturar página',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-          const SizedBox(width: 8),
-
-          // New page button
-          TextButton(
-            onPressed: () => _showQuickCreatePageDialog(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-            child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
-          ),
-          const SizedBox(width: 8),
-
-          // Main mode button (Preview -> Edit, Edit -> Preview)
-          ElevatedButton(
-            onPressed: () {
-              // IMPORTANT: Mode is controlled by BOTH provider state and URL query params.
-              // If we only flip provider state while the URL still has ?edit=true,
-              // the page will immediately force edit mode again (bounce).
-              final state = GoRouterState.of(context);
-              final currentUri = state.uri;
-
-              final qp = Map<String, String>.from(currentUri.queryParameters);
-              qp.remove('edit');
-              qp.remove('preview');
-
-              if (isEditMode) {
-                // Go to preview mode (remove edit=true)
-                qp['preview'] = 'true';
-                editProvider.switchToPreviewMode();
-              } else {
-                // Go to edit mode (remove preview=true)
-                qp['edit'] = 'true';
-                editProvider.switchToEditMode();
-              }
-
-              final nextUri = Uri(
-                path: currentUri.path,
-                queryParameters: qp.isEmpty ? null : qp,
-              );
-              context.go(_routeForPublicStore(nextUri.toString()));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4)),
-            ),
-            child: Text(
-              isEditMode ? 'Vista previa' : 'Editar',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
 
           // Close/exit button - go back to Website Management
           IconButton(
@@ -1811,6 +1824,60 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             const SizedBox(width: 4),
             const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewWorkspaceButton({
+    required BuildContext context,
+    required WebsiteEditModeProvider editProvider,
+    required WebsiteService websiteService,
+    required String label,
+    required IconData icon,
+    required String actionId,
+    required bool isActive,
+  }) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => _handleTopBarAction(
+          context: context,
+          editProvider: editProvider,
+          websiteService: websiteService,
+          actionId: actionId,
+        ),
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white.withValues(alpha: 0.1) : null,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isActive
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.6),
+                  fontSize: 13,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2269,6 +2336,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     }
 
     switch (actionId) {
+      case _actionPageEditorWorkspace:
+        _closeConfigHub();
+        return;
+      case _actionEcomCatalog:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_EditorConfigHubTab.ecomCatalog);
+          return;
+        }
+        goAdmin('/website/product-visibility');
+        return;
+
       // Site
       case _actionSitePages:
         if (editProvider.isInEditorContext) {
@@ -2284,12 +2362,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         }
         goAdmin('/website/navigation');
         return;
-      case _actionSiteContent:
+      case _actionSiteDestinations:
         if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.siteContent);
+          _openConfigHub(_EditorConfigHubTab.siteDestinations);
           return;
         }
-        goAdmin('/website/content');
+        goAdmin('/website/destinations');
         return;
       case _actionSiteSettings:
         if (editProvider.isInEditorContext) {
@@ -2307,34 +2385,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         return;
 
       // E-commerce
-      case _actionEcomProducts:
-        if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.ecomProducts);
-          return;
-        }
-        goAdmin('/inventory/products');
-        return;
-      case _actionEcomVisibility:
-        if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.ecomVisibility);
-          return;
-        }
-        goAdmin('/website/product-visibility');
-        return;
-      case _actionEcomCategories:
-        if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.ecomCategories);
-          return;
-        }
-        goAdmin('/inventory/categories');
-        return;
-      case _actionEcomFeatured:
-        if (editProvider.isInEditorContext) {
-          _openConfigHub(_EditorConfigHubTab.ecomFeatured);
-          return;
-        }
-        goAdmin('/website/featured');
-        return;
       case _actionEcomOrders:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.ecomOrders);
@@ -6022,14 +6072,66 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   void _openConfigHub(_EditorConfigHubTab tab) {
+    context
+        .read<WebsiteEditModeProvider>()
+        .openWorkspace(_workspaceModeForConfigTab(tab));
     setState(() {
       _configHubTab = tab;
       _isConfigHubOpen = true;
     });
   }
 
+  void _openWorkspacePanel(WebsiteWorkspacePanel panel) {
+    switch (panel) {
+      case WebsiteWorkspacePanel.pages:
+        _openConfigHub(_EditorConfigHubTab.sitePages);
+        return;
+      case WebsiteWorkspacePanel.navigation:
+        _openConfigHub(_EditorConfigHubTab.siteNavigation);
+        return;
+      case WebsiteWorkspacePanel.destinations:
+        _openConfigHub(_EditorConfigHubTab.siteDestinations);
+        return;
+      case WebsiteWorkspacePanel.catalogProducts:
+        setState(() => _catalogTab = _EditorCatalogTab.products);
+        _openConfigHub(_EditorConfigHubTab.ecomCatalog);
+        return;
+      case WebsiteWorkspacePanel.catalogCategories:
+        setState(() {
+          _catalogTab = _EditorCatalogTab.categories;
+          _categoryTab = _EditorCategoryTab.publication;
+        });
+        _openConfigHub(_EditorConfigHubTab.ecomCatalog);
+        return;
+    }
+  }
+
   void _closeConfigHub() {
-    setState(() => _isConfigHubOpen = false);
+    context.read<WebsiteEditModeProvider>().returnToPageEditor();
+    if (_isConfigHubOpen) {
+      setState(() => _isConfigHubOpen = false);
+    }
+  }
+
+  WebsiteWorkspaceMode _workspaceModeForConfigTab(_EditorConfigHubTab tab) {
+    switch (tab) {
+      case _EditorConfigHubTab.ecomCatalog:
+        return WebsiteWorkspaceMode.catalog;
+      case _EditorConfigHubTab.sitePages:
+      case _EditorConfigHubTab.siteNavigation:
+      case _EditorConfigHubTab.siteDestinations:
+        return WebsiteWorkspaceMode.structure;
+      case _EditorConfigHubTab.siteSettings:
+      case _EditorConfigHubTab.seo:
+      case _EditorConfigHubTab.integrations:
+      case _EditorConfigHubTab.paymentMethods:
+      case _EditorConfigHubTab.domain:
+        return WebsiteWorkspaceMode.settings;
+      case _EditorConfigHubTab.siteHub:
+      case _EditorConfigHubTab.ecomOrders:
+      case _EditorConfigHubTab.reportsAnalytics:
+        return WebsiteWorkspaceMode.operations;
+    }
   }
 
   Widget _buildConfigHubOverlay() {
@@ -6061,20 +6163,31 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               return erp.PageManagementPage(embedded: true);
             case _EditorConfigHubTab.siteNavigation:
               return erp.NavigationManagementPage(embedded: true);
-            case _EditorConfigHubTab.siteContent:
-              return erp.ContentManagementPage(embedded: true);
+            case _EditorConfigHubTab.siteDestinations:
+              return erp.WebsiteDestinationManagementPage(
+                embedded: true,
+                onOpenPages: () =>
+                    _openConfigHub(_EditorConfigHubTab.sitePages),
+                onOpenNavigation: () =>
+                    _openConfigHub(_EditorConfigHubTab.siteNavigation),
+                onOpenCatalogProducts: () {
+                  setState(() => _catalogTab = _EditorCatalogTab.products);
+                  _openConfigHub(_EditorConfigHubTab.ecomCatalog);
+                },
+                onOpenCatalogCategories: () {
+                  setState(() {
+                    _catalogTab = _EditorCatalogTab.categories;
+                    _categoryTab = _EditorCategoryTab.publication;
+                  });
+                  _openConfigHub(_EditorConfigHubTab.ecomCatalog);
+                },
+              );
             case _EditorConfigHubTab.siteSettings:
               return erp.WebsiteSettingsPage(embedded: true);
 
             // E-commerce
-            case _EditorConfigHubTab.ecomProducts:
-              return erp.ProductListPage(embedded: true);
-            case _EditorConfigHubTab.ecomVisibility:
-              return erp.ProductWebsiteVisibilityPage(embedded: true);
-            case _EditorConfigHubTab.ecomCategories:
-              return erp.HierarchicalCategoryPage(embedded: true);
-            case _EditorConfigHubTab.ecomFeatured:
-              return erp.FeaturedProductsPage(embedded: true);
+            case _EditorConfigHubTab.ecomCatalog:
+              return _buildCatalogWorkspace(theme);
             case _EditorConfigHubTab.ecomOrders:
               return erp.OnlineOrdersPage(embedded: true);
 
@@ -6114,12 +6227,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
             child: Row(
               children: [
-                IconButton(
-                  tooltip: 'Cerrar',
-                  icon: const Icon(Icons.close),
+                TextButton.icon(
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Volver al editor'),
                   onPressed: _closeConfigHub,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 24,
+                  child: VerticalDivider(color: theme.dividerColor),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _configHubTab.title,
@@ -6127,6 +6245,32 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                         ?.copyWith(fontWeight: FontWeight.w600),
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                Builder(
+                  builder: (context) {
+                    final editProvider =
+                        context.watch<WebsiteEditModeProvider>();
+                    if (!editProvider.hasUnsavedChanges) {
+                      return const SizedBox.shrink();
+                    }
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Borrador de página preservado',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onTertiaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -6136,6 +6280,125 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCatalogWorkspace(ThemeData theme) {
+    final selectedSection = _catalogTab == _EditorCatalogTab.categories
+        ? erp.WebsiteCatalogSection.categories
+        : erp.WebsiteCatalogSection.products;
+
+    Widget body;
+    if (_catalogTab == _EditorCatalogTab.featured) {
+      body = erp.FeaturedProductsPage(embedded: true);
+    } else if (_catalogTab == _EditorCatalogTab.categories &&
+        _categoryTab == _EditorCategoryTab.structure) {
+      body = erp.HierarchicalCategoryPage(embedded: true);
+    } else {
+      body = erp.ProductWebsiteVisibilityPage(
+        embedded: true,
+        section: selectedSection,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Catálogo web',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Publica productos, categorías y la colección destacada desde un solo lugar.',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SegmentedButton<_EditorCatalogTab>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(
+                        value: _EditorCatalogTab.products,
+                        icon: Icon(Icons.inventory_2_outlined, size: 17),
+                        label: Text('Productos'),
+                      ),
+                      ButtonSegment(
+                        value: _EditorCatalogTab.categories,
+                        icon: Icon(Icons.category_outlined, size: 17),
+                        label: Text('Categorías'),
+                      ),
+                      ButtonSegment(
+                        value: _EditorCatalogTab.featured,
+                        icon: Icon(Icons.star_outline, size: 17),
+                        label: Text('Destacados'),
+                      ),
+                    ],
+                    selected: {_catalogTab},
+                    onSelectionChanged: (selection) {
+                      setState(() => _catalogTab = selection.first);
+                    },
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+              if (_catalogTab == _EditorCatalogTab.categories) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: SegmentedButton<_EditorCategoryTab>(
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: const [
+                      ButtonSegment(
+                        value: _EditorCategoryTab.publication,
+                        label: Text('Publicación web'),
+                      ),
+                      ButtonSegment(
+                        value: _EditorCategoryTab.structure,
+                        label: Text('Estructura y nombres'),
+                      ),
+                    ],
+                    selected: {_categoryTab},
+                    onSelectionChanged: (selection) {
+                      setState(() => _categoryTab = selection.first);
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(child: body),
+      ],
     );
   }
 
@@ -6218,19 +6481,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 }
 
+enum _EditorCatalogTab { products, categories, featured }
+
+enum _EditorCategoryTab { publication, structure }
+
 enum _EditorConfigHubTab {
   // Site
   siteHub,
   sitePages,
   siteNavigation,
-  siteContent,
+  siteDestinations,
   siteSettings,
 
   // E-commerce
-  ecomProducts,
-  ecomVisibility,
-  ecomCategories,
-  ecomFeatured,
+  ecomCatalog,
   ecomOrders,
 
   // Reports
@@ -6252,18 +6516,12 @@ extension on _EditorConfigHubTab {
         return 'Páginas';
       case _EditorConfigHubTab.siteNavigation:
         return 'Navegación';
-      case _EditorConfigHubTab.siteContent:
-        return 'Contenido';
+      case _EditorConfigHubTab.siteDestinations:
+        return 'Destinos y enlaces';
       case _EditorConfigHubTab.siteSettings:
         return 'Ajustes del sitio';
-      case _EditorConfigHubTab.ecomProducts:
-        return 'Productos (publicar en web)';
-      case _EditorConfigHubTab.ecomVisibility:
-        return 'Visibilidad de productos';
-      case _EditorConfigHubTab.ecomCategories:
-        return 'Categorías';
-      case _EditorConfigHubTab.ecomFeatured:
-        return 'Productos destacados (home)';
+      case _EditorConfigHubTab.ecomCatalog:
+        return 'Catálogo web';
       case _EditorConfigHubTab.ecomOrders:
         return 'Pedidos online';
       case _EditorConfigHubTab.reportsAnalytics:

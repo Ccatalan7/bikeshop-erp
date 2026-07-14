@@ -289,6 +289,113 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  Future<BikeAggregate> getBikeAggregate(String bikeId) async {
+    try {
+      if (bikeId.isEmpty) {
+        throw ArgumentError.value(bikeId, 'bikeId', 'Must not be empty');
+      }
+
+      final data = await Supabase.instance.client.rpc(
+        'get_bike_aggregate',
+        params: {'p_bike_id': bikeId},
+      );
+      if (data is! Map) {
+        throw const FormatException('Invalid bicycle aggregate response');
+      }
+
+      return BikeAggregate.fromJson(Map<String, dynamic>.from(data));
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike aggregate: $e');
+      rethrow;
+    }
+  }
+
+  /// Saves bicycle identity and optional profile truth as one PostgreSQL
+  /// transaction. The operation key must be reused after an uncertain network
+  /// outcome; the server will replay the committed aggregate instead of
+  /// creating a duplicate or applying a partial save.
+  Future<BikeAggregateSaveResult> saveBikeAggregate({
+    required Bike bike,
+    required BikeProfile? profile,
+    required String operationKey,
+    DateTime? expectedBikeUpdatedAt,
+    DateTime? expectedProfileUpdatedAt,
+  }) async {
+    try {
+      final bikeId = bike.id;
+      if (bikeId == null || bikeId.isEmpty) {
+        throw ArgumentError('Atomic bicycle save requires a stable bike id');
+      }
+
+      final bikePayload = Map<String, dynamic>.from(bike.toJson())
+        ..remove('id')
+        ..remove('tenant_id')
+        ..remove('customer_id')
+        ..remove('created_at')
+        ..remove('updated_at');
+      final profilePayload = profile == null
+          ? null
+          : (Map<String, dynamic>.from(profile.toJson())
+            ..remove('tenant_id')
+            ..remove('bike_id')
+            ..remove('created_at')
+            ..remove('updated_at'));
+
+      final data = await Supabase.instance.client.rpc(
+        'save_bike_aggregate',
+        params: {
+          'p_operation_key': operationKey,
+          'p_bike_id': bikeId,
+          'p_customer_id': bike.customerId,
+          'p_expected_bike_updated_at':
+              expectedBikeUpdatedAt?.toUtc().toIso8601String(),
+          'p_expected_profile_updated_at':
+              expectedProfileUpdatedAt?.toUtc().toIso8601String(),
+          'p_bike_payload': bikePayload,
+          'p_profile_payload': profilePayload,
+        },
+      );
+      if (data is! Map) {
+        throw const FormatException('Invalid bicycle save response');
+      }
+
+      final result = BikeAggregateSaveResult.fromJson(
+        Map<String, dynamic>.from(data),
+      );
+      invalidateBikesCache();
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) print('Error saving bike aggregate: $e');
+      rethrow;
+    }
+  }
+
+  Future<BikeAggregateSaveResult?> getBikeAggregateSaveOperation(
+    String operationKey,
+  ) async {
+    try {
+      if (operationKey.trim().isEmpty) return null;
+      final data = await Supabase.instance.client.rpc(
+        'get_bike_aggregate_save_operation',
+        params: {'p_operation_key': operationKey.trim()},
+      );
+      if (data == null) return null;
+      if (data is! Map) {
+        throw const FormatException('Invalid bicycle save receipt response');
+      }
+      final result = BikeAggregateSaveResult.fromJson(
+        Map<String, dynamic>.from(data),
+      );
+      invalidateBikesCache();
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching bike save receipt: $e');
+      rethrow;
+    }
+  }
+
   Future<Bike> createBike(Bike bike) async {
     try {
       final data = await _db.insert('bikes', bike.toJson());
@@ -359,12 +466,55 @@ class BikeshopService extends ChangeNotifier {
       existing ??= await getBikeProfile(profile.bikeId);
 
       if (existing != null && existing.id != null) {
+        // An id-less profile means the caller did not load an authoritative
+        // existing snapshot (for example, a service-wizard promotion after a
+        // transient read failure). Merge that narrow promotion into current
+        // upstream truth instead of replacing the complete ficha with a
+        // partial/default map. Authoritative editors carry the persisted id and
+        // may still intentionally replace/remove rendered keys.
+        final profileToSave = profile.id == null
+            ? BikeProfile(
+                id: existing.id,
+                tenantId: existing.tenantId,
+                bikeId: existing.bikeId,
+                catalogBikeId: profile.catalogBikeId ?? existing.catalogBikeId,
+                intakeProfile: {
+                  ...existing.intakeProfile,
+                  ...profile.intakeProfile,
+                },
+                technicalProfile: {
+                  ...existing.technicalProfile,
+                  ...profile.technicalProfile,
+                  'values': {
+                    ...existing.technicalValues,
+                    ...profile.technicalValues,
+                  },
+                  'sources': {
+                    ...existing.technicalSources,
+                    ...profile.technicalSources,
+                  },
+                  'confirmed': {
+                    ...existing.technicalConfirmed,
+                    ...profile.technicalConfirmed,
+                  },
+                },
+                summarySnapshot: {
+                  ...existing.summarySnapshot,
+                  ...profile.summarySnapshot,
+                },
+                lastConfirmedAt:
+                    profile.lastConfirmedAt ?? existing.lastConfirmedAt,
+                createdAt: existing.createdAt,
+                updatedAt: profile.updatedAt,
+              )
+            : profile.copyWith(
+                id: existing.id,
+                createdAt: existing.createdAt,
+              );
         final data = await _db.update(
           'bike_profiles',
           existing.id!,
-          profile
-              .copyWith(id: existing.id, createdAt: existing.createdAt)
-              .toJson(),
+          profileToSave.toJson(),
         );
         final savedProfile = BikeProfile.fromJson(data);
         await _logBikeProfileEvent(savedProfile, isCreate: false);

@@ -1,4 +1,10 @@
- # Website Editor Refactor Handoff (Vinabike)
+# Website Editor Refactor Handoff (Vinabike)
+
+> **Historical document — do not use as current implementation guidance.**
+> The mandatory living contract is
+> [`docs/architecture/website-editor-contract.md`](../../architecture/website-editor-contract.md),
+> together with `docs/architecture/canonical-ui-surfaces.md` and
+> `.github/copilot-instructions.md`.
 
 Date: 2026-01-08
 

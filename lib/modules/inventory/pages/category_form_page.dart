@@ -197,6 +197,11 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
             : _descriptionController.text.trim(),
         imageUrl: finalImageUrl,
         isActive: _isActive,
+        // Website visibility is owned by Catálogo web. Preserve it when this
+        // inventory form edits taxonomy details so a harmless rename/image
+        // change never unpublishes the category.
+        showOnWebsite: _existingCategory?.showOnWebsite ?? false,
+        sortOrder: _existingCategory?.sortOrder ?? 0,
       );
 
       Category resultCategory;
@@ -867,7 +872,8 @@ class _CategoryTreePickerState extends State<_CategoryTreePicker> {
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [

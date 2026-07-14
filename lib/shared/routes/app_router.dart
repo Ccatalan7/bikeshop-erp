@@ -30,7 +30,6 @@ import 'erp_routes_barrel.dart' deferred as erp
         BrandListPage,
         CategoryFormPage,
         ClientLogbookPage,
-        ContentManagementPage,
         CompanySettingsPage,
         CustomerBikeDirectoryPage,
         CustomerFormPage,
@@ -83,6 +82,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         ProductType,
         InventoryCatalogScope,
         ProductWebsiteVisibilityPage,
+        WebsiteCatalogSection,
         ProductImportPage,
         ProductListPage,
         ServiceListPage,
@@ -108,6 +108,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         SupplierListPage,
         UserManagementPage,
         WebsiteManagementPage,
+        WebsiteDestinationManagementPage,
         WebsiteSettingsPage,
         WhatsAppWebModulePage,
         WheelBuilderWizardPage,
@@ -2556,6 +2557,17 @@ class AppRouter {
                 () => erp.NavigationManagementPage(),
               ),
             ),
+            // Canonical CTA/navigation integrity view
+            GoRoute(
+              path: 'destinations',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                erp.loadLibrary(),
+                () => erp.WebsiteDestinationManagementPage(),
+              ),
+            ),
             // Integrations (Dec 2025)
             GoRoute(
               path: 'integrations',
@@ -2597,19 +2609,18 @@ class AppRouter {
                 context,
                 state,
                 erp.loadLibrary(),
-                () => erp.ProductWebsiteVisibilityPage(),
+                () => erp.ProductWebsiteVisibilityPage(
+                  section: state.uri.queryParameters['section'] == 'categories'
+                      ? erp.WebsiteCatalogSection.categories
+                      : erp.WebsiteCatalogSection.products,
+                ),
               ),
             ),
-            // Content Management
+            // Legacy content records are not consumed by the storefront.
+            // Keep old bookmarks working, but land on the canonical view.
             GoRoute(
               path: 'content',
-              pageBuilder: (context, state) =>
-                  _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                erp.loadLibrary(),
-                () => erp.ContentManagementPage(),
-              ),
+              redirect: (context, state) => '/website/destinations',
             ),
             // Online Orders
             GoRoute(

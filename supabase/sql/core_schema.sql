@@ -35211,5 +35211,6 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260122000002_get_period_details.sql
 \ir ../migrations/20260712220000_fix_expense_period_details_contract.sql
 \ir ../migrations/20260713101500_restore_staff_negative_stock_sales.sql
+\ir ../migrations/20260714120000_add_atomic_bike_aggregate_save.sql
 
 commit;
