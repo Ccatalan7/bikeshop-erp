@@ -59,7 +59,15 @@ else
 fi
 
 if [[ "$environment" == production && "$write" == true ]]; then
-  die "Production writes are intentionally unsupported by this helper"
+  expected_production_ref="xzdvtzdqjeyqxnkqprtf"
+  linked_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"
+  connection_ref="${PGUSER#postgres.}"
+  [[ "${VINABIKE_DB_WRITE_CONFIRM:-}" == production ]] ||
+    die "Production writes require VINABIKE_DB_WRITE_CONFIRM=production"
+  [[ "$linked_ref" == "$expected_production_ref" ]] ||
+    die "Linked project is not the approved production project"
+  [[ "$connection_ref" == "$expected_production_ref" ]] ||
+    die "Production connection identity does not match the approved project"
 fi
 if [[ "$environment" == staging && "$write" == true && "${VINABIKE_DB_WRITE_CONFIRM:-}" != staging ]]; then
   die "Staging writes require VINABIKE_DB_WRITE_CONFIRM=staging"

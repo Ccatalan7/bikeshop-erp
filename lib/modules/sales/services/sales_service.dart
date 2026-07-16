@@ -309,23 +309,9 @@ class SalesService extends ChangeNotifier {
       );
       _upsertInvoice(savedInvoice);
 
-      // EXPLICIT SYNC: If this invoice is linked to a trabajo, sync items back to mechanic_job_items.
-      // This is a reliable fallback in addition to the DB trigger (trg_sales_invoices_change).
-      // The RPC ignores the flag guards since it runs outside the trigger transaction.
-      if (savedInvoice.id != null) {
-        try {
-          await _databaseService.supabase.rpc(
-            'sync_invoice_items_to_job',
-            params: {'p_invoice_id': savedInvoice.id},
-          );
-          debugPrint(
-              '🔁 [SalesService] sync_invoice_items_to_job called for ${savedInvoice.id}');
-        } catch (e) {
-          // Non-fatal: invoice was saved correctly, only trabajo sync failed
-          debugPrint(
-              '⚠️ [SalesService] sync_invoice_items_to_job failed (non-fatal): $e');
-        }
-      }
+      // The database trigger is the sole invoice -> workshop synchronizer.
+      // Calling the RPC again here used to duplicate work and expand the
+      // failure window after the invoice transaction had already committed.
 
       // GUARD: Mark this invoice as "just saved" to ignore stale realtime updates for 5s
       if (savedInvoice.id != null) {
@@ -542,6 +528,60 @@ class SalesService extends ChangeNotifier {
     } catch (e) {
       // Propagate actual error for debugging
       rethrow;
+    }
+  }
+
+  /// Registers a sales payment and applies the payment-terminal tax choice to
+  /// the whole invoice in the same database transaction.
+  ///
+  /// Revenue and IVA remain invoice-owned; the payment journal only settles
+  /// accounts receivable. The RPC also posts draft/sent invoices before cash
+  /// settlement and protects retries with [Payment.idempotencyKey].
+  Future<Payment> registerPaymentWithInvoiceTax(
+    Payment payment,
+    TaxTreatment taxTreatment,
+  ) async {
+    final idempotencyKey = payment.idempotencyKey?.trim();
+    if (idempotencyKey == null || idempotencyKey.isEmpty) {
+      throw ArgumentError('El pago requiere una clave idempotente.');
+    }
+
+    try {
+      final response = await _databaseService.supabase.rpc(
+        'register_sales_payment_with_invoice_tax',
+        params: {
+          'p_invoice_id': payment.invoiceId,
+          'p_payment_method_id': payment.paymentMethodId,
+          'p_idempotency_key': idempotencyKey,
+          'p_amount': payment.amount.round(),
+          'p_date': payment.date.toUtc().toIso8601String(),
+          'p_reference': payment.reference,
+          'p_notes': payment.notes,
+          'p_tax_treatment': taxTreatment.toValue(),
+        },
+      );
+
+      final payload = Map<String, dynamic>.from(response as Map);
+      final rawPayment = payload['payment'];
+      if (rawPayment is! Map) {
+        throw StateError('El comando de pago no devolvió un pago válido.');
+      }
+
+      final savedPayment = Payment.fromJson(
+        Map<String, dynamic>.from(rawPayment),
+      );
+      _upsertPayment(savedPayment);
+      await fetchInvoice(savedPayment.invoiceId, refresh: true);
+      await loadPayments(forceRefresh: true);
+      await _accountingService.initialize();
+      await _accountingService.journalEntries.loadJournalEntries();
+      invalidateInvoicesCache();
+      invalidatePaymentsCache();
+      AccountingDashboardSection.invalidateCache();
+      notifyListeners();
+      return savedPayment;
+    } catch (e) {
+      throw Exception('No se pudo registrar el pago: $e');
     }
   }
 

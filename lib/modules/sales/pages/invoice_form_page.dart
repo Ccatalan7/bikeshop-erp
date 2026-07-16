@@ -112,7 +112,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
   InvoiceStatus _status = InvoiceStatus.draft;
   TaxTreatment _taxTreatment =
       TaxTreatment.noTax; // Default: no tax (cash/transfer common)
-  String? _paymentMethodHint; // 'card' or 'other' - for smart tax validation
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
   bool get _canEditFields => _status != InvoiceStatus.paid && _isEditing;
@@ -128,7 +127,8 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   bool get _canRegisterPayment =>
       _currentInvoiceId != null &&
-      (_status == InvoiceStatus.sent || _status == InvoiceStatus.confirmed) &&
+      _status != InvoiceStatus.paid &&
+      _status != InvoiceStatus.cancelled &&
       _outstandingAmount > 0.01;
   bool get _shouldShowReadOnlyNotice =>
       !_canEditFields && _status != InvoiceStatus.paid;
@@ -906,17 +906,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             ? await _salesService.previewNegativeStock(_loadedInvoice!.items)
             : const <SalesNegativeStockWarning>[];
     if (!mounted) return false;
-
-    // ⚠️ Smart validation: If paying with card but no tax → auto-fix
-    if (newStatus == InvoiceStatus.confirmed &&
-        _paymentMethodHint == 'card' &&
-        _taxTreatment == TaxTreatment.noTax) {
-      // Auto-add tax for card payments
-      setState(() => _taxTreatment = TaxTreatment.taxIncluded);
-      await _saveInvoice();
-      if (!mounted) return false;
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
 
     setState(() => _isUpdatingStatus = true);
     try {
@@ -3340,6 +3329,30 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       children: [
         _buildSummaryRow('Subtotal', ChileanUtils.formatCurrency(_subtotal),
             textStyle, theme),
+        if (_taxTreatment == TaxTreatment.taxIncluded) ...[
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Neto',
+            ChileanUtils.formatCurrency(_netAmount),
+            theme.textTheme.bodyMedium,
+            theme,
+          ),
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'IVA incluido (19%)',
+            ChileanUtils.formatCurrency(_iva),
+            theme.textTheme.bodyMedium,
+            theme,
+          ),
+        ] else ...[
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            'Impuesto',
+            'Sin IVA',
+            theme.textTheme.bodyMedium,
+            theme,
+          ),
+        ],
         const Divider(height: 24),
         _buildSummaryRow(
           'Total',

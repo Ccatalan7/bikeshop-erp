@@ -35212,5 +35212,41 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260712220000_fix_expense_period_details_contract.sql
 \ir ../migrations/20260713101500_restore_staff_negative_stock_sales.sql
 \ir ../migrations/20260714120000_add_atomic_bike_aggregate_save.sql
+\ir ../migrations/20260714233000_add_spreadsheet_workbook_snapshot.sql
+\ir ../migrations/20260715130000_add_mechanic_job_estimated_duration.sql
+\ir ../migrations/20260715140000_preserve_workshop_invoice_line_identity.sql
+\ir ../migrations/20260715150000_backfill_workshop_invoice_line_identity.sql
+\ir ../migrations/20260715160000_add_atomic_sales_payment_tax_command.sql
+\ir ../migrations/20260715170000_backfill_workshop_financial_mirrors.sql
+\ir ../migrations/20260715180000_enforce_accounting_source_identity.sql
+\ir ../migrations/20260715190000_refine_workshop_line_identity_matching.sql
+\ir ../migrations/20260715200000_retire_duplicate_padded_invoice_journals.sql
+\ir ../migrations/20260715210000_repair_fv00809_missing_pedal_movement.sql
+\ir ../migrations/20260715220000_enforce_workshop_tenant_graph.sql
+\ir ../migrations/20260715230000_retire_rogue_job_sync_and_close_trace.sql
+-- Immutable delivery and service-warranty ledger, including completed
+-- invoice-owned inventory/accounting traces for covered warranty lifecycle.
+\ir ../migrations/20260715233000_add_service_warranty_ledger.sql
+-- Orthogonal workshop workflow/intake modes, quotation audit/conversion, and
+-- conservative legacy classification with non-posting quotation guards.
+\ir ../migrations/20260716010000_redesign_mechanic_job_modes.sql
+-- Per-row transaction-local trace frames for nested/multi-row invoice and
+-- payment triggers, plus a strictly guarded append-only QA trace repair.
+\ir ../migrations/20260716020000_repair_nested_invoice_trace_context.sql
+-- Non-posting quotation totals, immutable approval snapshots, and guarded
+-- conversion/edit boundaries for the canonical workshop workflow.
+\ir ../migrations/20260716030000_harden_quotation_approval_contract.sql
+-- Exact, read-friendly and replay-safe normalization of the single frozen
+-- legacy quotation candidate, separated to minimize the production lock.
+\ir ../migrations/20260716035000_normalize_quotation_non_posting_candidate.sql
+-- Audited employee action that resolves conservative legacy intake review
+-- without creating invoice, inventory, payment or accounting effects.
+\ir ../migrations/20260716040000_add_mechanic_job_intake_classification_command.sql
+-- Wall-clock-independent linkage from manual online-payment confirmations to
+-- their exact deterministic invoice/payment child trace roots.
+\ir ../migrations/20260716050000_harden_online_manual_payment_trace_linkage.sql
+-- Preserve server-owned workshop bicycle attribution when historical invoice
+-- JSON omits it; reject explicit invalid or cross-job references.
+\ir ../migrations/20260716060000_preserve_workshop_invoice_bike_attribution.sql
 
 commit;

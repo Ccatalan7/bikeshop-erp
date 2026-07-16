@@ -1,0 +1,475 @@
+# Rediseño integral de modos de trabajo del taller
+
+**Estado:** release candidate parcialmente desplegado. La base 010/020 está
+activa en producción; las migraciones 030/035/040/050/060 y su cliente
+permanecen pendientes del gate final.
+
+**Fecha:** 2026-07-16
+
+**Superficie principal:** `/taller/pegas`
+
+**Principio operativo:** mantener una sola tabla y el flujo conocido por los
+trabajadores, corrigiendo internamente la arquitectura y haciendo explícitas
+solo las decisiones que realmente cambian el comportamiento del negocio.
+
+## 1. Problema que resuelve
+
+El campo histórico `mechanic_jobs.job_type` mezcla dos conceptos diferentes:
+
+1. la etapa o responsabilidad comercial del registro (`presupuesto`,
+   `servicio`, `garantía`); y
+2. lo que el cliente dejó físicamente en el taller (`bicicleta`, `componente`
+   o todavía nada).
+
+Esa mezcla provoca actualmente:
+
+- presupuestos que parecen facturas o que no pueden generar un PDF propio;
+- conversiones que cambian datos directamente sin una transacción auditable;
+- componentes contados erróneamente como bicicletas;
+- servicios antiguos sin bicicleta que muestran un ícono genérico y `—`;
+- garantías pendientes o rechazadas cuya relación con una factura no es clara;
+- riesgo de que una cotización afecte inventario o contabilidad antes de ser
+  aprobada;
+- pérdida de contexto al convertir un presupuesto o una garantía a un trabajo
+  cobrable.
+
+## 2. Resultado esperado
+
+Los trabajadores seguirán viendo los cuatro accesos conocidos:
+
+| Opción visible | Significado operativo | Factura | Inventario / contabilidad |
+|---|---|---|---|
+| Servicio | El cliente dejó una o más bicicletas | Sí, una vez guardados sus ítems | Propiedad exclusiva de la factura |
+| Componente | El cliente dejó solo una rueda, horquilla u otro componente | Sí, sin aumentar el contador de bicicletas | Propiedad exclusiva de la factura |
+| Presupuesto | Propuesta comercial; todavía no existe recepción de un objeto ni obligación de cobro | No | No reserva, descuenta ni contabiliza stock |
+| Garantía | Reclamo vinculado a un trabajo entregado previamente | Solo respaldo interno si está cubierta; factura cobrable si no está cubierta | La factura asociada sigue siendo el único dueño del movimiento y asiento |
+
+No se agregará otra columna permanente a la tabla. La diferencia se comunicará
+en los chips, íconos, textos secundarios, menús y acciones existentes.
+
+## 3. Arquitectura de datos objetivo
+
+Se conservará `job_type` por compatibilidad, pero se introducirán dos ejes
+canónicos aditivos:
+
+- `workflow_kind`: `service`, `quotation` o `warranty`;
+- `intake_kind`: `bike`, `component` o `unspecified`.
+
+Mapeo compatible:
+
+| `job_type` legado | `workflow_kind` | `intake_kind` |
+|---|---|---|
+| `service` | `service` | `bike` |
+| `item_service` | `service` | `component` |
+| `quotation` | `quotation` | `unspecified`, hasta su conversión |
+| `warranty` | `warranty` | heredado del trabajo original |
+
+Se agregarán además:
+
+- `mode_needs_review`: marca conservadora para registros históricos ambiguos;
+- `mode_review_reason`: explica por qué no se puede clasificar automáticamente;
+- un ledger append-only de eventos de modo y presupuesto, con actor, timestamp
+  de servidor, clave idempotente, motivo y snapshot del registro/ítems.
+
+Los eventos cubrirán como mínimo:
+
+- creación y clasificación inicial;
+- cambio de estado de presupuesto;
+- conversión de presupuesto a servicio o componente;
+- decisión de garantía no cubierta y creación de su factura cobrable;
+- clasificación/backfill histórico;
+- separación segura de una factura borrador creada por el flujo legado.
+
+## 4. Invariantes obligatorias en base de datos
+
+1. Un presupuesto no puede quedar vinculado a `sales_invoices`.
+2. Crear o editar ítems de un presupuesto no mueve inventario ni genera
+   asientos.
+3. Un servicio cobrable de bicicleta debe tener una bicicleta activa y válida
+   del mismo cliente y tenant.
+4. Un trabajo cobrable de componente debe identificar el objeto recibido con
+   un sujeto activo del mismo tenant o una descripción manual explícita; no
+   crea una fila ficticia en `mechanic_job_bikes` para satisfacer la UI.
+5. Una garantía debe conservar el vínculo al trabajo original y su decisión
+   auditada.
+6. Una garantía cubierta tiene valor cliente cero y usa un documento interno
+   para registrar costo de garantía y salida de inventario, sin ingreso, IVA,
+   cuenta por cobrar ni pago.
+7. Una garantía no cubierta solo genera cobro mediante una decisión explícita,
+   justificada y auditada; la factura se crea en esa misma transacción.
+8. Toda conversión crea/sincroniza la factura en la misma transacción o falla
+   completa, sin estados intermedios.
+9. Las claves de operación permiten repetir la misma solicitud sin duplicar
+   factura, vínculo, evento, movimiento ni asiento. Reutilizar una clave con
+   otro trabajo, tipo de evento o payload falla explícitamente.
+10. El tenant se valida en cada tabla, FK y comando RPC.
+11. Aprobar un presupuesto captura sus campos comerciales e ítems exactos en
+    un evento append-only con hash; la conversión vuelve a comparar ese mismo
+    snapshot y falla si el contenido cambió.
+12. Un presupuesto aprobado no se edita directamente: para corregirlo se
+    reabre con motivo, se modifica y se aprueba una nueva versión. El servicio
+    resultante de una conversión sí continúa editable de forma normal.
+13. Los precios del presupuesto son montos brutos para el cliente: antes de
+    existir factura su IVA persistido es cero y el único ajuste al total es el
+    descuento explícito. La clasificación tributaria sigue perteneciendo al
+    panel de pago de la factura.
+14. La sincronización factura→trabajo no puede borrar el `job_bike_id` de un
+    ítem estable cuando el JSON comercial omite esa atribución física, la deja
+    vacía o contiene `null`. Un valor explícito solo es válido si referencia una
+    bicicleta vinculada al mismo trabajo y tenant; cualquier otro valor aborta
+    la transacción.
+
+## 5. Flujos de usuario
+
+### 5.1 Servicio de bicicleta
+
+1. Seleccionar o crear cliente.
+2. Seleccionar o crear una o más bicicletas mediante la ficha canónica.
+3. Completar solicitud, diagnóstico, ficha técnica, productos y servicios.
+4. Guardar el agregado estable de trabajo, bicicletas e ítems.
+5. Crear o sincronizar la factura cobrable después de persistir los ítems.
+6. Inventario, IVA, ingreso, costo y pago se ejecutan únicamente desde la
+   factura y su panel de pago.
+
+### 5.2 Componente
+
+1. Seleccionar cliente.
+2. Elegir el componente recibido (por ejemplo, rueda completa) y agregar una
+   descripción identificadora.
+3. Completar diagnóstico narrativo, productos y servicios sin exigir una
+   bicicleta ficticia.
+4. Guardar y crear la factura cobrable.
+5. Mostrar el componente en la columna `Bicicleta`, pero excluirlo del contador
+   de bicicletas y contarlo como `Ítem`.
+
+### 5.3 Presupuesto
+
+1. Seleccionar cliente y describir lo que se cotiza.
+2. Agregar productos/servicios propuestos, descuento y vigencia.
+3. Guardar siempre como `Pendiente`, sin factura ni movimientos financieros.
+4. Descargar/compartir un PDF titulado **PRESUPUESTO**, con número de trabajo,
+   vigencia, cliente, líneas y total; nunca debe decir `Factura` ni `Saldo
+   adeudado`.
+5. Registrar aprobación, rechazo o expiración mediante comando auditado.
+   La aprobación congela un snapshot exacto de campos e ítems; para revisarlo
+   se vuelve a `Pendiente` con motivo y se genera una aprobación nueva.
+6. Al aprobar, escoger qué recibió el taller:
+   - `Bicicleta`: seleccionar/crear bicicleta del cliente;
+   - `Componente`: seleccionar el componente recibido.
+7. Convertir atómicamente el mismo registro a trabajo cobrable, conservar el
+   snapshot original del presupuesto y generar la factura recién entonces.
+
+### 5.4 Garantía
+
+1. Seleccionar cliente y trabajo original entregado.
+2. Heredar bicicleta o componente desde ese trabajo.
+3. Mostrar vigencia calculada desde el ledger inmutable de entrega.
+4. Guardar el reclamo pendiente sin generar una factura de cliente.
+5. Decidir:
+   - `Cubierta`: documento interno a valor cliente cero, costo de garantía e
+     inventario respaldados por la factura interna;
+   - `No cubierta`: motivo obligatorio y creación atómica de la factura
+     cobrable, conservando el trabajo como reclamo de garantía;
+   - fuera de plazo: motivo obligatorio incluso cuando se acepta.
+6. Conservar siempre el trabajo original, la ventana evaluada, el actor, la
+   decisión y la justificación.
+
+## 6. Diseño de la tabla única
+
+No se agregan columnas. Se reutilizan las existentes así:
+
+- `Bicicleta`:
+  - bicicleta real: ícono y nombre habitual;
+  - componente: ícono de herramienta y nombre del componente;
+  - presupuesto: ícono de documento y descripción resumida;
+  - ambiguo legado: texto explícito `Clasificación pendiente`, nunca `—`.
+- `Estado`: mantiene el estado operativo y añade un sublabel compacto para el
+  estado comercial o de garantía cuando corresponde.
+- `Factura`:
+  - presupuesto: chip `Presupuesto` que descarga/abre su PDF;
+  - servicio/componente: estado real de la factura;
+  - garantía cubierta: `Respaldo interno`;
+  - garantía pendiente: `En evaluación`, sin fingir que existe una factura.
+- menú `⋮`:
+  - presupuesto: descargar PDF, aprobar/convertir, rechazar;
+  - garantía: resolver desde el chip de estado; una decisión no cubierta deja
+    disponible su factura cobrable sin un segundo cambio de tipo;
+  - registro ambiguo: `Revisar modo` abre la misma clasificación compacta que
+    el chip de alerta, sin obligar a navegar a otra pantalla;
+  - acciones comunes existentes se conservan.
+
+Los contadores quedan definidos así:
+
+- `Bicicletas`: solo recepciones físicas con filas válidas en
+  `mechanic_job_bikes`;
+- `Ítems`: trabajos de componente;
+- `Presupuestos`: `workflow_kind = quotation`;
+- `Garantías`: reclamos de garantía activos según su fase operativa.
+
+## 7. Formulario y navegación
+
+- Mantener los cuatro botones y el layout general conocido.
+- Agregar una explicación de una línea bajo cada modo seleccionado.
+- Mostrar únicamente campos pertinentes al modo.
+- El selector de tipo se bloquea después de guardar; los cambios de obligación
+  se hacen con acciones de conversión auditadas.
+- El presupuesto no permite cambiar arbitrariamente a `Aprobado` desde un
+  dropdown que solo edita una columna: usa una acción con confirmación.
+- La conversión solicita bicicleta/componente dentro del mismo diálogo y
+  valida propiedad del cliente antes de confirmar.
+- `Revisar modo` solo aparece en registros conservadores marcados
+  `mode_needs_review`. Para bicicleta lista únicamente bicicletas activas del
+  cliente; para componente acepta un sujeto activo del tenant o una descripción
+  manual. La acción admite una razón de auditoría y llama al comando idempotente
+  `classify_mechanic_job_intake`.
+- Si falla la carga opcional del catálogo de componentes, la descripción manual
+  sigue disponible. Ningún error de catálogo convierte ni borra el trabajo.
+- En errores o respuestas inciertas, mantener el formulario y datos visibles;
+  no mostrar éxito ni permitir una segunda conversión ciega. La clasificación
+  genera una sola clave de operación por intento y conserva esa misma clave
+  durante el readback/replay posterior a un ACK perdido; una respuesta incierta
+  se muestra como tal hasta reconciliar el recibo, nunca como un rollback
+  confirmado.
+- La tabla, calendario, formulario routed y formulario embedded consumen los
+  mismos servicios y read models.
+
+## 8. PDF de presupuesto
+
+Se reutilizará el generador visual de documentos comerciales con un tipo de
+documento explícito y default compatible para facturas.
+
+El presupuesto debe incluir:
+
+- logo y datos de Viñabike;
+- título `PRESUPUESTO`;
+- número de trabajo/presupuesto;
+- fecha de emisión y `Válido hasta`;
+- cliente y RUT cuando exista;
+- descripción, cantidad, precio y total por línea;
+- subtotal, descuento y total propuesto;
+- texto claro de que no es una factura ni acredita pago/recepción.
+
+No debe incluir:
+
+- número de factura;
+- `Facturar a`;
+- saldo adeudado, pago realizado o estado de pago;
+- lenguaje que implique que la bicicleta/componente fue recibido si aún no lo
+  fue.
+
+## 9. Inventario, contabilidad e impuestos
+
+- El trabajo permanece como documento operativo.
+- La factura es el único documento financiero dueño de:
+  - salida de stock;
+  - costo de venta o costo de garantía;
+  - ingreso;
+  - IVA;
+  - cuenta por cobrar;
+  - pago/reembolso.
+- El impuesto se elige y registra únicamente en el panel de pago; el trabajo
+  solo refleja el resultado persistido.
+- Antes de convertirse, el presupuesto se calcula como suma bruta de líneas
+  menos descuento, con `tax_treatment = no_tax` y `tax_amount = 0`. No se suma
+  un 19% ficticio por fuera del precio que se mostró al cliente.
+- Un presupuesto no crea reservas contables implícitas ni stock comprometido.
+- La conversión copia las líneas preservando sus IDs técnicos y luego usa el
+  bridge bidireccional existente con la factura.
+
+## 10. Backfill y compatibilidad histórica
+
+El backfill será conservador y aditivo:
+
+1. mapear sin alterar totales únicamente registros anteriores al corte fijo
+   `2026-07-16 05:15:00+00`; ese corte nunca se mueve en una reejecución;
+2. clasificar automáticamente solo cuando hay evidencia inequívoca;
+3. dejar `mode_needs_review = true` cuando la evidencia no alcanza;
+4. no inventar bicicletas ni componentes;
+5. no reescribir facturas pagadas, movimientos o asientos históricos;
+6. separar una factura borrador de un presupuesto legado solo si simultáneamente:
+   - la factura está en borrador;
+   - no tiene pagos vigentes;
+   - no tiene movimientos de stock;
+   - no tiene asientos contables;
+   - el texto histórico identifica inequívocamente una cotización;
+7. revalidar y cancelar primero esa factura borrador, preservándola como
+   evidencia histórica; solo después registrar el evento y separarla del
+   trabajo, todo en la misma transacción;
+8. registrar cada reclasificación en el ledger de modos.
+
+La instalación del contrato y la reparación de datos están separadas
+deliberadamente:
+
+- `20260716030000_harden_quotation_approval_contract.sql` define primero todas
+  las funciones. Solo al final solicita, con `NOWAIT`, el bloqueo DDL mínimo
+  necesario para reemplazar constraints/triggers; usa `lock_timeout = 750ms` y
+  `statement_timeout = 20s`, por lo que aborta la transacción completa en vez de
+  quedar en cola y bloquear la operación normal del taller.
+- `20260716035000_normalize_quotation_non_posting_candidate.sql` es el único
+  backfill de este endurecimiento. Usa `SHARE ROW EXCLUSIVE NOWAIT` —las lecturas
+  siguen disponibles—, `statement_timeout = 12s`, el fingerprint congelado de
+  `PG-00468`, una actualización de una sola fila y un evento inmutable. Cero
+  candidatos es replay seguro; cualquier candidato distinto aborta. No crea ni
+  reejecuta facturas, pagos, stock o asientos.
+- `20260716060000_preserve_workshop_invoice_bike_attribution.sql` reemplaza una
+  función de sincronización y no contiene backfill: no reescribe el JSON de
+  facturas ni la atribución histórica.
+
+Hallazgos de producción que guían el backfill inicial (snapshot 2026-07-15):
+
+- 395 servicios, cuatro sin bicicleta ni `mechanic_job_bikes`;
+- dos trabajos de componente correctamente excluidos del contador;
+- un presupuesto canónico sin factura;
+- siete garantías con historia financiera heredada;
+- `PG-00397`: evidencia suficiente de rueda/componente;
+- `PG-00455`: presupuesto válido que no debe ser modificado por 030;
+- `PG-00468`: único candidato conocido para la normalización acotada de 030;
+  no tiene factura, pago, stock ni asiento, y la migración solo puede tocarlo si
+  su fingerprint completo sigue coincidiendo al momento de aplicar;
+- `PG-00465` y `PG-00344`: ambiguos; deben quedar marcados para revisión, no
+  reclasificados automáticamente.
+
+## 11. Estrategia de despliegue sin interrupción
+
+1. Capturar fingerprint previo de trabajos, facturas, pagos, stock, movimientos
+   y asientos.
+2. Aplicar migración aditiva local y ejecutar pgTAP focalizado y suite completa.
+3. Ejecutar analyzer/tests Flutter y tests de arquitectura.
+4. Verificar los cuatro modos en browser local por el camino normal del
+   trabajador.
+5. Aplicar la migración en producción mediante el runbook autorizado.
+6. Ejecutar invariantes posteriores y comparar el fingerprint.
+7. Desplegar Flutter solo después de confirmar compatibilidad de schema.
+8. Repetir smoke test autenticado en producción.
+
+Estado del rollout al 2026-07-16:
+
+- `20260716010000_redesign_mechanic_job_modes.sql`: desplegada y registrada;
+- `20260716020000_repair_nested_invoice_trace_context.sql`: desplegada,
+  registrada y verificada con trazas completas;
+- `20260716030000_harden_quotation_approval_contract.sql`: **pendiente**;
+- `20260716035000_normalize_quotation_non_posting_candidate.sql`:
+  **pendiente**;
+- `20260716040000_add_mechanic_job_intake_classification_command.sql`:
+  **pendiente**;
+- `20260716050000_harden_online_manual_payment_trace_linkage.sql`:
+  **pendiente**;
+- `20260716060000_preserve_workshop_invoice_bike_attribution.sql`:
+  **pendiente**;
+- cliente aislado con `Revisar modo` y contrato 030/035/040/050/060:
+  **pendiente de publicación**, después de las migraciones y del smoke normal
+  del trabajador.
+
+No se eliminarán columnas ni funciones legadas durante esta fase. La reversión
+de UI puede hacerse sin perder datos; los eventos append-only permanecen como
+evidencia. Una falla de migración revierte la transacción completa.
+
+## 12. Verificación obligatoria
+
+### Base de datos
+
+- presupuesto no puede vincular ni crear factura;
+- ítems de presupuesto no cambian stock/journals;
+- conversión repetida con la misma clave devuelve replay sin duplicados;
+- servicio de bicicleta exige una bicicleta activa del cliente/tenant;
+- servicio de componente exige sujeto activo o descripción explícita y no
+  crea bicicleta;
+- clasificación manual solo opera sobre service/warranty en revisión, es
+  idempotente y no crea efectos financieros;
+- clasificación con ACK perdido reutiliza la misma clave y reconcilia el recibo
+  antes de permitir otro intento;
+- conversión crea exactamente una factura y conserva líneas;
+- confirmación manual online enlaza sus trazas hijas por sus claves de operación
+  determinísticas exactas, nunca por un rango de `created_at`, y revierte si una
+  hija falta o no está completa;
+- invoice→job conserva `job_bike_id` para el mismo ID estable cuando el espejo de
+  factura no lo informa, y rechaza referencias explícitas inválidas o de otro
+  trabajo/tenant;
+- garantía cubierta/no cubierta mantiene los invariantes existentes;
+- eventos son inmutables y tenant-scoped;
+- backfill no cambia pagos, totales, stock ni balance de asientos.
+
+### Flutter
+
+- parsing compatible con filas previas a la migración;
+- estado efectivo de presupuesto expira por fecha sin perder el estado
+  persistido/auditado;
+- tabla no muestra `—` para registros ambiguos;
+- contador de bicicletas excluye componentes y presupuestos;
+- generador de factura conserva su output actual;
+- generador de presupuesto usa lenguaje correcto.
+
+### Browser
+
+1. crear y guardar servicio con cliente/bicicleta/diagnóstico/ítems;
+2. crear componente sin bicicleta y comprobar contador/factura;
+3. crear presupuesto, descargar PDF y comprobar ausencia de factura/stock;
+4. aprobar presupuesto, elegir bicicleta o componente y confirmar una sola
+   factura;
+5. crear garantía dentro y fuera de plazo, guardar justificación y comprobar
+   respaldo interno o conversión cobrable;
+6. recargar cada registro y confirmar persistencia;
+7. revisar consola, requests y terminal durante cada flujo.
+
+## 13. Definition of Done
+
+El rediseño está terminado solo cuando:
+
+- los cuatro modos funcionan de punta a punta en la tabla única;
+- presupuesto tiene PDF propio y nunca se presenta como factura;
+- conversión es atómica, auditable e idempotente;
+- componente representa una recepción física sin bicicleta y no altera el
+  contador;
+- garantía conserva origen, plazo, decisión, motivo y respaldo financiero
+  correcto;
+- no hay divergencia entre trabajo, factura, inventario, pago y contabilidad;
+- el backfill de producción está aplicado y verificado con invariantes antes y
+  después;
+- `supabase/sql/core_schema.sql`, la documentación maestra y el registro de
+  superficies canónicas reflejan exactamente la implementación desplegada;
+- los tests locales, pgTAP, analyzer y recorridos browser pasan con evidencia.
+
+## 14. Evidencia y estado de implementación (2026-07-16)
+
+- La base `20260716010000_redesign_mechanic_job_modes.sql` fue aplicada y
+  registrada en producción (`xzdvtzdqjeyqxnkqprtf`) después de generar un
+  backup cifrado verificable. Su backfill conservador dejó los casos ambiguos
+  en revisión y no cambió pagos, stock, totales financieros ni balances
+  contables existentes.
+- La reparación `20260716020000_repair_nested_invoice_trace_context.sql` también
+  está desplegada. El readback confirmó cero raíces de operación incompletas y
+  totales de stock, pagos y asientos sin cambios.
+- La migración 030 endurece aprobación/conversión de presupuestos: congela y
+  vuelve a validar el snapshot comercial, valida sujetos activos del tenant y
+  mantiene un puente estrecho y auditado para clientes anteriores. Sigue
+  **pendiente en producción**. Instala sus funciones antes de solicitar una
+  ventana DDL mínima `ACCESS EXCLUSIVE NOWAIT`, de modo que contención operativa
+  causa un aborto limpio en vez de una espera que congele el taller.
+- La migración 035 contiene por separado la reparación acotada. Su único
+  candidato conocido es `PG-00468` y debe volver a comparar el fingerprint
+  exacto justo antes de escribir; `PG-00455` permanece como presupuesto válido
+  y no debe cambiar. Su lock `SHARE ROW EXCLUSIVE NOWAIT` permite lecturas y el
+  postflight exige evidencia inmutable y cero efectos financieros reejecutados.
+- La migración 040 y la UI `Revisar modo` resuelven solo registros
+  `mode_needs_review` mediante un comando idempotente. Bicicleta exige propiedad
+  activa del cliente/tenant; componente exige sujeto activo o descripción
+  manual; el evento declara explícitamente cero efectos financieros. El cliente
+  conserva una clave por intento y reconcilia el mismo recibo ante un ACK
+  perdido, sin declarar falsamente que no hubo cambios.
+- La migración 050 endurece la confirmación manual de pagos online: localiza las
+  operaciones hijas de factura/pago por su identidad determinística exacta y
+  aborta atómicamente si falta una traza completa. No usa comparaciones de reloj
+  o `created_at`, que pueden retroceder durante una corrección del host.
+- La migración 060 preserva el `job_bike_id` existente solo para el mismo ítem
+  estable cuando la factura omite el espejo; un ID explícito debe pertenecer al
+  mismo trabajo/tenant. Es un reemplazo de función sin backfill ni cambios de
+  datos al instalarse.
+- Existen contratos focalizados para estos comportamientos. El gate completo
+  repetible, el readback de cada migración y el smoke del camino normal del
+  trabajador siguen siendo requisitos previos; esta documentación no registra
+  un resultado final hasta que esa ejecución termine.
+- El frontend vive en la rama aislada `codex/workshop-job-modes-release`, basada
+  en `0b245de4`, para no incorporar cambios concurrentes del worktree operativo.
+  No debe publicarse hasta completar el gate de base de datos, aplicar y leer de
+  vuelta 030/035/040/050/060 y verificar por el camino normal del trabajador la
+  conversión de presupuesto y la clasificación `Revisar modo`.

@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
 
@@ -901,10 +901,13 @@ Important meaning:
 
 ### 3A. Atomic bicycle aggregate persistence boundary
 
-Implementation status (2026-07-14): implemented and verified against the
-disposable local canonical schema, but **not deployed or active in
-production**. The database migration must be installed before any client that
-requires these RPCs is released.
+Implementation status (2026-07-16): implemented, verified and deployed in
+production through
+`20260714120000_add_atomic_bike_aggregate_save.sql`. Production readback and a
+browser canary confirmed the RPC/ACL/RLS contract, one atomic bike + profile
+commit, its two audit events and its durable replay receipt. Any future client
+change that depends on this command must still preserve the schema-first
+release order; the database dependency is already active.
 
 `bikes` and `bike_profiles` remain normalized sources of truth, but the full
 bicycle form must persist them as one logical aggregate command.
@@ -1055,7 +1058,7 @@ It is the operational context layer that should tell the mechanic what is alread
 ### Multi-bike invoice payment integrity (current rule)
 
 - A job containing 2+ bicycles has one linked sales invoice and one shared payment balance. Payments are not allocated to an individual `mechanic_job_bikes` row.
-- `job_bike_id` must survive job→invoice and invoice→job item synchronization so per-bike work and totals remain attributable even though payment is job-level.
+- `job_bike_id` must survive job→invoice and invoice→job item synchronization so per-bike work and totals remain attributable even though payment is job-level. Invoice JSON does not own that physical attribution: when it omits the field, sends an empty value, or sends JSON `null`, invoice→job sync preserves the existing value for the same stable `mechanic_job_items.id`. A non-empty explicit value must resolve to `mechanic_job_bikes` inside that exact job and tenant or the transaction aborts.
 - Partial payment keeps the invoice `confirmed` and `mechanic_jobs.is_paid = false`; exact full payment sets `paid` and `is_paid = true`; reducing/deleting the final payment returns both states atomically.
 - Payment actions must never consume, restore, or reapply inventory. Their trace root must connect the payment snapshot, shared invoice before/after status, job paid flag, journal replacement/reversal, and a zero-stock-effect checkpoint.
 - Production inspection on 2026-07-10 found 12 multi-bike jobs, all currently fully paid with matching job flags. Historical attribution remains incomplete: 25 of 67 linked invoice item rows lack `job_bike_id`.
@@ -1914,9 +1917,10 @@ This strengthens centralization because diagnosis, service guidance, product sug
   service-wizard profile.
 - the canonical surface registry now names every host of `BikeFormDialog` and
   requires them to consume the same aggregate contract.
-- production was inspected read-only only for schema/current-shape evidence;
-  the screenshot supplied for this investigation was an example and was not
-  treated as the affected incident record. No production mutation was made.
+- the aggregate migration was subsequently deployed and registered in
+  production. The live canary used the canonical command and verified the
+  committed bike/profile/events/receipt graph; it did not run a broad or
+  inferential historical backfill.
 
 This strengthens centralization: normalized `bikes`/`bike_profiles` ownership
 does not change, while the persistence boundary now matches the employee's one
@@ -1927,7 +1931,178 @@ logical save action and refuses to turn missing connectivity into empty truth.
 - mechanic job delivery is now treated as a current lifecycle state, not as any row that merely has an old `delivered_at` timestamp. `delivered_at` is set only while the current legacy/custom status resolves to `ENTREGADO`, and is cleared when a job moves back to `FINALIZADO`/`Terminado` or any other non-delivered state.
 - the `Trabajos: Activos` table must archive only jobs that are currently delivered and paid; stale delivery timestamps must not hide paid-but-currently-terminated jobs such as a job moved back from `Entregado` to `Terminado`.
 - `supabase/migrations/20260703133000_normalize_mechanic_job_delivered_at.sql` adds a lifecycle timestamp guard plus a backfill for stale non-delivered `delivered_at` values, while `lib/modules/bikeshop/pages/pegas_table_page.dart` now uses current status/custom status as the active filter source of truth.
-- diagnosis narrative generation remains read-only with respect to `mechanic_job_bikes.diagnosis_sheet_data`: `MechanicJobBike.toJson(forUpdate: true)` now omits structured diagnosis columns when there is no meaningful structured sheet, and `mechanic_job_form_page.dart` preserves the existing persisted sheet before its delete/recreate save cycle so AI-generated narrative text or details-only edits cannot wipe the structured model.
+- diagnosis narrative generation remains read-only with respect to `mechanic_job_bikes.diagnosis_sheet_data`: `MechanicJobBike.toJson(forUpdate: true)` omits structured diagnosis columns when there is no meaningful structured sheet, and the stable diff/upsert job save preserves the existing persisted sheet so AI-generated narrative text or details-only edits cannot wipe the structured model.
+
+## Delivery and service-warranty ledger (2026-07-15)
+
+- `mechanic_jobs.delivered_at` remains a current-state compatibility mirror for
+  Activos/Entregados filtering. Historical delivery truth now lives in
+  append-only `mechanic_job_delivery_events`, written from the database clock
+  with the authenticated actor.
+- the first delivery freezes a 14-day service-warranty window. Moving away from
+  Entregado does not delete it, and a later delivery appends a re-delivery event
+  without resetting the window. Explicit extensions append a reasoned event.
+- historical delivery transitions are backfilled from
+  `mechanic_job_timeline`; currently delivered jobs with missing timeline data
+  receive a conservative current-snapshot event. Multiple legacy deliveries
+  are marked ambiguous and never auto-reset the warranty.
+- a warranty job is linked to its original work by append-only
+  `mechanic_job_warranty_claim_events`. Eligibility is snapshotted at claim
+  registration; accepting an expired/unknown claim and every rejection require
+  a reason. `warranty_outcome` remains a guarded compatibility mirror.
+- `mechanic_job_service_warranty_view` and
+  `mechanic_job_warranty_claims_view` are the only UI read models for warranty
+  state. The table and calendar show that state inside the existing status
+  surface, and the form uses the same source/eligibility contract in routed and
+  embedded hosts.
+- customer-owned form state is isolated: changing the customer on an unsaved
+  job clears the previously selected bike, component, original warranty job,
+  decision and reason before loading the new customer's eligible sources.
+- invoice ownership does not change. A covered claim uses its linked
+  zero-customer-value invoice as the only inventory/accounting document. On
+  completion it consumes products and posts debit `5115 Garantías de Servicio
+  Técnico` / credit `1105 Inventarios` at catalog cost, with no revenue, IVA,
+  receivable, or payment. Reopening or changing coverage reverses through the
+  same invoice-owned path before any billable draft is rebuilt.
+- the legacy warranty backfill preserves known outcomes but does not guess the
+  original job or replay historical inventory/accounting when evidence is
+  incomplete.
+
+## Orthogonal job modes and intake ownership (2026-07-15)
+
+Deployment state (2026-07-16): the additive base contract in
+`20260716010000_redesign_mechanic_job_modes.sql` and the nested trace repair in
+`20260716020000_repair_nested_invoice_trace_context.sql` are deployed and
+verified in production. The stricter quotation contract in
+`20260716030000_harden_quotation_approval_contract.sql`, its isolated one-row
+normalization in
+`20260716035000_normalize_quotation_non_posting_candidate.sql`, the manual
+intake classification command in
+`20260716040000_add_mechanic_job_intake_classification_command.sql`, the exact
+online-payment child-trace linkage in
+`20260716050000_harden_online_manual_payment_trace_linkage.sql`, and the
+invoice-sync bicycle-attribution guard in
+`20260716060000_preserve_workshop_invoice_bike_attribution.sql` are implemented
+in the isolated release worktree but remain **pending in production** until the
+final repeatable release gate, pre-write fingerprint and per-migration
+post-write readback pass. The matching UI is therefore release-candidate
+behavior, not yet an employee-facing production guarantee.
+
+The four familiar creation choices remain, but they no longer overload one
+database concept. `mechanic_jobs.workflow_kind` is the commercial/lifecycle
+axis (`service`, `quotation`, `warranty`) and `intake_kind` is the physical
+receipt axis (`bike`, `component`, `unspecified`). Legacy `job_type` remains a
+compatibility facade: `service` means service + bike, `item_service` means
+service + component, while quotation and warranty keep their familiar values.
+
+- `component` means the customer left only the loose component (for example a
+  wheel to build or convert to tubular). It is not merely a label for a part being repaired
+  on a bicycle, and component-intake rows must not inflate bicycle counts.
+- billable bicycle service and billable component service have different
+  intake invariants: the former requires an active bicycle owned by the same
+  customer and tenant; the latter requires an active tenant component subject
+  or an explicit manual description and must not create a fictitious
+  `mechanic_job_bikes` row.
+- a walk-in quotation may validly have `intake_kind = unspecified`: proposed
+  products/services are planning rows only and create no invoice, stock
+  movement, revenue, IVA, receivable, COGS, or payment entry.
+- `mechanic_job_mode_view` derives effective quotation expiry from
+  `quotation_valid_until`; the clock does not mutate pending rows in the
+  background. Status changes use the audited quotation command.
+- quotation lines are customer-facing gross prices. Before conversion,
+  `recalculate_mechanic_job_costs` always keeps the job as `no_tax`, stores
+  `tax_amount = 0`, and subtracts only the explicit discount. Once an invoice
+  exists, that function updates operational parts/labour rollups only: the
+  invoice and payment terminal remain the exclusive owners of tax treatment,
+  IVA and financial totals.
+- approval captures `mechanic_job_quotation_content_snapshot`, including the
+  exact line IDs and commercial fields, inside the append-only approval event
+  with a reproducible hash. Approved quotation content and lines are immutable;
+  a revision must first return to `pending` through the reasoned status RPC and
+  then receive a new approval snapshot.
+- an approved quotation converts the same familiar table row atomically to
+  either bicycle service or component service. The command validates the
+  tenant/customer bicycle or tenant subject, preserves the quotation snapshot
+  in `mechanic_job_mode_events`, and optionally creates the one linked draft
+  invoice in the same transaction.
+- conversion re-verifies the current commercial snapshot against the latest
+  approved event before it can commit. The resulting service remains normally
+  editable for later diagnosis or authorized additions; the accepted proposal
+  stays immutable as historical evidence instead of freezing day-to-day work.
+- canonical clients never perform direct cross-workflow or quotation-status
+  writes: the four-mode selector is creation-only on every shared form host,
+  and table actions call the audited status/conversion commands. During the
+  rollout of migration 030, a narrowly bounded compatibility bridge accepts an
+  older client's status-only quotation update and its already-approved
+  conversion only when every non-mode field is unchanged, the accepted
+  commercial snapshot still matches and intake is resolved. Unsafe,
+  unapproved, expired-without-reason or drifted writes fail at the row boundary,
+  and every accepted legacy transition is appended to the same event ledger.
+- migration 030 defines every replacement function before requesting the short
+  DDL window. Only its final constraint/trigger swap uses
+  `ACCESS EXCLUSIVE NOWAIT` with `lock_timeout = 750ms` and
+  `statement_timeout = 20s`; any concurrent reader/writer makes the transaction
+  abort instead of queueing and freezing the workshop. The data repair is not
+  embedded in that window.
+- `create_billable_invoice_from_mechanic_job` is the safe workshop invoice
+  entrypoint. Quotations, unresolved service intake, and undecided warranties
+  are rejected. The linked invoice remains the exclusive owner of stock,
+  revenue, IVA, receivable, COGS and payment posting. The historical
+  `create_invoice_from_mechanic_job` RPC delegates to that same guard; its
+  private invoice builder is not executable by app roles.
+- `mechanic_job_mode_events` is append-only and records classification,
+  quotation decisions and conversion receipts. A lost client response is safe:
+  same-key replay returns the receipt, and a fresh-key retry against an already
+  converted target returns the committed invoice without duplicating it. A
+  same-key request whose job, event type, or payload differs is rejected.
+- retroactive classification is deliberately conservative. Existing graph
+  links determine bicycle/component intake; a narrow wheel-only rule requires
+  explicit evidence that the loose object was received, left, or will be
+  collected. A mere wheel/tire repair description is not evidence. Everything else stays
+  `mode_needs_review = true` rather than inventing a bicycle or component.
+- release-candidate rows that remain `mode_needs_review = true` expose one
+  compact `Revisar modo` action in the existing table/overflow surfaces. It
+  calls the idempotent `classify_mechanic_job_intake` command, restricts bicycle
+  choices to active bicycles owned by the job customer, accepts only an active
+  same-tenant component subject or a manual component description, and records
+  the actor, reason and immutable classification event. The command never
+  creates or changes an invoice, payment, stock movement or journal entry.
+- the classification coordinator creates one operation key per semantic
+  attempt and retains it across transport-error readback and the only safe RPC
+  replay. If neither the receipt nor authoritative job readback proves the
+  result, the UI retains an explicit outcome-unknown state and that same key;
+  it never reports a false rollback or starts a fresh blind attempt.
+- every historical mode-classification, review, and baseline event is bounded
+  by the immutable `2026-07-16 05:15:00+00` cutoff exposed through the private
+  `mechanic_job_mode_backfill_eligible` predicate. Reapplying the canonical
+  schema must never advance that timestamp or sweep newer jobs into history.
+- only quote-like legacy service rows with a draft invoice and exactly zero
+  payments, invoice-owned stock movements, and invoice-owned journals may have
+  that invoice detached. The invoice row is preserved as cancelled, the
+  immutable event records the safety proof, and no stock/journal is produced;
+  ambiguous or financially active rows are never repaired by inference.
+- migration 035 is the only quotation normalization in this hardening slice.
+  It acquires `SHARE ROW EXCLUSIVE NOWAIT` with a 12-second statement limit, so
+  reads stay available and an active writer causes a clean abort. It accepts
+  only the frozen `PG-00468` tenant/job/line fingerprint, updates one row,
+  appends immutable evidence and runs a global quotation postflight. Zero
+  candidates is replay-safe; any different candidate aborts. It never creates
+  or replays invoice, payment, stock movement, or journal effects, and leaves
+  `PG-00455` unchanged.
+- migration 050 stops correlating manual online-payment children through
+  wall-clock `created_at` ranges. It resolves the exact deterministic invoice
+  and payment operation keys and aborts the complete parent transaction if a
+  required child is absent or incomplete, so a backwards clock correction
+  cannot leave a committed but disconnected trace graph.
+- migration 060 replaces only `sync_invoice_items_to_job`. Missing/blank/null
+  invoice `job_bike_id` preserves the same stable job item's physical
+  attribution; an explicit ID must belong to the same job/tenant. The migration
+  contains no backfill and does not rewrite historical invoice JSON or job
+  items merely by being installed.
+- an expired quotation can be approved outside its validity window only with a
+  recorded reason. Conversion remains coherent: it accepts a timely approval
+  or the latest audited late-approval event with that explicit reason, never a
+  bare status flip with no approval evidence.
 
 ## Recent Continuity Note (2026-05-14)
 
@@ -1947,13 +2122,13 @@ logical save action and refuses to turn missing connectivity into empty truth.
 
 This strengthens centralization around bike profile truth because real service flows can now create the first durable `bike_profiles.technical_profile.values` record for bikes that previously had no profile at all, while historical data remains untouched until there is real structured evidence worth promoting. It also strengthens validation discipline because compatibility/backbone work now has a repeatable hidden debug harness instead of relying on production-visible test UI or repeated manual setup.
 
-## Next Session Priority Queue (2026-07-14)
+## Next Session Priority Queue (2026-07-16)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
-1. Review `20260714120000_add_atomic_bike_aggregate_save.sql` and decide the rollout gate for the documented crash-only client-outbox limitation. Install the database migration before releasing the RPC-dependent client, then verify create, edit, lost-response replay, profile-only stale rejection, and failed-load retry through the normal employee job flow. Staging remains suspended/non-authoritative.
+1. Finish the isolated workshop-mode release gate before exposing the new UI: re-read the exact production quotation candidate and business fingerprints, apply/register pending migrations `20260716030000`, `20260716035000`, `20260716040000`, `20260716050000`, and `20260716060000` in that order only if those proofs still match, verify zero unintended invoice/payment/stock/journal effects and read every migration back, then run the normal employee quote conversion and `Revisar modo` browser paths before publishing the matching client. Migration 035 is the only backfill; migration 060 has no backfill. Staging remains suspended/non-authoritative.
 2. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
 3. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
 4. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.

@@ -1,4 +1,6 @@
--- Deployment status: NOT DEPLOYED. Local architecture proposal for review.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-15
+-- Deployment verification: RPC/ACL/RLS smoke passed; browser canary persisted
+-- 1 bike, 1 profile, 2 audit events and 1 receipt; migration history recorded.
 -- One bicycle form submission is one durable command: identity, optional
 -- profile truth, audit events, and the retry receipt commit or roll back
 -- together.
@@ -111,8 +113,6 @@ declare
   v_tenant_id uuid;
   v_active_profile_count integer;
   v_operation public.bike_aggregate_save_operations%rowtype;
-  v_bike public.bikes%rowtype;
-  v_profile public.bike_profiles%rowtype;
 begin
   select count(*)::integer
     into v_active_profile_count
@@ -141,31 +141,10 @@ begin
     return null;
   end if;
 
-  select *
-    into v_bike
-    from public.bikes
-   where id = v_operation.bike_id
-     and tenant_id = v_tenant_id;
-
-  if not found then
-    raise exception 'Completed bicycle save no longer has a readable bicycle';
-  end if;
-
-  select *
-    into v_profile
-    from public.bike_profiles
-   where bike_id = v_bike.id
-     and tenant_id = v_tenant_id;
-
-  return jsonb_build_object(
-    'operation_id', v_operation.id,
-    'bike', to_jsonb(v_bike),
-    'profile', case
-      when v_profile.id is null then null
-      else to_jsonb(v_profile)
-    end,
-    'replayed', true
-  );
+  -- A retry receipt is evidence of the command that committed. Returning the
+  -- mutable current aggregate here would let a lost-response retry appear to
+  -- have committed changes made by a later, unrelated operation.
+  return v_operation.result_snapshot || jsonb_build_object('replayed', true);
 end;
 $$;
 
@@ -242,6 +221,15 @@ begin
     raise exception 'Bicycle profile payload must be an object or null';
   end if;
 
+  if octet_length(p_bike_payload::text) > 65536 then
+    raise exception 'Bicycle payload exceeds the 64 KiB command limit';
+  end if;
+
+  if p_profile_payload is not null
+     and octet_length(p_profile_payload::text) > 262144 then
+    raise exception 'Bicycle profile payload exceeds the 256 KiB command limit';
+  end if;
+
   if exists (
     select 1
       from jsonb_object_keys(p_bike_payload) as key_name
@@ -279,25 +267,36 @@ begin
     raise exception 'Bicycle profile maps must be JSON objects';
   end if;
 
+  if p_profile_payload is not null
+     and p_profile_payload ? 'technical_profile'
+     and (
+       (p_profile_payload->'technical_profile' ? 'values'
+         and jsonb_typeof(p_profile_payload->'technical_profile'->'values')
+           is distinct from 'object')
+       or (p_profile_payload->'technical_profile' ? 'sources'
+         and jsonb_typeof(p_profile_payload->'technical_profile'->'sources')
+           is distinct from 'object')
+       or (p_profile_payload->'technical_profile' ? 'confirmed'
+         and jsonb_typeof(p_profile_payload->'technical_profile'->'confirmed')
+           is distinct from 'object')
+     ) then
+    raise exception 'Bicycle technical profile values, sources and confirmed maps must be JSON objects';
+  end if;
+
   if p_bike_payload ? 'image_urls'
      and p_bike_payload->'image_urls' <> 'null'::jsonb
      and jsonb_typeof(p_bike_payload->'image_urls') <> 'array' then
     raise exception 'Bicycle image_urls must be an array or null';
   end if;
 
-  v_payload_hash := md5(jsonb_build_object(
+  v_payload_hash := encode(extensions.digest(jsonb_build_object(
     'bike_id', p_bike_id,
     'customer_id', p_customer_id,
     'expected_bike_updated_at', p_expected_bike_updated_at,
     'expected_profile_updated_at', p_expected_profile_updated_at,
     'bike', p_bike_payload,
-    'profile', case
-      when p_profile_payload is null then null
-      else p_profile_payload - array[
-        'summary_snapshot', 'last_confirmed_at'
-      ]::text[]
-    end
-  )::text);
+    'profile', p_profile_payload
+  )::text, 'sha256'), 'hex');
 
   perform pg_advisory_xact_lock(
     hashtextextended(v_tenant_id::text || ':bike_aggregate:' || v_operation_key, 0)
@@ -315,31 +314,7 @@ begin
         using errcode = 'integrity_constraint_violation';
     end if;
 
-    select *
-      into v_saved_bike
-      from public.bikes
-     where id = v_operation.bike_id
-       and tenant_id = v_tenant_id;
-
-    if not found then
-      raise exception 'Completed bicycle save no longer has a readable bicycle';
-    end if;
-
-    select *
-      into v_saved_profile
-      from public.bike_profiles
-     where bike_id = v_saved_bike.id
-       and tenant_id = v_tenant_id;
-
-    return jsonb_build_object(
-      'operation_id', v_operation.id,
-      'bike', to_jsonb(v_saved_bike),
-      'profile', case
-        when v_saved_profile.id is null then null
-        else to_jsonb(v_saved_profile)
-      end,
-      'replayed', true
-    );
+    return v_operation.result_snapshot || jsonb_build_object('replayed', true);
   end if;
 
   if not exists (
@@ -385,6 +360,12 @@ begin
   ) then
     raise exception 'Bicycle not found for current tenant'
       using errcode = 'insufficient_privilege';
+  end if;
+
+  if v_bike_exists
+     and v_existing_bike.customer_id is distinct from p_customer_id then
+    raise exception 'Bicycle customer cannot be reassigned through the aggregate save command'
+      using errcode = 'integrity_constraint_violation';
   end if;
 
   v_effective_brand_id := case
@@ -674,19 +655,19 @@ end;
 $$;
 
 revoke all on function public.get_bike_aggregate(uuid)
-  from public, anon;
+  from public, anon, service_role;
 revoke all on function public.get_bike_aggregate_save_operation(text)
-  from public, anon;
+  from public, anon, service_role;
 revoke all on function public.save_bike_aggregate(
   text, uuid, uuid, timestamptz, timestamptz, jsonb, jsonb
-) from public, anon;
+) from public, anon, service_role;
 
 grant execute on function public.get_bike_aggregate(uuid)
-  to authenticated, service_role;
+  to authenticated;
 grant execute on function public.get_bike_aggregate_save_operation(text)
-  to authenticated, service_role;
+  to authenticated;
 grant execute on function public.save_bike_aggregate(
   text, uuid, uuid, timestamptz, timestamptz, jsonb, jsonb
-) to authenticated, service_role;
+) to authenticated;
 
 commit;

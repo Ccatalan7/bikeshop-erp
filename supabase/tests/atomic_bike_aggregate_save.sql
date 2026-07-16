@@ -1,7 +1,7 @@
 begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(48);
+select plan(56);
 
 insert into public.tenants(id, shop_name) values
   ('99941000-0000-4000-8000-000000000001', 'Atomic Bike Tenant'),
@@ -34,6 +34,7 @@ insert into public.user_profiles(user_id, tenant_id, role) values (
 
 insert into public.customers(id, tenant_id, name) values
   ('99941000-0000-4000-8000-000000000010', '99941000-0000-4000-8000-000000000001', 'Atomic Bike Customer'),
+  ('99941000-0000-4000-8000-000000000012', '99941000-0000-4000-8000-000000000001', 'Same Tenant Other Customer'),
   ('99941000-0000-4000-8000-000000000020', '99941000-0000-4000-8000-000000000002', 'Other Tenant Customer');
 
 insert into public.bike_brands(id, tenant_id, name) values
@@ -76,6 +77,14 @@ select ok(
     'execute'
   ),
   'authenticated employees can execute the aggregate writer'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.save_bike_aggregate(text,uuid,uuid,timestamptz,timestamptz,jsonb,jsonb)',
+    'execute'
+  ),
+  'service role is not granted a command whose authorization requires an employee JWT'
 );
 select ok(
   not has_table_privilege(
@@ -153,6 +162,40 @@ select throws_ok(
   'P0001',
   'Bicycle profile maps must be JSON objects',
   'JSON null cannot silently replace a profile map'
+);
+
+select throws_ok(
+  $$
+    select public.save_bike_aggregate(
+      'bike-invalid-technical-values',
+      '99941000-0000-4000-8000-000000000012',
+      '99941000-0000-4000-8000-000000000010',
+      null,
+      null,
+      '{"brand":"Invalid","model":"Technical"}'::jsonb,
+      '{"technical_profile":{"values":[]}}'::jsonb
+    )
+  $$,
+  'P0001',
+  'Bicycle technical profile values, sources and confirmed maps must be JSON objects',
+  'nested technical maps cannot silently change JSON type'
+);
+
+select throws_ok(
+  $$
+    select public.save_bike_aggregate(
+      'bike-oversized-payload',
+      '99941000-0000-4000-8000-000000000013',
+      '99941000-0000-4000-8000-000000000010',
+      null,
+      null,
+      jsonb_build_object('notes', repeat('x', 65537)),
+      null
+    )
+  $$,
+  'P0001',
+  'Bicycle payload exceeds the 64 KiB command limit',
+  'aggregate commands reject unexpectedly large identity payloads'
 );
 
 create temp table first_save on commit drop as
@@ -291,8 +334,8 @@ select public.save_bike_aggregate(
         'drivetrainSpeeds', true
       )
     ),
-    'summary_snapshot', jsonb_build_object('identityLine', 'Different derived summary is ignored by the retry fingerprint'),
-    'last_confirmed_at', '2026-07-14T12:05:00Z'
+    'summary_snapshot', jsonb_build_object('identityLine', 'Atomic Trail'),
+    'last_confirmed_at', '2026-07-14T12:00:00Z'
   )
 ) payload;
 
@@ -319,6 +362,38 @@ select is(
   ),
   2,
   'replay creates no duplicate audit events'
+);
+select throws_ok(
+  $$
+    select public.save_bike_aggregate(
+      'bike-attempt-1',
+      '99941000-0000-4000-8000-000000000011',
+      '99941000-0000-4000-8000-000000000010',
+      null,
+      null,
+      '{"brand_id":"99941000-0000-4000-8000-000000000041","model_id":"99941000-0000-4000-8000-000000000051","brand":"Atomic","model":"Trail","bike_type":"mountain_hardtail","color":"Azul","wheel_size":"29","image_urls":[]}'::jsonb,
+      '{"intake_profile":{"primaryUse":"trail"},"technical_profile":{"values":{"brakeType":"hydraulic_disc","drivetrainConfig":"1x12","drivetrainSpeeds":12},"sources":{"brakeType":"mechanic","drivetrainConfig":"mechanic","drivetrainSpeeds":"mechanic"},"confirmed":{"brakeType":true,"drivetrainConfig":true,"drivetrainSpeeds":true}},"summary_snapshot":{"identityLine":"Changed summary"},"last_confirmed_at":"2026-07-14T12:00:00Z"}'::jsonb
+    )
+  $$,
+  '23000',
+  'Bicycle save key was already used with different content',
+  'the retry fingerprint includes the persisted summary snapshot'
+);
+select throws_ok(
+  $$
+    select public.save_bike_aggregate(
+      'bike-attempt-1',
+      '99941000-0000-4000-8000-000000000011',
+      '99941000-0000-4000-8000-000000000010',
+      null,
+      null,
+      '{"brand_id":"99941000-0000-4000-8000-000000000041","model_id":"99941000-0000-4000-8000-000000000051","brand":"Atomic","model":"Trail","bike_type":"mountain_hardtail","color":"Azul","wheel_size":"29","image_urls":[]}'::jsonb,
+      '{"intake_profile":{"primaryUse":"trail"},"technical_profile":{"values":{"brakeType":"hydraulic_disc","drivetrainConfig":"1x12","drivetrainSpeeds":12},"sources":{"brakeType":"mechanic","drivetrainConfig":"mechanic","drivetrainSpeeds":"mechanic"},"confirmed":{"brakeType":true,"drivetrainConfig":true,"drivetrainSpeeds":true}},"summary_snapshot":{"identityLine":"Atomic Trail"},"last_confirmed_at":"2026-07-14T12:05:00Z"}'::jsonb
+    )
+  $$,
+  '23000',
+  'Bicycle save key was already used with different content',
+  'the retry fingerprint includes the persisted confirmation timestamp'
 );
 select throws_ok(
   $$
@@ -385,8 +460,16 @@ select is(
     public.get_bike_aggregate_save_operation('bike-attempt-1')
       ->'bike'->>'color'
   ),
-  'Rojo',
-  'receipt reconciliation returns current aggregate truth, not its audit snapshot'
+  'Azul',
+  'receipt reconciliation returns the immutable committed command snapshot'
+);
+select is(
+  (
+    public.get_bike_aggregate_save_operation('bike-attempt-1')
+      ->'profile'->'technical_profile'->'values'->>'brakeType'
+  ),
+  'hydraulic_disc',
+  'receipt reconciliation cannot absorb a later profile edit'
 );
 select is(
   (
@@ -432,6 +515,33 @@ select is(
   ),
   '99941000-0000-4000-8000-000000000041',
   'rejected brand-model mismatch leaves the original identity pair intact'
+);
+
+create temp table ownership_version on commit drop as
+select updated_at
+  from public.bikes
+ where id = '99941000-0000-4000-8000-000000000011';
+select throws_ok(
+  format(
+    'select public.save_bike_aggregate(%L,%L::uuid,%L::uuid,%L::timestamptz,null,%L::jsonb,null)',
+    'bike-owner-reassignment',
+    '99941000-0000-4000-8000-000000000011',
+    '99941000-0000-4000-8000-000000000012',
+    (select updated_at from ownership_version),
+    '{"notes":"Ownership reassignment attempt"}'
+  ),
+  '23000',
+  'Bicycle customer cannot be reassigned through the aggregate save command',
+  'normal aggregate editing cannot rewrite durable bicycle ownership'
+);
+select is(
+  (
+    select customer_id::text
+      from public.bikes
+     where id = '99941000-0000-4000-8000-000000000011'
+  ),
+  '99941000-0000-4000-8000-000000000010',
+  'rejected ownership reassignment preserves the original customer'
 );
 
 create temp table profile_stale_baseline on commit drop as

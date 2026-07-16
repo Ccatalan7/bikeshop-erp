@@ -113,12 +113,20 @@ select is(
   'failed validations create no payment row'
 );
 
+-- Simulate a backwards wall-clock correction between command acceptance and
+-- child trace creation. Exact trace identity must never depend on timestamps.
+alter table public.inventory_accounting_operations
+  alter column created_at set default (clock_timestamp() - interval '1 minute');
+
 insert into online_payment_ids
 select 'payment', public.confirm_online_order_payment(
   (select id from online_payment_ids where name = 'order'),
   'BANK-TRANSFER-001',
   clock_timestamp()
 );
+
+alter table public.inventory_accounting_operations
+  alter column created_at set default clock_timestamp();
 
 select is(
   (select payment_status from public.online_orders where id = (select id from online_payment_ids where name = 'order')),
@@ -198,9 +206,25 @@ select is(
   'parent confirmation operation completes invariant checks'
 );
 select ok(
-  (select context->>'invoice_operation_id' is not null and context->>'payment_operation_id' is not null
-   from public.inventory_accounting_operations where id = (select payment_confirmation_operation_id from public.online_orders where id = (select id from online_payment_ids where name = 'order'))),
-  'parent operation links invoice and payment child operations'
+  (
+    select invoice_child.operation_key =
+             'sales_invoice:' || invoice_child.document_id::text
+             || ':update:online_order_manual_payment:' || orders.id::text
+       and invoice_child.outcome = 'completed'
+       and payment_child.operation_key =
+             'sales_payment:' || payment_child.document_id::text
+             || ':insert:online_order_manual_payment:' || orders.id::text
+       and payment_child.outcome = 'completed'
+      from public.online_orders orders
+      join public.inventory_accounting_operations parent
+        on parent.id = orders.payment_confirmation_operation_id
+      join public.inventory_accounting_operations invoice_child
+        on invoice_child.id = (parent.context->>'invoice_operation_id')::uuid
+      join public.inventory_accounting_operations payment_child
+        on payment_child.id = (parent.context->>'payment_operation_id')::uuid
+     where orders.id = (select id from online_payment_ids where name = 'order')
+  ),
+  'parent operation links the exact completed invoice and payment child operations despite wall-clock regression'
 );
 select is(
   (select count(*)::integer from public.stock_movements movement
