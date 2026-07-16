@@ -33,6 +33,27 @@ steps, or deployment chores left for the user.
   to commit, push, publish, delete data, rotate credentials, incur material
   cost, or expand scope unless the task or a repo runbook authorizes it.
 
+### Mandatory Workspace And Branch Continuity
+
+- Work directly in `/Users/Claudio/Dev/bikeshop-erp` on the established
+  `smartpegas1.0` branch. The user runs and debugs that checkout and is not
+  expected to understand or reconcile alternate Git environments.
+- Do not create Git worktrees, temporary clones, alternate implementation
+  branches, or switch the active branch unless the user has first received a
+  plain-language explanation and explicitly authorized that exact action.
+- Do not stash, reset, discard, or overwrite pending changes. Changes visible
+  in Source Control are agent-produced project work: inspect, consolidate,
+  verify, commit, and push them autonomously on the established branch.
+- Never leave the user instructions to run `fetch`, `pull`, `stash`, `reset`,
+  resolve conflicts, or synchronize a debug checkout. The agent owns that
+  workflow end to end and must confirm that VS Code, the filesystem, `HEAD`,
+  and `origin/smartpegas1.0` all refer to the consolidated version before
+  claiming that a UI fix is visible.
+- Before starting or restarting any debug server/session, verify the absolute
+  checkout path, branch name, clean/intentional working-tree state, and exact
+  commit. A test or screenshot from another checkout is not evidence for the
+  user's active debug session.
+
 An explicit request to implement, fix, ship, deploy, or "get it done" is
 task-level authorization for the normal, non-destructive, backward-compatible
 writes required to make that result active on the clearly identified target.
