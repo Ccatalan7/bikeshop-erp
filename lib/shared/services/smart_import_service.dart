@@ -30,7 +30,8 @@ class SmartImportService extends ChangeNotifier {
 
     // Generate import reference (batch ID with timestamp)
     final importReference = 'import_${DateTime.now().millisecondsSinceEpoch}';
-    final importReason = 'Import: ${options.mode.label} (${records.length} records)';
+    final importReason =
+        'Import: ${options.mode.label} (${records.length} records)';
 
     int inserted = 0;
     int updated = 0;
@@ -57,7 +58,8 @@ class SmartImportService extends ChangeNotifier {
               failed++;
               continue;
             } else {
-              throw Exception('Campo de coincidencia ${options.matchField} no encontrado');
+              throw Exception(
+                  'Campo de coincidencia ${options.matchField} no encontrado');
             }
           }
 
@@ -108,7 +110,8 @@ class SmartImportService extends ChangeNotifier {
 
             if (filteredUpdateData.isEmpty) {
               skipped++;
-              debugPrint('⏭️ Skipped (no valid changes after filtering): $matchValue');
+              debugPrint(
+                  '⏭️ Skipped (no valid changes after filtering): $matchValue');
               continue;
             }
 
@@ -127,7 +130,8 @@ class SmartImportService extends ChangeNotifier {
             }
 
             // Update existing record
-            debugPrint('🔄 Attempting update for $matchValue with data: $filteredUpdateData');
+            debugPrint(
+                '🔄 Attempting update for $matchValue with data: $filteredUpdateData');
             try {
               await _db.update(
                 tableName,
@@ -135,11 +139,13 @@ class SmartImportService extends ChangeNotifier {
                 filteredUpdateData,
               );
               updated++;
-              debugPrint('✅ Updated: $matchValue (${filteredUpdateData.length} fields)');
+              debugPrint(
+                  '✅ Updated: $matchValue (${filteredUpdateData.length} fields)');
             } catch (updateError) {
               debugPrint('❌ Update failed for $matchValue: $updateError');
               if (options.skipErrors) {
-                errors.add('Error actualizando ${record[options.matchField]}: $updateError');
+                errors.add(
+                    'Error actualizando ${record[options.matchField]}: $updateError');
                 failed++;
               } else {
                 rethrow;
@@ -241,7 +247,8 @@ class SmartImportService extends ChangeNotifier {
       final normalizedExisting = _normalizeValue(existingValue);
       final normalizedImported = _normalizeValue(importedValue);
       
-      debugPrint('   🔍 $field: "$existingValue" → "$importedValue" (${normalizedExisting == normalizedImported ? "same" : "CHANGED"})');
+      debugPrint(
+          '   🔍 $field: "$existingValue" → "$importedValue" (${normalizedExisting == normalizedImported ? "same" : "CHANGED"})');
 
       // Mode-specific logic
       switch (options.mode) {

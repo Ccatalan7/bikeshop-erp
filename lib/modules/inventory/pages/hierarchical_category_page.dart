@@ -27,7 +27,8 @@ class HierarchicalCategoryPage extends StatefulWidget {
   });
 
   @override
-  State<HierarchicalCategoryPage> createState() => _HierarchicalCategoryPageState();
+  State<HierarchicalCategoryPage> createState() =>
+      _HierarchicalCategoryPageState();
 }
 
 class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
@@ -69,7 +70,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
 
   Future<void> _loadData() async {
     final startTime = DateTime.now();
-    debugPrint('⏱️ [LOAD] Starting _loadData for categoryId: ${widget.categoryId}');
+    debugPrint(
+        '⏱️ [LOAD] Starting _loadData for categoryId: ${widget.categoryId}');
     
     setState(() => _isLoading = true);
     try {
@@ -78,7 +80,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         final searchStart = DateTime.now();
         _allCategories = await _categoryService.getCategories(activeOnly: true);
         _indexCategoryPaths();
-        debugPrint('⏱️ [LOAD] All categories loaded in ${DateTime.now().difference(searchStart).inMilliseconds}ms');
+        debugPrint(
+            '⏱️ [LOAD] All categories loaded in ${DateTime.now().difference(searchStart).inMilliseconds}ms');
       }
       
       if (widget.categoryId == null) {
@@ -86,7 +89,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         final rootStart = DateTime.now();
         _currentCategory = null;
         _subcategories = await _categoryService.getRootCategories();
-        debugPrint('⏱️ [LOAD] Root categories loaded (${_subcategories.length} items) in ${DateTime.now().difference(rootStart).inMilliseconds}ms');
+        debugPrint(
+            '⏱️ [LOAD] Root categories loaded (${_subcategories.length} items) in ${DateTime.now().difference(rootStart).inMilliseconds}ms');
         _products = [];
         _breadcrumbs = await _generateBreadcrumbs(null);
       } else {
@@ -97,13 +101,15 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
           _categoryService.getSubcategories(widget.categoryId!),
           _loadProductsForCategory(widget.categoryId!),
         ]);
-        debugPrint('⏱️ [LOAD] Parallel queries completed in ${DateTime.now().difference(parallelStart).inMilliseconds}ms');
+        debugPrint(
+            '⏱️ [LOAD] Parallel queries completed in ${DateTime.now().difference(parallelStart).inMilliseconds}ms');
         
         _currentCategory = results[0] as Category?;
         _subcategories = results[1] as List<Category>;
         _products = results[2] as List<Map<String, dynamic>>;
         
-        debugPrint('⏱️ [LOAD] Loaded: ${_subcategories.length} subcategories, ${_products.length} products');
+        debugPrint(
+            '⏱️ [LOAD] Loaded: ${_subcategories.length} subcategories, ${_products.length} products');
         
         if (_currentCategory != null) {
           _breadcrumbs = await _generateBreadcrumbs(_currentCategory!);
@@ -114,9 +120,11 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         setState(() => _isLoading = false);
       }
       
-      debugPrint('⏱️ [LOAD] TOTAL _loadData completed in ${DateTime.now().difference(startTime).inMilliseconds}ms');
+      debugPrint(
+          '⏱️ [LOAD] TOTAL _loadData completed in ${DateTime.now().difference(startTime).inMilliseconds}ms');
     } catch (e) {
-      debugPrint('❌ [LOAD] Error after ${DateTime.now().difference(startTime).inMilliseconds}ms: $e');
+      debugPrint(
+          '❌ [LOAD] Error after ${DateTime.now().difference(startTime).inMilliseconds}ms: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +134,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadProductsForCategory(String categoryId) async {
+  Future<List<Map<String, dynamic>>> _loadProductsForCategory(
+      String categoryId) async {
     try {
       final products = await _databaseService.select(
         'products',
@@ -160,9 +169,11 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     }
   }
 
-  Future<List<CategoryBreadcrumb>> _generateBreadcrumbs(Category? category) async {
+  Future<List<CategoryBreadcrumb>> _generateBreadcrumbs(
+      Category? category) async {
     final breadcrumbs = <CategoryBreadcrumb>[
-      CategoryBreadcrumb(name: 'Todas las Categorías', categoryId: null, level: -1),
+      CategoryBreadcrumb(
+          name: 'Todas las Categorías', categoryId: null, level: -1),
     ];
 
     if (category == null) {
@@ -254,14 +265,16 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         ),
                         onChanged: (value) async {
                           setState(() => _searchTerm = value);
                           // Load all categories when user starts searching
                           if (value.isNotEmpty && _allCategories.isEmpty) {
                             setState(() => _isLoading = true);
-                            _allCategories = await _categoryService.getCategories(activeOnly: true);
+                          _allCategories = await _categoryService.getCategories(
+                              activeOnly: true);
                             _indexCategoryPaths();
                             setState(() => _isLoading = false);
                           }
@@ -309,7 +322,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                         // Pass current category as parent context
                         final parentId = widget.categoryId;
                         if (parentId != null) {
-                          await context.push('/inventory/categories/new?parent=$parentId');
+                        await context
+                            .push('/inventory/categories/new?parent=$parentId');
                         } else {
                           await context.push('/inventory/categories/new');
                         }
@@ -345,11 +359,13 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
       spacing: 4,
       children: [
         for (int i = 0; i < _breadcrumbs.length; i++) ...[
-          if (i > 0) Icon(Icons.chevron_right, size: 16, color: Colors.grey[600]),
+          if (i > 0)
+            Icon(Icons.chevron_right, size: 16, color: Colors.grey[600]),
           InkWell(
             onTap: () {
               final breadcrumb = _breadcrumbs[i];
-              debugPrint('🔗 Breadcrumb clicked: ${breadcrumb.name} -> categoryId: ${breadcrumb.categoryId}');
+              debugPrint(
+                  '🔗 Breadcrumb clicked: ${breadcrumb.name} -> categoryId: ${breadcrumb.categoryId}');
               // Navigate to the breadcrumb's category
               _navigateToCategory(breadcrumb.categoryId);
             },
@@ -377,9 +393,11 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
   Widget _buildContent() {
     // When searching, search ALL categories globally (don't show products in search)
     if (_searchTerm.isNotEmpty) {
-      final filteredCategories = _allCategories.where((cat) =>
+      final filteredCategories = _allCategories
+          .where((cat) =>
           cat.fullPath.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-          cat.name.toLowerCase().contains(_searchTerm.toLowerCase())).toList();
+              cat.name.toLowerCase().contains(_searchTerm.toLowerCase()))
+          .toList();
 
       if (filteredCategories.isEmpty) {
         return Center(
@@ -468,7 +486,9 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                   },
                 )
               : Column(
-                  children: _subcategories.map((cat) => _buildCategoryListTile(cat)).toList(),
+                  children: _subcategories
+                      .map((cat) => _buildCategoryListTile(cat))
+                      .toList(),
                 ),
           if (hasProducts) const SizedBox(height: 24),
         ],
@@ -477,7 +497,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         if (hasProducts) ...[
           Row(
             children: [
-              Icon(Icons.inventory_2, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.inventory_2,
+                  color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
               Text(
                 'Productos (${_products.length})',
@@ -505,7 +526,9 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                   },
                 )
               : Column(
-                  children: _products.map((product) => _buildProductListTile(product)).toList(),
+                  children: _products
+                      .map((product) => _buildProductListTile(product))
+                      .toList(),
                 ),
         ],
       ],
@@ -580,7 +603,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                         padding: EdgeInsets.zero,
                         onSelected: (value) {
                           if (value == 'edit') {
-                            context.push('/inventory/categories/${category.id}/edit');
+                            context.push(
+                                '/inventory/categories/${category.id}/edit');
                           } else if (value == 'delete') {
                             _showDeleteConfirmation(category);
                           }
@@ -602,7 +626,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                               children: [
                                 Icon(Icons.delete, size: 18, color: Colors.red),
                                 SizedBox(width: 8),
-                                Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                Text('Eliminar',
+                                    style: TextStyle(color: Colors.red)),
                               ],
                             ),
                           ),
@@ -688,7 +713,8 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         title: Text(
           isSearchResult ? category.fullPath : category.name,
           style: TextStyle(
-            fontWeight: category.level == 0 ? FontWeight.bold : FontWeight.normal,
+            fontWeight:
+                category.level == 0 ? FontWeight.bold : FontWeight.normal,
           ),
         ),
         subtitle: category.description != null
@@ -812,13 +838,15 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           color: Colors.grey[200],
-                          child: Icon(Icons.image, size: 48, color: Colors.grey[400]),
+                          child: Icon(Icons.image,
+                              size: 48, color: Colors.grey[400]),
                         );
                       },
                     )
                   : Container(
                       color: Colors.grey[200],
-                      child: Icon(Icons.image, size: 48, color: Colors.grey[400]),
+                      child:
+                          Icon(Icons.image, size: 48, color: Colors.grey[400]),
                     ),
             ),
             
@@ -946,7 +974,8 @@ class _ImportCategoriesDialog extends StatefulWidget {
   });
 
   @override
-  State<_ImportCategoriesDialog> createState() => _ImportCategoriesDialogState();
+  State<_ImportCategoriesDialog> createState() =>
+      _ImportCategoriesDialogState();
 }
 
 class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
@@ -1004,7 +1033,9 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error leyendo archivo: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error leyendo archivo: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -1055,7 +1086,9 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error importando: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error importando: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1081,10 +1114,10 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
             ),
             const SizedBox(height: 8),
             const Text('• Una sola columna con nombres de categorías'),
-            const Text('• Use "/" para separar niveles (e.g., "Accesorios / Asientos / Tija")'),
+            const Text(
+                '• Use "/" para separar niveles (e.g., "Accesorios / Asientos / Tija")'),
             const Text('• El sistema creará automáticamente la jerarquía'),
             const Divider(height: 24),
-            
             if (_selectedFileName != null) ...[
               Row(
                 children: [
@@ -1094,7 +1127,6 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
                 ],
               ),
               const SizedBox(height: 16),
-              
               if (_previewData != null && _previewData!.isNotEmpty) ...[
                 const Text(
                   'Vista previa (primeras 10):',
@@ -1121,7 +1153,9 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
                         child: Row(
                           children: [
                             Icon(
-                              level == 0 ? Icons.folder : Icons.subdirectory_arrow_right,
+                              level == 0
+                                  ? Icons.folder
+                                  : Icons.subdirectory_arrow_right,
                               size: 16,
                               color: Colors.grey[600],
                             ),

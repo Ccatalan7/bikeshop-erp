@@ -2112,8 +2112,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
             decoration: BoxDecoration(
               border: Border(
                   bottom: BorderSide(
-                      color:
-                          theme.colorScheme.outlineVariant.withValues(alpha: 0.2))),
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.2))),
             ),
             child: Material(
               color: isSelected
@@ -2502,9 +2502,10 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                                 icon: const Icon(Icons.delete, size: 18),
                                 onPressed: () => _confirmDelete(item, service),
                                 tooltip: 'Eliminar',
-                                color: theme.colorScheme.error.withValues(alpha: 0.7),
-                                hoverColor:
-                                    theme.colorScheme.error.withValues(alpha: 0.1),
+                                color: theme.colorScheme.error
+                                    .withValues(alpha: 0.7),
+                                hoverColor: theme.colorScheme.error
+                                    .withValues(alpha: 0.1),
                               ),
                             ],
                           ),

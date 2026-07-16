@@ -295,8 +295,8 @@ class _JobSubjectsPageState extends State<JobSubjectsPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     filled: true,
-                    fillColor:
-                        colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    fillColor: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.4),
                   ),
                   onChanged: (v) => setState(() => _searchTerm = v),
                 ),
@@ -608,7 +608,8 @@ class _SubjectDialogState extends State<_SubjectDialog> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        initialValue: widget.availableCategories.contains(_category)
+                        initialValue:
+                            widget.availableCategories.contains(_category)
                             ? _category
                             : null,
                         decoration: const InputDecoration(

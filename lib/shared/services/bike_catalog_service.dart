@@ -49,11 +49,8 @@ class BikeCatalogService {
   /// Get bike by ID
   Future<BikeCatalogEntry?> getBikeById(String id) async {
     try {
-      final response = await _supabase
-          .from('bike_catalog')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _supabase.from('bike_catalog').select().eq('id', id).single();
       
       return BikeCatalogEntry.fromJson(response);
     } catch (e) {
@@ -87,13 +84,12 @@ class BikeCatalogService {
   /// Get distinct brands
   Future<List<String>> getBrands() async {
     try {
-      final response = await _supabase
-          .from('bike_catalog')
-          .select('brand')
-          .order('brand');
+      final response =
+          await _supabase.from('bike_catalog').select('brand').order('brand');
       
       final data = response as List;
-      final brands = data.map((item) => item['brand'] as String).toSet().toList();
+      final brands =
+          data.map((item) => item['brand'] as String).toSet().toList();
       brands.sort();
       return brands;
     } catch (e) {
@@ -111,7 +107,8 @@ class BikeCatalogService {
           .order('model_year', ascending: false);
       
       final data = response as List;
-      final years = data.map((item) => item['model_year'] as int).toSet().toList();
+      final years =
+          data.map((item) => item['model_year'] as int).toSet().toList();
       years.sort((a, b) => b.compareTo(a)); // Descending
       return years;
     } catch (e) {
@@ -123,9 +120,7 @@ class BikeCatalogService {
   /// Get total count
   Future<int> getTotalCount() async {
     try {
-      final response = await _supabase
-          .from('bike_catalog')
-          .select('id');
+      final response = await _supabase.from('bike_catalog').select('id');
       
       final data = response as List;
       return data.length;

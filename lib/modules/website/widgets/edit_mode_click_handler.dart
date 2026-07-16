@@ -122,7 +122,8 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
                 top: 4,
                 right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00A09D).withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(4),
@@ -137,7 +138,8 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.touch_app, size: 12, color: Colors.white),
+                      const Icon(Icons.touch_app,
+                          size: 12, color: Colors.white),
                       const SizedBox(width: 4),
                       Text(
                         widget.tooltip ?? 'Clic para editar',
@@ -160,7 +162,8 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
                 right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(12),
@@ -252,7 +255,8 @@ class _EditModeButtonState extends State<EditModeButton> {
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
-          decoration: widget.isEditMode ? BoxDecoration(
+          decoration: widget.isEditMode
+              ? BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: widget.isSelected 
@@ -265,7 +269,8 @@ class _EditModeButtonState extends State<EditModeButton> {
             color: _isHovered && !widget.isSelected
                 ? const Color(0xFF00A09D).withValues(alpha: 0.1)
                 : null,
-          ) : null,
+                )
+              : null,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -277,7 +282,8 @@ class _EditModeButtonState extends State<EditModeButton> {
                   top: -20,
                   left: 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF00A09D),
                       borderRadius: BorderRadius.circular(3),
@@ -422,7 +428,8 @@ class _EditableMenuItemState extends State<EditableMenuItem> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: widget.isEditMode ? BoxDecoration(
+          decoration: widget.isEditMode
+              ? BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: widget.isSelected || _isEditing
@@ -437,7 +444,8 @@ class _EditableMenuItemState extends State<EditableMenuItem> {
                 : _isHovered 
                     ? const Color(0xFF00A09D).withValues(alpha: 0.1)
                     : null,
-          ) : null,
+                )
+              : null,
           child: _isEditing
               ? IntrinsicWidth(
                   child: TextField(

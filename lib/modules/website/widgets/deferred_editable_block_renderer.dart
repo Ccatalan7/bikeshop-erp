@@ -30,7 +30,8 @@ class DeferredEditableBlockRenderer {
   }) {
     // If the type is not recognized, loading the editor library is pointless.
     final normalised = blockType.trim().toLowerCase();
-    final isKnownType = WebsiteBlockType.values.any((t) => t.name.toLowerCase() == normalised);
+    final isKnownType =
+        WebsiteBlockType.values.any((t) => t.name.toLowerCase() == normalised);
     if (!isKnownType) {
       return const SizedBox.shrink();
     }

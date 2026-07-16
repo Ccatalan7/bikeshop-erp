@@ -288,7 +288,8 @@ class _BikeSystemControllerState extends State<BikeSystemController>
     // --- system detail view (exploded component image) ---
     // Only show when the user EXPLICITLY tapped a pin (not auto-resolved by parent).
     final detailConfig = _kSystemDetailAssets[_explicitSystemKey];
-    final detailAssetPath = detailConfig?.resolveAssetPath(widget.bike, widget.profile);
+    final detailAssetPath =
+        detailConfig?.resolveAssetPath(widget.bike, widget.profile);
     final detailLabel = _explicitSystemKey != null
         ? bikeSystemControllerLabelFor(_explicitSystemKey!)
         : '';
@@ -356,8 +357,11 @@ class _BikeSystemControllerState extends State<BikeSystemController>
                   widget.selectedSystemKey == entry.spec.systemKey;
 
               return Positioned(
-                left: px - 12,
-                top: py - 12,
+                left: placement.labelRight ? px - 16 : null,
+                right: placement.labelRight
+                    ? null
+                    : constraints.maxWidth - px - 16,
+                top: py - 16,
                 child: _BikeSystemControllerPin(
                   label: entry.spec.label,
                   color: _statusColor(entry.status),
@@ -666,6 +670,141 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
     final effectiveColor =
         widget.selectable ? widget.color : widget.color.withValues(alpha: 0.45);
 
+    final pin = SizedBox(
+      width: 32,
+      height: 32,
+      child: AnimatedBuilder(
+        animation: widget.pulseAnimation,
+        builder: (context, _) {
+          return Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              if (!active)
+                Container(
+                  width: 24 * widget.pulseAnimation.value,
+                  height: 24 * widget.pulseAnimation.value,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: effectiveColor.withValues(
+                        alpha: (1 - widget.pulseAnimation.value) * 0.8,
+                      ),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              if (active)
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: effectiveColor.withValues(alpha: 0.20),
+                    border: Border.all(
+                      color: effectiveColor.withValues(alpha: 0.6),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: effectiveColor.withValues(alpha: 0.5),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              if (widget.isSelected && !_isHovered)
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: effectiveColor.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                ),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: active
+                      ? effectiveColor
+                      : effectiveColor.withValues(alpha: 0.85),
+                  boxShadow: [
+                    BoxShadow(
+                      color: effectiveColor.withValues(
+                        alpha: active ? 0.9 : 0.5,
+                      ),
+                      blurRadius: active ? 10 : 4,
+                      spreadRadius: active ? 2 : 0,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    final label = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: active
+              ? effectiveColor.withValues(alpha: 0.7)
+              : const Color(0xFFCBD5E1),
+          width: 1,
+        ),
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: effectiveColor.withValues(alpha: 0.20),
+                  blurRadius: 8,
+                ),
+              ]
+            : [
+                const BoxShadow(
+                  color: Color(0x14000000),
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: effectiveColor,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            widget.label,
+            style: TextStyle(
+              color: active ? const Color(0xFF1E293B) : const Color(0xFF475569),
+              fontSize: 10,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+
     return MouseRegion(
       onEnter: (_) {
         if (!_isHovered) {
@@ -683,147 +822,13 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
           ? SystemMouseCursors.click
           : SystemMouseCursors.basic,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: AnimatedBuilder(
-            animation: widget.pulseAnimation,
-            builder: (context, _) {
-              return Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  if (!active)
-                    Container(
-                      width: 24 * widget.pulseAnimation.value,
-                      height: 24 * widget.pulseAnimation.value,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: effectiveColor.withValues(
-                            alpha: (1 - widget.pulseAnimation.value) * 0.8,
-                          ),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  if (active)
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: effectiveColor.withValues(alpha: 0.20),
-                        border: Border.all(
-                          color: effectiveColor.withValues(alpha: 0.6),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: effectiveColor.withValues(alpha: 0.5),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (widget.isSelected && !_isHovered)
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: effectiveColor.withValues(alpha: 0.35),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: active
-                          ? effectiveColor
-                          : effectiveColor.withValues(alpha: 0.85),
-                      boxShadow: [
-                        BoxShadow(
-                          color: effectiveColor.withValues(
-                            alpha: active ? 0.9 : 0.5,
-                          ),
-                          blurRadius: active ? 10 : 4,
-                          spreadRadius: active ? 2 : 0,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: widget.labelRight ? 18 : null,
-                    right: widget.labelRight ? null : 18,
-                    top: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: active
-                              ? effectiveColor.withValues(alpha: 0.7)
-                              : const Color(0xFFCBD5E1),
-                          width: 1,
-                        ),
-                        boxShadow: active
-                            ? [
-                                BoxShadow(
-                                  color: effectiveColor.withValues(alpha: 0.20),
-                                  blurRadius: 8,
-                                ),
-                              ]
-                            : [
-                                const BoxShadow(
-                                  color: Color(0x14000000),
-                                  blurRadius: 4,
-                                  offset: Offset(0, 1),
-                                ),
-                              ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: effectiveColor,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            widget.label,
-                            style: TextStyle(
-                              color: active
-                                  ? const Color(0xFF1E293B)
-                                  : const Color(0xFF475569),
-                              fontSize: 10,
-                              fontWeight:
-                                  active ? FontWeight.w700 : FontWeight.w500,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: widget.labelRight
+              ? [pin, const SizedBox(width: 2), label]
+              : [label, const SizedBox(width: 2), pin],
         ),
       ),
     );

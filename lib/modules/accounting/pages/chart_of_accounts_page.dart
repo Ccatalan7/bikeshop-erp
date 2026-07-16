@@ -148,9 +148,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
           ],
           Expanded(
             child: Text(
-              _selectedAccount != null
-                  ? 'Plan de Cuentas'
-                  : 'Plan de Cuentas',
+              _selectedAccount != null ? 'Plan de Cuentas' : 'Plan de Cuentas',
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,

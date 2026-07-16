@@ -122,7 +122,8 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             decoration: BoxDecoration(
               color: Colors.orange.withValues(alpha: 0.1),
               border: Border(
-                  bottom: BorderSide(color: Colors.orange.withValues(alpha: 0.3))),
+                  bottom:
+                      BorderSide(color: Colors.orange.withValues(alpha: 0.3))),
             ),
             child: Row(
               children: [

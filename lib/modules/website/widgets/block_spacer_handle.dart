@@ -58,13 +58,17 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
     }
 
     // During drag, use local spacing; otherwise use widget's spacing
-    final displaySpacing = _isDragging ? (_localDragSpacing ?? widget.currentSpacing) : widget.currentSpacing;
+    final displaySpacing = _isDragging
+        ? (_localDragSpacing ?? widget.currentSpacing)
+        : widget.currentSpacing;
     final showControls = _isHovered || _isDragging;
     
     // Simple fix: always have a minimum height for hit testing (16px)
     // This is the ACTUAL container height - no tricks with positioned elements
     const minInteractiveHeight = 16.0;
-    final containerHeight = displaySpacing < minInteractiveHeight ? minInteractiveHeight : displaySpacing;
+    final containerHeight = displaySpacing < minInteractiveHeight
+        ? minInteractiveHeight
+        : displaySpacing;
     
     return MouseRegion(
       cursor: SystemMouseCursors.resizeRow,
@@ -105,7 +109,8 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
               // Controls row - centered, all in one row
               if (showControls)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00A09D).withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(6),
@@ -154,7 +159,9 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
                       const Icon(Icons.height, size: 12, color: Colors.white),
                       const SizedBox(width: 4),
                       Text(
-                        displaySpacing.toInt() == 0 ? '0' : '${displaySpacing.toInt()}px',
+                        displaySpacing.toInt() == 0
+                            ? '0'
+                            : '${displaySpacing.toInt()}px',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -198,7 +205,8 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
 
     // Apply snap increment if specified
     if (widget.snapIncrement != null && widget.snapIncrement! > 0) {
-      newSpacing = (newSpacing / widget.snapIncrement!).round() * widget.snapIncrement!;
+      newSpacing =
+          (newSpacing / widget.snapIncrement!).round() * widget.snapIncrement!;
     }
 
     setState(() {

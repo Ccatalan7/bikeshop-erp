@@ -240,8 +240,8 @@ class GarageGrid extends StatelessWidget {
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
               TextButton.icon(
-                onPressed: () =>
-                  PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/bicicletas'),
+                onPressed: () => PublicStoreLayout.navigateToHref(
+                    context, '/tienda/cuenta/bicicletas'),
                 icon: const Text('Ver Todo', style: TextStyle(fontSize: 12)),
                 label: const Icon(Icons.chevron_right, size: 14),
                 style: TextButton.styleFrom(

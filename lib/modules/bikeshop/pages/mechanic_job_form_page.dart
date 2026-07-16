@@ -10,7 +10,6 @@ import 'package:provider/provider.dart';
 
 import '../../../modules/ai_assistant/services/ai_service.dart';
 import '../../../modules/crm/models/crm_models.dart';
-import '../../../modules/sales/models/sales_models.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/product_compatibility.dart';
 import '../../../shared/models/tax_treatment.dart';
@@ -825,7 +824,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   JobSubject? _selectedSubject;
   List<JobSubject> _availableSubjects = [];
   final _subjectNotesController = TextEditingController();
+  final _warrantyDecisionReasonController = TextEditingController();
   WarrantyOutcome? _warrantyOutcome;
+  List<MechanicJobServiceWarranty> _warrantySources = [];
+  MechanicJobServiceWarranty? _selectedWarrantySource;
+  MechanicJobWarrantyClaim? _warrantyClaim;
   QuotationStatus? _quotationStatus;
   DateTime? _quotationValidUntil;
 
@@ -864,6 +867,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Edit mode
   MechanicJob? _existingJob;
 
+  QuotationStatus get _effectiveQuotationStatus =>
+      _existingJob?.effectiveQuotationStatus ??
+      _quotationStatus ??
+      QuotationStatus.pending;
+
+  /// Once a quotation leaves pending, its accepted/rejected commercial
+  /// snapshot is changed only through the audited table actions. This keeps a
+  /// normal form save from silently rewriting the proposal that was shown to
+  /// the customer.
+  bool get _isFinalQuotationReadOnly =>
+      widget.jobId != null &&
+      _existingJob?.workflowKind == JobWorkflowKind.quotation &&
+      (_existingJob?.quotationStatus ?? QuotationStatus.pending) !=
+          QuotationStatus.pending;
+
+  /// The accepted quotation itself is immutable. Once the audited conversion
+  /// has produced a normal billable service, that service remains editable;
+  /// the original accepted values live in the append-only event snapshot.
+  bool get _isCommercialSnapshotLocked => _isFinalQuotationReadOnly;
+
+  bool get _hasConvertedQuotationHistory => _existingJob?.convertedAt != null;
+
+  bool get _canSaveJob => !_isSaving && !_isFinalQuotationReadOnly;
+
   @override
   void initState() {
     super.initState();
@@ -884,6 +911,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _discountController.dispose();
     _estimatedDurationController.dispose();
     _subjectNotesController.dispose();
+    _warrantyDecisionReasonController.dispose();
     _partAutocompleteFocus.dispose();
     for (final tab in _bikeTabs) {
       tab.dispose();
@@ -964,6 +992,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
           if (widget.initialJobType != null && widget.jobId == null) {
             _jobType = JobType.fromDbValue(widget.initialJobType!);
+            if (_jobType == JobType.quotation) {
+              _quotationStatus = QuotationStatus.pending;
+              _quotationValidUntil =
+                  DateTime.now().add(const Duration(days: 30));
+            }
           }
         });
       }
@@ -1055,11 +1088,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Load all related job data in parallel
       final relatedResults = await Future.wait([
         bikeshopService.getJobItems(job.id!),
-        bikeshopService.getJobBikes(job.id!),
+        bikeshopService.getJobBikes(job.id!, forceRefresh: true),
+        bikeshopService.getWarrantyClaim(job.id!),
       ]);
 
       final allItems = relatedResults[0] as List<MechanicJobItem>;
       final jobBikes = relatedResults[1] as List<MechanicJobBike>;
+      final warrantyClaim = relatedResults[2] as MechanicJobWarrantyClaim?;
       debugPrint('📦 Loaded ${jobBikes.length} job bikes');
 
       // Load tax treatment from job
@@ -1421,14 +1456,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _taxTreatment = loadedTaxTreatment;
           _linkedInvoiceNumber = linkedInvoiceNumber;
           _discountController.text = job.discountAmount.toString();
-          _estimatedDurationController.text = '';
+          _estimatedDurationController.text =
+              job.estimatedDurationHours?.toString() ?? '';
 
           // Set bike tabs (multi-bike or legacy single-bike)
           _bikeTabs.clear();
           _bikeTabs.addAll(loadedBikeTabs);
           _selectedBikeTabIndex = 0;
 
-          // Set legacy fields for backward compat
+          // Hydrate the authoritative job-level narrative first. Component,
+          // quotation, and subject-based warranty jobs intentionally have no
+          // bike tabs, so keeping this inside the bike-only branch would show
+          // an empty diagnosis on edit and a later save could erase it.
+          _clientRequestController.text = job.clientRequest ?? '';
+          _diagnosisController.text = job.diagnosis ?? '';
+          _workSummaryController.text = job.workPerformed ?? '';
+          _technicianNotesController.text = job.notes ?? '';
+
+          // Bike tabs remain the compatibility source for bicycle jobs.
           if (loadedBikeTabs.isNotEmpty) {
             _selectedBike = loadedBikeTabs.first.bike;
             _clientRequestController.text =
@@ -1455,6 +1500,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _subjectNotesController.text = job.subjectNotes!;
           }
           _warrantyOutcome = job.warrantyOutcome;
+          _warrantyClaim = warrantyClaim;
+          _selectedWarrantySource = _warrantySources
+              .where((source) => source.jobId == warrantyClaim?.sourceJobId)
+              .firstOrNull;
+          _warrantyDecisionReasonController.text = warrantyClaim?.reason ?? '';
           _quotationStatus = job.quotationStatus;
           _quotationValidUntil = job.quotationValidUntil;
 
@@ -1481,15 +1531,41 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Future<void> _selectCustomer(Customer customer) async {
     final bikeshopService =
         Provider.of<BikeshopService>(context, listen: false);
+    final customerChanged = _selectedCustomer?.id != customer.id;
 
     // Load customer bikes
-    final bikes = await bikeshopService.getBikes(customerId: customer.id);
+    final results = await Future.wait([
+      bikeshopService.getBikes(customerId: customer.id),
+      bikeshopService.getServiceWarrantySources(customer.id!),
+    ]);
+    final bikes = results[0] as List<Bike>;
+    final warrantySources = results[1] as List<MechanicJobServiceWarranty>;
+
+    if (customerChanged) {
+      for (final tab in _bikeTabs) {
+        tab.dispose();
+      }
+    }
 
     setState(() {
       _selectedCustomer = customer;
       _bikes = bikes;
+      _warrantySources = warrantySources
+          .where((source) => source.jobId != widget.jobId)
+          .toList();
       _selectedBike = null; // Reset bike selection
       _selectedBikeProfile = null;
+      if (customerChanged) {
+        // Every related object must belong to the selected customer. Keeping a
+        // source job, bike, or component from the previous customer can create
+        // an invalid warranty link even when the field looks visually empty.
+        _selectedWarrantySource = null;
+        _selectedSubject = null;
+        _warrantyOutcome = WarrantyOutcome.pending;
+        _warrantyDecisionReasonController.clear();
+        _bikeTabs.clear();
+        _selectedBikeTabIndex = 0;
+      }
     });
   }
 
@@ -2435,6 +2511,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   Future<void> _saveJob() async {
+    if (_isFinalQuotationReadOnly) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este presupuesto está en solo lectura. Gestiona su estado desde la tabla de trabajos.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -2446,14 +2533,48 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    final requiresBike =
-        _jobType == JobType.service || _jobType == JobType.warranty;
+    final warrantyBikeId =
+        _selectedWarrantySource?.bikeId ?? _existingJob?.bikeId;
+    final requiresBike = _jobType == JobType.service ||
+        (_jobType == JobType.warranty && warrantyBikeId != null);
 
-    // Service and warranty jobs require a bicycle
+    // Bike-based service/warranty jobs require a bicycle. Component-only
+    // warranty claims inherit their subject from the original work instead.
     if (requiresBike && _bikeTabs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Debe seleccionar al menos una bicicleta')),
+      );
+      return;
+    }
+
+    if (_jobType == JobType.warranty &&
+        widget.jobId == null &&
+        _selectedWarrantySource == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Seleccione el trabajo original de la garantía'),
+        ),
+      );
+      return;
+    }
+
+    final desiredWarrantyOutcome = _warrantyOutcome ?? WarrantyOutcome.pending;
+    final persistedWarrantyOutcome = _existingJob?.warrantyOutcome ??
+        _warrantyClaim?.outcome ??
+        WarrantyOutcome.pending;
+    final warrantyDecisionNeedsReason = desiredWarrantyOutcome !=
+            persistedWarrantyOutcome &&
+        (desiredWarrantyOutcome == WarrantyOutcome.notCovered ||
+            (desiredWarrantyOutcome == WarrantyOutcome.covered &&
+                _selectedWarrantySource?.state != ServiceWarrantyState.active));
+    if (_jobType == JobType.warranty &&
+        warrantyDecisionNeedsReason &&
+        _warrantyDecisionReasonController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingrese la justificación de la decisión de garantía'),
+        ),
       );
       return;
     }
@@ -2476,6 +2597,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
       return;
     }
+
+    final requestedDiscountAmount = _discountAmount;
+    if (requestedDiscountAmount < 0 || requestedDiscountAmount > _subtotal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El descuento no puede superar el subtotal.'),
+        ),
+      );
+      return;
+    }
+
+    String? persistedJobId;
 
     setState(() {
       _isSaving = true;
@@ -2538,11 +2671,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         bikeId: primaryBike?.id, // Nullable for non-bike jobs
         jobType: _jobType,
         subjectId:
-            _jobType == JobType.itemService ? _selectedSubject?.id : null,
+            _jobType == JobType.itemService || _jobType == JobType.warranty
+                ? _selectedSubject?.id ?? _selectedWarrantySource?.subjectId
+                : null,
         subjectNotes: _subjectNotesController.text.isNotEmpty
             ? _subjectNotesController.text
             : null,
-        warrantyOutcome: _warrantyOutcome,
+        warrantyOutcome: _jobType == JobType.warranty
+            ? (_existingJob?.warrantyOutcome ?? WarrantyOutcome.pending)
+            : _warrantyOutcome,
         quotationStatus: _quotationStatus,
         quotationValidUntil: _quotationValidUntil,
         priority: _selectedPriority,
@@ -2591,7 +2728,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         requiresApproval: firstTab?.requiresApproval ?? _requiresApproval,
         isWarrantyJob:
             firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
-        discountAmount: _discountAmount,
+        // Lines are persisted in several requests. Apply the requested
+        // discount once the complete line set exists so an intermediate
+        // subtotal cannot reject an otherwise valid whole-job discount.
+        discountAmount: 0,
+        estimatedDurationHours:
+            double.tryParse(_estimatedDurationController.text.trim()),
         estimatedCost: 0,
         finalCost: 0,
         partsCost: 0,
@@ -2616,41 +2758,24 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final createdJob = await bikeshopService.createJob(job);
         jobId = createdJob.id!;
       }
+      persistedJobId = jobId;
 
       // ============================================================
       // MULTI-BIKE: Save each bike tab as MechanicJobBike + its items
       // ============================================================
 
-      var existingJobBikesForSave = <MechanicJobBike>[];
-
-      // First, delete all existing job items (we'll re-create them)
-      if (widget.jobId != null) {
-        final existingItems = await bikeshopService.getJobItems(jobId);
-        for (final existing in existingItems) {
-          if (existing.id != null) {
-            await bikeshopService.deleteJobItem(
-              existing.id!,
-              syncBikeMemory: false,
-            );
-          }
-        }
-
-        // Delete existing job bikes (we'll re-create them). Keep a fresh
-        // snapshot first so narrative-only saves cannot wipe structured data.
-        existingJobBikesForSave = await bikeshopService.getJobBikes(
-          jobId,
-          forceRefresh: true,
-        );
-        final existingJobBikes = existingJobBikesForSave;
-        for (final existingJB in existingJobBikes) {
-          if (existingJB.id != null) {
-            await bikeshopService.removeBikeFromJob(
-              existingJB.id!,
-              syncBikeMemory: false,
-            );
-          }
-        }
-      }
+      final existingItemsForSave = widget.jobId == null
+          ? <MechanicJobItem>[]
+          : await bikeshopService.getJobItems(jobId);
+      final existingJobBikesForSave = widget.jobId == null
+          ? <MechanicJobBike>[]
+          : await bikeshopService.getJobBikes(jobId, forceRefresh: true);
+      final existingItemById = <String, MechanicJobItem>{
+        for (final item in existingItemsForSave)
+          if (item.id != null && item.id!.isNotEmpty) item.id!: item,
+      };
+      final retainedItemIds = <String>{};
+      final retainedJobBikeIds = <String>{};
 
       final existingJobBikeById = <String, MechanicJobBike>{
         for (final jobBike in existingJobBikesForSave)
@@ -2677,6 +2802,68 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return null;
       }
 
+      Future<MechanicJobItem> persistPartItem(
+        _JobPartItem item,
+        String? jobBikeId,
+      ) async {
+        final existing = existingItemById[item.id];
+        final quantity = item.quantity.toDouble();
+        final isCatalog = item.isCatalogProduct;
+        final jobItem = MechanicJobItem(
+          id: existing?.id,
+          jobId: jobId,
+          jobBikeId: jobBikeId,
+          tenantId: tenantId,
+          productId:
+              isCatalog ? (item.product?.id ?? existing?.productId) : null,
+          serviceProductId: item.isServiceItem
+              ? (_serviceProductIdForPartItem(item) ??
+                  existing?.serviceProductId)
+              : null,
+          productName: item.name,
+          productSku: item.sku ?? existing?.productSku ?? '',
+          quantity: quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: quantity * item.unitPrice,
+          itemType: _itemTypeForPartItem(item),
+          systemKey: existing?.systemKey,
+          componentSlotKey: existing?.componentSlotKey,
+          location: item.location,
+          interventionType: existing?.interventionType,
+          createsLifecycle: existing?.createsLifecycle ?? false,
+          notes: item.notes,
+          serviceConfigurationData: _effectiveWizardAnswersForItem(item),
+          createdAt: existing?.createdAt,
+        );
+
+        final saved = existing == null
+            ? await bikeshopService.createJobItem(
+                jobItem,
+                syncBikeMemory: false,
+              )
+            : await bikeshopService.updateJobItem(
+                jobItem,
+                syncBikeMemory: false,
+              );
+        if (saved.id != null) retainedItemIds.add(saved.id!);
+
+        if (existing == null &&
+            item.product?.description?.isNotEmpty == true &&
+            saved.id != null) {
+          try {
+            await taskService.generateAutoTasksFromDescription(
+              jobId: jobId,
+              parentItemId: saved.id!,
+              description: item.product!.description!,
+            );
+          } catch (e) {
+            debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
+          }
+        }
+
+        return saved;
+      }
+
       // Save each bike tab
       for (int i = 0; i < _bikeTabs.length; i++) {
         final tab = _bikeTabs[i];
@@ -2685,47 +2872,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Save General tab parts with jobBikeId = null
           for (final item in tab.partItems) {
             if (item.name.isEmpty) continue; // Skip empty rows
-
-            final quantity = item.quantity.toDouble();
-            final unitPrice = item.unitPrice;
-            final jobItem = MechanicJobItem(
-              jobId: jobId,
-              jobBikeId: null, // General items have no bike
-              tenantId: tenantId,
-              productId: item.product?.id,
-              serviceProductId: _serviceProductIdForPartItem(item),
-              productName: item.name,
-              productSku: item.sku ?? '',
-              quantity: quantity,
-              unitPrice: unitPrice,
-              totalPrice: quantity * unitPrice,
-              itemType: _itemTypeForPartItem(item),
-              location: item.location,
-              notes: item.notes,
-              serviceConfigurationData: _effectiveWizardAnswersForItem(item),
-            );
-            final created = await bikeshopService.createJobItem(
-              jobItem,
-              syncBikeMemory: false,
-            );
-
-            // Auto-generate tasks from product description if available
-            if (item.product != null &&
-                item.product!.description != null &&
-                item.product!.description!.isNotEmpty &&
-                created.id != null) {
-              try {
-                await taskService.generateAutoTasksFromDescription(
-                  jobId: jobId,
-                  parentItemId: created.id!,
-                  description: item.product!.description!,
-                );
-                debugPrint('✅ Auto-tasks generated for ${item.name}');
-              } catch (e) {
-                debugPrint(
-                    '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
-              }
-            }
+            await persistPartItem(item, null);
           }
           continue; // Skip MechanicJobBike creation
         }
@@ -2749,7 +2896,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             normalizedDiagnosisSheet.hasMeaningfulData
                 ? (shouldPreserveExistingDiagnosisSheet
                     ? existingJobBike?.diagnosisSheetUpdatedAt
-                    : (tab.diagnosisSheetUpdatedAt ?? DateTime.now()))
+                    : (tab.diagnosisSheetUpdatedAt ?? DateTime.now()).toUtc())
                 : null;
 
         if (shouldPreserveExistingDiagnosisSheet) {
@@ -2760,7 +2907,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
 
         final jobBike = MechanicJobBike(
-          id: null, // Always create new (we deleted old ones)
+          id: existingJobBike?.id,
           tenantId: tenantId,
           jobId: jobId,
           bikeId: tab.bike!.id!,
@@ -2791,59 +2938,26 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           approvedByCustomer: tab.approvedByCustomer,
         );
 
-        final createdJobBike = await bikeshopService.addBikeToJob(
-          jobBike,
-          syncBikeMemory: false,
-        );
-        final jobBikeId = createdJobBike.id;
+        final savedJobBike = existingJobBike == null
+            ? await bikeshopService.addBikeToJob(
+                jobBike,
+                syncBikeMemory: false,
+              )
+            : await bikeshopService.updateJobBike(
+                jobBike,
+                syncBikeMemory: false,
+              );
+        final jobBikeId = savedJobBike.id;
+        tab.jobBikeId = jobBikeId;
+        if (jobBikeId != null) retainedJobBikeIds.add(jobBikeId);
 
         debugPrint(
-            '✅ Created job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
+            '✅ Saved job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
 
         // Save this bike's parts/products
         for (final item in tab.partItems) {
           if (item.name.isEmpty) continue; // Skip empty rows
-
-          final quantity = item.quantity.toDouble();
-          final unitPrice = item.unitPrice;
-          final jobItem = MechanicJobItem(
-            jobId: jobId,
-            jobBikeId: jobBikeId, // Link to specific bike!
-            tenantId: tenantId,
-            productId: item.product?.id,
-            serviceProductId: _serviceProductIdForPartItem(item),
-            productName: item.name,
-            productSku: item.sku ?? '',
-            quantity: quantity,
-            unitPrice: unitPrice,
-            totalPrice: quantity * unitPrice,
-            itemType: _itemTypeForPartItem(item),
-            location: item.location,
-            notes: item.notes, // ✅ Save the description!
-            serviceConfigurationData: _effectiveWizardAnswersForItem(item),
-          );
-          final created = await bikeshopService.createJobItem(
-            jobItem,
-            syncBikeMemory: false,
-          );
-
-          // Auto-generate tasks from product description if available
-          if (item.product != null &&
-              item.product!.description != null &&
-              item.product!.description!.isNotEmpty &&
-              created.id != null) {
-            try {
-              await taskService.generateAutoTasksFromDescription(
-                jobId: jobId,
-                parentItemId: created.id!,
-                description: item.product!.description!,
-              );
-              debugPrint('✅ Auto-tasks generated for ${item.name}');
-            } catch (e) {
-              debugPrint(
-                  '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
-            }
-          }
+          await persistPartItem(item, jobBikeId);
         }
       }
 
@@ -2851,43 +2965,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (_bikeTabs.isEmpty && _partItems.isNotEmpty) {
         for (final item in _partItems) {
           if (item.name.isEmpty) continue;
-          final quantity = item.quantity.toDouble();
-          final unitPrice = item.unitPrice;
-          final jobItem = MechanicJobItem(
-            jobId: jobId,
-            jobBikeId: null,
-            tenantId: tenantId,
-            productId: item.product?.id,
-            serviceProductId: _serviceProductIdForPartItem(item),
-            productName: item.name,
-            productSku: item.sku ?? '',
-            quantity: quantity,
-            unitPrice: unitPrice,
-            totalPrice: quantity * unitPrice,
-            itemType: _itemTypeForPartItem(item),
-            location: item.location,
-            notes: item.notes,
-            serviceConfigurationData: _effectiveWizardAnswersForItem(item),
-          );
-          final created = await bikeshopService.createJobItem(
-            jobItem,
-            syncBikeMemory: false,
-          );
-          if (item.product != null &&
-              item.product!.description != null &&
-              item.product!.description!.isNotEmpty &&
-              created.id != null) {
-            try {
-              await taskService.generateAutoTasksFromDescription(
-                jobId: jobId,
-                parentItemId: created.id!,
-                description: item.product!.description!,
-              );
-            } catch (e) {
-              debugPrint(
-                  '⚠️ Failed to generate auto-tasks for ${item.name}: $e');
-            }
-          }
+          await persistPartItem(item, null);
         }
       }
 
@@ -2918,6 +2996,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           jobServiceItem,
           syncBikeMemory: false,
         );
+        if (created.id != null) retainedItemIds.add(created.id!);
 
         if (serviceProduct != null &&
             serviceProduct.description != null &&
@@ -2937,7 +3016,56 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
+      // Delete only rows that the user actually removed. Stable IDs keep
+      // invoice links and mechanic_job_tasks attached to retained lines.
+      for (final existing in existingItemsForSave) {
+        final id = existing.id;
+        if (id != null && !retainedItemIds.contains(id)) {
+          await bikeshopService.deleteJobItem(
+            id,
+            syncBikeMemory: false,
+          );
+        }
+      }
+      for (final existing in existingJobBikesForSave) {
+        final id = existing.id;
+        if (id != null && !retainedJobBikeIds.contains(id)) {
+          await bikeshopService.removeBikeFromJob(
+            id,
+            syncBikeMemory: false,
+          );
+        }
+      }
+
+      await bikeshopService.updateJobDiscount(
+        jobId,
+        requestedDiscountAmount,
+      );
+
       await bikeshopService.syncBikeMemoryFromJob(jobId);
+
+      if (_jobType == JobType.warranty) {
+        final sourceJobId = _selectedWarrantySource?.jobId;
+        final registeredSourceJobId = _warrantyClaim?.sourceJobId;
+        if (sourceJobId != null && registeredSourceJobId == null) {
+          await bikeshopService.registerWarrantyClaim(
+            warrantyJobId: jobId,
+            sourceJobId: sourceJobId,
+          );
+        }
+
+        final currentOutcome =
+            _warrantyClaim?.outcome ?? WarrantyOutcome.pending;
+        if (desiredWarrantyOutcome != currentOutcome) {
+          await bikeshopService.decideWarrantyClaim(
+            warrantyJobId: jobId,
+            outcome: desiredWarrantyOutcome,
+            reason: _warrantyDecisionReasonController.text.trim().isEmpty
+                ? null
+                : _warrantyDecisionReasonController.text.trim(),
+          );
+        }
+      }
 
       await _debugLogPegaInvoiceSnapshot(
         'before_invoice_phase',
@@ -2950,34 +3078,46 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final savedJob = await bikeshopService.getJobById(jobId);
       final linkedInvoiceId = savedJob?.invoiceId;
 
-      bool shouldInvoice = true;
-      if (savedJob != null) {
-        if (savedJob.jobType == JobType.quotation) {
-          shouldInvoice = false;
-        } else if (savedJob.jobType == JobType.warranty &&
-            savedJob.warrantyOutcome != WarrantyOutcome.notCovered) {
-          shouldInvoice = false;
-        }
-      }
+      // A quote is a proposal and a pending warranty is a claim under
+      // evaluation. Neither is a customer invoice. Service/component jobs are
+      // billable immediately; warranty decisions create their correct
+      // billable or internal document through the audited warranty command.
+      final shouldCreateInvoice = savedJob != null &&
+          (savedJob.jobType == JobType.service ||
+              savedJob.jobType == JobType.itemService);
 
-      if (linkedInvoiceId != null) {
+      if (linkedInvoiceId != null && savedJob?.jobType != JobType.quotation) {
         // If there's an existing invoice, we still sync it just to keep it updated,
         // (unless we want to delete it if it's a quotation now, but we'll assume
         // quotes don't get invoices attached in the first place).
         debugPrint('🔄 Syncing job to invoice: $linkedInvoiceId');
         await bikeshopService.syncJobToInvoice(jobId);
-        await _updateInvoiceTaxTreatment(linkedInvoiceId);
         await _debugLogPegaInvoiceSnapshot(
           'after_invoice_sync',
           jobId: jobId,
           invoiceId: linkedInvoiceId,
         );
-      } else if (shouldInvoice) {
+      } else if (shouldCreateInvoice) {
         debugPrint('🧾 No linked invoice yet, creating one after items save');
-        final createdInvoiceId =
-            await bikeshopService.createInvoiceFromJob(jobId);
-        if (createdInvoiceId != null) {
-          await _updateInvoiceTaxTreatment(createdInvoiceId);
+        String? createdInvoiceId;
+        Object? lastInvoiceError;
+        for (var attempt = 1; attempt <= 2; attempt++) {
+          try {
+            createdInvoiceId =
+                await bikeshopService.createInvoiceFromJob(jobId);
+            lastInvoiceError = null;
+            break;
+          } catch (error) {
+            lastInvoiceError = error;
+            if (attempt < 2) {
+              await Future<void>.delayed(const Duration(milliseconds: 300));
+            }
+          }
+        }
+        if (lastInvoiceError != null || createdInvoiceId == null) {
+          throw Exception(
+            'El trabajo quedó guardado, pero no se pudo confirmar su factura: $lastInvoiceError',
+          );
         }
         await _debugLogPegaInvoiceSnapshot(
           'after_invoice_create',
@@ -2986,7 +3126,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         );
       } else {
         debugPrint(
-            'ℹ️ Skipping invoice generation for JobType: ${savedJob?.jobType}, outcome: ${savedJob?.warrantyOutcome}');
+            'ℹ️ Skipping customer invoice generation for JobType: ${savedJob?.jobType}, outcome: ${savedJob?.warrantyOutcome}');
       }
 
       if (mounted && context.mounted) {
@@ -3011,8 +3151,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     } catch (e) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar trabajo: $e')),
+          SnackBar(
+            content: Text(
+              persistedJobId != null && widget.jobId == null
+                  ? 'El trabajo quedó creado, pero una etapa posterior falló. Abriremos la ficha existente para evitar duplicarlo. Detalle: $e'
+                  : 'Error al guardar trabajo: $e',
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
         );
+        if (persistedJobId != null && widget.jobId == null) {
+          context.go('/taller/pegas/$persistedJobId');
+        }
       }
     } finally {
       if (mounted) {
@@ -3020,73 +3171,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _isSaving = false;
         });
       }
-    }
-  }
-
-  Future<void> _updateInvoiceTaxTreatment(String invoiceId) async {
-    try {
-      final databaseService =
-          Provider.of<DatabaseService>(context, listen: false);
-
-      // Fetch the current invoice
-      final invoiceData =
-          await databaseService.selectById('sales_invoices', invoiceId);
-      if (invoiceData == null) {
-        debugPrint('⚠️ Invoice not found: $invoiceId');
-        return;
-      }
-
-      final invoice = Invoice.fromJson(invoiceData);
-
-      // Check if tax treatment actually changed
-      final currentTaxTreatment = invoice.taxTreatment;
-      if (currentTaxTreatment == _taxTreatment) {
-        debugPrint('✅ Tax treatment unchanged: $_taxTreatment');
-        return;
-      }
-
-      debugPrint(
-          '🔄 Updating invoice tax treatment: $currentTaxTreatment → $_taxTreatment');
-
-      // Recalculate invoice totals based on new tax treatment
-      // Note: subtotal stays the same (sum of line items), we only change net_amount and iva_amount
-      final subtotal = invoice.subtotal;
-      double netAmount;
-      double ivaAmount;
-      final total =
-          subtotal; // Total is always the subtotal (what customer pays)
-
-      if (_taxTreatment == TaxTreatment.noTax) {
-        // No tax: net = full subtotal, iva = 0
-        netAmount = subtotal;
-        ivaAmount = 0;
-      } else {
-        // Tax included: net = subtotal ÷ 1.19, iva = subtotal - net
-        netAmount = subtotal / 1.19;
-        ivaAmount = subtotal - netAmount;
-      }
-
-      debugPrint(
-          '💰 Recalculated: subtotal=$subtotal, net=$netAmount, iva=$ivaAmount, total=$total');
-
-      // Update the invoice
-      await databaseService.update(
-        'sales_invoices',
-        invoiceId,
-        {
-          'tax_treatment': _taxTreatment.toValue(),
-          'net_amount': netAmount,
-          'iva_amount': ivaAmount,
-          'total': total,
-          'balance': total - invoice.paidAmount,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-      );
-
-      debugPrint('✅ Invoice tax treatment updated successfully');
-    } catch (e) {
-      debugPrint('❌ Error updating invoice tax treatment: $e');
-      // Don't rethrow - this shouldn't block saving the trabajo
     }
   }
 
@@ -3386,27 +3470,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                         if (isEditing &&
                             _selectedCustomer != null &&
                             _selectedBike != null) ...[
-                          if (_jobType == JobType.quotation &&
-                              _quotationStatus == QuotationStatus.pending) ...[
-                            FilledButton.icon(
-                              onPressed: _isSaving
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _jobType = JobType.service;
-                                        _quotationStatus =
-                                            QuotationStatus.approved;
-                                      });
-                                      _saveJob();
-                                    },
-                              icon: const Icon(Icons.check_circle_outline),
-                              label: const Text('Aprobar Presupuesto'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.orange.shade700,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
                           if (_selectedStatus == JobStatus.finalizado ||
                               _selectedStatus == JobStatus.entregado)
                             OutlinedButton.icon(
@@ -3436,7 +3499,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           label: const Text('Cancelar'),
                         ),
                         FilledButton.icon(
-                          onPressed: _isSaving ? null : _saveJob,
+                          onPressed: _canSaveJob ? _saveJob : null,
                           icon: _isSaving
                               ? const SizedBox(
                                   height: 16,
@@ -3446,8 +3509,16 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Icon(Icons.save),
-                          label: const Text('Guardar'),
+                              : Icon(
+                                  _isFinalQuotationReadOnly
+                                      ? Icons.lock_outline
+                                      : Icons.save,
+                                ),
+                          label: Text(
+                            _isFinalQuotationReadOnly
+                                ? 'Solo lectura'
+                                : 'Guardar',
+                          ),
                         ),
                       ],
                     ),
@@ -3465,26 +3536,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     if (isEditing &&
                         _selectedCustomer != null &&
                         _selectedBike != null) ...[
-                      if (_jobType == JobType.quotation &&
-                          _quotationStatus == QuotationStatus.pending) ...[
-                        FilledButton.icon(
-                          onPressed: _isSaving
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _jobType = JobType.service;
-                                    _quotationStatus = QuotationStatus.approved;
-                                  });
-                                  _saveJob();
-                                },
-                          icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Aprobar Presupuesto'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.orange.shade700,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
                       if (_selectedStatus == JobStatus.finalizado ||
                           _selectedStatus == JobStatus.entregado)
                         OutlinedButton.icon(
@@ -3514,7 +3565,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     ),
                     const SizedBox(width: 12),
                     FilledButton.icon(
-                      onPressed: _isSaving ? null : _saveJob,
+                      onPressed: _canSaveJob ? _saveJob : null,
                       icon: _isSaving
                           ? const SizedBox(
                               height: 16,
@@ -3524,8 +3575,14 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(Icons.save),
-                      label: const Text('Guardar'),
+                          : Icon(
+                              _isFinalQuotationReadOnly
+                                  ? Icons.lock_outline
+                                  : Icons.save,
+                            ),
+                      label: Text(
+                        _isFinalQuotationReadOnly ? 'Solo lectura' : 'Guardar',
+                      ),
                     ),
                   ],
                 ),
@@ -3793,6 +3850,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
+                        if (_isCommercialSnapshotLocked ||
+                            _hasConvertedQuotationHistory) ...[
+                          _buildCommercialLockBanner(theme),
+                          const SizedBox(height: 16),
+                        ],
                         // Job details with embedded bike tabs
                         _buildJobDetailsSectionCard(
                           theme,
@@ -3805,7 +3867,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           theme,
                           icon: Icons.attach_file,
                           title: 'Adjuntos',
-                          child: _buildAttachmentsSection(),
+                          child: _lockFormContent(
+                            _buildAttachmentsSection(),
+                            locked: _isFinalQuotationReadOnly,
+                          ),
                         ),
                       ],
                     ),
@@ -3822,14 +3887,20 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           theme,
                           icon: Icons.person_outline,
                           title: 'Cliente',
-                          child: _buildCustomerBikeSection(),
+                          child: _lockFormContent(
+                            _buildCustomerBikeSection(),
+                            locked: _isFinalQuotationReadOnly,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         _buildSectionCard(
                           theme,
                           icon: Icons.calculate_outlined,
                           title: 'Resumen de Costos',
-                          child: _buildCostSummary(),
+                          child: _lockFormContent(
+                            _buildCostSummary(),
+                            locked: _isCommercialSnapshotLocked,
+                          ),
                         ),
                         if (_existingJob?.invoiceId != null) ...[
                           const SizedBox(height: 16),
@@ -3847,7 +3918,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                             theme,
                             icon: Icons.build_circle_outlined,
                             title: 'Detalle de Servicio',
-                            child: _buildServiceDetailsPanel(),
+                            child: _lockFormContent(
+                              _buildServiceDetailsPanel(),
+                              locked: _isCommercialSnapshotLocked,
+                            ),
                           ),
                         ],
                       ],
@@ -3873,11 +3947,19 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                if (_isCommercialSnapshotLocked ||
+                    _hasConvertedQuotationHistory) ...[
+                  _buildCommercialLockBanner(theme),
+                  const SizedBox(height: 16),
+                ],
                 _buildSectionCard(
                   theme,
                   icon: Icons.person_outline,
                   title: 'Cliente',
-                  child: _buildCustomerBikeSection(),
+                  child: _lockFormContent(
+                    _buildCustomerBikeSection(),
+                    locked: _isFinalQuotationReadOnly,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 // Job details with embedded bike tabs (mobile)
@@ -3892,14 +3974,20 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   theme,
                   icon: Icons.attach_file,
                   title: 'Adjuntos',
-                  child: _buildAttachmentsSection(),
+                  child: _lockFormContent(
+                    _buildAttachmentsSection(),
+                    locked: _isFinalQuotationReadOnly,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 _buildSectionCard(
                   theme,
                   icon: Icons.calculate_outlined,
                   title: 'Resumen de Costos',
-                  child: _buildCostSummary(),
+                  child: _lockFormContent(
+                    _buildCostSummary(),
+                    locked: _isCommercialSnapshotLocked,
+                  ),
                 ),
                 if (_existingJob?.invoiceId != null) ...[
                   const SizedBox(height: 16),
@@ -3917,7 +4005,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     theme,
                     icon: Icons.build_circle_outlined,
                     title: 'Detalle de Servicio',
-                    child: _buildServiceDetailsPanel(),
+                    child: _lockFormContent(
+                      _buildServiceDetailsPanel(),
+                      locked: _isCommercialSnapshotLocked,
+                    ),
                   ),
                 ],
               ],
@@ -3925,6 +4016,71 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           );
         }
       },
+    );
+  }
+
+  Widget _lockFormContent(Widget child, {required bool locked}) {
+    if (!locked) return child;
+    return IgnorePointer(
+      ignoring: true,
+      child: Opacity(opacity: 0.68, child: child),
+    );
+  }
+
+  Widget _buildCommercialLockBanner(ThemeData theme) {
+    final isFinalQuotation = _isFinalQuotationReadOnly;
+    final statusLabel = _effectiveQuotationStatus.displayName.toLowerCase();
+    final title = isFinalQuotation
+        ? 'Presupuesto $statusLabel · solo lectura'
+        : 'Presupuesto original conservado';
+    final message = isFinalQuotation
+        ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
+        : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial del presupuesto.';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.32),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_clock_outlined,
+              color: theme.colorScheme.onSecondaryContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: _handleCancel,
+            icon: const Icon(Icons.arrow_back, size: 16),
+            label: const Text('Ir a la tabla'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -4064,7 +4220,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     final icon = tab.isGeneralTab
                         ? Icons.shopping_bag_outlined
                         : Icons.pedal_bike_outlined;
-                    final canClose = !tab.isGeneralTab &&
+                    final canClose = !_isFinalQuotationReadOnly &&
+                        !tab.isGeneralTab &&
                         _bikeTabs.where((t) => !t.isGeneralTab).length > 1;
 
                     return _BikeTabButton(
@@ -4084,23 +4241,24 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                       inactiveColor: onSurface,
                     );
                   }),
-                  // Add bike button — vertically centered, subtle
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Tooltip(
-                      message: 'Agregar bicicleta',
-                      child: InkWell(
-                        onTap: _showAddBikeSelector,
-                        borderRadius: BorderRadius.circular(6),
-                        hoverColor: primary.withValues(alpha: 0.08),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 10),
-                          child: Icon(Icons.add, size: 16, color: primary),
+                  if (!_isFinalQuotationReadOnly)
+                    // Add bike button — vertically centered, subtle
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Tooltip(
+                        message: 'Agregar bicicleta',
+                        child: InkWell(
+                          onTap: _showAddBikeSelector,
+                          borderRadius: BorderRadius.circular(6),
+                          hoverColor: primary.withValues(alpha: 0.08),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 10),
+                            child: Icon(Icons.add, size: 16, color: primary),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -4144,17 +4302,21 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   Widget _buildWorkbenchContent(ThemeData theme) {
+    final content = switch (_selectedWorkbenchTab) {
+      _JobWorkbenchTab.general => _buildGeneralSection(theme),
+      _JobWorkbenchTab.diagnosis => _buildDiagnosisSection(theme),
+      _JobWorkbenchTab.products => _buildPartsSection(),
+    };
+    final contentLocked = _isFinalQuotationReadOnly ||
+        (_isCommercialSnapshotLocked &&
+            _selectedWorkbenchTab == _JobWorkbenchTab.products);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildWorkbenchTabs(theme),
         const SizedBox(height: 20),
-        if (_selectedWorkbenchTab == _JobWorkbenchTab.general)
-          _buildGeneralSection(theme)
-        else if (_selectedWorkbenchTab == _JobWorkbenchTab.diagnosis)
-          _buildDiagnosisSection(theme)
-        else
-          _buildPartsSection(),
+        _lockFormContent(content, locked: contentLocked),
       ],
     );
   }
@@ -4261,7 +4423,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     void apply() {
       currentTab.diagnosisSheet = transform(currentTab.diagnosisSheet);
       currentTab.diagnosisSheetKey = currentTab.diagnosisSheet.templateKey;
-      currentTab.diagnosisSheetUpdatedAt = DateTime.now();
+      currentTab.diagnosisSheetUpdatedAt = DateTime.now().toUtc();
     }
 
     if (refresh) {
@@ -8336,7 +8498,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   String _formatDiagnosisSheetTimestamp(DateTime? timestamp) {
     if (timestamp == null) return 'Sin sincronizar';
-    return DateFormat('dd/MM HH:mm').format(timestamp);
+    return DateFormat('dd/MM HH:mm').format(timestamp.toLocal());
   }
 
   Widget _buildDiagnosisWorkspace(
@@ -8469,6 +8631,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         currentTab?.diagnosisController ?? _diagnosisController;
 
     if (currentTab == null) {
+      if (_jobType == JobType.itemService ||
+          _jobType == JobType.warranty ||
+          _jobType == JobType.quotation) {
+        return _buildNonBikeDiagnosisPanel(theme);
+      }
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -8525,6 +8692,94 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
 
     return _buildDiagnosisWorkspace(theme, currentTab, diagnosisCtrl);
+  }
+
+  Widget _buildNonBikeDiagnosisPanel(ThemeData theme) {
+    final isQuotation = _jobType == JobType.quotation;
+    final subjectLabel = _selectedSubject?.name ??
+        (isQuotation ? 'presupuesto' : 'componente recibido');
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isQuotation
+                    ? Icons.description_outlined
+                    : Icons.build_circle_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isQuotation
+                      ? 'Evaluación previa del presupuesto'
+                      : 'Diagnóstico de $subjectLabel',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isQuotation
+                ? 'Registra antecedentes útiles para cotizar. Esto no afirma que una bicicleta o componente haya quedado recibido.'
+                : 'Este diagnóstico pertenece al componente, por lo que no crea ni exige una bicicleta ficticia.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _diagnosisController,
+            minLines: 5,
+            maxLines: 10,
+            decoration: InputDecoration(
+              labelText: isQuotation
+                  ? 'Evaluación / observaciones técnicas'
+                  : 'Diagnóstico del componente',
+              alignLabelWithHint: true,
+              border: const OutlineInputBorder(),
+              hintText: isQuotation
+                  ? 'Compatibilidad, alternativas, mediciones o condiciones consideradas...'
+                  : 'Hallazgos, mediciones, riesgos y condición de ingreso...',
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _workSummaryController,
+            minLines: 3,
+            maxLines: 7,
+            decoration: InputDecoration(
+              labelText: isQuotation
+                  ? 'Propuesta técnica'
+                  : 'Trabajo solicitado / recomendado',
+              alignLabelWithHint: true,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            controller: _technicianNotesController,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Notas internas del técnico',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDiagnosisSummaryChip(
@@ -11785,6 +12040,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   // CUSTOMER + BIKE SECTION (original design)
   // ============================================================
   Widget _buildCustomerBikeSection() {
+    final warrantyHasBike = _jobType == JobType.warranty &&
+        (_selectedWarrantySource?.bikeId ?? _existingJob?.bikeId) != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -11815,8 +12072,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
         ),
         const SizedBox(height: 16),
-        // Service and warranty are bike-based workflows.
-        if (_jobType == JobType.service || _jobType == JobType.warranty) ...[
+        if (_jobType == JobType.service || warrantyHasBike) ...[
           // Custom bike dropdown with action buttons
           if (_selectedCustomer != null)
             PopupMenuButton<String>(
@@ -11956,6 +12212,20 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ],
           if (_selectedBike != null) _buildBikeProfileSummaryCard(),
+        ] else if (_jobType == JobType.warranty) ...[
+          InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Objeto asociado',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.build_outlined),
+            ),
+            child: Text(
+              _selectedWarrantySource?.subjectId != null
+                  ? (_selectedSubject?.name ??
+                      'Componente del trabajo original')
+                  : 'Selecciona el trabajo original en la sección de garantía',
+            ),
+          ),
         ] else if (_jobType == JobType.itemService) ...[
           _buildSubjectPicker(),
           const SizedBox(height: 12),
@@ -12415,8 +12685,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     setState(() {
       _jobType = type;
       _warrantyOutcome = null;
-      _quotationStatus = null;
-      _quotationValidUntil = null;
+      _quotationStatus =
+          type == JobType.quotation ? QuotationStatus.pending : null;
+      _quotationValidUntil = type == JobType.quotation
+          ? DateTime.now().add(const Duration(days: 30))
+          : null;
 
       if (type != JobType.service && type != JobType.warranty) {
         for (final tab in _bikeTabs) {
@@ -12432,6 +12705,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
       if (type != JobType.itemService && type != JobType.quotation) {
         _subjectNotesController.clear();
+      }
+
+      if (type != JobType.warranty) {
+        _selectedWarrantySource = null;
+        _warrantyClaim = null;
+        _warrantyDecisionReasonController.clear();
       }
 
       final isWarrantyType = type == JobType.warranty;
@@ -12520,25 +12799,95 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             );
           }).toList(),
         ),
+        const SizedBox(height: 10),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: Container(
+            key: ValueKey(_jobType),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 17, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _jobTypeDescription(_jobType),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 
+  String _jobTypeDescription(JobType type) {
+    switch (type) {
+      case JobType.service:
+        return 'El cliente deja una bicicleta. Al guardar se crea o sincroniza su factura.';
+      case JobType.itemService:
+        return 'El cliente deja solo un componente. No aumenta el contador de bicicletas.';
+      case JobType.quotation:
+        return 'Propuesta para enviar al cliente: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.';
+      case JobType.warranty:
+        return 'Reclamo vinculado a un trabajo entregado. La cobertura se decide y registra por separado.';
+    }
+  }
+
   Widget _buildJobTypeBadge() {
     final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(_jobTypeIcon(_jobType),
-            size: 16, color: theme.colorScheme.primary),
-        const SizedBox(width: 6),
-        Text(
-          _jobType.displayName,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.w600,
-          ),
+    final explanation = _jobType == JobType.quotation
+        ? 'El modo no se cambia en esta ficha. Aprueba, rechaza, reabre o convierte el presupuesto mediante las acciones auditadas de la tabla.'
+        : 'El modo y la recepción quedan fijos al crear el registro. Las conversiones válidas se realizan mediante acciones auditadas de la tabla.';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.20),
         ),
-      ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_jobTypeIcon(_jobType),
+              size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _jobType.displayName,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(explanation, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: _handleCancel,
+            icon: const Icon(Icons.open_in_new, size: 15),
+            label: const Text('Acciones'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -12766,42 +13115,204 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   Widget _buildWarrantySection() {
     final theme = Theme.of(context);
+    final selectedSource = _selectedWarrantySource;
+    final sourceLocked = _warrantyClaim?.sourceJobId != null;
+    final needsReason = _warrantyOutcome == WarrantyOutcome.notCovered ||
+        (_warrantyOutcome == WarrantyOutcome.covered &&
+            selectedSource?.state != ServiceWarrantyState.active);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Resultado de Garantía',
+          'Garantía de servicio',
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey('warranty-source-${selectedSource?.jobId ?? 'none'}'),
+          initialValue: selectedSource?.jobId,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: 'Trabajo original *',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.history),
+            helperText: sourceLocked
+                ? 'El vínculo queda bloqueado para preservar la trazabilidad.'
+                : 'Selecciona el trabajo cuya reparación está siendo reclamada.',
+          ),
+          items: _warrantySources
+              .map((source) => DropdownMenuItem<String>(
+                    value: source.jobId,
+                    child: Text(
+                      _warrantySourceLabel(source),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: sourceLocked ? null : _selectWarrantySource,
+        ),
+        if (selectedSource != null) ...[
+          const SizedBox(height: 10),
+          _buildWarrantyEligibilityNotice(selectedSource),
+        ] else if (_warrantyClaim != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, size: 18),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Registro histórico sin trabajo original identificado. '
+                    'La decisión existente se conserva sin inventar fechas.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
         DropdownButtonFormField<WarrantyOutcome>(
-          initialValue: _warrantyOutcome,
+          key: ValueKey('warranty-outcome-${_warrantyOutcome?.dbValue}'),
+          initialValue: _warrantyOutcome ?? WarrantyOutcome.pending,
           decoration: const InputDecoration(
-            labelText: 'Estado de garantía',
+            labelText: 'Decisión',
             border: OutlineInputBorder(),
             prefixIcon: Icon(Icons.verified_user_outlined),
           ),
-          items: [
-            const DropdownMenuItem(
-              value: null,
-              child: Text('Pendiente evaluación'),
-            ),
-            ...WarrantyOutcome.values.map((o) => DropdownMenuItem(
-                  value: o,
-                  child: Text(o.displayName),
-                )),
-          ],
+          items: WarrantyOutcome.values
+              .map((outcome) => DropdownMenuItem(
+                    value: outcome,
+                    child: Text(outcome.displayName),
+                  ))
+              .toList(),
           onChanged: (v) => setState(() => _warrantyOutcome = v),
+        ),
+        if (needsReason) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _warrantyDecisionReasonController,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: _warrantyOutcome == WarrantyOutcome.covered
+                  ? 'Justificación de excepción *'
+                  : 'Motivo de rechazo *',
+              hintText: _warrantyOutcome == WarrantyOutcome.covered
+                  ? 'Por qué se acepta fuera de plazo o sin fecha confiable'
+                  : 'Hallazgo técnico o condición que no cubre la garantía',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.notes_outlined),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          'Si se cubre, los repuestos se respaldan en un documento interno: '
+          'descuenta inventario y registra el costo de garantía, sin venta ni IVA.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
   }
 
+  String _warrantySourceLabel(MechanicJobServiceWarranty source) {
+    final deliveredAt = source.lastDeliveredAt?.toLocal();
+    final dateLabel = deliveredAt == null
+        ? 'sin fecha'
+        : DateFormat('dd/MM/yyyy').format(deliveredAt);
+    final warrantyLabel = switch (source.state) {
+      ServiceWarrantyState.active => 'vigente ${source.daysRemaining ?? 0}d',
+      ServiceWarrantyState.expired => 'vencida',
+      ServiceWarrantyState.notStarted => 'sin ventana',
+    };
+    return '${source.jobNumber ?? 'Trabajo'} · $dateLabel · $warrantyLabel';
+  }
+
+  void _selectWarrantySource(String? jobId) {
+    final source = _warrantySources
+        .where((candidate) => candidate.jobId == jobId)
+        .firstOrNull;
+    setState(() => _selectedWarrantySource = source);
+
+    final sourceBikeId = source?.bikeId;
+    if (sourceBikeId != null &&
+        !_bikeTabs.any((tab) => tab.bike?.id == sourceBikeId)) {
+      final bike = _findBikeById(sourceBikeId);
+      if (bike != null) _addBikeTab(bike);
+    }
+
+    final sourceSubjectId = source?.subjectId;
+    if (sourceSubjectId != null) {
+      final subject = _availableSubjects
+          .where((candidate) => candidate.id == sourceSubjectId)
+          .firstOrNull;
+      if (subject != null) setState(() => _selectedSubject = subject);
+    }
+  }
+
+  Widget _buildWarrantyEligibilityNotice(
+    MechanicJobServiceWarranty source,
+  ) {
+    final theme = Theme.of(context);
+    final isActive = source.state == ServiceWarrantyState.active;
+    final color = isActive ? const Color(0xFF059669) : const Color(0xFFB45309);
+    final expiry = source.warrantyExpiresAt?.toLocal();
+    final text = isActive
+        ? 'Dentro del plazo de 14 días${expiry == null ? '' : ' · vence ${DateFormat('dd/MM/yyyy HH:mm').format(expiry)}'}.'
+        : source.state == ServiceWarrantyState.expired
+            ? 'Fuera del plazo${expiry == null ? '' : ' · venció ${DateFormat('dd/MM/yyyy HH:mm').format(expiry)}'}. Se puede aceptar con justificación.'
+            : 'No existe una fecha de entrega confiable. Se puede aceptar con justificación.';
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          color.withValues(alpha: 0.08),
+          theme.colorScheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isActive ? Icons.verified_outlined : Icons.info_outline,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuotationSection() {
     final theme = Theme.of(context);
+    final status = _effectiveQuotationStatus;
+    final statusColor = switch (status) {
+      QuotationStatus.pending => const Color(0xFFD97706),
+      QuotationStatus.approved => const Color(0xFF059669),
+      QuotationStatus.rejected => const Color(0xFFDC2626),
+      QuotationStatus.expired => const Color(0xFF64748B),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -12816,41 +13327,55 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<QuotationStatus>(
-                initialValue: _quotationStatus,
+              child: InputDecorator(
                 decoration: const InputDecoration(
                   labelText: 'Estado',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.request_quote_outlined),
+                  helperText:
+                      'Se cambia desde la acción auditada del presupuesto.',
                 ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('Pendiente'),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.38),
+                      ),
+                    ),
+                    child: Text(
+                      status.displayName,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  ...QuotationStatus.values.map((s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(s.displayName),
-                      )),
-                ],
-                onChanged: (v) => setState(() => _quotationStatus = v),
+                ),
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _quotationValidUntil ??
-                        DateTime.now().add(const Duration(days: 30)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) {
-                    setState(() => _quotationValidUntil = date);
-                  }
-                },
+                onTap: _isFinalQuotationReadOnly
+                    ? null
+                    : () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: _quotationValidUntil ??
+                              DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          setState(() => _quotationValidUntil = date);
+                        }
+                      },
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: 'Válido hasta',
@@ -12869,6 +13394,31 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.30),
+            ),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.description_outlined,
+                  size: 18, color: Color(0xFFB45309)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Se puede guardar y descargar como presupuesto. No genera factura, pago, salida de stock ni asiento contable hasta convertirlo a un trabajo cobrable.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -13768,6 +14318,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               width: 150,
               child: TextFormField(
                 controller: _discountController,
+                enabled: !_isCommercialSnapshotLocked,
                 decoration: const InputDecoration(
                   prefixText: '\$ ',
                   border: OutlineInputBorder(),
@@ -13778,6 +14329,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
+                validator: (value) {
+                  final discount = double.tryParse(value ?? '') ?? 0;
+                  if (discount < 0 || discount > _subtotal) {
+                    return 'Máximo: ${NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(_subtotal)}';
+                  }
+                  return null;
+                },
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -14021,19 +14579,35 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             style: TextStyle(fontSize: 12, color: Colors.grey[700]),
           ),
           const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: () {
-              if (_existingJob?.invoiceId != null) {
-                // Pass extra param to indicate we came from a job, so back button works nicely
-                context.push(
-                    '/sales/invoices/${_existingJob!.invoiceId}/edit?referrer=job&jobId=${_existingJob!.id}');
-              }
-            },
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Ver Factura'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  if (_existingJob?.invoiceId != null) {
+                    context.push(
+                        '/sales/invoices/${_existingJob!.invoiceId}/edit?referrer=job&jobId=${_existingJob!.id}');
+                  }
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Ver Factura'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                ),
+              ),
+              if (_existingJob?.isPaid != true)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final invoiceId = _existingJob?.invoiceId;
+                    if (invoiceId != null) {
+                      context.push('/sales/invoices/$invoiceId/payment');
+                    }
+                  },
+                  icon: const Icon(Icons.payments_outlined),
+                  label: const Text('Registrar pago'),
+                ),
+            ],
           ),
         ],
       ),

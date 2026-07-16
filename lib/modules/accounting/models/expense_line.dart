@@ -18,8 +18,10 @@ class ExpenseLine {
     this.createdAt,
     this.updatedAt,
   })  : subtotal = subtotal ?? (quantity * unitPrice),
-        taxAmount = taxAmount ?? ((subtotal ?? (quantity * unitPrice)) * (taxRate / 100)),
-        total = total ?? ((subtotal ?? (quantity * unitPrice)) + (taxAmount ?? 0));
+        taxAmount = taxAmount ??
+            ((subtotal ?? (quantity * unitPrice)) * (taxRate / 100)),
+        total =
+            total ?? ((subtotal ?? (quantity * unitPrice)) + (taxAmount ?? 0));
 
   final String? id;
   final String? tenantId;
@@ -44,7 +46,8 @@ class ExpenseLine {
     final unitPrice = _parseDouble(json['unit_price']) ?? 0;
     final subtotal = _parseDouble(json['subtotal']) ?? quantity * unitPrice;
     final taxRate = _parseDouble(json['tax_rate']) ?? 0;
-    final taxAmount = _parseDouble(json['tax_amount']) ?? subtotal * (taxRate / 100);
+    final taxAmount =
+        _parseDouble(json['tax_amount']) ?? subtotal * (taxRate / 100);
     final total = _parseDouble(json['total']) ?? subtotal + taxAmount;
 
     return ExpenseLine(

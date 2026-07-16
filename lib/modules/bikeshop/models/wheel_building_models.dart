@@ -79,10 +79,14 @@ class WheelHub {
       hubType: json['hub_type']?.toString() ?? 'rear',
       oldMm: _parseDouble(json['old_mm']) ?? 135.0,
       spokeHoles: _parseInt(json['spoke_holes']) ?? 32,
-      leftFlangeDiameterMm: _parseDouble(json['left_flange_diameter_mm']) ?? 50.0,
-      rightFlangeDiameterMm: _parseDouble(json['right_flange_diameter_mm']) ?? 50.0,
-      centerToLeftFlangeMm: _parseDouble(json['center_to_left_flange_mm']) ?? 30.0,
-      centerToRightFlangeMm: _parseDouble(json['center_to_right_flange_mm']) ?? 30.0,
+      leftFlangeDiameterMm:
+          _parseDouble(json['left_flange_diameter_mm']) ?? 50.0,
+      rightFlangeDiameterMm:
+          _parseDouble(json['right_flange_diameter_mm']) ?? 50.0,
+      centerToLeftFlangeMm:
+          _parseDouble(json['center_to_left_flange_mm']) ?? 30.0,
+      centerToRightFlangeMm:
+          _parseDouble(json['center_to_right_flange_mm']) ?? 30.0,
       brakeType: json['brake_type']?.toString() ?? 'disc_6bolt',
       driverType: json['driver_type']?.toString() ?? 'cassette',
       axleType: json['axle_type']?.toString() ?? 'quick_release',
@@ -92,8 +96,12 @@ class WheelHub {
       notes: json['notes']?.toString(),
       imageUrl: json['image_url']?.toString(),
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'].toString())
+          : null,
     );
   }
 
@@ -215,8 +223,12 @@ class WheelRim {
       notes: json['notes']?.toString(),
       imageUrl: json['image_url']?.toString(),
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'].toString())
+          : null,
     );
   }
 
@@ -327,8 +339,12 @@ class WheelSpoke {
       notes: json['notes']?.toString(),
       imageUrl: json['image_url']?.toString(),
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'].toString())
+          : null,
     );
   }
 
@@ -379,7 +395,8 @@ class WheelBuild {
   
   // Build Specifications
   final int spokeCount;
-  final String lacingPattern; // 'radial', '1-cross', '2-cross', '3-cross', '4-cross'
+  final String
+      lacingPattern; // 'radial', '1-cross', '2-cross', '3-cross', '4-cross'
   
   // Calculated Spoke Lengths
   final double? leftSpokeLengthMm;
@@ -434,7 +451,9 @@ class WheelBuild {
       mechanicJobId: json['mechanic_job_id']?.toString(),
       buildName: json['build_name']?.toString() ?? '',
       wheelPosition: json['wheel_position']?.toString() ?? 'rear',
-      buildDate: json['build_date'] != null ? DateTime.parse(json['build_date'].toString()) : null,
+      buildDate: json['build_date'] != null
+          ? DateTime.parse(json['build_date'].toString())
+          : null,
       hubId: json['hub_id']?.toString(),
       rimId: json['rim_id']?.toString(),
       spokeId: json['spoke_id']?.toString(),
@@ -449,8 +468,12 @@ class WheelBuild {
       notes: json['notes']?.toString(),
       mechanicNotes: json['mechanic_notes']?.toString(),
       isTemplate: json['is_template'] as bool? ?? false,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'].toString())
+          : null,
     );
   }
 
@@ -462,16 +485,20 @@ class WheelBuild {
       if (mechanicJobId != null) 'mechanic_job_id': mechanicJobId,
       'build_name': buildName,
       'wheel_position': wheelPosition,
-      if (buildDate != null) 'build_date': buildDate!.toIso8601String().split('T')[0],
+      if (buildDate != null)
+        'build_date': buildDate!.toIso8601String().split('T')[0],
       if (hubId != null) 'hub_id': hubId,
       if (rimId != null) 'rim_id': rimId,
       if (spokeId != null) 'spoke_id': spokeId,
       'spoke_count': spokeCount,
       'lacing_pattern': lacingPattern,
       if (leftSpokeLengthMm != null) 'left_spoke_length_mm': leftSpokeLengthMm,
-      if (rightSpokeLengthMm != null) 'right_spoke_length_mm': rightSpokeLengthMm,
-      if (leftSpokeProductId != null) 'left_spoke_product_id': leftSpokeProductId,
-      if (rightSpokeProductId != null) 'right_spoke_product_id': rightSpokeProductId,
+      if (rightSpokeLengthMm != null)
+        'right_spoke_length_mm': rightSpokeLengthMm,
+      if (leftSpokeProductId != null)
+        'left_spoke_product_id': leftSpokeProductId,
+      if (rightSpokeProductId != null)
+        'right_spoke_product_id': rightSpokeProductId,
       if (nippleType != null) 'nipple_type': nippleType,
       if (rimTapeWidthMm != null) 'rim_tape_width_mm': rimTapeWidthMm,
       if (notes != null) 'notes': notes,

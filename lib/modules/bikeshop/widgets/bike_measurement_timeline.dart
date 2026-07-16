@@ -35,7 +35,8 @@ class _BikeMeasurementTimelineState extends State<BikeMeasurementTimeline> {
       builder: (context, constraints) {
         return Container(
           height: 180, // Taller to allow beautiful gradients and floating text
-          padding: const EdgeInsets.only(top: 40, bottom: 20, left: 10, right: 10),
+          padding:
+              const EdgeInsets.only(top: 40, bottom: 20, left: 10, right: 10),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -125,9 +126,12 @@ class _TimelineSplinePainter extends CustomPainter {
         final p1 = paintPoints[i + 1];
         final controlPointX = p0.dx + ((p1.dx - p0.dx) / 2);
         path.cubicTo(
-          controlPointX, p0.dy,
-          controlPointX, p1.dy,
-          p1.dx, p1.dy,
+          controlPointX,
+          p0.dy,
+          controlPointX,
+          p1.dy,
+          p1.dx,
+          p1.dy,
         );
       }
     }
@@ -177,13 +181,15 @@ class _TimelineSplinePainter extends CustomPainter {
 
       // Tag bounding box above curve (like mockup)
       if (point.title.isNotEmpty || point.summary != null) {
-        final tagText = point.summary?.isNotEmpty == true ? point.summary! : point.title;
+        final tagText =
+            point.summary?.isNotEmpty == true ? point.summary! : point.title;
         // Draw little connecting line
         canvas.drawLine(
           pos, 
           Offset(pos.dx, pos.dy - 20), 
-          Paint()..color = Colors.grey.shade300..strokeWidth = 1.5
-        );
+            Paint()
+              ..color = Colors.grey.shade300
+              ..strokeWidth = 1.5);
         
         textPainter.text = TextSpan(
           text: tagText,
@@ -209,15 +215,13 @@ class _TimelineSplinePainter extends CustomPainter {
           tagRRect, 
           Paint()
             ..color = isHovered ? Colors.white : Colors.grey.shade50
-            ..style = PaintingStyle.fill
-        );
+              ..style = PaintingStyle.fill);
         canvas.drawRRect(
           tagRRect, 
           Paint()
             ..color = isHovered ? Colors.grey.shade400 : Colors.grey.shade200
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1
-        );
+              ..strokeWidth = 1);
         
         textPainter.paint(canvas, Offset(rectLeft + 8, rectTop + 5));
       }
@@ -228,13 +232,16 @@ class _TimelineSplinePainter extends CustomPainter {
 
       if (isHovered) {
         canvas.drawCircle(
-          pos, 14, 
-          Paint()..color = accentColor.withValues(alpha: 0.2)..style = PaintingStyle.fill
-        );
+            pos,
+            14,
+            Paint()
+              ..color = accentColor.withValues(alpha: 0.2)
+              ..style = PaintingStyle.fill);
       }
 
       // Draw Value text below
-      final valStr = _formatObservationValue(point.valueNumeric) + (point.unit ?? '');
+      final valStr =
+          _formatObservationValue(point.valueNumeric) + (point.unit ?? '');
       textPainter.text = TextSpan(
         text: valStr,
         style: TextStyle(
@@ -244,7 +251,8 @@ class _TimelineSplinePainter extends CustomPainter {
         ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(pos.dx - (textPainter.width / 2), pos.dy + 12));
+      textPainter.paint(
+          canvas, Offset(pos.dx - (textPainter.width / 2), pos.dy + 12));
 
       // Draw Date text
       final dateStr = DateFormat('MMM dd').format(point.observedAt);
@@ -256,7 +264,8 @@ class _TimelineSplinePainter extends CustomPainter {
         ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(pos.dx - (textPainter.width / 2), pos.dy + 30));
+      textPainter.paint(
+          canvas, Offset(pos.dx - (textPainter.width / 2), pos.dy + 30));
     }
   }
 
@@ -269,6 +278,8 @@ class _TimelineSplinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TimelineSplinePainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.accentColor != accentColor || oldDelegate.hoveredIndex != hoveredIndex;
+    return oldDelegate.points != points ||
+        oldDelegate.accentColor != accentColor ||
+        oldDelegate.hoveredIndex != hoveredIndex;
   }
 }

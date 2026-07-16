@@ -96,6 +96,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   final List<Product> _cachedProducts = [];
 
   bool _isLoading = true;
+  String? _loadError;
   bool _isSaving = false;
   bool _isEditing = false;
   bool _isUpdatingStatus = false;
@@ -164,6 +165,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
     setState(() {
       _isLoading = true;
+      _loadError = null;
       _isEditing = widget.invoiceId == null;
       _loadedInvoice = null;
       _selectedCustomer = null;
@@ -385,6 +387,12 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   Future<void> _initialize() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
     _salesService = Provider.of<SalesService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _inventoryService =
@@ -437,6 +445,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             await _hydrateMissingInvoiceProducts(invoice);
             _loadedInvoice = invoice;
             _applyInvoice(invoice);
+          } else {
+            throw StateError(
+              'No fue posible cargar la factura solicitada. No se habilitara un formulario vacio.',
+            );
           }
         }
 
@@ -504,13 +516,17 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       }
     } catch (e) {
       if (mounted) {
+        _loadError = 'No se pudo cargar esta factura. '
+            'Tus datos no fueron reemplazados; reintenta la carga.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error preparando el formulario: $e'),
             backgroundColor: Colors.red,
           ),
         );
-        _invoiceNumberController.text = await _previewInvoiceNumber();
+        if (widget.invoiceId == null) {
+          _invoiceNumberController.text = await _previewInvoiceNumber();
+        }
       }
     } finally {
       if (mounted) {
@@ -651,7 +667,10 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   Future<void> _hydrateMissingInvoiceProducts(Invoice invoice) async {
     final missingProductIds = invoice.items
-        .where((item) => item.isCatalogProduct && item.productId != null)
+        .where((item) =>
+            item.isCatalogProduct &&
+            item.productId != null &&
+            item.productId!.trim().isNotEmpty)
         .map((item) => item.productId!)
         .where(
           (productId) =>
@@ -1369,7 +1388,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
           Expanded(
             child: _isLoading
                 ? const Center(child: BrandedLoading())
-                : _buildForm(theme),
+                : _loadError != null
+                    ? _buildLoadError(theme)
+                    : _buildForm(theme),
           ),
         ],
       ),
@@ -1388,6 +1409,48 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
         }
       },
       child: content,
+    );
+  }
+
+  Widget _buildLoadError(ThemeData theme) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_off_outlined,
+                size: 44,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No se pudo abrir la factura',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _loadError!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _initialize,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar carga'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1417,6 +1480,29 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   Widget _buildHeader(ThemeData theme) {
+    if (_loadError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Factura no disponible',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isLoading ? null : _initialize,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Simplified header for compact mode
     if (widget.isCompact) {
       return Container(

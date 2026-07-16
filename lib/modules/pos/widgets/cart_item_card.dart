@@ -62,14 +62,16 @@ class CartItemCard extends StatelessWidget {
                       errorWidget: (context, url, error) => Icon(
                         Icons.pedal_bike,
                         size: 20,
-                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.5),
                       ),
                     ),
                   )
                 : Icon(
                     item.isAdHoc ? Icons.edit_note : Icons.pedal_bike,
                     size: 20,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.5),
                   ),
           ),
 
@@ -106,7 +108,8 @@ class CartItemCard extends StatelessWidget {
                       ),
                       Text(
                         ' • ',
-                        style: TextStyle(color: theme.colorScheme.outlineVariant),
+                        style:
+                            TextStyle(color: theme.colorScheme.outlineVariant),
                       ),
                     ],
                     Text(
@@ -170,16 +173,19 @@ class CartItemCard extends StatelessWidget {
                         color: theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                          color: theme.colorScheme.outlineVariant
+                              .withValues(alpha: 0.5),
                         ),
                       ),
                       child: Row(
                         children: [
                           InkWell(
                             onTap: item.quantity > 1
-                                ? () => onQuantityChanged?.call(item.quantity - 1)
+                                ? () =>
+                                    onQuantityChanged?.call(item.quantity - 1)
                                 : null, // If qty 1, do nothing, rely on remove button
-                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+                            borderRadius: const BorderRadius.horizontal(
+                                left: Radius.circular(5)),
                             child: Padding(
                               padding: const EdgeInsets.all(4.0),
                               child: Icon(
@@ -202,16 +208,20 @@ class CartItemCard extends StatelessWidget {
                             ),
                           ),
                           InkWell(
-                            onTap: (item.product?.stockQuantity ?? 999) > item.quantity
-                                ? () => onQuantityChanged?.call(item.quantity + 1)
+                            onTap: (item.product?.stockQuantity ?? 999) >
+                                    item.quantity
+                                ? () =>
+                                    onQuantityChanged?.call(item.quantity + 1)
                                 : null,
-                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+                            borderRadius: const BorderRadius.horizontal(
+                                right: Radius.circular(5)),
                             child: Padding(
                               padding: const EdgeInsets.all(4.0),
                               child: Icon(
                                 Icons.add,
                                 size: 14,
-                                color: (item.product?.stockQuantity ?? 999) > item.quantity
+                                color: (item.product?.stockQuantity ?? 999) >
+                                        item.quantity
                                     ? theme.colorScheme.onSurface
                                     : theme.disabledColor,
                               ),
@@ -227,7 +237,8 @@ class CartItemCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+                          color: theme.colorScheme.errorContainer
+                              .withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(

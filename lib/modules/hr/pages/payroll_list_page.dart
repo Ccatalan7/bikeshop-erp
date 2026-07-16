@@ -495,8 +495,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
           if (isExpanded)
             _buildExpandedDetails(
               voucher,
-              isLoadingSettlements:
-                  _settlementLoadingIds.contains(voucher.id),
+              isLoadingSettlements: _settlementLoadingIds.contains(voucher.id),
             ),
         ],
       ),

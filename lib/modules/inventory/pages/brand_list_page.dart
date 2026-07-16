@@ -326,8 +326,7 @@ class _BrandListPageState extends State<BrandListPage> {
     final subtitle = <String>[
       if (brand.description != null && brand.description!.isNotEmpty)
         brand.description!,
-      if (brand.website != null && brand.website!.isNotEmpty)
-        brand.website!,
+      if (brand.website != null && brand.website!.isNotEmpty) brand.website!,
     ].join(' • ');
 
     return Card(

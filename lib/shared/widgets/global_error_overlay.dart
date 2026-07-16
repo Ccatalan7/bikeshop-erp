@@ -27,11 +27,13 @@ class GlobalErrorOverlay extends StatelessWidget {
                       style: TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text(notifier.error!, style: const TextStyle(color: Colors.white)),
+                  Text(notifier.error!,
+                      style: const TextStyle(color: Colors.white)),
                   if (notifier.stackTrace != null) ...[
                     const SizedBox(height: 8),
                     Text(notifier.stackTrace!,
-                        style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12)),
                   ],
                   Align(
                     alignment: Alignment.topRight,

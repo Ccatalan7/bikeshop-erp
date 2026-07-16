@@ -24,7 +24,9 @@ class _PaymentMethodsSettingsPageState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PaymentMethodService>().loadPaymentMethods(forceRefresh: true);
+      context
+          .read<PaymentMethodService>()
+          .loadPaymentMethods(forceRefresh: true);
       context.read<AccountingService>().initialize();
     });
   }
@@ -44,7 +46,8 @@ class _PaymentMethodsSettingsPageState
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
+                Icon(Icons.error_outline,
+                    size: 64, color: theme.colorScheme.error),
                   const SizedBox(height: 16),
                   Text(service.error!, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 16),
@@ -334,7 +337,8 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
     _sortOrder = widget.method?.sortOrder ?? 99;
     _requiresReference = widget.method?.requiresReference ?? false;
     _isActive = widget.method?.isActive ?? true;
-    _defaultTaxTreatment = widget.method?.defaultTaxTreatment ?? TaxTreatment.noTax;
+    _defaultTaxTreatment =
+        widget.method?.defaultTaxTreatment ?? TaxTreatment.noTax;
     _selectedAccountId = widget.method?.accountId;
     _selectedIcon = widget.method?.icon ?? 'payment';
 
@@ -354,7 +358,8 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.method == null ? 'Nuevo Método de Pago' : 'Editar Método'),
+      title: Text(
+          widget.method == null ? 'Nuevo Método de Pago' : 'Editar Método'),
       content: SingleChildScrollView(
         child: SizedBox(
           width: 500,
@@ -476,7 +481,8 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
                       value: TaxTreatment.noTax,
                       child: Row(
                         children: [
-                          Icon(Icons.remove_circle_outline, size: 20, color: Colors.grey[600]),
+                          Icon(Icons.remove_circle_outline,
+                              size: 20, color: Colors.grey[600]),
                           const SizedBox(width: 8),
                           const Text('Sin IVA'),
                         ],
@@ -486,7 +492,8 @@ class _PaymentMethodDialogState extends State<_PaymentMethodDialog> {
                       value: TaxTreatment.taxIncluded,
                       child: Row(
                         children: [
-                          Icon(Icons.percent, size: 20, color: Colors.green[700]),
+                          Icon(Icons.percent,
+                              size: 20, color: Colors.green[700]),
                           const SizedBox(width: 8),
                           const Text('IVA Incluido (19%)'),
                         ],

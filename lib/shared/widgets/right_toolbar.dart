@@ -43,7 +43,9 @@ class _RightToolbarState extends State<RightToolbar> {
   bool _isResizing = false;
 
   static const double _minWidth = 320.0;
-  static const double _maxWidth = 600.0;
+  static const double _absoluteMaxWidth = 1600.0;
+  static const double _maxWindowFraction = 0.82;
+  static const double _fileRunnerPreferredWidth = 640.0;
   static const double _collapsedWidth = RightToolbar.collapsedWidth;
   static const String _prefKey = 'right_toolbar_width';
 
@@ -72,8 +74,16 @@ class _RightToolbarState extends State<RightToolbar> {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getDouble(_prefKey);
     if (saved != null && mounted) {
-      setState(() => _expandedWidth = saved.clamp(_minWidth, _maxWidth));
+      setState(
+        () => _expandedWidth =
+            saved.clamp(_minWidth, _absoluteMaxWidth).toDouble(),
+      );
     }
+  }
+
+  double _effectiveMaxWidth(BuildContext context) {
+    final windowLimit = MediaQuery.sizeOf(context).width * _maxWindowFraction;
+    return windowLimit.clamp(_minWidth, _absoluteMaxWidth).toDouble();
   }
 
   Future<void> _saveWidth() async {
@@ -88,7 +98,17 @@ class _RightToolbarState extends State<RightToolbar> {
           .navigateActiveWorkspace('/taller/pegas/nueva');
       return;
     }
-    context.read<RightToolbarService>().toggleTool(tool);
+    final toolbarService = context.read<RightToolbarService>();
+    if (tool == ToolbarTool.fileRunner &&
+        toolbarService.activeTool != tool &&
+        _expandedWidth < _fileRunnerPreferredWidth) {
+      setState(
+        () => _expandedWidth = _fileRunnerPreferredWidth
+            .clamp(_minWidth, _effectiveMaxWidth(context))
+            .toDouble(),
+      );
+    }
+    toolbarService.toggleTool(tool);
   }
 
   void _close() {
@@ -111,6 +131,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return 'Proveedores';
       case ToolbarTool.storage:
         return 'Archivos';
+      case ToolbarTool.fileRunner:
+        return 'Ejecutar archivos';
       case ToolbarTool.kiosk:
         return 'Kiosko RRHH';
       case ToolbarTool.quickSale:
@@ -144,6 +166,8 @@ class _RightToolbarState extends State<RightToolbar> {
         return Icons.storefront_outlined;
       case ToolbarTool.storage:
         return Icons.folder_open_outlined;
+      case ToolbarTool.fileRunner:
+        return Icons.play_circle_outline;
       case ToolbarTool.kiosk:
         return Icons.badge_outlined;
       case ToolbarTool.quickSale:
@@ -192,6 +216,12 @@ class _RightToolbarState extends State<RightToolbar> {
         return const QuickSupplierMessagesPanel();
       case ToolbarTool.storage:
         return const AppFilesPanel(compact: true, showHeader: false);
+      case ToolbarTool.fileRunner:
+        return const AppFilesPanel(
+          compact: true,
+          showHeader: false,
+          runnerMode: true,
+        );
       case ToolbarTool.kiosk:
         return const KioskModePage(
           embedded: true,
@@ -342,7 +372,10 @@ class _RightToolbarState extends State<RightToolbar> {
             : theme.colorScheme.primary.withValues(alpha: 0.1);
 
     final bool isExpanded = activeTool != null;
-    final double currentWidth = isExpanded ? _expandedWidth : _collapsedWidth;
+    final effectiveMaxWidth = _effectiveMaxWidth(context);
+    final double currentWidth = isExpanded
+        ? _expandedWidth.clamp(_minWidth, effectiveMaxWidth).toDouble()
+        : _collapsedWidth;
 
     return Stack(
       children: [
@@ -398,7 +431,8 @@ class _RightToolbarState extends State<RightToolbar> {
                 onHorizontalDragUpdate: (details) {
                   setState(() {
                     _expandedWidth = (_expandedWidth - details.delta.dx)
-                        .clamp(_minWidth, _maxWidth);
+                        .clamp(_minWidth, effectiveMaxWidth)
+                        .toDouble();
                   });
                 },
                 onHorizontalDragEnd: (_) {
@@ -421,43 +455,48 @@ class _RightToolbarState extends State<RightToolbar> {
     ChatProvider chatProvider,
     DesktopUpdateService desktopUpdateService,
   ) {
-    return Column(
-      children: [
-        const SizedBox(height: 12),
-        if (desktopUpdateService.hasDismissedReadyUpdate)
-          _buildDismissedUpdateIcon(theme, desktopUpdateService),
-        // Tool icons
-        for (final tool in visibleTools)
-          Tooltip(
-            message: _toolTitle(tool),
-            preferBelow: false,
-            waitDuration: const Duration(milliseconds: 400),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _selectTool(tool),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  margin:
-                      const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: _buildToolIcon(
-                    theme,
-                    tool,
-                    chatProvider,
-                    iconSize: 22,
-                    iconColor:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.65),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (desktopUpdateService.hasDismissedReadyUpdate)
+            _buildDismissedUpdateIcon(theme, desktopUpdateService),
+          // Tool icons
+          for (final tool in visibleTools)
+            Tooltip(
+              message: _toolTitle(tool),
+              preferBelow: false,
+              waitDuration: const Duration(milliseconds: 400),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _selectTool(tool),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _buildToolIcon(
+                      theme,
+                      tool,
+                      chatProvider,
+                      iconSize: 22,
+                      iconColor:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -562,6 +601,7 @@ class _RightToolbarState extends State<RightToolbar> {
     );
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Panel area first (left), mini rail on right edge
         Expanded(
@@ -594,56 +634,61 @@ class _RightToolbarState extends State<RightToolbar> {
             ),
             child: SizedBox(
               width: _collapsedWidth,
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  if (desktopUpdateService.hasDismissedReadyUpdate)
-                    _buildDismissedUpdateIcon(
-                      railTheme,
-                      desktopUpdateService,
-                    ),
-                  for (final t in visibleTools)
-                    Tooltip(
-                      message: _toolTitle(t),
-                      preferBelow: false,
-                      waitDuration: const Duration(milliseconds: 300),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _selectTool(t),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            margin: const EdgeInsets.symmetric(
-                                vertical: 4, horizontal: 4),
-                            decoration: BoxDecoration(
-                              color: t == tool
-                                  ? railTheme.colorScheme.primary.withValues(
-                                      alpha: useToolbarPalette
-                                          ? 0.16
-                                          : isDark
-                                              ? 0.25
-                                              : 0.12,
-                                    )
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: _buildToolIcon(
-                              railTheme,
-                              t,
-                              chatProvider,
-                              iconSize: 20,
-                              iconColor: t == tool
-                                  ? railTheme.colorScheme.primary
-                                  : railTheme.colorScheme.onSurface
-                                      .withValues(alpha: 0.55),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (desktopUpdateService.hasDismissedReadyUpdate)
+                      _buildDismissedUpdateIcon(
+                        railTheme,
+                        desktopUpdateService,
+                      ),
+                    for (final t in visibleTools)
+                      Tooltip(
+                        message: _toolTitle(t),
+                        preferBelow: false,
+                        waitDuration: const Duration(milliseconds: 300),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _selectTool(t),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              margin: const EdgeInsets.symmetric(
+                                vertical: 4,
+                                horizontal: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: t == tool
+                                    ? railTheme.colorScheme.primary.withValues(
+                                        alpha: useToolbarPalette
+                                            ? 0.16
+                                            : isDark
+                                                ? 0.25
+                                                : 0.12,
+                                      )
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: _buildToolIcon(
+                                railTheme,
+                                t,
+                                chatProvider,
+                                iconSize: 20,
+                                iconColor: t == tool
+                                    ? railTheme.colorScheme.primary
+                                    : railTheme.colorScheme.onSurface
+                                        .withValues(alpha: 0.55),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

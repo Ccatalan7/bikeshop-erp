@@ -28,10 +28,19 @@
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
+      "preLaunchTask": "🧮 Build Spreadsheet Engine",
       "args": [
         "-d",
         "windows"
       ]
+    },
+    {
+      "name": "🍎 Flutter: Run (macOS)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "macos",
+      "preLaunchTask": "🧮 Build Spreadsheet Engine"
     },
     {
       "name": "📱 Flutter: Run (iPad)",

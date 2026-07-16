@@ -258,7 +258,9 @@ Respondemos consultas de Lunes a Viernes, 9:00 a 18:00 hrs.
                   ),
                   const SizedBox(width: 8),
                 ],
-                Text('Contenido del Sitio', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Contenido del Sitio',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.refresh),

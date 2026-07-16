@@ -15,7 +15,8 @@ class SmartImportOptionsDialog extends StatefulWidget {
   });
 
   @override
-  State<SmartImportOptionsDialog> createState() => _SmartImportOptionsDialogState();
+  State<SmartImportOptionsDialog> createState() =>
+      _SmartImportOptionsDialogState();
 }
 
 class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
@@ -109,7 +110,8 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
                   children: [
                     const Text(
                       'Campos a Actualizar',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     Row(
                       children: [
@@ -119,7 +121,8 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
                             setState(() {
                               _selectAllFields = value!;
                               if (_selectAllFields) {
-                                _selectedFields = Set.from(widget.availableUpdateFields!);
+                                _selectedFields =
+                                    Set.from(widget.availableUpdateFields!);
                               } else {
                                 _selectedFields.clear();
                               }
@@ -193,7 +196,8 @@ class _SmartImportOptionsDialogState extends State<SmartImportOptionsDialog> {
             final options = ImportOptions(
               mode: _selectedMode,
               matchField: _matchField,
-              fieldsToUpdate: _selectAllFields ? null : _selectedFields.toList(),
+              fieldsToUpdate:
+                  _selectAllFields ? null : _selectedFields.toList(),
               skipErrors: true,
             );
             Navigator.pop(context, options);
@@ -237,7 +241,8 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildStat('Nuevos', result.inserted, Colors.green),
-                  _buildStat('Actualizados', result.conflicts.length, Colors.orange),
+                  _buildStat(
+                      'Actualizados', result.conflicts.length, Colors.orange),
                   _buildStat('Omitidos', result.skipped, Colors.grey),
                 ],
               ),
@@ -269,7 +274,8 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child: Table(
-                              border: TableBorder.all(color: Colors.grey.shade300),
+                              border:
+                                  TableBorder.all(color: Colors.grey.shade300),
                               columnWidths: const {
                                 0: FlexColumnWidth(2),
                                 1: FlexColumnWidth(3),
@@ -277,19 +283,26 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                               },
                               children: [
                                 TableRow(
-                                  decoration: BoxDecoration(color: Colors.grey.shade200),
+                                  decoration: BoxDecoration(
+                                      color: Colors.grey.shade200),
                                   children: const [
                                     Padding(
                                       padding: EdgeInsets.all(8),
-                                      child: Text('Campo', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      child: Text('Campo',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
                                     ),
                                     Padding(
                                       padding: EdgeInsets.all(8),
-                                      child: Text('Actual', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      child: Text('Actual',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
                                     ),
                                     Padding(
                                       padding: EdgeInsets.all(8),
-                                      child: Text('Nuevo', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      child: Text('Nuevo',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
                                     ),
                                   ],
                                 ),
@@ -305,14 +318,17 @@ class ImportConflictPreviewDialog extends StatelessWidget {
                                         padding: const EdgeInsets.all(8),
                                         child: Text(
                                           '${change.oldValue ?? "null"}',
-                                          style: const TextStyle(color: Colors.red),
+                                          style: const TextStyle(
+                                              color: Colors.red),
                                         ),
                                       ),
                                       Padding(
                                         padding: const EdgeInsets.all(8),
                                         child: Text(
                                           '${change.newValue ?? "null"}',
-                                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(
+                                              color: Colors.green,
+                                              fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                     ],

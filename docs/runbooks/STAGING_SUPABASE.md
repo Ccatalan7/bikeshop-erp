@@ -40,7 +40,22 @@ Pure documentation, isolated formatting, and unit-tested UI changes do not requi
 - The repository remains linked to production for deployment metadata. Do not relink it merely to query staging.
 - `scripts/db/` reads staging credentials from macOS Keychain or approved Windows/CI environment variables and never prints them.
 - Every staging mutation helper compares project refs and refuses production.
-- Production query helpers are read-only and do not offer a write override.
+- Production queries are read-only by default. Authorized production writes
+  use `scripts/db/query.sh production --write` with
+  `VINABIKE_DB_WRITE_CONFIRM=production`; the helper verifies the exact linked
+  production project ref before executing.
+
+## Agent-owned production deployment
+
+After read-only inspection proves the issue, the forward SQL is represented in
+the repository, local tests pass, and the user has authorized the production
+change, the agent must execute the smallest reviewed migration and verify the
+live result. Do not stop at a copy/paste snippet or ask the user to run the SQL.
+
+Before execution, record the forward change and recovery approach. Prefer
+additive/idempotent migrations. For an additive nullable column, recovery is to
+roll back the client while leaving the compatible column in place; do not drop
+stored production data merely to reverse a release.
 
 ## Standard change sequence
 

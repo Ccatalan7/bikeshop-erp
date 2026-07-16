@@ -56,7 +56,8 @@ class WebsiteBackupService extends ChangeNotifier {
     try {
       final response = await _supabase
           .from('website_backups')
-          .select('id, name, description, block_count, is_auto_backup, created_at, created_by')
+          .select(
+              'id, name, description, block_count, is_auto_backup, created_at, created_by')
           .order('created_at', ascending: false);
 
       _backups = (response as List)
@@ -107,7 +108,8 @@ class WebsiteBackupService extends ChangeNotifier {
   }
 
   /// Restore a backup
-  Future<bool> restoreBackup(String backupId, {bool createSafetyBackup = true}) async {
+  Future<bool> restoreBackup(String backupId,
+      {bool createSafetyBackup = true}) async {
     try {
       debugPrint('🔄 Restoring backup: $backupId');
       
@@ -139,10 +141,7 @@ class WebsiteBackupService extends ChangeNotifier {
   /// Delete a backup
   Future<bool> deleteBackup(String backupId) async {
     try {
-      await _supabase
-          .from('website_backups')
-          .delete()
-          .eq('id', backupId);
+      await _supabase.from('website_backups').delete().eq('id', backupId);
 
       _backups.removeWhere((b) => b.id == backupId);
       notifyListeners();

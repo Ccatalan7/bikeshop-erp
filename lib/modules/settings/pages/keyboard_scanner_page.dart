@@ -101,7 +101,8 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         service.isListening 
@@ -140,9 +141,7 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                         : Icons.play_arrow,
                                   ),
                                   label: Text(
-                                    service.isListening 
-                                        ? 'Detener' 
-                                        : 'Iniciar',
+                                    service.isListening ? 'Detener' : 'Iniciar',
                                   ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: service.isListening 
@@ -187,11 +186,13 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                               decoration: BoxDecoration(
                                 color: Colors.amber.shade50,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.amber.shade200),
+                                border:
+                                    Border.all(color: Colors.amber.shade200),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.info_outline, color: Colors.amber.shade800),
+                                  Icon(Icons.info_outline,
+                                      color: Colors.amber.shade800),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -270,7 +271,8 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               itemCount: _recentScans.length,
                               itemBuilder: (context, index) {
                                 final barcode = _recentScans[index];
@@ -299,13 +301,15 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.copy, size: 20),
+                                          icon:
+                                              const Icon(Icons.copy, size: 20),
                                           tooltip: 'Copiar',
                                           onPressed: () {
                                             Clipboard.setData(
                                               ClipboardData(text: barcode),
                                             );
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
                                               const SnackBar(
                                                 content: Text('Código copiado'),
                                                 duration: Duration(seconds: 1),
@@ -314,13 +318,16 @@ class _KeyboardScannerPageState extends State<KeyboardScannerPage> {
                                           },
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.search, size: 20),
+                                          icon: const Icon(Icons.search,
+                                              size: 20),
                                           tooltip: 'Buscar producto',
                                           onPressed: () {
                                             // TODO: Navigate to product search with barcode
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
                                               SnackBar(
-                                                content: Text('Buscando producto: $barcode'),
+                                                content: Text(
+                                                    'Buscando producto: $barcode'),
                                               ),
                                             );
                                           },

@@ -8,7 +8,8 @@ class PaymentMethod {
   final String name; // 'Efectivo', 'Transferencia Bancaria', etc.
   final String accountId; // uuid - references accounts(id)
   final bool requiresReference; // true if reference field is mandatory
-  final TaxTreatment defaultTaxTreatment; // Tax treatment for this payment method
+  final TaxTreatment
+      defaultTaxTreatment; // Tax treatment for this payment method
   final String? icon; // optional icon name
   final int sortOrder; // display order
   final bool isActive; // whether this method is currently available

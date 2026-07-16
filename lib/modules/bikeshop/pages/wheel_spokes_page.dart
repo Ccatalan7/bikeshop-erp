@@ -116,7 +116,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(spoke == null ? 'Spoke created' : 'Spoke updated'),
+                  content:
+                      Text(spoke == null ? 'Spoke created' : 'Spoke updated'),
                 ),
               );
             }
@@ -137,7 +138,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Spoke'),
-        content: Text('Are you sure you want to delete "${spoke.displayName}"?'),
+        content:
+            Text('Are you sure you want to delete "${spoke.displayName}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -219,7 +221,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                         ),
                         initialValue: _filterLength,
                         items: [
-                          const DropdownMenuItem(value: null, child: Text('All')),
+                          const DropdownMenuItem(
+                              value: null, child: Text('All')),
                           ...List.generate(20, (i) => 284 + i * 2).map(
                             (length) => DropdownMenuItem(
                               value: length,
@@ -247,8 +250,10 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 2.0, child: Text('2.0mm')),
                           DropdownMenuItem(value: 1.8, child: Text('1.8mm')),
-                          DropdownMenuItem(value: 2.34, child: Text('2.34mm (13g)')),
-                          DropdownMenuItem(value: 2.6, child: Text('2.6mm (12g)')),
+                          DropdownMenuItem(
+                              value: 2.34, child: Text('2.34mm (13g)')),
+                          DropdownMenuItem(
+                              value: 2.6, child: Text('2.6mm (12g)')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -269,7 +274,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: true, child: Text('Butted')),
-                          DropdownMenuItem(value: false, child: Text('Straight')),
+                          DropdownMenuItem(
+                              value: false, child: Text('Straight')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -304,7 +310,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.linear_scale, size: 64, color: Colors.grey),
+                            const Icon(Icons.linear_scale,
+                                size: 64, color: Colors.grey),
                             const SizedBox(height: 16),
                             Text(
                               _searchQuery.isEmpty
@@ -336,7 +343,8 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                                   Text(
                                     '${spoke.gauge}mm • ${spoke.isButted ? 'Butted' : 'Straight'} • '
                                     '${spoke.headType.replaceAll('_', ' ')}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
@@ -345,10 +353,12 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit),
-                                    onPressed: () => _showSpokeDialog(spoke: spoke),
+                                    onPressed: () =>
+                                        _showSpokeDialog(spoke: spoke),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
                                     onPressed: () => _deleteSpoke(spoke),
                                   ),
                                 ],
@@ -394,11 +404,15 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
     super.initState();
     final spoke = widget.spoke;
     _nameController = TextEditingController(text: spoke?.name ?? '');
-    _manufacturerController = TextEditingController(text: spoke?.manufacturer ?? '');
+    _manufacturerController =
+        TextEditingController(text: spoke?.manufacturer ?? '');
     _modelController = TextEditingController(text: spoke?.model ?? '');
-    _lengthController = TextEditingController(text: spoke?.lengthMm.toString() ?? '292');
-    _tensileStrengthController = TextEditingController(text: spoke?.tensileStrengthN?.toString() ?? '');
-    _weightController = TextEditingController(text: spoke?.weightGrams?.toString() ?? '');
+    _lengthController =
+        TextEditingController(text: spoke?.lengthMm.toString() ?? '292');
+    _tensileStrengthController =
+        TextEditingController(text: spoke?.tensileStrengthN?.toString() ?? '');
+    _weightController =
+        TextEditingController(text: spoke?.weightGrams?.toString() ?? '');
     
     if (spoke != null) {
       _gauge = spoke.gauge;
@@ -437,7 +451,6 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
-              
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -452,7 +465,8 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 labelText: 'Name *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -490,7 +504,8 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -508,13 +523,18 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                               ),
                               initialValue: _gauge,
                               items: const [
-                                DropdownMenuItem(value: 2.0, child: Text('2.0mm (15g)')),
-                                DropdownMenuItem(value: 1.8, child: Text('1.8mm (16g)')),
-                                DropdownMenuItem(value: 2.34, child: Text('2.34mm (13g)')),
-                                DropdownMenuItem(value: 2.6, child: Text('2.6mm (12g)')),
+                                DropdownMenuItem(
+                                    value: 2.0, child: Text('2.0mm (15g)')),
+                                DropdownMenuItem(
+                                    value: 1.8, child: Text('1.8mm (16g)')),
+                                DropdownMenuItem(
+                                    value: 2.34, child: Text('2.34mm (13g)')),
+                                DropdownMenuItem(
+                                    value: 2.6, child: Text('2.6mm (12g)')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _gauge = value);
+                                if (value != null)
+                                  setState(() => _gauge = value);
                               },
                             ),
                           ),
@@ -545,13 +565,19 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                               ),
                               initialValue: _material,
                               items: const [
-                                DropdownMenuItem(value: 'stainless_steel', child: Text('Stainless Steel')),
-                                DropdownMenuItem(value: 'brass', child: Text('Brass')),
-                                DropdownMenuItem(value: 'titanium', child: Text('Titanium')),
-                                DropdownMenuItem(value: 'aluminum', child: Text('Aluminum')),
+                                DropdownMenuItem(
+                                    value: 'stainless_steel',
+                                    child: Text('Stainless Steel')),
+                                DropdownMenuItem(
+                                    value: 'brass', child: Text('Brass')),
+                                DropdownMenuItem(
+                                    value: 'titanium', child: Text('Titanium')),
+                                DropdownMenuItem(
+                                    value: 'aluminum', child: Text('Aluminum')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _material = value);
+                                if (value != null)
+                                  setState(() => _material = value);
                               },
                             ),
                           ),
@@ -564,11 +590,15 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                               ),
                               initialValue: _headType,
                               items: const [
-                                DropdownMenuItem(value: 'j_bend', child: Text('J-Bend')),
-                                DropdownMenuItem(value: 'straight_pull', child: Text('Straight Pull')),
+                                DropdownMenuItem(
+                                    value: 'j_bend', child: Text('J-Bend')),
+                                DropdownMenuItem(
+                                    value: 'straight_pull',
+                                    child: Text('Straight Pull')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _headType = value);
+                                if (value != null)
+                                  setState(() => _headType = value);
                               },
                             ),
                           ),
@@ -587,13 +617,18 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                               ),
                               initialValue: _finish,
                               items: const [
-                                DropdownMenuItem(value: 'plain', child: Text('Plain')),
-                                DropdownMenuItem(value: 'black', child: Text('Black')),
-                                DropdownMenuItem(value: 'silver', child: Text('Silver')),
-                                DropdownMenuItem(value: 'colored', child: Text('Colored')),
+                                DropdownMenuItem(
+                                    value: 'plain', child: Text('Plain')),
+                                DropdownMenuItem(
+                                    value: 'black', child: Text('Black')),
+                                DropdownMenuItem(
+                                    value: 'silver', child: Text('Silver')),
+                                DropdownMenuItem(
+                                    value: 'colored', child: Text('Colored')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _finish = value);
+                                if (value != null)
+                                  setState(() => _finish = value);
                               },
                             ),
                           ),
@@ -626,7 +661,6 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                   ),
                 ),
               ),
-              
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -653,7 +687,8 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                           'material': _material,
                           'finish': _finish,
                           'head_type': _headType,
-                          'tensile_strength_n': _tensileStrengthController.text.isEmpty 
+                          'tensile_strength_n':
+                              _tensileStrengthController.text.isEmpty
                               ? null 
                               : int.parse(_tensileStrengthController.text),
                           'weight_grams': _weightController.text.isEmpty 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -1541,9 +1542,10 @@ class BikeshopService extends ChangeNotifier {
   }
 
   BikeMemorySeverity? _severityFromWearPercent(double? value) {
-    if (value == null) return null;
-    if (value >= 75) return BikeMemorySeverity.critical;
-    if (value >= 50) return BikeMemorySeverity.warning;
+    final normalized = normalizeDiagnosisWearPercent(value);
+    if (normalized == null) return null;
+    if (normalized >= 75) return BikeMemorySeverity.critical;
+    if (normalized >= 50) return BikeMemorySeverity.warning;
     return null;
   }
 
@@ -2829,6 +2831,7 @@ class BikeshopService extends ChangeNotifier {
           .toList();
 
       jobs = await _hydrateJobSubjects(jobs);
+      jobs = await _hydrateServiceWarranties(jobs);
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         final searchLower = searchTerm.toLowerCase();
@@ -2877,9 +2880,10 @@ class BikeshopService extends ChangeNotifier {
           .maybeSingle();
 
       if (data == null) return null;
-      final hydrated = await _hydrateJobSubjects([
+      var hydrated = await _hydrateJobSubjects([
         MechanicJob.fromJson(data),
       ]);
+      hydrated = await _hydrateServiceWarranties(hydrated);
       return hydrated.isNotEmpty ? hydrated.first : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
@@ -2920,6 +2924,107 @@ class BikeshopService extends ChangeNotifier {
       }
       return jobs;
     }
+  }
+
+  Future<List<MechanicJob>> _hydrateServiceWarranties(
+    List<MechanicJob> jobs,
+  ) async {
+    final jobIds = jobs.map((job) => job.id).whereType<String>().toList();
+    if (jobIds.isEmpty) return jobs;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_service_warranty_view')
+          .select()
+          .inFilter('job_id', jobIds);
+      final byJobId = <String, MechanicJobServiceWarranty>{
+        for (final raw in data as List<dynamic>)
+          if ((raw as Map<String, dynamic>)['job_id'] != null)
+            raw['job_id'].toString(): MechanicJobServiceWarranty.fromJson(raw),
+      };
+
+      return jobs
+          .map((job) => job.copyWith(serviceWarranty: byJobId[job.id]))
+          .toList();
+    } catch (error) {
+      if (kDebugMode) {
+        print('⚠️ Service-warranty projection unavailable: $error');
+      }
+      return jobs;
+    }
+  }
+
+  Future<List<MechanicJobServiceWarranty>> getServiceWarrantySources(
+    String customerId,
+  ) async {
+    if (customerId.isEmpty) return const [];
+
+    final data = await Supabase.instance.client
+        .from('mechanic_job_service_warranty_view')
+        .select()
+        .eq('customer_id', customerId)
+        .not('last_delivered_at', 'is', null)
+        .order('last_delivered_at', ascending: false)
+        .limit(50);
+
+    return (data as List<dynamic>)
+        .map((raw) => MechanicJobServiceWarranty.fromJson(
+              raw as Map<String, dynamic>,
+            ))
+        .toList();
+  }
+
+  Future<MechanicJobWarrantyClaim?> getWarrantyClaim(
+      String warrantyJobId) async {
+    if (warrantyJobId.isEmpty) return null;
+
+    final data = await Supabase.instance.client
+        .from('mechanic_job_warranty_claims_view')
+        .select()
+        .eq('warranty_job_id', warrantyJobId)
+        .maybeSingle();
+    if (data == null) return null;
+    return MechanicJobWarrantyClaim.fromJson(data);
+  }
+
+  Future<Map<String, dynamic>> registerWarrantyClaim({
+    required String warrantyJobId,
+    required String sourceJobId,
+  }) async {
+    final operationKey =
+        'register:$warrantyJobId:$sourceJobId:${DateTime.now().microsecondsSinceEpoch}';
+    final data = await Supabase.instance.client.rpc(
+      'register_mechanic_job_warranty_claim',
+      params: {
+        'p_warranty_job_id': warrantyJobId,
+        'p_source_job_id': sourceJobId,
+        'p_operation_key': operationKey,
+      },
+    );
+    invalidateJobsCache();
+    _debouncedNotify();
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> decideWarrantyClaim({
+    required String warrantyJobId,
+    required WarrantyOutcome outcome,
+    String? reason,
+  }) async {
+    final operationKey =
+        'decision:$warrantyJobId:${outcome.dbValue}:${DateTime.now().microsecondsSinceEpoch}';
+    final data = await Supabase.instance.client.rpc(
+      'decide_mechanic_job_warranty_claim',
+      params: {
+        'p_warranty_job_id': warrantyJobId,
+        'p_outcome': outcome.dbValue,
+        'p_reason': reason,
+        'p_operation_key': operationKey,
+      },
+    );
+    invalidateJobsCache();
+    _debouncedNotify();
+    return Map<String, dynamic>.from(data as Map);
   }
 
   Future<MechanicJob> createJob(MechanicJob job) async {
@@ -2987,6 +3092,29 @@ class BikeshopService extends ChangeNotifier {
       if (kDebugMode) print('Error updating job: $e');
       rethrow;
     }
+  }
+
+  /// Applies the final job discount after all line mutations have completed.
+  ///
+  /// The workshop form persists lines across several requests. Staging the
+  /// discount last prevents a valid whole-job discount from making an
+  /// intermediate first-line subtotal negative. Database guards remain the
+  /// authority for the final range and quotation total.
+  Future<MechanicJob> updateJobDiscount(
+    String jobId,
+    double discountAmount,
+  ) async {
+    if (jobId.isEmpty) throw Exception('ID de trabajo inválido');
+
+    final data = await _db.update(
+      'mechanic_jobs',
+      jobId,
+      {'discount_amount': discountAmount},
+    );
+    final updatedJob = MechanicJob.fromJson(data);
+    invalidateJobsCache();
+    _debouncedNotify();
+    return updatedJob;
   }
 
   Future<void> deleteJob(String id) async {
@@ -3764,34 +3892,32 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  /// Create an invoice from a mechanic job (AWESOME feature!)
-  /// Calls database function to generate invoice with all items + labor + IVA
-  Future<String?> createInvoiceFromJob(String jobId) async {
-    try {
-      if (jobId.isEmpty) return null;
-
-      // Call the database function to create invoice
-      // This will include all job items, labor costs, and calculate IVA
-      final result = await _db.rpc(
-        'create_invoice_from_mechanic_job',
-        params: {'p_job_id': jobId},
-      );
-
-      if (result != null) {
-        notifyListeners();
-        if (kDebugMode) print('✅ Invoice created from job: $result');
-        return result.toString();
-      }
-
-      if (kDebugMode) {
-        print('⚠️ Invoice creation returned null for job: $jobId');
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) print('❌ Error creating invoice from job: $e');
-      // Don't rethrow - invoice creation failure shouldn't prevent job from being saved
-      return null;
+  /// Creates (or returns) the invoice owned by a billable workshop job.
+  ///
+  /// The guarded server command rejects quotations and incomplete/misclassified
+  /// intake records before they can leak into accounting or inventory. Errors
+  /// intentionally propagate so callers never report a financial document as
+  /// created when the server refused it.
+  Future<String> createInvoiceFromJob(String jobId) async {
+    if (jobId.trim().isEmpty) {
+      throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
     }
+
+    final result = await _db.rpc(
+      'create_billable_invoice_from_mechanic_job',
+      params: {'p_job_id': jobId.trim()},
+    );
+    final invoiceId = result?.toString().trim() ?? '';
+    if (invoiceId.isEmpty) {
+      throw const FormatException(
+        'Billable invoice command returned no invoice id',
+      );
+    }
+
+    invalidateJobsCache();
+    _debouncedNotify();
+    if (kDebugMode) print('✅ Invoice created from job: $invoiceId');
+    return invoiceId;
   }
 
   /// Sync a mechanic job to its linked invoice
@@ -4280,64 +4406,220 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Resolves a job's ambiguous physical intake through the canonical,
+  /// append-only classification command.
+  ///
+  /// The server validates tenant/customer ownership, rewires the physical
+  /// bike/component anchor atomically and clears `mode_needs_review` only when
+  /// the requested evidence is valid. Callers may retain [operationKey] when
+  /// retrying an uncertain response so the command remains replay-safe.
+  Future<MechanicJob> classifyMechanicJobIntake(
+    String jobId, {
+    required JobIntakeKind intakeKind,
+    String? bikeId,
+    String? subjectId,
+    String? subjectNotes,
+    String? reason,
+    String? operationKey,
+  }) async {
+    final normalizedJobId = jobId.trim();
+    if (normalizedJobId.isEmpty) {
+      throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
+    }
+    if (intakeKind == JobIntakeKind.unspecified) {
+      throw ArgumentError.value(
+        intakeKind,
+        'intakeKind',
+        'Classification must resolve to bike or component',
+      );
+    }
+
+    final normalizedBikeId = _nonBlankOrNull(bikeId);
+    final normalizedSubjectId = _nonBlankOrNull(subjectId);
+    final normalizedSubjectNotes = _nonBlankOrNull(subjectNotes);
+    if (intakeKind == JobIntakeKind.bike && normalizedBikeId == null) {
+      throw ArgumentError.value(
+        bikeId,
+        'bikeId',
+        'A bicycle intake requires a bike',
+      );
+    }
+    if (intakeKind == JobIntakeKind.component &&
+        normalizedSubjectId == null &&
+        normalizedSubjectNotes == null) {
+      throw ArgumentError.value(
+        subjectNotes,
+        'subjectNotes',
+        'A component intake requires a subject or clear description',
+      );
+    }
+
+    final normalizedOperationKey =
+        _nonBlankOrNull(operationKey) ?? const Uuid().v4();
+    final response = await _db.rpc(
+      'classify_mechanic_job_intake',
+      params: {
+        'p_job_id': normalizedJobId,
+        'p_intake_kind': intakeKind.dbValue,
+        'p_bike_id': intakeKind == JobIntakeKind.bike ? normalizedBikeId : null,
+        'p_subject_id':
+            intakeKind == JobIntakeKind.component ? normalizedSubjectId : null,
+        'p_subject_notes': intakeKind == JobIntakeKind.component
+            ? normalizedSubjectNotes
+            : null,
+        'p_reason': _nonBlankOrNull(reason),
+        'p_operation_key': normalizedOperationKey,
+      },
+    );
+    if (response is! Map) {
+      throw const FormatException(
+        'Intake classification command returned an invalid response',
+      );
+    }
+    final result = Map<String, dynamic>.from(response);
+    if (result['job_id']?.toString() != normalizedJobId) {
+      throw const FormatException(
+        'Intake classification command returned a different job',
+      );
+    }
+
+    invalidateJobsCache();
+    invalidateJobBikesCache();
+    _debouncedNotify();
+    final updated = await getJobById(normalizedJobId);
+    if (updated == null) {
+      throw StateError(
+        'Job not found after intake classification: $normalizedJobId',
+      );
+    }
+    return updated;
+  }
+
   // ============================================================
   // JOB TYPE CONVERSION METHODS
   // ============================================================
 
-  /// Convert a warranty or quotation job into a regular service job (in-place).
-  /// Updates the existing job record — preserves the job number and history.
-  Future<MechanicJob> convertToServiceJob(String jobId) async {
-    try {
-      await Supabase.instance.client.from('mechanic_jobs').update({
-        'job_type': 'service',
-        // 'warranty_outcome': null, // PRESERVE to leave a footprint that this came from a warranty
-        'quotation_status': null,
-        'quotation_valid_until': null,
-        'is_warranty_job': false,
-        'converted_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', jobId);
-      invalidateJobsCache();
-      _debouncedNotify();
-      final updated = await getJobById(jobId);
-      if (updated == null) {
-        throw Exception('Job not found after conversion: $jobId');
-      }
-      return updated;
-    } catch (e) {
-      if (kDebugMode) print('Error converting job to service: $e');
-      rethrow;
+  /// Atomically converts an approved quotation into a billable bicycle or
+  /// component service. The server appends the audit event and, when requested,
+  /// creates the invoice in the same transaction.
+  Future<MechanicJob> convertToBillableJob(
+    String jobId, {
+    required JobType targetType,
+    String? reason,
+    bool createInvoice = true,
+    String? bikeId,
+    String? subjectId,
+  }) async {
+    final normalizedJobId = jobId.trim();
+    if (normalizedJobId.isEmpty) {
+      throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
     }
+    if (targetType != JobType.service && targetType != JobType.itemService) {
+      throw ArgumentError.value(
+        targetType,
+        'targetType',
+        'Only service and itemService are billable conversion targets',
+      );
+    }
+
+    final response = await _db.rpc(
+      'convert_mechanic_job_to_billable',
+      params: {
+        'p_job_id': normalizedJobId,
+        'p_target_job_type': targetType.dbValue,
+        'p_reason': _nonBlankOrNull(reason),
+        'p_create_invoice': createInvoice,
+        'p_bike_id': _nonBlankOrNull(bikeId),
+        'p_subject_id': _nonBlankOrNull(subjectId),
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    if (response is! Map) {
+      throw const FormatException(
+        'Billable conversion command returned an invalid response',
+      );
+    }
+    final result = Map<String, dynamic>.from(response);
+    if (result['job_id']?.toString() != normalizedJobId) {
+      throw const FormatException(
+        'Billable conversion command returned a different job',
+      );
+    }
+
+    invalidateJobsCache();
+    invalidateJobBikesCache();
+    _debouncedNotify();
+    final updated = await getJobById(normalizedJobId);
+    if (updated == null) {
+      throw StateError('Job not found after conversion: $normalizedJobId');
+    }
+    return updated;
   }
 
-  /// Update the warranty outcome of a job
+  /// Backwards-compatible bicycle-service shortcut used by existing table
+  /// actions. New conversion UI should call [convertToBillableJob] explicitly
+  /// so component intake cannot be mistaken for a bicycle.
+  Future<MechanicJob> convertToServiceJob(
+    String jobId, {
+    String? reason,
+    bool createInvoice = true,
+    String? bikeId,
+  }) {
+    return convertToBillableJob(
+      jobId,
+      targetType: JobType.service,
+      reason: reason,
+      createInvoice: createInvoice,
+      bikeId: bikeId,
+    );
+  }
+
+  /// Records a warranty decision through the audited database command.
   Future<void> updateWarrantyOutcome(
-      String jobId, WarrantyOutcome outcome) async {
-    try {
-      await Supabase.instance.client
-          .from('mechanic_jobs')
-          .update({'warranty_outcome': outcome.dbValue}).eq('id', jobId);
-      invalidateJobsCache();
-      _debouncedNotify();
-    } catch (e) {
-      if (kDebugMode) print('Error updating warranty outcome: $e');
-      rethrow;
-    }
+    String jobId,
+    WarrantyOutcome outcome, {
+    String? reason,
+  }) async {
+    await decideWarrantyClaim(
+      warrantyJobId: jobId,
+      outcome: outcome,
+      reason: reason,
+    );
   }
 
-  /// Update the quotation status of a job
+  /// Updates quotation state through the append-only audited command.
   Future<void> updateQuotationStatus(
-      String jobId, QuotationStatus status) async {
-    try {
-      await Supabase.instance.client
-          .from('mechanic_jobs')
-          .update({'quotation_status': status.dbValue}).eq('id', jobId);
-      invalidateJobsCache();
-      _debouncedNotify();
-    } catch (e) {
-      if (kDebugMode) print('Error updating quotation status: $e');
-      rethrow;
+    String jobId,
+    QuotationStatus status, {
+    String? reason,
+  }) async {
+    final normalizedJobId = jobId.trim();
+    if (normalizedJobId.isEmpty) {
+      throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
     }
+
+    final response = await _db.rpc(
+      'transition_mechanic_job_quotation',
+      params: {
+        'p_job_id': normalizedJobId,
+        'p_status': status.dbValue,
+        'p_reason': _nonBlankOrNull(reason),
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    if (response is! Map || response['job_id']?.toString() != normalizedJobId) {
+      throw const FormatException(
+        'Quotation transition command returned an invalid response',
+      );
+    }
+
+    invalidateJobsCache();
+    _debouncedNotify();
+  }
+
+  static String? _nonBlankOrNull(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   @override

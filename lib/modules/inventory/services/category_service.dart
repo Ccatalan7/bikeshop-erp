@@ -40,11 +40,14 @@ class CategoryService extends ChangeNotifier {
   }) async {
     try {
       // Check if this is a filtered query
-      final isFilteredQuery = (searchTerm != null && searchTerm.isNotEmpty) ||
-                              activeOnly == true;
+      final isFilteredQuery =
+          (searchTerm != null && searchTerm.isNotEmpty) || activeOnly == true;
       
       // Return cached data if valid and not a filtered query
-      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_categoriesCacheTime) && _cachedCategories != null) {
+      if (!forceRefresh &&
+          !isFilteredQuery &&
+          _isCacheValid(_categoriesCacheTime) &&
+          _cachedCategories != null) {
         return _cachedCategories!;
       }
       
@@ -53,7 +56,8 @@ class CategoryService extends ChangeNotifier {
         while (_isLoadingCategories) {
           await Future.delayed(const Duration(milliseconds: 50));
         }
-        if (_cachedCategories != null && !isFilteredQuery) return _cachedCategories!;
+        if (_cachedCategories != null && !isFilteredQuery)
+          return _cachedCategories!;
       }
       
       if (!isFilteredQuery) _isLoadingCategories = true;
@@ -64,8 +68,8 @@ class CategoryService extends ChangeNotifier {
         // Search by name or description
         final nameResults =
             await _db.searchRecords('product_categories', 'name', searchTerm);
-        final descResults =
-            await _db.searchRecords('product_categories', 'description', searchTerm);
+        final descResults = await _db.searchRecords(
+            'product_categories', 'description', searchTerm);
 
         // Combine and deduplicate results
         final Set<int> ids = {};
@@ -126,7 +130,8 @@ class CategoryService extends ChangeNotifier {
       // Check if full_path already exists
       final existingCategory = await getCategoryByPath(category.fullPath);
       if (existingCategory != null) {
-        throw Exception('Ya existe una categoría con esta ruta: ${category.fullPath}');
+        throw Exception(
+            'Ya existe una categoría con esta ruta: ${category.fullPath}');
       }
 
       // Category already has tenant_id from the form - no need to add it again
@@ -149,11 +154,13 @@ class CategoryService extends ChangeNotifier {
       // Check if full_path already exists (excluding current category)
       final existingCategory = await getCategoryByPath(category.fullPath);
       if (existingCategory != null && existingCategory.id != category.id) {
-        throw Exception('Ya existe una categoría con esta ruta: ${category.fullPath}');
+        throw Exception(
+            'Ya existe una categoría con esta ruta: ${category.fullPath}');
       }
 
       final updatedCategory = category.copyWith(updatedAt: DateTime.now());
-      await _db.update('product_categories', category.id!, updatedCategory.toJson());
+      await _db.update(
+          'product_categories', category.id!, updatedCategory.toJson());
       invalidateCategoriesCache();
       notifyListeners(); // ✅ Notify listeners to refresh UI
       return updatedCategory;
@@ -323,7 +330,8 @@ class CategoryService extends ChangeNotifier {
           .order('name');
       
       return (data as List)
-          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .map((json) =>
+              models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
           .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching root categories: $e');
@@ -350,7 +358,8 @@ class CategoryService extends ChangeNotifier {
           .order('name');
       
       return (data as List)
-          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .map((json) =>
+              models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
           .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching subcategories: $e');
@@ -375,7 +384,8 @@ class CategoryService extends ChangeNotifier {
           .limit(1);
       
       if ((data as List).isEmpty) return null;
-      return models.Category.fromJson(Map<String, dynamic>.from(data.first as Map));
+      return models.Category.fromJson(
+          Map<String, dynamic>.from(data.first as Map));
     } catch (e) {
       if (kDebugMode) print('Error fetching category by path: $e');
       rethrow;
@@ -408,7 +418,8 @@ class CategoryService extends ChangeNotifier {
 
   /// Import categories from Excel format (single column with slashes)
   /// Format: ["Accesorios", "Accesorios / Asientos", "Accesorios / Asientos / Tija"]
-  Future<Map<String, dynamic>> importCategoriesFromList(List<String> paths) async {
+  Future<Map<String, dynamic>> importCategoriesFromList(
+      List<String> paths) async {
     try {
       int created = 0;
       int skipped = 0;
@@ -416,7 +427,8 @@ class CategoryService extends ChangeNotifier {
       final Map<String, String> pathToIdMap = {}; // full_path -> id
 
       // Sort paths by depth (fewer slashes first)
-      final sortedPaths = paths.toList()..sort((a, b) {
+      final sortedPaths = paths.toList()
+        ..sort((a, b) {
         final aDepth = '/'.allMatches(a).length;
         final bDepth = '/'.allMatches(b).length;
         return aDepth.compareTo(bDepth);
@@ -479,7 +491,6 @@ class CategoryService extends ChangeNotifier {
           final createdCategory = await createCategory(category);
           pathToIdMap[trimmedPath] = createdCategory.id!;
           created++;
-
         } catch (e) {
           if (kDebugMode) print('Error importing category "$fullPath": $e');
           errors++;
@@ -522,7 +533,8 @@ class CategoryService extends ChangeNotifier {
           .order('name');
       
       return (data as List)
-          .map((json) => models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
+          .map((json) =>
+              models.Category.fromJson(Map<String, dynamic>.from(json as Map)))
           .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching website categories: $e');
@@ -531,15 +543,13 @@ class CategoryService extends ChangeNotifier {
   }
 
   /// Toggle show_on_website flag for a category
-  Future<void> toggleWebsiteVisibility(String categoryId, bool showOnWebsite) async {
+  Future<void> toggleWebsiteVisibility(
+      String categoryId, bool showOnWebsite) async {
     try {
-      await Supabase.instance.client
-          .from('product_categories')
-          .update({
+      await Supabase.instance.client.from('product_categories').update({
             'show_on_website': showOnWebsite,
             'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', categoryId);
+      }).eq('id', categoryId);
       
       invalidateCategoriesCache();
       notifyListeners();
@@ -570,13 +580,10 @@ class CategoryService extends ChangeNotifier {
       // Then, set the selected ones to true
       if (categoryIds.isNotEmpty) {
         for (final id in categoryIds) {
-          await Supabase.instance.client
-              .from('product_categories')
-              .update({
+          await Supabase.instance.client.from('product_categories').update({
                 'show_on_website': true,
                 'updated_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', id);
+          }).eq('id', id);
         }
       }
       

@@ -37,7 +37,9 @@ class _PaymentFormState extends State<PaymentForm> {
   DateTime _paymentDate = DateTime.now();
   bool _isSaving = false;
   bool _isLoadingMethods = true;
-  bool _includesIva = false; // Payment-level IVA toggle
+  bool _includesIva = false;
+
+  bool get _taxChoiceIsLocked => widget.invoice.paidAmount > 0.01;
 
   int? _parseWholePesoAmount(String value) {
     final normalized = value.trim().replaceAll(RegExp(r'[\s$]'), '');
@@ -66,6 +68,7 @@ class _PaymentFormState extends State<PaymentForm> {
   @override
   void initState() {
     super.initState();
+    _includesIva = widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
     _amountController = TextEditingController(
       text: _effectiveBalance.toStringAsFixed(0),
     );
@@ -81,9 +84,6 @@ class _PaymentFormState extends State<PaymentForm> {
         // Default to first payment method (usually cash)
         if (paymentMethodService.paymentMethods.isNotEmpty) {
           _selectedPaymentMethod = paymentMethodService.paymentMethods.first;
-          // Set IVA based on payment method's default
-          _includesIva = _selectedPaymentMethod?.defaultTaxTreatment ==
-              TaxTreatment.taxIncluded;
         }
       });
     }
@@ -178,7 +178,10 @@ class _PaymentFormState extends State<PaymentForm> {
         taxTreatment: _includesIva ? 'tax_included' : 'no_tax',
       );
 
-      await salesService.registerPayment(payment);
+      await salesService.registerPaymentWithInvoiceTax(
+        payment,
+        _includesIva ? TaxTreatment.taxIncluded : TaxTreatment.noTax,
+      );
       widget.onCompleted?.call();
       if (mounted) {
         if (widget.dismissOnSubmit) {
@@ -218,7 +221,7 @@ class _PaymentFormState extends State<PaymentForm> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Pagar factura',
+            'Pago y documento tributario',
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
@@ -265,6 +268,7 @@ class _PaymentFormState extends State<PaymentForm> {
               prefixText: '\$ ',
             ),
             keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Ingresa el monto del pago';
@@ -310,9 +314,6 @@ class _PaymentFormState extends State<PaymentForm> {
                 if (value != null) {
                   setState(() {
                     _selectedPaymentMethod = value;
-                    // Auto-set IVA toggle based on payment method default
-                    _includesIva =
-                        value.defaultTaxTreatment == TaxTreatment.taxIncluded;
                   });
                 }
               },
@@ -325,33 +326,46 @@ class _PaymentFormState extends State<PaymentForm> {
             ),
           const SizedBox(height: 12),
 
-          // IVA toggle - payment-level tax treatment
+          // The terminal owns the tax choice for the whole invoice. Payments
+          // only settle accounts receivable; they never recognize IVA twice.
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Incluye IVA (19%)'),
+            title: const Text('Factura incluye IVA (19%)'),
             subtitle: Text(
               _includesIva
-                  ? 'El pago incluye impuesto'
-                  : 'Pago sin boleta/factura electrónica',
+                  ? 'El total ya incluye IVA; se separará neto e impuesto.'
+                  : 'El total completo se registrará sin IVA.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             value: _includesIva,
-            onChanged: (value) => setState(() => _includesIva = value),
+            onChanged: _taxChoiceIsLocked
+                ? null
+                : (value) => setState(() => _includesIva = value),
             secondary: Icon(
               _includesIva ? Icons.receipt_long : Icons.receipt_outlined,
               color:
                   _includesIva ? Theme.of(context).colorScheme.primary : null,
             ),
           ),
+          if (_taxChoiceIsLocked)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'El documento tributario quedó fijado con el primer pago. '
+                'Para cambiarlo se requiere una corrección auditada.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
 
-          // Show IVA breakdown when toggle is on
+          // Show the invoice classification using the full document total, not
+          // only the partial payment amount.
           if (_includesIva) ...[
             Builder(builder: (context) {
-              final amount =
-                  (_parseWholePesoAmount(_amountController.text) ?? 0)
-                      .toDouble();
-              final net = (amount / 1.19).roundToDouble();
-              final iva = amount - net;
+              final invoiceTotal = widget.invoice.total.roundToDouble();
+              final net = (invoiceTotal / 1.19).roundToDouble();
+              final iva = invoiceTotal - net;
               return Card(
                 color: Theme.of(context)
                     .colorScheme
@@ -367,8 +381,8 @@ class _PaymentFormState extends State<PaymentForm> {
                       _buildBreakdownRow('IVA (19%):',
                           ChileanUtils.formatCurrency(iva), context),
                       const Divider(height: 12),
-                      _buildBreakdownRow('Total:',
-                          ChileanUtils.formatCurrency(amount), context,
+                      _buildBreakdownRow('Total factura:',
+                          ChileanUtils.formatCurrency(invoiceTotal), context,
                           isBold: true),
                     ],
                   ),

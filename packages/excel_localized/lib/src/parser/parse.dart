@@ -586,6 +586,13 @@ class Parser {
       return;
     }
 
+    if (_excel._skipEmptyStyledCells &&
+        node.findElements('v').isEmpty &&
+        node.findElements('f').isEmpty &&
+        node.findElements('is').isEmpty) {
+      return;
+    }
+
     var s1 = node.getAttribute('s');
     int s = 0;
     if (s1 != null) {

@@ -1,6 +1,9 @@
 part of excel;
 
-Excel _newExcel(Archive archive) {
+Excel _newExcel(
+  Archive archive, {
+  bool skipEmptyStyledCells = false,
+}) {
   // Lookup at file format
   String? format;
 
@@ -14,7 +17,10 @@ Excel _newExcel(Archive archive) {
 
   switch (format) {
     case _spreasheetXlsx:
-      return Excel._(archive);
+      return Excel._(
+        archive,
+        skipEmptyStyledCells: skipEmptyStyledCells,
+      );
     default:
       throw UnsupportedError(
           'Excel format unsupported. Only .xlsx files are supported');
@@ -46,6 +52,13 @@ class Excel {
 
   final _SharedStringsMaintainer _sharedStrings = _SharedStringsMaintainer._();
 
+  /// Avoids materializing cells that contain formatting but no value/formula.
+  ///
+  /// This is opt-in because callers that edit and re-encode an existing
+  /// workbook may need those empty cell styles. Read-only importers can enable
+  /// it to avoid allocating very large sparse formatting tails.
+  final bool _skipEmptyStyledCells;
+
   String _stylesTarget = '';
   String _sharedStringsTarget = '';
   String get _absSharedStringsTarget {
@@ -58,7 +71,10 @@ class Excel {
   String? _defaultSheet;
   late Parser parser;
 
-  Excel._(this._archive) {
+  Excel._(
+    this._archive, {
+    bool skipEmptyStyledCells = false,
+  }) : _skipEmptyStyledCells = skipEmptyStyledCells {
     parser = Parser._(this);
     parser._startParsing();
   }
@@ -67,7 +83,10 @@ class Excel {
     return Excel.decodeBytes(const Base64Decoder().convert(_newSheet));
   }
 
-  factory Excel.decodeBytes(List<int> data) {
+  factory Excel.decodeBytes(
+    List<int> data, {
+    bool skipEmptyStyledCells = false,
+  }) {
     final Archive archive;
     try {
       archive = ZipDecoder().decodeBytes(data);
@@ -75,11 +94,20 @@ class Excel {
       throw UnsupportedError(
           'Excel format unsupported. Only .xlsx files are supported');
     }
-    return _newExcel(archive);
+    return _newExcel(
+      archive,
+      skipEmptyStyledCells: skipEmptyStyledCells,
+    );
   }
 
-  factory Excel.decodeBuffer(InputStream input) {
-    return _newExcel(ZipDecoder().decodeBytes(input.toUint8List()));
+  factory Excel.decodeBuffer(
+    InputStream input, {
+    bool skipEmptyStyledCells = false,
+  }) {
+    return _newExcel(
+      ZipDecoder().decodeBytes(input.toUint8List()),
+      skipEmptyStyledCells: skipEmptyStyledCells,
+    );
   }
 
   ///

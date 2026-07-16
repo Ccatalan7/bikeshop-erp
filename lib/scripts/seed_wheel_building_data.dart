@@ -229,7 +229,11 @@ Future<void> seedWheelBuildingData() async {
     
     final hubIds = <String, String>{};
     for (final hub in hubsData) {
-      final result = await supabase.from('wheel_hubs').insert(hub).select('id, name').single();
+      final result = await supabase
+          .from('wheel_hubs')
+          .insert(hub)
+          .select('id, name')
+          .single();
       hubIds[hub['name'] as String] = result['id'] as String;
       print('  ✓ ${hub['name']}');
     }
@@ -399,7 +403,11 @@ Future<void> seedWheelBuildingData() async {
     
     final rimIds = <String, String>{};
     for (final rim in rimsData) {
-      final result = await supabase.from('wheel_rims').insert(rim).select('id, name').single();
+      final result = await supabase
+          .from('wheel_rims')
+          .insert(rim)
+          .select('id, name')
+          .single();
       rimIds[rim['name'] as String] = result['id'] as String;
       print('  ✓ ${rim['name']}');
     }
@@ -412,23 +420,167 @@ Future<void> seedWheelBuildingData() async {
     
     final spokesData = [
       // DT Swiss Competition series (Butted 2.0/1.8mm)
-      {'tenant_id': tenantId, 'name': 'DT Swiss Competition 290mm', 'manufacturer': 'DT Swiss', 'model': 'Competition', 'length_mm': 290, 'gauge': 2.0, 'is_butted': true, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1200, 'weight_grams': 5.3, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'DT Swiss Competition 292mm', 'manufacturer': 'DT Swiss', 'model': 'Competition', 'length_mm': 292, 'gauge': 2.0, 'is_butted': true, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1200, 'weight_grams': 5.4, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'DT Swiss Competition 294mm', 'manufacturer': 'DT Swiss', 'model': 'Competition', 'length_mm': 294, 'gauge': 2.0, 'is_butted': true, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1200, 'weight_grams': 5.5, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'DT Swiss Competition 296mm', 'manufacturer': 'DT Swiss', 'model': 'Competition', 'length_mm': 296, 'gauge': 2.0, 'is_butted': true, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1200, 'weight_grams': 5.6, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'DT Swiss Competition 298mm', 'manufacturer': 'DT Swiss', 'model': 'Competition', 'length_mm': 298, 'gauge': 2.0, 'is_butted': true, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1200, 'weight_grams': 5.7, 'is_active': true},
+      {
+        'tenant_id': tenantId,
+        'name': 'DT Swiss Competition 290mm',
+        'manufacturer': 'DT Swiss',
+        'model': 'Competition',
+        'length_mm': 290,
+        'gauge': 2.0,
+        'is_butted': true,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1200,
+        'weight_grams': 5.3,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'DT Swiss Competition 292mm',
+        'manufacturer': 'DT Swiss',
+        'model': 'Competition',
+        'length_mm': 292,
+        'gauge': 2.0,
+        'is_butted': true,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1200,
+        'weight_grams': 5.4,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'DT Swiss Competition 294mm',
+        'manufacturer': 'DT Swiss',
+        'model': 'Competition',
+        'length_mm': 294,
+        'gauge': 2.0,
+        'is_butted': true,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1200,
+        'weight_grams': 5.5,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'DT Swiss Competition 296mm',
+        'manufacturer': 'DT Swiss',
+        'model': 'Competition',
+        'length_mm': 296,
+        'gauge': 2.0,
+        'is_butted': true,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1200,
+        'weight_grams': 5.6,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'DT Swiss Competition 298mm',
+        'manufacturer': 'DT Swiss',
+        'model': 'Competition',
+        'length_mm': 298,
+        'gauge': 2.0,
+        'is_butted': true,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1200,
+        'weight_grams': 5.7,
+        'is_active': true
+      },
       // Sapim Race series (Straight gauge 2.0mm)
-      {'tenant_id': tenantId, 'name': 'Sapim Race 290mm', 'manufacturer': 'Sapim', 'model': 'Race', 'length_mm': 290, 'gauge': 2.0, 'is_butted': false, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1100, 'weight_grams': 5.8, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'Sapim Race 292mm', 'manufacturer': 'Sapim', 'model': 'Race', 'length_mm': 292, 'gauge': 2.0, 'is_butted': false, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1100, 'weight_grams': 5.9, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'Sapim Race 294mm', 'manufacturer': 'Sapim', 'model': 'Race', 'length_mm': 294, 'gauge': 2.0, 'is_butted': false, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1100, 'weight_grams': 6.0, 'is_active': true},
-      {'tenant_id': tenantId, 'name': 'Sapim Race 296mm', 'manufacturer': 'Sapim', 'model': 'Race', 'length_mm': 296, 'gauge': 2.0, 'is_butted': false, 'material': 'stainless_steel', 'finish': 'plain', 'head_type': 'j_bend', 'tensile_strength_n': 1100, 'weight_grams': 6.1, 'is_active': true},
+      {
+        'tenant_id': tenantId,
+        'name': 'Sapim Race 290mm',
+        'manufacturer': 'Sapim',
+        'model': 'Race',
+        'length_mm': 290,
+        'gauge': 2.0,
+        'is_butted': false,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1100,
+        'weight_grams': 5.8,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'Sapim Race 292mm',
+        'manufacturer': 'Sapim',
+        'model': 'Race',
+        'length_mm': 292,
+        'gauge': 2.0,
+        'is_butted': false,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1100,
+        'weight_grams': 5.9,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'Sapim Race 294mm',
+        'manufacturer': 'Sapim',
+        'model': 'Race',
+        'length_mm': 294,
+        'gauge': 2.0,
+        'is_butted': false,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1100,
+        'weight_grams': 6.0,
+        'is_active': true
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'Sapim Race 296mm',
+        'manufacturer': 'Sapim',
+        'model': 'Race',
+        'length_mm': 296,
+        'gauge': 2.0,
+        'is_butted': false,
+        'material': 'stainless_steel',
+        'finish': 'plain',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 1100,
+        'weight_grams': 6.1,
+        'is_active': true
+      },
       // Pillar PSR 1432 (1.8mm lightweight)
-      {'tenant_id': tenantId, 'name': 'Pillar PSR 1432 292mm', 'manufacturer': 'Pillar', 'model': 'PSR 1432', 'length_mm': 292, 'gauge': 1.8, 'is_butted': false, 'material': 'stainless_steel', 'finish': 'black', 'head_type': 'j_bend', 'tensile_strength_n': 950, 'weight_grams': 4.8, 'is_active': true},
+      {
+        'tenant_id': tenantId,
+        'name': 'Pillar PSR 1432 292mm',
+        'manufacturer': 'Pillar',
+        'model': 'PSR 1432',
+        'length_mm': 292,
+        'gauge': 1.8,
+        'is_butted': false,
+        'material': 'stainless_steel',
+        'finish': 'black',
+        'head_type': 'j_bend',
+        'tensile_strength_n': 950,
+        'weight_grams': 4.8,
+        'is_active': true
+      },
     ];
     
     final spokeIds = <String, String>{};
     for (final spoke in spokesData) {
-      final result = await supabase.from('wheel_spokes').insert(spoke).select('id, name').single();
+      final result = await supabase
+          .from('wheel_spokes')
+          .insert(spoke)
+          .select('id, name')
+          .single();
       spokeIds[spoke['name'] as String] = result['id'] as String;
       print('  ✓ ${spoke['name']}');
     }
@@ -452,7 +604,8 @@ Future<void> seedWheelBuildingData() async {
         'left_spoke_length_mm': 295.8,
         'right_spoke_length_mm': 295.8, // Symmetric front wheel
         'is_template': true,
-        'notes': 'Standard 29" MTB front wheel with Shimano Deore 32H hub and DT Swiss XM421 rim. 3-cross lacing for durability. Recommended spoke: DT Swiss Competition 296mm (both sides).',
+        'notes':
+            'Standard 29" MTB front wheel with Shimano Deore 32H hub and DT Swiss XM421 rim. 3-cross lacing for durability. Recommended spoke: DT Swiss Competition 296mm (both sides).',
       },
       // Sample Build 2: 29" MTB Rear Wheel (Shimano + DT Swiss XM421)
       {
@@ -466,7 +619,8 @@ Future<void> seedWheelBuildingData() async {
         'left_spoke_length_mm': 297.2,
         'right_spoke_length_mm': 293.4, // Asymmetric rear wheel!
         'is_template': true,
-        'notes': 'Standard 29" MTB rear wheel with Shimano Deore 32H hub (asymmetric). Left side uses ~298mm, right (drive) side uses ~294mm.',
+        'notes':
+            'Standard 29" MTB rear wheel with Shimano Deore 32H hub (asymmetric). Left side uses ~298mm, right (drive) side uses ~294mm.',
       },
       // Sample Build 3: 700c Road Wheel (DT Swiss + DT Swiss R460)
       {
@@ -480,7 +634,8 @@ Future<void> seedWheelBuildingData() async {
         'left_spoke_length_mm': 296.5,
         'right_spoke_length_mm': 292.8, // Asymmetric rear wheel
         'is_template': true,
-        'notes': 'High-quality 700c road rear wheel with DT Swiss 350 32H hub and R460 rim. Perfect for road bikes and gravel bikes. Recommended: 296mm left, 292mm right.',
+        'notes':
+            'High-quality 700c road rear wheel with DT Swiss 350 32H hub and R460 rim. Perfect for road bikes and gravel bikes. Recommended: 296mm left, 292mm right.',
       },
     ];
     
@@ -497,7 +652,8 @@ Future<void> seedWheelBuildingData() async {
     print('✅ Demo data seeded successfully!');
     print('');
     print('📊 Summary:');
-    print('   - 10 Hubs: 5×32H, 3×28H, 1×24H, 1×32H MTB (diverse compatibility)');
+    print(
+        '   - 10 Hubs: 5×32H, 3×28H, 1×24H, 1×32H MTB (diverse compatibility)');
     print('   - 10 Rims: 29"×3, 700c×3, 27.5"×2, 26"×2 (24H, 28H, 32H, 36H)');
     print('   - 10 Spokes added (290-298mm range)');
     print('   - 3 Sample builds added (templates)');
@@ -506,7 +662,8 @@ Future<void> seedWheelBuildingData() async {
     print('   1. Go to Taller → Wheel Builder');
     print('   2. Select "Shimano Deore M6010 Rear 32H" hub');
     print('   3. Watch rim list FILTER to show only 32H rims!');
-    print('   4. Should see: DT Swiss XM421 32H, DT Swiss R460 32H, Mavic XM319 32H, Sun Ringle 32H');
+    print(
+        '   4. Should see: DT Swiss XM421 32H, DT Swiss R460 32H, Mavic XM319 32H, Sun Ringle 32H');
     print('   5. Should NOT see: 24H, 28H, or 36H rims');
     print('   6. Try selecting a 28H hub → rim list changes!');
     print('');
@@ -514,7 +671,6 @@ Future<void> seedWheelBuildingData() async {
     print('   Left (non-drive): ~297mm');
     print('   Right (drive): ~293mm');
     print('   Recommended: DT Swiss 298mm + 294mm');
-    
   } catch (e, stackTrace) {
     print('❌ Error seeding data: $e');
     print(stackTrace);

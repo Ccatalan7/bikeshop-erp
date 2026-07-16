@@ -170,13 +170,16 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
     }
     
     // Auto-select factory rim when entering rim step (if replacing hub only)
-    if (_currentStep == 1 && _buildType == BuildType.replaceHub && _selectedRim == null) {
+    if (_currentStep == 1 &&
+        _buildType == BuildType.replaceHub &&
+        _selectedRim == null) {
       setState(() {
         // Use factory rim if bike has one, otherwise first matching rim
         if (_selectedBike?.factoryRimId != null) {
           _selectedRim = _allRims.firstWhere(
             (r) => r.id == _selectedBike!.factoryRimId,
-            orElse: () => _filteredRims.isNotEmpty ? _filteredRims.first : _allRims.first,
+            orElse: () =>
+                _filteredRims.isNotEmpty ? _filteredRims.first : _allRims.first,
           );
           debugPrint('🎯 Auto-selected FACTORY rim: ${_selectedRim?.name}');
         } else {
@@ -184,7 +187,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
           final matchingRims = _filteredRims;
           if (matchingRims.isNotEmpty) {
             _selectedRim = matchingRims.first;
-            debugPrint('⚠️ No factory rim defined, using first match: ${_selectedRim?.name}');
+            debugPrint(
+                '⚠️ No factory rim defined, using first match: ${_selectedRim?.name}');
           }
         }
       });
@@ -382,10 +386,11 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                         )
                       else
                         const SizedBox(),
-                      
                       ElevatedButton.icon(
                         onPressed: _currentStep < 4 ? _nextStep : null,
-                        icon: Icon(_currentStep == 3 ? Icons.calculate : Icons.arrow_forward),
+                        icon: Icon(_currentStep == 3
+                            ? Icons.calculate
+                            : Icons.arrow_forward),
                         label: Text(_currentStep == 3 ? 'Calculate' : 'Next'),
                       ),
                     ],
@@ -436,9 +441,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
                   if (_bikes.isEmpty)
-                    const Text('No bikes found. Add bikes in the Bikeshop module first.')
+                    const Text(
+                        'No bikes found. Add bikes in the Bikeshop module first.')
                   else
                     DropdownButtonFormField<Bike>(
                       initialValue: _selectedBike,
@@ -455,11 +460,13 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                             children: [
                               Text(
                                 '${bike.brand} ${bike.model}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 bike.wheelSize ?? 'Unknown size',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey.shade600),
                               ),
                             ],
                           ),
@@ -491,10 +498,10 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
                   RadioListTile<BuildType>(
                     title: const Text('Full Wheel Build'),
-                    subtitle: const Text('Building a complete wheel from scratch'),
+                    subtitle:
+                        const Text('Building a complete wheel from scratch'),
                     value: BuildType.fullWheel,
                     groupValue: _buildType,
                     onChanged: (value) {
@@ -503,7 +510,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                   ),
                   RadioListTile<BuildType>(
                     title: const Text('Replace Hub Only'),
-                    subtitle: const Text('Keeping the existing rim, replacing hub'),
+                    subtitle:
+                        const Text('Keeping the existing rim, replacing hub'),
                     value: BuildType.replaceHub,
                     groupValue: _buildType,
                     onChanged: (value) {
@@ -512,7 +520,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                   ),
                   RadioListTile<BuildType>(
                     title: const Text('Replace Rim Only'),
-                    subtitle: const Text('Keeping the existing hub, replacing rim'),
+                    subtitle:
+                        const Text('Keeping the existing hub, replacing rim'),
                     value: BuildType.replaceRim,
                     groupValue: _buildType,
                     onChanged: (value) {
@@ -543,7 +552,6 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
                   Row(
                     children: [
                       Expanded(
@@ -591,11 +599,13 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.info_outline, size: 24, color: Colors.blue.shade700),
+                        Icon(Icons.info_outline,
+                            size: 24, color: Colors.blue.shade700),
                         const SizedBox(width: 8),
                         Text(
                           'Pre-filled Specifications',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: Colors.blue.shade700,
                             fontWeight: FontWeight.bold,
                           ),
@@ -666,7 +676,6 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
           if (_filteredHubs.isEmpty)
             Center(
               child: Column(
@@ -697,7 +706,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                 
                 return Card(
                   elevation: isSelected ? 8 : 2,
-                  color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
+                  color: isSelected
+                      ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                      : null,
                   child: InkWell(
                     onTap: () {
                       setState(() => _selectedHub = hub);
@@ -711,14 +722,20 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                             children: [
                               Icon(
                                 Icons.hub,
-                                color: isSelected ? Theme.of(context).primaryColor : null,
+                                color: isSelected
+                                    ? Theme.of(context).primaryColor
+                                    : null,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   hub.displayName,
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: isSelected ? FontWeight.bold : null,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight:
+                                            isSelected ? FontWeight.bold : null,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -774,7 +791,6 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
             ),
           ),
           const SizedBox(height: 24),
-          
           if (compatibleRims.isEmpty)
             Center(
               child: Column(
@@ -807,7 +823,9 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                 
                 return Card(
                   elevation: isSelected ? 8 : 2,
-                  color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
+                  color: isSelected
+                      ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                      : null,
                   child: InkWell(
                     onTap: () {
                       setState(() => _selectedRim = rim);
@@ -821,14 +839,20 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                             children: [
                               Icon(
                                 Icons.album,
-                                color: isSelected ? Theme.of(context).primaryColor : null,
+                                color: isSelected
+                                    ? Theme.of(context).primaryColor
+                                    : null,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   rim.displayName,
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: isSelected ? FontWeight.bold : null,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight:
+                                            isSelected ? FontWeight.bold : null,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -888,7 +912,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               _LacingPatternCard(
                 pattern: 0,
                 name: 'Radial',
-                description: 'Spokes go straight from hub to rim. Lightest, stiffest laterally.',
+                description:
+                    'Spokes go straight from hub to rim. Lightest, stiffest laterally.',
                 icon: Icons.brightness_1_outlined,
                 isSelected: _crossPattern == 0,
                 onTap: () => setState(() => _crossPattern = 0),
@@ -896,7 +921,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               _LacingPatternCard(
                 pattern: 1,
                 name: '1-Cross',
-                description: 'Each spoke crosses one other spoke. Light and responsive.',
+                description:
+                    'Each spoke crosses one other spoke. Light and responsive.',
                 icon: Icons.close,
                 isSelected: _crossPattern == 1,
                 onTap: () => setState(() => _crossPattern = 1),
@@ -912,7 +938,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               _LacingPatternCard(
                 pattern: 3,
                 name: '3-Cross',
-                description: 'Each spoke crosses three others. Most common, durable.',
+                description:
+                    'Each spoke crosses three others. Most common, durable.',
                 icon: Icons.close,
                 isSelected: _crossPattern == 3,
                 onTap: () => setState(() => _crossPattern = 3),
@@ -920,7 +947,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
               _LacingPatternCard(
                 pattern: 4,
                 name: '4-Cross',
-                description: 'Each spoke crosses four others. Maximum strength.',
+                description:
+                    'Each spoke crosses four others. Maximum strength.',
                 icon: Icons.close,
                 isSelected: _crossPattern == 4,
                 onTap: () => setState(() => _crossPattern = 4),
@@ -977,8 +1005,10 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
     
     final leftLength = _buildResult!['left_spoke_length_mm'] as double;
     final rightLength = _buildResult!['right_spoke_length_mm'] as double;
-    final compatibleLeftSpokes = _buildResult!['compatible_left_spokes'] as List;
-    final compatibleRightSpokes = _buildResult!['compatible_right_spokes'] as List;
+    final compatibleLeftSpokes =
+        _buildResult!['compatible_left_spokes'] as List;
+    final compatibleRightSpokes =
+        _buildResult!['compatible_right_spokes'] as List;
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1013,9 +1043,12 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                   _SummaryRow(label: 'Rim', value: _selectedRim!.displayName),
                   _SummaryRow(
                     label: 'Lacing',
-                    value: _crossPattern == 0 ? 'Radial' : '$_crossPattern-Cross',
+                    value:
+                        _crossPattern == 0 ? 'Radial' : '$_crossPattern-Cross',
                   ),
-                  _SummaryRow(label: 'Spoke Holes', value: '${_selectedHub!.spokeHoles}H'),
+                  _SummaryRow(
+                      label: 'Spoke Holes',
+                      value: '${_selectedHub!.spokeHoles}H'),
                 ],
               ),
             ),
@@ -1046,7 +1079,10 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                         const SizedBox(height: 8),
                         Text(
                           '${leftLength.toStringAsFixed(1)} mm',
-                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineLarge
+                              ?.copyWith(
                             color: Colors.blue.shade700,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1067,7 +1103,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.arrow_forward, color: Colors.orange),
+                            const Icon(Icons.arrow_forward,
+                                color: Colors.orange),
                             const SizedBox(width: 8),
                             Text(
                               'Right Side (Drive)',
@@ -1078,7 +1115,10 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                         const SizedBox(height: 8),
                         Text(
                           '${rightLength.toStringAsFixed(1)} mm',
-                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineLarge
+                              ?.copyWith(
                             color: Colors.orange.shade700,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1134,12 +1174,16 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                           const Divider(height: 16),
                           ...compatibleLeftSpokes.map((spoke) {
                             final spokeModel = WheelSpoke.fromJson(spoke);
-                            final stock = spoke['inventory_qty'] as int? ?? spoke['stock_quantity'] as int? ?? 0;
-                            final diff = spoke['length_difference_mm'] as double;
+                            final stock = spoke['inventory_qty'] as int? ??
+                                spoke['stock_quantity'] as int? ??
+                                0;
+                            final diff =
+                                spoke['length_difference_mm'] as double;
                             
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: stock > 0 ? Colors.green : Colors.red,
+                                backgroundColor:
+                                    stock > 0 ? Colors.green : Colors.red,
                                 child: Text(
                                   '$stock',
                                   style: const TextStyle(color: Colors.white),
@@ -1151,7 +1195,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                 'Difference: ${diff.abs().toStringAsFixed(1)}mm',
                               ),
                               trailing: stock > 0
-                                  ? const Icon(Icons.check_circle, color: Colors.green)
+                                  ? const Icon(Icons.check_circle,
+                                      color: Colors.green)
                                   : const Icon(Icons.error, color: Colors.red),
                             );
                           }),
@@ -1161,7 +1206,6 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                
                 if (compatibleRightSpokes.isNotEmpty)
                   Card(
                     child: Padding(
@@ -1176,12 +1220,16 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                           const Divider(height: 16),
                           ...compatibleRightSpokes.map((spoke) {
                             final spokeModel = WheelSpoke.fromJson(spoke);
-                            final stock = spoke['inventory_qty'] as int? ?? spoke['stock_quantity'] as int? ?? 0;
-                            final diff = spoke['length_difference_mm'] as double;
+                            final stock = spoke['inventory_qty'] as int? ??
+                                spoke['stock_quantity'] as int? ??
+                                0;
+                            final diff =
+                                spoke['length_difference_mm'] as double;
                             
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: stock > 0 ? Colors.green : Colors.red,
+                                backgroundColor:
+                                    stock > 0 ? Colors.green : Colors.red,
                                 child: Text(
                                   '$stock',
                                   style: const TextStyle(color: Colors.white),
@@ -1193,7 +1241,8 @@ class _WheelBuilderWizardPageState extends State<WheelBuilderWizardPage> {
                                 'Difference: ${diff.abs().toStringAsFixed(1)}mm',
                               ),
                               trailing: stock > 0
-                                  ? const Icon(Icons.check_circle, color: Colors.green)
+                                  ? const Icon(Icons.check_circle,
+                                      color: Colors.green)
                                   : const Icon(Icons.error, color: Colors.red),
                             );
                           }),
@@ -1228,7 +1277,9 @@ class _StepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: isActive ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
+      color: isActive
+          ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+          : null,
       child: Row(
         children: [
           CircleAvatar(
@@ -1302,7 +1353,9 @@ class _LacingPatternCard extends StatelessWidget {
       width: 300,
       child: Card(
         elevation: isSelected ? 8 : 2,
-        color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
+        color: isSelected
+            ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+            : null,
         child: InkWell(
           onTap: onTap,
           child: Padding(

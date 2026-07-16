@@ -1,13 +1,18 @@
 /// Represents a saved spreadsheet's metadata.
 library;
 
+import 'dart:convert';
+
 /// Represents a saved spreadsheet's metadata.
 class SpreadsheetModel {
+  static const Object _unset = Object();
+
   final String? id;
   final String tenantId;
   final String name;
   final int rowCount;
   final int colCount;
+  final Map<String, dynamic>? workbookData;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -17,6 +22,7 @@ class SpreadsheetModel {
     this.name = 'Planilla sin título',
     this.rowCount = 100,
     this.colCount = 26,
+    this.workbookData,
     this.createdAt,
     this.updatedAt,
   });
@@ -28,6 +34,7 @@ class SpreadsheetModel {
       name: json['name'] as String? ?? 'Planilla sin título',
       rowCount: json['row_count'] as int? ?? 100,
       colCount: json['col_count'] as int? ?? 26,
+      workbookData: _parseWorkbookData(json['workbook_data']),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -44,6 +51,7 @@ class SpreadsheetModel {
       'name': name,
       'row_count': rowCount,
       'col_count': colCount,
+      'workbook_data': workbookData,
     };
   }
 
@@ -53,6 +61,7 @@ class SpreadsheetModel {
     String? name,
     int? rowCount,
     int? colCount,
+    Object? workbookData = _unset,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -62,9 +71,26 @@ class SpreadsheetModel {
       name: name ?? this.name,
       rowCount: rowCount ?? this.rowCount,
       colCount: colCount ?? this.colCount,
+      workbookData: identical(workbookData, _unset)
+          ? this.workbookData
+          : _parseWorkbookData(workbookData),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static Map<String, dynamic>? _parseWorkbookData(Object? value) {
+    if (value == null) return null;
+
+    try {
+      final decoded = value is String ? jsonDecode(value) : value;
+      if (decoded is! Map) return null;
+      return Map<String, dynamic>.from(decoded);
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
   }
 }
 
@@ -97,7 +123,8 @@ class CellModel {
   /// A1 notation for this cell (e.g., "A1", "B3", "AA10")
   String get cellRef => '${colToLetter(col)}${row + 1}';
 
-  bool get isFormula => rawValue != null && rawValue!.startsWith('=');
+  bool get isFormula =>
+      rawValue != null && rawValue!.trimLeft().startsWith('=');
   bool get isEmpty => rawValue == null || rawValue!.isEmpty;
 
   factory CellModel.fromJson(Map<String, dynamic> json) {
@@ -198,5 +225,5 @@ class CellData {
   });
 
   bool get isEmpty => rawValue.isEmpty;
-  bool get isFormula => rawValue.startsWith('=');
+  bool get isFormula => rawValue.trimLeft().startsWith('=');
 }

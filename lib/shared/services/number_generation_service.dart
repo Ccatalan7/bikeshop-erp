@@ -49,7 +49,8 @@ class NumberGenerationService {
         throw Exception('Tenant ID not found');
       }
 
-      final response = await _client.rpc('preview_next_document_number', params: {
+      final response =
+          await _client.rpc('preview_next_document_number', params: {
         'p_tenant_id': tenantId,
         'p_document_type': documentType,
         'p_prefix': customPrefix,
@@ -67,23 +68,28 @@ class NumberGenerationService {
   // ============================================================
   
   /// Preview sales invoice number (e.g., FV-0143)
-  Future<String> previewSalesInvoiceNumber() => previewNextNumber('sales_invoice');
+  Future<String> previewSalesInvoiceNumber() =>
+      previewNextNumber('sales_invoice');
 
   /// Preview purchase invoice number (e.g., FC-0089)
-  Future<String> previewPurchaseInvoiceNumber() => previewNextNumber('purchase_invoice');
+  Future<String> previewPurchaseInvoiceNumber() =>
+      previewNextNumber('purchase_invoice');
 
   /// Preview payment number
   Future<String> previewPaymentNumber({required bool isSales}) =>
       previewNextNumber(isSales ? 'sales_payment' : 'purchase_payment');
 
   /// Preview journal entry number (e.g., AS-0324)
-  Future<String> previewJournalEntryNumber() => previewNextNumber('journal_entry');
+  Future<String> previewJournalEntryNumber() =>
+      previewNextNumber('journal_entry');
 
   /// Preview mechanic job number (e.g., PG-0052)
-  Future<String> previewMechanicJobNumber() => previewNextNumber('mechanic_job');
+  Future<String> previewMechanicJobNumber() =>
+      previewNextNumber('mechanic_job');
 
   /// Preview stock adjustment number (e.g., AJ-0018)
-  Future<String> previewStockAdjustmentNumber() => previewNextNumber('stock_adjustment');
+  Future<String> previewStockAdjustmentNumber() =>
+      previewNextNumber('stock_adjustment');
 
   /// Preview expense number (e.g., GTO-00001)
   Future<String> previewExpenseNumber() => previewNextNumber('expense');
@@ -96,7 +102,8 @@ class NumberGenerationService {
   Future<String> nextSalesInvoiceNumber() => getNextNumber('sales_invoice');
 
   /// Generate purchase invoice number (e.g., FC-0089)
-  Future<String> nextPurchaseInvoiceNumber() => getNextNumber('purchase_invoice');
+  Future<String> nextPurchaseInvoiceNumber() =>
+      getNextNumber('purchase_invoice');
 
   /// Generate payment number (e.g., PV-0215 for sales, PC-0067 for purchases)
   Future<String> nextPaymentNumber({required bool isSales}) =>
@@ -109,7 +116,8 @@ class NumberGenerationService {
   Future<String> nextMechanicJobNumber() => getNextNumber('mechanic_job');
 
   /// Generate stock adjustment number (e.g., AJ-0018)
-  Future<String> nextStockAdjustmentNumber() => getNextNumber('stock_adjustment');
+  Future<String> nextStockAdjustmentNumber() =>
+      getNextNumber('stock_adjustment');
 
   /// Generate expense number (e.g., GTO-00001)
   Future<String> nextExpenseNumber() => getNextNumber('expense');

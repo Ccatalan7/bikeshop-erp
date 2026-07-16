@@ -100,8 +100,7 @@ class F29Declaration {
       ivaDebitoActivosFijos:
           (json['iva_debito_activos_fijos'] as num?)?.toDouble() ?? 0,
       ivaDebitoTotal: (json['iva_debito_total'] as num?)?.toDouble() ?? 0,
-      ivaCreditoCompras:
-          (json['iva_credito_compras'] as num?)?.toDouble() ?? 0,
+      ivaCreditoCompras: (json['iva_credito_compras'] as num?)?.toDouble() ?? 0,
       ivaCreditoImportaciones:
           (json['iva_credito_importaciones'] as num?)?.toDouble() ?? 0,
       ivaCreditoActivosFijos:
@@ -123,8 +122,7 @@ class F29Declaration {
           (json['retencion_honorarios'] as num?)?.toDouble() ?? 0,
       retencionArrendamiento:
           (json['retencion_arrendamiento'] as num?)?.toDouble() ?? 0,
-      impuestoAdicional:
-          (json['impuesto_adicional'] as num?)?.toDouble() ?? 0,
+      impuestoAdicional: (json['impuesto_adicional'] as num?)?.toDouble() ?? 0,
       impuestoEspecifico:
           (json['impuesto_especifico'] as num?)?.toDouble() ?? 0,
       totalAPagar: (json['total_a_pagar'] as num?)?.toDouble() ?? 0,

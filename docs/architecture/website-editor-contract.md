@@ -207,12 +207,43 @@ every field in `block_data`. It must preserve professional editor conventions:
   and deleting stay available beside the overview; the active item's text/data
   opens first while media, actions, nested collections, and advanced options
   use progressive disclosure.
-- Inline toolbars own direct content and typography actions. Geometry such as
-  position, size, rotation, responsive visibility, and layer order belongs in
-  the right inspector so it is discoverable for every transformable layer.
+- Inline toolbars are contextual, not one generic row of every serialized
+  field. They expose frequent direct actions for the selected type (text
+  formatting; image fit/crop/reframe; button presentation; shape form) plus a
+  compact universal set for rotation, alignment, arrangement, duplicate, and
+  delete. Secondary and precise controls remain in the right inspector.
+- Every transformable Canvas layer exposes direct edge/corner resize handles
+  and a rotation handle. The inspector remains the accessible precision
+  fallback for X/Y/width/height/rotation, so a capability is neither
+  mouse-only nor hidden in inline chrome.
+- Direct-manipulation targets must be fully inside a hit-testable overlay and
+  the rotation target must not begin at the element's exact center (a zero
+  pointer vector produces a dead or jumping angle). `Clip.none` changes paint,
+  not Flutter hit-test bounds. Do not put `Tooltip`, `PopupMenuButton`,
+  `MenuAnchor`, `showMenu`, or another `OverlayPortal` inside rotated selection
+  chrome or the rapidly rebuilding positioned Canvas toolbar; these can fail
+  during macOS layout. Use semantics plus a local non-interactive hover label,
+  and present secondary actions as in-place toolbar palettes.
+- Keyboard interaction follows the same model: arrows nudge, Shift+arrows use
+  a larger step, Command/Ctrl+D duplicates, and Delete removes the selected
+  layer when text editing is not active. Transient crop/selection modes never
+  become published data.
 - A saved transform is never a design-only constant. All Canvas element types
   that the shared renderer can rotate must expose the same persisted rotation
   control, including a clear reset action.
+- Canvas position limits must never be invisible. The editor draws the shared
+  responsive safe area and exposes X/Y/width/height/rotation at the top of the
+  selected-layer inspector. Boundary behavior is one persisted canvas/slide
+  policy applied to every existing and future layer, never a toggle repeated on
+  each layer. Disabling the canvas-wide constraint permits intentional edge
+  bleed while retaining a visible grab target; carousel preview and public
+  rendering still clip at the slide boundary.
+- Image crop is non-destructive website-layout framing. The layer's `x`, `y`,
+  `w`, and `h` own the visible frame; `fit`, normalized `focalPointX/Y`, and
+  `rotation` own how the media appears in it. Crop mode itself is transient.
+  Dragging within crop mode changes the focal point, eight edge/corner handles
+  change the frame, and Preview/public consume the same saved values. Do not
+  write a second cropped bitmap or editor-only transform for this workflow.
 - The visible carousel slide and the slide selected in its inspector are one
   transient UI selection. Arrow/indicator navigation and inspector slide tabs
   update each other without writing selection state into published block data
@@ -281,6 +312,9 @@ Required rules:
   owning container boundary so future rotations and campaigns behave correctly.
 - Responsive scaling, element hit testing, resize bounds, guides, and clipping
   must use the same coordinate space.
+- Regression tests must exercise pointer-driven rotation on both scaled and
+  unscaled canvases, including a short layer such as a button. Merely asserting
+  that a rotation icon or serialized field exists is not interaction coverage.
 
 Visual regression checks must include rotated elements touching the top,
 bottom, left, and right edges at desktop and mobile widths.
@@ -299,6 +333,10 @@ list and reuse `CanvasBlock` plus `_CanvasBlockControls`.
   explicit shared option passed through `DeferredCanvasBlock` to `CanvasBlock`.
 - Adding a new Canvas capability requires both the canvas renderer and the
   shared inspector control, plus public-mode consumption and regression tests.
+- All layer creation entry points use the canonical Canvas element factory.
+  Do not duplicate type defaults in the canvas, inspector, and provider; shared
+  capabilities such as rotation, locking, responsive fields, or image focal
+  data must exist regardless of where the layer was inserted.
 
 ## Media-control contract
 

@@ -45,5 +45,3 @@ class _WorkspaceDemoContent extends StatelessWidget {
     );
   }
 }
-
-

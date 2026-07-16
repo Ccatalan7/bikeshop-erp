@@ -391,8 +391,7 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child:
-                      const Icon(Icons.search, color: Colors.white, size: 24),
+                child: const Icon(Icons.search, color: Colors.white, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -502,8 +501,7 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                               builder: (context, constraints) {
                                 if (constraints.maxWidth > 1200) {
                                   return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: Column(
@@ -646,7 +644,8 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border:
+                      Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -825,8 +824,9 @@ class _SeoSettingsPageState extends State<SeoSettingsPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color:
-            isOk ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+        color: isOk
+            ? Colors.green.withValues(alpha: 0.1)
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

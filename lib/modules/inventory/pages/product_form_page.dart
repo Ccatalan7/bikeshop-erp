@@ -10263,8 +10263,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       searchConsole?['serviceAccountEmail']?.toString(),
       sitemap?['serviceAccountEmail']?.toString(),
     ]);
-    final searchConsoleUsesServiceAccount =
-        serviceAccountAccessRequired ||
+    final searchConsoleUsesServiceAccount = serviceAccountAccessRequired ||
             searchConsole?['authSource'] == 'service_account' ||
             sitemap?['authSource'] == 'service_account';
     final searchConsoleHasConnection =
@@ -10359,8 +10358,8 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                   OutlinedButton.icon(
                     onPressed: _isLoadingGoogleDiagnostics
                         ? null
-                        : () => _runGoogleLinkMaintenance(
-                            'refresh_merchant_feed'),
+                        : () =>
+                            _runGoogleLinkMaintenance('refresh_merchant_feed'),
                     icon: const Icon(Icons.sync_outlined),
                     label: const Text('Actualizar feed'),
                   ),

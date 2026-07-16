@@ -24,13 +24,15 @@ class PDFParserService {
   /// Works for PDFs with selectable text. For scanned PDFs, use camera/gallery OCR instead.
   Future<PDFExtractionResult> extractTextFromPDF(String filePath) async {
     try {
-      debugPrint('🔍 PDFParserService: Starting PDF text extraction from $filePath');
+      debugPrint(
+          '🔍 PDFParserService: Starting PDF text extraction from $filePath');
 
       // Try direct text extraction (digital PDFs)
       final directText = await _extractTextDirect(filePath);
       
       if (_isValidExtraction(directText)) {
-        debugPrint('✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
+        debugPrint(
+            '✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
         return PDFExtractionResult(
           text: directText,
           method: PDFExtractionMethod.direct,
@@ -38,8 +40,10 @@ class PDFParserService {
         );
       }
 
-      debugPrint('⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
-      debugPrint('💡 Please use camera/gallery feature to scan the document instead');
+      debugPrint(
+          '⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
+      debugPrint(
+          '💡 Please use camera/gallery feature to scan the document instead');
       
       return PDFExtractionResult(
         text: '',
@@ -65,7 +69,8 @@ class PDFParserService {
         return null;
       }
       
-      debugPrint('📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
+      debugPrint(
+          '📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
       
       // Parse the plain text
       return _invoiceParser.parseInvoiceFromText(result.text);
@@ -78,7 +83,8 @@ class PDFParserService {
   /// Parse invoice data from PDF bytes (web platform)
   /// 
   /// Strategy: Using Dart parser only (API integration disabled)
-  Future<ParsedInvoice?> parseInvoiceFromBytes(Uint8List bytes, {String filename = 'invoice.pdf'}) async {
+  Future<ParsedInvoice?> parseInvoiceFromBytes(Uint8List bytes,
+      {String filename = 'invoice.pdf'}) async {
     try {
       debugPrint('🔍 Using Dart parser for invoice extraction...');
       
@@ -103,12 +109,14 @@ class PDFParserService {
         return null;
       }
       
-      debugPrint('📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
+      debugPrint(
+          '📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
       
       // Parse the plain text
       return _invoiceParser.parseInvoiceFromText(result.text);
     } catch (e) {
-      debugPrint('❌ PDFParserService: Error parsing invoice from PDF bytes: $e');
+      debugPrint(
+          '❌ PDFParserService: Error parsing invoice from PDF bytes: $e');
       return null;
     }
   }
@@ -121,7 +129,8 @@ class PDFParserService {
       final directText = await _extractTextDirectFromBytes(bytes);
       
       if (_isValidExtraction(directText)) {
-        debugPrint('✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
+        debugPrint(
+            '✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
         return PDFExtractionResult(
           text: directText,
           method: PDFExtractionMethod.direct,
@@ -129,7 +138,8 @@ class PDFParserService {
         );
       }
 
-      debugPrint('⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
+      debugPrint(
+          '⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
       
       return PDFExtractionResult(
         text: '',
@@ -137,7 +147,8 @@ class PDFParserService {
         pageCount: await _getPageCountFromBytes(bytes),
       );
     } catch (e, stackTrace) {
-      debugPrint('❌ PDFParserService: Error extracting text from PDF bytes: $e');
+      debugPrint(
+          '❌ PDFParserService: Error extracting text from PDF bytes: $e');
       debugPrint(stackTrace.toString());
       rethrow;
     }
@@ -151,7 +162,8 @@ class PDFParserService {
 
       debugPrint('📄 ========== PDF TEXT EXTRACTION ==========');
       for (int i = 0; i < document.pages.count; i++) {
-        final String pageText = PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
+        final String pageText = PdfTextExtractor(document)
+            .extractText(startPageIndex: i, endPageIndex: i);
         textBuffer.writeln(pageText);
         debugPrint('📄 Page ${i + 1} (${pageText.length} chars):');
         debugPrint(pageText);
@@ -195,7 +207,8 @@ class PDFParserService {
 
       // Extract text from each page
       for (int i = 0; i < document.pages.count; i++) {
-        final String pageText = PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
+        final String pageText = PdfTextExtractor(document)
+            .extractText(startPageIndex: i, endPageIndex: i);
         textBuffer.writeln(pageText);
         debugPrint('📄 Page ${i + 1}: Extracted ${pageText.length} characters');
       }

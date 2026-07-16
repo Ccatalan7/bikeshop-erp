@@ -11,7 +11,8 @@ class Supplier {
   final String? contactPerson;
   final bool isActive;
   final String? notes;
-  final TaxTreatment defaultTaxTreatment; // suggested tax treatment for purchases
+  final TaxTreatment
+      defaultTaxTreatment; // suggested tax treatment for purchases
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -43,7 +44,8 @@ class Supplier {
       contactPerson: json['contact_person'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       notes: json['notes'] as String?,
-      defaultTaxTreatment: TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
+      defaultTaxTreatment:
+          TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,

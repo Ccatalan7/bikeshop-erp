@@ -68,7 +68,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
         _expenseAccounts = expenseAccounts;
         _accountLabelById = {
           for (final a in expenseAccounts)
-            if (a.id != null && a.id!.isNotEmpty) a.id!: '${a.code} - ${a.name}',
+            if (a.id != null && a.id!.isNotEmpty)
+              a.id!: '${a.code} - ${a.name}',
         };
       });
 
@@ -104,7 +105,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
     final isEdit = category != null;
 
     final nameController = TextEditingController(text: category?.name ?? '');
-    final descController = TextEditingController(text: category?.description ?? '');
+    final descController =
+        TextEditingController(text: category?.description ?? '');
     String? selectedAccountId = category?.defaultAccountId;
     bool isSaving = false;
 
@@ -143,7 +145,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
                       decoration: const InputDecoration(
                         labelText: 'Cuenta por defecto (opcional)',
                         border: OutlineInputBorder(),
-                        helperText: 'Se usará como cuenta sugerida para esta categoría',
+                        helperText:
+                            'Se usará como cuenta sugerida para esta categoría',
                       ),
                       items: [
                         const DropdownMenuItem<String?>(
@@ -188,7 +191,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
 
                           setDialogState(() => isSaving = true);
                           try {
-                            final expenseService = context.read<ExpenseService>();
+                            final expenseService =
+                                context.read<ExpenseService>();
                             final toSave = ExpenseCategory(
                               id: category?.id ?? '',
                               name: name,
@@ -199,7 +203,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
                               updatedAt: DateTime.now(),
                             );
 
-                            final stored = await expenseService.saveCategory(toSave);
+                            final stored =
+                                await expenseService.saveCategory(toSave);
                             if (context.mounted) {
                               Navigator.pop(context, stored);
                             }
@@ -310,7 +315,8 @@ class _ExpenseCategoriesPageState extends State<ExpenseCategoriesPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+        border:
+            Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Row(
         children: [

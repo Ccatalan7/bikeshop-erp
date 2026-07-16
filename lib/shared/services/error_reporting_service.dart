@@ -36,6 +36,10 @@ class ErrorReportingService {
     'Picture',
     'Typeface',
     'Shader',
+    // The web engine sends the full URL to the temporary root Navigator before
+    // WorkspaceManager consumes the same captured URL with GoRouter. Flutter
+    // falls back to `/`; the workspace then opens the intended deep route.
+    'Could not navigate to initial route.',
   ];
 
   static bool shouldSuppress(dynamic error) {

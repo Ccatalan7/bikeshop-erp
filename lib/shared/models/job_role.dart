@@ -1,7 +1,8 @@
 class JobRole {
   final String id;
   final String tenantId;
-  final String systemRole; // 'admin', 'manager', 'cashier', 'mechanic', 'accountant'
+  final String
+      systemRole; // 'admin', 'manager', 'cashier', 'mechanic', 'accountant'
   final String displayName; // 'Administrador', 'Gerente', etc.
   final List<String> suggestedTitles;
   final Map<String, dynamic> defaultPermissions;
@@ -32,7 +33,8 @@ class JobRole {
       systemRole: json['system_role'],
       displayName: json['display_name'],
       suggestedTitles: List<String>.from(json['suggested_titles'] ?? []),
-      defaultPermissions: Map<String, dynamic>.from(json['default_permissions'] ?? {}),
+      defaultPermissions:
+          Map<String, dynamic>.from(json['default_permissions'] ?? {}),
       description: json['description'],
       sortOrder: json['sort_order'] ?? 0,
       isActive: json['is_active'] ?? true,
@@ -84,7 +86,9 @@ class JobRole {
   static String? inferSystemRole(String jobTitle) {
     final lower = jobTitle.toLowerCase();
     
-    if (lower.contains('admin') || lower.contains('dueño') || lower.contains('propietario')) {
+    if (lower.contains('admin') ||
+        lower.contains('dueño') ||
+        lower.contains('propietario')) {
       return 'admin';
     }
     if (lower.contains('gerente') || lower.contains('jefe')) {
@@ -93,8 +97,10 @@ class JobRole {
     if (lower.contains('cajero') || lower.contains('vendedor')) {
       return 'cashier';
     }
-    if (lower.contains('mecánico') || lower.contains('mecanico') || 
-        lower.contains('técnico') || lower.contains('tecnico')) {
+    if (lower.contains('mecánico') ||
+        lower.contains('mecanico') ||
+        lower.contains('técnico') ||
+        lower.contains('tecnico')) {
       return 'mechanic';
     }
     if (lower.contains('contador') || lower.contains('contable')) {

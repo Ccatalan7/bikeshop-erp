@@ -4333,6 +4333,8 @@ class _EditableCarouselWidgetState extends State<_EditableCarouselWidget> {
                     (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
                 'mobileDesignWidth':
                     (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+                'constrainElementsToSafeArea':
+                    slide['constrainElementsToSafeArea'] != false,
                 'blockHeight':
                     (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
                 'activeElementId': slide['activeElementId'],

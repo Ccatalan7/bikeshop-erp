@@ -33,8 +33,13 @@ class WheelBuildingService extends ChangeNotifier {
   }) {
     // Validate inputs
     if (erdMm <= 0) throw ArgumentError('Invalid ERD: $erdMm');
-    if (spokeHoles != 24 && spokeHoles != 28 && spokeHoles != 32 && spokeHoles != 36 && spokeHoles != 40) {
-      throw ArgumentError('Invalid spoke hole count: $spokeHoles. Must be 24, 28, 32, 36, or 40');
+    if (spokeHoles != 24 &&
+        spokeHoles != 28 &&
+        spokeHoles != 32 &&
+        spokeHoles != 36 &&
+        spokeHoles != 40) {
+      throw ArgumentError(
+          'Invalid spoke hole count: $spokeHoles. Must be 24, 28, 32, 36, or 40');
     }
     if (crossPattern < 0 || crossPattern > 4) {
       throw ArgumentError('Invalid cross pattern: $crossPattern. Must be 0-4');
@@ -56,9 +61,8 @@ class WheelBuildingService extends ChangeNotifier {
     final theta = thetaDegrees * (math.pi / 180.0); // Convert to radians
     
     // Step 3: Apply law of cosines
-    final uncorrectedLength = math.sqrt(
-      (R * R) + (F * F) + (C * C) - (2.0 * R * F * math.cos(theta))
-    );
+    final uncorrectedLength = math
+        .sqrt((R * R) + (F * F) + (C * C) - (2.0 * R * F * math.cos(theta)));
     
     // Step 4: Apply spoke hole offset correction
     // Subtract half the spoke hole diameter because the spoke sits at the hole edge
@@ -105,15 +109,14 @@ class WheelBuildingService extends ChangeNotifier {
   // HUB CRUD OPERATIONS
   // ============================================================================
 
-  Future<List<WheelHub>> getHubs({String? hubType, bool activeOnly = true}) async {
+  Future<List<WheelHub>> getHubs(
+      {String? hubType, bool activeOnly = true}) async {
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
 
-      var query = _supabase
-          .from('wheel_hubs')
-          .select()
-          .eq('tenant_id', tenantId);
+      var query =
+          _supabase.from('wheel_hubs').select().eq('tenant_id', tenantId);
 
       if (activeOnly) {
         query = query.eq('is_active', true);
@@ -174,15 +177,14 @@ class WheelBuildingService extends ChangeNotifier {
   // RIM CRUD OPERATIONS
   // ============================================================================
 
-  Future<List<WheelRim>> getRims({String? wheelSize, bool activeOnly = true}) async {
+  Future<List<WheelRim>> getRims(
+      {String? wheelSize, bool activeOnly = true}) async {
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
 
-      var query = _supabase
-          .from('wheel_rims')
-          .select()
-          .eq('tenant_id', tenantId);
+      var query =
+          _supabase.from('wheel_rims').select().eq('tenant_id', tenantId);
 
       if (activeOnly) {
         query = query.eq('is_active', true);
@@ -243,15 +245,14 @@ class WheelBuildingService extends ChangeNotifier {
   // SPOKE CRUD OPERATIONS
   // ============================================================================
 
-  Future<List<WheelSpoke>> getSpokes({int? lengthMm, bool activeOnly = true}) async {
+  Future<List<WheelSpoke>> getSpokes(
+      {int? lengthMm, bool activeOnly = true}) async {
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
 
-      var query = _supabase
-          .from('wheel_spokes')
-          .select()
-          .eq('tenant_id', tenantId);
+      var query =
+          _supabase.from('wheel_spokes').select().eq('tenant_id', tenantId);
 
       if (activeOnly) {
         query = query.eq('is_active', true);
@@ -262,7 +263,9 @@ class WheelBuildingService extends ChangeNotifier {
       }
 
       final response = await query.order('length_mm');
-      return (response as List).map((json) => WheelSpoke.fromJson(json)).toList();
+      return (response as List)
+          .map((json) => WheelSpoke.fromJson(json))
+          .toList();
     } catch (e) {
       if (kDebugMode) print('❌ Error getting spokes: $e');
       rethrow;
@@ -368,15 +371,14 @@ class WheelBuildingService extends ChangeNotifier {
   // WHEEL BUILD OPERATIONS
   // ============================================================================
 
-  Future<List<WheelBuild>> getWheelBuilds({String? bikeId, bool templatesOnly = false}) async {
+  Future<List<WheelBuild>> getWheelBuilds(
+      {String? bikeId, bool templatesOnly = false}) async {
     try {
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
 
-      var query = _supabase
-          .from('wheel_builds')
-          .select()
-          .eq('tenant_id', tenantId);
+      var query =
+          _supabase.from('wheel_builds').select().eq('tenant_id', tenantId);
 
       if (bikeId != null) {
         query = query.eq('bike_id', bikeId);
@@ -387,7 +389,9 @@ class WheelBuildingService extends ChangeNotifier {
       }
 
       final response = await query.order('created_at', ascending: false);
-      return (response as List).map((json) => WheelBuild.fromJson(json)).toList();
+      return (response as List)
+          .map((json) => WheelBuild.fromJson(json))
+          .toList();
     } catch (e) {
       if (kDebugMode) print('❌ Error getting wheel builds: $e');
       rethrow;
@@ -446,7 +450,8 @@ class WheelBuildingService extends ChangeNotifier {
     try {
       // Validate compatibility
       if (hub.spokeHoles != rim.spokeHoles) {
-        throw Exception('Hub and rim spoke hole count must match! Hub: ${hub.spokeHoles}, Rim: ${rim.spokeHoles}');
+        throw Exception(
+            'Hub and rim spoke hole count must match! Hub: ${hub.spokeHoles}, Rim: ${rim.spokeHoles}');
       }
 
       // Calculate spoke lengths

@@ -496,7 +496,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
               onSelected: (value) async {
                 switch (value) {
                   case 'edit':
-                    await context.push('/inventory/categories/${category.id}/edit');
+                    await context
+                        .push('/inventory/categories/${category.id}/edit');
                     await _loadCategories();
                     break;
                   case 'toggle':
@@ -619,7 +620,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           onSelected: (value) async {
                             switch (value) {
                               case 'edit':
-                                await context.push('/inventory/categories/${category.id}/edit');
+                                await context.push(
+                                    '/inventory/categories/${category.id}/edit');
                                 await _loadCategories();
                                 break;
                               case 'toggle':

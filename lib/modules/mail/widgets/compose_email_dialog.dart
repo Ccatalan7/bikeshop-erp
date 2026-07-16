@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
 import '../providers/mail_account_manager.dart';
 
+bool isValidMailRecipientList(String value, {bool allowEmpty = false}) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) return allowEmpty;
+
+  final recipients = normalized
+      .split(RegExp(r'[,;]'))
+      .map((recipient) => recipient.trim())
+      .where((recipient) => recipient.isNotEmpty)
+      .toList(growable: false);
+  if (recipients.isEmpty) return false;
+
+  final emailPattern = RegExp(r'^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$');
+  return recipients.every(emailPattern.hasMatch);
+}
+
 /// Dialog for composing and sending emails
 class ComposeEmailDialog extends StatefulWidget {
   final MailAccountManager manager;
+  final String? initialProviderId;
   final String? replyTo;
   final String? replySubject;
   final String? quotedContent;
@@ -12,6 +28,7 @@ class ComposeEmailDialog extends StatefulWidget {
   const ComposeEmailDialog({
     super.key,
     required this.manager,
+    this.initialProviderId,
     this.replyTo,
     this.replySubject,
     this.quotedContent,
@@ -26,6 +43,7 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   final _formKey = GlobalKey<FormState>();
   final _toController = TextEditingController();
   final _ccController = TextEditingController();
+  final _bccController = TextEditingController();
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
 
@@ -48,14 +66,30 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
     // Default to first connected provider
     final connected = widget.manager.connectedProviders;
     if (connected.isNotEmpty) {
-      _selectedProviderId = connected.first.providerId;
+      final requestedProvider = widget.initialProviderId;
+      _selectedProviderId = connected.any(
+        (provider) => provider.providerId == requestedProvider,
+      )
+          ? requestedProvider
+          : connected.first.providerId;
     }
+
+    _toController.addListener(_onDraftChanged);
+    _ccController.addListener(_onDraftChanged);
+    _bccController.addListener(_onDraftChanged);
+    _subjectController.addListener(_onDraftChanged);
+    _bodyController.addListener(_onDraftChanged);
+  }
+
+  void _onDraftChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _toController.dispose();
     _ccController.dispose();
+    _bccController.dispose();
     _subjectController.dispose();
     _bodyController.dispose();
     super.dispose();
@@ -81,6 +115,9 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
         content: content,
         cc: _ccController.text.trim().isNotEmpty
             ? _ccController.text.trim()
+            : null,
+        bcc: _bccController.text.trim().isNotEmpty
+            ? _bccController.text.trim()
             : null,
       );
 
@@ -109,6 +146,60 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
     }
   }
 
+  bool get _canSend =>
+      !_isSending &&
+      _selectedProviderId != null &&
+      isValidMailRecipientList(_toController.text) &&
+      isValidMailRecipientList(_ccController.text, allowEmpty: true) &&
+      isValidMailRecipientList(_bccController.text, allowEmpty: true) &&
+      _subjectController.text.trim().isNotEmpty &&
+      _bodyController.text.trim().isNotEmpty;
+
+  bool get _hasDraftContent =>
+      _toController.text.trim().isNotEmpty ||
+      _ccController.text.trim().isNotEmpty ||
+      _bccController.text.trim().isNotEmpty ||
+      _subjectController.text.trim().isNotEmpty ||
+      _bodyController.text.trim().isNotEmpty;
+
+  String? _validateRecipients(String? value, {bool optional = false}) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) return optional ? null : 'Requerido';
+    if (!isValidMailRecipientList(normalized)) {
+      return 'Revisa las direcciones de correo';
+    }
+    return null;
+  }
+
+  Future<void> _requestClose() async {
+    if (_isSending) return;
+    if (!_hasDraftContent) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Descartar borrador'),
+        content: const Text(
+          'El contenido de este correo no se guardará.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Seguir editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -125,7 +216,8 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                color:
+                    theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(12)),
               ),
@@ -147,8 +239,9 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: _requestClose,
                     icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Cerrar',
                     constraints: const BoxConstraints(),
                     padding: EdgeInsets.zero,
                   ),
@@ -231,12 +324,14 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                                     ? TextButton(
                                         onPressed: () =>
                                             setState(() => _showCc = true),
-                                        child: const Text('CC'),
+                                        child: const Text('CC/CCO'),
                                       )
                                     : null,
                               ),
-                              validator: (v) =>
-                                  v?.isEmpty ?? true ? 'Requerido' : null,
+                              keyboardType: TextInputType.emailAddress,
+                              autovalidateMode:
+                                  AutovalidateMode.onUserInteraction,
+                              validator: _validateRecipients,
                             ),
                           ),
                         ],
@@ -265,6 +360,41 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                                   contentPadding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 12),
                                 ),
+                                keyboardType: TextInputType.emailAddress,
+                                autovalidateMode:
+                                    AutovalidateMode.onUserInteraction,
+                                validator: (value) =>
+                                    _validateRecipients(value, optional: true),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 60,
+                              child: Text(
+                                'CCO:',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _bccController,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 12),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                                autovalidateMode:
+                                    AutovalidateMode.onUserInteraction,
+                                validator: (value) =>
+                                    _validateRecipients(value, optional: true),
                               ),
                             ),
                           ],
@@ -293,8 +423,11 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                                 contentPadding: EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 12),
                               ),
-                              validator: (v) =>
-                                  v?.isEmpty ?? true ? 'Requerido' : null,
+                              validator: (v) => v?.trim().isEmpty ?? true
+                                  ? 'Requerido'
+                                  : null,
+                              autovalidateMode:
+                                  AutovalidateMode.onUserInteraction,
                             ),
                           ),
                         ],
@@ -311,6 +444,10 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                         ),
                         maxLines: 10,
                         minLines: 5,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        validator: (value) => value?.trim().isEmpty ?? true
+                            ? 'Escribe un mensaje'
+                            : null,
                       ),
 
                       // Show quoted content preview if replying
@@ -354,13 +491,12 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed:
-                        _isSending ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isSending ? null : _requestClose,
                     child: const Text('Cancelar'),
                   ),
                   const SizedBox(width: 12),
                   FilledButton.icon(
-                    onPressed: _isSending ? null : _send,
+                    onPressed: _canSend ? _send : null,
                     icon: _isSending
                         ? const SizedBox(
                             width: 16,

@@ -167,8 +167,10 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
                   items: const [
                     DropdownMenuItem(value: 'manager', child: Text('Gerente')),
                     DropdownMenuItem(value: 'cashier', child: Text('Cajero')),
-                    DropdownMenuItem(value: 'mechanic', child: Text('Mecánico')),
-                    DropdownMenuItem(value: 'accountant', child: Text('Contador')),
+                    DropdownMenuItem(
+                        value: 'mechanic', child: Text('Mecánico')),
+                    DropdownMenuItem(
+                        value: 'accountant', child: Text('Contador')),
                   ],
                   onChanged: (value) {
                     if (value != null) {

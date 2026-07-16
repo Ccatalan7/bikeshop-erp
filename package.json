@@ -19,13 +19,17 @@
     "secret:staged": "bash scripts/dev/check_secrets.sh staged",
     "secret:working": "bash scripts/dev/check_secrets.sh working",
     "db:test": "bash scripts/reset_local_supabase.sh",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build:spreadsheet-engine": "esbuild web/spreadsheet_engine/univer.entry.js --bundle --minify --format=iife --platform=browser --target=es2020 --outfile=web/spreadsheet_engine/univer.bundle.js"
   },
   "dependencies": {
+    "@univerjs/preset-sheets-core": "0.25.1",
+    "@univerjs/presets": "0.25.1",
     "pg": "^8.20.0"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
+    "esbuild": "0.28.1",
     "firebase-tools": "15.23.0",
     "prettier": "3.9.5",
     "supabase": "2.109.1"

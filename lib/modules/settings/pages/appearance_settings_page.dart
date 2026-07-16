@@ -156,7 +156,8 @@ class AppearanceSettingsPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.1),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -324,17 +325,20 @@ class AppearanceSettingsPage extends StatelessWidget {
       // Pick image
       final result = await ImageService.pickImage();
 
-      debugPrint('[AppearanceSettings] pickImage() returned: ${result != null ? "Got file: ${result.name}" : "null (cancelled)"}');
+      debugPrint(
+          '[AppearanceSettings] pickImage() returned: ${result != null ? "Got file: ${result.name}" : "null (cancelled)"}');
 
       if (result == null) {
         debugPrint('[AppearanceSettings] User cancelled, returning');
         return; // User cancelled
       }
 
-      debugPrint('[AppearanceSettings] File size: ${result.bytes.length} bytes');
+      debugPrint(
+          '[AppearanceSettings] File size: ${result.bytes.length} bytes');
 
       if (!context.mounted) {
-        debugPrint('[AppearanceSettings] Context not mounted after pick, returning');
+        debugPrint(
+            '[AppearanceSettings] Context not mounted after pick, returning');
         return;
       }
 
@@ -368,7 +372,8 @@ class AppearanceSettingsPage extends StatelessWidget {
       debugPrint('[AppearanceSettings] Starting upload: ${result.name}');
 
       // Upload image with timeout
-      await appearanceService.uploadCompanyLogo(result.bytes, result.name)
+      await appearanceService
+          .uploadCompanyLogo(result.bytes, result.name)
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () {
@@ -409,14 +414,16 @@ class AppearanceSettingsPage extends StatelessWidget {
       // Close loading dialog if open
       if (dialogContext != null && dialogContext!.mounted) {
         try {
-          debugPrint('[AppearanceSettings] Closing dialog after error (dialog context)');
+          debugPrint(
+              '[AppearanceSettings] Closing dialog after error (dialog context)');
           Navigator.of(dialogContext!).pop();
         } catch (navError) {
           debugPrint('[AppearanceSettings] Error closing dialog: $navError');
         }
       } else if (context.mounted) {
         try {
-          debugPrint('[AppearanceSettings] Closing dialog after error (main context)');
+          debugPrint(
+              '[AppearanceSettings] Closing dialog after error (main context)');
           Navigator.of(context).pop();
         } catch (navError) {
           debugPrint('[AppearanceSettings] Error closing dialog: $navError');

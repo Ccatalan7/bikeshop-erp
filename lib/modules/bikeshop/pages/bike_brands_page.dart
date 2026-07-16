@@ -206,7 +206,8 @@ class _BikeBrandsPageState extends State<BikeBrandsPage> {
                                   : Colors.grey.withValues(alpha: 0.2),
                               child: Icon(
                                 Icons.pedal_bike,
-                                color: brand.isActive ? Colors.blue : Colors.grey,
+                                color:
+                                    brand.isActive ? Colors.blue : Colors.grey,
                               ),
                             ),
                             title: Text(
@@ -239,7 +240,8 @@ class _BikeBrandsPageState extends State<BikeBrandsPage> {
                                   ),
                                 IconButton(
                                   icon: const Icon(Icons.edit, size: 20),
-                                  onPressed: () => _showBrandDialog(brand: brand),
+                                  onPressed: () =>
+                                      _showBrandDialog(brand: brand),
                                   tooltip: 'Editar marca',
                                 ),
                                 IconButton(

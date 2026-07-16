@@ -102,6 +102,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         SmartPurchaseListPage,
         SpokeLengthCalculatorPage,
         SpreadsheetDashboardPage,
+        SpreadsheetEditorExitGuard,
         SpreadsheetEditorPage,
         StockMovementsPage,
         SupplierFormPage,
@@ -2696,6 +2697,12 @@ class AppRouter {
         ),
         GoRoute(
           path: '/tools/spreadsheets/:id',
+          onExit: (context, state) async {
+            await erp.loadLibrary();
+            return erp.SpreadsheetEditorExitGuard.canExit(
+              state.pathParameters['id'] ?? '',
+            );
+          },
           pageBuilder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
             return _buildDeferredPageWithNoTransition(

@@ -11,7 +11,8 @@ import './tenant_detection_service.dart';
 /// 3. Initializes default data (payment methods, categories, accounts)
 class TenantSignupService {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final TenantDetectionService _tenantDetectionService = TenantDetectionService();
+  final TenantDetectionService _tenantDetectionService =
+      TenantDetectionService();
 
   /// Create tenant for newly signed up user
   /// 
@@ -32,10 +33,13 @@ class TenantSignupService {
       debugPrint('🏗️ TenantSignupService: Creating tenant for user $userId');
 
       // Step 1: Generate unique subdomain
-      final subdomain = await _tenantDetectionService.generateUniqueSubdomain(shopName);
+      final subdomain =
+          await _tenantDetectionService.generateUniqueSubdomain(shopName);
       if (subdomain == null) {
-        debugPrint('❌ TenantSignupService: Failed to generate unique subdomain');
-        throw Exception('No se pudo generar un subdominio único. Por favor intente con otro nombre.');
+        debugPrint(
+            '❌ TenantSignupService: Failed to generate unique subdomain');
+        throw Exception(
+            'No se pudo generar un subdominio único. Por favor intente con otro nombre.');
       }
 
       debugPrint('✅ TenantSignupService: Generated subdomain: $subdomain');
@@ -52,11 +56,8 @@ class TenantSignupService {
         'timezone': 'America/Santiago', // Default to Chile timezone
       };
 
-      final tenantResponse = await _supabase
-          .from('tenants')
-          .insert(tenantData)
-          .select()
-          .single();
+      final tenantResponse =
+          await _supabase.from('tenants').insert(tenantData).select().single();
 
       final tenant = Tenant.fromJson(tenantResponse);
       debugPrint('✅ TenantSignupService: Created tenant: ${tenant.id}');
@@ -70,9 +71,7 @@ class TenantSignupService {
         'permissions': ['all'], // Admin has all permissions
       };
 
-      await _supabase
-          .from('user_profiles')
-          .insert(profileData);
+      await _supabase.from('user_profiles').insert(profileData);
 
       debugPrint('✅ TenantSignupService: Created user_profile for admin');
 
@@ -91,10 +90,7 @@ class TenantSignupService {
       // Try to clean up if tenant was created but later steps failed
       // This is best-effort cleanup
       try {
-        await _supabase
-            .from('user_profiles')
-            .delete()
-            .eq('user_id', userId);
+        await _supabase.from('user_profiles').delete().eq('user_id', userId);
       } catch (_) {
         // Ignore cleanup errors
       }
@@ -111,7 +107,8 @@ class TenantSignupService {
   /// - Default product categories (Bicicletas, Repuestos, Accesorios)
   Future<void> _initializeDefaultData(String tenantId) async {
     try {
-      debugPrint('📦 TenantSignupService: Initializing default data for tenant $tenantId');
+      debugPrint(
+          '📦 TenantSignupService: Initializing default data for tenant $tenantId');
 
       // 1. Create default chart of accounts FIRST (required by payment methods)
       await _createDefaultAccounts(tenantId);
@@ -148,7 +145,8 @@ class TenantSignupService {
         .maybeSingle();
 
     if (cashAccount == null || bankAccount == null) {
-      throw Exception('❌ Cash or Bank account not found. Accounts must be created before payment methods.');
+      throw Exception(
+          '❌ Cash or Bank account not found. Accounts must be created before payment methods.');
     }
 
     final cashAccountId = cashAccount['id'] as String;
@@ -209,7 +207,8 @@ class TenantSignupService {
 
     await _supabase.from('payment_methods').insert(paymentMethods);
     debugPrint('✅ Created ${paymentMethods.length} default payment methods');
-    debugPrint('   💰 Linked to accounting accounts (Cash: $cashAccountId, Bank: $bankAccountId)');
+    debugPrint(
+        '   💰 Linked to accounting accounts (Cash: $cashAccountId, Bank: $bankAccountId)');
   }
 
   /// Create default product categories
@@ -295,7 +294,8 @@ class TenantSignupService {
         'name': 'Cuentas por Cobrar Comerciales',
         'type': 'asset',
         'category': 'currentAsset',
-        'description': 'Saldos pendientes de cobro a clientes por ventas a crédito',
+        'description':
+            'Saldos pendientes de cobro a clientes por ventas a crédito',
         'is_active': true,
       },
       {
@@ -313,7 +313,8 @@ class TenantSignupService {
         'name': 'Otros Activos Corrientes',
         'type': 'asset',
         'category': 'currentAsset',
-        'description': 'Activos circulantes no clasificados en otra cuenta específica',
+        'description':
+            'Activos circulantes no clasificados en otra cuenta específica',
         'is_active': true,
       },
 
@@ -416,7 +417,8 @@ class TenantSignupService {
         'name': 'Cotizaciones Previsionales y Salud',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Aportes previsionales, salud y seguros obligatorios del personal',
+        'description':
+            'Aportes previsionales, salud y seguros obligatorios del personal',
         'is_active': true,
       },
       {
@@ -443,7 +445,8 @@ class TenantSignupService {
         'name': 'Servicios Básicos',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Consumo de electricidad, agua, gas y otros servicios básicos',
+        'description':
+            'Consumo de electricidad, agua, gas y otros servicios básicos',
         'is_active': true,
       },
       {
@@ -452,7 +455,8 @@ class TenantSignupService {
         'name': 'Telefonía e Internet',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Planes de telefonía fija, móvil y servicios de internet',
+        'description':
+            'Planes de telefonía fija, móvil y servicios de internet',
         'is_active': true,
       },
       {
@@ -461,7 +465,8 @@ class TenantSignupService {
         'name': 'Mantención y Reparaciones',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos',
+        'description':
+            'Gastos de mantenimiento preventivo y correctivo de infraestructura y equipos',
         'is_active': true,
       },
       {
@@ -470,7 +475,8 @@ class TenantSignupService {
         'name': 'Suministros de Oficina',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Materiales de oficina, papelería e insumos administrativos',
+        'description':
+            'Materiales de oficina, papelería e insumos administrativos',
         'is_active': true,
       },
       {
@@ -479,7 +485,8 @@ class TenantSignupService {
         'name': 'Marketing y Publicidad',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Campañas de marketing, publicidad y promoción de la marca',
+        'description':
+            'Campañas de marketing, publicidad y promoción de la marca',
         'is_active': true,
       },
       {
@@ -488,7 +495,8 @@ class TenantSignupService {
         'name': 'Comisiones y Servicios de Venta',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Comisiones pagadas a vendedores y servicios relacionados con ventas',
+        'description':
+            'Comisiones pagadas a vendedores y servicios relacionados con ventas',
         'is_active': true,
       },
       {
@@ -506,7 +514,8 @@ class TenantSignupService {
         'name': 'Capacitación y Desarrollo',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Programas de formación, cursos y certificaciones del personal',
+        'description':
+            'Programas de formación, cursos y certificaciones del personal',
         'is_active': true,
       },
       {
@@ -515,7 +524,8 @@ class TenantSignupService {
         'name': 'Seguros Generales',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Primas de seguros patrimoniales, de responsabilidad y otros',
+        'description':
+            'Primas de seguros patrimoniales, de responsabilidad y otros',
         'is_active': true,
       },
       {
@@ -533,7 +543,8 @@ class TenantSignupService {
         'name': 'Intereses y Gastos Financieros',
         'type': 'expense',
         'category': 'financialExpense',
-        'description': 'Intereses de créditos, comisiones bancarias y costos financieros',
+        'description':
+            'Intereses de créditos, comisiones bancarias y costos financieros',
         'is_active': true,
       },
       {
@@ -542,7 +553,8 @@ class TenantSignupService {
         'name': 'Depreciación y Amortización',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Gastos por depreciación de activos fijos y amortización de intangibles',
+        'description':
+            'Gastos por depreciación de activos fijos y amortización de intangibles',
         'is_active': true,
       },
       {
@@ -551,7 +563,8 @@ class TenantSignupService {
         'name': 'Gastos Varios',
         'type': 'expense',
         'category': 'operatingExpense',
-        'description': 'Gastos generales menores no clasificados en otras cuentas específicas',
+        'description':
+            'Gastos generales menores no clasificados en otras cuentas específicas',
         'is_active': true,
       },
     ];

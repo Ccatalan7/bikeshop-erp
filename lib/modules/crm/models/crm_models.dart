@@ -170,7 +170,7 @@ class Loyalty {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
       'tenant_id': tenantId,
       'customer_id': customerId,
       'points': points,

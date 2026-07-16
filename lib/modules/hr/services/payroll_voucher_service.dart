@@ -389,10 +389,8 @@ class PayrollVoucherService extends ChangeNotifier {
         descending: true,
       );
 
-      final voucherIds = data
-          .map((row) => row['id']?.toString())
-          .whereType<String>()
-          .toList();
+      final voucherIds =
+          data.map((row) => row['id']?.toString()).whereType<String>().toList();
       final linesByVoucherId = await _fetchLinesByVoucherId(voucherIds);
 
       final vouchers = <PayrollVoucher>[];
@@ -832,8 +830,7 @@ class PayrollVoucherService extends ChangeNotifier {
         final advancesApplied =
             line.id == null ? 0.0 : advancesByLineId[line.id] ?? 0.0;
         final paid = cashPaid + advancesApplied;
-        final settledAmount =
-            paid > line.totalAmount ? line.totalAmount : paid;
+        final settledAmount = paid > line.totalAmount ? line.totalAmount : paid;
         final remaining = line.totalAmount - paid;
         final balance = remaining > 0 ? remaining : 0.0;
 

@@ -25,17 +25,26 @@ with health_checks(severity, check_name, violations, details) as (
 
   select
     'critical',
-    'new_negative_stock_after_guard',
-    count(*),
-    'no product may newly end negative after the professional negative-stock guard'
+    'negative_stock_without_completed_trace',
+    count(distinct product.id),
+    'staff sales may end negative, but every recent negative transition requires a completed trace operation'
   from public.products product
   where coalesce(product.track_stock, true)
     and coalesce(product.product_type, 'product') <> 'service'
     and greatest(coalesce(product.inventory_qty, 0), coalesce(product.stock_quantity, 0)) < 0
     and exists (
-      select 1 from public.stock_movements movement
+      select 1
+      from public.stock_movements movement
+      left join public.inventory_accounting_operations operation
+        on operation.id = movement.operation_id
+       and operation.tenant_id = movement.tenant_id
       where movement.product_id = product.id
         and movement.created_at >= '2026-07-12 00:00:00+00'::timestamptz
+        and coalesce(movement.stock_after, 0) < 0
+        and (
+          movement.operation_id is null
+          or operation.outcome is distinct from 'completed'
+        )
     )
 
   union all
@@ -109,6 +118,88 @@ with health_checks(severity, check_name, violations, details) as (
   from public.purchase_invoices
   where public.clp_round(balance)
     <> greatest(public.clp_round(total) - public.clp_round(paid_amount), 0)
+
+  union all
+
+  select
+    'critical',
+    'active_quotation_financial_effect',
+    count(*),
+    'active quotations must have no invoice and must remain no-tax previews whose total equals lines minus discount'
+  from public.mechanic_jobs job
+  left join lateral (
+    select
+      public.clp_round(coalesce(sum(coalesce(
+        item.total_price,
+        item.quantity * item.unit_price,
+        0
+      )), 0)) as gross,
+      public.clp_round(coalesce(sum(coalesce(
+        item.total_price,
+        item.quantity * item.unit_price,
+        0
+      )) filter (
+        where coalesce(item.item_type, 'product') <> 'service'
+      ), 0)) as parts,
+      public.clp_round(coalesce(sum(coalesce(
+        item.total_price,
+        item.quantity * item.unit_price,
+        0
+      )) filter (
+        where coalesce(item.item_type, 'product') = 'service'
+      ), 0)) as labor
+    from public.mechanic_job_items item
+    where item.job_id = job.id
+      and item.tenant_id = job.tenant_id
+  ) lines on true
+  where job.deleted_at is null
+    and job.workflow_kind = 'quotation'
+    and (
+      job.invoice_id is not null
+      or job.requires_approval is distinct from true
+      or job.is_invoiced is distinct from false
+      or job.is_paid is distinct from false
+      or job.tax_treatment is distinct from 'no_tax'
+      or public.clp_round(job.tax_amount) <> 0
+      or public.clp_round(job.parts_cost) <> lines.parts
+      or public.clp_round(job.labor_cost) <> lines.labor
+      or public.clp_round(job.total_cost)
+           <> lines.gross - public.clp_round(coalesce(job.discount_amount, 0))
+      or exists (
+        select 1
+        from public.stock_movements movement
+        where movement.tenant_id = job.tenant_id
+          and movement.source_document_id = job.id
+      )
+      or exists (
+        select 1
+        from public.journal_entries entry
+        where entry.tenant_id = job.tenant_id
+          and entry.source_document_id = job.id
+      )
+    )
+
+  union all
+
+  select
+    'critical',
+    'approved_quotation_without_snapshot',
+    count(*),
+    'every active approved quotation needs an immutable commercial snapshot before conversion'
+  from public.mechanic_jobs job
+  where job.deleted_at is null
+    and job.workflow_kind = 'quotation'
+    and job.quotation_status = 'approved'
+    and not exists (
+      select 1
+      from public.mechanic_job_mode_events event
+      where event.tenant_id = job.tenant_id
+        and event.job_id = job.id
+        and event.event_type = 'quotation_status_changed'
+        and event.to_quotation_status = 'approved'
+        and event.metadata ? 'quotation_snapshot'
+        and nullif(event.metadata->>'quotation_snapshot_hash', '') is not null
+    )
 )
 select severity, check_name, violations, violations = 0 as passed, details
 from health_checks

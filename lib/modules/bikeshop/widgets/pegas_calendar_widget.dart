@@ -972,6 +972,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   Widget _buildSmartHeader(MechanicJob job) {
     final statusColor = _getJobColor(job);
     final statusText = _getJobStatusText(job);
+    final serviceWarrantyText = _serviceWarrantyText(job);
 
     // Determine "Next Action" based on status
     // Logic:
@@ -1116,7 +1117,27 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   ),
                 ),
               ),
-              if (job.statusUpdatedAt != null)
+              if (serviceWarrantyText != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.shield_outlined,
+                          size: 12, color: Color(0xFF047857)),
+                      const SizedBox(width: 3),
+                      Text(
+                        serviceWarrantyText,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF047857),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (job.statusUpdatedAt != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
                   child: Text(
@@ -1155,6 +1176,21 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         ],
       ),
     );
+  }
+
+  String? _serviceWarrantyText(MechanicJob job) {
+    final warranty = job.serviceWarranty;
+    if (warranty == null || warranty.state == ServiceWarrantyState.notStarted) {
+      return null;
+    }
+    if (warranty.state == ServiceWarrantyState.active) {
+      final days = warranty.daysRemaining;
+      return days == 0 ? 'Garantía vence hoy' : 'Garantía ${days ?? '-'}d';
+    }
+    final expiry = warranty.warrantyExpiresAt;
+    return expiry == null
+        ? 'Garantía vencida'
+        : 'Venció ${DateFormat('dd/MM').format(expiry.toLocal())}';
   }
 
   // Helper to find status by code

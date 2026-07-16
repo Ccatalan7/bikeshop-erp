@@ -333,7 +333,11 @@ class VinabikeApp extends StatelessWidget {
           navigationService.initialize();
           return navigationService;
         }),
-        ChangeNotifierProvider(create: (_) => WorkspaceManager()),
+        ChangeNotifierProvider(
+          create: (_) => WorkspaceManager(
+            initialBrowserUrl: _initialBrowserUrl,
+          ),
+        ),
 
         // Messaging service (global for chat sidebar in all modules)
         Provider(create: (_) => MessagingService()),

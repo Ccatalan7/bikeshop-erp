@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
@@ -16,7 +17,10 @@ import 'package:provider/provider.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/ocr_file_handoff_service.dart';
 import '../../../shared/services/right_toolbar_service.dart';
+import '../../../shared/services/spreadsheet_file_handoff_service.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../spreadsheets/services/spreadsheet_service.dart';
+import '../../spreadsheets/widgets/stored_spreadsheet_runner.dart';
 import '../models/app_stored_file.dart';
 import '../services/app_file_storage_service.dart';
 import 'storage_image_crop_dialog.dart';
@@ -41,11 +45,13 @@ enum _StorageCompactTab {
 class AppFilesPanel extends StatefulWidget {
   final bool compact;
   final bool showHeader;
+  final bool runnerMode;
 
   const AppFilesPanel({
     super.key,
     this.compact = false,
     this.showHeader = true,
+    this.runnerMode = false,
   });
 
   @override
@@ -70,6 +76,8 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
   bool _isLoading = true;
   bool _isUploading = false;
   bool _isDragging = false;
+  final Set<String> _spreadsheetImportIds = <String>{};
+  AppStoredFile? _runnerFile;
 
   @override
   void initState() {
@@ -559,6 +567,51 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
     }
   }
 
+  Future<void> _openInSpreadsheets(AppStoredFile file) async {
+    if (_spreadsheetImportIds.contains(file.id)) return;
+    final handoff = SpreadsheetFileHandoffService.instance;
+    if (!handoff.supports(file)) return;
+
+    setState(() => _spreadsheetImportIds.add(file.id));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Importando ${file.fileName} en Planillas...')),
+    );
+
+    try {
+      final sheet = await handoff.importStoredFile(
+        file: file,
+        store: context.read<SpreadsheetService>(),
+      );
+      if (!mounted || sheet.id == null) return;
+      messenger.hideCurrentSnackBar();
+
+      final route = '/tools/spreadsheets/${sheet.id}';
+      try {
+        context.read<WorkspaceManager>().navigateActiveWorkspace(route);
+      } catch (_) {
+        context.go(route);
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('“${file.fileName}” se abrió en Planillas.')),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Stored spreadsheet import error: $error\n$stackTrace');
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir en Planillas: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _spreadsheetImportIds.remove(file.id));
+      }
+    }
+  }
+
   bool _canProcessAsQuickExpense(AppStoredFile file) {
     return file.isPdf || file.isImage;
   }
@@ -669,14 +722,30 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final child = Column(
-      children: [
-        if (widget.showHeader) _buildHeader(context),
-        _buildControls(context),
-        if (_isLoading) const LinearProgressIndicator(minHeight: 2),
-        Expanded(child: _buildBody(context)),
-      ],
-    );
+    final selectedRunnerFile = _runnerFile;
+    final child =
+        widget.runnerMode && widget.compact && selectedRunnerFile != null
+            ? _InlineStorageFileRunner(
+                key: ValueKey('file-runner-${selectedRunnerFile.id}'),
+                file: selectedRunnerFile,
+                onBack: () => setState(() => _runnerFile = null),
+                onFileChanged: _replaceRunnerFile,
+                onOpenOrigin: selectedRunnerFile.sourceRoute == null
+                    ? null
+                    : () => _openOrigin(selectedRunnerFile),
+                onOpenInSpreadsheets: SpreadsheetFileHandoffService.instance
+                        .supports(selectedRunnerFile)
+                    ? () => _openInSpreadsheets(selectedRunnerFile)
+                    : null,
+              )
+            : Column(
+                children: [
+                  if (widget.showHeader) _buildHeader(context),
+                  _buildControls(context),
+                  if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+                  Expanded(child: _buildBody(context)),
+                ],
+              );
 
     return DropTarget(
       enable: !_isUploading,
@@ -691,6 +760,21 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
         ],
       ),
     );
+  }
+
+  void _replaceRunnerFile(AppStoredFile updatedFile) {
+    if (!mounted) return;
+    setState(() {
+      _runnerFile = updatedFile;
+      _allFiles = [
+        for (final file in _allFiles)
+          if (file.id == updatedFile.id) updatedFile else file,
+      ];
+      _files = [
+        for (final file in _files)
+          if (file.id == updatedFile.id) updatedFile else file,
+      ];
+    });
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -1003,7 +1087,9 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
           file: file,
           compact: widget.compact,
           dateLabel: _dateFormat.format(file.createdAt.toLocal()),
-          onPreview: () => StorageFilePreviewDialog.show(context, file),
+          onPreview: widget.runnerMode && widget.compact
+              ? () => setState(() => _runnerFile = file)
+              : () => StorageFilePreviewDialog.show(context, file),
           onDownload: () => _downloadFile(file),
           onDelete: () => _deleteFile(file),
           onOpenOrigin:
@@ -1014,6 +1100,11 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
           onPurchaseInvoiceOcr: _canProcessAsPurchaseInvoice(file)
               ? () => _sendFileToOcr(file, OcrFileHandoffTarget.purchaseInvoice)
               : null,
+          onOpenInSpreadsheets:
+              SpreadsheetFileHandoffService.instance.supports(file) &&
+                      !_spreadsheetImportIds.contains(file.id)
+                  ? () => _openInSpreadsheets(file)
+                  : null,
         );
       },
     );
@@ -1440,6 +1531,7 @@ class _FileListTile extends StatelessWidget {
   final VoidCallback? onOpenOrigin;
   final VoidCallback? onQuickExpenseOcr;
   final VoidCallback? onPurchaseInvoiceOcr;
+  final VoidCallback? onOpenInSpreadsheets;
 
   const _FileListTile({
     required this.file,
@@ -1451,6 +1543,7 @@ class _FileListTile extends StatelessWidget {
     required this.onOpenOrigin,
     required this.onQuickExpenseOcr,
     required this.onPurchaseInvoiceOcr,
+    required this.onOpenInSpreadsheets,
   });
 
   @override
@@ -1526,6 +1619,12 @@ class _FileListTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
+              if (!compact && onOpenInSpreadsheets != null)
+                IconButton(
+                  tooltip: 'Abrir en Planillas',
+                  onPressed: onOpenInSpreadsheets,
+                  icon: const Icon(Icons.table_view_outlined, size: 18),
+                ),
               if (!compact && onOpenOrigin != null)
                 IconButton(
                   tooltip: 'Abrir origen',
@@ -1550,11 +1649,32 @@ class _FileListTile extends StatelessWidget {
                   if (value == 'purchase_invoice_ocr') {
                     onPurchaseInvoiceOcr?.call();
                   }
+                  if (value == 'open_in_spreadsheets') {
+                    onOpenInSpreadsheets?.call();
+                  }
                   if (value == 'download') onDownload();
                   if (value == 'origin') onOpenOrigin?.call();
                   if (value == 'delete') onDelete();
                 },
                 itemBuilder: (context) => [
+                  if (onOpenInSpreadsheets != null)
+                    const PopupMenuItem(
+                      value: 'open_in_spreadsheets',
+                      child: _FileActionMenuItem(
+                        icon: Icons.table_view_outlined,
+                        label: 'Abrir en Planillas',
+                      ),
+                    ),
+                  if (onOpenInSpreadsheets != null) const PopupMenuDivider(),
+                  if (file.extension == 'xls')
+                    const PopupMenuItem(
+                      enabled: false,
+                      child: _FileActionMenuItem(
+                        icon: Icons.info_outline,
+                        label: 'XLS: convierte a XLSX',
+                      ),
+                    ),
+                  if (file.extension == 'xls') const PopupMenuDivider(),
                   if (onQuickExpenseOcr != null)
                     const PopupMenuItem(
                       value: 'quick_expense_ocr',
@@ -1700,6 +1820,550 @@ class _FileActionMenuItem extends StatelessWidget {
         const SizedBox(width: 10),
         Text(label),
       ],
+    );
+  }
+}
+
+class _InlineStorageFileRunner extends StatefulWidget {
+  const _InlineStorageFileRunner({
+    super.key,
+    required this.file,
+    required this.onBack,
+    required this.onFileChanged,
+    required this.onOpenOrigin,
+    required this.onOpenInSpreadsheets,
+  });
+
+  final AppStoredFile file;
+  final VoidCallback onBack;
+  final ValueChanged<AppStoredFile> onFileChanged;
+  final VoidCallback? onOpenOrigin;
+  final VoidCallback? onOpenInSpreadsheets;
+
+  @override
+  State<_InlineStorageFileRunner> createState() =>
+      _InlineStorageFileRunnerState();
+}
+
+class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
+  final StoredSpreadsheetRunnerController _spreadsheetController =
+      StoredSpreadsheetRunnerController();
+  late AppStoredFile _file;
+  late Future<Uint8List> _bytesFuture;
+  TextEditingController? _textController;
+  String _savedText = '';
+  bool _textDirty = false;
+  bool _isSavingText = false;
+  double _pdfZoom = 1;
+
+  bool get _isSpreadsheet =>
+      SpreadsheetFileHandoffService.instance.supports(_file);
+
+  @override
+  void initState() {
+    super.initState();
+    _file = widget.file;
+    _bytesFuture = _loadBytes();
+  }
+
+  @override
+  void dispose() {
+    _disposeTextController();
+    super.dispose();
+  }
+
+  Future<Uint8List> _loadBytes() {
+    return AppFileStorageService.instance.downloadFile(_file);
+  }
+
+  void _reload() {
+    _disposeTextController();
+    setState(() {
+      _pdfZoom = 1;
+      _bytesFuture = _loadBytes();
+    });
+  }
+
+  void _disposeTextController() {
+    _textController?.removeListener(_onTextChanged);
+    _textController?.dispose();
+    _textController = null;
+    _savedText = '';
+    _textDirty = false;
+  }
+
+  TextEditingController _textControllerFor(Uint8List bytes) {
+    final existing = _textController;
+    if (existing != null) return existing;
+
+    _savedText = utf8.decode(bytes, allowMalformed: true);
+    final controller = TextEditingController(text: _savedText);
+    controller.addListener(_onTextChanged);
+    _textController = controller;
+    return controller;
+  }
+
+  void _onTextChanged() {
+    final dirty = _textController?.text != _savedText;
+    if (dirty != _textDirty && mounted) {
+      setState(() => _textDirty = dirty);
+    }
+  }
+
+  Future<void> _download(Uint8List bytes) async {
+    await downloadFile(
+      bytes: bytes,
+      fileName: _file.fileName,
+      mimeType: _file.mimeType,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Archivo descargado.')),
+    );
+  }
+
+  Future<void> _editImage(Uint8List bytes) async {
+    final updatedFile = await StorageImageCropDialog.show(
+      context,
+      file: _file,
+      bytes: bytes,
+    );
+    if (updatedFile == null || !mounted) return;
+
+    _file = updatedFile;
+    widget.onFileChanged(updatedFile);
+    _reload();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Imagen recortada y reemplazada.')),
+    );
+  }
+
+  Future<void> _saveText() async {
+    final controller = _textController;
+    if (controller == null || !_textDirty || _isSavingText) return;
+
+    setState(() => _isSavingText = true);
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(controller.text));
+      final updatedFile = await AppFileStorageService.instance.replaceFileBytes(
+        file: _file,
+        bytes: bytes,
+        mimeType: _file.mimeType,
+        addTags: const ['editado'],
+        metadataPatch: {
+          'last_edited_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+      if (!mounted) return;
+
+      _file = updatedFile;
+      _savedText = controller.text;
+      _textDirty = false;
+      widget.onFileChanged(updatedFile);
+      setState(() => _bytesFuture = Future.value(bytes));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Archivo de texto guardado.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingText = false);
+    }
+  }
+
+  Future<void> _handleBack() async {
+    if (_isSpreadsheet) {
+      final saved = await _spreadsheetController.save();
+      if (!saved || !mounted) return;
+    } else if (_textDirty) {
+      await _saveText();
+      if (!mounted || _textDirty) return;
+    }
+    widget.onBack();
+  }
+
+  void _changePdfZoom(double delta) {
+    setState(() => _pdfZoom = (_pdfZoom + delta).clamp(0.5, 3));
+  }
+
+  Future<void> _printPdf(Uint8List bytes) async {
+    try {
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: _file.fileName,
+        dynamicLayout: false,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo imprimir: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return FutureBuilder<Uint8List>(
+      future: _bytesFuture,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+
+        return Column(
+          children: [
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Volver a archivos',
+                    onPressed: _handleBack,
+                    icon: const Icon(Icons.arrow_back, size: 19),
+                  ),
+                  Icon(
+                    _fileIcon(_file),
+                    size: 19,
+                    color: _sourceColor(_file),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _file.fileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          _textDirty
+                              ? 'Cambios sin guardar'
+                              : '${_sourceLabel(_file.sourceType)} · ${_file.displaySize}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _textDirty
+                                ? colorScheme.error
+                                : colorScheme.onSurfaceVariant,
+                            fontWeight: _textDirty ? FontWeight.w700 : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_file.isTextLike && _textDirty)
+                    IconButton(
+                      tooltip: 'Guardar cambios',
+                      onPressed: _isSavingText ? null : _saveText,
+                      icon: _isSavingText
+                          ? const SizedBox(
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined, size: 19),
+                    ),
+                  if (_file.isImage)
+                    IconButton(
+                      tooltip: 'Recortar imagen',
+                      onPressed: bytes == null ? null : () => _editImage(bytes),
+                      icon: const Icon(Icons.crop_outlined, size: 19),
+                    ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Acciones del archivo',
+                    onSelected: (value) {
+                      if (value == 'retry') _reload();
+                      if (value == 'download' && bytes != null) {
+                        _download(bytes);
+                      }
+                      if (value == 'origin') widget.onOpenOrigin?.call();
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'retry',
+                        child: _FileActionMenuItem(
+                          icon: Icons.refresh,
+                          label: 'Volver a cargar',
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'download',
+                        enabled: bytes != null,
+                        child: const _FileActionMenuItem(
+                          icon: Icons.download_outlined,
+                          label: 'Descargar',
+                        ),
+                      ),
+                      if (widget.onOpenOrigin != null)
+                        const PopupMenuItem(
+                          value: 'origin',
+                          child: _FileActionMenuItem(
+                            icon: Icons.open_in_new_outlined,
+                            label: 'Abrir origen',
+                          ),
+                        ),
+                    ],
+                    icon: const Icon(Icons.more_vert, size: 19),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _buildPreview(snapshot)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPreview(AsyncSnapshot<Uint8List> snapshot) {
+    final theme = Theme.of(context);
+
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    if (snapshot.hasError || snapshot.data == null) {
+      return _StorageEmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'No se pudo cargar el archivo',
+        subtitle: snapshot.error?.toString() ?? 'Intenta nuevamente.',
+        actionLabel: 'Reintentar',
+        onAction: _reload,
+      );
+    }
+
+    final bytes = snapshot.data!;
+    if (_isSpreadsheet) {
+      return StoredSpreadsheetRunner(
+        key: ValueKey<String>('stored-spreadsheet-runner-${_file.id}'),
+        file: _file,
+        bytes: bytes,
+        controller: _spreadsheetController,
+        onFileChanged: (updatedFile) {
+          _file = updatedFile;
+          widget.onFileChanged(updatedFile);
+        },
+        onOpenFullEditor: widget.onOpenInSpreadsheets,
+      );
+    }
+
+    if (_file.isImage) {
+      return ColoredBox(
+        color: const Color(0xFF0F172A),
+        child: InteractiveViewer(
+          minScale: 0.6,
+          maxScale: 5,
+          child: Center(
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const _StorageEmptyState(
+                icon: Icons.broken_image_outlined,
+                title: 'Imagen no compatible',
+                subtitle: 'Usa Descargar desde el menú del archivo.',
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_file.isPdf) {
+      return _buildPdfPreview(bytes);
+    }
+
+    if (_file.isTextLike) {
+      return ColoredBox(
+        color: theme.colorScheme.surface,
+        child: TextField(
+          controller: _textControllerFor(bytes),
+          expands: true,
+          minLines: null,
+          maxLines: null,
+          textAlignVertical: TextAlignVertical.top,
+          keyboardType: TextInputType.multiline,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontFamily: 'monospace',
+            height: 1.45,
+          ),
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.all(14),
+          ),
+        ),
+      );
+    }
+
+    return _StorageEmptyState(
+      icon: _fileIcon(_file),
+      title: 'Archivo disponible',
+      subtitle:
+          'Este formato no tiene visor interno. Puedes descargarlo o abrir su módulo de origen.',
+      actionLabel: 'Descargar',
+      onAction: () => _download(bytes),
+    );
+  }
+
+  Widget _buildPdfPreview(Uint8List bytes) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Alejar',
+                onPressed: _pdfZoom <= 0.5 ? null : () => _changePdfZoom(-0.25),
+                icon: const Icon(Icons.remove, size: 18),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _pdfZoom = 1),
+                child: Text('${(_pdfZoom * 100).round()}%'),
+              ),
+              IconButton(
+                tooltip: 'Acercar',
+                onPressed: _pdfZoom >= 3 ? null : () => _changePdfZoom(0.25),
+                icon: const Icon(Icons.add, size: 18),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Imprimir PDF',
+                onPressed: () => _printPdf(bytes),
+                icon: const Icon(Icons.print_outlined, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Descargar PDF',
+                onPressed: () => _download(bytes),
+                icon: const Icon(Icons.download_outlined, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Volver a cargar',
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh, size: 18),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: PdfPreview.builder(
+            build: (PdfPageFormat _) async => bytes,
+            useActions: false,
+            allowPrinting: false,
+            allowSharing: false,
+            canChangeOrientation: false,
+            canChangePageFormat: false,
+            canDebug: false,
+            dynamicLayout: false,
+            pdfFileName: _file.fileName,
+            loadingWidget: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            pagesBuilder: (context, pages) => _RunnerPdfPagesCanvas(
+              pages: pages,
+              zoom: _pdfZoom,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RunnerPdfPagesCanvas extends StatelessWidget {
+  const _RunnerPdfPagesCanvas({
+    required this.pages,
+    required this.zoom,
+  });
+
+  final List<PdfPreviewPageData> pages;
+  final double zoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final baseWidth = math.max(260.0, constraints.maxWidth - 32);
+        final pageWidth = baseWidth * zoom;
+        final canvasWidth = math.max(constraints.maxWidth, pageWidth + 32);
+        return ColoredBox(
+          color: const Color(0xFFE5E7EB),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: canvasWidth,
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 18,
+                ),
+                itemCount: pages.length,
+                itemBuilder: (context, index) {
+                  final page = pages[index];
+                  final pageHeight = pageWidth / page.aspectRatio;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Página ${index + 1} de ${pages.length}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: pageWidth,
+                        height: pageHeight,
+                        margin: EdgeInsets.only(
+                          bottom: index == pages.length - 1 ? 18 : 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Image(
+                          image: page.image,
+                          fit: BoxFit.fill,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

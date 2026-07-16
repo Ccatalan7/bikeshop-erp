@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/web_url.dart';
@@ -32,6 +34,12 @@ class MailInboxPage extends StatefulWidget {
 
 class _MailInboxPageState extends State<MailInboxPage> {
   static const double _estimatedEmailRowHeight = 92;
+  static const double _inboxStatusRowHeight = 32;
+  static const double _desktopSplitMinWidth = 1120;
+  static const double _defaultListWidth = 540;
+  static const double _minimumListWidth = 460;
+  static const double _maximumListWidth = 640;
+  static const String _listWidthPreferenceKey = 'mail_inbox_list_width_v1';
 
   late final MailAccountManager _manager;
   final TextEditingController _searchController = TextEditingController();
@@ -42,6 +50,7 @@ class _MailInboxPageState extends State<MailInboxPage> {
   bool _isProcessingOAuthCallback = false;
   String _searchQuery = '';
   _InboxQuickFilter _quickFilter = _InboxQuickFilter.all;
+  double _desktopListWidth = _defaultListWidth;
 
   @override
   void initState() {
@@ -52,7 +61,30 @@ class _MailInboxPageState extends State<MailInboxPage> {
     _searchController.addListener(_onSearchChanged);
     _listScrollController.addListener(_onListScrolled);
     DeepLinkHandler.instance.addListener(_onDeepLinkChange);
+    unawaited(_restoreListWidth());
     _initialize();
+  }
+
+  Future<void> _restoreListWidth() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedWidth = preferences.getDouble(_listWidthPreferenceKey);
+    if (!mounted || savedWidth == null) return;
+    setState(() {
+      _desktopListWidth = savedWidth
+          .clamp(
+            _minimumListWidth,
+            _maximumListWidth,
+          )
+          .toDouble();
+    });
+  }
+
+  Future<void> _saveListWidth() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setDouble(
+      _listWidthPreferenceKey,
+      _desktopListWidth,
+    );
   }
 
   void _onManagerChange() {
@@ -245,11 +277,15 @@ class _MailInboxPageState extends State<MailInboxPage> {
       {String? replyTo,
       String? replySubject,
       String? quotedContent,
-      bool replyAll = false}) {
+      bool replyAll = false,
+      String? initialProviderId}) {
     showDialog(
       context: context,
       builder: (context) => ComposeEmailDialog(
         manager: _manager,
+        initialProviderId: initialProviderId ??
+            _manager.selectedProvider?.providerId ??
+            _manager.providerFilter,
         replyTo: replyTo,
         replySubject: replySubject,
         quotedContent: quotedContent,
@@ -275,13 +311,63 @@ ${email.content ?? email.summary ?? ''}
 </div>
 ''';
 
+    final replyRecipients = <String>[
+      email.senderEmail,
+      if (replyAll && (email.ccAddress?.trim().isNotEmpty ?? false))
+        email.ccAddress!.trim(),
+    ].where((address) => address.trim().isNotEmpty).join(', ');
+
     _showComposeDialog(
-      replyTo: replyAll
-          ? '${email.senderEmail}, ${email.ccAddress ?? ''}'
-          : email.senderEmail,
+      replyTo: replyRecipients,
       replySubject: subject,
       quotedContent: quoted,
       replyAll: replyAll,
+      initialProviderId: email.providerId,
+    );
+  }
+
+  Future<void> _confirmDeleteSelectedEmail() async {
+    final selected = _manager.selectedEmail;
+    if (selected == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mover a papelera'),
+        content: Text(
+          selected.subject.trim().isEmpty
+              ? 'Este correo se moverá a la papelera.'
+              : '“${selected.subject}” se moverá a la papelera.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Mover a papelera'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    final success = await _manager.deleteSelectedEmail();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Correo movido a la papelera'
+              : 'No se pudo mover el correo a la papelera',
+        ),
+        backgroundColor: success ? null : Theme.of(context).colorScheme.error,
+      ),
     );
   }
 
@@ -341,7 +427,7 @@ ${email.content ?? email.summary ?? ''}
     return _buildKeyboardScope(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 800;
+          final isDesktop = constraints.maxWidth >= _desktopSplitMinWidth;
 
           if (isDesktop) {
             return _buildDesktopSplitView();
@@ -469,40 +555,79 @@ ${email.content ?? email.summary ?? ''}
   Widget _buildDesktopSplitView() {
     final theme = Theme.of(context);
 
-    return Row(
-      children: [
-        SizedBox(
-          width: 420,
-          child: Column(
-            children: [
-              _buildListHeader(),
-              Expanded(child: _buildEmailList()),
-            ],
-          ),
-        ),
-        VerticalDivider(width: 1, color: theme.dividerColor),
-        Expanded(
-          child: _manager.selectedEmail != null
-              ? EmailDetailViewUnified(
-                  email: _manager.selectedEmail!,
-                  provider: _manager.selectedProvider,
-                  isLoading: _manager.isLoadingSelectedEmail,
-                  error: _manager.selectedEmailError,
-                  onRetry: () => _manager.selectEmail(_manager.selectedEmail!),
-                  onToggleRead: () => _manager.markAsRead(
-                    _manager.selectedEmail!,
-                    read: !_manager.selectedEmail!.isRead,
-                  ),
-                  onReply: () => _replyToEmail(false),
-                  onReplyAll: () => _replyToEmail(true),
-                  onDelete: () async {
-                    await _manager.deleteSelectedEmail();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableMaximum = math.max(
+          _minimumListWidth,
+          math.min(_maximumListWidth, constraints.maxWidth - 560),
+        );
+        final listWidth = _desktopListWidth
+            .clamp(
+              _minimumListWidth,
+              availableMaximum,
+            )
+            .toDouble();
+
+        return Row(
+          children: [
+            SizedBox(
+              width: listWidth,
+              child: Column(
+                children: [
+                  _buildListHeader(),
+                  Expanded(child: _buildEmailList()),
+                ],
+              ),
+            ),
+            Semantics(
+              label: 'Ajustar ancho de la lista de correos',
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _desktopListWidth = (_desktopListWidth + details.delta.dx)
+                          .clamp(_minimumListWidth, availableMaximum)
+                          .toDouble();
+                    });
                   },
-                  onNavigateSelection: _moveSelection,
-                )
-              : _buildEmptyDetailView(),
-        ),
-      ],
+                  onHorizontalDragEnd: (_) => unawaited(_saveListWidth()),
+                  child: SizedBox(
+                    width: 9,
+                    child: Center(
+                      child: VerticalDivider(
+                        width: 1,
+                        color: theme.dividerColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _manager.selectedEmail != null
+                  ? EmailDetailViewUnified(
+                      email: _manager.selectedEmail!,
+                      provider: _manager.selectedProvider,
+                      isLoading: _manager.isLoadingSelectedEmail,
+                      error: _manager.selectedEmailError,
+                      onRetry: () =>
+                          _manager.selectEmail(_manager.selectedEmail!),
+                      onToggleRead: () => _manager.markAsRead(
+                        _manager.selectedEmail!,
+                        read: !_manager.selectedEmail!.isRead,
+                      ),
+                      onReply: () => _replyToEmail(false),
+                      onReplyAll: () => _replyToEmail(true),
+                      onDelete: _confirmDeleteSelectedEmail,
+                      onNavigateSelection: _moveSelection,
+                    )
+                  : _buildEmptyDetailView(),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -521,9 +646,7 @@ ${email.content ?? email.summary ?? ''}
         ),
         onReply: () => _replyToEmail(false),
         onReplyAll: () => _replyToEmail(true),
-        onDelete: () async {
-          await _manager.deleteSelectedEmail();
-        },
+        onDelete: _confirmDeleteSelectedEmail,
         onNavigateSelection: _moveSelection,
       );
     }
@@ -538,7 +661,6 @@ ${email.content ?? email.summary ?? ''}
 
   Widget _buildListHeader() {
     final theme = Theme.of(context);
-    final connectedProviders = _manager.connectedProviders;
     final visibleCount = _visibleEmails.length;
 
     return Container(
@@ -578,10 +700,15 @@ ${email.content ?? email.summary ?? ''}
                 ),
               ),
               const SizedBox(width: 8),
-              _buildHeaderIconButton(
+              FilledButton.icon(
                 onPressed: () => _showComposeDialog(),
-                icon: const Icon(Icons.edit, size: 20),
-                tooltip: 'Redactar',
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 17),
+                label: const Text('Redactar'),
               ),
               _buildHeaderIconButton(
                 onPressed:
@@ -595,7 +722,7 @@ ${email.content ?? email.summary ?? ''}
                     : const Icon(Icons.refresh, size: 20),
                 tooltip: 'Actualizar',
               ),
-              _buildAddAccountMenu(),
+              if (_availableProviders.isNotEmpty) _buildAddAccountMenu(),
             ],
           ),
           const SizedBox(height: 10),
@@ -623,75 +750,75 @@ ${email.content ?? email.summary ?? ''}
             ),
           ),
           const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildProviderChip(
-                  label: 'Todos',
-                  selected: _manager.providerFilter == null,
-                  onSelected: () => _manager.setProviderFilter(null),
-                ),
-                const SizedBox(width: 8),
-                ...connectedProviders.map((provider) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _buildProviderChip(
-                        label: provider.displayName,
-                        icon: _providerIcon(provider.providerId),
-                        selected:
-                            _manager.providerFilter == provider.providerId,
-                        onSelected: () => _manager.setProviderFilter(
-                          _manager.providerFilter == provider.providerId
-                              ? null
-                              : provider.providerId,
-                        ),
-                      ),
-                    )),
-                const SizedBox(width: 8),
-                _buildQuickFilterChip(
-                  label: 'No leídos',
-                  icon: Icons.markunread_outlined,
-                  filter: _InboxQuickFilter.unread,
-                ),
-                const SizedBox(width: 8),
-                _buildQuickFilterChip(
-                  label: 'Adjuntos',
-                  icon: Icons.attach_file,
-                  filter: _InboxQuickFilter.attachments,
-                ),
-              ],
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _buildAccountFilterControl(),
+              _buildQuickFilterChip(
+                label: 'No leídos',
+                icon: Icons.markunread_outlined,
+                filter: _InboxQuickFilter.unread,
+              ),
+              _buildQuickFilterChip(
+                label: 'Adjuntos',
+                icon: Icons.attach_file,
+                filter: _InboxQuickFilter.attachments,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _manager.isSearchActive
-                      ? (_manager.isSearching
-                          ? 'Buscando...'
-                          : '$visibleCount resultados')
-                      : '$visibleCount visibles de ${_manager.loadedCount} cargados',
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+          SizedBox(
+            height: _inboxStatusRowHeight,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _manager.isSearchActive
+                        ? (_manager.isSearching
+                            ? 'Buscando...'
+                            : '$visibleCount resultados')
+                        : '$visibleCount visibles de ${_manager.loadedCount} cargados',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-              ),
-              if (!_manager.isSearchActive && _manager.canLoadMore)
-                TextButton.icon(
-                  onPressed:
-                      _manager.isLoadingMore ? null : () => _manager.loadMore(),
-                  icon: _manager.isLoadingMore
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.keyboard_arrow_down, size: 18),
-                  label: const Text('Más'),
-                ),
-            ],
+                if (!_manager.isSearchActive && _manager.canLoadMore)
+                  TextButton.icon(
+                    onPressed: _manager.isLoadingMore
+                        ? null
+                        : () => _manager.loadMore(),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, _inboxStatusRowHeight),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Center(
+                        child: _manager.isLoadingMore
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 18,
+                              ),
+                      ),
+                    ),
+                    label: const Text('Más'),
+                  ),
+              ],
+            ),
           ),
           if (_manager.error != null) ...[
             const SizedBox(height: 6),
@@ -735,14 +862,6 @@ ${email.content ?? email.summary ?? ''}
   }
 
   Widget _buildAddAccountMenu() {
-    final connectedProviderIds = _manager.connectedProviders
-        .map((provider) => provider.providerId)
-        .toSet();
-    final availableProviders = <({String id, String label})>[
-      (id: 'zoho', label: 'Zoho'),
-      (id: 'gmail', label: 'Gmail'),
-    ].where((provider) => !connectedProviderIds.contains(provider.id)).toList();
-
     return SizedBox(
       width: 32,
       height: 32,
@@ -751,52 +870,103 @@ ${email.content ?? email.summary ?? ''}
         iconSize: 20,
         icon: const Icon(Icons.add),
         tooltip: 'Agregar cuenta',
-        itemBuilder: (context) => availableProviders.isEmpty
-            ? [
-                const PopupMenuItem(
-                  enabled: false,
-                  child: Text('No hay cuentas nuevas'),
+        itemBuilder: (context) => _availableProviders
+            .map(
+              (provider) => PopupMenuItem(
+                value: provider.id,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _providerIcon(provider.id),
+                    const SizedBox(width: 10),
+                    Text('Conectar ${provider.label}'),
+                  ],
                 ),
-              ]
-            : availableProviders
-                .map(
-                  (provider) => PopupMenuItem(
-                    value: provider.id,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _providerIcon(provider.id),
-                        const SizedBox(width: 10),
-                        Text('Conectar ${provider.label}'),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
+              ),
+            )
+            .toList(),
         onSelected: _connectProvider,
       ),
     );
   }
 
-  Widget _buildProviderChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onSelected,
-    Widget? icon,
-  }) {
-    return FilterChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            icon,
-            const SizedBox(width: 5),
+  List<({String id, String label})> get _availableProviders {
+    final connectedProviderIds = _manager.connectedProviders
+        .map((provider) => provider.providerId)
+        .toSet();
+    return <({String id, String label})>[
+      (id: 'zoho', label: 'Zoho'),
+      (id: 'gmail', label: 'Gmail'),
+    ].where((provider) => !connectedProviderIds.contains(provider.id)).toList();
+  }
+
+  Widget _buildAccountFilterControl() {
+    final theme = Theme.of(context);
+    final selectedId = _manager.providerFilter;
+    final selectedProvider = selectedId == null
+        ? null
+        : _manager.connectedProviders
+            .where((provider) => provider.providerId == selectedId)
+            .firstOrNull;
+    final label = selectedProvider?.displayName ?? 'Todas las cuentas';
+
+    return PopupMenuButton<String>(
+      tooltip: 'Filtrar por cuenta',
+      onSelected: (value) {
+        _manager.setProviderFilter(value == 'all' ? null : value);
+      },
+      itemBuilder: (context) => [
+        CheckedPopupMenuItem(
+          value: 'all',
+          checked: selectedId == null,
+          child: const Text('Todas las cuentas'),
+        ),
+        ..._manager.connectedProviders.map(
+          (provider) => CheckedPopupMenuItem(
+            value: provider.providerId,
+            checked: selectedId == provider.providerId,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _providerIcon(provider.providerId),
+                const SizedBox(width: 8),
+                Text(provider.displayName),
+              ],
+            ),
+          ),
+        ),
+      ],
+      child: Container(
+        height: 32,
+        constraints: const BoxConstraints(maxWidth: 210),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outline),
+          borderRadius: BorderRadius.circular(7),
+          color: theme.colorScheme.surface,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selectedProvider != null) ...[
+              _providerIcon(selectedProvider.providerId),
+              const SizedBox(width: 7),
+            ] else ...[
+              const Icon(Icons.all_inbox_outlined, size: 16),
+              const SizedBox(width: 7),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 18),
           ],
-          Text(label),
-        ],
+        ),
       ),
-      selected: selected,
-      onSelected: (_) => onSelected(),
     );
   }
 
@@ -814,6 +984,15 @@ ${email.content ?? email.summary ?? ''}
         setState(() {
           _quickFilter = selected ? _InboxQuickFilter.all : filter;
         });
+        final selectedEmail = _manager.selectedEmail;
+        if (selectedEmail != null &&
+            !_visibleEmails.any(
+              (email) =>
+                  email.id == selectedEmail.id &&
+                  email.providerId == selectedEmail.providerId,
+            )) {
+          _manager.clearSelection();
+        }
       },
     );
   }

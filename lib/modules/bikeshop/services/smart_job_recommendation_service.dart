@@ -72,7 +72,9 @@ class SmartJobRecommendationService {
     required Bike? bike,
     required BikeProfile? bikeProfile,
   }) async {
-    final chainWear = diagnosisSheet.drivetrain.chainWearPercent;
+    final chainWear = normalizeDiagnosisWearPercent(
+      diagnosisSheet.drivetrain.chainWearPercent,
+    );
     if (chainWear == null || chainWear < _wornChainThresholdPercent) {
       return const SmartJobRecommendationResult(
         triggerActive: false,
@@ -117,7 +119,7 @@ class SmartJobRecommendationService {
     required BikeProfile? bikeProfile,
     required String brakeSystemKey,
   }) async {
-    final wear = brakeSheet.padWearPercent;
+    final wear = normalizeDiagnosisWearPercent(brakeSheet.padWearPercent);
     final needsReplacement = (wear != null && wear >= 75) ||
         brakeSheet.padContaminationStatus == 'replace';
 

@@ -282,6 +282,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   late final String _draftBikeId;
   String? _pendingSaveOperationKey;
   String? _pendingSaveContentSignature;
+  DateTime? _pendingSaveConfirmedAt;
   bool _pendingSaveAllowsIncompleteTechnicalKernel = false;
   bool _isLoadingCatalogMatches = false;
   bool _isChangingJobBike = false;
@@ -1768,7 +1769,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _transportMethod != null;
   }
 
-  BikeProfile? _buildBikeProfileForSave(Bike savedBike, String tenantId) {
+  BikeProfile? _buildBikeProfileForSave(
+    Bike savedBike,
+    String tenantId, {
+    required DateTime confirmedAt,
+  }) {
     if (!_hasProfileData() && _existingProfile == null) {
       return null;
     }
@@ -1863,7 +1868,6 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           managedTechnicalKeys.contains(key) &&
           !technicalValues.containsKey(key));
 
-    final confirmedAt = DateTime.now().toUtc();
     final summarySnapshot = <String, dynamic>{
       ...?_existingProfile?.summarySnapshot,
       ...BikeProfileSummaryBuilder.buildSummarySnapshot(
@@ -1927,6 +1931,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _pendingSaveContentSignature != signature) {
       _pendingSaveOperationKey = const Uuid().v4();
       _pendingSaveContentSignature = signature;
+      _pendingSaveConfirmedAt = profile?.lastConfirmedAt;
     }
     return _pendingSaveOperationKey!;
   }
@@ -2150,8 +2155,23 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         updatedAt: baseBike?.updatedAt,
       );
 
-      final profile = _buildBikeProfileForSave(bike, tenantId);
+      var profile = _buildBikeProfileForSave(
+        bike,
+        tenantId,
+        confirmedAt: DateTime.now().toUtc(),
+      );
       final operationKey = _operationKeyForSave(bike, profile);
+      if (profile != null) {
+        // A transport retry must resend byte-for-byte equivalent persisted
+        // profile truth for the same operation key. Keep the confirmation
+        // timestamp stable until this command is confirmed or the form content
+        // changes and a new operation key is minted.
+        profile = _buildBikeProfileForSave(
+          bike,
+          tenantId,
+          confirmedAt: _pendingSaveConfirmedAt ?? profile.lastConfirmedAt!,
+        );
+      }
       _pendingSaveAllowsIncompleteTechnicalKernel =
           allowIncompleteTechnicalKernel;
 
@@ -2193,6 +2213,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _pendingUploadedImageUrls.clear();
       _pendingSaveOperationKey = null;
       _pendingSaveContentSignature = null;
+      _pendingSaveConfirmedAt = null;
 
       if (widget.isEmbedded) {
         widget.onSaved?.call(savedBike);
@@ -3677,9 +3698,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           const SizedBox(height: 18),
           Expanded(
             child: showTechnicalControls
-                ? _buildTechnicalSchemaNavigator(
-                    theme,
-                    activeSystemKey: _activeTechnicalSystemKey(),
+                ? SingleChildScrollView(
+                    child: _buildTechnicalSchemaNavigator(
+                      theme,
+                      activeSystemKey: _activeTechnicalSystemKey(),
+                    ),
                   )
                 : _buildStaticBikePreviewSurface(theme),
           ),
@@ -4475,6 +4498,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
+      key: ValueKey<String>(
+        'code-dropdown:$label:${value ?? ''}:${options.keys.join('|')}',
+      ),
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,
@@ -4501,6 +4528,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
+      key: ValueKey<String>(
+        'string-dropdown:$label:${value ?? ''}:${options.join('|')}',
+      ),
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,
@@ -4528,6 +4559,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     String? unit,
   }) {
     return DropdownButtonFormField<int>(
+      key: ValueKey<String>(
+        'int-dropdown:$label:${value?.toString() ?? ''}:${options.join('|')}',
+      ),
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,

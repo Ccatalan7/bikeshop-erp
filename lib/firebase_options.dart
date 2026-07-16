@@ -58,8 +58,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '452996097799',
     projectId: 'project-vinabike',
     storageBucket: 'project-vinabike.firebasestorage.app',
-    androidClientId: '452996097799-fqend7u92h8j41c10lbkirm2kshvph1c.apps.googleusercontent.com',
-    iosClientId: '452996097799-s6mfnp814p0goo4eltbu1sco0hf5n87e.apps.googleusercontent.com',
+    androidClientId:
+        '452996097799-fqend7u92h8j41c10lbkirm2kshvph1c.apps.googleusercontent.com',
+    iosClientId:
+        '452996097799-s6mfnp814p0goo4eltbu1sco0hf5n87e.apps.googleusercontent.com',
     iosBundleId: 'com.vinabike.erp',
   );
 
@@ -79,5 +81,4 @@ class DefaultFirebaseOptions {
     authDomain: 'project-vinabike.firebaseapp.com',
     storageBucket: 'project-vinabike.firebasestorage.app',
   );
-
 }

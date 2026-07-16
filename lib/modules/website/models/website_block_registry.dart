@@ -177,6 +177,7 @@ class WebsiteBlockRegistry {
         'focalPointY': 0.5,
         'mobileFocalPointX': 0.5,
         'mobileFocalPointY': 0.5,
+        'constrainElementsToSafeArea': true,
         'elements': <Map<String, dynamic>>[],
         'activeElementId': null,
       },

@@ -222,7 +222,8 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                         initialValue: _filterHubType,
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
-                          DropdownMenuItem(value: 'front', child: Text('Front')),
+                          DropdownMenuItem(
+                              value: 'front', child: Text('Front')),
                           DropdownMenuItem(value: 'rear', child: Text('Rear')),
                         ],
                         onChanged: (value) {
@@ -244,8 +245,11 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: 'rim', child: Text('Rim')),
-                          DropdownMenuItem(value: 'disc_6bolt', child: Text('Disc 6-bolt')),
-                          DropdownMenuItem(value: 'disc_centerlock', child: Text('Disc Centerlock')),
+                          DropdownMenuItem(
+                              value: 'disc_6bolt', child: Text('Disc 6-bolt')),
+                          DropdownMenuItem(
+                              value: 'disc_centerlock',
+                              child: Text('Disc Centerlock')),
                         ],
                         onChanged: (value) {
                           setState(() {
@@ -330,11 +334,13 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('OLD: ${hub.oldMm}mm • ${hub.spokeHoles}H'),
+                                  Text(
+                                      'OLD: ${hub.oldMm}mm • ${hub.spokeHoles}H'),
                                   Text(
                                     'Brake: ${hub.brakeType.replaceAll('_', ' ')} • '
                                     'Driver: ${hub.driverType.replaceAll('_', ' ')}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
@@ -346,7 +352,8 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
                                     onPressed: () => _showHubDialog(hub: hub),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
                                     onPressed: () => _deleteHub(hub),
                                   ),
                                 ],
@@ -394,13 +401,19 @@ class _HubFormDialogState extends State<_HubFormDialog> {
     super.initState();
     final hub = widget.hub;
     _nameController = TextEditingController(text: hub?.name ?? '');
-    _manufacturerController = TextEditingController(text: hub?.manufacturer ?? '');
+    _manufacturerController =
+        TextEditingController(text: hub?.manufacturer ?? '');
     _modelController = TextEditingController(text: hub?.model ?? '');
-    _oldController = TextEditingController(text: hub?.oldMm.toString() ?? '135');
-    _leftFlangeController = TextEditingController(text: hub?.leftFlangeDiameterMm.toString() ?? '50');
-    _rightFlangeController = TextEditingController(text: hub?.rightFlangeDiameterMm.toString() ?? '50');
-    _centerToLeftController = TextEditingController(text: hub?.centerToLeftFlangeMm.toString() ?? '30');
-    _centerToRightController = TextEditingController(text: hub?.centerToRightFlangeMm.toString() ?? '30');
+    _oldController =
+        TextEditingController(text: hub?.oldMm.toString() ?? '135');
+    _leftFlangeController = TextEditingController(
+        text: hub?.leftFlangeDiameterMm.toString() ?? '50');
+    _rightFlangeController = TextEditingController(
+        text: hub?.rightFlangeDiameterMm.toString() ?? '50');
+    _centerToLeftController = TextEditingController(
+        text: hub?.centerToLeftFlangeMm.toString() ?? '30');
+    _centerToRightController = TextEditingController(
+        text: hub?.centerToRightFlangeMm.toString() ?? '30');
     
     if (hub != null) {
       _hubType = hub.hubType;
@@ -441,7 +454,6 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
-              
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -456,7 +468,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Name *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -467,7 +480,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 labelText: 'Manufacturer *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -494,8 +508,10 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                               ),
                               initialValue: _hubType,
                               items: const [
-                                DropdownMenuItem(value: 'front', child: Text('Front')),
-                                DropdownMenuItem(value: 'rear', child: Text('Rear')),
+                                DropdownMenuItem(
+                                    value: 'front', child: Text('Front')),
+                                DropdownMenuItem(
+                                    value: 'rear', child: Text('Rear')),
                               ],
                               onChanged: (value) {
                                 if (value != null) {
@@ -525,7 +541,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -544,7 +561,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 DropdownMenuItem(value: 40, child: Text('40H')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _spokeHoles = value);
+                                if (value != null)
+                                  setState(() => _spokeHoles = value);
                               },
                             ),
                           ),
@@ -564,7 +582,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -577,7 +596,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -595,7 +615,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -608,7 +629,8 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -626,12 +648,18 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                               ),
                               initialValue: _brakeType,
                               items: const [
-                                DropdownMenuItem(value: 'rim', child: Text('Rim')),
-                                DropdownMenuItem(value: 'disc_6bolt', child: Text('Disc 6-bolt')),
-                                DropdownMenuItem(value: 'disc_centerlock', child: Text('Disc Centerlock')),
+                                DropdownMenuItem(
+                                    value: 'rim', child: Text('Rim')),
+                                DropdownMenuItem(
+                                    value: 'disc_6bolt',
+                                    child: Text('Disc 6-bolt')),
+                                DropdownMenuItem(
+                                    value: 'disc_centerlock',
+                                    child: Text('Disc Centerlock')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _brakeType = value);
+                                if (value != null)
+                                  setState(() => _brakeType = value);
                               },
                             ),
                           ),
@@ -644,15 +672,23 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                               ),
                               initialValue: _driverType,
                               items: [
-                                const DropdownMenuItem(value: 'none', child: Text('None (Front)')),
+                                const DropdownMenuItem(
+                                    value: 'none', child: Text('None (Front)')),
                                 if (_hubType == 'rear') ...[
-                                  const DropdownMenuItem(value: 'freewheel', child: Text('Freewheel')),
-                                  const DropdownMenuItem(value: 'cassette', child: Text('Cassette')),
-                                  const DropdownMenuItem(value: 'fixed', child: Text('Fixed Gear')),
+                                  const DropdownMenuItem(
+                                      value: 'freewheel',
+                                      child: Text('Freewheel')),
+                                  const DropdownMenuItem(
+                                      value: 'cassette',
+                                      child: Text('Cassette')),
+                                  const DropdownMenuItem(
+                                      value: 'fixed',
+                                      child: Text('Fixed Gear')),
                                 ],
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _driverType = value);
+                                if (value != null)
+                                  setState(() => _driverType = value);
                               },
                             ),
                           ),
@@ -667,11 +703,20 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ),
                         initialValue: _axleType,
                         items: const [
-                          DropdownMenuItem(value: 'quick_release', child: Text('Quick Release')),
-                          DropdownMenuItem(value: 'thru_axle_12mm', child: Text('Thru-axle 12mm')),
-                          DropdownMenuItem(value: 'thru_axle_15mm', child: Text('Thru-axle 15mm')),
-                          DropdownMenuItem(value: 'thru_axle_20mm', child: Text('Thru-axle 20mm')),
-                          DropdownMenuItem(value: 'bolt_on', child: Text('Bolt-on')),
+                          DropdownMenuItem(
+                              value: 'quick_release',
+                              child: Text('Quick Release')),
+                          DropdownMenuItem(
+                              value: 'thru_axle_12mm',
+                              child: Text('Thru-axle 12mm')),
+                          DropdownMenuItem(
+                              value: 'thru_axle_15mm',
+                              child: Text('Thru-axle 15mm')),
+                          DropdownMenuItem(
+                              value: 'thru_axle_20mm',
+                              child: Text('Thru-axle 20mm')),
+                          DropdownMenuItem(
+                              value: 'bolt_on', child: Text('Bolt-on')),
                         ],
                         onChanged: (value) {
                           if (value != null) setState(() => _axleType = value);
@@ -681,7 +726,6 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                   ),
                 ),
               ),
-              
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -697,14 +741,20 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         widget.onSave({
                           'name': _nameController.text,
                           'manufacturer': _manufacturerController.text,
-                          'model': _modelController.text.isEmpty ? null : _modelController.text,
+                          'model': _modelController.text.isEmpty
+                              ? null
+                              : _modelController.text,
                           'hub_type': _hubType,
                           'old_mm': double.parse(_oldController.text),
                           'spoke_holes': _spokeHoles,
-                          'left_flange_diameter_mm': double.parse(_leftFlangeController.text),
-                          'right_flange_diameter_mm': double.parse(_rightFlangeController.text),
-                          'center_to_left_flange_mm': double.parse(_centerToLeftController.text),
-                          'center_to_right_flange_mm': double.parse(_centerToRightController.text),
+                          'left_flange_diameter_mm':
+                              double.parse(_leftFlangeController.text),
+                          'right_flange_diameter_mm':
+                              double.parse(_rightFlangeController.text),
+                          'center_to_left_flange_mm':
+                              double.parse(_centerToLeftController.text),
+                          'center_to_right_flange_mm':
+                              double.parse(_centerToRightController.text),
                           'brake_type': _brakeType,
                           'driver_type': _driverType,
                           'axle_type': _axleType,

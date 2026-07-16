@@ -18,7 +18,8 @@ class PendingInvoiceDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final currencyFormat =
+        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return AlertDialog(
@@ -50,7 +51,8 @@ class PendingInvoiceDialog extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                  Icon(Icons.info_outline,
+                      color: Colors.orange.shade700, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -101,7 +103,8 @@ class PendingInvoiceDialog extends StatelessWidget {
                                 children: [
                                   Text(
                                     invoice.invoiceNumber,
-                                    style: theme.textTheme.titleMedium?.copyWith(
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -110,10 +113,12 @@ class PendingInvoiceDialog extends StatelessWidget {
                                     'Fecha: ${dateFormat.format(invoice.date)}',
                                     style: theme.textTheme.bodySmall,
                                   ),
-                                  if (invoice.reference != null && invoice.reference!.isNotEmpty)
+                                  if (invoice.reference != null &&
+                                      invoice.reference!.isNotEmpty)
                                     Text(
                                       'Ref: ${invoice.reference}',
-                                      style: theme.textTheme.bodySmall?.copyWith(
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
                                         fontStyle: FontStyle.italic,
                                       ),
                                     ),
@@ -142,7 +147,8 @@ class PendingInvoiceDialog extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: Colors.red.shade50,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.red.shade200),
+                                    border:
+                                        Border.all(color: Colors.red.shade200),
                                   ),
                                   child: Column(
                                     children: [

@@ -4621,6 +4621,8 @@ class _CarouselBannerState extends State<_CarouselBanner> {
         'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
         'mobileDesignWidth':
             (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+        'constrainElementsToSafeArea':
+            slide['constrainElementsToSafeArea'] != false,
         'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
         'elements': compositionElements,
       };

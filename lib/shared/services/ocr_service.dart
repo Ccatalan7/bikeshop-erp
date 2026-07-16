@@ -81,7 +81,8 @@ class OCRService {
       );
 
       final recognizedText = await _textRecognizer.processImage(inputImage);
-      print('📄 OCR extracted ${recognizedText.blocks.length} text blocks from bytes');
+      print(
+          '📄 OCR extracted ${recognizedText.blocks.length} text blocks from bytes');
       return recognizedText;
     } catch (e) {
       print('❌ OCR processing from bytes failed: $e');

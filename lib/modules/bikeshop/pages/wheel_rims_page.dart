@@ -221,7 +221,8 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                         items: const [
                           DropdownMenuItem(value: null, child: Text('All')),
                           DropdownMenuItem(value: '26"', child: Text('26"')),
-                          DropdownMenuItem(value: '27.5"', child: Text('27.5"')),
+                          DropdownMenuItem(
+                              value: '27.5"', child: Text('27.5"')),
                           DropdownMenuItem(value: '29"', child: Text('29"')),
                           DropdownMenuItem(value: '700c', child: Text('700c')),
                           DropdownMenuItem(value: '650b', child: Text('650b')),
@@ -304,7 +305,8 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.album, size: 64, color: Colors.grey),
+                            const Icon(Icons.album,
+                                size: 64, color: Colors.grey),
                             const SizedBox(height: 16),
                             Text(
                               _searchQuery.isEmpty
@@ -330,10 +332,12 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('ERD: ${rim.erdMm}mm • ${rim.spokeHoles}H'),
+                                  Text(
+                                      'ERD: ${rim.erdMm}mm • ${rim.spokeHoles}H'),
                                   Text(
                                     '${rim.wheelSize} • Width: ${rim.internalWidthMm}mm • ${rim.brakeType}',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
@@ -345,7 +349,8 @@ class _WheelRimsPageState extends State<WheelRimsPage> {
                                     onPressed: () => _showRimDialog(rim: rim),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
                                     onPressed: () => _deleteRim(rim),
                                   ),
                                 ],
@@ -391,12 +396,17 @@ class _RimFormDialogState extends State<_RimFormDialog> {
     super.initState();
     final rim = widget.rim;
     _nameController = TextEditingController(text: rim?.name ?? '');
-    _manufacturerController = TextEditingController(text: rim?.manufacturer ?? '');
+    _manufacturerController =
+        TextEditingController(text: rim?.manufacturer ?? '');
     _modelController = TextEditingController(text: rim?.model ?? '');
-    _erdController = TextEditingController(text: rim?.erdMm.toString() ?? '622');
-    _internalWidthController = TextEditingController(text: rim?.internalWidthMm.toString() ?? '19');
-    _externalWidthController = TextEditingController(text: rim?.externalWidthMm?.toString() ?? '');
-    _rimDepthController = TextEditingController(text: rim?.rimDepthMm?.toString() ?? '');
+    _erdController =
+        TextEditingController(text: rim?.erdMm.toString() ?? '622');
+    _internalWidthController =
+        TextEditingController(text: rim?.internalWidthMm.toString() ?? '19');
+    _externalWidthController =
+        TextEditingController(text: rim?.externalWidthMm?.toString() ?? '');
+    _rimDepthController =
+        TextEditingController(text: rim?.rimDepthMm?.toString() ?? '');
     
     if (rim != null) {
       _wheelSize = rim.wheelSize;
@@ -435,7 +445,6 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
-              
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -450,7 +459,8 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Name *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -461,7 +471,8 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 labelText: 'Manufacturer *',
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -488,11 +499,17 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                               ),
                               initialValue: _wheelSize,
                               items: const [
-                                DropdownMenuItem(value: '26"', child: Text('26"')),
-                                DropdownMenuItem(value: '27.5"', child: Text('27.5" (650b)')),
-                                DropdownMenuItem(value: '29"', child: Text('29"')),
-                                DropdownMenuItem(value: '700c', child: Text('700c')),
-                                DropdownMenuItem(value: '650b', child: Text('650b')),
+                                DropdownMenuItem(
+                                    value: '26"', child: Text('26"')),
+                                DropdownMenuItem(
+                                    value: '27.5"',
+                                    child: Text('27.5" (650b)')),
+                                DropdownMenuItem(
+                                    value: '29"', child: Text('29"')),
+                                DropdownMenuItem(
+                                    value: '700c', child: Text('700c')),
+                                DropdownMenuItem(
+                                    value: '650b', child: Text('650b')),
                               ],
                               onChanged: (value) {
                                 if (value != null) {
@@ -503,7 +520,8 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                       _erdController.text = '622';
                                     } else if (value == '29"') {
                                       _erdController.text = '602';
-                                    } else if (value == '27.5"' || value == '650b') {
+                                    } else if (value == '27.5"' ||
+                                        value == '650b') {
                                       _erdController.text = '584';
                                     } else if (value == '26"') {
                                       _erdController.text = '559';
@@ -526,11 +544,13 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                               decoration: const InputDecoration(
                                 labelText: 'ERD (mm) *',
                                 hintText: '622 for 700c',
-                                helperText: 'Effective Rim Diameter - CRITICAL for spoke calc!',
+                                helperText:
+                                    'Effective Rim Diameter - CRITICAL for spoke calc!',
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -549,7 +569,8 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 DropdownMenuItem(value: 40, child: Text('40H')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _spokeHoles = value);
+                                if (value != null)
+                                  setState(() => _spokeHoles = value);
                               },
                             ),
                           ),
@@ -569,7 +590,8 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                              validator: (v) =>
+                                  v?.isEmpty ?? true ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -611,11 +633,14 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                               ),
                               initialValue: _brakeType,
                               items: const [
-                                DropdownMenuItem(value: 'rim', child: Text('Rim')),
-                                DropdownMenuItem(value: 'disc', child: Text('Disc')),
+                                DropdownMenuItem(
+                                    value: 'rim', child: Text('Rim')),
+                                DropdownMenuItem(
+                                    value: 'disc', child: Text('Disc')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _brakeType = value);
+                                if (value != null)
+                                  setState(() => _brakeType = value);
                               },
                             ),
                           ),
@@ -628,13 +653,19 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                               ),
                               initialValue: _rimType,
                               items: const [
-                                DropdownMenuItem(value: 'clincher', child: Text('Clincher')),
-                                DropdownMenuItem(value: 'tubular', child: Text('Tubular')),
-                                DropdownMenuItem(value: 'tubeless_ready', child: Text('Tubeless Ready')),
-                                DropdownMenuItem(value: 'hookless', child: Text('Hookless')),
+                                DropdownMenuItem(
+                                    value: 'clincher', child: Text('Clincher')),
+                                DropdownMenuItem(
+                                    value: 'tubular', child: Text('Tubular')),
+                                DropdownMenuItem(
+                                    value: 'tubeless_ready',
+                                    child: Text('Tubeless Ready')),
+                                DropdownMenuItem(
+                                    value: 'hookless', child: Text('Hookless')),
                               ],
                               onChanged: (value) {
-                                if (value != null) setState(() => _rimType = value);
+                                if (value != null)
+                                  setState(() => _rimType = value);
                               },
                             ),
                           ),
@@ -644,7 +675,6 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                   ),
                 ),
               ),
-              
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -660,12 +690,16 @@ class _RimFormDialogState extends State<_RimFormDialog> {
                         widget.onSave({
                           'name': _nameController.text,
                           'manufacturer': _manufacturerController.text,
-                          'model': _modelController.text.isEmpty ? null : _modelController.text,
+                          'model': _modelController.text.isEmpty
+                              ? null
+                              : _modelController.text,
                           'wheel_size': _wheelSize,
                           'erd_mm': double.parse(_erdController.text),
                           'spoke_holes': _spokeHoles,
-                          'internal_width_mm': double.parse(_internalWidthController.text),
-                          'external_width_mm': _externalWidthController.text.isEmpty 
+                          'internal_width_mm':
+                              double.parse(_internalWidthController.text),
+                          'external_width_mm':
+                              _externalWidthController.text.isEmpty
                               ? null 
                               : double.parse(_externalWidthController.text),
                           'rim_depth_mm': _rimDepthController.text.isEmpty 

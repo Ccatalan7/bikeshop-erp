@@ -8,6 +8,47 @@ const double workspaceMinDrawerWidth = 200.0;
 const double workspaceMaxDrawerWidth = 400.0;
 const double workspaceDefaultDrawerWidth = 280.0;
 
+const _initialWorkspaceRouteRoots = <String>[
+  '/mail',
+  '/storage',
+  '/dashboard',
+  '/accounting',
+  '/inventory',
+  '/sales',
+  '/purchases',
+  '/taller',
+  '/clientes',
+  '/hr',
+  '/pos',
+  '/tools',
+  '/settings',
+  '/website',
+  '/chat',
+];
+
+/// Returns the ERP route represented by a browser URL, including its query
+/// string, or `null` when the URL is not a workspace route.
+///
+/// Keeping this independent from the live browser location lets startup pass
+/// the URL captured before the unauthenticated router redirects through login.
+String? resolveInitialWorkspaceRoute(String? browserUrl) {
+  if (browserUrl == null || browserUrl.trim().isEmpty) return null;
+
+  final uri = Uri.tryParse(browserUrl);
+  if (uri == null) return null;
+
+  final path = uri.path;
+  final isWorkspaceRoute = _initialWorkspaceRouteRoots.any(
+    (root) => path == root || path.startsWith('$root/'),
+  );
+  if (!isWorkspaceRoute) return null;
+
+  if (uri.hasScheme && uri.hasAuthority) {
+    return uri.toString().replaceFirst(uri.origin, '');
+  }
+  return uri.toString();
+}
+
 String workspaceRoutePath(String route) {
   return Uri.tryParse(route)?.path ?? route.split('?').first;
 }
@@ -338,7 +379,7 @@ class WorkspaceManager extends ChangeNotifier {
     return index == -1 ? null : _workspaces[index];
   }
 
-  WorkspaceManager() {
+  WorkspaceManager({String? initialBrowserUrl}) {
     debugPrint(
         '🏗️ [WorkspaceManager] Constructor called, checking initial URL');
 
@@ -347,33 +388,14 @@ class WorkspaceManager extends ChangeNotifier {
     String initialTitle = 'Dashboard';
 
     if (kIsWeb) {
-      final browserUrl = getInitialBrowserUrl();
-      if (browserUrl != null) {
-        final uri = Uri.parse(browserUrl);
-        final path = uri.path;
-
-        // Check for ERP routes (not public store routes)
-        if (path.startsWith('/mail') ||
-            path.startsWith('/storage') ||
-            path.startsWith('/dashboard') ||
-            path.startsWith('/accounting') ||
-            path.startsWith('/inventory') ||
-            path.startsWith('/sales') ||
-            path.startsWith('/purchases') ||
-            path.startsWith('/taller') ||
-            path.startsWith('/clientes') ||
-            path.startsWith('/hr') ||
-            path.startsWith('/pos') ||
-            path.startsWith('/settings') ||
-            path.startsWith('/website') ||
-            path.startsWith('/chat')) {
-          // Use the path (without query params for the initial route title,
-          // but WITH query params for actual navigation)
-          initialRoute = uri.toString().replaceFirst(uri.origin, '');
-          initialTitle = getRouteTitle(path);
-          debugPrint(
-              '🔗 [WorkspaceManager] Using URL from browser: $initialRoute');
-        }
+      final resolvedRoute = resolveInitialWorkspaceRoute(
+        initialBrowserUrl ?? getInitialBrowserUrl(),
+      );
+      if (resolvedRoute != null) {
+        initialRoute = resolvedRoute;
+        initialTitle = getRouteTitle(resolvedRoute);
+        debugPrint(
+            '🔗 [WorkspaceManager] Using URL from browser: $initialRoute');
       }
     }
 

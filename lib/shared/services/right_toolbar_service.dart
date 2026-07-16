@@ -10,6 +10,7 @@ enum ToolbarTool {
   messages,
   supplierMessages,
   storage,
+  fileRunner,
   kiosk,
   quickSale,
   expenses,

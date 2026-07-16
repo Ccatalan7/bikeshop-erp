@@ -31,6 +31,7 @@ fvm install "$flutter_version"
 fvm use "$flutter_version" --force
 
 npm ci
+npm run build:spreadsheet-engine
 uv sync --project tools/invoice-parser-service
 
 if ! docker info >/dev/null 2>&1 && command -v colima >/dev/null 2>&1; then

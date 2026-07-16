@@ -10,15 +10,17 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../../shared/services/spreadsheet_file_handoff_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../spreadsheets/services/spreadsheet_service.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../storage/services/app_file_storage_service.dart';
 import '../providers/email_provider.dart';
 import 'mail_error_diagnostic_banner.dart';
 
-const int _emailBodyRendererVersion = 7;
+const int _emailBodyRendererVersion = 8;
 const String _emailReaderBaseUrl = 'https://mail.vinabike.local/';
 const bool _emailReaderDiagnosticsEnabled = false;
 
@@ -997,6 +999,8 @@ class _EmailAttachmentPreviewDialog extends StatefulWidget {
 class _EmailAttachmentPreviewDialogState
     extends State<_EmailAttachmentPreviewDialog> {
   late Future<Uint8List> _bytesFuture;
+  bool _isOpeningInSpreadsheets = false;
+  SpreadsheetFileImportStage? _spreadsheetImportStage;
 
   @override
   void initState() {
@@ -1009,6 +1013,81 @@ class _EmailAttachmentPreviewDialogState
       widget.email,
       widget.attachment,
     );
+  }
+
+  bool get _canOpenInSpreadsheets => SpreadsheetFileHandoffService.instance
+      .supportsFileName(widget.attachment.displayName);
+
+  Future<void> _openInSpreadsheets(Uint8List bytes) async {
+    if (_isOpeningInSpreadsheets || !_canOpenInSpreadsheets) return;
+
+    setState(() {
+      _isOpeningInSpreadsheets = true;
+      _spreadsheetImportStage = SpreadsheetFileImportStage.decoding;
+    });
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final workspaceManager = context.read<WorkspaceManager>();
+    var completed = false;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Abriendo ${widget.attachment.displayName} en Planillas...',
+        ),
+      ),
+    );
+
+    try {
+      final sheet = await SpreadsheetFileHandoffService.instance.importBytes(
+        bytes: bytes,
+        fileName: widget.attachment.displayName,
+        store: context.read<SpreadsheetService>(),
+        onStageChanged: (stage) {
+          if (mounted) {
+            setState(() => _spreadsheetImportStage = stage);
+          }
+        },
+      );
+      final sheetId = sheet.id;
+      if (!mounted || sheetId == null) {
+        throw StateError('La planilla importada no recibió un identificador.');
+      }
+
+      completed = true;
+      messenger.hideCurrentSnackBar();
+      navigator.pop();
+      final route = '/tools/spreadsheets/$sheetId';
+      // Attachment dialogs are hosted by the root Navigator, outside the
+      // active workspace's GoRouter subtree. WorkspaceManager is the canonical
+      // bridge for navigation from global overlays.
+      workspaceManager.navigateActiveWorkspace(route);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '“${widget.attachment.displayName}” se abrió en Planillas.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+          'Email spreadsheet attachment import error: $error\n$stackTrace');
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir en Planillas: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted && !completed) {
+        setState(() {
+          _isOpeningInSpreadsheets = false;
+          _spreadsheetImportStage = null;
+        });
+      }
+    }
   }
 
   Future<void> _download(Uint8List bytes) async {
@@ -1093,6 +1172,7 @@ class _EmailAttachmentPreviewDialogState
                       attachment: widget.attachment,
                       isLoading:
                           snapshot.connectionState == ConnectionState.waiting,
+                      isOpeningInSpreadsheets: _isOpeningInSpreadsheets,
                       onClose: () => Navigator.of(context).maybePop(),
                       onRetry: () {
                         setState(() {
@@ -1100,6 +1180,10 @@ class _EmailAttachmentPreviewDialogState
                         });
                       },
                       onDownload: bytes == null ? null : () => _download(bytes),
+                      onOpenInSpreadsheets:
+                          bytes == null || !_canOpenInSpreadsheets
+                              ? null
+                              : () => _openInSpreadsheets(bytes),
                     ),
                     const Divider(height: 1),
                     Expanded(child: _buildPreview(snapshot)),
@@ -1199,8 +1283,20 @@ class _EmailAttachmentPreviewDialogState
     return _AttachmentPreviewEmptyState(
       icon: _iconForAttachment(attachment),
       title: 'Vista previa no disponible',
-      subtitle:
-          '${attachment.displayName} está listo para descargar desde el botón superior.',
+      subtitle: _canOpenInSpreadsheets
+          ? '${attachment.displayName} se puede abrir directamente en Planillas.'
+          : '${attachment.displayName} está listo para descargar desde el botón superior.',
+      actionIcon: _canOpenInSpreadsheets ? Icons.table_view_outlined : null,
+      actionLabel: _canOpenInSpreadsheets
+          ? switch (_spreadsheetImportStage) {
+              SpreadsheetFileImportStage.decoding => 'Leyendo archivo...',
+              SpreadsheetFileImportStage.saving => 'Guardando planilla...',
+              null => 'Abrir en Planillas',
+            }
+          : null,
+      actionInProgress: _isOpeningInSpreadsheets,
+      onAction:
+          _canOpenInSpreadsheets ? () => _openInSpreadsheets(bytes) : null,
     );
   }
 }
@@ -1208,16 +1304,20 @@ class _EmailAttachmentPreviewDialogState
 class _EmailAttachmentPreviewHeader extends StatelessWidget {
   final EmailAttachment attachment;
   final bool isLoading;
+  final bool isOpeningInSpreadsheets;
   final VoidCallback onClose;
   final VoidCallback onRetry;
   final VoidCallback? onDownload;
+  final VoidCallback? onOpenInSpreadsheets;
 
   const _EmailAttachmentPreviewHeader({
     required this.attachment,
     required this.isLoading,
+    required this.isOpeningInSpreadsheets,
     required this.onClose,
     required this.onRetry,
     required this.onDownload,
+    required this.onOpenInSpreadsheets,
   });
 
   @override
@@ -1272,6 +1372,21 @@ class _EmailAttachmentPreviewHeader extends StatelessWidget {
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
             ),
+          if (isOpeningInSpreadsheets)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (onOpenInSpreadsheets != null)
+            IconButton(
+              tooltip: 'Abrir en Planillas',
+              onPressed: onOpenInSpreadsheets,
+              icon: const Icon(Icons.table_view_outlined),
+            ),
           IconButton(
             tooltip: 'Descargar',
             onPressed: onDownload,
@@ -1295,6 +1410,7 @@ class _AttachmentPreviewEmptyState extends StatelessWidget {
   final IconData? actionIcon;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool actionInProgress;
 
   const _AttachmentPreviewEmptyState({
     required this.icon,
@@ -1303,6 +1419,7 @@ class _AttachmentPreviewEmptyState extends StatelessWidget {
     this.actionIcon,
     this.actionLabel,
     this.onAction,
+    this.actionInProgress = false,
   });
 
   @override
@@ -1333,12 +1450,18 @@ class _AttachmentPreviewEmptyState extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            if (onAction != null && actionIcon != null && actionLabel != null)
+            if (actionIcon != null && actionLabel != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: FilledButton.icon(
-                  onPressed: onAction,
-                  icon: Icon(actionIcon),
+                  onPressed: actionInProgress ? null : onAction,
+                  icon: actionInProgress
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(actionIcon),
                   label: Text(actionLabel!),
                 ),
               ),
@@ -1902,10 +2025,24 @@ $base
   }
   body {
     zoom: var(--vinabike-email-content-scale);
+    margin: 0 !important;
+    word-break: normal !important;
   }
   img {
     max-width: 100% !important;
     height: auto !important;
+  }
+  table {
+    max-width: 100% !important;
+  }
+  td, th {
+    word-break: normal !important;
+    overflow-wrap: break-word;
+  }
+  pre {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
   }
   a, area, [href], [onclick], [role="button"], button,
   [data-href], [data-url], [data-link] {
@@ -1996,11 +2133,41 @@ $_emailKeyboardBridgeScript
     _scheduleContentScaleSync(_appScale);
 
     if (!_useNativeWebView) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: HtmlWidget(
-          widget.email.content ?? '',
-          onTapUrl: (url) => _openEmailUrl(context, url),
+      return ColoredBox(
+        color: Colors.white,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: HtmlWidget(
+                widget.email.content ?? '',
+                customStylesBuilder: (element) {
+                  switch (element.localName) {
+                    case 'table':
+                      return {'max-width': '100%'};
+                    case 'img':
+                      return {'max-width': '100%', 'height': 'auto'};
+                    case 'td':
+                    case 'th':
+                      return {
+                        'word-break': 'normal',
+                        'overflow-wrap': 'break-word',
+                      };
+                    case 'pre':
+                      return {
+                        'max-width': '100%',
+                        'white-space': 'pre-wrap',
+                        'overflow-wrap': 'break-word',
+                      };
+                    default:
+                      return null;
+                  }
+                },
+                onTapUrl: (url) => _openEmailUrl(context, url),
+              ),
+            ),
+          ),
         ),
       );
     }

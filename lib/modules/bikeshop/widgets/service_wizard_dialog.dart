@@ -190,7 +190,9 @@ class _ServiceWizardDialogState extends State<_ServiceWizardDialog>
   }
 
   List<ServiceQuestionOption> _questionOptions(ServiceProfileQuestion q) {
-    return _overrideFor(q)?.options ?? _bottomBracketQuestionOptions(q) ?? q.options;
+    return _overrideFor(q)?.options ??
+        _bottomBracketQuestionOptions(q) ??
+        q.options;
   }
 
   ServiceProfileQuestion? _questionByKey(String key) {

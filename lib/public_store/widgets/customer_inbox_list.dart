@@ -127,7 +127,8 @@ class _ConversationCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isActive ? Colors.blue.withValues(alpha: 0.05) : Colors.white,
+            color:
+                isActive ? Colors.blue.withValues(alpha: 0.05) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: isActive
                 ? Border.all(color: Colors.blue.withValues(alpha: 0.3))

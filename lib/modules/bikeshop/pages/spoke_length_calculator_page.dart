@@ -9,7 +9,8 @@ class SpokeLengthCalculatorPage extends StatefulWidget {
   const SpokeLengthCalculatorPage({super.key});
 
   @override
-  State<SpokeLengthCalculatorPage> createState() => _SpokeLengthCalculatorPageState();
+  State<SpokeLengthCalculatorPage> createState() =>
+      _SpokeLengthCalculatorPageState();
 }
 
 class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
@@ -51,7 +52,8 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
     final erdMm = double.parse(_erdController.text);
     final spokeHoles = int.parse(_spokeHolesController.text);
     final leftFlangeDiameter = double.parse(_leftFlangeDiameterController.text);
-    final rightFlangeDiameter = double.parse(_rightFlangeDiameterController.text);
+    final rightFlangeDiameter =
+        double.parse(_rightFlangeDiameterController.text);
     final leftToCenter = double.parse(_leftFlangeToCenter.text);
     final rightToCenter = double.parse(_rightFlangeToCenter.text);
     
@@ -117,8 +119,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}'))
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -130,8 +136,11 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -172,8 +181,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}'))
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -186,8 +199,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}'))
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -211,8 +228,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}'))
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -225,8 +246,12 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d+\.?\d{0,2}'))
+                              ],
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                         ],
@@ -256,7 +281,8 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                           border: OutlineInputBorder(),
                         ),
                         items: const [
-                          DropdownMenuItem(value: 0, child: Text('Radial (0-cross)')),
+                          DropdownMenuItem(
+                              value: 0, child: Text('Radial (0-cross)')),
                           DropdownMenuItem(value: 1, child: Text('1-Cross')),
                           DropdownMenuItem(value: 2, child: Text('2-Cross')),
                           DropdownMenuItem(value: 3, child: Text('3-Cross')),
@@ -277,7 +303,8 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                   icon: const Icon(Icons.calculate),
                   label: const Text('Calculate Spoke Length'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 16),
                   ),
                 ),
               ),
@@ -314,13 +341,17 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 ),
                                 child: Column(
                                   children: [
-                                    const Icon(Icons.arrow_back, color: Colors.blue),
+                                    const Icon(Icons.arrow_back,
+                                        color: Colors.blue),
                                     const SizedBox(height: 8),
                                     const Text('Left Side (Non-Drive)'),
                                     const SizedBox(height: 8),
                                     Text(
                                       '${_leftSpokeLength!.toStringAsFixed(1)} mm',
-                                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
                                         color: Colors.blue,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -339,13 +370,17 @@ class _SpokeLengthCalculatorPageState extends State<SpokeLengthCalculatorPage> {
                                 ),
                                 child: Column(
                                   children: [
-                                    const Icon(Icons.arrow_forward, color: Colors.orange),
+                                    const Icon(Icons.arrow_forward,
+                                        color: Colors.orange),
                                     const SizedBox(height: 8),
                                     const Text('Right Side (Drive)'),
                                     const SizedBox(height: 8),
                                     Text(
                                       '${_rightSpokeLength!.toStringAsFixed(1)} mm',
-                                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
                                         color: Colors.orange,
                                         fontWeight: FontWeight.bold,
                                       ),

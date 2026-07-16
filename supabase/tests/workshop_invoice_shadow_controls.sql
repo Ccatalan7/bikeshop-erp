@@ -3,7 +3,14 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(20);
+select plan(22);
+
+select hasnt_trigger(
+  'public',
+  'mechanic_jobs',
+  'trg_mechanic_jobs_sync_invoice_update',
+  'obsolete statement-level job-to-invoice synchronization remains retired'
+);
 
 insert into public.tenants (id, shop_name)
 values ('95000000-0000-4000-8000-000000000001', 'Workshop Ownership Shadow Test');
@@ -103,6 +110,18 @@ select is(
 update public.sales_invoices
 set customer_name = 'Workshop Ownership Customer Updated'
 where id = '95000000-0000-4000-8000-000000000005';
+
+select is(
+  (
+    select count(*)::integer
+    from public.inventory_accounting_operations
+    where document_type = 'sales_invoice'
+      and document_id = '95000000-0000-4000-8000-000000000005'
+      and outcome = 'started'
+  ),
+  0,
+  'ordinary linked invoice updates leave no incomplete trace root'
+);
 
 select ok(
   exists (

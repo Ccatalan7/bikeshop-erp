@@ -15,7 +15,8 @@ class ConstraintLayoutBuilder extends StatelessWidget {
     required this.builder,
   });
 
-  final Widget Function(BuildContext context, BoxConstraints constraints) builder;
+  final Widget Function(BuildContext context, BoxConstraints constraints)
+      builder;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +28,8 @@ class ConstraintLayoutBuilder extends StatelessWidget {
 class _ConstraintLayoutBuilderWidget extends RenderObjectWidget {
   const _ConstraintLayoutBuilderWidget({required this.builder});
 
-  final Widget Function(BuildContext context, BoxConstraints constraints) builder;
+  final Widget Function(BuildContext context, BoxConstraints constraints)
+      builder;
 
   @override
   RenderObjectElement createElement() => _ConstraintLayoutBuilderElement(this);
@@ -225,7 +227,8 @@ class MediaQueryLayoutBuilder extends StatelessWidget {
     required this.builder,
   });
 
-  final Widget Function(BuildContext context, BoxConstraints constraints) builder;
+  final Widget Function(BuildContext context, BoxConstraints constraints)
+      builder;
 
   @override
   Widget build(BuildContext context) {

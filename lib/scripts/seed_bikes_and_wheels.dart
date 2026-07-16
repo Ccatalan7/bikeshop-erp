@@ -33,7 +33,10 @@ Future<void> seedBikesAndWheels() async {
     // Delete in correct order (builds → spokes → rims → hubs → bikes)
     await supabase.from('wheel_builds').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_spokes').delete().eq('tenant_id', tenantId);
-    await supabase.from('bikes').delete().eq('tenant_id', tenantId); // Delete bikes before rims
+    await supabase
+        .from('bikes')
+        .delete()
+        .eq('tenant_id', tenantId); // Delete bikes before rims
     await supabase.from('wheel_rims').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_hubs').delete().eq('tenant_id', tenantId);
     
@@ -127,19 +130,21 @@ Future<void> seedBikesAndWheels() async {
       },
     ];
     
-    final insertedRims = await supabase
-        .from('wheel_rims')
-        .insert(rimsData)
-        .select();
+    final insertedRims =
+        await supabase.from('wheel_rims').insert(rimsData).select();
     
     print('✅ Added ${insertedRims.length} rims');
     
     // Get rim IDs by name for linking to bikes
-    final dtSwissXM421Id = insertedRims.firstWhere((r) => r['name'].contains('DT Swiss XM421'))['id'];
-    final stansArchId = insertedRims.firstWhere((r) => r['name'].contains('Stan\'s NoTubes Arch'))['id'];
-    final wtbKomId = insertedRims.firstWhere((r) => r['name'].contains('WTB KOM'))['id'];
+    final dtSwissXM421Id = insertedRims
+        .firstWhere((r) => r['name'].contains('DT Swiss XM421'))['id'];
+    final stansArchId = insertedRims
+        .firstWhere((r) => r['name'].contains('Stan\'s NoTubes Arch'))['id'];
+    final wtbKomId =
+        insertedRims.firstWhere((r) => r['name'].contains('WTB KOM'))['id'];
     
-    print('📋 Rim IDs: DT Swiss=$dtSwissXM421Id, Stan\'s=$stansArchId, WTB=$wtbKomId');
+    print(
+        '📋 Rim IDs: DT Swiss=$dtSwissXM421Id, Stan\'s=$stansArchId, WTB=$wtbKomId');
     
     // ============================================================================
     // 3. BIKES - Link to specific factory rims
@@ -165,7 +170,8 @@ Future<void> seedBikesAndWheels() async {
         'spoke_count': 32,
         'factory_rim_id': dtSwissXM421Id, // EXACT factory rim
         'purchase_price': 650000,
-        'notes': 'Cross-country hardtail, 29" wheels with Boost spacing (110/148mm)',
+        'notes':
+            'Cross-country hardtail, 29" wheels with Boost spacing (110/148mm)',
       },
       {
         'tenant_id': tenantId,
@@ -331,9 +337,7 @@ Future<void> seedBikesAndWheels() async {
       },
     ];
     
-    await supabase
-        .from('bikes')
-        .insert(bikesData);
+    await supabase.from('bikes').insert(bikesData);
     
     print('✅ Added ${bikesData.length} bikes');
     
@@ -511,9 +515,7 @@ Future<void> seedBikesAndWheels() async {
       },
     ];
     
-    await supabase
-        .from('wheel_hubs')
-        .insert(hubsData);
+    await supabase.from('wheel_hubs').insert(hubsData);
     
     print('✅ Added ${hubsData.length} hubs');
     
@@ -646,9 +648,7 @@ Future<void> seedBikesAndWheels() async {
       },
     ];
     
-    await supabase
-        .from('wheel_spokes')
-        .insert(spokesData);
+    await supabase.from('wheel_spokes').insert(spokesData);
     
     print('✅ Added ${spokesData.length} spokes');
     
@@ -680,7 +680,6 @@ Future<void> seedBikesAndWheels() async {
     print('   1. Select a bike (e.g., Trek X-Caliber 8 29")');
     print('   2. Choose build type (Full/Replace Hub/Replace Rim)');
     print('   3. See automatic filtering in action!');
-    
   } catch (e, stackTrace) {
     print('❌ Error seeding data: $e');
     print('Stack trace: $stackTrace');

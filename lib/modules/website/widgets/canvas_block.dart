@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_action.dart';
+import '../models/canvas_element_factory.dart';
 import 'canvas_block_toolbar.dart';
 import 'website_action_button.dart';
 
@@ -34,7 +35,10 @@ import 'snap_result.dart';
 ///     "productsGallery"
 ///   - x, y, w, h: numbers (px)
 ///   - hideOnMobile/showOnMobile: responsive visibility (optional)
+///   - rotation: degrees (-180..180)
+///   - image layers: fit, focalPointX/focalPointY (0..1)
 ///   - ... type-specific fields
+/// - constrainElementsToSafeArea: bool (defaults true; false permits bleed)
 class CanvasBlock extends StatefulWidget {
   final Map<String, dynamic> data;
   final bool editable;
@@ -73,6 +77,7 @@ class CanvasBlock extends StatefulWidget {
 
 class _CanvasBlockState extends State<CanvasBlock> {
   final GlobalKey _canvasKey = GlobalKey();
+  final FocusNode _canvasFocusNode = FocusNode(debugLabel: 'Canvas editor');
   late List<Map<String, dynamic>> _elements;
   String? _activeElementIdLocal;
 
@@ -85,12 +90,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
   String? _draggingElementId;
   String? _resizingElementId;
+  String? _rotatingElementId;
+  String? _croppingElementId;
+  String? _reframingElementId;
+
+  _CanvasFrameHandle? _activeFrameHandle;
+  Rect? _frameStartRect;
+  Offset? _frameStartPointer;
+  double? _frameStartRotation;
+  Offset? _rotationCenter;
+  double? _rotationStartPointerAngle;
+  double? _rotationStartDegrees;
 
   // Drag anchor so the cursor stays "attached" to the element while moving.
   Offset? _dragAnchorInElement; // local offset inside the element at drag start
   Offset? _pointerCanvasPos; // pointer position in canvas coordinates
   _AxisLock _axisLock = _AxisLock.none;
-  Size? _resizeStartSize;
 
   // Track pointer buttons to ignore trackpad scrolling (buttons == 0)
   int _lastPointerButtons = 0;
@@ -272,6 +287,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   void dispose() {
     _inlineController?.dispose();
     _inlineFocusNode.dispose();
+    _canvasFocusNode.dispose();
     super.dispose();
   }
 
@@ -289,6 +305,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
     // If we are not actively interacting, accept provider updates.
     final isBusy = _draggingElementId != null ||
         _resizingElementId != null ||
+        _rotatingElementId != null ||
+        _reframingElementId != null ||
         _editingElementId != null;
     if (isBusy) return;
 
@@ -307,12 +325,21 @@ class _CanvasBlockState extends State<CanvasBlock> {
       // Re-emit the selection so an already-active element can restore its
       // parent block/inspector context after another surface cleared it.
       widget.onActiveElementChanged?.call(id);
+      if (id != null && widget.editable) {
+        _canvasFocusNode.requestFocus();
+      }
       return;
     }
     setState(() {
       _activeElementIdLocal = id;
+      if (_croppingElementId != id) {
+        _croppingElementId = null;
+      }
     });
     widget.onActiveElementChanged?.call(id);
+    if (id != null && widget.editable) {
+      _canvasFocusNode.requestFocus();
+    }
   }
 
   void _commitElements() {
@@ -440,93 +467,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   String _newElementId() => 'el_${DateTime.now().microsecondsSinceEpoch}';
 
   Map<String, dynamic> _defaultElement(String type) {
-    final id = _newElementId();
-    final base = <String, dynamic>{
-      'id': id,
-      'type': type,
-      'x': 24.0,
-      'y': 24.0,
-      'anim': 'none', // none | fade | fadeUp
-    };
-    switch (type) {
-      case 'button':
-        return {
-          ...base,
-          'w': 220.0,
-          'h': 56.0,
-          'label': 'Botón',
-          'style': 'filled',
-          'inheritTheme': true,
-          'bgColor': '#00A09D',
-          'fgColor': '#FFFFFF',
-          'radius': 12.0,
-          'fontSize': 14.0,
-          'letterSpacing': 0.0,
-          'uppercase': false,
-          'shadow': false,
-          'link': '/',
-        };
-      case 'image':
-        return {
-          ...base,
-          'w': 320.0,
-          'h': 200.0,
-          'imageUrl': '',
-          'productId': '',
-          'fit': 'cover', // cover|contain
-          'radius': 12.0,
-          'altText': '',
-        };
-      case 'shape':
-        return {
-          ...base,
-          'w': 320.0,
-          'h': 200.0,
-          'shape': 'rectangle', // rectangle|ellipse
-          'fillColor': '#1F2937',
-          'borderColor': '#1F2937',
-          'borderWidth': 0.0,
-          'radius': 0.0,
-          'rotation': 0.0,
-        };
-      case 'product':
-        return {
-          ...base,
-          'w': 280.0,
-          'h': 320.0,
-          'productId': '',
-          'showPrice': true,
-        };
-      case 'productsGallery':
-        return {
-          ...base,
-          'w': 560.0,
-          'h': 360.0,
-          'mode': 'latest', // latest|manual
-          'productIds': <String>[],
-          'maxProducts': 6,
-          'layout': 'grid', // grid|carousel
-          'columns': 3,
-          'cardWidth': 300,
-          'showPrice': true,
-        };
-      case 'text':
-      default:
-        return {
-          ...base,
-          'w': 360.0,
-          'h': 72.0,
-          'text': 'Texto',
-          'fontSize': 28.0,
-          'fontWeight': 'w700',
-          'fontRole': 'heading', // heading|body
-          'color': '#111111',
-          'align': 'left',
-          'letterSpacing': 0.0,
-          'lineHeight': 1.1,
-          'uppercase': false,
-        };
-    }
+    return createCanvasElement(id: _newElementId(), type: type);
   }
 
   void _addElementAtCanvasOffset(
@@ -565,6 +506,436 @@ class _CanvasBlockState extends State<CanvasBlock> {
     _commitElements();
   }
 
+  double _normalizedRotation(double degrees) {
+    var value = degrees % 360;
+    if (value > 180) value -= 360;
+    if (value <= -180) value += 360;
+    return value;
+  }
+
+  void _rotateQuarterTurn(String elementId) {
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == elementId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (element.isEmpty || element['locked'] == true) return;
+    final current = (element['rotation'] as num?)?.toDouble() ?? 0;
+    _patchElement(elementId, {
+      'rotation': _normalizedRotation(current + 90),
+    });
+  }
+
+  void _toggleCropMode(String elementId) {
+    final index =
+        _elements.indexWhere((item) => item['id']?.toString() == elementId);
+    if (index == -1 || _elements[index]['type'] != 'image') return;
+    if (_elements[index]['locked'] == true) return;
+    final enabling = _croppingElementId != elementId;
+    setState(() {
+      _croppingElementId = enabling ? elementId : null;
+      _reframingElementId = null;
+      if (enabling) {
+        _elements[index] = {
+          ..._elements[index],
+          'fit': 'cover',
+          'focalPointX':
+              (_elements[index]['focalPointX'] as num?)?.toDouble() ?? 0.5,
+          'focalPointY':
+              (_elements[index]['focalPointY'] as num?)?.toDouble() ?? 0.5,
+        };
+      }
+    });
+    _setActive(elementId);
+    if (enabling) _commitElements();
+  }
+
+  void _resetImageFrame(String elementId) {
+    _patchElement(elementId, {
+      'fit': 'cover',
+      'focalPointX': 0.5,
+      'focalPointY': 0.5,
+    });
+  }
+
+  void _moveForward(String id) {
+    final index = _elements.indexWhere((element) => element['id'] == id);
+    if (index == -1 || index >= _elements.length - 1) return;
+    setState(() {
+      final element = _elements.removeAt(index);
+      _elements.insert(index + 1, element);
+    });
+    _commitElements();
+  }
+
+  void _moveBackward(String id) {
+    final index = _elements.indexWhere((element) => element['id'] == id);
+    if (index <= 0) return;
+    setState(() {
+      final element = _elements.removeAt(index);
+      _elements.insert(index - 1, element);
+    });
+    _commitElements();
+  }
+
+  void _alignElement(
+    String id,
+    CanvasElementAlignment alignment,
+    double canvasW,
+    double canvasH,
+  ) {
+    final index =
+        _elements.indexWhere((element) => element['id']?.toString() == id);
+    if (index == -1 || _elements[index]['locked'] == true) return;
+    final element = _elements[index];
+    final width = (element['w'] as num?)?.toDouble() ?? 200;
+    final height = (element['h'] as num?)?.toDouble() ?? 56;
+    final scale = _calculateScale(canvasW);
+    final designWidth = _computeDesignWidth(canvasW);
+    final designHeight = canvasH / math.max(scale, 0.0001);
+    var x = (element['x'] as num?)?.toDouble() ?? 0;
+    var y = (element['y'] as num?)?.toDouble() ?? 0;
+
+    switch (alignment) {
+      case CanvasElementAlignment.left:
+        x = 0;
+        break;
+      case CanvasElementAlignment.horizontalCenter:
+        x = (designWidth - width) / 2;
+        break;
+      case CanvasElementAlignment.right:
+        x = designWidth - width;
+        break;
+      case CanvasElementAlignment.top:
+        y = 0;
+        break;
+      case CanvasElementAlignment.verticalCenter:
+        y = (designHeight - height) / 2;
+        break;
+      case CanvasElementAlignment.bottom:
+        y = designHeight - height;
+        break;
+    }
+
+    _patchElement(id, {'x': x, 'y': y});
+  }
+
+  Offset? _canvasPointer(Offset globalPosition) {
+    final renderBox =
+        _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.attached || !renderBox.hasSize) {
+      return null;
+    }
+    return renderBox.globalToLocal(globalPosition);
+  }
+
+  void _startFrameGesture(
+    String id,
+    _CanvasFrameHandle handle,
+    Offset globalPosition,
+  ) {
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    final pointer = _canvasPointer(globalPosition);
+    if (element.isEmpty || pointer == null || element['locked'] == true) return;
+    setState(() {
+      _resizingElementId = id;
+      _activeFrameHandle = handle;
+      _frameStartRect = Rect.fromLTWH(
+        (element['x'] as num?)?.toDouble() ?? 0,
+        (element['y'] as num?)?.toDouble() ?? 0,
+        (element['w'] as num?)?.toDouble() ?? 200,
+        (element['h'] as num?)?.toDouble() ?? 56,
+      );
+      _frameStartPointer = pointer;
+      _frameStartRotation = (element['rotation'] as num?)?.toDouble() ?? 0;
+      _guideX = null;
+      _guideY = null;
+    });
+    _canvasFocusNode.requestFocus();
+  }
+
+  void _updateFrameGesture(
+    String id,
+    String type,
+    Offset globalPosition,
+    double canvasW,
+    double canvasH, {
+    required bool cropMode,
+  }) {
+    if (_resizingElementId != id ||
+        _activeFrameHandle == null ||
+        _frameStartRect == null ||
+        _frameStartPointer == null) {
+      return;
+    }
+    final pointer = _canvasPointer(globalPosition);
+    if (pointer == null) return;
+    final scale = _calculateScale(canvasW);
+    final rawDelta = pointer - _frameStartPointer!;
+    final radians = -((_frameStartRotation ?? 0) * math.pi / 180);
+    final localDelta = Offset(
+          rawDelta.dx * math.cos(radians) - rawDelta.dy * math.sin(radians),
+          rawDelta.dx * math.sin(radians) + rawDelta.dy * math.cos(radians),
+        ) /
+        math.max(scale, 0.0001);
+    final start = _frameStartRect!;
+    final handle = _activeFrameHandle!;
+    var left = start.left;
+    var top = start.top;
+    var right = start.right;
+    var bottom = start.bottom;
+
+    if (handle.affectsLeft) left += localDelta.dx;
+    if (handle.affectsRight) right += localDelta.dx;
+    if (handle.affectsTop) top += localDelta.dy;
+    if (handle.affectsBottom) bottom += localDelta.dy;
+
+    final minWidth = type == 'button' ? 120.0 : 40.0;
+    final minHeight = type == 'button' ? 44.0 : 32.0;
+    if (right - left < minWidth) {
+      if (handle.affectsLeft) {
+        left = right - minWidth;
+      } else {
+        right = left + minWidth;
+      }
+    }
+    if (bottom - top < minHeight) {
+      if (handle.affectsTop) {
+        top = bottom - minHeight;
+      } else {
+        bottom = top + minHeight;
+      }
+    }
+
+    if (!cropMode && handle.isCorner && _isShiftPressed()) {
+      final ratio = start.width / math.max(start.height, 1);
+      if ((right - left - start.width).abs() >=
+          (bottom - top - start.height).abs()) {
+        final targetHeight = (right - left) / ratio;
+        if (handle.affectsTop) {
+          top = bottom - targetHeight;
+        } else {
+          bottom = top + targetHeight;
+        }
+      } else {
+        final targetWidth = (bottom - top) * ratio;
+        if (handle.affectsLeft) {
+          left = right - targetWidth;
+        } else {
+          right = left + targetWidth;
+        }
+      }
+    }
+
+    final localFrame = Rect.fromLTRB(left, top, right, bottom);
+    final localCenterShift = localFrame.center - start.center;
+    final rotationRadians = (_frameStartRotation ?? 0) * math.pi / 180;
+    final rotatedCenterShift = Offset(
+      localCenterShift.dx * math.cos(rotationRadians) -
+          localCenterShift.dy * math.sin(rotationRadians),
+      localCenterShift.dx * math.sin(rotationRadians) +
+          localCenterShift.dy * math.cos(rotationRadians),
+    );
+    final nextCenter = start.center + rotatedCenterShift;
+    final nextWidth = localFrame.width;
+    final nextHeight = localFrame.height;
+    var nextX = nextCenter.dx - nextWidth / 2;
+    var nextY = nextCenter.dy - nextHeight / 2;
+
+    if (widget.data['constrainElementsToSafeArea'] != false) {
+      final designWidth = _computeDesignWidth(canvasW);
+      final designHeight = canvasH / math.max(scale, 0.0001);
+      nextX = nextX.clamp(0.0, math.max(0.0, designWidth - nextWidth));
+      nextY = nextY.clamp(0.0, math.max(0.0, designHeight - nextHeight));
+    }
+
+    setState(() {
+      final index =
+          _elements.indexWhere((item) => item['id']?.toString() == id);
+      if (index == -1) return;
+      _elements[index] = {
+        ..._elements[index],
+        'x': nextX,
+        'y': nextY,
+        'w': nextWidth,
+        'h': nextHeight,
+      };
+    });
+  }
+
+  void _endFrameGesture() {
+    if (_resizingElementId == null) return;
+    setState(() {
+      _resizingElementId = null;
+      _activeFrameHandle = null;
+      _frameStartRect = null;
+      _frameStartPointer = null;
+      _frameStartRotation = null;
+    });
+    _commitElements();
+  }
+
+  void _startRotation(
+    String id,
+    Offset globalPosition,
+    double canvasW,
+    double canvasH,
+  ) {
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    final pointer = _canvasPointer(globalPosition);
+    if (element.isEmpty || pointer == null || element['locked'] == true) return;
+    final x = (element['x'] as num?)?.toDouble() ?? 0;
+    final y = (element['y'] as num?)?.toDouble() ?? 0;
+    final width = (element['w'] as num?)?.toDouble() ?? 200;
+    final height = (element['h'] as num?)?.toDouble() ?? 56;
+    final center = Offset(
+      _effectiveLeft(x: x, w: width, canvasW: canvasW) +
+          _effectiveWidth(
+                  type: element['type']?.toString() ?? 'text',
+                  w: width,
+                  canvasW: canvasW) /
+              2,
+      _effectiveTop(y: y, h: height, canvasW: canvasW, canvasH: canvasH) +
+          _effectiveHeight(
+                  type: element['type']?.toString() ?? 'text',
+                  h: height,
+                  canvasW: canvasW,
+                  canvasH: canvasH) /
+              2,
+    );
+    setState(() {
+      _rotatingElementId = id;
+      _rotationCenter = center;
+      _rotationStartPointerAngle =
+          math.atan2(pointer.dy - center.dy, pointer.dx - center.dx);
+      _rotationStartDegrees = (element['rotation'] as num?)?.toDouble() ?? 0;
+    });
+    _canvasFocusNode.requestFocus();
+  }
+
+  void _updateRotation(String id, Offset globalPosition) {
+    if (_rotatingElementId != id ||
+        _rotationCenter == null ||
+        _rotationStartPointerAngle == null ||
+        _rotationStartDegrees == null) {
+      return;
+    }
+    final pointer = _canvasPointer(globalPosition);
+    if (pointer == null) return;
+    final currentAngle = math.atan2(
+      pointer.dy - _rotationCenter!.dy,
+      pointer.dx - _rotationCenter!.dx,
+    );
+    var degrees = _normalizedRotation(
+      _rotationStartDegrees! +
+          (currentAngle - _rotationStartPointerAngle!) * 180 / math.pi,
+    );
+    if (_isShiftPressed()) {
+      degrees = (degrees / 15).round() * 15.0;
+    }
+    setState(() {
+      final index =
+          _elements.indexWhere((item) => item['id']?.toString() == id);
+      if (index == -1) return;
+      _elements[index] = {..._elements[index], 'rotation': degrees};
+    });
+  }
+
+  void _endRotation() {
+    if (_rotatingElementId == null) return;
+    setState(() {
+      _rotatingElementId = null;
+      _rotationCenter = null;
+      _rotationStartPointerAngle = null;
+      _rotationStartDegrees = null;
+    });
+    _commitElements();
+  }
+
+  KeyEventResult _handleCanvasKeyEvent(FocusNode node, KeyEvent event) {
+    if (!widget.editable || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final activeId = _activeElementIdLocal;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_croppingElementId != null) {
+        setState(() => _croppingElementId = null);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (activeId == null || _editingElementId != null) {
+      return KeyEventResult.ignored;
+    }
+    if (_croppingElementId == activeId &&
+        event.logicalKey == LogicalKeyboardKey.enter) {
+      setState(() => _croppingElementId = null);
+      return KeyEventResult.handled;
+    }
+
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    final commandPressed = keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight) ||
+        keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight);
+    if (commandPressed && event.logicalKey == LogicalKeyboardKey.keyD) {
+      _duplicateElement(activeId);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.delete ||
+        event.logicalKey == LogicalKeyboardKey.backspace) {
+      _deleteElement(activeId);
+      return KeyEventResult.handled;
+    }
+
+    final dx = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowLeft => -1.0,
+      LogicalKeyboardKey.arrowRight => 1.0,
+      _ => 0.0,
+    };
+    final dy = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowUp => -1.0,
+      LogicalKeyboardKey.arrowDown => 1.0,
+      _ => 0.0,
+    };
+    if (dx == 0 && dy == 0) return KeyEventResult.ignored;
+    final index = _elements
+        .indexWhere((element) => element['id']?.toString() == activeId);
+    if (index == -1 || _elements[index]['locked'] == true) {
+      return KeyEventResult.handled;
+    }
+    final renderBox =
+        _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) {
+      return KeyEventResult.ignored;
+    }
+    final step = _isShiftPressed() ? 10.0 : 1.0;
+    final element = _elements[index];
+    final x = (element['x'] as num?)?.toDouble() ?? 0;
+    final y = (element['y'] as num?)?.toDouble() ?? 0;
+    final scale = _calculateScale(renderBox.size.width);
+    setState(() {
+      _updateElementPosition(
+        activeId,
+        _designToRenderX(
+          x: x + dx * step,
+          canvasW: renderBox.size.width,
+        ),
+        (y + dy * step) * scale,
+        renderBox.size.width,
+        renderBox.size.height,
+        applySnap: false,
+      );
+    });
+    _commitElements();
+    return KeyEventResult.handled;
+  }
+
   void _updateElementPosition(
       String elementId, double x, double y, double maxW, double maxH,
       {bool applySnap = true}) {
@@ -587,13 +958,25 @@ class _CanvasBlockState extends State<CanvasBlock> {
       nextY = _snapToGrid(nextY);
     }
 
-    // Clamp to canvas bounds (in render space, accounting for scaled element size)
+    // Clamp in render space. Constrained layers stay inside the visible safe
+    // area; unconstrained layers may bleed beyond it while keeping a grab
+    // target visible so they cannot be lost completely off-canvas.
     final scaledW = w * scaleX;
     final scaledH = h * scaleX;
-    // Allow dragging a bit outside if needed, but for now clamp to safe area (0..max)
-    // Note: offsetX is the visual start of the "centered" canvas.
-    nextX = nextX.clamp(0.0, math.max(0.0, maxW - scaledW));
-    nextY = nextY.clamp(0.0, math.max(0.0, maxH - scaledH));
+    final constrainToCanvas =
+        widget.data['constrainElementsToSafeArea'] != false;
+    if (constrainToCanvas) {
+      nextX = nextX.clamp(
+        offsetX,
+        math.max(offsetX, maxW - offsetX - scaledW),
+      );
+      nextY = nextY.clamp(0.0, math.max(0.0, maxH - scaledH));
+    } else {
+      final visibleX = math.min(32.0, math.max(12.0, scaledW));
+      final visibleY = math.min(32.0, math.max(12.0, scaledH));
+      nextX = nextX.clamp(-scaledW + visibleX, maxW - visibleX);
+      nextY = nextY.clamp(-scaledH + visibleY, maxH - visibleY);
+    }
 
     // Convert back to design space: subtract offset, then divide by scale
     final designX = (nextX - offsetX) / scaleX;
@@ -603,44 +986,6 @@ class _CanvasBlockState extends State<CanvasBlock> {
       ..._elements[idx],
       'x': designX,
       'y': designY,
-    };
-  }
-
-  void _updateElementSize(
-      String elementId, double w, double h, double maxW, double maxH,
-      {bool applySnap = true}) {
-    final idx = _elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1) return;
-
-    final x = (_elements[idx]['x'] as num?)?.toDouble() ?? 0.0;
-    final y = (_elements[idx]['y'] as num?)?.toDouble() ?? 0.0;
-
-    var nextW = w;
-    var nextH = h;
-    if (applySnap && _snapEnabled()) {
-      nextW = _snapToGrid(nextW);
-      nextH = _snapToGrid(nextH);
-    }
-
-    // Minimum sizes by type
-    final type = (_elements[idx]['type'] ?? 'text').toString();
-    final minW = type == 'button' ? 120.0 : 80.0;
-    final minH = type == 'button' ? 44.0 : 40.0;
-
-    // Use _calculateScale to match rendering logic (clamped to 1.0)
-    final scaleX = _calculateScale(maxW);
-
-    final xRender = _designToRenderX(x: x, canvasW: maxW);
-    // Use effective top for clamping height. yRender = y * scale
-    final yRender = y * scaleX;
-
-    nextW = nextW.clamp(minW, math.max(minW, maxW - xRender));
-    nextH = nextH.clamp(minH, math.max(minH, maxH - yRender));
-
-    _elements[idx] = {
-      ..._elements[idx],
-      'w': nextW / scaleX,
-      'h': nextH / scaleX,
     };
   }
 
@@ -667,7 +1012,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
     double? guideX;
 
     // Collect Targets
-    final canvasTargetsX = [0.0, canvasW / 2, canvasW];
+    final safeOffsetX = _calculateOffsetX(canvasW);
+    final canvasTargetsX = [
+      safeOffsetX,
+      canvasW / 2,
+      canvasW - safeOffsetX,
+    ];
     final xTargets = <double>[...canvasTargetsX];
 
     for (final e in _elements) {
@@ -801,18 +1151,20 @@ class _CanvasBlockState extends State<CanvasBlock> {
       }
     }
 
-    // Clamp
-    final offsetX = _calculateOffsetX(canvasW); // Render space offset
-    // Clamp needs to know Scaled Width if nextX is top-left
-    // But wait, w/h passed here are already scaled?
-    // Callers pass effectiveW/effectiveH.
-    nextX = nextX.clamp(offsetX, math.max(offsetX, canvasW - w - offsetX));
-    // wait, canvasW is usually full width. if offsetX > 0, right limit is canvasW - w - offsetX?
-    // Actually simpler: clamp within available centered column.
-    // Or just clamp to Safe Area?
-    // Let's stick to simple safe clamp:
-    nextX = nextX.clamp(offsetX, math.max(offsetX, canvasW - w));
-    nextY = nextY.clamp(0.0, math.max(0.0, canvasH - h));
+    final constrainToCanvas =
+        widget.data['constrainElementsToSafeArea'] != false;
+    if (constrainToCanvas) {
+      nextX = nextX.clamp(
+        safeOffsetX,
+        math.max(safeOffsetX, canvasW - safeOffsetX - w),
+      );
+      nextY = nextY.clamp(0.0, math.max(0.0, canvasH - h));
+    } else {
+      final visibleX = math.min(32.0, math.max(12.0, w));
+      final visibleY = math.min(32.0, math.max(12.0, h));
+      nextX = nextX.clamp(-w + visibleX, canvasW - visibleX);
+      nextY = nextY.clamp(-h + visibleY, canvasH - visibleY);
+    }
 
     return SnapResult(
       x: nextX,
@@ -834,7 +1186,10 @@ class _CanvasBlockState extends State<CanvasBlock> {
     // Also check for null id.
     if (id == null ||
         (id == _editingElementId && _inlineController != null) ||
-        _draggingElementId == id) {
+        _draggingElementId == id ||
+        _resizingElementId == id ||
+        _rotatingElementId == id ||
+        _reframingElementId == id) {
       return const SizedBox.shrink();
     }
 
@@ -845,10 +1200,15 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final x = (el['x'] as num?)?.toDouble() ?? 20.0;
     final y = (el['y'] as num?)?.toDouble() ?? 20.0;
     final w = (el['w'] as num?)?.toDouble() ?? 240.0;
-    // Heights for toolbar positioning rely on TOP, so height isn't strictly needed for positioning,
-    // but useful if we ever want to position below. We position ABOVE.
+    final h = (el['h'] as num?)?.toDouble() ?? 56.0;
 
     final effectiveW = _effectiveWidth(type: type, w: w, canvasW: canvasW);
+    final effectiveH = _effectiveHeight(
+      type: type,
+      h: h,
+      canvasW: canvasW,
+      canvasH: canvasH,
+    );
     final effectiveX = _effectiveLeft(x: x, w: effectiveW, canvasW: canvasW);
     // We only need top-left for the toolbar.
     // NOTE: In _buildElement we used _effectiveTop which is just y * scale.
@@ -857,10 +1217,27 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final effectiveY =
         _effectiveTop(y: y, h: 0, canvasW: canvasW, canvasH: canvasH);
 
+    final toolbarTop = effectiveY >= 68
+        ? effectiveY - 60
+        : math.min(canvasH - 44, effectiveY + effectiveH + 12);
+    // Every contextual palette (including the alignment drill-in) shares this
+    // maximum. The toolbar itself becomes horizontally scrollable below this
+    // width instead of escaping the canvas or creating a popup overlay.
+    final estimatedToolbarWidth = math.min(
+      424.0,
+      math.max(120.0, canvasW - 16),
+    );
+    final toolbarLeft = effectiveX
+        .clamp(
+          8.0,
+          math.max(8.0, canvasW - estimatedToolbarWidth - 8),
+        )
+        .toDouble();
+
     return Positioned(
       key: ValueKey('toolbar_$id'), // Ensure clean removal on delete
-      top: effectiveY - 48, // 48px above the element
-      left: effectiveX,
+      top: toolbarTop,
+      left: toolbarLeft,
       child: CanvasElementToolbar(
         key: ValueKey('toolbar_content_$id'),
         type: type,
@@ -869,6 +1246,17 @@ class _CanvasBlockState extends State<CanvasBlock> {
         onDuplicate: () => _duplicateElement(id),
         onBringToFront: () => _bringToFront(id),
         onSendToBack: () => _sendToBack(id),
+        onMoveForward: () => _moveForward(id),
+        onMoveBackward: () => _moveBackward(id),
+        onRotateQuarterTurn: () => _rotateQuarterTurn(id),
+        onAlign: (alignment) => _alignElement(id, alignment, canvasW, canvasH),
+        cropActive: _croppingElementId == id,
+        maxWidth: math.max(120.0, canvasW - 16),
+        hoverLabelBelow: toolbarTop + 68 <= canvasH,
+        onToggleCrop: type == 'image' && el['locked'] != true
+            ? () => _toggleCropMode(id)
+            : null,
+        onResetImageFrame: type == 'image' ? () => _resetImageFrame(id) : null,
         onUpdate: (k, v) => _patchElement(id, {k: v}),
       ),
     );
@@ -922,219 +1310,270 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
     // Use ConstraintLayoutBuilder OUTSIDE SizedBox to get actual available width first
     // Then scale the block height proportionally
-    return ConstraintLayoutBuilder(
-      builder: (context, outerConstraints) {
-        final availableWidth = outerConstraints.maxWidth;
-        final designW = _computeDesignWidth(availableWidth);
-        final scaleX = designW > 0 ? availableWidth / designW : 1.0;
+    return Focus(
+      focusNode: _canvasFocusNode,
+      onKeyEvent: _handleCanvasKeyEvent,
+      child: ConstraintLayoutBuilder(
+        builder: (context, outerConstraints) {
+          final availableWidth = outerConstraints.maxWidth;
+          final designW = _computeDesignWidth(availableWidth);
+          final scaleX = designW > 0 ? availableWidth / designW : 1.0;
 
-        // Scale the block height proportionally when width changes (zoom in/out)
-        // This ensures the canvas maintains aspect ratio
-        final blockHeight = widget.fillAvailableHeight &&
-                outerConstraints.maxHeight.isFinite
-            ? outerConstraints.maxHeight
-            : heightMode == 'viewport'
-                ? rawBlockHeight // Viewport mode: don't scale, use viewport percentage
-                : rawBlockHeight *
-                    scaleX.clamp(0.5, 2.0); // Fixed mode: scale with width
+          // Scale the block height proportionally when width changes (zoom in/out)
+          // This ensures the canvas maintains aspect ratio
+          final blockHeight = widget.fillAvailableHeight &&
+                  outerConstraints.maxHeight.isFinite
+              ? outerConstraints.maxHeight
+              : heightMode == 'viewport'
+                  ? rawBlockHeight // Viewport mode: don't scale, use viewport percentage
+                  : rawBlockHeight *
+                      scaleX.clamp(0.5, 2.0); // Fixed mode: scale with width
 
-        return SizedBox(
-          height: blockHeight,
-          child: Builder(
-            builder: (context) {
-              final canvasW = availableWidth;
-              final canvasH = blockHeight;
-              _reportCanvasSizeIfNeeded(canvasW, canvasH);
-              // Don't use ClipRect - let content overflow if needed (especially galleries)
-              // The Stack still clips but overflow is visible during editing
-              return SizedBox(
-                key: _canvasKey,
-                width: canvasW,
-                height: canvasH,
-                child: Stack(
-                  clipBehavior: Clip
-                      .none, // Allow overflow so galleries don't get cut off
-                  children: [
-                    // Background tap detector - deselects active element AND selects the block
-                    Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          // Deselect any active element
-                          final currentActive = _activeElementIdFromData();
-                          if (currentActive != null &&
-                              currentActive.isNotEmpty) {
-                            _setActive(null);
-                          }
-                          // Also trigger block selection (so it works like other blocks)
-                          widget.onBackgroundTap?.call();
-                        },
+          return SizedBox(
+            height: blockHeight,
+            child: Builder(
+              builder: (context) {
+                final canvasW = availableWidth;
+                final canvasH = blockHeight;
+                _reportCanvasSizeIfNeeded(canvasW, canvasH);
+                // Don't use ClipRect - let content overflow if needed (especially galleries)
+                // The Stack still clips but overflow is visible during editing
+                return SizedBox(
+                  key: _canvasKey,
+                  width: canvasW,
+                  height: canvasH,
+                  child: Stack(
+                    clipBehavior: Clip
+                        .none, // Allow overflow so galleries don't get cut off
+                    children: [
+                      // Background tap detector - deselects active element AND selects the block
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            // Deselect any active element
+                            final currentActive = _activeElementIdFromData();
+                            if (currentActive != null &&
+                                currentActive.isNotEmpty) {
+                              _setActive(null);
+                            }
+                            // Also trigger block selection (so it works like other blocks)
+                            widget.onBackgroundTap?.call();
+                          },
+                        ),
                       ),
-                    ),
-                    // Background (color + image/video + overlay) + grid
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Stack(
-                          children: [
-                            // Solid background color
-                            Positioned.fill(child: ColoredBox(color: bg)),
+                      // Background (color + image/video + overlay) + grid
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Stack(
+                            children: [
+                              // Solid background color
+                              Positioned.fill(child: ColoredBox(color: bg)),
 
-                            // Video background (web only)
-                            if (backgroundYoutubeId.isNotEmpty ||
-                                backgroundVideoUrl.isNotEmpty)
-                              Positioned.fill(
-                                child: video_platform.VideoBannerPlatform
-                                    .buildVideoBackground(
-                                  youtubeVideoId: backgroundYoutubeId.isNotEmpty
-                                      ? backgroundYoutubeId
-                                      : null,
-                                  videoFileUrl: backgroundVideoUrl.isNotEmpty
-                                      ? backgroundVideoUrl
-                                      : null,
-                                  width: canvasW,
-                                  height: canvasH,
+                              // Video background (web only)
+                              if (backgroundYoutubeId.isNotEmpty ||
+                                  backgroundVideoUrl.isNotEmpty)
+                                Positioned.fill(
+                                  child: video_platform.VideoBannerPlatform
+                                      .buildVideoBackground(
+                                    youtubeVideoId:
+                                        backgroundYoutubeId.isNotEmpty
+                                            ? backgroundYoutubeId
+                                            : null,
+                                    videoFileUrl: backgroundVideoUrl.isNotEmpty
+                                        ? backgroundVideoUrl
+                                        : null,
+                                    width: canvasW,
+                                    height: canvasH,
+                                  ),
                                 ),
-                              ),
 
-                            // Image background (shown on all platforms; can be used as fallback for video)
-                            if (backgroundImageUrl.isNotEmpty)
-                              Positioned.fill(
-                                child: Image.network(
-                                  backgroundImageUrl,
-                                  fit: fit,
-                                  alignment: focalAlignment,
-                                  semanticLabel: widget
-                                      .data['backgroundImageAltText']
-                                      ?.toString(),
-                                  errorBuilder: (context, _, __) =>
-                                      const SizedBox.shrink(),
+                              // Image background (shown on all platforms; can be used as fallback for video)
+                              if (backgroundImageUrl.isNotEmpty)
+                                Positioned.fill(
+                                  child: Image.network(
+                                    backgroundImageUrl,
+                                    fit: fit,
+                                    alignment: focalAlignment,
+                                    semanticLabel: widget
+                                        .data['backgroundImageAltText']
+                                        ?.toString(),
+                                    errorBuilder: (context, _, __) =>
+                                        const SizedBox.shrink(),
+                                  ),
                                 ),
-                              ),
 
-                            // Overlay
-                            if (overlayEnabled)
+                              // Overlay
+                              if (overlayEnabled)
+                                Positioned.fill(
+                                  child: ColoredBox(
+                                    color: overlayColor.withValues(
+                                      alpha: overlayOpacity.clamp(0.0, 0.9),
+                                    ),
+                                  ),
+                                ),
+
+                              // Grid (edit mode only)
                               Positioned.fill(
-                                child: ColoredBox(
-                                  color: overlayColor.withValues(
-                                    alpha: overlayOpacity.clamp(0.0, 0.9),
+                                child: CustomPaint(
+                                  painter: _CanvasBackgroundPainter(
+                                    background: Colors.transparent,
+                                    showGrid: showGrid && widget.editable,
+                                    gridSize: _gridSize(),
+                                    gridColor:
+                                        Colors.black.withValues(alpha: 0.06),
                                   ),
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                      ),
 
-                            // Grid (edit mode only)
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: _CanvasBackgroundPainter(
-                                  background: Colors.transparent,
-                                  showGrid: showGrid && widget.editable,
-                                  gridSize: _gridSize(),
-                                  gridColor:
-                                      Colors.black.withValues(alpha: 0.06),
+                      // The fixed design coordinate system is narrower than a
+                      // very wide editor viewport so editor and public rendering
+                      // remain aligned. Show that boundary instead of enforcing
+                      // an invisible drag limit.
+                      if (widget.editable && _calculateOffsetX(canvasW) > 0.5)
+                        Positioned(
+                          left: _calculateOffsetX(canvasW),
+                          top: 0,
+                          bottom: 0,
+                          width: canvasW - (_calculateOffsetX(canvasW) * 2),
+                          child: IgnorePointer(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.symmetric(
+                                  vertical: BorderSide(
+                                    color: widget.accentColor
+                                        .withValues(alpha: 0.34),
+                                  ),
+                                ),
+                              ),
+                              alignment: Alignment.topRight,
+                              padding: const EdgeInsets.only(top: 6, right: 8),
+                              child: Text(
+                                'ÁREA SEGURA',
+                                style: TextStyle(
+                                  color: widget.accentColor
+                                      .withValues(alpha: 0.65),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8,
                                 ),
                               ),
                             ),
+                          ),
+                        ),
+
+                      // Drop target for editor panel canvas elements (drag from "Canvas (arrastrable)" section)
+                      // MUST be above the background so it can receive hit tests.
+                      if (widget.editable)
+                        Positioned.fill(
+                          child: DragTarget<String>(
+                            onWillAcceptWithDetails: (data) =>
+                                data.data.startsWith('canvas_el:'),
+                            onAcceptWithDetails: (details) {
+                              final payload = details.data;
+                              if (!payload.startsWith('canvas_el:')) return;
+                              final type =
+                                  payload.replaceFirst('canvas_el:', '');
+
+                              final ctx = _canvasKey.currentContext;
+                              final box = ctx?.findRenderObject() as RenderBox?;
+                              if (box == null ||
+                                  !box.attached ||
+                                  !box.hasSize) {
+                                return;
+                              }
+                              final local = box.globalToLocal(details.offset);
+                              _addElementAtCanvasOffset(
+                                  type, local, Size(canvasW, canvasH));
+                            },
+                            builder: (context, candidate, rejected) {
+                              // Keep the DragTarget active without blocking normal interactions:
+                              // only paint the overlay when dragging a compatible payload.
+                              if (candidate.isEmpty) {
+                                return const SizedBox.expand();
+                              }
+                              return Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: widget.accentColor
+                                        .withValues(alpha: 0.9),
+                                    width: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                      // Elements use their own clipping boundary so transformed
+                      // content can be contained by carousel slides without
+                      // clipping editor toolbars or standalone Canvas blocks.
+                      Positioned.fill(
+                        child: Stack(
+                          clipBehavior: widget.clipContentToBounds
+                              ? Clip.hardEdge
+                              : Clip.none,
+                          children: [
+                            for (final el in elements)
+                              if (!((canvasW < 600 &&
+                                      el['hideOnMobile'] == true) ||
+                                  (canvasW >= 600 &&
+                                      el['showOnMobile'] == true)))
+                                _buildElement(
+                                  context: context,
+                                  el: el,
+                                  isActive: _activeElementIdLocal != null &&
+                                      el['id'] == _activeElementIdLocal,
+                                  canvasW: canvasW,
+                                  canvasH: canvasH,
+                                ),
                           ],
                         ),
                       ),
-                    ),
 
-                    // Drop target for editor panel canvas elements (drag from "Canvas (arrastrable)" section)
-                    // MUST be above the background so it can receive hit tests.
-                    if (widget.editable)
-                      Positioned.fill(
-                        child: DragTarget<String>(
-                          onWillAcceptWithDetails: (data) =>
-                              data.data.startsWith('canvas_el:'),
-                          onAcceptWithDetails: (details) {
-                            final payload = details.data;
-                            if (!payload.startsWith('canvas_el:')) return;
-                            final type = payload.replaceFirst('canvas_el:', '');
+                      // Selection chrome is intentionally above the bounded
+                      // content clip. Rotated content stays inside the slide,
+                      // while edge/corner handles remain reachable at all four
+                      // canvas boundaries.
+                      _buildActiveElementChrome(canvasW, canvasH),
 
-                            final ctx = _canvasKey.currentContext;
-                            final box = ctx?.findRenderObject() as RenderBox?;
-                            if (box == null || !box.attached || !box.hasSize) {
-                              return;
-                            }
-                            final local = box.globalToLocal(details.offset);
-                            _addElementAtCanvasOffset(
-                                type, local, Size(canvasW, canvasH));
-                          },
-                          builder: (context, candidate, rejected) {
-                            // Keep the DragTarget active without blocking normal interactions:
-                            // only paint the overlay when dragging a compatible payload.
-                            if (candidate.isEmpty) {
-                              return const SizedBox.expand();
-                            }
-                            return Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color:
-                                      widget.accentColor.withValues(alpha: 0.9),
-                                  width: 2,
-                                ),
-                              ),
-                            );
-                          },
+                      // Guides
+                      if (widget.editable && _guideX != null)
+                        Positioned(
+                          left: (_guideX!).clamp(0.0, canvasW),
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 1,
+                            color: widget.accentColor.withValues(alpha: 0.6),
+                          ),
                         ),
-                      ),
-
-                    // Elements use their own clipping boundary so transformed
-                    // content can be contained by carousel slides without
-                    // clipping editor toolbars or standalone Canvas blocks.
-                    Positioned.fill(
-                      child: Stack(
-                        clipBehavior: widget.clipContentToBounds
-                            ? Clip.hardEdge
-                            : Clip.none,
-                        children: [
-                          for (final el in elements)
-                            if (!((canvasW < 600 &&
-                                    el['hideOnMobile'] == true) ||
-                                (canvasW >= 600 && el['showOnMobile'] == true)))
-                              _buildElement(
-                                context: context,
-                                el: el,
-                                isActive: _activeElementIdLocal != null &&
-                                    el['id'] == _activeElementIdLocal,
-                                canvasW: canvasW,
-                                canvasH: canvasH,
-                              ),
-                        ],
-                      ),
-                    ),
-
-                    // Guides
-                    if (widget.editable && _guideX != null)
-                      Positioned(
-                        left: (_guideX!).clamp(0.0, canvasW),
-                        top: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 1,
-                          color: widget.accentColor.withValues(alpha: 0.6),
+                      if (widget.editable && _guideY != null)
+                        Positioned(
+                          top: (_guideY!).clamp(0.0, canvasH),
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            height: 1,
+                            color: widget.accentColor.withValues(alpha: 0.6),
+                          ),
                         ),
-                      ),
-                    if (widget.editable && _guideY != null)
-                      Positioned(
-                        top: (_guideY!).clamp(0.0, canvasH),
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 1,
-                          color: widget.accentColor.withValues(alpha: 0.6),
-                        ),
-                      ),
 
-                    // Toolbar overlay (top-most layer)
-                    _buildToolbarOverlay(context, canvasW, canvasH),
-                  ],
-                ), // Stack
-              ); // Inner SizedBox
-            },
-          ), // Builder
-        ); // Outer SizedBox
-      },
-    ); // LayoutBuilder
+                      // Toolbar overlay (top-most layer)
+                      _buildToolbarOverlay(context, canvasW, canvasH),
+                    ],
+                  ), // Stack
+                ); // Inner SizedBox
+              },
+            ), // Builder
+          ); // Outer SizedBox
+        },
+      ),
+    );
   }
 
   void _deleteElement(String id) {
@@ -1188,6 +1627,264 @@ class _CanvasBlockState extends State<CanvasBlock> {
       _elements.insert(0, el);
     });
     _commitElements();
+  }
+
+  Widget _buildFrameHandle({
+    required String id,
+    required String type,
+    required _CanvasFrameHandle handle,
+    required double canvasW,
+    required double canvasH,
+    required bool cropMode,
+  }) {
+    final isHorizontalEdge =
+        handle == _CanvasFrameHandle.top || handle == _CanvasFrameHandle.bottom;
+    final isVerticalEdge =
+        handle == _CanvasFrameHandle.left || handle == _CanvasFrameHandle.right;
+    final visualWidth = isVerticalEdge ? 5.0 : (isHorizontalEdge ? 18.0 : 10.0);
+    final visualHeight =
+        isHorizontalEdge ? 5.0 : (isVerticalEdge ? 18.0 : 10.0);
+    return Align(
+      alignment: handle.alignment,
+      child: Transform.translate(
+        offset: handle.outwardOffset,
+        child: MouseRegion(
+          cursor: handle.cursor,
+          child: GestureDetector(
+            key: ValueKey('${cropMode ? 'crop' : 'resize'}_${handle.name}_$id'),
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (details) =>
+                _startFrameGesture(id, handle, details.globalPosition),
+            onPanUpdate: (details) => _updateFrameGesture(
+              id,
+              type,
+              details.globalPosition,
+              canvasW,
+              canvasH,
+              cropMode: cropMode,
+            ),
+            onPanEnd: (_) => _endFrameGesture(),
+            onPanCancel: _endFrameGesture,
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: Align(
+                alignment: handle.alignment,
+                child: Container(
+                  width: visualWidth,
+                  height: visualHeight,
+                  decoration: BoxDecoration(
+                    color: cropMode ? Colors.white : widget.accentColor,
+                    borderRadius: BorderRadius.circular(2),
+                    border: Border.all(
+                      color: cropMode ? widget.accentColor : Colors.white,
+                      width: cropMode ? 2 : 1,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRotationHandle({
+    required String id,
+    required double canvasW,
+    required double canvasH,
+    required double elementWidth,
+    required double elementHeight,
+  }) {
+    // Tall layers get the familiar top-center rotation affordance. Compact
+    // layers (buttons and short text rows) use an inset right-side handle so
+    // the entire 24px hit target remains inside their render bounds.
+    final placeAtTop = elementHeight >= 96;
+    final compactInset = math.min(28.0, math.max(0.0, elementWidth - 24));
+    return Align(
+      alignment: placeAtTop ? Alignment.topCenter : Alignment.centerRight,
+      child: Transform.translate(
+        offset: placeAtTop ? const Offset(0, 28) : Offset(-compactInset, 0),
+        child: Semantics(
+          button: true,
+          label: 'Arrastra para rotar. Shift ajusta a 15 grados.',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              key: ValueKey('rotation_handle_$id'),
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (details) => _startRotation(
+                id,
+                details.globalPosition,
+                canvasW,
+                canvasH,
+              ),
+              onPanUpdate: (details) =>
+                  _updateRotation(id, details.globalPosition),
+              onPanEnd: (_) => _endRotation(),
+              onPanCancel: _endRotation,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: widget.accentColor, width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 4),
+                  ],
+                ),
+                child: Icon(
+                  Icons.rotate_right_rounded,
+                  size: 15,
+                  color: widget.accentColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveElementChrome(double canvasW, double canvasH) {
+    if (!widget.editable || _activeElementIdLocal == null) {
+      return const SizedBox.shrink();
+    }
+    final id = _activeElementIdLocal!;
+    final element = _elements.firstWhere(
+      (item) => item['id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    if (element.isEmpty || _editingElementId == id) {
+      return const SizedBox.shrink();
+    }
+    final type = (element['type'] ?? 'text').toString();
+    final x = (element['x'] as num?)?.toDouble() ?? 0;
+    final y = (element['y'] as num?)?.toDouble() ?? 0;
+    final width = (element['w'] as num?)?.toDouble() ?? 200;
+    final height = (element['h'] as num?)?.toDouble() ?? 56;
+    final effectiveX = _effectiveLeft(x: x, w: width, canvasW: canvasW);
+    final effectiveY =
+        _effectiveTop(y: y, h: height, canvasW: canvasW, canvasH: canvasH);
+    final effectiveW = _effectiveWidth(type: type, w: width, canvasW: canvasW);
+    final effectiveH = _effectiveHeight(
+      type: type,
+      h: height,
+      canvasW: canvasW,
+      canvasH: canvasH,
+    );
+    final rotation = (element['rotation'] as num?)?.toDouble() ?? 0;
+    final locked = element['locked'] == true;
+    final cropMode = type == 'image' && _croppingElementId == id;
+
+    Widget chrome = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: widget.accentColor, width: 2),
+              ),
+            ),
+          ),
+        ),
+        if (cropMode)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _CanvasCropGridPainter(
+                  color: widget.accentColor.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          ),
+        if (cropMode)
+          Positioned(
+            left: 8,
+            top: 8,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'RECORTE · ARRASTRA LA IMAGEN',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (locked)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: IgnorePointer(
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                ),
+                child: Icon(
+                  Icons.lock_rounded,
+                  size: 14,
+                  color: widget.accentColor,
+                ),
+              ),
+            ),
+          ),
+        if (!locked)
+          for (final handle in _CanvasFrameHandle.values)
+            _buildFrameHandle(
+              id: id,
+              type: type,
+              handle: handle,
+              canvasW: canvasW,
+              canvasH: canvasH,
+              cropMode: cropMode,
+            ),
+        if (!locked && !cropMode)
+          _buildRotationHandle(
+            id: id,
+            canvasW: canvasW,
+            canvasH: canvasH,
+            elementWidth: effectiveW,
+            elementHeight: effectiveH,
+          ),
+      ],
+    );
+    if (rotation.abs() > 0.01) {
+      chrome = Transform.rotate(
+        angle: rotation * math.pi / 180,
+        child: chrome,
+      );
+    }
+    return Positioned(
+      key: ValueKey('canvas_chrome_$id'),
+      left: effectiveX,
+      top: effectiveY,
+      width: effectiveW,
+      height: effectiveH,
+      child: chrome,
+    );
   }
 
   Widget _buildElement({
@@ -1308,6 +2005,14 @@ class _CanvasBlockState extends State<CanvasBlock> {
             : (el['imageUrl'] ?? '').toString().trim();
         final fitRaw = (el['fit'] ?? 'cover').toString();
         final fit = fitRaw == 'contain' ? BoxFit.contain : BoxFit.cover;
+        final focalPointX =
+            ((el['focalPointX'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
+        final focalPointY =
+            ((el['focalPointY'] as num?)?.toDouble() ?? 0.5).clamp(0.0, 1.0);
+        final imageAlignment = Alignment(
+          focalPointX * 2 - 1,
+          focalPointY * 2 - 1,
+        );
         final radius = ((el['radius'] as num?)?.toDouble() ?? 12) * scale;
         content = ClipRRect(
           borderRadius: BorderRadius.circular(radius),
@@ -1327,6 +2032,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
               : Image.network(
                   imageUrl,
                   fit: fit,
+                  alignment: imageAlignment,
                   semanticLabel: el['altText']?.toString(),
                   errorBuilder: (context, _, __) => Container(
                     color: Colors.black.withValues(alpha: 0.04),
@@ -1634,9 +2340,6 @@ class _CanvasBlockState extends State<CanvasBlock> {
         }
     }
 
-    // Show resize handle if editable, active, and not inline editing
-    final showResizeHandle = widget.editable && isActive && !isInlineEditing;
-
     final anim = (el['anim'] ?? 'none').toString();
     if (!widget.editable && anim != 'none') {
       final durationMs = (el['animDurationMs'] as num?)?.toInt() ?? 420;
@@ -1648,38 +2351,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
       );
     }
 
-    // Determine border/bg color based on state
-    final borderColor = widget.editable
-        ? (isActive
-            ? widget.accentColor
-            : isHovered
-                ? widget.accentColor.withValues(alpha: 0.5)
-                : Colors.black.withValues(alpha: 0.08))
-        : null;
-
-    final borderWidth = widget.editable && isActive ? 2.0 : 1.0;
-
-    final bgColor = widget.editable
-        ? (isActive
-            ? Colors.white.withValues(alpha: 0.14)
-            : isHovered
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.white.withValues(alpha: 0.06))
-        : null;
-
-    final decorated = AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: borderColor != null
-            ? Border.all(color: borderColor, width: borderWidth)
-            : null,
-        color: bgColor,
-      ),
-      child: SizedBox.expand(child: content),
-    );
+    final resolvedHeight = overrideHeight ?? effectiveH;
     final rotationDegrees = (el['rotation'] as num?)?.toDouble() ?? 0.0;
     Widget applyRotation(Widget child) => rotationDegrees == 0
         ? child
@@ -1687,97 +2359,31 @@ class _CanvasBlockState extends State<CanvasBlock> {
             angle: rotationDegrees * math.pi / 180,
             child: child,
           );
-    final transformed = applyRotation(decorated);
     final publicTransformed = applyRotation(SizedBox.expand(child: content));
-
-    // Always use a Stack in edit mode to maintain widget tree stability for gestures
-    final decoratedWithHandles = widget.editable
-        ? Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(child: transformed),
-              if (showResizeHandle)
-                Positioned(
-                  right: 2,
-                  bottom: 2,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanStart: (d) {
-                      setState(() {
-                        _resizingElementId = id;
-                        _resizeStartSize = Size(w, h);
-                        _guideX = null;
-                        _guideY = null;
-                      });
-                      _setActive(id);
-                    },
-                    onPanUpdate: (d) {
-                      if (_resizingElementId != id) return;
-
-                      final current = _elements.firstWhere(
-                        (e) => e['id']?.toString() == id,
-                        orElse: () => el,
-                      );
-                      final cw = (current['w'] as num?)?.toDouble() ?? w;
-                      final ch = (current['h'] as num?)?.toDouble() ?? h;
-                      var nextW = cw + d.delta.dx;
-                      var nextH = ch + d.delta.dy;
-
-                      // Hold Shift to keep aspect ratio while resizing.
-                      if (_isShiftPressed() && _resizeStartSize != null) {
-                        final ratio = _resizeStartSize!.width /
-                            math.max(1.0, _resizeStartSize!.height);
-                        if (d.delta.dx.abs() >= d.delta.dy.abs()) {
-                          nextH = nextW / ratio;
-                        } else {
-                          nextW = nextH * ratio;
-                        }
-                      }
-                      setState(() {
-                        // During resize, don't snap live (prevents "lag behind cursor").
-                        _updateElementSize(id, nextW, nextH, canvasW, canvasH,
-                            applySnap: false);
-                      });
-                    },
-                    onPanEnd: (_) {
-                      setState(() {
-                        _resizingElementId = null;
-                        _resizeStartSize = null;
-                      });
-                      // Snap-on-drop for resize (clean final alignment without magnetic lag).
-                      final current = _elements.firstWhere(
-                        (e) => e['id']?.toString() == id,
-                        orElse: () => el,
-                      );
-                      final cw = (current['w'] as num?)?.toDouble() ?? w;
-                      final ch = (current['h'] as num?)?.toDouble() ?? h;
-                      setState(() {
-                        _updateElementSize(id, cw, ch, canvasW, canvasH,
-                            applySnap: true);
-                      });
-                      _commitElements();
-                    },
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: widget.accentColor,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.white, width: 1),
-                      ),
-                      child: const Icon(
-                        Icons.open_in_full_rounded,
-                        size: 10,
-                        color: Colors.white,
-                      ),
-                    ),
+    final locked = el['locked'] == true;
+    final cropMode = type == 'image' && _croppingElementId == id;
+    final editableFrame = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: content),
+        if (isHovered && !isActive)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: widget.accentColor.withValues(alpha: 0.45),
+                    width: 1,
                   ),
                 ),
-            ],
-          )
-        : transformed;
+              ),
+            ),
+          ),
+      ],
+    );
+    final editorTransformed = applyRotation(editableFrame);
 
-    final resolvedHeight = overrideHeight ?? effectiveH;
     final effectiveY = _effectiveTop(
         y: y, h: resolvedHeight, canvasW: canvasW, canvasH: canvasH);
 
@@ -1802,14 +2408,29 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _setActive(id),
-                  onDoubleTap: () => _startInlineEdit(type: type, el: el),
+                  onDoubleTap: () {
+                    if (type == 'image') {
+                      _toggleCropMode(id);
+                    } else {
+                      _startInlineEdit(type: type, el: el);
+                    }
+                  },
                   onPanStart: (d) {
                     // Ignore trackpad scroll/pan (usually has 0 buttons pressed)
                     // Only allow drag if a button is pressed (primary, secondary, etc)
                     if (_lastPointerButtons == 0) return;
 
                     if (_resizingElementId == id) return;
+                    if (_rotatingElementId == id) return;
                     if (_editingElementId == id) return;
+                    if (locked) return;
+                    if (cropMode) {
+                      setState(() {
+                        _reframingElementId = id;
+                        _draggingElementId = null;
+                      });
+                      return;
+                    }
                     setState(() {
                       _draggingElementId = id;
                       _dragAnchorInElement = d.localPosition;
@@ -1823,7 +2444,40 @@ class _CanvasBlockState extends State<CanvasBlock> {
                   },
                   onPanUpdate: (d) {
                     if (_resizingElementId == id) return;
+                    if (_rotatingElementId == id) return;
                     if (_editingElementId == id) return;
+                    if (_reframingElementId == id) {
+                      final radians = -(rotationDegrees * math.pi / 180);
+                      final localDelta = Offset(
+                        d.delta.dx * math.cos(radians) -
+                            d.delta.dy * math.sin(radians),
+                        d.delta.dx * math.sin(radians) +
+                            d.delta.dy * math.cos(radians),
+                      );
+                      setState(() {
+                        final index = _elements.indexWhere(
+                          (item) => item['id']?.toString() == id,
+                        );
+                        if (index == -1) return;
+                        final currentX =
+                            (_elements[index]['focalPointX'] as num?)
+                                    ?.toDouble() ??
+                                0.5;
+                        final currentY =
+                            (_elements[index]['focalPointY'] as num?)
+                                    ?.toDouble() ??
+                                0.5;
+                        _elements[index] = {
+                          ..._elements[index],
+                          'focalPointX': (currentX - localDelta.dx / effectiveW)
+                              .clamp(0.0, 1.0),
+                          'focalPointY':
+                              (currentY - localDelta.dy / resolvedHeight)
+                                  .clamp(0.0, 1.0),
+                        };
+                      });
+                      return;
+                    }
                     if (_draggingElementId != id) return;
                     if (_dragAnchorInElement == null ||
                         _pointerCanvasPos == null) {
@@ -1903,6 +2557,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     });
                   },
                   onPanEnd: (_) {
+                    if (_reframingElementId == id) {
+                      setState(() => _reframingElementId = null);
+                      _commitElements();
+                      return;
+                    }
                     // Commit selection now that drag is done
                     _setActive(id);
 
@@ -1917,7 +2576,23 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     });
                     _commitElements();
                   },
-                  child: decoratedWithHandles,
+                  onPanCancel: () {
+                    if (_reframingElementId == id) {
+                      setState(() => _reframingElementId = null);
+                      _commitElements();
+                    } else if (_draggingElementId == id) {
+                      setState(() {
+                        _draggingElementId = null;
+                        _dragAnchorInElement = null;
+                        _pointerCanvasPos = null;
+                        _axisLock = _AxisLock.none;
+                        _guideX = null;
+                        _guideY = null;
+                      });
+                      _commitElements();
+                    }
+                  },
+                  child: editorTransformed,
                 ),
               ),
             )
@@ -1932,6 +2607,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
     if (!widget.editable) return;
     final id = el['id']?.toString();
     if (id == null || id.isEmpty) return;
+    if (type != 'text' && type != 'button') return;
 
     // Choose which field to edit.
     final field = type == 'button' ? 'label' : 'text';
@@ -2019,6 +2695,102 @@ class _CanvasBackgroundPainter extends CustomPainter {
         oldDelegate.gridSize != gridSize ||
         oldDelegate.gridColor != gridColor;
   }
+}
+
+class _CanvasCropGridPainter extends CustomPainter {
+  final Color color;
+
+  const _CanvasCropGridPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRect(Offset.zero & size, paint..strokeWidth = 2);
+    paint.strokeWidth = 1;
+    canvas.drawLine(
+      Offset(size.width / 3, 0),
+      Offset(size.width / 3, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 2 / 3, 0),
+      Offset(size.width * 2 / 3, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(0, size.height / 3),
+      Offset(size.width, size.height / 3),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(0, size.height * 2 / 3),
+      Offset(size.width, size.height * 2 / 3),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CanvasCropGridPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+enum _CanvasFrameHandle {
+  topLeft,
+  top,
+  topRight,
+  right,
+  bottomRight,
+  bottom,
+  bottomLeft,
+  left;
+
+  bool get affectsLeft => this == topLeft || this == bottomLeft || this == left;
+
+  bool get affectsRight =>
+      this == topRight || this == bottomRight || this == right;
+
+  bool get affectsTop => this == topLeft || this == topRight || this == top;
+
+  bool get affectsBottom =>
+      this == bottomLeft || this == bottomRight || this == bottom;
+
+  bool get isCorner =>
+      this == topLeft ||
+      this == topRight ||
+      this == bottomLeft ||
+      this == bottomRight;
+
+  Alignment get alignment => switch (this) {
+        topLeft => Alignment.topLeft,
+        top => Alignment.topCenter,
+        topRight => Alignment.topRight,
+        right => Alignment.centerRight,
+        bottomRight => Alignment.bottomRight,
+        bottom => Alignment.bottomCenter,
+        bottomLeft => Alignment.bottomLeft,
+        left => Alignment.centerLeft,
+      };
+
+  Offset get outwardOffset => switch (this) {
+        topLeft => Offset.zero,
+        top => Offset.zero,
+        topRight => Offset.zero,
+        right => Offset.zero,
+        bottomRight => Offset.zero,
+        bottom => Offset.zero,
+        bottomLeft => Offset.zero,
+        left => Offset.zero,
+      };
+
+  MouseCursor get cursor => switch (this) {
+        topLeft || bottomRight => SystemMouseCursors.resizeUpLeftDownRight,
+        topRight || bottomLeft => SystemMouseCursors.resizeUpRightDownLeft,
+        top || bottom => SystemMouseCursors.resizeUpDown,
+        left || right => SystemMouseCursors.resizeLeftRight,
+      };
 }
 
 enum _AxisLock { none, horizontal, vertical }

@@ -116,7 +116,9 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                   ),
                   const SizedBox(width: 8),
                 ],
-                Text('Productos Destacados', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Productos Destacados',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.refresh),
@@ -207,7 +209,8 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: featuredProductDetails.length,
                       onReorder: (oldIndex, newIndex) {
-                        _reorderFeatured(websiteService, oldIndex, newIndex);
+                            _reorderFeatured(
+                                websiteService, oldIndex, newIndex);
                       },
                       itemBuilder: (context, index) {
                         final product = featuredProductDetails[index];
@@ -283,8 +286,8 @@ class _FeaturedProductsPageState extends State<FeaturedProductsPage> {
                               ),
                             )
                           : ListView.builder(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
                               itemCount: _filteredProducts.length,
                               itemBuilder: (context, index) {
                                 final product = _filteredProducts[index];

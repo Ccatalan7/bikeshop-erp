@@ -27,7 +27,9 @@ class BarcodeScanEvent {
 
   factory BarcodeScanEvent.fromJson(Map<String, dynamic> json) {
     // Handle nested payload structure from Supabase broadcast
-    final data = json.containsKey('payload') ? json['payload'] as Map<String, dynamic> : json;
+    final data = json.containsKey('payload')
+        ? json['payload'] as Map<String, dynamic>
+        : json;
     
     return BarcodeScanEvent(
       barcode: data['barcode'] as String,

@@ -33,7 +33,8 @@ class POSCartItem {
     return POSCartItem(
       id: json['id'] ?? '',
       tenantId: json['tenant_id']?.toString() ?? '',
-      product: json['product'] != null ? Product.fromJson(json['product']) : null,
+      product:
+          json['product'] != null ? Product.fromJson(json['product']) : null,
       adHocDescription: json['ad_hoc_description'],
       quantity: json['quantity'] ?? 1,
       unitPrice: (json['unit_price'] ?? 0).toDouble(),

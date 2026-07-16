@@ -118,7 +118,8 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                 }
               } else {
                 // Check if permanently denied
-                final permanentlyDenied = await _scannerService.hasPermissionsDenied();
+                final permanentlyDenied =
+                    await _scannerService.hasPermissionsDenied();
                 
                 if (mounted) {
                   if (permanentlyDenied) {
@@ -126,7 +127,8 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Permisos denegados. Se necesitan para usar esta función.'),
+                        content: Text(
+                            'Permisos denegados. Se necesitan para usar esta función.'),
                         backgroundColor: Colors.red,
                         duration: Duration(seconds: 3),
                       ),
@@ -417,7 +419,8 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.search),
                         label: Text(

@@ -1313,9 +1313,8 @@ class _StockMovementsPageState extends State<StockMovementsPage> {
     final sourceText = sourceChannel == null || sourceChannel.isEmpty
         ? ''
         : ' • canal $sourceChannel';
-    final executorText = executor == null || executor.isEmpty
-        ? ''
-        : ' • ejecutor $executor';
+    final executorText =
+        executor == null || executor.isEmpty ? '' : ' • ejecutor $executor';
 
     return Text(
       'Disparador probado: $action de $documentType$sourceText$executorText$statusTransition$actorText • operación ${movement.operationId}',

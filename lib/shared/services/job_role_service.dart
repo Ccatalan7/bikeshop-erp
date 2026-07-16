@@ -74,10 +74,12 @@ class JobRoleService extends ChangeNotifier {
   Future<List<Map<String, String>>> getRoleOptions() async {
     try {
       final roles = await getJobRoles(activeOnly: true);
-      return roles.map((r) => {
+      return roles
+          .map((r) => {
         'code': r.systemRole,
         'name': r.displayName,
-      }).toList();
+              })
+          .toList();
     } catch (e) {
       if (kDebugMode) print('❌ Error fetching role options: $e');
       return [];
@@ -85,7 +87,8 @@ class JobRoleService extends ChangeNotifier {
   }
 
   // Update job role (admin only)
-  Future<void> updateJobRole(String systemRole, Map<String, dynamic> updates) async {
+  Future<void> updateJobRole(
+      String systemRole, Map<String, dynamic> updates) async {
     try {
       final tenantId = await _getTenantId();
       if (tenantId == null) throw Exception('Tenant ID not found');

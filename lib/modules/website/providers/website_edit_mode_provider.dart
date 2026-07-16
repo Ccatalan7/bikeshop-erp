@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/website_page_models.dart';
 import '../models/website_action.dart';
+import '../models/canvas_element_factory.dart';
 
 const _uuid = Uuid();
 
@@ -1006,90 +1007,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     final now = DateTime.now().microsecondsSinceEpoch;
     final id = 'el_$now';
-    final next = <String, dynamic>{
-      'id': id,
-      'type': elementType,
-      'x': 24.0,
-      'y': 24.0,
-      'w': switch (elementType) {
-        'button' => 220.0,
-        'image' => 320.0,
-        'shape' => 320.0,
-        'product' => 280.0,
-        'productsGallery' => 520.0,
-        _ => 360.0,
-      },
-      'h': switch (elementType) {
-        'button' => 56.0,
-        'image' => 200.0,
-        'shape' => 200.0,
-        'product' => 320.0,
-        'productsGallery' => 360.0,
-        _ => 72.0,
-      },
-      'anim': 'none', // none | fade | fadeUp
-    };
-
-    if (elementType == 'button') {
-      next.addAll({
-        'label': 'Botón',
-        'style': 'filled', // filled|outline|text
-        'inheritTheme': true,
-        'bgColor': '#00A09D',
-        'fgColor': '#FFFFFF',
-        'radius': 12.0,
-        'fontSize': 14.0,
-        'letterSpacing': 0.0,
-        'uppercase': false,
-        'shadow': false,
-        'link': '/',
-      });
-    } else if (elementType == 'image') {
-      next.addAll({
-        'imageUrl': '',
-        'productId': '',
-        'fit': 'cover', // cover|contain
-        'radius': 12.0,
-        'altText': '',
-      });
-    } else if (elementType == 'shape') {
-      next.addAll({
-        'shape': 'rectangle',
-        'fillColor': '#1F2937',
-        'borderColor': '#1F2937',
-        'borderWidth': 0.0,
-        'radius': 0.0,
-        'rotation': 0.0,
-      });
-    } else if (elementType == 'product') {
-      next.addAll({
-        'productId': '',
-        'showPrice': true,
-      });
-    } else if (elementType == 'productsGallery') {
-      next.addAll({
-        'mode': 'latest', // latest|manual
-        'productIds': <String>[],
-        'maxProducts': 6,
-        'layout': 'grid', // grid|carousel
-        'columns': 3,
-        'cardWidth': 300,
-        'showPrice': true,
-      });
-    } else {
-      // text
-      next.addAll({
-        'text': 'Texto',
-        'fontSize': 28.0,
-        'fontWeight': 'w700',
-        'fontRole': 'heading',
-        'color': '#111111',
-        'align': 'left',
-        'letterSpacing': 0.0,
-        'lineHeight': 1.1,
-        'uppercase': false,
-      });
-    }
+    final next = createCanvasElement(id: id, type: elementType);
 
     elements.add(next);
     updateBlockData(canvasBlockId, 'elements', elements);

@@ -34,8 +34,9 @@ class F29Service extends ChangeNotifier {
           .order('period_year', ascending: false)
           .order('period_month', ascending: false);
 
-      _declarations =
-          (response as List).map((json) => F29Declaration.fromJson(json)).toList();
+      _declarations = (response as List)
+          .map((json) => F29Declaration.fromJson(json))
+          .toList();
     } catch (e) {
       _error = e.toString();
       debugPrint('❌ Error loading F29 declarations: $e');
@@ -184,8 +185,7 @@ class F29Service extends ChangeNotifier {
       // Check status first
       final f29 = _declarations.firstWhere((d) => d.id == f29Id);
       if (!f29.isDraft) {
-        throw Exception(
-            'Cannot delete F29 that is already submitted or paid');
+        throw Exception('Cannot delete F29 that is already submitted or paid');
       }
 
       await _supabase.from('f29_declarations').delete().eq('id', f29Id);

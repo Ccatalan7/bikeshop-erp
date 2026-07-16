@@ -174,8 +174,7 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
   bool _showFontSizePicker = false;
   bool _showMoreOptions = false;
 
-  bool get _allowMinimalControls =>
-    widget.preset != TextToolbarPreset.textOnly;
+  bool get _allowMinimalControls => widget.preset != TextToolbarPreset.textOnly;
 
   bool get _allowBasicControls =>
     widget.preset == TextToolbarPreset.basic ||
@@ -229,7 +228,6 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                       onPressed: () => _toggleUnderline(),
                     ),
                   ],
-
                   if (_allowBasicControls) ...[
                     _ToolbarDivider(),
 
@@ -272,7 +270,6 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                       }),
                     ),
                   ],
-
                   if (_allowLink) ...[
                     _ToolbarDivider(),
 
@@ -284,7 +281,6 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                       onPressed: () => _showLinkDialog(),
                     ),
                   ],
-
                   if (_allowAdvancedOptions) ...[
                     _ToolbarDivider(),
 
@@ -301,7 +297,6 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                       }),
                     ),
                   ],
-
                   if (widget.onClose != null) ...[
                     _ToolbarDivider(),
                     _ToolbarButton(

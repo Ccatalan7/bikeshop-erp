@@ -426,6 +426,12 @@ void main() {
     expect(panel, contains("_addElement('shape')"));
     expect(canvas, contains("case 'shape':"));
     expect(canvas, contains('WebsiteActionButton('));
+    expect(canvas, contains("'constrainElementsToSafeArea'"));
+    expect(canvas, contains("'ÁREA SEGURA'"));
+    expect(panel, contains("title: 'Posición y tamaño'"));
+    expect(panel, contains("title: 'Reglas del lienzo'"));
+    expect(panel, contains("label: 'Restringir capas al área segura'"));
+    expect(panel, isNot(contains("'constrainToCanvas'")));
   });
 
   test('inspector uses task navigation and progressive control groups', () {
@@ -501,5 +507,43 @@ void main() {
     expect(panel, contains('Restablecer rotación'));
     expect(canvas, contains("final rotationDegrees = (el['rotation']"));
     expect(canvas, contains('Transform.rotate('));
+  });
+
+  test('Canvas contextual editing is shared, typed, and renderer-backed', () {
+    final canvas = File('lib/modules/website/widgets/canvas_block.dart')
+        .readAsStringSync();
+    final toolbar =
+        File('lib/modules/website/widgets/canvas_block_toolbar.dart')
+            .readAsStringSync();
+    final factory =
+        File('lib/modules/website/models/canvas_element_factory.dart')
+            .readAsStringSync();
+    final panel = File('lib/modules/website/widgets/website_editor_panel.dart')
+        .readAsStringSync();
+    final provider =
+        File('lib/modules/website/providers/website_edit_mode_provider.dart')
+            .readAsStringSync();
+
+    expect(canvas, contains('for (final handle in _CanvasFrameHandle.values)'));
+    expect(canvas, contains("ValueKey('rotation_handle_\$id')"));
+    expect(canvas, contains("'RECORTE · ARRASTRA LA IMAGEN'"));
+    expect(canvas, contains("'focalPointX'"));
+    expect(canvas, contains('alignment: imageAlignment'));
+    expect(canvas, contains('_handleCanvasKeyEvent'));
+    expect(toolbar, contains('CanvasElementAlignment'));
+    expect(toolbar, contains("tooltip: 'Girar 90°'"));
+    expect(toolbar, contains("'Recortar y reencuadrar'"));
+    expect(toolbar, contains('_CanvasToolbarView'));
+    expect(toolbar, contains("ValueKey('toolbar_more')"));
+    expect(toolbar, contains("ValueKey('toolbar_align_left')"));
+    expect(toolbar, isNot(contains('PopupMenuButton')));
+    expect(toolbar, isNot(contains('Tooltip(')));
+    expect(panel, contains("label: 'Encuadre horizontal'"));
+    expect(panel, contains("label: 'Bloquear ajustes directos'"));
+    expect(factory, contains("'rotation': 0.0"));
+    expect(factory, contains("'focalPointX': 0.5"));
+    expect(panel, contains('createCanvasElement(id: id, type: type)'));
+    expect(
+        provider, contains('createCanvasElement(id: id, type: elementType)'));
   });
 }

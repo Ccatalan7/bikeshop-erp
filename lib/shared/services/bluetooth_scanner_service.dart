@@ -10,7 +10,8 @@ class BluetoothScannerService extends ChangeNotifier {
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
   StreamSubscription<List<int>>? _dataSubscription;
   
-  final StreamController<String> _barcodeController = StreamController<String>.broadcast();
+  final StreamController<String> _barcodeController =
+      StreamController<String>.broadcast();
   Stream<String> get barcodeStream => _barcodeController.stream;
   
   bool _isScanning = false;
@@ -135,7 +136,8 @@ class BluetoothScannerService extends ChangeNotifier {
   }
 
   /// Scan for available Bluetooth devices
-  Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<void> startScan(
+      {Duration timeout = const Duration(seconds: 10)}) async {
     if (_isScanning) return;
     
     _isScanning = true;
@@ -199,7 +201,8 @@ class BluetoothScannerService extends ChangeNotifier {
       
       // Find characteristics that support notifications (typical for barcode scanners)
       for (BluetoothService service in services) {
-        for (BluetoothCharacteristic characteristic in service.characteristics) {
+        for (BluetoothCharacteristic characteristic
+            in service.characteristics) {
           if (characteristic.properties.notify) {
             // Subscribe to notifications
             await characteristic.setNotifyValue(true);
@@ -232,10 +235,8 @@ class BluetoothScannerService extends ChangeNotifier {
       String bufferContent = _dataBuffer.toString();
       if (bufferContent.contains('\n') || bufferContent.contains('\r')) {
         // Extract barcode (remove control characters)
-        String barcode = bufferContent
-            .replaceAll('\n', '')
-            .replaceAll('\r', '')
-            .trim();
+        String barcode =
+            bufferContent.replaceAll('\n', '').replaceAll('\r', '').trim();
         
         if (barcode.isNotEmpty) {
           // Emit barcode

@@ -37,11 +37,15 @@ class BrandService extends ChangeNotifier {
   }) async {
     try {
       // Check if this is a filtered query
-      final isFilteredQuery = (searchTerm != null && searchTerm.trim().isNotEmpty) ||
+      final isFilteredQuery =
+          (searchTerm != null && searchTerm.trim().isNotEmpty) ||
                               activeOnly == true;
       
       // Return cached data if valid and not a filtered query
-      if (!forceRefresh && !isFilteredQuery && _isCacheValid(_brandsCacheTime) && _cachedBrands != null) {
+      if (!forceRefresh &&
+          !isFilteredQuery &&
+          _isCacheValid(_brandsCacheTime) &&
+          _cachedBrands != null) {
         return _cachedBrands!;
       }
       
@@ -85,7 +89,8 @@ class BrandService extends ChangeNotifier {
         brands = brands.where((brand) => brand.isActive).toList();
       }
 
-      brands.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      brands
+          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       
       // Cache only unfiltered results
       if (!isFilteredQuery) {

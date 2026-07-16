@@ -357,6 +357,12 @@ class InvoiceItem {
   // ✅ Multi-bike sync metadata (preserves bike assignment through round-trip)
   final String? jobBikeId; // Links to mechanic_job_bikes.id
   final String? bikeName; // Display name for bike grouping
+  final Map<String, dynamic>? serviceConfigurationData;
+  final String? systemKey;
+  final String? componentSlotKey;
+  final String? locationKey;
+  final String? interventionType;
+  final bool createsLifecycle;
 
   InvoiceItem({
     this.id,
@@ -377,6 +383,12 @@ class InvoiceItem {
     this.hourlyRate,
     this.jobBikeId,
     this.bikeName,
+    this.serviceConfigurationData,
+    this.systemKey,
+    this.componentSlotKey,
+    this.locationKey,
+    this.interventionType,
+    this.createsLifecycle = false,
   }) : lineTotal = lineTotal ?? (quantity * unitPrice - discount);
 
   InvoiceItem copyWith({
@@ -398,6 +410,12 @@ class InvoiceItem {
     double? hourlyRate,
     String? jobBikeId,
     String? bikeName,
+    Map<String, dynamic>? serviceConfigurationData,
+    String? systemKey,
+    String? componentSlotKey,
+    String? locationKey,
+    String? interventionType,
+    bool? createsLifecycle,
   }) {
     return InvoiceItem(
       id: id ?? this.id,
@@ -418,6 +436,13 @@ class InvoiceItem {
       hourlyRate: hourlyRate ?? this.hourlyRate,
       jobBikeId: jobBikeId ?? this.jobBikeId,
       bikeName: bikeName ?? this.bikeName,
+      serviceConfigurationData:
+          serviceConfigurationData ?? this.serviceConfigurationData,
+      systemKey: systemKey ?? this.systemKey,
+      componentSlotKey: componentSlotKey ?? this.componentSlotKey,
+      locationKey: locationKey ?? this.locationKey,
+      interventionType: interventionType ?? this.interventionType,
+      createsLifecycle: createsLifecycle ?? this.createsLifecycle,
     );
   }
 
@@ -429,15 +454,19 @@ class InvoiceItem {
     // Handle both 'line_total' and 'subtotal' (from process_online_order)
     final lineTotal = (json['line_total'] as num?)?.toDouble() ??
         (json['subtotal'] as num?)?.toDouble();
+    final rawProductId = json['product_id']?.toString().trim();
+    final productId =
+        rawProductId == null || rawProductId.isEmpty ? null : rawProductId;
 
     return InvoiceItem(
       id: json['id']?.toString(),
       invoiceId: json['invoice_id']?.toString(),
-      productId: json['product_id']?.toString(), // Nullable now
+      productId: productId,
       productName: json['product_name']?.toString(),
       productSku: json['product_sku']?.toString(),
       description: json['description']?.toString(),
-      isCatalogProduct: json['is_catalog_product'] ?? true,
+      isCatalogProduct:
+          json['is_catalog_product'] as bool? ?? (productId != null),
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unitPrice: price,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
@@ -452,6 +481,21 @@ class InvoiceItem {
       hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
       jobBikeId: json['job_bike_id']?.toString(),
       bikeName: json['bike_name']?.toString(),
+      serviceConfigurationData:
+          json['service_configuration_data'] is Map<String, dynamic>
+              ? Map<String, dynamic>.from(
+                  json['service_configuration_data'] as Map<String, dynamic>,
+                )
+              : json['service_configuration_data'] is Map
+                  ? Map<String, dynamic>.from(
+                      json['service_configuration_data'] as Map,
+                    )
+                  : null,
+      systemKey: json['system_key']?.toString(),
+      componentSlotKey: json['component_slot_key']?.toString(),
+      locationKey: json['location_key']?.toString(),
+      interventionType: json['intervention_type']?.toString(),
+      createsLifecycle: json['creates_lifecycle'] as bool? ?? false,
     );
   }
 
@@ -471,10 +515,19 @@ class InvoiceItem {
       'cost': cost,
       'purchase_treatment': purchaseTreatment.dbValue,
       'is_service': isService,
+      'item_type':
+          isService ? 'service' : (isCatalogProduct ? 'product' : 'adhoc'),
       if (hours != null) 'hours': hours,
       if (hourlyRate != null) 'hourly_rate': hourlyRate,
       if (jobBikeId != null) 'job_bike_id': jobBikeId,
       if (bikeName != null) 'bike_name': bikeName,
+      if (serviceConfigurationData != null)
+        'service_configuration_data': serviceConfigurationData,
+      if (systemKey != null) 'system_key': systemKey,
+      if (componentSlotKey != null) 'component_slot_key': componentSlotKey,
+      if (locationKey != null) 'location_key': locationKey,
+      if (interventionType != null) 'intervention_type': interventionType,
+      if (createsLifecycle) 'creates_lifecycle': true,
     };
   }
 }

@@ -214,7 +214,8 @@ class Expense {
       updatedAt: updatedAt ?? this.updatedAt,
       lines: lines ?? List<ExpenseLine>.from(this.lines),
       payments: payments ?? List<ExpensePayment>.from(this.payments),
-      attachments: attachments ?? List<ExpenseAttachment>.from(this.attachments),
+      attachments:
+          attachments ?? List<ExpenseAttachment>.from(this.attachments),
     );
   }
 
@@ -234,7 +235,9 @@ class Expense {
       'payment_terms': paymentTerms,
       'currency': currency,
       'exchange_rate': exchangeRate,
-      'posting_status': postingStatus == ExpensePostingStatus.voided ? 'void' : postingStatus.name,
+      'posting_status': postingStatus == ExpensePostingStatus.voided
+          ? 'void'
+          : postingStatus.name,
       'payment_status': _encodePaymentStatus(paymentStatus),
       'subtotal': subtotal,
       'tax_amount': taxAmount,
@@ -341,7 +344,12 @@ class Expense {
     if (value is List) {
       return value.map((item) => item.toString()).toList();
     }
-    return value.toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    return value
+        .toString()
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 
   static String _encodePaymentStatus(ExpensePaymentStatus status) {

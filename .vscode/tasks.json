@@ -2,6 +2,13 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "🧮 Build Spreadsheet Engine",
+			"type": "shell",
+			"command": "npm run build:spreadsheet-engine",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
 			"label": "🧰 Repair Flutter SDK (macOS)",
 			"type": "shell",
 			"command": "bash scripts/bootstrap/ensure_flutter_sdk_macos.sh",

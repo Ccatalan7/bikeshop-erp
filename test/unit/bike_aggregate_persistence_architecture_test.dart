@@ -128,6 +128,24 @@ void main() {
     expect(source, contains('_confirmConflictReload'));
   });
 
+  test('technical bike wizard isolates dropdown state and scrolls its map', () {
+    final source = File(
+      'lib/modules/bikeshop/pages/bike_form_dialog.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("'code-dropdown:\$label:"));
+    expect(source, contains("'string-dropdown:\$label:"));
+    expect(source, contains("'int-dropdown:\$label:"));
+    expect(source, contains('isExpanded: true'));
+    expect(
+      source,
+      contains(
+        'SingleChildScrollView(\n'
+        '                    child: _buildTechnicalSchemaNavigator(',
+      ),
+    );
+  });
+
   test('database snapshot and service expose the shared atomic contract', () {
     final service = File(
       'lib/modules/bikeshop/services/bikeshop_service.dart',
@@ -149,6 +167,12 @@ void main() {
     expect(migration, contains('pg_advisory_xact_lock'));
     expect(migration, contains('p_expected_profile_updated_at'));
     expect(migration, contains('v_effective_model_id'));
+    expect(migration, contains("'profile', p_profile_payload"));
+    expect(migration, contains('v_operation.result_snapshot'));
+    expect(
+      migration,
+      contains('Bicycle customer cannot be reassigned'),
+    );
     expect(
       migration,
       contains("p_profile_payload ? 'intake_profile'"),
@@ -158,6 +182,12 @@ void main() {
       contains('Exactly one active employee tenant is required'),
     );
     expect(migration, contains("'replayed', true"));
+    expect(
+      File(
+        'lib/modules/bikeshop/pages/bike_form_dialog.dart',
+      ).readAsStringSync(),
+      contains('_pendingSaveConfirmedAt'),
+    );
   });
 
   test('every bicycle editor host is registered on the shared contract', () {

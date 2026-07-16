@@ -19,6 +19,7 @@ import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_action.dart';
+import '../models/canvas_element_factory.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
 import '../services/website_backup_service.dart';
@@ -2441,6 +2442,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       'useComposition': true,
       'designWidth': 1200.0,
       'mobileDesignWidth': 390.0,
+      'constrainElementsToSafeArea': true,
       'elements': elements,
     });
   }
@@ -2541,6 +2543,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 elementsOnly: true,
                 onElementsChanged: (elements) =>
                     _updateSlide(_selectedSlideIndex, 'elements', elements),
+                onCanvasSettingChanged: (key, value) =>
+                    _updateSlide(_selectedSlideIndex, key, value),
                 onActiveElementChanged: (elementId) => _updateSlideTransient(
                   _selectedSlideIndex,
                   'activeElementId',
@@ -5556,6 +5560,7 @@ class _CanvasBlockControls extends StatelessWidget {
   final bool elementsOnly;
   final ValueChanged<List<Map<String, dynamic>>>? onElementsChanged;
   final ValueChanged<String?>? onActiveElementChanged;
+  final void Function(String key, dynamic value)? onCanvasSettingChanged;
 
   const _CanvasBlockControls({
     required this.data,
@@ -5564,6 +5569,7 @@ class _CanvasBlockControls extends StatelessWidget {
     this.elementsOnly = false,
     this.onElementsChanged,
     this.onActiveElementChanged,
+    this.onCanvasSettingChanged,
   });
 
   List<Map<String, dynamic>> _elements() {
@@ -5600,6 +5606,14 @@ class _CanvasBlockControls extends StatelessWidget {
       return;
     }
     provider.updateBlockData(blockId, 'elements', elements);
+  }
+
+  void _setCanvasSetting(String key, dynamic value) {
+    if (onCanvasSettingChanged != null) {
+      onCanvasSettingChanged!(key, value);
+      return;
+    }
+    provider.updateBlockData(blockId, key, value);
   }
 
   void _updateElement(
@@ -5640,82 +5654,7 @@ class _CanvasBlockControls extends StatelessWidget {
     final now = DateTime.now().microsecondsSinceEpoch;
     final id = 'el_$now';
     final elements = _elements();
-    final next = <String, dynamic>{
-      'id': id,
-      'type': type,
-      'x': 24.0,
-      'y': 24.0,
-      'w': switch (type) {
-        'button' => 220.0,
-        'image' => 320.0,
-        'shape' => 320.0,
-        'product' => 280.0,
-        'productsGallery' => 520.0,
-        _ => 360.0,
-      },
-      'h': switch (type) {
-        'button' => 56.0,
-        'image' => 200.0,
-        'shape' => 200.0,
-        'product' => 320.0,
-        'productsGallery' => 360.0,
-        _ => 72.0,
-      },
-      'anim': 'none',
-    };
-    if (type == 'button') {
-      next.addAll({
-        'label': 'Botón',
-        'style': 'filled', // filled|outline|text
-        'inheritTheme': true,
-        'bgColor': '#00A09D',
-        'fgColor': '#FFFFFF',
-        'radius': 12.0,
-        'fontSize': 14.0,
-        'link': '/',
-      });
-    } else if (type == 'image') {
-      next.addAll({
-        'imageUrl': '',
-        'productId': '',
-        'fit': 'contain',
-        'radius': 0.0,
-        'altText': '',
-      });
-    } else if (type == 'shape') {
-      next.addAll({
-        'shape': 'rectangle',
-        'fillColor': '#1F2937',
-        'borderColor': '#1F2937',
-        'borderWidth': 0.0,
-        'radius': 0.0,
-        'rotation': 0.0,
-      });
-    } else if (type == 'product') {
-      next.addAll({'productId': '', 'showPrice': true});
-    } else if (type == 'productsGallery') {
-      next.addAll({
-        'mode': 'latest',
-        'productIds': <String>[],
-        'maxProducts': 6,
-        'layout': 'grid',
-        'columns': 3,
-        'cardWidth': 300,
-        'showPrice': true,
-      });
-    } else {
-      next.addAll({
-        'text': 'Texto',
-        'fontSize': 28.0,
-        'fontWeight': 'w700',
-        'fontRole': 'heading',
-        'color': '#111111',
-        'align': 'left',
-        'letterSpacing': 0.0,
-        'lineHeight': 1.1,
-        'uppercase': false,
-      });
-    }
+    final next = createCanvasElement(id: id, type: type);
     elements.add(next);
     _setElements(elements);
     _setActive(id);
@@ -5980,6 +5919,34 @@ class _CanvasBlockControls extends StatelessWidget {
           ),
         ],
 
+        // ========== CANVAS-WIDE LAYOUT POLICY ==========
+        _CollapsibleSection(
+          title: 'Reglas del lienzo',
+          icon: Icons.crop_free_rounded,
+          initiallyExpanded: true,
+          children: [
+            _EditorToggle(
+              label: 'Restringir capas al área segura',
+              value: data['constrainElementsToSafeArea'] != false,
+              onChanged: (value) => _setCanvasSetting(
+                'constrainElementsToSafeArea',
+                value,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              data['constrainElementsToSafeArea'] == false
+                  ? 'Sangrado general activado: cualquier capa puede cruzar la guía. La parte fuera de la diapositiva se recorta en vista previa.'
+                  : 'Regla general activa para capas actuales y nuevas. La guía visible conserva la composición entre editor y vista previa.',
+              style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+
         // ========== CANVAS ELEMENTS ==========
         _CollapsibleSection(
           title: 'Canvas Elements (${elements.length})',
@@ -6105,14 +6072,138 @@ class _CanvasBlockControls extends StatelessWidget {
         // ========== ELEMENT EDITOR (when element is selected) ==========
         if (active != null) ...[
           _CollapsibleSection(
-            title: switch (activeType) {
-              'button' => 'Editar: ${active["label"] ?? "Botón"}',
-              'image' => 'Editar: Imagen',
-              'shape' => 'Editar: Forma',
-              'product' => 'Editar: Producto',
-              'productsGallery' => 'Editar: Galería',
-              _ => 'Editar: ${active["text"] ?? "Texto"}',
-            },
+            title: 'Posición y tamaño',
+            icon: Icons.open_with_rounded,
+            initiallyExpanded: true,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _EditorTextField(
+                      label: 'X',
+                      value: ((active['x'] as num?)?.toDouble() ?? 0)
+                          .toStringAsFixed(0),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v);
+                        if (parsed != null) {
+                          _updateElement(activeId!, {'x': parsed});
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _EditorTextField(
+                      label: 'Y',
+                      value: ((active['y'] as num?)?.toDouble() ?? 0)
+                          .toStringAsFixed(0),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v);
+                        if (parsed != null) {
+                          _updateElement(activeId!, {'y': parsed});
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _EditorTextField(
+                      label: 'Ancho',
+                      value: ((active['w'] as num?)?.toDouble() ?? 200)
+                          .toStringAsFixed(0),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v);
+                        if (parsed != null) {
+                          _updateElement(
+                            activeId!,
+                            {'w': parsed.clamp(40, 2000)},
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _EditorTextField(
+                      label: 'Alto',
+                      value: ((active['h'] as num?)?.toDouble() ?? 56)
+                          .toStringAsFixed(0),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v);
+                        if (parsed != null) {
+                          _updateElement(
+                            activeId!,
+                            {'h': parsed.clamp(30, 2000)},
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _EditorSlider(
+                label: 'Rotación',
+                value: ((active['rotation'] as num?)?.toDouble() ?? 0)
+                    .clamp(-180, 180),
+                min: -180,
+                max: 180,
+                divisions: 360,
+                valueLabel:
+                    '${((active['rotation'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}°',
+                onChanged: (v) => _updateElement(activeId!, {'rotation': v}),
+              ),
+              if (((active['rotation'] as num?)?.toDouble() ?? 0).abs() > 0.01)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _updateElement(activeId!, {'rotation': 0}),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                    label: const Text('Restablecer rotación'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF20C5C1),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              _EditorToggle(
+                label: 'Bloquear ajustes directos',
+                value: active['locked'] == true,
+                onChanged: (v) => _updateElement(activeId!, {'locked': v}),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'Evita mover, redimensionar, recortar o rotar accidentalmente desde el lienzo. Los valores precisos siguen disponibles aquí.',
+                style:
+                    TextStyle(color: Colors.white38, fontSize: 11, height: 1.3),
+              ),
+              const SizedBox(height: 12),
+              _EditorDropdown(
+                label: 'Visibilidad adaptable',
+                value: active['showOnMobile'] == true
+                    ? 'mobile'
+                    : active['hideOnMobile'] == true
+                        ? 'desktop'
+                        : 'all',
+                options: const [
+                  ('all', 'Escritorio y móvil'),
+                  ('desktop', 'Solo escritorio'),
+                  ('mobile', 'Solo móvil'),
+                ],
+                onChanged: (value) => _updateElement(activeId!, {
+                  'hideOnMobile': value == 'desktop',
+                  'showOnMobile': value == 'mobile',
+                }),
+              ),
+            ],
+          ),
+          _CollapsibleSection(
+            title: 'Contenido y apariencia',
             icon: switch (activeType) {
               'button' => Icons.smart_button_rounded,
               'image' => Icons.image_outlined,
@@ -6121,7 +6212,7 @@ class _CanvasBlockControls extends StatelessWidget {
               'productsGallery' => Icons.grid_view_rounded,
               _ => Icons.text_fields_rounded,
             },
-            initiallyExpanded: true,
+            initiallyExpanded: false,
             children: [
               if (activeType == 'text') ...[
                 _EditorTextField(
@@ -6365,6 +6456,56 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _EditorSlider(
+                  label: 'Encuadre horizontal',
+                  value: (((active['focalPointX'] as num?)?.toDouble() ?? 0.5) *
+                          100)
+                      .clamp(0, 100),
+                  min: 0,
+                  max: 100,
+                  divisions: 100,
+                  valueLabel:
+                      '${((((active['focalPointX'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'focalPointX': v / 100}),
+                ),
+                const SizedBox(height: 12),
+                _EditorSlider(
+                  label: 'Encuadre vertical',
+                  value: (((active['focalPointY'] as num?)?.toDouble() ?? 0.5) *
+                          100)
+                      .clamp(0, 100),
+                  min: 0,
+                  max: 100,
+                  divisions: 100,
+                  valueLabel:
+                      '${((((active['focalPointY'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
+                  onChanged: (v) =>
+                      _updateElement(activeId!, {'focalPointY': v / 100}),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _updateElement(activeId!, {
+                      'fit': 'cover',
+                      'focalPointX': 0.5,
+                      'focalPointY': 0.5,
+                    }),
+                    icon:
+                        const Icon(Icons.center_focus_strong_rounded, size: 16),
+                    label: const Text('Centrar encuadre'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF20C5C1),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+                const Text(
+                  'En el lienzo: doble clic o usa Recortar; arrastra la imagen para reencuadrar y sus ocho bordes para cambiar el marco.',
+                  style: TextStyle(
+                      color: Colors.white38, fontSize: 11, height: 1.3),
+                ),
+                const SizedBox(height: 12),
+                _EditorSlider(
                   label: 'Radio',
                   value: ((active['radius'] as num?)?.toDouble() ?? 12)
                       .clamp(0, 32),
@@ -6562,115 +6703,6 @@ class _CanvasBlockControls extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white12),
-              const SizedBox(height: 8),
-              const _SectionHeader('Tamaño / Posición'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'X',
-                      value: ((active['x'] as num?)?.toDouble() ?? 0)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed == null) return;
-                        _updateElement(activeId!, {'x': parsed});
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'Y',
-                      value: ((active['y'] as num?)?.toDouble() ?? 0)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed == null) return;
-                        _updateElement(activeId!, {'y': parsed});
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'W',
-                      value: ((active['w'] as num?)?.toDouble() ?? 200)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed == null) return;
-                        _updateElement(
-                            activeId!, {'w': parsed.clamp(40, 2000)});
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'H',
-                      value: ((active['h'] as num?)?.toDouble() ?? 56)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed == null) return;
-                        _updateElement(
-                            activeId!, {'h': parsed.clamp(30, 2000)});
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _EditorSlider(
-                label: 'Rotación',
-                value: ((active['rotation'] as num?)?.toDouble() ?? 0)
-                    .clamp(-180, 180),
-                min: -180,
-                max: 180,
-                divisions: 360,
-                valueLabel:
-                    '${((active['rotation'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}°',
-                onChanged: (v) => _updateElement(activeId!, {'rotation': v}),
-              ),
-              if (((active['rotation'] as num?)?.toDouble() ?? 0).abs() > 0.01)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _updateElement(activeId!, {'rotation': 0}),
-                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                    label: const Text('Restablecer rotación'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF20C5C1),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              _EditorDropdown(
-                label: 'Visibilidad adaptable',
-                value: active['showOnMobile'] == true
-                    ? 'mobile'
-                    : active['hideOnMobile'] == true
-                        ? 'desktop'
-                        : 'all',
-                options: const [
-                  ('all', 'Escritorio y móvil'),
-                  ('desktop', 'Solo escritorio'),
-                  ('mobile', 'Solo móvil'),
-                ],
-                onChanged: (value) => _updateElement(activeId!, {
-                  'hideOnMobile': value == 'desktop',
-                  'showOnMobile': value == 'mobile',
-                }),
               ),
               const SizedBox(height: 12),
               const Divider(color: Colors.white12),
@@ -8678,10 +8710,15 @@ class _EditorToggle extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
         ),
+        const SizedBox(width: 8),
         Switch(
           value: value,
           onChanged: onChanged,

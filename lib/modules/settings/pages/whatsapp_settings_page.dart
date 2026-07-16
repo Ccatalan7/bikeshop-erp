@@ -480,7 +480,8 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                       Text(
                         'Estos valores si afectan el envio real del primer mensaje por WhatsApp. Se guardan por tenant en company_settings.',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.72),
                         ),
                       ),
                     ],

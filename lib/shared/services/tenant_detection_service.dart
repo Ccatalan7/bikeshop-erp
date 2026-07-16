@@ -171,8 +171,10 @@ class TenantDetectionService {
 
     // Public Store mobile optimization: allow forcing a tenant via dart-define.
     // This avoids any auth/user_profiles lookup and makes boot deterministic.
-    const forcedStoreTenantId = String.fromEnvironment('PUBLIC_STORE_TENANT_ID');
-    const forcedStoreSubdomain = String.fromEnvironment('PUBLIC_STORE_SUBDOMAIN');
+    const forcedStoreTenantId =
+        String.fromEnvironment('PUBLIC_STORE_TENANT_ID');
+    const forcedStoreSubdomain =
+        String.fromEnvironment('PUBLIC_STORE_SUBDOMAIN');
     const ignoreAuth = bool.fromEnvironment('PUBLIC_STORE_IGNORE_AUTH');
 
     // Fast path (all platforms, including web): explicit tenant override.

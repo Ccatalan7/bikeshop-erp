@@ -50,6 +50,7 @@ foreach ($path in $requiredPaths) {
 volta install "node@$($tools.node)" "npm@$($tools.npm)"
 fvm use $tools.flutter --force
 npm ci
+npm run build:spreadsheet-engine
 uv sync --project tools/invoice-parser-service
 
 & (Join-Path $Root 'scripts\dev\doctor.ps1')

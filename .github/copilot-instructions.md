@@ -6,6 +6,141 @@ The backend uses Supabase exclusively, with PostgreSQL as the relational databas
 
 ---
 
+# Agent Autonomy And End-To-End Ownership (CRITICAL)
+
+Agents own the complete technical outcome of an implementation. A finished task
+is a working, verified result—not a set of commands, SQL snippets, dashboard
+steps, or deployment chores left for the user.
+
+## Default Operating Contract
+
+- Before changing code or infrastructure, read this file and every
+  task-specific canonical document named by `AGENTS.md`.
+- Inspect the current implementation and live/runtime evidence, make the
+  smallest coherent change, run the applicable tests, execute required
+  migrations/deployments, and verify the resulting behavior end to end.
+- Use repository scripts, CLIs, APIs, authenticated browser sessions, and
+  provider automation directly when they can complete an in-scope step. Do not
+  turn an automatable step into user instructions merely because a web
+  dashboard also offers a manual path.
+- Do not ask the user to run routine queries, paste SQL into an editor, execute
+  tests, configure a known setting, deploy a reviewed change, or report results
+  that the agent can obtain with available tooling.
+- Treat setup and tooling failures as problems to diagnose. Check documented
+  credential stores, installed CLIs, command help, repository scripts, service
+  health, and supported APIs before declaring a step blocked.
+- Preserve unrelated working-tree changes. Do not use autonomy as permission
+  to commit, push, publish, delete data, rotate credentials, incur material
+  cost, or expand scope unless the task or a repo runbook authorizes it.
+
+An explicit request to implement, fix, ship, deploy, or "get it done" is
+task-level authorization for the normal, non-destructive, backward-compatible
+writes required to make that result active on the clearly identified target.
+Do not interrupt that flow for a second confirmation already inherent in the
+request. Analysis-only, diagnosis-only, local-only, ambiguous-target, data
+deletion/repair, credential rotation, publication, and materially costly work
+remain outside that implied authorization unless separately included.
+
+## Definition Of Done For Implementations
+
+Unless the user explicitly requests analysis-only or local-only work, the agent
+must complete every applicable item below before reporting completion:
+
+1. Implement the code, schema, configuration, and documentation required by the
+   chosen design.
+2. Run focused tests for the changed behavior and broader gates proportional to
+   the risk and release boundary.
+3. Apply required database migrations, backfills, Edge Function deployments,
+   provider configuration, or other in-scope remote changes using the
+   documented automated path.
+4. Verify the actual target state after the write. A successful command exit is
+   not enough when a read-back, health check, invariant query, or real workflow
+   can prove the outcome.
+5. Report what changed, which target was affected, what verification passed,
+   and any residual risk or genuinely blocked item. Never describe an
+   undeployed or unverified dependency as complete.
+
+Tests and deployment checks must be relevant rather than ceremonial. Pure
+documentation changes do not require application or database suites, while a
+data-integrity change requires database contracts and live invariant checks.
+
+## The Only Valid User Hand-Offs
+
+Pause and ask the user only for something the agent genuinely cannot obtain or
+perform safely, such as:
+
+- an account owner completing identity verification, consent, billing, legal,
+  hardware, CAPTCHA, or another provider-enforced human-only action;
+- a credential or OAuth authorization that does not already exist in the
+  documented OS credential store, protected CI environment, provider CLI, or
+  authenticated session;
+- a product/business decision whose alternatives materially change behavior;
+- authorization for a destructive, irreversible, unexpectedly costly, or
+  out-of-scope external mutation.
+
+When blocked, ask for the minimum missing input—not for the entire procedure.
+After the user supplies it, the agent resumes and completes the automated work.
+
+## External APIs, OAuth, And Durable Credentials
+
+For Supabase, Meta, Google, Firebase, GitHub, payment providers, messaging, and
+other integrations:
+
+- Prefer the provider's supported API, CLI, service account, OAuth flow, or
+  authenticated browser automation over instructions for manual dashboard
+  clicks.
+- Check existing authenticated tooling and documented secret locations first.
+  Never ask for a key that is already safely available.
+- If a credential is missing, ask once for the exact minimum credential or
+  authorization required through an approved secure entry path, identify the
+  provider and scopes, and prefer the provider's durable production credential
+  model. If the user supplies a credential in conversation, never quote or echo
+  it. Do not build a lasting integration around an expiring test token when a
+  refreshable OAuth grant, service credential, webhook secret, or production
+  API key is available.
+- Store private server-side credentials immediately in the approved durable
+  secret store (for example Supabase Edge Function secrets, an OS credential
+  store for local agent tooling, or protected CI secrets). Never commit them,
+  place them in Flutter/public web code, persist them in chat/docs, or echo them
+  in terminal output.
+- Configure every authorized consumer, record only the secret name/location and
+  consumer mapping, and verify the integration from credential validation
+  through the real application path. Credential rotation should update the
+  secret store and consumers, not require an app rebuild.
+- Use least-privilege scopes and separate development/test credentials from
+  production credentials when the provider supports it. Never silently replace
+  a production credential or revoke an existing one before mapping consumers
+  and proving the replacement.
+
+## Supabase Implementation Completion Gate
+
+Every Supabase/database implementation must also follow
+`docs/runbooks/STAGING_SUPABASE.md`, whose current environment status and safety
+rules override older staging wording elsewhere in this file.
+
+For each database-backed implementation, the agent must:
+
+1. Run the documented CLI/project-identity preflight and inspect read-only
+   evidence first.
+2. Represent schema/data behavior in an idempotent forward migration and mirror
+   the same objects/logic in `supabase/sql/core_schema.sql`.
+3. Run the affected local pgTAP tests; run the full database gate at the
+   phase/release boundary or when the change has broad schema impact.
+4. Execute the smallest reviewed migration/backfill against the intended live
+   environment when that target is in scope and the task authorizes the write.
+   Do not stop after creating SQL or after proving it only on a local database.
+5. Register/confirm migration state when required, then query the live target to
+   verify schema, data, tenant isolation, and the affected business invariants.
+6. Make backfills idempotent, scoped, auditable, and safe to replay. Use preview
+   counts/checkpoints and refuse ambiguous repairs rather than guessing.
+
+Production writes retain the authorization and recovery safeguards documented
+below. Once those safeguards and the task-level authorization are satisfied,
+the agent executes and verifies the change without asking the user to repeat
+the same authorization or perform the deployment manually.
+
+---
+
 # Product Language
 
 ## Canonical Sales Invoice UI
@@ -43,6 +178,37 @@ workflow UI changes.
 ## Workshop Lifecycle Guardrail
 
 - For mechanic jobs, `delivered_at` is a timestamp for the current delivered lifecycle state, not an independent archive flag. Jobs should be treated as delivered only when the current legacy/custom status resolves to `ENTREGADO`; moving a job back to `FINALIZADO`/`Terminado` or any non-delivered state must clear `delivered_at` so `Trabajos: Activos` only hides currently delivered and paid jobs.
+
+## Workshop Job Mode Guardrail
+
+- The canonical job-mode contract is orthogonal: `workflow_kind` owns
+  service/quotation/warranty behavior and `intake_kind` owns whether the shop
+  actually received a bicycle, only a loose component, or no object yet.
+  `job_type` remains a backwards-compatible facade; do not build new financial
+  or bicycle-count logic from it alone.
+- A component intake means the customer left only that component. It must not
+  count as a received bicycle even if a related bike is retained as provenance.
+- A quotation is non-posting planning state. It may contain proposed
+  `mechanic_job_items`, but it must not link an invoice or create stock,
+  revenue, IVA, receivable, COGS, journal, or payment effects.
+- Quotation decisions use `transition_mechanic_job_quotation`; approved quotes
+  convert through `convert_mechanic_job_to_billable`. Billable document creation
+  uses `create_billable_invoice_from_mechanic_job`. Do not restore client-side
+  mode updates followed by a separate best-effort invoice call. The historical
+  `create_invoice_from_mechanic_job` RPC is only a guarded compatibility alias;
+  never expose or call its private `_internal` builder directly.
+- An operation key replays only the exact same job, event type, and request
+  payload. Reusing it for another transition must fail rather than returning an
+  unrelated receipt.
+- Historical intake classification must remain conservative. Use proven bike
+  links, explicit component subjects, or the narrowly documented wheel-only
+  backfill with explicit received/left/collection language; a product or repair
+  description mentioning a wheel or tire is not enough. Otherwise preserve
+  `mode_needs_review` instead of guessing.
+- The initial job-mode backfill is permanently bounded by
+  `mechanic_job_mode_backfill_eligible` at `2026-07-16 05:15:00+00`. Never move
+  that cutoff forward: future schema reapplication must not classify newer
+  operational rows as history.
 
 ---
 
@@ -874,7 +1040,11 @@ Validation rule for every queue item below: use the debug-only `Prueba rápida` 
 
 ## Staging Project
 
-Before any Supabase schema, trigger, RLS, Edge Function, inventory, payment, or accounting change, read and follow `docs/runbooks/STAGING_SUPABASE.md`. Staging is a required professional gate for those changes; it must not become an undocumented or abandoned parallel system.
+Before any Supabase schema, trigger, RLS, Edge Function, inventory, payment, or
+accounting change, read and follow `docs/runbooks/STAGING_SUPABASE.md`. That
+runbook is authoritative for the environment's current status. Staging is
+currently suspended and non-authoritative; do not use it as release evidence or
+spend time rebuilding it unless the owner explicitly reactivates it.
 
 | Field | Value |
 |-------|-------|
@@ -887,7 +1057,9 @@ Before any Supabase schema, trigger, RLS, Edge Function, inventory, payment, or 
 - This replacement staging project was created on 2026-07-12 under the Free Plan's second active-project allowance. The prior project `kyvgmapifacpzuyreasy` was paused for more than 90 days and Supabase returned HTTP 400 stating that it cannot be restored.
 - The repository remains linked to production. Do not casually run `supabase link` against staging and leave the working copy pointed at the wrong project.
 - The staging project ref and database password are stored in macOS Keychain as `Vinabike ERP Supabase staging project ref` (account `supabase`) and `Vinabike ERP Supabase staging database password` (account `postgres`).
-- Destructive browser/database journeys belong on this staging project, never production. Staging must use synthetic tenant/user fixtures and must reject the production project ref in reset/cleanup tooling.
+- If staging is explicitly reactivated, destructive browser/database journeys
+  belong there, never in production. Staging must use synthetic tenant/user
+  fixtures and must reject the production project ref in reset/cleanup tooling.
 
 ## Connection Strings
 
@@ -1730,7 +1902,10 @@ SELECT * FROM test_table;  -- Should only see your tenant's data
 
 **When making database changes:**
 - ✅ Edit `core_schema.sql` (master file)
-- ✅ After editing, tell user: "Deploy the updated `supabase/sql/core_schema.sql` OR regenerate the 3-file split"
+- ✅ When the task requires the database change to become live and repository
+  credentials/tooling are available, the agent MUST execute the reviewed SQL
+  against the intended Supabase environment and verify it. Do not stop by
+  telling the user to copy/paste or deploy it.
 - ✅ Be EXPLICIT: "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
 - ✅ **ALLOWED:** You may create standalone .sql files (e.g. `supabase/migrations/YYYYMMDD_name.sql`) for specific deployments to avoid running the entire schema, BUT you must ALSO update `core_schema.sql` as the source of truth.
 
@@ -1750,6 +1925,21 @@ After the SQL has actually been run against the real linked Supabase project `xz
 ```
 
 Never mark a standalone SQL file as deployed after only running it on a local Supabase database. If deployment is not completed or verification did not run, leave the file marked `NOT DEPLOYED` and say that clearly to the user.
+
+Every timestamped `.sql` file under `supabase/migrations/` is an active
+deployment candidate. Never leave an intentionally non-deployable experiment,
+superseded proposal, or partial backfill in that directory, and never include
+one from `supabase/sql/core_schema.sql`. Move preserved review evidence to
+`supabase/manual_checks/archive/`, label it `NEVER DEPLOY`, and keep the
+canonical snapshot limited to the reviewed forward migrations that actually
+define a fresh database. A `NOT DEPLOYED` status means "pending deployment",
+not "do not deploy".
+
+Migration version prefixes must be unique across `supabase/migrations/`.
+Search for the proposed timestamp before creating a file. Supabase history is
+keyed by version, so duplicate prefixes make deployment attribution and
+metadata repair ambiguous; resolve the behavior under a new unique, idempotent
+forward migration instead of guessing which duplicate was applied.
 
 **⚠️ CRITICAL: NEVER CREATE UNNECESSARY COLUMNS OR FUNCTIONS!**
 
@@ -1840,7 +2030,8 @@ alter table my_table add column if not exists new_column text;
 6. 🤔 **Ask: "Is this column STRICTLY NECESSARY?"**
 7. ✏️ Make changes directly in `core_schema.sql`
 8. ✏️ **Add ALTER TABLE if modifying existing table structure**
-9. 💾 Save and inform user: "Deploy the updated `core_schema.sql` to Supabase"
+9. 💾 Save, deploy the smallest reviewed SQL change with the repository
+   database tooling, and run a live verification query
 10. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
 
 **This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
@@ -2180,8 +2371,31 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
 11. ✅ **IF MODIFYING INVENTORY:** Update BOTH `inventory_qty` AND `stock_quantity` columns (see inventory columns section above)
 12. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
-13. ✅ **TELL USER:** "Deploy the updated `core_schema.sql` to Supabase"
-14. ✅ **PROVIDE DEPLOYMENT SNIPPET:** Extract the exact lines to deploy and present them in a canvas artifact for easy copy-paste
+13. ✅ **DEPLOY IT:** If the requested change requires SQL to become live and
+    the repository has the target credentials, execute the smallest reviewed
+    migration/query yourself. Do not hand routine deployment back to the user.
+14. ✅ **VERIFY IT:** Query the live target after deployment and record the
+    migration status/result. Provide a snippet only as review evidence or when
+    execution is genuinely blocked.
+
+## 🚨 Agent-Owned Supabase Query And Deployment Rule
+
+- Agents MUST run required database inspection and deployment queries when the
+  repository tooling and credentials are available.
+- A database implementation is not complete merely because the SQL file exists
+  or local tests pass. If the feature depends on that SQL, deploy it to the
+  intended environment in the same task and verify the live schema/behavior.
+- Use read-only inspection first, then run the smallest idempotent migration or
+  repair proven by that evidence. Keep the SQL represented in a migration and
+  `supabase/sql/core_schema.sql`.
+- Production writes require an explicit task-level authorization, a reviewed
+  forward change, a rollback/forward-recovery plan, local tests, exact project
+  identity checks, and a post-deployment read-only verification. Once those
+  conditions are satisfied, execute the deployment; do not ask the user to run
+  it manually or ask for the same authorization again.
+- Pause only when credentials are unavailable, the target environment is
+  ambiguous, the requested mutation is destructive/data-repairing beyond the
+  task's authorization, or a safety/verification check fails.
 
 ## 🚨 Production Incident Inspection Protocol (Inventory / Accounting / Triggers)
 
@@ -2313,7 +2527,9 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 5. ✅ Navigation integration (add to main menu)
 
 **REMEMBER:**
-- 🚫 No new SQL files
+- 🚫 No undocumented/ad hoc SQL-only fixes. Versioned idempotent migration files
+  are required for deployable database changes and must remain mirrored in
+  `core_schema.sql`.
 - 🚫 No duplicate functions/triggers (search first!)
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first
@@ -2339,20 +2555,29 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 - ✅ **ALWAYS use DatabaseService for import services** (CSV/Excel imports)
 - ✅ **ALWAYS add ALTER TABLE when adding columns to existing tables**
 - ✅ **ALWAYS update BOTH inventory_qty AND stock_quantity when modifying product stock** (see inventory columns pattern)
-- ✅ **ALWAYS provide deployment snippet in canvas artifact after modifying core_schema.sql**
+- ✅ **ALWAYS keep the smallest deployable migration/query represented in the
+  repo, execute it when the target is authorized, and verify the live result**
 
 ---
 
-# 📤 DEPLOYMENT SNIPPET WORKFLOW
+# 📤 DATABASE DEPLOYMENT ARTIFACT AND EXECUTION WORKFLOW
 
 **WHEN YOU MODIFY `core_schema.sql`, YOU MUST:**
 
 1. ✅ Make the changes to `core_schema.sql`
 2. ✅ Note the line numbers you modified (e.g., "lines 4309-4419")
 3. ✅ Tell user: "I modified `core_schema.sql` at lines X-Y (function/view/table name)"
-4. ✅ **EXTRACT the exact SQL code** from those lines
-5. ✅ **PRESENT in a canvas artifact** OR **CREATE a standalone SQL file** (e.g. `supabase/migrations/20251221_fix_name.sql`)
-6. ✅ Include clear instructions: "Copy this SQL and run it in Supabase SQL Editor" or "Run the migration file"
+4. ✅ **EXTRACT/REVIEW the exact SQL code** that must become live
+5. ✅ **CREATE or update the idempotent forward migration** (for example,
+   `supabase/migrations/20251221_fix_name.sql`) and keep the canonical snapshot
+   synchronized
+6. ✅ Execute the reviewed SQL with the repository database tooling when the
+   task authorizes deployment
+7. ✅ Run a live read-back/invariant query and record the migration/result
+
+A canvas/copy-paste snippet is optional review evidence. It is not a substitute
+for agent-owned execution and must not be presented as work for the user unless
+automated execution is genuinely blocked.
 
 **Example canvas format:**
 ```
@@ -2370,20 +2595,20 @@ create view stock_movements_view as
 alter view stock_movements_view set (security_invoker = on);
 ```
 
-**When to provide deployment snippet:**
+**When a deployable migration is required:**
 - ✅ Creating or modifying a VIEW
 - ✅ Creating or modifying a FUNCTION
 - ✅ Creating or modifying a TRIGGER
 - ✅ Adding/modifying RLS policies
 - ✅ Adding new tables with indexes
 - ✅ Any ALTER TABLE statements
-- ❌ NOT needed for Flutter code changes (those auto-deploy on app restart)
+- ❌ NOT needed for Flutter-only code changes
 
 **Benefits:**
-- User can copy-paste directly into Supabase SQL Editor
-- No need to search through 13,000+ line file
-- Clear documentation of what changed
-- Easy to review before deploying
+- The exact live change is versioned and reviewable
+- No need to replay the entire canonical schema snapshot
+- Deployment and recovery scope stay explicit
+- The same artifact can be tested, executed, and audited
 
 ---
 
@@ -4368,6 +4593,12 @@ selection changes, and use progressive disclosure inside dense block controls.
 Inline text toolbars own content/typography; shared persisted transforms such as
 position, size, rotation, visibility, and layer order belong in the inspector
 and must be exposed for every supported Canvas element type.
+Canvas drag constraints must be visible and controllable: render the responsive
+safe-area guide, keep layers constrained by default, expose precise geometry at
+the top of the selected-layer inspector, and provide one shared persisted
+canvas/slide policy for intentional edge bleed. Never require users to toggle
+the same boundary rule layer by layer. Do not enforce unexplained hardcoded drag
+limits or remove carousel/public clipping to simulate overflow.
 
 Schema-defined repeater fields must use the shared compact collection editor:
 show a scannable item overview and edit only one selected item at a time. Keep
@@ -4384,6 +4615,7 @@ Current canonical controls/capabilities:
 - Visible CTA action (label, destination, presentation): `WebsiteActionValue`, `WebsiteActionEditor`, and `WebsiteActionButton`. Banner, carousel, pricing, products “Ver todos”, standalone, and Canvas buttons must use this contract rather than private label/link widgets or renderers.
 - Inline formatted text: `InlineEditableTextV2` + `TextFormattingToolbar` with explicit toolbar presets.
 - Layered campaign composition: `CanvasBlock` + `_CanvasBlockControls` + `DeferredCanvasBlock`. Carousel slides with `useComposition` must store their editable `elements` inside the slide and reuse this same renderer and inspector for text, images, shapes, products, galleries, and buttons. Never flatten a designed campaign into one poster image when copy, product imagery, geometry, or CTA can remain editor-native layers. Desktop/mobile variants use the same element schema and its editor-visible responsive visibility controls.
+- Canvas contextual editing is a shared professional interaction system, not block-local buttons added case by case. All layer creation paths must use `createCanvasElement`; selected transformable layers expose eight edge/corner handles, direct rotation, keyboard nudging, alignment/arrangement, duplicate/delete, and type-specific primary actions through `CanvasElementToolbar`, with precise fallbacks in `_CanvasBlockControls`. Image crop is non-destructive frame editing: persist the frame (`x/y/w/h`), `fit`, normalized `focalPointX/Y`, and rotation; keep crop mode transient; and consume the same values in Edit, Preview, and public rendering. Keep selection chrome above the bounded carousel content clip so handles remain reachable without letting transformed content overflow the slide. Every direct-manipulation target must remain fully inside a hit-testable parent (paint overflow from `Clip.none` is not hit-test overflow); never begin a rotation gesture at the element center; and never use `Tooltip`, `PopupMenuButton`, `MenuAnchor`, `showMenu`, or another `OverlayPortal` inside transformed selection chrome or the rapidly rebuilding positioned Canvas toolbar. Use semantics plus a local non-interactive hover label and in-place secondary palettes. Verify real drag rotation at responsive scale and on a short layer, not only the presence of an icon or field.
 - Click-to-replace images: `InlineEditableImage` / the shared image picker path, not ad-hoc URL-only controls.
 - Cover/background focal point: `FocalPointPicker`, promoted as the shared focal-point control for every cover/background image.
 - Block field controls: schema-driven `WebsiteBlockFieldSchema` rendering where the field type can describe the capability.
@@ -5915,24 +6147,35 @@ The app supports **3 types of barcode scanners**:
   - CREDIT: Cuentas por Cobrar/Pagar
 - Updates invoice `paid_amount` and `status`
 
-## Mechanic Job (Trabajo) → Invoice Flow
+## Mechanic Job (Trabajo) ↔ Invoice Flow
 
 **Location:** `lib/modules/bikeshop/services/bikeshop_service.dart`
 
-1. Mechanic completes job with parts + labor
-2. Job status = 'completed' or 'ready_for_delivery'
-3. User clicks "Generate Invoice"
-4. System creates `sales_invoice` with:
-   - Line items from `mechanic_job_parts` (products used)
-   - Labor line item from `mechanic_jobs.labor_cost`
-   - Customer from `mechanic_jobs.customer_id`
-   - Links invoice back: `mechanic_jobs.invoice_id = invoice.id`
-5. Invoice posting triggers accounting entries (see above)
-
-**Bidirectional Cascade Delete:**
-- Deleting trabajo → deletes invoice (trigger: `cascade_delete_pega_invoice`)
-- Deleting invoice → deletes trabajo (same trigger)
-- Prevents orphaned records
+1. A service/warranty job owns operational bikes, diagnosis, parts/services,
+   duration, status and work notes.
+2. One linked `sales_invoice` owns the customer document, revenue, IVA,
+   receivable, inventory and COGS.
+3. Job→invoice and invoice→job synchronization must preserve the same
+   `mechanic_job_items.id` and use diff/upsert. Never delete/recreate every line;
+   tasks and per-bike attribution depend on stable parents.
+4. Payment is the only interactive place that chooses sales `tax_treatment`.
+   The atomic payment command classifies/posts the invoice first and then
+   settles receivable. Workshop and payment rows only mirror that tax truth.
+5. Removing an active job uses soft delete and preserves the linked invoice and
+   accounting evidence. Financial documents follow their own void/correction
+   policy; do not restore bidirectional cascade deletion.
+6. Historical workshop repair must use the database-admin-only, batch-keyed,
+   audited, purpose-specific backfills. It may repair deterministic operational
+   mirrors but must never guess ambiguous line links or implicitly repair
+   legacy inventory/GL. The broad `apply_workshop_invoice_backfill` proposal is
+   not a deployed repair boundary.
+7. Never use visible `invoice_number` or `journal_entries.source_reference` as
+   an accounting key: historical numbers can be duplicated. Canonical sales
+   journal ownership is `source_document_type` + `source_document_id` (the
+   invoice/payment UUID); `source_reference` is display/search compatibility.
+   Legacy repair may use a unique exact number, or exact amount to disambiguate
+   a duplicate number, but must leave orphan/ambiguous journals unresolved.
+   New duplicate sales invoice numbers are blocked.
 
 ---
 

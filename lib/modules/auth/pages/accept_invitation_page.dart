@@ -56,7 +56,8 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
       // Fetch invitation by token
       final response = await Supabase.instance.client
           .from('user_invitations')
-          .select('id, email, role, tenant_id, status, expires_at, metadata, employee_id')
+          .select(
+              'id, email, role, tenant_id, status, expires_at, metadata, employee_id')
           .eq('metadata->>invitation_token', widget.token)
           .maybeSingle();
 
@@ -144,7 +145,8 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
         if (signupError.toString().contains('already registered') ||
             signupError.toString().contains('User already registered')) {
           setState(() {
-            _errorMessage = 'Este email ya está registrado. Si ya tienes una cuenta, inicia sesión normalmente.';
+            _errorMessage =
+                'Este email ya está registrado. Si ya tienes una cuenta, inicia sesión normalmente.';
             _isSubmitting = false;
           });
           return;
@@ -154,7 +156,8 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
       }
 
       if (authResponse.user == null) {
-        throw Exception('Error al crear la cuenta. Por favor intenta nuevamente.');
+        throw Exception(
+            'Error al crear la cuenta. Por favor intenta nuevamente.');
       }
 
       final userId = authResponse.user!.id;
@@ -164,14 +167,14 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
       // (The trigger already marked invitation as accepted)
       if (_invitationData!['employee_id'] != null) {
         try {
-          await Supabase.instance.client
-              .from('employees')
-              .update({'user_id': userId})
-              .eq('id', _invitationData!['employee_id']);
+          await Supabase.instance.client.from('employees').update(
+              {'user_id': userId}).eq('id', _invitationData!['employee_id']);
           
-          debugPrint('✅ Linked user to employee: ${_invitationData!['employee_id']}');
+          debugPrint(
+              '✅ Linked user to employee: ${_invitationData!['employee_id']}');
         } catch (employeeError) {
-          debugPrint('⚠️ Failed to link employee (non-critical): $employeeError');
+          debugPrint(
+              '⚠️ Failed to link employee (non-critical): $employeeError');
           // Non-critical error - continue anyway
         }
       }
@@ -180,7 +183,8 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
       await Supabase.instance.client.auth.signOut();
 
       // Step 4: Check if email confirmation is required
-      final needsEmailConfirmation = authResponse.user?.emailConfirmedAt == null;
+      final needsEmailConfirmation =
+          authResponse.user?.emailConfirmedAt == null;
 
       // Step 5: Show success message and redirect
       if (mounted) {
@@ -201,7 +205,8 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
           // Email auto-confirmed - can login immediately
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Cuenta creada exitosamente. Ya puedes iniciar sesión con tu contraseña.'),
+              content: Text(
+                  '✅ Cuenta creada exitosamente. Ya puedes iniciar sesión con tu contraseña.'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 5),
             ),
@@ -364,8 +369,10 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
               labelText: 'Contraseña',
               prefixIcon: const Icon(Icons.lock),
               suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                icon: Icon(
+                    _obscurePassword ? Icons.visibility : Icons.visibility_off),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
               border: const OutlineInputBorder(),
             ),
@@ -389,8 +396,11 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
               labelText: 'Confirmar Contraseña',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
-                icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                icon: Icon(_obscureConfirmPassword
+                    ? Icons.visibility
+                    : Icons.visibility_off),
+                onPressed: () => setState(
+                    () => _obscureConfirmPassword = !_obscureConfirmPassword),
               ),
               border: const OutlineInputBorder(),
             ),

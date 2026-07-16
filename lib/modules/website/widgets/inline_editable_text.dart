@@ -112,7 +112,8 @@ class _InlineEditableTextState extends State<InlineEditableText> {
         maxLines: widget.maxLines,
         decoration: InputDecoration(
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: const BorderSide(color: Colors.blue, width: 2),
@@ -149,7 +150,9 @@ class _InlineEditableTextState extends State<InlineEditableText> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           child: Text(
-            widget.text.isEmpty ? (widget.placeholder ?? 'Haz clic para editar') : widget.text,
+            widget.text.isEmpty
+                ? (widget.placeholder ?? 'Haz clic para editar')
+                : widget.text,
             style: widget.text.isEmpty
                 ? widget.style?.copyWith(
                     color: Colors.grey,

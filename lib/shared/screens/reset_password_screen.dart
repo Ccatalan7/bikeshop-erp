@@ -40,7 +40,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         _hasValidSession = session != null;
         _checkingSession = false;
         if (!_hasValidSession) {
-          _errorMessage = 'El enlace de restablecimiento ha expirado o es inválido. Por favor solicita uno nuevo.';
+          _errorMessage =
+              'El enlace de restablecimiento ha expirado o es inválido. Por favor solicita uno nuevo.';
         }
       });
     }
@@ -178,7 +179,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         ),
         const SizedBox(height: 16),
         Text(
-          _errorMessage ?? 'El enlace de restablecimiento ha expirado o es inválido.',
+          _errorMessage ??
+              'El enlace de restablecimiento ha expirado o es inválido.',
           style: Theme.of(context).textTheme.bodyMedium,
           textAlign: TextAlign.center,
         ),
@@ -271,8 +273,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       : Icons.visibility_off,
                 ),
                 onPressed: () {
-                  setState(() =>
-                      _obscureConfirmPassword = !_obscureConfirmPassword);
+                  setState(
+                      () => _obscureConfirmPassword = !_obscureConfirmPassword);
                 },
               ),
               border: const OutlineInputBorder(),

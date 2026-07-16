@@ -82,5 +82,4 @@ class PublicStoreTenantProvider extends ChangeNotifier {
   Future<void> retry() async {
     await detectTenant();
   }
-
 }

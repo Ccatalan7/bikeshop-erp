@@ -221,13 +221,15 @@ Future<void> downloadOrderPdf(OnlineOrder order) async {
             pw.Center(
               child: pw.Text(
                 'Gracias por tu compra en Viñabike',
-                style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                style:
+                    const pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
               ),
             ),
             pw.Center(
               child: pw.Text(
                 'vinabike.cl | +56 9 9835 7797',
-                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
+                style:
+                    const pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
               ),
             ),
           ],

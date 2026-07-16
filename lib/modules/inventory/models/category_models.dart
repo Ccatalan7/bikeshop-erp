@@ -31,7 +31,8 @@ class Category {
         updatedAt = updatedAt ?? DateTime.now();
 
   // Get breadcrumb parts: ["Accesorios", "Asientos", "Tija"]
-  List<String> get breadcrumbs => fullPath.split(' / ').map((s) => s.trim()).toList();
+  List<String> get breadcrumbs =>
+      fullPath.split(' / ').map((s) => s.trim()).toList();
   
   // Is this a root category?
   bool get isRoot => level == 0 && parentId == null;

@@ -10,6 +10,8 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:printing/printing.dart';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
@@ -20,6 +22,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../../sales/models/sales_models.dart';
@@ -55,6 +58,38 @@ class _BicycleStatusBreakdownEntry {
   final String label;
   final Color color;
   int count = 0;
+}
+
+class _JobConversionChoice {
+  const _JobConversionChoice({
+    required this.targetType,
+    this.bikeId,
+    this.subjectId,
+    this.reason,
+    this.createBike = false,
+  });
+
+  final JobType targetType;
+  final String? bikeId;
+  final String? subjectId;
+  final String? reason;
+  final bool createBike;
+}
+
+class _JobIntakeClassificationChoice {
+  const _JobIntakeClassificationChoice({
+    required this.intakeKind,
+    this.bikeId,
+    this.subjectId,
+    this.subjectNotes,
+    this.reason,
+  });
+
+  final JobIntakeKind intakeKind;
+  final String? bikeId;
+  final String? subjectId;
+  final String? subjectNotes;
+  final String? reason;
 }
 
 class _HoverCardTooltip extends StatefulWidget {
@@ -178,6 +213,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   List<MechanicJob> _jobs = [];
   List<MechanicJob> _filteredJobs = [];
   Map<String, Customer> _customers = {};
+  final Set<String> _generatingQuotationPdfIds = <String>{};
   Map<String, Bike> _bikes = {};
   Map<String, Invoice> _invoices = {};
   Map<String, String> _productImages = {};
@@ -338,6 +374,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (kDebugMode) 'test',
         'completed',
         'delivered',
+        'service_warranty_active',
         'warranty_completed',
         'unpaid',
         'all',
@@ -353,8 +390,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'Completados';
       case 'delivered':
         return 'Entregados';
+      case 'service_warranty_active':
+        return 'Garantía vigente';
       case 'warranty_completed':
-        return 'Garantías';
+        return 'Garantías cerradas';
       case 'unpaid':
         return 'Sin pagar';
       case 'all':
@@ -372,6 +411,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'trabajos completados';
       case 'delivered':
         return 'trabajos entregados';
+      case 'service_warranty_active':
+        return 'trabajos con garantía de servicio vigente';
       case 'warranty_completed':
         return 'trabajos de garantía completados';
       case 'unpaid':
@@ -444,6 +485,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return const Color(0xFF0F766E);
       case 'delivered':
         return const Color(0xFF0891B2);
+      case 'service_warranty_active':
+        return const Color(0xFF059669);
       case 'warranty_completed':
         return const Color(0xFF9333EA);
       case 'unpaid':
@@ -465,6 +508,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return '✅';
       case 'delivered':
         return '📦';
+      case 'service_warranty_active':
+        return '🛡️';
       case 'warranty_completed':
         return '🛡️';
       case 'unpaid':
@@ -1279,6 +1324,11 @@ class _PegasTablePageState extends State<PegasTablePage>
           break;
         case 'delivered':
           if (!isDelivered) return false;
+          break;
+        case 'service_warranty_active':
+          if (job.serviceWarranty?.state != ServiceWarrantyState.active) {
+            return false;
+          }
           break;
         case 'unpaid':
           if (isPaidEffective || !isInvoicedEffective) return false;
@@ -3221,7 +3271,12 @@ class _PegasTablePageState extends State<PegasTablePage>
                 Builder(builder: (context) {
                   double totalSum = 0;
                   double paidSum = 0;
+                  double quotationSum = 0;
                   for (final job in _filteredJobs) {
+                    if (job.workflowKind == JobWorkflowKind.quotation) {
+                      quotationSum += job.totalCost;
+                      continue;
+                    }
                     final invoice =
                         job.invoiceId != null ? _invoices[job.invoiceId] : null;
                     totalSum += invoice?.total ?? job.totalCost;
@@ -3272,6 +3327,22 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   ),
                         ),
                       ],
+                      if (quotationSum > 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('·',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 16)),
+                        ),
+                        Text(
+                          'Cotizado: ${fmt.format(quotationSum)}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade700,
+                                  ),
+                        ),
+                      ],
                     ],
                   );
                 }),
@@ -3290,25 +3361,23 @@ class _PegasTablePageState extends State<PegasTablePage>
       (sum, status) => sum + status.count,
     );
 
-    final items = _filteredJobs.where((j) {
-      if (j.jobType == JobType.itemService) return true;
-      if (j.jobType == JobType.quotation) return false;
-      if (j.bikeId != null) return false;
-      return j.subjectData != null ||
-          j.subjectId != null ||
-          (j.subjectNotes?.trim().isNotEmpty ?? false);
-    }).length;
+    final items = _filteredJobs
+        .where((job) =>
+            job.workflowKind != JobWorkflowKind.quotation &&
+            job.intakeKind == JobIntakeKind.component)
+        .length;
     // Only count warranty-type jobs that are still in progress (not completed/finalizado).
     // Warranty jobs in the complete phase (e.g. "Terminado Cubierto") are done
     // and should not count as "active" warranties in the counter.
     final warranties = _filteredJobs.where((j) {
-      if (j.jobType != JobType.warranty) return false;
+      if (j.workflowKind != JobWorkflowKind.warranty) return false;
       final phase =
           j.customStatus?.phase ?? _inferPhaseFromLegacyStatus(j.status);
       return phase != StatusPhase.complete;
     }).length;
-    final quotations =
-        _filteredJobs.where((j) => j.jobType == JobType.quotation).length;
+    final quotations = _filteredJobs
+        .where((job) => job.workflowKind == JobWorkflowKind.quotation)
+        .length;
 
     Widget simpleCount(
       IconData icon,
@@ -3533,7 +3602,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
 
     for (final job in _filteredJobs) {
-      if (job.jobType == JobType.itemService) {
+      if (job.workflowKind == JobWorkflowKind.quotation ||
+          job.intakeKind != JobIntakeKind.bike) {
         continue;
       }
 
@@ -4049,6 +4119,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     required String label,
     required Color accentColor,
     DateTime? timestamp,
+    String? metaText,
+    IconData metaIcon = Icons.access_time_rounded,
     VoidCallback? onTap,
     double maxWidth = 132,
     bool compact = false,
@@ -4074,7 +4146,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 8 : 10,
-        vertical: timestamp == null ? 6 : 5,
+        vertical: timestamp == null && metaText == null ? 6 : 5,
       ),
       decoration: BoxDecoration(
         color: palette.background,
@@ -4128,20 +4200,20 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             ],
           ),
-          if (timestamp != null) ...[
+          if (timestamp != null || metaText != null) ...[
             const SizedBox(height: 3),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.access_time_rounded,
+                  metaText == null ? Icons.access_time_rounded : metaIcon,
                   size: compact ? 9 : 10,
                   color: palette.meta,
                 ),
                 const SizedBox(width: 3),
                 Flexible(
                   child: Text(
-                    _formatStatusTimestamp(timestamp),
+                    metaText ?? _formatStatusTimestamp(timestamp!),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -4770,7 +4842,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     return switch (col.id) {
       'checkbox' || 'attachments' => 4,
       'actions' => 4,
-      'state' || 'kpi' || 'priority' || 'invoice' || 'total' => 8,
+      'deadline' || 'state' || 'kpi' || 'priority' || 'invoice' || 'total' => 8,
       _ => 16,
     };
   }
@@ -5195,17 +5267,36 @@ class _PegasTablePageState extends State<PegasTablePage>
         // Non-bike job: show subject/item instead of bike
         if (job.bikeId == null ||
             (job.jobType == JobType.itemService && job.subjectData != null)) {
-          final subjectName = job.subjectData?.name ?? job.subjectNotes ?? '—';
+          final subjectName = job.subjectData?.name ??
+              (job.subjectNotes?.trim().isNotEmpty == true
+                  ? job.subjectNotes!.trim()
+                  : job.modeNeedsReview
+                      ? 'Clasificación pendiente'
+                      : job.jobType == JobType.quotation
+                          ? 'Presupuesto sin descripción'
+                          : 'Sin detalle de recepción');
           final subjectNotes = (job.subjectData != null &&
                   job.subjectNotes != null &&
                   job.subjectNotes!.isNotEmpty)
               ? job.subjectNotes
-              : null;
-          final subjectIcon = _jobTypeIcon(job.jobType);
+              : job.modeNeedsReview
+                  ? job.modeReviewReason
+                  : null;
+          final subjectIcon = job.modeNeedsReview
+              ? Icons.warning_amber_rounded
+              : _jobTypeIcon(job.jobType);
+          final subjectColor = job.modeNeedsReview
+              ? Colors.orange.shade700
+              : Theme.of(context).colorScheme.secondary;
           return Row(
             children: [
-              Icon(subjectIcon,
-                  size: 28, color: Theme.of(context).colorScheme.secondary),
+              Tooltip(
+                message: job.modeNeedsReview
+                    ? (job.modeReviewReason ??
+                        'Este registro histórico necesita completar su clasificación.')
+                    : job.jobType.displayName,
+                child: Icon(subjectIcon, size: 28, color: subjectColor),
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Column(
@@ -5213,9 +5304,17 @@ class _PegasTablePageState extends State<PegasTablePage>
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(subjectName,
-                        style: const TextStyle(fontSize: 13),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      subjectName,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: job.modeNeedsReview ? subjectColor : null,
+                        fontWeight: job.modeNeedsReview
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if (subjectNotes != null)
                       Text(subjectNotes,
                           style: Theme.of(context)
@@ -5335,7 +5434,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                 child: _buildStatusBadge(
                   label: statusName,
                   accentColor: statusColor,
-                  timestamp: jobBike.updatedAt,
+                  timestamp:
+                      job.serviceWarranty == null ? jobBike.updatedAt : null,
+                  metaText: _serviceWarrantyMeta(job),
+                  metaIcon: Icons.shield_outlined,
                   onTap: () => _showBikeStatusMenu(job, jobBike),
                   maxWidth: chipWidth,
                 ),
@@ -5358,7 +5460,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               child: _buildStatusBadge(
                 label: statusName,
                 accentColor: statusColor,
-                timestamp: statusUpdatedAt,
+                timestamp: job.serviceWarranty == null ? statusUpdatedAt : null,
+                metaText: _serviceWarrantyMeta(job),
+                metaIcon: Icons.shield_outlined,
                 onTap: () => _showStatusMenu(job),
                 maxWidth: chipWidth,
               ),
@@ -5690,9 +5794,206 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       case 'invoice':
         // Clickable invoice with full status display
+        if (job.jobType == JobType.warranty &&
+            job.warrantyOutcome == WarrantyOutcome.covered &&
+            job.invoiceId != null) {
+          return Tooltip(
+            message:
+                'Documento interno: respalda inventario y costo de garantía; '
+                'no es una factura para el cliente.',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: const Color(0xFF059669).withValues(alpha: 0.35),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.shield_outlined,
+                      size: 14, color: Color(0xFF047857)),
+                  SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      'RESPALDO INTERNO',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF047857),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (job.workflowKind == JobWorkflowKind.warranty) {
+          final outcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
+
+          // A pending claim is not a customer invoice. Older rows may still
+          // retain an internal draft while a decision is being reconsidered;
+          // keep that implementation detail out of the operational table.
+          if (outcome == WarrantyOutcome.pending) {
+            return Tooltip(
+              message:
+                  'La garantía sigue en evaluación. Todavía no existe un cobro para el cliente.',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.manage_search_outlined,
+                        size: 13, color: Colors.orange),
+                    SizedBox(width: 4),
+                    Text(
+                      'EN EVALUACIÓN',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // A covered claim must be backed by the internal zero-customer-value
+          // document created by the warranty command. Never offer the generic
+          // customer-invoice path when that invariant is missing.
+          if (outcome == WarrantyOutcome.covered && job.invoiceId == null) {
+            return Tooltip(
+              message:
+                  'Falta el respaldo interno de esta garantía. Abre el trabajo para revisar la decisión.',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => _openJobEditor(job),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          size: 13, color: Colors.red),
+                      SizedBox(width: 4),
+                      Text(
+                        'REVISAR RESPALDO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // A rejected claim is billable. If a historical row has no invoice,
+          // the only repair exposed here is the guarded workshop RPC below.
+          if (outcome == WarrantyOutcome.notCovered &&
+              job.invoiceId == null &&
+              !job.isInvoiced) {
+            return _buildInteractiveTableField(
+              onTap: () => _createInvoiceForJob(job),
+              accentColor: Colors.red.shade700,
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.red.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.receipt_long_outlined,
+                        size: 13, color: Colors.red),
+                    SizedBox(width: 4),
+                    Text(
+                      'GENERAR COBRO',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        }
+
         if (job.invoiceId == null && !job.isInvoiced) {
-          // Warranty job: show green "Garantía" badge instead of "Generar"
-          if (job.jobType == JobType.warranty) {
+          if (job.modeNeedsReview) {
+            return _buildInteractiveTableField(
+              onTap: () => _classifyJobIntake(job),
+              accentColor: Colors.orange.shade800,
+              padding: EdgeInsets.zero,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.rule_folder_outlined,
+                        size: 13, color: Colors.orange),
+                    SizedBox(width: 4),
+                    Text(
+                      'REVISAR MODO',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // Warranty job: show its operational meaning instead of a generic
+          // invoice action. The pending/covered branches above handle the
+          // normal cases; this fallback is only for legacy incomplete rows.
+          if (job.workflowKind == JobWorkflowKind.warranty) {
             final outcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
             final Color badgeColor;
             final String badgeLabel;
@@ -5737,8 +6038,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           }
 
           // Quotation job: show quotation status chip
-          if (job.jobType == JobType.quotation) {
-            final qStatus = job.quotationStatus ?? QuotationStatus.pending;
+          if (job.workflowKind == JobWorkflowKind.quotation) {
+            final qStatus = job.effectiveQuotationStatus;
             final Color badgeColor;
             switch (qStatus) {
               case QuotationStatus.approved:
@@ -5752,8 +6053,10 @@ class _PegasTablePageState extends State<PegasTablePage>
                 badgeColor = Colors.orange;
                 break;
             }
+            final isGenerating =
+                job.id != null && _generatingQuotationPdfIds.contains(job.id);
             return _buildInteractiveTableField(
-              onTap: () => _createInvoiceForJob(job),
+              onTap: isGenerating ? null : () => _downloadQuotationPdf(job),
               accentColor: badgeColor,
               padding: EdgeInsets.zero,
               borderRadius: BorderRadius.circular(6),
@@ -5768,7 +6071,18 @@ class _PegasTablePageState extends State<PegasTablePage>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.request_quote, size: 13, color: badgeColor),
+                    if (isGenerating)
+                      SizedBox(
+                        width: 13,
+                        height: 13,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: badgeColor,
+                        ),
+                      )
+                    else
+                      Icon(Icons.picture_as_pdf_outlined,
+                          size: 13, color: badgeColor),
                     const SizedBox(width: 4),
                     Text(
                       'Presupuesto',
@@ -6041,28 +6355,69 @@ class _PegasTablePageState extends State<PegasTablePage>
               tooltip: '',
               iconSize: 16,
               itemBuilder: (context) => [
-                if (job.jobType == JobType.warranty ||
-                    job.jobType == JobType.quotation)
+                if (job.modeNeedsReview)
+                  const PopupMenuItem(
+                    value: 'classify_intake',
+                    child: Row(
+                      children: [
+                        Icon(Icons.rule_folder_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Clasificar recepción'),
+                      ],
+                    ),
+                  ),
+                if (job.jobType == JobType.quotation)
+                  const PopupMenuItem(
+                    value: 'quotation_pdf',
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Descargar presupuesto'),
+                      ],
+                    ),
+                  ),
+                if (job.workflowKind == JobWorkflowKind.quotation)
+                  PopupMenuItem(
+                    value: 'quotation_status',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.fact_check_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            job.effectiveQuotationStatus ==
+                                    QuotationStatus.pending
+                                ? 'Aprobar o rechazar'
+                                : 'Gestionar estado',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (job.workflowKind == JobWorkflowKind.quotation &&
+                    job.effectiveQuotationStatus == QuotationStatus.approved)
                   const PopupMenuItem(
                     value: 'convert',
                     child: Row(
                       children: [
                         Icon(Icons.transform, size: 18),
                         SizedBox(width: 8),
-                        Text('Convertir a Normal'),
+                        Text('Convertir a cobrable'),
                       ],
                     ),
                   ),
-                const PopupMenuItem(
-                  value: 'complete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, size: 18),
-                      SizedBox(width: 8),
-                      Text('Completar'),
-                    ],
+                if (job.workflowKind != JobWorkflowKind.quotation)
+                  const PopupMenuItem(
+                    value: 'complete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 18),
+                        SizedBox(width: 8),
+                        Text('Completar'),
+                      ],
+                    ),
                   ),
-                ),
                 const PopupMenuItem(
                   value: 'delete',
                   child: Row(
@@ -6075,7 +6430,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
               ],
               onSelected: (value) {
-                if (value == 'convert') {
+                if (value == 'classify_intake') {
+                  _classifyJobIntake(job);
+                } else if (value == 'quotation_pdf') {
+                  _downloadQuotationPdf(job);
+                } else if (value == 'quotation_status') {
+                  _showStatusMenu(job);
+                } else if (value == 'convert') {
                   _convertToService(job);
                 } else if (value == 'complete') {
                   _markJobAsComplete(job);
@@ -6626,93 +6987,764 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  void _createInvoiceForJob(MechanicJob job) {
-    context.push(
-        '/sales/invoices/new?job_id=${job.id}&customer_id=${job.customerId}');
-  }
+  Future<void> _classifyJobIntake(MechanicJob job) async {
+    final jobId = job.id?.trim();
+    if (jobId == null || jobId.isEmpty) return;
 
-  Future<void> _convertToService(MechanicJob job) async {
-    final typeLabel =
-        job.jobType == JobType.warranty ? 'garantía' : 'presupuesto';
-    final confirmed = await showDialog<bool>(
+    List<JobSubject> subjects = const [];
+    String? subjectCatalogError;
+    try {
+      subjects = (await _bikeshopService.getJobSubjects())
+          .where(
+            (subject) =>
+                subject.isActive &&
+                subject.id != null &&
+                subject.id!.trim().isNotEmpty,
+          )
+          .toList(growable: false);
+    } catch (error) {
+      subjectCatalogError =
+          'No se pudo cargar el catálogo. Aún puedes describir el componente manualmente.';
+      debugPrint('Error loading intake subjects: $error');
+    }
+    if (!mounted) return;
+
+    final customerBikes = _bikes.values
+        .where(
+          (bike) =>
+              bike.id != null &&
+              bike.isActive &&
+              bike.customerId == job.customerId,
+        )
+        .toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final customerBikeIds = customerBikes.map((bike) => bike.id).toSet();
+    final activeSubjectIds = subjects.map((subject) => subject.id).toSet();
+
+    var intakeKind = job.intakeKind == JobIntakeKind.component ||
+            (job.subjectId != null && job.bikeId == null)
+        ? JobIntakeKind.component
+        : JobIntakeKind.bike;
+    String? selectedBikeId =
+        customerBikeIds.contains(job.bikeId) ? job.bikeId : null;
+    String? selectedSubjectId =
+        activeSubjectIds.contains(job.subjectId) ? job.subjectId : null;
+    const descriptionSubjectValue = '__description__';
+    var subjectSelection = selectedSubjectId ?? descriptionSubjectValue;
+    String? validationMessage;
+    final subjectNotesController = TextEditingController(
+      text: job.subjectNotes?.trim() ?? '',
+    );
+    final reasonController = TextEditingController();
+
+    final choice = await showDialog<_JobIntakeClassificationChoice>(
       context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.transform, size: 28),
-        title: const Text('Convertir a Servicio Cobrable'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${job.jobNumber} dejará de ser un trabajo de $typeLabel y pasará a ser un '
-              'servicio normal cobrable al cliente.',
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.info_outline, size: 14, color: Colors.grey.shade500),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'Podrás generar la factura inmediatamente después.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          icon: const Icon(Icons.rule_folder_outlined, size: 26),
+          title: const Text('Clasificar recepción'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Confirma qué dejó físicamente el cliente en ${job.jobNumber ?? 'este trabajo'}. Esto no cambia precios, productos ni estado.',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                ),
-              ],
+                  if (job.modeReviewReason?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.30),
+                        ),
+                      ),
+                      child: Text(
+                        job.modeReviewReason!.trim(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SegmentedButton<JobIntakeKind>(
+                    segments: const [
+                      ButtonSegment(
+                        value: JobIntakeKind.bike,
+                        icon: Icon(Icons.pedal_bike_outlined),
+                        label: Text('Bicicleta completa'),
+                      ),
+                      ButtonSegment(
+                        value: JobIntakeKind.component,
+                        icon: Icon(Icons.build_circle_outlined),
+                        label: Text('Solo componente'),
+                      ),
+                    ],
+                    selected: {intakeKind},
+                    onSelectionChanged: (selection) => setDialogState(() {
+                      intakeKind = selection.first;
+                      validationMessage = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  if (intakeKind == JobIntakeKind.bike) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedBikeId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Bicicleta recibida *',
+                        border: OutlineInputBorder(),
+                      ),
+                      hint: const Text('Selecciona una bicicleta del cliente'),
+                      items: customerBikes
+                          .map(
+                            (bike) => DropdownMenuItem<String>(
+                              value: bike.id!,
+                              child: Text(
+                                bike.displayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: customerBikes.isEmpty
+                          ? null
+                          : (value) => setDialogState(() {
+                                selectedBikeId = value;
+                                validationMessage = null;
+                              }),
+                    ),
+                    if (customerBikes.isEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Este cliente no tiene bicicletas activas cargadas. Cambia a “Solo componente” o crea la bicicleta desde su ficha antes de clasificar.',
+                        style: TextStyle(
+                          color: Colors.orange.shade900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ] else ...[
+                    if (subjectCatalogError != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.30),
+                          ),
+                        ),
+                        child: Text(
+                          subjectCatalogError,
+                          style: TextStyle(
+                            color: Colors.orange.shade900,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    DropdownButtonFormField<String>(
+                      initialValue: subjectSelection,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de componente',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: descriptionSubjectValue,
+                          child: Text('Otro / describir manualmente'),
+                        ),
+                        ...subjects.map(
+                          (subject) => DropdownMenuItem<String>(
+                            value: subject.id!,
+                            child: Text(
+                              subject.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) => setDialogState(() {
+                        subjectSelection = value ?? descriptionSubjectValue;
+                        selectedSubjectId =
+                            value == descriptionSubjectValue ? null : value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: subjectNotesController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: selectedSubjectId == null
+                            ? 'Descripción clara del componente *'
+                            : 'Detalle adicional (opcional)',
+                        hintText: selectedSubjectId == null
+                            ? 'Ej.: rueda trasera 29” con maza Shimano'
+                            : 'Ej.: rueda trasera, color negro',
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setDialogState(() {
+                        validationMessage = null;
+                      }),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo de clasificación (opcional)',
+                      hintText: 'Ej.: confirmado con el cliente',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      validationMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final subjectNotes = subjectNotesController.text.trim();
+                if (intakeKind == JobIntakeKind.bike &&
+                    selectedBikeId == null) {
+                  setDialogState(() {
+                    validationMessage =
+                        'Selecciona la bicicleta completa que quedó en el taller.';
+                  });
+                  return;
+                }
+                if (intakeKind == JobIntakeKind.component &&
+                    selectedSubjectId == null &&
+                    subjectNotes.isEmpty) {
+                  setDialogState(() {
+                    validationMessage =
+                        'Selecciona un componente o escribe una descripción clara.';
+                  });
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _JobIntakeClassificationChoice(
+                    intakeKind: intakeKind,
+                    bikeId: intakeKind == JobIntakeKind.bike
+                        ? selectedBikeId
+                        : null,
+                    subjectId: intakeKind == JobIntakeKind.component
+                        ? selectedSubjectId
+                        : null,
+                    subjectNotes: intakeKind == JobIntakeKind.component &&
+                            subjectNotes.isNotEmpty
+                        ? subjectNotes
+                        : null,
+                    reason: reasonController.text.trim().isEmpty
+                        ? null
+                        : reasonController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('Guardar clasificación'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.transform, size: 16),
-            label: const Text('Convertir'),
-          ),
-        ],
       ),
     );
+    subjectNotesController.dispose();
+    reasonController.dispose();
 
-    if (confirmed == true && mounted) {
-      _startLocalOperation();
-      try {
-        final updated = await _bikeshopService.convertToServiceJob(job.id!);
-        if (mounted) {
-          // Optimistic update in local list
-          setState(() {
-            final index = _jobs.indexWhere((j) => j.id == job.id);
-            if (index != -1) _jobs[index] = updated;
-            _applyFiltersAndSort();
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${job.jobNumber} convertido a servicio cobrable'),
-              duration: const Duration(seconds: 8),
-              backgroundColor: Colors.green.shade700,
-              action: SnackBarAction(
-                label: 'Generar Factura',
-                textColor: Colors.white,
-                onPressed: () => context.push(
-                  '/sales/invoices/new?job_id=${job.id}&customer_id=${job.customerId}',
-                ),
+    if (!mounted || choice == null) return;
+    _startLocalOperation();
+    try {
+      await _bikeshopService.classifyMechanicJobIntake(
+        jobId,
+        intakeKind: choice.intakeKind,
+        bikeId: choice.bikeId,
+        subjectId: choice.subjectId,
+        subjectNotes: choice.subjectNotes,
+        reason: choice.reason,
+      );
+      await _loadData();
+      if (!mounted) return;
+      final classificationLabel = choice.intakeKind == JobIntakeKind.bike
+          ? 'bicicleta completa'
+          : 'solo componente';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${job.jobNumber ?? 'Trabajo'} clasificado como $classificationLabel.',
+          ),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No se pudo guardar la clasificación; no se aplicaron cambios: $error',
+            ),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      _endLocalOperation();
+    }
+  }
+
+  Future<void> _createInvoiceForJob(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null || jobId.isEmpty) return;
+
+    _startLocalOperation();
+    try {
+      // This server-side entrypoint owns the job/invoice link and refuses
+      // quotations, unresolved intake and undecided warranties. Opening the
+      // generic invoice editor here would allow those domain guards to be
+      // bypassed.
+      final invoiceId = await _bikeshopService.createInvoiceFromJob(jobId);
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Factura del trabajo creada correctamente'),
+          backgroundColor: Colors.green.shade700,
+          action: SnackBarAction(
+            label: 'Abrir factura',
+            textColor: Colors.white,
+            onPressed: () => _openInvoice(invoiceId),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo generar la factura: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _endLocalOperation();
+    }
+  }
+
+  Future<void> _downloadQuotationPdf(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null ||
+        jobId.isEmpty ||
+        job.jobType != JobType.quotation ||
+        _generatingQuotationPdfIds.contains(jobId)) {
+      return;
+    }
+
+    setState(() => _generatingQuotationPdfIds.add(jobId));
+    try {
+      final customer = _customers[job.customerId];
+      final jobItems = await _bikeshopService.getJobItems(jobId);
+      if (!mounted) return;
+      final invoiceItems = jobItems
+          .map(
+            (item) => InvoiceItem(
+              id: item.id,
+              productId: item.productId ?? item.serviceProductId,
+              productName: item.productName,
+              productSku: item.productSku,
+              description: item.notes,
+              isCatalogProduct:
+                  item.productId != null || item.serviceProductId != null,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.totalPrice,
+              isService: item.itemType == 'service',
+              jobBikeId: item.jobBikeId,
+            ),
+          )
+          .toList(growable: false);
+      final gross = invoiceItems.fold<double>(
+        0,
+        (sum, item) => sum + item.lineTotal,
+      );
+      final total = (gross - job.discountAmount).clamp(0, double.infinity);
+      final documentNumber = (job.jobNumber?.trim().isNotEmpty ?? false)
+          ? job.jobNumber!.trim()
+          : jobId;
+      final quotation = Invoice(
+        tenantId: job.tenantId,
+        customerId: customer?.id,
+        invoiceNumber: documentNumber,
+        customerName: customer?.name ?? 'Cliente',
+        customerRut: customer?.rut,
+        date: job.createdAt,
+        dueDate: job.quotationValidUntil,
+        reference: job.subjectDisplayName,
+        subtotal: gross,
+        total: total.toDouble(),
+        balance: 0,
+        items: invoiceItems,
+        invoiceType: 'quotation',
+        jobNumber: job.jobNumber,
+        entryDate: job.arrivalDate,
+        workDescription: job.subjectDisplayName,
+        source: null,
+      );
+      final resolvedBikeNames = <String, String>{};
+      final bikeId = job.bikeId;
+      final bike = bikeId == null ? null : _bikes[bikeId];
+      if (bike != null) resolvedBikeNames['single'] = bike.displayName;
+
+      final pdf = await InvoicePdfGenerator.generateQuotationPDF(
+        context,
+        quotation,
+        resolvedBikeNames,
+        validUntil: job.quotationValidUntil,
+        discountAmount: job.discountAmount,
+      );
+      final bytes = await pdf.save();
+      final fileName = InvoicePdfGenerator.quotationFileNameFor(documentNumber);
+
+      if (!kIsWeb &&
+          (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+        final outputFile = await FilePicker.platform.saveFile(
+          dialogTitle: 'Guardar Presupuesto PDF',
+          fileName: fileName,
+          initialDirectory:
+              await InvoicePdfGenerator.resolveDefaultSaveDirectory(),
+          allowedExtensions: const ['pdf'],
+          type: FileType.custom,
+        );
+        if (outputFile != null) {
+          await File(outputFile).writeAsBytes(bytes);
+        }
+      } else {
+        await Printing.sharePdf(bytes: bytes, filename: fileName);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Presupuesto PDF generado correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo generar el presupuesto PDF: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _generatingQuotationPdfIds.remove(jobId));
+      }
+    }
+  }
+
+  Future<void> _convertToService(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null || jobId.isEmpty) return;
+
+    if (job.workflowKind == JobWorkflowKind.quotation &&
+        job.effectiveQuotationStatus != QuotationStatus.approved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Primero aprueba el presupuesto desde la acción de estado.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final subjects = await _bikeshopService.getJobSubjects();
+    if (!mounted) return;
+    final customerBikes = _bikes.values
+        .where((bike) => bike.customerId == job.customerId && bike.id != null)
+        .toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    var targetType = job.subjectId != null && job.bikeId == null
+        ? JobType.itemService
+        : JobType.service;
+    String? selectedBikeId = job.bikeId;
+    String? selectedSubjectId = job.subjectId;
+    String? validationMessage;
+    final reasonController = TextEditingController();
+    final sourceLabel =
+        job.jobType == JobType.warranty ? 'garantía' : 'presupuesto';
+
+    final choice = await showDialog<_JobConversionChoice>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          icon: const Icon(Icons.transform, size: 28),
+          title: const Text('Convertir a trabajo cobrable'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${job.jobNumber} conservará el historial del $sourceLabel y generará una sola factura en la misma operación.',
+                  ),
+                  const SizedBox(height: 16),
+                  Text('¿Qué dejó físicamente el cliente?',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  SegmentedButton<JobType>(
+                    segments: const [
+                      ButtonSegment(
+                        value: JobType.service,
+                        icon: Icon(Icons.pedal_bike_outlined),
+                        label: Text('Bicicleta'),
+                      ),
+                      ButtonSegment(
+                        value: JobType.itemService,
+                        icon: Icon(Icons.build_circle_outlined),
+                        label: Text('Componente'),
+                      ),
+                    ],
+                    selected: {targetType},
+                    onSelectionChanged: (selection) => setDialogState(() {
+                      targetType = selection.first;
+                      validationMessage = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  if (targetType == JobType.service) ...[
+                    DropdownButtonFormField<String>(
+                      key: ValueKey('conversion-bike-$selectedBikeId'),
+                      initialValue: selectedBikeId,
+                      decoration: const InputDecoration(
+                        labelText: 'Bicicleta recibida *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.pedal_bike_outlined),
+                      ),
+                      items: customerBikes
+                          .map((bike) => DropdownMenuItem(
+                                value: bike.id,
+                                child: Text(bike.displayName),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        selectedBikeId = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.pop(
+                          dialogContext,
+                          const _JobConversionChoice(
+                            targetType: JobType.service,
+                            createBike: true,
+                          ),
+                        ),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Crear nueva bicicleta'),
+                      ),
+                    ),
+                  ] else
+                    DropdownButtonFormField<String>(
+                      key: ValueKey('conversion-subject-$selectedSubjectId'),
+                      initialValue: selectedSubjectId,
+                      decoration: const InputDecoration(
+                        labelText: 'Componente recibido *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.build_circle_outlined),
+                      ),
+                      items: subjects
+                          .map((subject) => DropdownMenuItem(
+                                value: subject.id,
+                                child: Text(subject.name),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        selectedSubjectId = value;
+                        validationMessage = null;
+                      }),
+                    ),
+                  if (job.jobType == JobType.warranty ||
+                      job.effectiveQuotationStatus ==
+                          QuotationStatus.rejected ||
+                      job.effectiveQuotationStatus ==
+                          QuotationStatus.expired) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Motivo de la conversión *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      validationMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.verified_outlined,
+                          size: 16, color: Color(0xFF047857)),
+                      SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          'La conversión, el vínculo físico, el evento de auditoría y la factura se guardan juntos. Si algo falla, no se aplica nada.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Error al convertir: $e'),
-                backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        _endLocalOperation();
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final needsReason = job.jobType == JobType.warranty ||
+                    job.effectiveQuotationStatus == QuotationStatus.rejected ||
+                    job.effectiveQuotationStatus == QuotationStatus.expired;
+                if (targetType == JobType.service && selectedBikeId == null) {
+                  setDialogState(() => validationMessage =
+                      'Selecciona o crea la bicicleta que quedó en el taller.');
+                  return;
+                }
+                if (targetType == JobType.itemService &&
+                    selectedSubjectId == null) {
+                  setDialogState(() => validationMessage =
+                      'Selecciona el componente que quedó en el taller.');
+                  return;
+                }
+                if (needsReason && reasonController.text.trim().isEmpty) {
+                  setDialogState(() => validationMessage =
+                      'Esta conversión requiere una justificación.');
+                  return;
+                }
+                Navigator.pop(
+                  dialogContext,
+                  _JobConversionChoice(
+                    targetType: targetType,
+                    bikeId: selectedBikeId,
+                    subjectId: selectedSubjectId,
+                    reason: reasonController.text.trim().isEmpty
+                        ? null
+                        : reasonController.text.trim(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.transform, size: 16),
+              label: const Text('Convertir y facturar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    reasonController.dispose();
+
+    if (!mounted || choice == null) return;
+    if (choice.createBike) {
+      final createdBike = await showDialog<Bike>(
+        context: context,
+        builder: (context) => BikeFormDialog(customerId: job.customerId),
+      );
+      if (!mounted || createdBike == null) return;
+      if (createdBike.id != null) {
+        setState(() => _bikes[createdBike.id!] = createdBike);
       }
+      await _convertToService(job);
+      return;
+    }
+
+    _startLocalOperation();
+    try {
+      final updated = await _bikeshopService.convertToBillableJob(
+        jobId,
+        targetType: choice.targetType,
+        reason: choice.reason,
+        bikeId: choice.bikeId,
+        subjectId: choice.subjectId,
+      );
+      await _loadData();
+      if (!mounted) return;
+      final targetLabel = choice.targetType == JobType.itemService
+          ? 'componente cobrable'
+          : 'servicio de bicicleta';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${job.jobNumber} convertido a $targetLabel con factura creada'),
+          duration: const Duration(seconds: 8),
+          backgroundColor: Colors.green.shade700,
+          action: updated.invoiceId == null
+              ? null
+              : SnackBarAction(
+                  label: 'Abrir factura',
+                  textColor: Colors.white,
+                  onPressed: () => _openInvoice(updated.invoiceId!),
+                ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo convertir el trabajo: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      _endLocalOperation();
     }
   }
 
@@ -6818,9 +7850,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar Trabajo'),
+        title: const Text('Mover trabajo a eliminados'),
         content: Text(
-            '¿Eliminar ${job.jobNumber}? Esta acción no se puede deshacer.'),
+            '¿Mover ${job.jobNumber} a eliminados? La factura y su historial contable se conservarán.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -6831,7 +7863,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             style: FilledButton.styleFrom(
               backgroundColor: Colors.red,
             ),
-            child: const Text('Eliminar'),
+            child: const Text('Mover a eliminados'),
           ),
         ],
       ),
@@ -6849,11 +7881,11 @@ class _PegasTablePageState extends State<PegasTablePage>
       });
 
       try {
-        await _bikeshopService.deleteJob(job.id!);
+        await _bikeshopService.softDeleteJob(job.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Trabajo eliminado'),
+                content: Text('Trabajo movido a eliminados'),
                 duration: Duration(seconds: 1)),
           );
         }
@@ -7002,34 +8034,89 @@ class _PegasTablePageState extends State<PegasTablePage>
         },
         onWarrantyOutcomeSelected: (outcome) async {
           Navigator.pop(dialogContext);
+          final reason = await _requestWarrantyDecisionReason(job, outcome);
+          if (reason == null) return;
           _startLocalOperation();
           try {
-            await _bikeshopService.updateWarrantyOutcome(job.id!, outcome);
+            await _bikeshopService.updateWarrantyOutcome(
+              job.id!,
+              outcome,
+              reason: reason.isEmpty ? null : reason,
+            );
+            if (mounted) {
+              await _loadData();
+              if (!mounted) return;
+              final updated = _jobs.cast<MechanicJob?>().firstWhere(
+                    (candidate) => candidate?.id == job.id,
+                    orElse: () => null,
+                  );
+              final message = switch (outcome) {
+                WarrantyOutcome.covered =>
+                  'Garantía cubierta: respaldo interno actualizado.',
+                WarrantyOutcome.notCovered =>
+                  'Garantía no cubierta: factura cobrable creada.',
+                WarrantyOutcome.pending => 'Garantía devuelta a evaluación.',
+              };
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(message),
+                  backgroundColor: outcome == WarrantyOutcome.notCovered
+                      ? Colors.red.shade700
+                      : Colors.green.shade700,
+                  action: updated?.invoiceId == null
+                      ? null
+                      : SnackBarAction(
+                          label: outcome == WarrantyOutcome.covered
+                              ? 'Abrir respaldo'
+                              : 'Abrir factura',
+                          textColor: Colors.white,
+                          onPressed: () => _openInvoice(updated!.invoiceId!),
+                        ),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Error: $e'), backgroundColor: Colors.red));
+            }
+          } finally {
+            _endLocalOperation();
+          }
+        },
+        onQuotationStatusSelected: (qStatus) async {
+          Navigator.pop(dialogContext);
+          final reason = await _requestQuotationStatusReason(job, qStatus);
+          if (reason == null) return;
+          _startLocalOperation();
+          try {
+            await _bikeshopService.updateQuotationStatus(
+              job.id!,
+              qStatus,
+              reason: reason.isEmpty ? null : reason,
+            );
             if (mounted) {
               setState(() {
                 final index = _jobs.indexWhere((j) => j.id == job.id);
                 if (index != -1) {
                   _jobs[index] = job.copyWith(
-                      warrantyOutcome: outcome, updatedAt: DateTime.now());
+                      quotationStatus: qStatus, updatedAt: DateTime.now());
                 }
                 _applyFiltersAndSort();
               });
-              // When warranty is rejected, offer to convert to a paid service job
-              if (outcome == WarrantyOutcome.notCovered) {
-                showDialog<void>(
-                  context: context,
-                  barrierColor: Colors.transparent,
-                  builder: (ctx) => _NotCoveredConvertDialog(
-                    jobNumber: job.jobNumber ?? '',
-                    onConvert: () {
-                      Navigator.pop(ctx);
-                      final current = _jobs.firstWhere(
-                        (j) => j.id == job.id,
-                        orElse: () => job,
-                      );
-                      _convertToService(current);
-                    },
-                    onDismiss: () => Navigator.pop(ctx),
+              if (qStatus == QuotationStatus.approved) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Presupuesto aprobado. Conviértelo cuando recibas la bicicleta o componente.',
+                    ),
+                    duration: const Duration(seconds: 8),
+                    action: SnackBarAction(
+                      label: 'Convertir ahora',
+                      onPressed: () => _convertToService(job.copyWith(
+                        quotationStatus: QuotationStatus.approved,
+                      )),
+                    ),
                   ),
                 );
               }
@@ -7043,32 +8130,140 @@ class _PegasTablePageState extends State<PegasTablePage>
             _endLocalOperation();
           }
         },
-        onQuotationStatusSelected: (qStatus) async {
-          Navigator.pop(dialogContext);
-          _startLocalOperation();
-          try {
-            await _bikeshopService.updateQuotationStatus(job.id!, qStatus);
-            if (mounted) {
-              setState(() {
-                final index = _jobs.indexWhere((j) => j.id == job.id);
-                if (index != -1) {
-                  _jobs[index] = job.copyWith(
-                      quotationStatus: qStatus, updatedAt: DateTime.now());
-                }
-                _applyFiltersAndSort();
-              });
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Error: $e'), backgroundColor: Colors.red));
-            }
-          } finally {
-            _endLocalOperation();
-          }
-        },
       ),
     );
+  }
+
+  Future<String?> _requestQuotationStatusReason(
+    MechanicJob job,
+    QuotationStatus status,
+  ) async {
+    final now = DateTime.now();
+    final isLateApproval = status == QuotationStatus.approved &&
+        job.isQuotationPastValidityAt(now);
+    final isReopening = status == QuotationStatus.pending &&
+        job.quotationStatus != QuotationStatus.pending;
+    final isEarlyExpiry = status == QuotationStatus.expired &&
+        !job.isQuotationPastValidityAt(now);
+    final requiresReason = status == QuotationStatus.rejected ||
+        isLateApproval ||
+        isReopening ||
+        isEarlyExpiry;
+    if (!requiresReason) return '';
+
+    final title = switch (status) {
+      QuotationStatus.rejected => 'Rechazar presupuesto',
+      QuotationStatus.approved => 'Aprobar presupuesto vencido',
+      QuotationStatus.pending => 'Reabrir presupuesto',
+      QuotationStatus.expired => 'Vencer presupuesto anticipadamente',
+    };
+    final hint = switch (status) {
+      QuotationStatus.rejected =>
+        'Ej: Cliente no aprobó el valor o cambió de opción',
+      QuotationStatus.approved =>
+        'Ej: Se mantiene el precio anterior por acuerdo con el cliente',
+      QuotationStatus.pending =>
+        'Ej: Se actualizarán productos o valores antes de reenviarlo',
+      QuotationStatus.expired =>
+        'Ej: Cambió el precio o dejó de estar disponible un producto',
+    };
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: Icon(status == QuotationStatus.approved
+            ? Icons.verified_outlined
+            : Icons.edit_note_outlined),
+        title: Text(title),
+        content: SizedBox(
+          width: 440,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Motivo *',
+              hintText: hint,
+              border: const OutlineInputBorder(),
+              helperText:
+                  'Quedará guardado en el historial de ${job.jobNumber}.',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Guardar cambio'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<String?> _requestWarrantyDecisionReason(
+    MechanicJob job,
+    WarrantyOutcome outcome,
+  ) async {
+    if (outcome == WarrantyOutcome.pending) return '';
+
+    MechanicJobWarrantyClaim? claim;
+    try {
+      claim = await _bikeshopService.getWarrantyClaim(job.id!);
+    } catch (_) {
+      // The database command remains the final validator. Keep the interaction
+      // usable if a projection refresh is temporarily unavailable.
+    }
+
+    final requiresReason = outcome == WarrantyOutcome.notCovered ||
+        claim?.eligibility != WarrantyEligibility.withinWindow;
+    if (!requiresReason) return '';
+    if (!mounted) return null;
+
+    final controller = TextEditingController(text: claim?.reason ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(outcome == WarrantyOutcome.covered
+            ? 'Justificar excepción de garantía'
+            : 'Motivo de garantía no cubierta'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: outcome == WarrantyOutcome.covered
+                ? 'Por qué se acepta fuera de plazo o sin fecha confiable'
+                : 'Hallazgo técnico o condición que no está cubierta',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Guardar decisión'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _updateJobToCustomStatus(
@@ -7647,6 +8842,25 @@ class _PegasTablePageState extends State<PegasTablePage>
       ];
       return '${timestamp.day} ${months[timestamp.month - 1]}';
     }
+  }
+
+  String? _serviceWarrantyMeta(MechanicJob job) {
+    final warranty = job.serviceWarranty;
+    if (warranty == null || warranty.state == ServiceWarrantyState.notStarted) {
+      return null;
+    }
+
+    if (warranty.state == ServiceWarrantyState.active) {
+      final days = warranty.daysRemaining;
+      if (days == null) return 'Garantía vigente';
+      if (days == 0) return 'Garantía vence hoy';
+      return 'Garantía ${days}d';
+    }
+
+    final expiry = warranty.warrantyExpiresAt;
+    return expiry == null
+        ? 'Garantía vencida'
+        : 'Venció ${DateFormat('dd/MM').format(expiry.toLocal())}';
   }
 
   IconData _jobTypeIcon(JobType type) {
@@ -9145,7 +10359,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
   }
 
   Widget _buildQuotationStatusSection() {
-    final current = widget.job.quotationStatus ?? QuotationStatus.pending;
+    final current = widget.job.effectiveQuotationStatus;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -9950,88 +11164,6 @@ class _DualDeadlineDialogState extends State<_DualDeadlineDialog> {
               color: Colors.grey.shade400,
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Floating block shown after marking a warranty as "not covered"
-// ---------------------------------------------------------------------------
-class _NotCoveredConvertDialog extends StatelessWidget {
-  final String jobNumber;
-  final VoidCallback onConvert;
-  final VoidCallback onDismiss;
-
-  const _NotCoveredConvertDialog({
-    required this.jobNumber,
-    required this.onConvert,
-    required this.onDismiss,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(16),
-          color: theme.colorScheme.surfaceContainerHigh,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.shield_outlined,
-                      color: Colors.red.shade700, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Garantía rechazada — $jobNumber',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '¿Cobrar el servicio al cliente?',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: onDismiss,
-                  child: const Text('No'),
-                ),
-                const SizedBox(width: 4),
-                FilledButton.icon(
-                  onPressed: onConvert,
-                  icon: const Icon(Icons.attach_money, size: 16),
-                  label: const Text('Cobrar'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

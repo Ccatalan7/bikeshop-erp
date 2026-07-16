@@ -747,6 +747,13 @@ class MailAccountManager extends ChangeNotifier {
   /// Set provider filter
   void setProviderFilter(String? providerId) {
     _providerFilter = providerId;
+    if (providerId != null && _selectedEmail?.providerId != providerId) {
+      _selectedEmail = null;
+      _selectedProvider = null;
+      _selectedEmailError = null;
+      _isLoadingSelectedEmail = false;
+      _selectionRequestId++;
+    }
     notifyListeners();
     if (_searchQuery.isNotEmpty) {
       unawaited(searchInbox(_searchQuery));

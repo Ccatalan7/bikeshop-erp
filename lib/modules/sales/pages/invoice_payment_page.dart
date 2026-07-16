@@ -48,6 +48,12 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
     }
   }
 
+  double _effectiveBalance(Invoice invoice) {
+    final calculated =
+        (invoice.total - invoice.paidAmount).clamp(0.0, invoice.total);
+    return calculated.abs() < 1 ? 0 : calculated;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MainLayout(
@@ -79,6 +85,8 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
 
   Widget _buildContent(BuildContext context, Invoice invoice) {
     final theme = Theme.of(context);
+    final effectiveBalance = _effectiveBalance(invoice);
+    final isSettled = effectiveBalance <= 0.01;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
@@ -134,7 +142,7 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Saldo pendiente: ${ChileanUtils.formatCurrency(invoice.balance)}',
+                            'Saldo pendiente: ${ChileanUtils.formatCurrency(effectiveBalance)}',
                             style: theme.textTheme.titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w600),
                           ),
@@ -155,11 +163,53 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  PaymentForm(
-                    invoice: invoice,
-                    dismissOnSubmit: false,
-                    onCompleted: () => _returnToInvoice(refresh: true),
-                  ),
+                  if (isSettled)
+                    Card(
+                      color: theme.colorScheme.surfaceContainerLowest,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.green.shade600.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: padding,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              size: 48,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Factura pagada',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'No hay saldo pendiente. El documento tributario y sus pagos ya están registrados.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 20),
+                            AppButton(
+                              text: 'Volver a la factura',
+                              onPressed: _returnToInvoice,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    PaymentForm(
+                      invoice: invoice,
+                      dismissOnSubmit: false,
+                      onCompleted: () => _returnToInvoice(refresh: true),
+                    ),
                 ],
               ),
             ),

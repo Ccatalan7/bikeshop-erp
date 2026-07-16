@@ -37,6 +37,16 @@ DateTime? _parseDateNullable(dynamic value) {
   return null;
 }
 
+/// Canonical diagnosis storage uses percentages in the 0..100 range. Older
+/// records may contain a 0..1 fraction; normalize them at the model boundary.
+double? normalizeDiagnosisWearPercent(dynamic value) {
+  final parsed = value is num
+      ? value.toDouble()
+      : double.tryParse(value?.toString() ?? '');
+  if (parsed == null) return null;
+  return parsed >= 0 && parsed <= 1 ? parsed * 100 : parsed;
+}
+
 // ============================================================
 // BIKE MODEL
 // ============================================================
@@ -2258,6 +2268,202 @@ enum JobType {
   }
 }
 
+/// Canonical lifecycle axis for a workshop record.
+///
+/// [JobType] remains the backwards-compatible four-button UI/database value,
+/// while this enum answers the independent question "which workflow is this
+/// record currently following?". In particular, a component repair is still
+/// a service workflow.
+enum JobWorkflowKind {
+  service,
+  quotation,
+  warranty;
+
+  String get dbValue => name;
+
+  String get displayName {
+    switch (this) {
+      case JobWorkflowKind.service:
+        return 'Servicio';
+      case JobWorkflowKind.quotation:
+        return 'Presupuesto';
+      case JobWorkflowKind.warranty:
+        return 'Garantía';
+    }
+  }
+
+  static JobWorkflowKind? tryFromDbValue(String? value) {
+    switch (value) {
+      case 'service':
+        return JobWorkflowKind.service;
+      case 'quotation':
+        return JobWorkflowKind.quotation;
+      case 'warranty':
+        return JobWorkflowKind.warranty;
+      default:
+        return null;
+    }
+  }
+
+  static JobWorkflowKind fromLegacyJobType(JobType jobType) {
+    switch (jobType) {
+      case JobType.quotation:
+        return JobWorkflowKind.quotation;
+      case JobType.warranty:
+        return JobWorkflowKind.warranty;
+      case JobType.service:
+      case JobType.itemService:
+        return JobWorkflowKind.service;
+    }
+  }
+
+  static JobWorkflowKind fromDbValue(
+    String? value, {
+    JobType legacyJobType = JobType.service,
+  }) {
+    return tryFromDbValue(value) ?? fromLegacyJobType(legacyJobType);
+  }
+}
+
+/// Canonical intake/physical-subject axis for a workshop record.
+///
+/// This keeps component-only custody distinct from bicycle custody, so a
+/// wheel, fork or other loose component never increments bicycle counts.
+enum JobIntakeKind {
+  bike,
+  component,
+  unspecified;
+
+  String get dbValue => name;
+
+  String get displayName {
+    switch (this) {
+      case JobIntakeKind.bike:
+        return 'Bicicleta';
+      case JobIntakeKind.component:
+        return 'Componente';
+      case JobIntakeKind.unspecified:
+        return 'Sin clasificar';
+    }
+  }
+
+  static JobIntakeKind? tryFromDbValue(String? value) {
+    switch (value) {
+      case 'bike':
+        return JobIntakeKind.bike;
+      case 'component':
+        return JobIntakeKind.component;
+      case 'unspecified':
+        return JobIntakeKind.unspecified;
+      default:
+        return null;
+    }
+  }
+
+  /// Conservative compatibility inference for rows written before the two
+  /// canonical axes existed. It only classifies a subject when there is a
+  /// durable bike/component signal and otherwise leaves it unspecified.
+  static JobIntakeKind fromLegacyJobType(
+    JobType jobType, {
+    String? bikeId,
+    String? subjectId,
+    String? subjectNotes,
+  }) {
+    if (jobType == JobType.itemService) return JobIntakeKind.component;
+    if (bikeId != null && bikeId.trim().isNotEmpty) {
+      return JobIntakeKind.bike;
+    }
+    if (subjectId != null && subjectId.trim().isNotEmpty) {
+      return JobIntakeKind.component;
+    }
+    // Free-form historical notes alone are not proof of component custody;
+    // they may simply describe a quotation or an incomplete bicycle service.
+    // The explicit item_service value above is the only notes-only legacy
+    // component classification we can make safely.
+    return JobIntakeKind.unspecified;
+  }
+
+  static JobIntakeKind fromDbValue(
+    String? value, {
+    JobType legacyJobType = JobType.service,
+    String? bikeId,
+    String? subjectId,
+    String? subjectNotes,
+  }) {
+    return tryFromDbValue(value) ??
+        fromLegacyJobType(
+          legacyJobType,
+          bikeId: bikeId,
+          subjectId: subjectId,
+          subjectNotes: subjectNotes,
+        );
+  }
+}
+
+bool _jobModeNeedsReview({
+  required JobType jobType,
+  required JobWorkflowKind workflowKind,
+  required JobIntakeKind intakeKind,
+}) {
+  switch (jobType) {
+    case JobType.service:
+      return workflowKind != JobWorkflowKind.service ||
+          intakeKind != JobIntakeKind.bike;
+    case JobType.itemService:
+      return workflowKind != JobWorkflowKind.service ||
+          intakeKind != JobIntakeKind.component;
+    case JobType.quotation:
+      return workflowKind != JobWorkflowKind.quotation;
+    case JobType.warranty:
+      return workflowKind != JobWorkflowKind.warranty ||
+          intakeKind == JobIntakeKind.unspecified;
+  }
+}
+
+String? _fallbackModeReviewReason({
+  required JobType jobType,
+  required JobWorkflowKind workflowKind,
+  required JobIntakeKind intakeKind,
+}) {
+  if (!_jobModeNeedsReview(
+    jobType: jobType,
+    workflowKind: workflowKind,
+    intakeKind: intakeKind,
+  )) {
+    return null;
+  }
+  if (intakeKind == JobIntakeKind.unspecified) {
+    return 'Falta confirmar si se recibió una bicicleta o un componente';
+  }
+  return 'La clasificación histórica del trabajo necesita revisión';
+}
+
+String? _resolveModeReviewReason({
+  required JobType jobType,
+  required JobWorkflowKind workflowKind,
+  required JobIntakeKind intakeKind,
+  required bool? modeNeedsReview,
+  String? modeReviewReason,
+}) {
+  final needsReview = modeNeedsReview ??
+      _jobModeNeedsReview(
+        jobType: jobType,
+        workflowKind: workflowKind,
+        intakeKind: intakeKind,
+      );
+  if (!needsReview) return null;
+  final explicitReason = modeReviewReason?.trim();
+  if (explicitReason != null && explicitReason.isNotEmpty) {
+    return explicitReason;
+  }
+  return _fallbackModeReviewReason(
+        jobType: jobType,
+        workflowKind: workflowKind,
+        intakeKind: intakeKind,
+      ) ??
+      'Clasificación pendiente de revisión';
+}
+
 enum WarrantyOutcome {
   pending,
   covered,
@@ -2294,6 +2500,165 @@ enum WarrantyOutcome {
       default:
         return WarrantyOutcome.pending;
     }
+  }
+}
+
+enum ServiceWarrantyState {
+  notStarted,
+  active,
+  expired;
+
+  static ServiceWarrantyState fromDbValue(String? value) {
+    switch (value) {
+      case 'active':
+        return ServiceWarrantyState.active;
+      case 'expired':
+        return ServiceWarrantyState.expired;
+      default:
+        return ServiceWarrantyState.notStarted;
+    }
+  }
+}
+
+class MechanicJobServiceWarranty {
+  final String jobId;
+  final String? jobNumber;
+  final String customerId;
+  final String? bikeId;
+  final String? subjectId;
+  final JobType jobType;
+  final DateTime? firstDeliveredAt;
+  final DateTime? lastDeliveredAt;
+  final int deliveryCount;
+  final bool hasAmbiguousLegacyHistory;
+  final String? warrantyEventId;
+  final DateTime? warrantyStartedAt;
+  final DateTime? warrantyExpiresAt;
+  final int? warrantyDaysSnapshot;
+  final ServiceWarrantyState state;
+  final int? daysRemaining;
+
+  const MechanicJobServiceWarranty({
+    required this.jobId,
+    this.jobNumber,
+    required this.customerId,
+    this.bikeId,
+    this.subjectId,
+    required this.jobType,
+    this.firstDeliveredAt,
+    this.lastDeliveredAt,
+    this.deliveryCount = 0,
+    this.hasAmbiguousLegacyHistory = false,
+    this.warrantyEventId,
+    this.warrantyStartedAt,
+    this.warrantyExpiresAt,
+    this.warrantyDaysSnapshot,
+    this.state = ServiceWarrantyState.notStarted,
+    this.daysRemaining,
+  });
+
+  factory MechanicJobServiceWarranty.fromJson(Map<String, dynamic> json) {
+    return MechanicJobServiceWarranty(
+      jobId: json['job_id']?.toString() ?? '',
+      jobNumber: json['job_number']?.toString(),
+      customerId: json['customer_id']?.toString() ?? '',
+      bikeId: json['bike_id']?.toString(),
+      subjectId: json['subject_id']?.toString(),
+      jobType: JobType.fromDbValue(json['job_type']?.toString()),
+      firstDeliveredAt: _parseDateNullable(json['first_delivered_at']),
+      lastDeliveredAt: _parseDateNullable(json['last_delivered_at']),
+      deliveryCount:
+          int.tryParse(json['delivery_count']?.toString() ?? '0') ?? 0,
+      hasAmbiguousLegacyHistory:
+          json['has_ambiguous_legacy_history'] as bool? ?? false,
+      warrantyEventId: json['warranty_event_id']?.toString(),
+      warrantyStartedAt: _parseDateNullable(json['warranty_started_at']),
+      warrantyExpiresAt: _parseDateNullable(json['warranty_expires_at']),
+      warrantyDaysSnapshot:
+          int.tryParse(json['warranty_days_snapshot']?.toString() ?? ''),
+      state: ServiceWarrantyState.fromDbValue(
+        json['warranty_state']?.toString(),
+      ),
+      daysRemaining:
+          int.tryParse(json['warranty_days_remaining']?.toString() ?? ''),
+    );
+  }
+
+  bool get isActive => state == ServiceWarrantyState.active;
+}
+
+enum WarrantyEligibility {
+  withinWindow,
+  outsideWindow,
+  unknown;
+
+  static WarrantyEligibility fromDbValue(String? value) {
+    switch (value) {
+      case 'within_window':
+        return WarrantyEligibility.withinWindow;
+      case 'outside_window':
+        return WarrantyEligibility.outsideWindow;
+      default:
+        return WarrantyEligibility.unknown;
+    }
+  }
+}
+
+class MechanicJobWarrantyClaim {
+  final String warrantyJobId;
+  final String? warrantyJobNumber;
+  final String? sourceJobId;
+  final String? sourceJobNumber;
+  final String? sourceBikeId;
+  final String? sourceSubjectId;
+  final String? sourceSubjectName;
+  final String? sourceDeliveryEventId;
+  final WarrantyEligibility eligibility;
+  final DateTime? warrantyExpiresAtSnapshot;
+  final WarrantyOutcome outcome;
+  final String? reason;
+  final DateTime? registeredAt;
+  final DateTime? decidedAt;
+  final String? decidedBy;
+
+  const MechanicJobWarrantyClaim({
+    required this.warrantyJobId,
+    this.warrantyJobNumber,
+    this.sourceJobId,
+    this.sourceJobNumber,
+    this.sourceBikeId,
+    this.sourceSubjectId,
+    this.sourceSubjectName,
+    this.sourceDeliveryEventId,
+    this.eligibility = WarrantyEligibility.unknown,
+    this.warrantyExpiresAtSnapshot,
+    this.outcome = WarrantyOutcome.pending,
+    this.reason,
+    this.registeredAt,
+    this.decidedAt,
+    this.decidedBy,
+  });
+
+  factory MechanicJobWarrantyClaim.fromJson(Map<String, dynamic> json) {
+    return MechanicJobWarrantyClaim(
+      warrantyJobId: json['warranty_job_id']?.toString() ?? '',
+      warrantyJobNumber: json['warranty_job_number']?.toString(),
+      sourceJobId: json['source_job_id']?.toString(),
+      sourceJobNumber: json['source_job_number']?.toString(),
+      sourceBikeId: json['source_bike_id']?.toString(),
+      sourceSubjectId: json['source_subject_id']?.toString(),
+      sourceSubjectName: json['source_subject_name']?.toString(),
+      sourceDeliveryEventId: json['source_delivery_event_id']?.toString(),
+      eligibility:
+          WarrantyEligibility.fromDbValue(json['eligibility']?.toString()),
+      warrantyExpiresAtSnapshot:
+          _parseDateNullable(json['warranty_expires_at_snapshot']),
+      outcome: WarrantyOutcome.fromDbValue(json['outcome']?.toString()),
+      reason: json['reason']?.toString(),
+      registeredAt: _parseDateNullable(json['registered_at']),
+      decidedAt: _parseDateNullable(json['decided_at']),
+      decidedBy: json['decided_by']?.toString(),
+    );
   }
 }
 
@@ -2440,8 +2805,13 @@ class MechanicJob {
   final String?
       bikeId; // nullable: item_service / quotation / warranty jobs may not have a bike
   final String? servicePackageId;
-  // --- new job type fields ---
+  // Legacy four-button mode plus its canonical independent workflow/intake
+  // axes. The axes are what downstream counting and lifecycle logic consume.
   final JobType jobType;
+  final JobWorkflowKind workflowKind;
+  final JobIntakeKind intakeKind;
+  final bool modeNeedsReview;
+  final String? modeReviewReason;
   final String? subjectId;
   final JobSubject? subjectData; // loaded from join, not persisted directly
   final String? subjectNotes;
@@ -2461,6 +2831,7 @@ class MechanicJob {
   final String? statusId; // New: UUID reference to job_statuses table
   final JobStatusCustom? customStatus; // Loaded from job_statuses join
   final DateTime? statusUpdatedAt; // Timestamp of last status change
+  final MechanicJobServiceWarranty? serviceWarranty;
   final JobPriority priority;
   final String? clientRequest;
   final String? diagnosis;
@@ -2473,6 +2844,7 @@ class MechanicJob {
   final double partsCost;
   final double laborCost;
   final double discountAmount;
+  final double? estimatedDurationHours;
   final double taxAmount;
   final double totalCost;
   final TaxTreatment taxTreatment; // ← Add this field
@@ -2500,6 +2872,10 @@ class MechanicJob {
     this.bikeId, // nullable now
     this.servicePackageId,
     this.jobType = JobType.service,
+    JobWorkflowKind? workflowKind,
+    JobIntakeKind? intakeKind,
+    bool? modeNeedsReview,
+    String? modeReviewReason,
     this.subjectId,
     this.subjectData,
     this.subjectNotes,
@@ -2519,6 +2895,7 @@ class MechanicJob {
     this.statusId,
     this.customStatus,
     this.statusUpdatedAt,
+    this.serviceWarranty,
     this.priority = JobPriority.normal,
     this.clientRequest,
     this.diagnosis,
@@ -2531,6 +2908,7 @@ class MechanicJob {
     this.partsCost = 0,
     this.laborCost = 0,
     this.discountAmount = 0,
+    this.estimatedDurationHours,
     this.taxAmount = 0,
     this.totalCost = 0,
     this.taxTreatment = TaxTreatment.noTax, // ← Add default
@@ -2547,7 +2925,43 @@ class MechanicJob {
     DateTime? updatedAt,
     this.deletedAt,
     this.deletedBy,
-  })  : arrivalDate = arrivalDate ?? DateTime.now(),
+  })  : workflowKind =
+            workflowKind ?? JobWorkflowKind.fromLegacyJobType(jobType),
+        intakeKind = intakeKind ??
+            JobIntakeKind.fromLegacyJobType(
+              jobType,
+              bikeId: bikeId,
+              subjectId: subjectId,
+              subjectNotes: subjectNotes,
+            ),
+        modeNeedsReview = modeNeedsReview ??
+            _jobModeNeedsReview(
+              jobType: jobType,
+              workflowKind:
+                  workflowKind ?? JobWorkflowKind.fromLegacyJobType(jobType),
+              intakeKind: intakeKind ??
+                  JobIntakeKind.fromLegacyJobType(
+                    jobType,
+                    bikeId: bikeId,
+                    subjectId: subjectId,
+                    subjectNotes: subjectNotes,
+                  ),
+            ),
+        modeReviewReason = _resolveModeReviewReason(
+          jobType: jobType,
+          workflowKind:
+              workflowKind ?? JobWorkflowKind.fromLegacyJobType(jobType),
+          intakeKind: intakeKind ??
+              JobIntakeKind.fromLegacyJobType(
+                jobType,
+                bikeId: bikeId,
+                subjectId: subjectId,
+                subjectNotes: subjectNotes,
+              ),
+          modeNeedsReview: modeNeedsReview,
+          modeReviewReason: modeReviewReason,
+        ),
+        arrivalDate = arrivalDate ?? DateTime.now(),
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
@@ -2566,17 +2980,53 @@ class MechanicJob {
           JobSubject.fromJson(json['subject'] as Map<String, dynamic>);
     }
 
+    final jobType = JobType.fromDbValue(json['job_type']?.toString());
+    final bikeId = json['bike_id']?.toString();
+    final subjectId = json['subject_id']?.toString();
+    final subjectNotes = json['subject_notes']?.toString();
+    final workflowKind =
+        JobWorkflowKind.tryFromDbValue(json['workflow_kind']?.toString()) ??
+            JobWorkflowKind.fromLegacyJobType(jobType);
+    final intakeKind =
+        JobIntakeKind.tryFromDbValue(json['intake_kind']?.toString()) ??
+            JobIntakeKind.fromLegacyJobType(
+              jobType,
+              bikeId: bikeId,
+              subjectId: subjectId,
+              subjectNotes: subjectNotes,
+            );
+    final inferredModeReview = _jobModeNeedsReview(
+      jobType: jobType,
+      workflowKind: workflowKind,
+      intakeKind: intakeKind,
+    );
+    final storedModeNeedsReview = json['mode_needs_review'] as bool? ?? false;
+    final modeNeedsReview = storedModeNeedsReview || inferredModeReview;
+    final storedModeReviewReason = json['mode_review_reason']?.toString();
+
     return MechanicJob(
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       jobNumber: json['job_number']?.toString() ?? '',
       customerId: json['customer_id']?.toString() ?? '',
-      bikeId: json['bike_id']?.toString(),
+      bikeId: bikeId,
       servicePackageId: json['service_package_id']?.toString(),
-      jobType: JobType.fromDbValue(json['job_type'] as String?),
-      subjectId: json['subject_id']?.toString(),
+      jobType: jobType,
+      workflowKind: workflowKind,
+      intakeKind: intakeKind,
+      modeNeedsReview: modeNeedsReview,
+      modeReviewReason: storedModeReviewReason ??
+          (modeNeedsReview
+              ? (_fallbackModeReviewReason(
+                    jobType: jobType,
+                    workflowKind: workflowKind,
+                    intakeKind: intakeKind,
+                  ) ??
+                  'Clasificación pendiente de revisión')
+              : null),
+      subjectId: subjectId,
       subjectData: subjectData,
-      subjectNotes: json['subject_notes'] as String?,
+      subjectNotes: subjectNotes,
       warrantyOutcome: json['warranty_outcome'] != null
           ? WarrantyOutcome.fromDbValue(json['warranty_outcome'] as String?)
           : null,
@@ -2612,6 +3062,9 @@ class MechanicJob {
       laborCost: double.tryParse(json['labor_cost']?.toString() ?? '0') ?? 0,
       discountAmount:
           double.tryParse(json['discount_amount']?.toString() ?? '0') ?? 0,
+      estimatedDurationHours: json['estimated_duration_hours'] == null
+          ? null
+          : double.tryParse(json['estimated_duration_hours'].toString()),
       taxAmount: double.tryParse(json['tax_amount']?.toString() ?? '0') ?? 0,
       totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
       taxTreatment: json['tax_treatment'] == 'tax_included'
@@ -2650,22 +3103,24 @@ class MechanicJob {
       'bike_id': bikeId,
       'service_package_id': servicePackageId,
       'job_type': jobType.dbValue,
+      'workflow_kind': workflowKind.dbValue,
+      'intake_kind': intakeKind.dbValue,
+      'mode_needs_review': modeNeedsReview,
+      'mode_review_reason': modeReviewReason,
       'subject_id': subjectId,
       'subject_notes': subjectNotes,
       if (warrantyOutcome != null) 'warranty_outcome': warrantyOutcome!.dbValue,
       if (quotationStatus != null) 'quotation_status': quotationStatus!.dbValue,
-      'quotation_valid_until': quotationValidUntil?.toIso8601String(),
+      'quotation_valid_until': quotationValidUntil?.toUtc().toIso8601String(),
       'converted_from_id': convertedFromId,
-      'converted_at': convertedAt?.toIso8601String(),
-      'arrival_date':
-          arrivalDate.toIso8601String(), // Always include (editable)
-      'diagnostic_deadline': diagnosticDeadline?.toIso8601String(),
-      'deadline': deliveryDeadline
-          ?.toIso8601String(), // Write to existing 'deadline' column
-      'diagnostic_sent_at': diagnosticSentAt?.toIso8601String(),
-      'started_at': startedAt?.toIso8601String(),
-      'completed_at': completedAt?.toIso8601String(),
-      'delivered_at': deliveredAt?.toIso8601String(),
+      'converted_at': convertedAt?.toUtc().toIso8601String(),
+      'arrival_date': arrivalDate.toUtc().toIso8601String(),
+      'diagnostic_deadline': diagnosticDeadline?.toUtc().toIso8601String(),
+      'deadline': deliveryDeadline?.toUtc().toIso8601String(),
+      'diagnostic_sent_at': diagnosticSentAt?.toUtc().toIso8601String(),
+      'started_at': startedAt?.toUtc().toIso8601String(),
+      'completed_at': completedAt?.toUtc().toIso8601String(),
+      'delivered_at': deliveredAt?.toUtc().toIso8601String(),
       'status': status.dbValue,
       if (statusId != null)
         'status_id': statusId, // New: custom status reference
@@ -2680,8 +3135,9 @@ class MechanicJob {
       'final_cost': finalCost,
       // Don't include parts_cost, labor_cost, total_cost - these are calculated by database triggers
       'discount_amount': discountAmount,
-      'tax_amount': taxAmount,
-      'tax_treatment': taxTreatment.toValue(),
+      'estimated_duration_hours': estimatedDurationHours,
+      // Tax fields are invoice-owned mirrors. They can only be changed from
+      // the payment terminal together with the linked invoice.
       'invoice_id': invoiceId,
       'is_invoiced': isInvoiced,
       'is_paid': isPaid,
@@ -2689,17 +3145,17 @@ class MechanicJob {
       'warranty_notes': warrantyNotes,
       'requires_approval': requiresApproval,
       'approved_by_customer': approvedByCustomer,
-      'approved_at': approvedAt?.toIso8601String(),
+      'approved_at': approvedAt?.toUtc().toIso8601String(),
       'image_urls': imageUrls,
     };
 
     // Only include created_at for CREATE, not UPDATE
     if (!forUpdate) {
-      json['created_at'] = createdAt.toIso8601String();
+      json['created_at'] = createdAt.toUtc().toIso8601String();
     }
 
     // updated_at is always set by database trigger, but include it for reference
-    json['updated_at'] = DateTime.now().toIso8601String();
+    json['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
     return json;
   }
@@ -2712,6 +3168,10 @@ class MechanicJob {
     Object? bikeId = _sentinel, // sentinel for nullable field
     String? servicePackageId,
     JobType? jobType,
+    JobWorkflowKind? workflowKind,
+    JobIntakeKind? intakeKind,
+    bool? modeNeedsReview,
+    Object? modeReviewReason = _sentinel,
     Object? subjectId = _sentinel,
     Object? subjectData = _sentinel,
     Object? subjectNotes = _sentinel,
@@ -2741,6 +3201,7 @@ class MechanicJob {
     double? partsCost,
     double? laborCost,
     double? discountAmount,
+    double? estimatedDurationHours,
     double? taxAmount,
     double? totalCost,
     TaxTreatment? taxTreatment,
@@ -2758,6 +3219,7 @@ class MechanicJob {
     String? statusId,
     JobStatusCustom? customStatus,
     DateTime? statusUpdatedAt,
+    Object? serviceWarranty = _sentinel,
   }) {
     return MechanicJob(
       id: id ?? this.id,
@@ -2767,6 +3229,12 @@ class MechanicJob {
       bikeId: bikeId == _sentinel ? this.bikeId : bikeId as String?,
       servicePackageId: servicePackageId ?? this.servicePackageId,
       jobType: jobType ?? this.jobType,
+      workflowKind: workflowKind ?? this.workflowKind,
+      intakeKind: intakeKind ?? this.intakeKind,
+      modeNeedsReview: modeNeedsReview ?? this.modeNeedsReview,
+      modeReviewReason: modeReviewReason == _sentinel
+          ? this.modeReviewReason
+          : modeReviewReason as String?,
       subjectId: subjectId == _sentinel ? this.subjectId : subjectId as String?,
       subjectData: subjectData == _sentinel
           ? this.subjectData
@@ -2809,6 +3277,9 @@ class MechanicJob {
       statusId: statusId ?? this.statusId,
       customStatus: customStatus ?? this.customStatus,
       statusUpdatedAt: statusUpdatedAt ?? this.statusUpdatedAt,
+      serviceWarranty: serviceWarranty == _sentinel
+          ? this.serviceWarranty
+          : serviceWarranty as MechanicJobServiceWarranty?,
       priority: priority ?? this.priority,
       clientRequest: clientRequest ?? this.clientRequest,
       diagnosis: diagnosis ?? this.diagnosis,
@@ -2822,6 +3293,8 @@ class MechanicJob {
       partsCost: partsCost ?? this.partsCost,
       laborCost: laborCost ?? this.laborCost,
       discountAmount: discountAmount ?? this.discountAmount,
+      estimatedDurationHours:
+          estimatedDurationHours ?? this.estimatedDurationHours,
       taxAmount: taxAmount ?? this.taxAmount,
       totalCost: totalCost ?? this.totalCost,
       taxTreatment: taxTreatment ?? this.taxTreatment,
@@ -2839,16 +3312,59 @@ class MechanicJob {
     );
   }
 
+  bool get isQuotationWorkflow => workflowKind == JobWorkflowKind.quotation;
+
+  bool get isWarrantyWorkflow => workflowKind == JobWorkflowKind.warranty;
+
+  bool get isBillableServiceWorkflow => workflowKind == JobWorkflowKind.service;
+
+  bool get isBikeIntake => intakeKind == JobIntakeKind.bike;
+
+  bool get isComponentIntake => intakeKind == JobIntakeKind.component;
+
+  /// A quotation becomes effectively expired at its validity instant without
+  /// requiring a clock-driven database update. Stored rejected/approved states
+  /// remain visible, while [canConvertQuotationAt] additionally enforces that
+  /// even an approved quotation is still inside its validity window.
+  QuotationStatus effectiveQuotationStatusAt(DateTime now) {
+    final stored = quotationStatus ?? QuotationStatus.pending;
+    if (stored == QuotationStatus.pending && isQuotationPastValidityAt(now)) {
+      return QuotationStatus.expired;
+    }
+    return stored;
+  }
+
+  QuotationStatus get effectiveQuotationStatus =>
+      effectiveQuotationStatusAt(DateTime.now());
+
+  bool isQuotationPastValidityAt(DateTime now) {
+    final validUntil = quotationValidUntil;
+    if (validUntil == null) return false;
+    return !validUntil.isAfter(now);
+  }
+
+  bool canConvertQuotationAt(DateTime now) {
+    return isQuotationWorkflow &&
+        quotationStatus == QuotationStatus.approved &&
+        !isQuotationPastValidityAt(now);
+  }
+
+  Duration? quotationTimeRemainingAt(DateTime now) {
+    final validUntil = quotationValidUntil;
+    if (validUntil == null) return null;
+    return validUntil.difference(now);
+  }
+
   /// Get the display name for the status (prefers custom status if available)
   String get statusDisplayName {
-    if (jobType == JobType.quotation) {
-      final qStatus = quotationStatus ?? QuotationStatus.pending;
+    if (isQuotationWorkflow) {
+      final qStatus = effectiveQuotationStatus;
       return 'Presupuesto ${qStatus.displayName}';
     }
 
     final baseName = customStatus?.name ?? status.displayName;
 
-    if (jobType == JobType.warranty && warrantyOutcome != null) {
+    if (isWarrantyWorkflow && warrantyOutcome != null) {
       if (warrantyOutcome == WarrantyOutcome.covered) {
         return '$baseName (Cubierto)';
       }
@@ -2864,8 +3380,8 @@ class MechanicJob {
 
   /// Get the color for the status (prefers custom status if available)
   String get statusColor {
-    if (jobType == JobType.quotation) {
-      final qStatus = quotationStatus ?? QuotationStatus.pending;
+    if (isQuotationWorkflow) {
+      final qStatus = effectiveQuotationStatus;
       switch (qStatus) {
         case QuotationStatus.pending:
           return '#F59E0B'; // Amber
@@ -2878,7 +3394,7 @@ class MechanicJob {
       }
     }
 
-    if (jobType == JobType.warranty && warrantyOutcome != null) {
+    if (isWarrantyWorkflow && warrantyOutcome != null) {
       if (warrantyOutcome == WarrantyOutcome.covered) return '#10B981'; // Green
       if (warrantyOutcome == WarrantyOutcome.notCovered) {
         return '#EF4444'; // Red
@@ -2957,8 +3473,9 @@ class MechanicJob {
     return null;
   }
 
-  /// Whether this job requires a bike (service) or just a subject/item
-  bool get requiresBike => jobType == JobType.service;
+  /// Whether the physical intake is a bicycle. Component-only repairs remain
+  /// false even though they share the normal service workflow.
+  bool get requiresBike => isBikeIntake;
 }
 
 // ============================================================
@@ -3120,7 +3637,9 @@ class MechanicJobBike {
           ? diagnosisSheet.toJson()
           : const <String, dynamic>{};
       json['diagnosis_sheet_updated_at'] = hasStructuredDiagnosis
-          ? (diagnosisSheetUpdatedAt ?? DateTime.now()).toIso8601String()
+          ? (diagnosisSheetUpdatedAt ?? DateTime.now())
+              .toUtc()
+              .toIso8601String()
           : null;
     }
 
@@ -3347,7 +3866,7 @@ class DrivetrainDiagnosisSheet {
         json['overall_status']?.toString(),
       ),
       chainWearPercent:
-          double.tryParse(json['chain_wear_percent']?.toString() ?? ''),
+          normalizeDiagnosisWearPercent(json['chain_wear_percent']),
       cableCondition: json['cable_condition']?.toString(),
       chainLubricationStatus: json['chain_lubrication_status']?.toString(),
       cassetteCondition: json['cassette_condition']?.toString(),
@@ -3462,8 +3981,7 @@ class BrakeDiagnosisSheet {
       overallStatus: BikeSystemOverallStatus.fromDbValue(
         json['overall_status']?.toString(),
       ),
-      padWearPercent:
-          double.tryParse(json['pad_wear_percent']?.toString() ?? ''),
+      padWearPercent: normalizeDiagnosisWearPercent(json['pad_wear_percent']),
       padContaminationStatus: json['pad_contamination_status']?.toString(),
       rotorThicknessMm:
           double.tryParse(json['rotor_thickness_mm']?.toString() ?? ''),
@@ -3911,7 +4429,7 @@ class MechanicJobItem {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'job_id': jobId,
-      if (jobBikeId != null) 'job_bike_id': jobBikeId, // ✅ NEW
+      'job_bike_id': jobBikeId,
       'product_id': productId,
       'service_product_id': serviceProductId,
       'product_name': productName,
@@ -3927,7 +4445,7 @@ class MechanicJobItem {
       'location_key': location.dbValue,
       'intervention_type': interventionType?.dbValue,
       'creates_lifecycle': createsLifecycle,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 
