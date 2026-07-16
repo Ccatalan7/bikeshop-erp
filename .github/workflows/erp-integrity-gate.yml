@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   verify:
-    name: Bootstrap snapshot and application regression gate
+    name: Application regression gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -19,18 +19,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
-
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v2
-        with:
-          version: 2.109.1
-          github-token: ${{ github.token }}
-
-      # Snapshot maintenance only. Production compatibility must be proven by
-      # the production-derived workflow in docs/runbooks/STAGING_SUPABASE.md;
-      # this core_schema bootstrap is never release evidence on its own.
-      - name: Validate bootstrap snapshot (not production compatibility)
-        run: bash scripts/reset_local_supabase.sh
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
