@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -4705,46 +4704,6 @@ class BikeshopService extends ChangeNotifier {
       invalidateJobBikesCache();
       _debouncedNotify();
     }
-    if (targetType != JobType.service && targetType != JobType.itemService) {
-      throw ArgumentError.value(
-        targetType,
-        'targetType',
-        'Only service and itemService are billable conversion targets',
-      );
-    }
-
-    final response = await _db.rpc(
-      'convert_mechanic_job_to_billable',
-      params: {
-        'p_job_id': normalizedJobId,
-        'p_target_job_type': targetType.dbValue,
-        'p_reason': _nonBlankOrNull(reason),
-        'p_create_invoice': createInvoice,
-        'p_bike_id': _nonBlankOrNull(bikeId),
-        'p_subject_id': _nonBlankOrNull(subjectId),
-        'p_operation_key': const Uuid().v4(),
-      },
-    );
-    if (response is! Map) {
-      throw const FormatException(
-        'Billable conversion command returned an invalid response',
-      );
-    }
-    final result = Map<String, dynamic>.from(response);
-    if (result['job_id']?.toString() != normalizedJobId) {
-      throw const FormatException(
-        'Billable conversion command returned a different job',
-      );
-    }
-
-    invalidateJobsCache();
-    invalidateJobBikesCache();
-    _debouncedNotify();
-    final updated = await getJobById(normalizedJobId);
-    if (updated == null) {
-      throw StateError('Job not found after conversion: $normalizedJobId');
-    }
-    return updated;
   }
 
   /// Backwards-compatible bicycle-service shortcut used by existing table

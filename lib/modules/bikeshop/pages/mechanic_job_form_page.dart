@@ -960,30 +960,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       _existingJobLoadError == null &&
       !_hasBlockingWarrantyLoadFailure;
 
-  QuotationStatus get _effectiveQuotationStatus =>
-      _existingJob?.effectiveQuotationStatus ??
-      _quotationStatus ??
-      QuotationStatus.pending;
-
-  /// Once a quotation leaves pending, its accepted/rejected commercial
-  /// snapshot is changed only through the audited table actions. This keeps a
-  /// normal form save from silently rewriting the proposal that was shown to
-  /// the customer.
-  bool get _isFinalQuotationReadOnly =>
-      widget.jobId != null &&
-      _existingJob?.workflowKind == JobWorkflowKind.quotation &&
-      (_existingJob?.quotationStatus ?? QuotationStatus.pending) !=
-          QuotationStatus.pending;
-
-  /// The accepted quotation itself is immutable. Once the audited conversion
-  /// has produced a normal billable service, that service remains editable;
-  /// the original accepted values live in the append-only event snapshot.
-  bool get _isCommercialSnapshotLocked => _isFinalQuotationReadOnly;
-
-  bool get _hasConvertedQuotationHistory => _existingJob?.convertedAt != null;
-
-  bool get _canSaveJob => !_isSaving && !_isFinalQuotationReadOnly;
-
   @override
   void initState() {
     super.initState();
@@ -1828,9 +1804,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     setState(() {
       _selectedCustomer = customer;
       _bikes = bikes;
-      _warrantySources = warrantySources
-          .where((source) => source.jobId != widget.jobId)
-          .toList();
       _selectedBike = null; // Reset bike selection
       _selectedBikeProfile = null;
       if (customerChanged) {
@@ -3796,29 +3769,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           );
           _warrantySaveCheckpoint.confirmDecision(desiredWarrantyOutcome);
           warrantyDecisionManagedDocument = true;
-        }
-      }
-
-      if (_jobType == JobType.warranty) {
-        final sourceJobId = _selectedWarrantySource?.jobId;
-        final registeredSourceJobId = _warrantyClaim?.sourceJobId;
-        if (sourceJobId != null && registeredSourceJobId == null) {
-          await bikeshopService.registerWarrantyClaim(
-            warrantyJobId: jobId,
-            sourceJobId: sourceJobId,
-          );
-        }
-
-        final currentOutcome =
-            _warrantyClaim?.outcome ?? WarrantyOutcome.pending;
-        if (desiredWarrantyOutcome != currentOutcome) {
-          await bikeshopService.decideWarrantyClaim(
-            warrantyJobId: jobId,
-            outcome: desiredWarrantyOutcome,
-            reason: _warrantyDecisionReasonController.text.trim().isEmpty
-                ? null
-                : _warrantyDecisionReasonController.text.trim(),
-          );
         }
       }
 
