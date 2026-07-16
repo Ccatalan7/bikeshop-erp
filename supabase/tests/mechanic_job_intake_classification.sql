@@ -2,7 +2,7 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(46);
+select plan(47);
 
 select has_function(
   'public',
@@ -156,6 +156,17 @@ insert into public.mechanic_job_items(
   'Diagnóstico inicial', 'INTAKE-DIAG', 'service', 1, 5000
 );
 
+select throws_ok(
+  $$select public.classify_mechanic_job_intake(
+    '99616400-0000-4000-8000-000000000061', 'bike',
+    '99616400-0000-4000-8000-000000000033', null, null,
+    'Intento con bicicleta inactiva.',
+    '99616400-0000-4000-8000-000000000100'
+  )$$,
+  '23514',
+  'La bicicleta debe estar activa y pertenecer al cliente y negocio del trabajo.',
+  'bike classification rejects an inactive customer bicycle'
+);
 select throws_ok(
   $$select public.classify_mechanic_job_intake(
     '99616400-0000-4000-8000-000000000061', 'bike',

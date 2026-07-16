@@ -51,10 +51,20 @@ products and the database preserves the normal movement/accounting trace.
 
 | Workflow / host | User entry point | Canonical implementation | Required shared behavior |
 |---|---|---|---|
-| Workshop job create/edit | `/taller/pegas/nueva`, `/taller/pegas/:id`, embedded client-logbook job pane | `mechanic_job_form_page.dart` | Stable diff/upsert of job bikes and items; structured diagnosis and task parents survive ordinary saves; duration persists; workflow (`service`/`quotation`/`warranty`) and physical intake (`bike`/`component`/`unspecified`) stay orthogonal behind the four familiar creation choices; saved mode/intake changes use audited table actions instead of the form selector; quotations with a persisted approval/rejection/expiry decision are read-only, while a still-pending quote may extend its validity and a converted quotation becomes a normally editable service whose accepted commercial snapshot remains immutable in the event ledger; quotation decisions/conversion use the audited commands and quotations never own invoices; tax is a read-only invoice mirror; warranty work links to its original delivered job and audited decision command; changing the customer on an unsaved job clears every customer-scoped bike, component, warranty source, outcome, and reason; an unpaid linked invoice exposes the shared routed payment action and a paid invoice does not |
-| Workshop list actions | `/taller/pegas` table/list/calendar hosts | `pegas_table_page.dart` + `pegas_calendar_widget.dart` | Canonical job form in one familiar table; existing columns render the workflow/intake distinction without a new permanent column; quotation PDF/status/conversion and mode-review actions use the shared service commands; bicycle counts include only `intake_kind = bike`; status surfaces consume the same immutable delivery/service-warranty projection; removing an active job uses soft delete and preserves its invoice/accounting evidence |
-| Linked invoice edit | Job invoice action, routed invoice page, invoice list preview, embedded editor | `invoice_form_page.dart` / `sales_invoice_editor.dart` / list preview | One database-owned bidirectional line sync with stable `mechanic_job_items.id`; a failed invoice read renders an explicit retry state, never an empty saveable invoice |
+| Workshop job create/edit | `/taller/pegas/nueva`, `/taller/pegas/:id`, embedded client-logbook job pane | `mechanic_job_form_page.dart` | Stable diff/upsert of job bikes and items; structured diagnosis and task parents survive ordinary saves; duration persists; workflow (`service`/`quotation`/`warranty`/`sale`) and physical intake (`bike`/`component`/`none`/`unspecified`) stay orthogonal behind five familiar creation choices; `Venta / cobro` requires a customer and catalog product, receives no physical object, hides diagnosis/mechanical scheduling and creates the normal invoice after its lines are saved; its optional agreement text is operational notes only and the linked invoice remains the sole source of stock, tax, receivable, balance and payments; a creation-mode change that removes bicycle context requires confirmation, preserves commercial lines in General, and copies nonempty standalone narrative into the first bicycle without overwriting bicycle-specific text; changing an unsaved warranty source with source-scoped draft data also requires confirmation and preserves its lines before replacing the physical diagnosis context; saved mode/intake changes use audited table actions instead of the form selector; quotations with a persisted approval/rejection/expiry decision are read-only, while a still-pending quote may extend its validity and a converted quotation becomes a normally editable service whose accepted commercial snapshot remains immutable in the event ledger; quotation decisions/conversion use the audited commands and quotations never own invoices; tax is a read-only invoice mirror; warranty work links to its original delivered job and audited decision command; any persisted job with active-payment evidence on its linked invoice, or an unreadable linked-payment state, keeps allowed operational notes editable but locks the physical object, products, discount, totals and mutable job-to-invoice projection; changing the customer on an unsaved job clears every customer-scoped bike, component, warranty source, outcome, and reason; an unpaid linked invoice exposes the shared routed payment action and a paid invoice does not |
+| Workshop list actions | `/taller/pegas` table/list/calendar hosts | `pegas_table_page.dart` + `pegas_calendar_widget.dart` + workshop mode classification coordinators | Canonical job form in one familiar table; existing columns render the workflow/intake distinction without a new permanent column; quotation PDF/status/conversion actions use the shared service commands; `sale/none` renders as `Venta / cobro · Sin objeto recibido`, uses the existing total/invoice payment progress, remains active while the invoice has balance, leaves Activos when fully paid, and is excluded from bicycle/component/warranty counts and mechanical calendar/Gantt; a flagged `REVISAR MODO` row opens the same compact classification action from its chip or overflow menu, offering bicycle, component, or product sale and calling the corresponding idempotent audited command; each coordinator owns one stable operation key per attempt, reuses it for readback/replay after a lost ACK and keeps an explicit uncertain outcome instead of reporting a false rollback; removing an active job uses soft delete and preserves its invoice/accounting evidence |
+| Linked invoice edit | Job invoice action, routed invoice page, invoice list preview, embedded editor | `invoice_form_page.dart` / `sales_invoice_editor.dart` / list preview | One database-owned bidirectional line sync with stable `mechanic_job_items.id`; an omitted/blank/JSON-null invoice `job_bike_id` preserves the existing physical attribution for that same stable item, while an explicit value must resolve inside the same job/tenant; a failed invoice read renders an explicit retry state, never an empty saveable invoice |
 | Invoice payment and tax choice | Routed payment page and every preview/dialog that composes `PaymentForm` | `invoice_payment_page.dart` + `PaymentForm` + `SalesService.registerPaymentWithInvoiceTax` | One idempotent database transaction posts the invoice when needed, classifies the whole invoice as IVA-included/no-tax, then records settlement; job/payment rows mirror that classification; a fully paid direct route renders a closed summary, not a zero-value form |
+
+Every employee status control in the table, legacy list, calendar, routed form
+and embedded form delegates to `BikeshopService.transitionJobStatus` and
+`MechanicJobStatusTransitionCoordinator`. The server command
+`transition_mechanic_job_status` owns the legacy `status` mirror, lifecycle
+timestamps, invoice-before-job locking and the append-only exact-key receipt.
+An ordinary form update omits `status`, `status_id`, `started_at`,
+`completed_at` and `delivered_at`. Public-store customer history remains
+read-only; the obsolete direct approve/reject status writers are removed rather
+than bypassing the employee tenant contract.
 
 The payment terminal is the only interactive sales-tax owner. Invoice editors
 show the persisted net/IVA breakdown, but do not infer or change tax from the
@@ -98,11 +108,58 @@ as a cancelled document, never an actionable orphan. The same
 `mechanic_job_mode_view` / `mechanic_job_mode_events` contract must be consumed
 by the routed form, embedded form, table, list, calendar and quick actions.
 
+The release migrations intentionally keep operational risk bounded. Migration
+`20260716030000` defines its function bodies before requesting a short
+`ACCESS EXCLUSIVE NOWAIT` DDL window; contention aborts instead of queueing
+behind or blocking workshop traffic. The only quotation data repair lives in
+`20260716035000`, uses a read-friendly `SHARE ROW EXCLUSIVE NOWAIT` lock and an
+exact one-row fingerprint, writes immutable evidence, and never replays invoice,
+payment, stock, or journal effects. `20260716040000` owns the audited manual
+classification command. `20260716050000` connects online manual-payment child
+traces by their exact deterministic operation keys rather than wall-clock
+timestamps and aborts if a required completed child is missing.
+`20260716060000` preserves stable per-bicycle workshop attribution during
+invoice sync and is a function-only change with no backfill.
+`20260716070000` appends canonical intake/review fields to the warranty-source
+view and makes claim registration replace stale form state with the exact
+original bicycle or loose component. It also aligns direct job sync and the
+existing-invoice retry with the payment kernel's invoice-to-job lock order.
+Payment first locks invoice then job and rejects a stale commercial snapshot.
+After settlement, job/invoice commercial rows, payment, stock and journal rows
+are exact no-ops. It is a function/view/trigger-only install with no backfill or
+install-time financial posting.
+`20260716080000` adds the canonical replay-safe job-status command and immutable
+receipt ledger. It derives the active tenant status and database-clock
+timestamps, follows invoice-before-job lock order and rejects covered-warranty
+status effects when payment evidence exists. Its installation creates only
+schema/functions/triggers and performs no business backfill.
+`20260716090000` completes the ordinary service/component invoice trace root
+created by a nested status effect before restoring the parent trace context.
+Covered warranties retain that root until their explicit invoice-owned
+stock/cost writer completes it. It replaces trigger logic only and performs no
+historical backfill.
+
+Release state (2026-07-16): migrations `20260716010000` through
+`20260716060000` in this workshop-mode sequence are deployed, registered and
+read back in production. The surgical normalization changed exactly PG-00468,
+left PG-00455 untouched and produced no payment, stock or journal effects. Two
+fresh canonical database rebuilds each passed 52 pgTAP files/1.210 assertions,
+and the post-write production health check has zero critical failures. The
+matching client surfaces remain pending publication and employee-path smoke;
+the active database contract remains backwards compatible with the prior
+client during that rollout. Migrations `20260716070000`, `20260716080000` and
+`20260716090000` remain locally gated release candidates until the final
+repeatable database, Flutter and browser gates complete and the coordinated
+database-before-client rollout is verified.
+
 ## Bicycle And Technical-Profile Surfaces
 
-Status (2026-07-15): this contract is implemented, locally verified and active
-in production through migration
-`20260714120000_add_atomic_bike_aggregate_save.sql`.
+Status (2026-07-16): the aggregate database contract is implemented, locally
+verified, deployed and registered in production through migration
+`20260714120000`. Production RPC/ACL/RLS readback and a browser canary confirmed
+the atomic bike/profile/events/receipt graph. Client changes must continue to
+use this already-active command; do not restore paired `bikes` then
+`bike_profiles` writes.
 
 `BikeFormDialog` is the one full bicycle identity/intake/technical-profile
 editor. It consumes `BikeshopService.getBikeAggregate` and

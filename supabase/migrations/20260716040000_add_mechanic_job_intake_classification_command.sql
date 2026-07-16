@@ -1,4 +1,6 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: RPC, ACLs and active bike/component guards were
+-- read back; the two ambiguous rows remain untouched for employee review.
 --
 -- Purpose:
 --   Give the existing one-table workshop UI an audited, tenant-safe command

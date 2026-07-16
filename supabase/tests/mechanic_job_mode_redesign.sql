@@ -162,6 +162,17 @@ insert into public.bikes(id, tenant_id, customer_id, brand, model) values
   ('99616000-0000-4000-8000-000000000031', '99616000-0000-4000-8000-000000000001', '99616000-0000-4000-8000-000000000011', 'Codex', 'Bike A'),
   ('99616000-0000-4000-8000-000000000041', '99616000-0000-4000-8000-000000000002', '99616000-0000-4000-8000-000000000021', 'Codex', 'Bike B');
 
+-- The deployed tenant trigger does not currently seed workshop subjects.
+-- Keep this contract fixture self-contained instead of relying on tenant
+-- initialization or a bootstrap snapshot.
+insert into public.job_subjects(
+  id, tenant_id, name, category, is_active
+) values (
+  '99616000-0000-4000-8000-000000000044',
+  '99616000-0000-4000-8000-000000000001',
+  'Rueda trasera', 'Ruedas', true
+);
+
 insert into public.products(
   id, tenant_id, name, sku, price, cost, inventory_qty, stock_quantity,
   is_service, product_type, track_stock
@@ -546,7 +557,7 @@ select throws_ok(
     '99616000-0000-4000-8000-000000000203'
   )$$,
   '23514',
-  'Selecciona una bicicleta del mismo cliente antes de convertir la cotización.',
+  'Selecciona una bicicleta activa del mismo cliente antes de convertir la cotización.',
   'conversion rejects a bicycle from another tenant/customer'
 );
 
@@ -764,9 +775,7 @@ select throws_ok(
     'Cliente dejó solamente la rueda.',
     true,
     null,
-    (select id from public.job_subjects
-      where tenant_id = '99616000-0000-4000-8000-000000000001'
-        and name = 'Rueda trasera'),
+    '99616000-0000-4000-8000-000000000044',
     '99616000-0000-4000-8000-000000000202'
   )$$,
   '23505',
@@ -777,8 +786,7 @@ select throws_ok(
 create temporary table mode_component_subject as
 select id
 from public.job_subjects
-where tenant_id = '99616000-0000-4000-8000-000000000001'
-  and name = 'Rueda trasera';
+where id = '99616000-0000-4000-8000-000000000044';
 
 create temporary table mode_component_conversion as
 select public.convert_mechanic_job_to_billable(

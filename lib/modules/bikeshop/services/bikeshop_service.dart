@@ -6,6 +6,12 @@ import 'package:uuid/uuid.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
+import 'mechanic_job_form_persistence_policy.dart';
+import 'mechanic_job_intake_classification_coordinator.dart';
+import 'mechanic_job_quotation_command_coordinator.dart';
+import 'mechanic_job_sale_classification_coordinator.dart';
+import 'mechanic_job_status_transition_coordinator.dart';
+import 'mechanic_job_warranty_command_coordinator.dart';
 
 class _BikeMemoryTarget {
   final String systemKey;
@@ -2511,15 +2517,21 @@ class BikeshopService extends ChangeNotifier {
   }
 
   BikeMemoryLocation _inferLocationFromText(String text) {
-    if (_containsAny(text, ['delanter', 'front']))
+    if (_containsAny(text, ['delanter', 'front'])) {
       return BikeMemoryLocation.front;
-    if (_containsAny(text, ['traser', 'rear'])) return BikeMemoryLocation.rear;
-    if (_containsAny(text, ['izquierd', 'left']))
+    }
+    if (_containsAny(text, ['traser', 'rear'])) {
+      return BikeMemoryLocation.rear;
+    }
+    if (_containsAny(text, ['izquierd', 'left'])) {
       return BikeMemoryLocation.left;
-    if (_containsAny(text, ['derech', 'right']))
+    }
+    if (_containsAny(text, ['derech', 'right'])) {
       return BikeMemoryLocation.right;
-    if (_containsAny(text, ['centro', 'center']))
+    }
+    if (_containsAny(text, ['centro', 'center'])) {
       return BikeMemoryLocation.center;
+    }
     return BikeMemoryLocation.none;
   }
 
@@ -2971,7 +2983,32 @@ class BikeshopService extends ChangeNotifier {
         .map((raw) => MechanicJobServiceWarranty.fromJson(
               raw as Map<String, dynamic>,
             ))
+        // New claims must never be linked to an ambiguous legacy intake. An
+        // already-linked historical source is loaded separately by id below
+        // so it can still be displayed without becoming selectable.
+        .where((source) =>
+            !source.modeNeedsReview && source.physicalObject.isValid)
         .toList();
+  }
+
+  /// Loads the exact source row referenced by an existing warranty claim.
+  ///
+  /// This intentionally bypasses the normal delivered-date filter and result
+  /// limit. Historical claims must remain traceable even when their source is
+  /// old, inactive, or still needs legacy intake review.
+  Future<MechanicJobServiceWarranty?> getServiceWarrantySourceByJobId(
+    String jobId,
+  ) async {
+    final normalizedJobId = jobId.trim();
+    if (normalizedJobId.isEmpty) return null;
+
+    final data = await Supabase.instance.client
+        .from('mechanic_job_service_warranty_view')
+        .select()
+        .eq('job_id', normalizedJobId)
+        .maybeSingle();
+    if (data == null) return null;
+    return MechanicJobServiceWarranty.fromJson(data);
   }
 
   Future<MechanicJobWarrantyClaim?> getWarrantyClaim(
@@ -2990,41 +3027,64 @@ class BikeshopService extends ChangeNotifier {
   Future<Map<String, dynamic>> registerWarrantyClaim({
     required String warrantyJobId,
     required String sourceJobId,
+    required String operationKey,
   }) async {
-    final operationKey =
-        'register:$warrantyJobId:$sourceJobId:${DateTime.now().microsecondsSinceEpoch}';
-    final data = await Supabase.instance.client.rpc(
-      'register_mechanic_job_warranty_claim',
-      params: {
-        'p_warranty_job_id': warrantyJobId,
-        'p_source_job_id': sourceJobId,
-        'p_operation_key': operationKey,
-      },
+    final request = MechanicJobWarrantyCommandRequest.registration(
+      warrantyJobId: warrantyJobId,
+      sourceJobId: sourceJobId,
+      operationKey: operationKey,
     );
-    invalidateJobsCache();
-    _debouncedNotify();
-    return Map<String, dynamic>.from(data as Map);
+    return _executeWarrantyCommand(request);
   }
 
   Future<Map<String, dynamic>> decideWarrantyClaim({
     required String warrantyJobId,
     required WarrantyOutcome outcome,
+    required String operationKey,
     String? reason,
   }) async {
-    final operationKey =
-        'decision:$warrantyJobId:${outcome.dbValue}:${DateTime.now().microsecondsSinceEpoch}';
-    final data = await Supabase.instance.client.rpc(
-      'decide_mechanic_job_warranty_claim',
-      params: {
-        'p_warranty_job_id': warrantyJobId,
-        'p_outcome': outcome.dbValue,
-        'p_reason': reason,
-        'p_operation_key': operationKey,
-      },
+    final request = MechanicJobWarrantyCommandRequest.decision(
+      warrantyJobId: warrantyJobId,
+      outcome: outcome.dbValue,
+      reason: reason,
+      operationKey: operationKey,
     );
-    invalidateJobsCache();
-    _debouncedNotify();
-    return Map<String, dynamic>.from(data as Map);
+    return _executeWarrantyCommand(request);
+  }
+
+  Future<Map<String, dynamic>> _executeWarrantyCommand(
+    MechanicJobWarrantyCommandRequest request,
+  ) async {
+    final coordinator = MechanicJobWarrantyCommandCoordinator(
+      send: (functionName, params) => _db.rpc(
+        functionName,
+        params: params,
+      ),
+      readback: _getWarrantyCommandEvent,
+      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+    );
+
+    try {
+      final result = await coordinator.execute(request);
+      return result.event;
+    } finally {
+      // An ACK can be lost after PostgreSQL commits. Never leave an in-memory
+      // projection authoritative after an uncertain warranty command.
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getWarrantyCommandEvent(
+    String operationKey,
+  ) async {
+    final data = await Supabase.instance.client
+        .from('mechanic_job_warranty_claim_events')
+        .select()
+        .eq('operation_key', operationKey)
+        .maybeSingle();
+    return data == null ? null : Map<String, dynamic>.from(data);
   }
 
   Future<MechanicJob> createJob(MechanicJob job) async {
@@ -3066,6 +3126,7 @@ class BikeshopService extends ChangeNotifier {
   Future<MechanicJob> updateJob(
     MechanicJob job, {
     bool syncBikeMemory = true,
+    bool protectCommercialSnapshot = false,
   }) async {
     try {
       if (job.id == null || job.id!.isEmpty) {
@@ -3074,9 +3135,14 @@ class BikeshopService extends ChangeNotifier {
 
       final previousJob = await getJobById(job.id!);
 
-      // Use forUpdate: true to exclude arrival_date and created_at from being overwritten
-      final data = await _db.update(
-          'mechanic_jobs', job.id!, job.toJson(forUpdate: true));
+      // Payment-protected saves omit lifecycle/commercial columns entirely.
+      // Sending their existing values would still fire PostgreSQL UPDATE OF
+      // triggers and could post/reverse invoice, stock or journal effects.
+      final fullPayload = job.toJson(forUpdate: true);
+      final updatePayload = protectCommercialSnapshot
+          ? mechanicJobPaymentProtectedUpdatePayload(fullPayload)
+          : fullPayload;
+      final data = await _db.update('mechanic_jobs', job.id!, updatePayload);
       final updatedJob = MechanicJob.fromJson(data);
       await _logJobCompletionBikeEvent(
         previousJob: previousJob,
@@ -3282,32 +3348,100 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<MechanicJob> updateJobStatus(String jobId, JobStatus newStatus) async {
+  /// Applies one audited, replay-safe lifecycle transition.
+  ///
+  /// The database derives the legacy status mirror and lifecycle timestamps,
+  /// appends the immutable receipt and serializes any linked invoice before the
+  /// job. [operationKey] belongs to the caller's semantic attempt and must be
+  /// retained while an uncertain outcome is being reconciled.
+  Future<MechanicJob> transitionJobStatus(
+    String jobId,
+    String statusId, {
+    required String operationKey,
+  }) async {
+    final request = MechanicJobStatusTransitionRequest(
+      jobId: jobId,
+      statusId: statusId,
+      operationKey: operationKey,
+    );
+    final previousJob = await getJobById(request.jobId);
+    final coordinator = MechanicJobStatusTransitionCoordinator(
+      send: (params) => _db.rpc(
+        'transition_mechanic_job_status',
+        params: params,
+      ),
+      readback: _getJobStatusTransitionReceipt,
+      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+    );
+
     try {
-      if (kDebugMode) {
-        print('🔄 [STATUS CHANGE] Job $jobId → ${newStatus.displayName}');
+      final result = await coordinator.execute(request);
+      final updatedJob = MechanicJob.fromJson(
+        result.authoritativeJobSnapshot,
+      );
+      if (result.changed) {
+        await _logJobCompletionBikeEvent(
+          previousJob: previousJob,
+          updatedJob: updatedJob,
+        );
       }
-
-      final job = await getJobById(jobId);
-      if (job == null) throw Exception('Trabajo no encontrado');
-
-      if (kDebugMode) {
-        print(
-            '🔍 [FETCHED JOB] Costs: parts=${job.partsCost}, labor=${job.laborCost}, total=${job.totalCost}');
-      }
-
-      final updatedJob = job.copyWith(status: newStatus);
-
-      if (kDebugMode) {
-        print(
-            '🔍 [AFTER COPYWITH] Costs: parts=${updatedJob.partsCost}, labor=${updatedJob.laborCost}, total=${updatedJob.totalCost}');
-      }
-
-      return await updateJob(updatedJob);
-    } catch (e) {
-      if (kDebugMode) print('Error updating job status: $e');
-      rethrow;
+      return updatedJob;
+    } finally {
+      // The server may have committed even when the acknowledgement was lost.
+      // Never leave a cached list authoritative after any attempt.
+      invalidateJobsCache();
+      _debouncedNotify();
     }
+  }
+
+  /// Compatibility adapter for the remaining detail widgets that still expose
+  /// the legacy enum. It resolves the tenant's active custom status first and
+  /// then delegates to the same canonical transition command.
+  Future<MechanicJob> transitionJobStatusByLegacyStatus(
+    String jobId,
+    JobStatus status, {
+    required String operationKey,
+  }) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No tenant context for job status transition');
+    }
+    final row = await Supabase.instance.client
+        .from('job_statuses')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('code', status.dbValue)
+        .eq('is_active', true)
+        .maybeSingle();
+    final statusId = row?['id']?.toString();
+    if (statusId == null || statusId.isEmpty) {
+      throw StateError(
+        'No existe un estado activo para ${status.displayName}.',
+      );
+    }
+    return transitionJobStatus(
+      jobId,
+      statusId,
+      operationKey: operationKey,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _getJobStatusTransitionReceipt(
+    String operationKey,
+    String jobId,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No tenant context for status receipt readback');
+    }
+    final row = await Supabase.instance.client
+        .from('mechanic_job_status_transition_events')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('job_id', jobId)
+        .eq('operation_key', operationKey)
+        .maybeSingle();
+    return row == null ? null : Map<String, dynamic>.from(row);
   }
 
   // ============================================================
@@ -3327,6 +3461,31 @@ class BikeshopService extends ChangeNotifier {
           .toList();
     } catch (e) {
       if (kDebugMode) print('Error fetching job items: $e');
+      rethrow;
+    }
+  }
+
+  /// Loads product summaries for a set of jobs in one query.
+  Future<Map<String, List<MechanicJobItem>>> getJobItemsForJobs(
+    Iterable<String> jobIds,
+  ) async {
+    final ids =
+        jobIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return const <String, List<MechanicJobItem>>{};
+
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_items')
+          .select()
+          .inFilter('job_id', ids.toList());
+      final result = <String, List<MechanicJobItem>>{};
+      for (final json in data as List) {
+        final item = MechanicJobItem.fromJson(json);
+        result.putIfAbsent(item.jobId, () => <MechanicJobItem>[]).add(item);
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job item summaries: $e');
       rethrow;
     }
   }
@@ -4366,6 +4525,17 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  Future<JobSubject?> getJobSubjectById(String subjectId) async {
+    if (subjectId.trim().isEmpty) return null;
+    try {
+      final data = await _db.selectById('job_subjects', subjectId.trim());
+      return data == null ? null : JobSubject.fromJson(data);
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job subject: $e');
+      rethrow;
+    }
+  }
+
   Future<JobSubject> createJobSubject(JobSubject subject) async {
     try {
       final payload = subject.toJson();
@@ -4411,88 +4581,81 @@ class BikeshopService extends ChangeNotifier {
   ///
   /// The server validates tenant/customer ownership, rewires the physical
   /// bike/component anchor atomically and clears `mode_needs_review` only when
-  /// the requested evidence is valid. Callers may retain [operationKey] when
-  /// retrying an uncertain response so the command remains replay-safe.
-  Future<MechanicJob> classifyMechanicJobIntake(
+  /// the requested evidence is valid. [operationKey] is mandatory so every
+  /// retry after an uncertain response replays the same semantic command.
+  Future<MechanicJobIntakeClassificationResult> classifyMechanicJobIntake(
     String jobId, {
     required JobIntakeKind intakeKind,
+    required String operationKey,
     String? bikeId,
     String? subjectId,
     String? subjectNotes,
     String? reason,
-    String? operationKey,
   }) async {
-    final normalizedJobId = jobId.trim();
-    if (normalizedJobId.isEmpty) {
-      throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
-    }
-    if (intakeKind == JobIntakeKind.unspecified) {
-      throw ArgumentError.value(
-        intakeKind,
-        'intakeKind',
-        'Classification must resolve to bike or component',
-      );
-    }
-
-    final normalizedBikeId = _nonBlankOrNull(bikeId);
-    final normalizedSubjectId = _nonBlankOrNull(subjectId);
-    final normalizedSubjectNotes = _nonBlankOrNull(subjectNotes);
-    if (intakeKind == JobIntakeKind.bike && normalizedBikeId == null) {
-      throw ArgumentError.value(
-        bikeId,
-        'bikeId',
-        'A bicycle intake requires a bike',
-      );
-    }
-    if (intakeKind == JobIntakeKind.component &&
-        normalizedSubjectId == null &&
-        normalizedSubjectNotes == null) {
-      throw ArgumentError.value(
-        subjectNotes,
-        'subjectNotes',
-        'A component intake requires a subject or clear description',
-      );
-    }
-
-    final normalizedOperationKey =
-        _nonBlankOrNull(operationKey) ?? const Uuid().v4();
-    final response = await _db.rpc(
-      'classify_mechanic_job_intake',
-      params: {
-        'p_job_id': normalizedJobId,
-        'p_intake_kind': intakeKind.dbValue,
-        'p_bike_id': intakeKind == JobIntakeKind.bike ? normalizedBikeId : null,
-        'p_subject_id':
-            intakeKind == JobIntakeKind.component ? normalizedSubjectId : null,
-        'p_subject_notes': intakeKind == JobIntakeKind.component
-            ? normalizedSubjectNotes
-            : null,
-        'p_reason': _nonBlankOrNull(reason),
-        'p_operation_key': normalizedOperationKey,
-      },
+    final request = MechanicJobIntakeClassificationRequest(
+      jobId: jobId,
+      intakeKind: intakeKind,
+      operationKey: operationKey,
+      bikeId: bikeId,
+      subjectId: subjectId,
+      subjectNotes: subjectNotes,
+      reason: reason,
     );
-    if (response is! Map) {
-      throw const FormatException(
-        'Intake classification command returned an invalid response',
-      );
-    }
-    final result = Map<String, dynamic>.from(response);
-    if (result['job_id']?.toString() != normalizedJobId) {
-      throw const FormatException(
-        'Intake classification command returned a different job',
-      );
-    }
+    final coordinator = MechanicJobIntakeClassificationCoordinator(
+      send: (params) => _db.rpc(
+        'classify_mechanic_job_intake',
+        params: params,
+      ),
+      readback: getJobById,
+      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+    );
 
-    invalidateJobsCache();
-    invalidateJobBikesCache();
-    _debouncedNotify();
-    final updated = await getJobById(normalizedJobId);
-    if (updated == null) {
-      throw StateError(
-        'Job not found after intake classification: $normalizedJobId',
-      );
+    try {
+      return await coordinator.execute(request);
+    } finally {
+      // An uncertain response may still have committed. Always invalidate the
+      // projections so realtime or the next explicit load cannot reuse stale
+      // mode/bicycle counts.
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
     }
-    return updated;
+  }
+
+  /// Reclassifies an audited legacy row as a sale without inventing a physical
+  /// workshop intake. The server owns the atomic mode/event update.
+  Future<MechanicJobSaleClassificationResult> classifyMechanicJobAsSale(
+    String jobId, {
+    required String operationKey,
+    String? reason,
+  }) async {
+    final request = MechanicJobSaleClassificationRequest(
+      jobId: jobId,
+      operationKey: operationKey,
+      reason: reason,
+    );
+    final coordinator = MechanicJobSaleClassificationCoordinator(
+      send: (params) => _db.rpc(
+        'classify_mechanic_job_as_sale',
+        params: params,
+      ),
+      readback: getJobById,
+      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+    );
+
+    try {
+      return await coordinator.execute(request);
+    } finally {
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
+    }
+  }
+
+  bool _isWorkshopCommandOutcomeAmbiguous(Object error) {
+    return error is! PostgrestException ||
+        error.code == null ||
+        error.code!.isEmpty;
   }
 
   // ============================================================
@@ -4501,10 +4664,12 @@ class BikeshopService extends ChangeNotifier {
 
   /// Atomically converts an approved quotation into a billable bicycle or
   /// component service. The server appends the audit event and, when requested,
-  /// creates the invoice in the same transaction.
-  Future<MechanicJob> convertToBillableJob(
+  /// creates the invoice in the same transaction. [operationKey] belongs to
+  /// the caller and must be reused until the exact outcome is confirmed.
+  Future<MechanicJobQuotationCommandResult> convertToBillableJob(
     String jobId, {
     required JobType targetType,
+    required String operationKey,
     String? reason,
     bool createInvoice = true,
     String? bikeId,
@@ -4513,6 +4678,32 @@ class BikeshopService extends ChangeNotifier {
     final normalizedJobId = jobId.trim();
     if (normalizedJobId.isEmpty) {
       throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
+    }
+    if (targetType != JobType.service && targetType != JobType.itemService) {
+      throw ArgumentError.value(
+        targetType,
+        'targetType',
+        'Only service and itemService are billable conversion targets',
+      );
+    }
+
+    final request = MechanicJobQuotationCommandRequest.conversion(
+      jobId: normalizedJobId,
+      targetJobType: targetType.dbValue,
+      reason: reason,
+      createInvoice: createInvoice,
+      bikeId: bikeId,
+      subjectId: subjectId,
+      operationKey: operationKey,
+    );
+    try {
+      return await _quotationCommandCoordinator.execute(request);
+    } finally {
+      // A lost response can happen after PostgreSQL committed the conversion.
+      // Never leave list/bicycle projections authoritative after any attempt.
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
     }
     if (targetType != JobType.service && targetType != JobType.itemService) {
       throw ArgumentError.value(
@@ -4559,8 +4750,9 @@ class BikeshopService extends ChangeNotifier {
   /// Backwards-compatible bicycle-service shortcut used by existing table
   /// actions. New conversion UI should call [convertToBillableJob] explicitly
   /// so component intake cannot be mistaken for a bicycle.
-  Future<MechanicJob> convertToServiceJob(
+  Future<MechanicJobQuotationCommandResult> convertToServiceJob(
     String jobId, {
+    required String operationKey,
     String? reason,
     bool createInvoice = true,
     String? bikeId,
@@ -4568,29 +4760,20 @@ class BikeshopService extends ChangeNotifier {
     return convertToBillableJob(
       jobId,
       targetType: JobType.service,
+      operationKey: operationKey,
       reason: reason,
       createInvoice: createInvoice,
       bikeId: bikeId,
     );
   }
 
-  /// Records a warranty decision through the audited database command.
-  Future<void> updateWarrantyOutcome(
-    String jobId,
-    WarrantyOutcome outcome, {
-    String? reason,
-  }) async {
-    await decideWarrantyClaim(
-      warrantyJobId: jobId,
-      outcome: outcome,
-      reason: reason,
-    );
-  }
-
   /// Updates quotation state through the append-only audited command.
-  Future<void> updateQuotationStatus(
+  /// [operationKey] belongs to the caller and must survive every retry of the
+  /// same status/reason request.
+  Future<MechanicJobQuotationCommandResult> updateQuotationStatus(
     String jobId,
     QuotationStatus status, {
+    required String operationKey,
     String? reason,
   }) async {
     final normalizedJobId = jobId.trim();
@@ -4598,28 +4781,72 @@ class BikeshopService extends ChangeNotifier {
       throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
     }
 
-    final response = await _db.rpc(
-      'transition_mechanic_job_quotation',
-      params: {
-        'p_job_id': normalizedJobId,
-        'p_status': status.dbValue,
-        'p_reason': _nonBlankOrNull(reason),
-        'p_operation_key': const Uuid().v4(),
-      },
+    final request = MechanicJobQuotationCommandRequest.transition(
+      jobId: normalizedJobId,
+      status: status.dbValue,
+      reason: reason,
+      operationKey: operationKey,
     );
-    if (response is! Map || response['job_id']?.toString() != normalizedJobId) {
-      throw const FormatException(
-        'Quotation transition command returned an invalid response',
-      );
+    try {
+      return await _quotationCommandCoordinator.execute(request);
+    } finally {
+      // The exact event receipt is authoritative. Invalidate cached rows even
+      // when acknowledgement is uncertain so a later refresh reads truth.
+      invalidateJobsCache();
+      _debouncedNotify();
     }
-
-    invalidateJobsCache();
-    _debouncedNotify();
   }
 
-  static String? _nonBlankOrNull(String? value) {
-    final normalized = value?.trim();
-    return normalized == null || normalized.isEmpty ? null : normalized;
+  MechanicJobQuotationCommandCoordinator get _quotationCommandCoordinator =>
+      MechanicJobQuotationCommandCoordinator(
+        send: (functionName, params) => _db.rpc(
+          functionName,
+          params: params,
+        ),
+        readback: _getQuotationCommandEvent,
+        readInvariant: _quotationTransitionInvariantMatches,
+        isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+      );
+
+  Future<Map<String, dynamic>?> _getQuotationCommandEvent(
+    String operationKey,
+    String jobId,
+  ) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No tenant context for quotation receipt readback');
+    }
+    final data = await Supabase.instance.client
+        .from('mechanic_job_mode_events')
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('job_id', jobId)
+        .eq('operation_key', operationKey)
+        .maybeSingle();
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
+  Future<bool> _quotationTransitionInvariantMatches(
+    MechanicJobQuotationCommandRequest request,
+  ) async {
+    if (request.kind != MechanicJobQuotationCommandKind.transition) {
+      return false;
+    }
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No tenant context for quotation invariant readback');
+    }
+    final data = await Supabase.instance.client
+        .from('mechanic_jobs')
+        .select('id, job_type, workflow_kind, quotation_status')
+        .eq('tenant_id', tenantId)
+        .eq('id', request.jobId)
+        .isFilter('deleted_at', null)
+        .maybeSingle();
+    return data != null &&
+        data['job_type']?.toString() == 'quotation' &&
+        data['workflow_kind']?.toString() == 'quotation' &&
+        data['quotation_status']?.toString() == request.status;
   }
 
   @override

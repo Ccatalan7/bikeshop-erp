@@ -27,51 +27,135 @@ void main() {
     expect(projection.state, ServiceWarrantyState.active);
     expect(projection.daysRemaining, 12);
     expect(
-        projection.warrantyExpiresAt?.toUtc(), DateTime.utc(2026, 7, 29, 12));
+      projection.warrantyExpiresAt?.toUtc(),
+      DateTime.utc(2026, 7, 29, 12),
+    );
   });
 
-  test('warranty claim projection keeps source eligibility and decision reason',
-      () {
-    final claim = MechanicJobWarrantyClaim.fromJson({
-      'warranty_job_id': 'warranty-job',
-      'warranty_job_number': 'PG-00101',
-      'source_job_id': 'source-job',
-      'source_job_number': 'PG-00100',
-      'source_subject_name': 'Rueda trasera',
-      'eligibility': 'outside_window',
-      'warranty_expires_at_snapshot': '2026-07-01T12:00:00Z',
-      'outcome': 'covered',
-      'reason': 'Excepción autorizada por diagnóstico técnico',
-      'registered_at': '2026-07-15T12:00:00Z',
-      'decided_at': '2026-07-15T12:05:00Z',
-      'decided_by': 'employee-1',
-    });
+  test(
+    'warranty claim projection keeps source eligibility and decision reason',
+    () {
+      final claim = MechanicJobWarrantyClaim.fromJson({
+        'warranty_job_id': 'warranty-job',
+        'warranty_job_number': 'PG-00101',
+        'source_job_id': 'source-job',
+        'source_job_number': 'PG-00100',
+        'source_subject_name': 'Rueda trasera',
+        'eligibility': 'outside_window',
+        'warranty_expires_at_snapshot': '2026-07-01T12:00:00Z',
+        'outcome': 'covered',
+        'reason': 'Excepción autorizada por diagnóstico técnico',
+        'registered_at': '2026-07-15T12:00:00Z',
+        'decided_at': '2026-07-15T12:05:00Z',
+        'decided_by': 'employee-1',
+      });
 
-    expect(claim.sourceJobId, 'source-job');
-    expect(claim.sourceSubjectName, 'Rueda trasera');
-    expect(claim.eligibility, WarrantyEligibility.outsideWindow);
-    expect(claim.outcome, WarrantyOutcome.covered);
-    expect(claim.reason, contains('Excepción'));
+      expect(claim.sourceJobId, 'source-job');
+      expect(claim.sourceSubjectName, 'Rueda trasera');
+      expect(claim.eligibility, WarrantyEligibility.outsideWindow);
+      expect(claim.outcome, WarrantyOutcome.covered);
+      expect(claim.reason, contains('Excepción'));
+    },
+  );
+
+  test(
+    'derived service warranty is never written to mechanic_jobs payload',
+    () {
+      const warranty = MechanicJobServiceWarranty(
+        jobId: 'job-1',
+        customerId: 'customer-1',
+        jobType: JobType.service,
+        state: ServiceWarrantyState.active,
+        daysRemaining: 8,
+      );
+      final job = MechanicJob(
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+      ).copyWith(serviceWarranty: warranty);
+
+      expect(job.serviceWarranty, same(warranty));
+      expect(
+        job.toJson(forUpdate: true).containsKey('service_warranty'),
+        isFalse,
+      );
+      expect(
+        job.toJson(forUpdate: true).containsKey('warranty_expires_at'),
+        isFalse,
+      );
+    },
+  );
+
+  test('warranty source object replaces bike with component exactly', () {
+    const bikeSource = MechanicJobServiceWarranty(
+      jobId: 'source-bike',
+      customerId: 'customer-1',
+      bikeId: 'bike-1',
+      jobType: JobType.service,
+      intakeKind: JobIntakeKind.bike,
+    );
+    const componentSource = MechanicJobServiceWarranty(
+      jobId: 'source-component',
+      customerId: 'customer-1',
+      subjectId: 'subject-wheel',
+      jobType: JobType.itemService,
+      intakeKind: JobIntakeKind.component,
+    );
+
+    var selection = bikeSource.physicalObject;
+    expect(selection.isBike, isTrue);
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const ['bike-1'],
+      ),
+      isTrue,
+    );
+
+    selection = componentSource.physicalObject;
+    expect(selection.bikeId, isNull);
+    expect(selection.subjectId, 'subject-wheel');
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const [],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isTrue,
+    );
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const ['bike-1'],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isFalse,
+      reason: 'a previous bicycle must never survive a component source',
+    );
   });
 
-  test('derived service warranty is never written to mechanic_jobs payload',
+  test('warranty source object follows canonical intake over provenance ids',
       () {
-    const warranty = MechanicJobServiceWarranty(
-      jobId: 'job-1',
+    const missingSource = MechanicJobServiceWarranty(
+      jobId: 'source-missing',
       customerId: 'customer-1',
       jobType: JobType.service,
-      state: ServiceWarrantyState.active,
-      daysRemaining: 8,
     );
-    final job = MechanicJob(
-      tenantId: 'tenant-1',
+    const mixedSource = MechanicJobServiceWarranty(
+      jobId: 'source-mixed',
       customerId: 'customer-1',
-    ).copyWith(serviceWarranty: warranty);
+      bikeId: 'bike-1',
+      subjectId: 'subject-wheel',
+      jobType: JobType.itemService,
+      intakeKind: JobIntakeKind.component,
+    );
 
-    expect(job.serviceWarranty, same(warranty));
+    expect(missingSource.physicalObject.isValid, isFalse);
+    expect(mixedSource.physicalObject.isComponent, isTrue);
+    expect(mixedSource.physicalObject.bikeId, isNull);
+    expect(mixedSource.physicalObject.subjectId, 'subject-wheel');
     expect(
-        job.toJson(forUpdate: true).containsKey('service_warranty'), isFalse);
-    expect(job.toJson(forUpdate: true).containsKey('warranty_expires_at'),
-        isFalse);
+      mixedSource.physicalObject.matchesSelection(
+        selectedBikeIds: const [],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isTrue,
+    );
   });
 }

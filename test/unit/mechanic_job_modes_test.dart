@@ -25,12 +25,29 @@ Map<String, dynamic> _baseJobJson({
 
 void main() {
   group('canonical workshop mode axes', () {
+    test('sale uses canonical axes while keeping the legacy service facade',
+        () {
+      final job = MechanicJob.fromJson({
+        ..._baseJobJson(jobType: 'service'),
+        'workflow_kind': 'sale',
+        'intake_kind': 'none',
+        'mode_needs_review': false,
+      });
+
+      expect(job.jobType, JobType.sale);
+      expect(job.workflowKind, JobWorkflowKind.sale);
+      expect(job.intakeKind, JobIntakeKind.none);
+      expect(job.requiresBike, isFalse);
+      expect(job.modeNeedsReview, isFalse);
+      expect(job.toJson(forUpdate: true)['job_type'], 'service');
+      expect(job.toJson(forUpdate: true)['workflow_kind'], 'sale');
+      expect(job.toJson(forUpdate: true)['intake_kind'], 'none');
+      expect(JobType.fromDbValue('sale'), JobType.sale);
+    });
+
     test('component repair is a service workflow without bicycle intake', () {
       final job = MechanicJob.fromJson({
-        ..._baseJobJson(
-          jobType: 'item_service',
-          subjectId: 'subject-wheel',
-        ),
+        ..._baseJobJson(jobType: 'item_service', subjectId: 'subject-wheel'),
         'workflow_kind': 'service',
         'intake_kind': 'component',
         'mode_needs_review': false,
@@ -46,12 +63,8 @@ void main() {
     });
 
     test('legacy values infer only durable intake evidence', () {
-      final bikeService = MechanicJob.fromJson(
-        _baseJobJson(bikeId: 'bike-1'),
-      );
-      final incompleteService = MechanicJob.fromJson(
-        _baseJobJson(),
-      );
+      final bikeService = MechanicJob.fromJson(_baseJobJson(bikeId: 'bike-1'));
+      final incompleteService = MechanicJob.fromJson(_baseJobJson());
       final walkInQuotation = MechanicJob.fromJson(
         _baseJobJson(
           jobType: 'quotation',
@@ -101,32 +114,69 @@ void main() {
       expect(reviewed.modeNeedsReview, isFalse);
       expect(reviewed.modeReviewReason, isNull);
     });
+
+    test('copyWith preserves canonical mode and derived warranty projection',
+        () {
+      const serviceWarranty = MechanicJobServiceWarranty(
+        jobId: 'job-1',
+        customerId: 'customer-1',
+        jobType: JobType.itemService,
+        state: ServiceWarrantyState.active,
+        daysRemaining: 9,
+      );
+      final job = MechanicJob(
+        id: 'job-1',
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+        jobType: JobType.itemService,
+        workflowKind: JobWorkflowKind.service,
+        intakeKind: JobIntakeKind.component,
+        modeNeedsReview: true,
+        modeReviewReason: 'Confirmar componente recibido',
+        clientRequest: 'Enrayar rueda',
+        serviceWarranty: serviceWarranty,
+      );
+
+      final updated = job.copyWith(
+        priority: JobPriority.alta,
+        clearClientRequest: true,
+      );
+
+      expect(updated.workflowKind, JobWorkflowKind.service);
+      expect(updated.intakeKind, JobIntakeKind.component);
+      expect(updated.modeNeedsReview, isTrue);
+      expect(updated.modeReviewReason, 'Confirmar componente recibido');
+      expect(updated.serviceWarranty, same(serviceWarranty));
+      expect(updated.clientRequest, isNull);
+    });
   });
 
   group('quotation validity', () {
     final beforeExpiry = DateTime.utc(2026, 7, 20, 11, 59);
     final atExpiry = DateTime.utc(2026, 7, 20, 12);
 
-    test('pending quotation expires from the clock without mutating storage',
-        () {
-      final quotation = MechanicJob(
-        tenantId: 'tenant-1',
-        customerId: 'customer-1',
-        jobType: JobType.quotation,
-        quotationStatus: QuotationStatus.pending,
-        quotationValidUntil: atExpiry,
-      );
+    test(
+      'pending quotation expires from the clock without mutating storage',
+      () {
+        final quotation = MechanicJob(
+          tenantId: 'tenant-1',
+          customerId: 'customer-1',
+          jobType: JobType.quotation,
+          quotationStatus: QuotationStatus.pending,
+          quotationValidUntil: atExpiry,
+        );
 
-      expect(
-        quotation.effectiveQuotationStatusAt(beforeExpiry),
-        QuotationStatus.pending,
-      );
-      expect(
-        quotation.effectiveQuotationStatusAt(atExpiry),
-        QuotationStatus.expired,
-      );
-      expect(quotation.quotationStatus, QuotationStatus.pending);
-    });
+        expect(
+          quotation.effectiveQuotationStatusAt(beforeExpiry),
+          QuotationStatus.pending,
+        );
+        expect(
+          quotation.effectiveQuotationStatusAt(atExpiry),
+          QuotationStatus.expired,
+        );
+        expect(quotation.quotationStatus, QuotationStatus.pending);
+      },
+    );
 
     test('approved quotation must also be inside its validity window', () {
       final quotation = MechanicJob(
@@ -146,45 +196,89 @@ void main() {
     });
   });
 
-  test('service mutations use audited commands instead of direct row writes',
-      () {
-    final source = File(
-      'lib/modules/bikeshop/services/bikeshop_service.dart',
-    ).readAsStringSync();
+  test(
+    'service mutations use audited commands instead of direct row writes',
+    () {
+      final source = File(
+        'lib/modules/bikeshop/services/bikeshop_service.dart',
+      ).readAsStringSync();
+      final quotationCoordinator = File(
+        'lib/modules/bikeshop/services/mechanic_job_quotation_command_coordinator.dart',
+      ).readAsStringSync();
 
-    final invoiceStart = source.indexOf('Future<String> createInvoiceFromJob');
-    final invoiceEnd =
-        source.indexOf('Future<void> syncJobToInvoice', invoiceStart);
-    final conversionStart =
-        source.indexOf('Future<MechanicJob> convertToBillableJob');
-    final conversionEnd =
-        source.indexOf('/// Records a warranty decision', conversionStart);
-    final quotationStart = source.indexOf('Future<void> updateQuotationStatus');
-    final quotationEnd = source.indexOf('@override', quotationStart);
+      final invoiceStart = source.indexOf(
+        'Future<String> createInvoiceFromJob',
+      );
+      final invoiceEnd = source.indexOf(
+        'Future<void> syncJobToInvoice',
+        invoiceStart,
+      );
+      final conversionStart = source.indexOf(
+        'Future<MechanicJobQuotationCommandResult> convertToBillableJob',
+      );
+      final conversionEnd = source.indexOf(
+        '/// Updates quotation state',
+        conversionStart,
+      );
+      final quotationStart = source.indexOf(
+        'Future<MechanicJobQuotationCommandResult> updateQuotationStatus',
+      );
+      final quotationEnd = source.indexOf('@override', quotationStart);
 
-    expect(invoiceStart, greaterThanOrEqualTo(0));
-    expect(conversionStart, greaterThanOrEqualTo(0));
-    expect(quotationStart, greaterThanOrEqualTo(0));
+      expect(invoiceStart, greaterThanOrEqualTo(0));
+      expect(conversionStart, greaterThanOrEqualTo(0));
+      expect(quotationStart, greaterThanOrEqualTo(0));
 
-    final invoiceCommand = source.substring(invoiceStart, invoiceEnd);
-    final conversionCommand = source.substring(conversionStart, conversionEnd);
-    final quotationCommand = source.substring(quotationStart, quotationEnd);
+      final invoiceCommand = source.substring(invoiceStart, invoiceEnd);
+      final conversionCommand = source.substring(
+        conversionStart,
+        conversionEnd,
+      );
+      final quotationCommand = source.substring(quotationStart, quotationEnd);
 
-    expect(
-      invoiceCommand,
-      contains("'create_billable_invoice_from_mechanic_job'"),
-    );
-    expect(
-      conversionCommand,
-      contains("'convert_mechanic_job_to_billable'"),
-    );
-    expect(conversionCommand, contains("'p_operation_key': const Uuid().v4()"));
-    expect(conversionCommand, isNot(contains("from('mechanic_jobs')")));
-    expect(
-      quotationCommand,
-      contains("'transition_mechanic_job_quotation'"),
-    );
-    expect(quotationCommand, contains("'p_operation_key': const Uuid().v4()"));
-    expect(quotationCommand, isNot(contains("from('mechanic_jobs')")));
-  });
+      expect(
+        invoiceCommand,
+        contains("'create_billable_invoice_from_mechanic_job'"),
+      );
+      expect(
+        quotationCoordinator,
+        contains("'convert_mechanic_job_to_billable'"),
+      );
+      expect(
+        conversionCommand,
+        contains('required String operationKey'),
+      );
+      expect(conversionCommand, contains('operationKey: operationKey'));
+      expect(conversionCommand, isNot(contains("from('mechanic_jobs')")));
+      expect(
+        source,
+        isNot(contains('Future<void> updateWarrantyOutcome(')),
+        reason:
+            'Warranty decisions must receive a durable caller-owned operation key.',
+      );
+      expect(
+        quotationCoordinator,
+        contains("'transition_mechanic_job_quotation'"),
+      );
+      expect(
+        quotationCommand,
+        contains('required String operationKey'),
+      );
+      expect(quotationCommand, contains('operationKey: operationKey'));
+      expect(
+        source,
+        contains(".from('mechanic_job_mode_events')"),
+      );
+      expect(source, contains(".eq('job_id', jobId)"));
+      expect(source, contains(".eq('tenant_id', tenantId)"));
+      expect(
+        quotationCommand,
+        contains('_quotationCommandCoordinator.execute(request)'),
+      );
+      expect(
+        quotationCommand,
+        isNot(contains(".update({'quotation_status'")),
+      );
+    },
+  );
 }

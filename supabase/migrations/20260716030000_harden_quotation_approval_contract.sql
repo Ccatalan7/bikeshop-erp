@@ -1,4 +1,6 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: functions, active-bike guards, event constraint and
+-- all four replacement triggers were read back after the transaction committed.
 --
 -- Purpose:
 --   1. Keep workshop quotations non-posting and non-taxed until their
@@ -10,8 +12,11 @@
 --      status-only writes remain audited during client rollout; legacy direct
 --      conversion is accepted only from an already-approved, unchanged quote
 --      with resolved intake.
---   4. Reject component conversions whose explicit or persisted subject is
---      inactive or belongs to another tenant, even when free-text notes exist.
+--   4. Reject bicycle/component conversions whose explicit or persisted intake
+--      object is inactive or belongs to another tenant/customer, even when a
+--      historical association or free-text note still exists.
+--   The exact legacy quotation normalization is isolated in 20260716035000 so
+--   this schema migration does not hold a writer lock while defining bodies.
 --
 -- Forward recovery:
 --   The new guards are additive. An older client can still create jobs and
@@ -22,13 +27,6 @@
 --   supported way to revise and approve a new version.
 
 begin;
-
--- This migration performs one surgical normalization while the shop remains
--- online. Acquire both writer locks atomically and fail immediately when a
--- worker is saving a job instead of racing or delaying that operational save.
--- Plain reads remain available for the whole transaction.
-lock table public.mechanic_jobs, public.mechanic_job_items
-  in share row exclusive mode nowait;
 
 -- The legacy recalc added 19% on top of workshop line prices even though the
 -- payment terminal owns tax classification and treats those prices as the
@@ -131,231 +129,6 @@ revoke all on function public.recalculate_mechanic_job_costs(uuid)
 
 comment on function public.recalculate_mechanic_job_costs(uuid) is
   'Recalculates operational line rollups. Unlinked jobs remain no-tax previews; linked tax/totals remain invoice-owned.';
-
--- The event type records the narrow, evidence-preserving correction below.
-alter table public.mechanic_job_mode_events
-  drop constraint if exists mechanic_job_mode_events_event_type_check;
-alter table public.mechanic_job_mode_events
-  add constraint mechanic_job_mode_events_event_type_check
-  check (event_type in (
-    'classified',
-    'review_flagged',
-    'quotation_status_changed',
-    'converted_to_billable',
-    'legacy_quote_invoice_detached',
-    'quotation_non_posting_normalized'
-  ));
-
-drop table if exists pg_temp.quotation_non_posting_normalization;
-create temporary table quotation_non_posting_normalization
-on commit drop
-as
-with totals as (
-  select
-    job.id as job_id,
-    job.tenant_id,
-    round(coalesce(sum(coalesce(
-      item.total_price,
-      item.quantity * item.unit_price,
-      0
-    )) filter (
-      where coalesce(item.item_type, 'product') <> 'service'
-    ), 0), 2) as parts_cost,
-    round(coalesce(sum(coalesce(
-      item.total_price,
-      item.quantity * item.unit_price,
-      0
-    )) filter (
-      where coalesce(item.item_type, 'product') = 'service'
-    ), 0), 2) as labor_cost,
-    count(item.id)::integer as line_count,
-    md5(coalesce(
-      jsonb_agg(jsonb_build_object(
-        'id', item.id,
-        'item_type', item.item_type,
-        'product_id', item.product_id,
-        'service_product_id', item.service_product_id,
-        'quantity', item.quantity,
-        'unit_price', item.unit_price,
-        'total_price', item.total_price
-      ) order by item.id) filter (where item.id is not null),
-      '[]'::jsonb
-    )::text) as line_contract_hash
-  from public.mechanic_jobs job
-  left join public.mechanic_job_items item
-    on item.job_id = job.id
-   and item.tenant_id = job.tenant_id
-  where job.deleted_at is null
-    and job.workflow_kind = 'quotation'
-    and job.job_type = 'quotation'
-    and job.invoice_id is null
-  group by job.id, job.tenant_id
-), candidates as (
-  select
-    job.id as job_id,
-    job.tenant_id,
-    job.job_number,
-    jsonb_build_object(
-      'quotation_status', job.quotation_status,
-      'requires_approval', job.requires_approval,
-      'is_invoiced', job.is_invoiced,
-      'is_paid', job.is_paid,
-      'parts_cost', job.parts_cost,
-      'labor_cost', job.labor_cost,
-      'final_cost', job.final_cost,
-      'tax_amount', job.tax_amount,
-      'total_cost', job.total_cost,
-      'tax_treatment', job.tax_treatment
-    ) as before_values,
-    totals.parts_cost,
-    totals.labor_cost,
-    totals.line_count,
-    totals.line_contract_hash,
-    round(
-      totals.parts_cost + totals.labor_cost
-        - round(coalesce(job.discount_amount, 0), 2),
-      2
-    ) as expected_total
-  from public.mechanic_jobs job
-  join totals on totals.job_id = job.id and totals.tenant_id = job.tenant_id
-  where job.quotation_status is null
-     or job.requires_approval is distinct from true
-     or job.is_invoiced is distinct from false
-     or job.is_paid is distinct from false
-     or job.parts_cost is distinct from totals.parts_cost
-     or job.labor_cost is distinct from totals.labor_cost
-     or job.final_cost is distinct from round(
-       totals.parts_cost + totals.labor_cost
-         - round(coalesce(job.discount_amount, 0), 2), 2
-     )
-     or job.tax_amount is distinct from 0::numeric
-     or job.total_cost is distinct from round(
-       totals.parts_cost + totals.labor_cost
-         - round(coalesce(job.discount_amount, 0), 2), 2
-     )
-     or job.tax_treatment is distinct from 'no_tax'
-)
-select * from candidates;
-
-do $$
-begin
-  if exists (
-    select 1
-    from quotation_non_posting_normalization candidate
-    where candidate.expected_total < 0
-  ) then
-    raise exception 'Quotation non-posting normalization found a discount above its subtotal';
-  end if;
-
-  -- This is deliberately a production-bounded repair, not a speculative bulk
-  -- backfill. Zero candidates makes replays idempotent. Any candidate other
-  -- than the independently inspected PG-00468 fingerprint aborts the whole
-  -- transaction so an operator edit or new legacy row is reviewed first.
-  if exists (
-    select 1
-    from quotation_non_posting_normalization candidate
-    where not (
-      candidate.tenant_id = '5443b130-cc28-45af-a420-cd500b288890'::uuid
-      and candidate.job_id = 'cb5606a2-9d91-41eb-81b9-f14db5c04347'::uuid
-      and candidate.job_number = 'PG-00468'
-      and candidate.before_values->>'quotation_status' is null
-      and candidate.before_values->>'requires_approval' = 'false'
-      and candidate.before_values->>'is_invoiced' = 'false'
-      and candidate.before_values->>'is_paid' = 'false'
-      and (candidate.before_values->>'parts_cost')::numeric = 74000
-      and (candidate.before_values->>'labor_cost')::numeric = 16000
-      and (candidate.before_values->>'final_cost')::numeric = 90000
-      and (candidate.before_values->>'tax_amount')::numeric = 17100
-      and (candidate.before_values->>'total_cost')::numeric = 90000
-      and candidate.before_values->>'tax_treatment' = 'no_tax'
-      and candidate.parts_cost = 74000
-      and candidate.labor_cost = 16000
-      and candidate.expected_total = 90000
-      and candidate.line_count = 4
-      and candidate.line_contract_hash = 'b00974ddcab33479417faa09dc569a0c'
-    )
-  ) then
-    raise exception 'Quotation normalization candidate set changed; review the live fingerprint before applying.'
-      using errcode = '23514';
-  end if;
-end;
-$$;
-
-select set_config('app.mechanic_job_mode_rpc', 'true', true);
-
-update public.mechanic_jobs job
-set quotation_status = coalesce(job.quotation_status, 'pending'),
-    requires_approval = true,
-    is_invoiced = false,
-    is_paid = false,
-    parts_cost = candidate.parts_cost,
-    labor_cost = candidate.labor_cost,
-    final_cost = candidate.expected_total,
-    tax_amount = 0,
-    total_cost = candidate.expected_total,
-    tax_treatment = 'no_tax',
-    updated_at = clock_timestamp()
-from quotation_non_posting_normalization candidate
-where job.id = candidate.job_id
-  and job.tenant_id = candidate.tenant_id
-  and job.deleted_at is null
-  and job.workflow_kind = 'quotation'
-  and job.job_type = 'quotation'
-  and job.invoice_id is null;
-
-select set_config('app.mechanic_job_mode_rpc', '', true);
-
-insert into public.mechanic_job_mode_events (
-  tenant_id,
-  job_id,
-  event_type,
-  from_job_type,
-  to_job_type,
-  from_workflow_kind,
-  to_workflow_kind,
-  from_intake_kind,
-  to_intake_kind,
-  from_quotation_status,
-  to_quotation_status,
-  reason,
-  actor_id,
-  operation_key,
-  metadata
-)
-select
-  candidate.tenant_id,
-  candidate.job_id,
-  'quotation_non_posting_normalized',
-  job.job_type,
-  job.job_type,
-  job.workflow_kind,
-  job.workflow_kind,
-  job.intake_kind,
-  job.intake_kind,
-  candidate.before_values->>'quotation_status',
-  job.quotation_status,
-  'Corrección no tributaria: el presupuesto no publica IVA, inventario ni contabilidad antes de convertirse.',
-  null,
-  'quotation-non-posting:v1:' || candidate.job_id,
-  jsonb_build_object(
-    'before', candidate.before_values,
-    'after', jsonb_build_object(
-      'quotation_status', job.quotation_status,
-      'parts_cost', job.parts_cost,
-      'labor_cost', job.labor_cost,
-      'final_cost', job.final_cost,
-      'tax_amount', job.tax_amount,
-      'total_cost', job.total_cost,
-      'tax_treatment', job.tax_treatment
-    ),
-    'invoice_id', job.invoice_id,
-    'business_effects_replayed', false
-  )
-from quotation_non_posting_normalization candidate
-join public.mechanic_jobs job
-  on job.id = candidate.job_id
- and job.tenant_id = candidate.tenant_id
-on conflict (tenant_id, operation_key) do nothing;
 
 -- Reinstall the canonical conversion command with strict intake-subject
 -- validation before invoice construction. The event guard below repeats the
@@ -524,13 +297,15 @@ begin
       from public.bikes
       where id = p_bike_id
         and tenant_id = v_job.tenant_id
-        and customer_id = v_job.customer_id;
+        and customer_id = v_job.customer_id
+        and is_active;
     elsif v_job.bike_id is not null then
       select * into v_bike
       from public.bikes
       where id = v_job.bike_id
         and tenant_id = v_job.tenant_id
-        and customer_id = v_job.customer_id;
+        and customer_id = v_job.customer_id
+        and is_active;
     else
       select bike.* into v_bike
       from public.mechanic_job_bikes job_bike
@@ -540,12 +315,13 @@ begin
       where job_bike.tenant_id = v_job.tenant_id
         and job_bike.job_id = v_job.id
         and bike.customer_id = v_job.customer_id
+        and bike.is_active
       order by job_bike.order_index, job_bike.created_at, job_bike.id
       limit 1;
     end if;
 
     if v_bike.id is null then
-      raise exception 'Selecciona una bicicleta del mismo cliente antes de convertir la cotización.'
+      raise exception 'Selecciona una bicicleta activa del mismo cliente antes de convertir la cotización.'
         using errcode = '23514';
     end if;
 
@@ -880,12 +656,6 @@ $$;
 revoke all on function public.enrich_mechanic_job_mode_event_snapshot()
   from public, anon, authenticated, service_role;
 
-drop trigger if exists trg_mechanic_job_mode_event_snapshot
-  on public.mechanic_job_mode_events;
-create trigger trg_mechanic_job_mode_event_snapshot
-  before insert on public.mechanic_job_mode_events
-  for each row execute function public.enrich_mechanic_job_mode_event_snapshot();
-
 create or replace function public.guard_canonical_mechanic_job_mode_transition()
 returns trigger
 language plpgsql
@@ -1010,8 +780,9 @@ begin
                where bike.id = new.bike_id
                  and bike.tenant_id = new.tenant_id
                  and bike.customer_id = new.customer_id
+                 and bike.is_active
              ) then
-            raise exception 'La bicicleta recibida debe pertenecer al cliente y negocio del trabajo.'
+            raise exception 'La bicicleta recibida debe estar activa y pertenecer al cliente y negocio del trabajo.'
               using errcode = '23514';
           end if;
         elsif new.intake_kind = 'component' then
@@ -1286,48 +1057,6 @@ $$;
 revoke all on function public.audit_direct_mechanic_job_mode_transition()
   from public, anon, authenticated, service_role;
 
--- Runs after the normalizer so a legacy job_type-only cross-workflow update
--- cannot hide the resulting workflow_kind mutation.
-drop trigger if exists zzzz_mechanic_jobs_guard_canonical_mode_transition
-  on public.mechanic_jobs;
-create trigger zzzz_mechanic_jobs_guard_canonical_mode_transition
-  before update of
-    job_type,
-    workflow_kind,
-    intake_kind,
-    quotation_status,
-    invoice_id,
-    is_invoiced,
-    is_paid,
-    requires_approval,
-    approved_by_customer,
-    approved_at,
-    converted_at,
-    customer_id,
-    service_package_id,
-    client_request,
-    diagnosis,
-    work_performed,
-    notes,
-    subject_notes,
-    estimated_cost,
-    parts_cost,
-    labor_cost,
-    final_cost,
-    discount_amount,
-    tax_amount,
-    total_cost,
-    tax_treatment,
-    quotation_valid_until
-  on public.mechanic_jobs
-  for each row execute function public.guard_canonical_mechanic_job_mode_transition();
-
-drop trigger if exists zzzz_mechanic_jobs_guard_canonical_mode_insert
-  on public.mechanic_jobs;
-create trigger zzzz_mechanic_jobs_guard_canonical_mode_insert
-  before insert on public.mechanic_jobs
-  for each row execute function public.guard_canonical_mechanic_job_mode_transition();
-
 create or replace function public.guard_final_quotation_item_mutation()
 returns trigger
 language plpgsql
@@ -1394,6 +1123,83 @@ $$;
 revoke all on function public.guard_final_quotation_item_mutation()
   from public, anon, authenticated, service_role;
 
+-- Keep the operational lock window at the very end of the migration. Every
+-- function body above is ready before we request table locks. If any reader or
+-- writer is active, NOWAIT aborts this whole transaction instead of queueing
+-- behind the shop or making later workers queue behind an ACCESS EXCLUSIVE
+-- request. The separate 20260716035000 migration owns the surgical data
+-- normalization under a weaker read-friendly writer lock.
+set local lock_timeout = '750ms';
+set local statement_timeout = '20s';
+lock table
+  public.mechanic_job_mode_events,
+  public.mechanic_jobs,
+  public.mechanic_job_items
+  in access exclusive mode nowait;
+
+-- The event type is consumed by the evidence-preserving normalization in the
+-- immediately following migration.
+alter table public.mechanic_job_mode_events
+  drop constraint if exists mechanic_job_mode_events_event_type_check;
+alter table public.mechanic_job_mode_events
+  add constraint mechanic_job_mode_events_event_type_check
+  check (event_type in (
+    'classified',
+    'review_flagged',
+    'quotation_status_changed',
+    'converted_to_billable',
+    'legacy_quote_invoice_detached',
+    'quotation_non_posting_normalized'
+  ));
+
+drop trigger if exists trg_mechanic_job_mode_event_snapshot
+  on public.mechanic_job_mode_events;
+create trigger trg_mechanic_job_mode_event_snapshot
+  before insert on public.mechanic_job_mode_events
+  for each row execute function public.enrich_mechanic_job_mode_event_snapshot();
+
+-- Runs after the compatibility normalizer so a legacy job_type-only
+-- cross-workflow update cannot hide the resulting workflow_kind mutation.
+drop trigger if exists zzzz_mechanic_jobs_guard_canonical_mode_transition
+  on public.mechanic_jobs;
+create trigger zzzz_mechanic_jobs_guard_canonical_mode_transition
+  before update of
+    job_type,
+    workflow_kind,
+    intake_kind,
+    quotation_status,
+    invoice_id,
+    is_invoiced,
+    is_paid,
+    requires_approval,
+    approved_by_customer,
+    approved_at,
+    converted_at,
+    customer_id,
+    service_package_id,
+    client_request,
+    diagnosis,
+    work_performed,
+    notes,
+    subject_notes,
+    estimated_cost,
+    parts_cost,
+    labor_cost,
+    final_cost,
+    discount_amount,
+    tax_amount,
+    total_cost,
+    tax_treatment,
+    quotation_valid_until
+  on public.mechanic_jobs
+  for each row execute function public.guard_canonical_mechanic_job_mode_transition();
+
+drop trigger if exists zzzz_mechanic_jobs_guard_canonical_mode_insert
+  on public.mechanic_jobs;
+create trigger zzzz_mechanic_jobs_guard_canonical_mode_insert
+  before insert on public.mechanic_jobs
+  for each row execute function public.guard_canonical_mechanic_job_mode_transition();
+
 drop trigger if exists trg_mechanic_job_items_guard_approved_quotation
   on public.mechanic_job_items;
 drop trigger if exists trg_mechanic_job_items_guard_final_quotation
@@ -1403,75 +1209,6 @@ create trigger trg_mechanic_job_items_guard_final_quotation
   for each row execute function public.guard_final_quotation_item_mutation();
 
 drop function if exists public.guard_approved_quotation_item_mutation();
-
-do $$
-begin
-  if exists (
-    select 1
-    from public.mechanic_jobs job
-    left join lateral (
-      select
-        round(coalesce(sum(coalesce(
-          item.total_price,
-          item.quantity * item.unit_price,
-          0
-        )) filter (
-          where coalesce(item.item_type, 'product') <> 'service'
-        ), 0), 2) as parts_cost,
-        round(coalesce(sum(coalesce(
-          item.total_price,
-          item.quantity * item.unit_price,
-          0
-        )) filter (
-          where coalesce(item.item_type, 'product') = 'service'
-        ), 0), 2) as labor_cost
-      from public.mechanic_job_items item
-      where item.job_id = job.id
-        and item.tenant_id = job.tenant_id
-    ) lines on true
-    where job.deleted_at is null
-      and job.workflow_kind = 'quotation'
-      and (
-        job.invoice_id is not null
-        or job.quotation_status is null
-        or job.requires_approval is distinct from true
-        or job.is_invoiced is distinct from false
-        or job.is_paid is distinct from false
-        or job.parts_cost is distinct from lines.parts_cost
-        or job.labor_cost is distinct from lines.labor_cost
-        or coalesce(job.discount_amount, 0) < 0
-        or coalesce(job.discount_amount, 0)
-             > lines.parts_cost + lines.labor_cost
-        or job.final_cost is distinct from round(
-          lines.parts_cost + lines.labor_cost
-            - round(coalesce(job.discount_amount, 0), 2),
-          2
-        )
-        or job.tax_amount is distinct from 0::numeric
-        or job.total_cost is distinct from round(
-          lines.parts_cost + lines.labor_cost
-            - round(coalesce(job.discount_amount, 0), 2),
-          2
-        )
-        or job.tax_treatment is distinct from 'no_tax'
-        or exists (
-          select 1
-          from public.stock_movements movement
-          where movement.tenant_id = job.tenant_id
-            and movement.source_document_id = job.id
-        )
-        or exists (
-          select 1
-          from public.journal_entries entry
-          where entry.tenant_id = job.tenant_id
-            and entry.source_document_id = job.id
-        )
-      )
-  ) then
-    raise exception 'Quotation hardening postflight failed';
-  end if;
-end;
-$$;
 
 comment on trigger trg_mechanic_job_mode_event_snapshot
   on public.mechanic_job_mode_events is

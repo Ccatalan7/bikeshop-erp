@@ -206,6 +206,28 @@ class _BikeTypeKernelDefaults {
   });
 }
 
+/// Keeps the technical map square while allowing it to yield vertical space
+/// inside the bounded desktop preview pane.
+class BikeTechnicalNavigatorController extends StatelessWidget {
+  final Widget child;
+  final bool fitControllerToAvailableHeight;
+
+  const BikeTechnicalNavigatorController({
+    super.key,
+    required this.child,
+    this.fitControllerToAvailableHeight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AspectRatio(aspectRatio: 1, child: child);
+    if (fitControllerToAvailableHeight) {
+      return Flexible(child: controller);
+    }
+    return controller;
+  }
+}
+
 class BikeFormDialog extends StatefulWidget {
   final String customerId;
   final Bike? bike; // Null for new bike, existing bike for edit
@@ -3098,6 +3120,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget _buildTechnicalSchemaNavigator(
     ThemeData theme, {
     required String activeSystemKey,
+    bool fitControllerToAvailableHeight = false,
   }) {
     final previewBike = _buildTechnicalPreviewBike();
     final activeSpec = bikeSystemControllerSpecFor(activeSystemKey);
@@ -3130,8 +3153,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ),
           ),
           const SizedBox(height: 14),
-          AspectRatio(
-            aspectRatio: 1,
+          BikeTechnicalNavigatorController(
+            fitControllerToAvailableHeight: fitControllerToAvailableHeight,
             child: BikeSystemController(
               bike: previewBike,
               entries: kBikeSystemControllerSpecs
@@ -3698,11 +3721,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           const SizedBox(height: 18),
           Expanded(
             child: showTechnicalControls
-                ? SingleChildScrollView(
-                    child: _buildTechnicalSchemaNavigator(
-                      theme,
-                      activeSystemKey: _activeTechnicalSystemKey(),
-                    ),
+                ? _buildTechnicalSchemaNavigator(
+                    theme,
+                    activeSystemKey: _activeTechnicalSystemKey(),
+                    fitControllerToAvailableHeight: true,
                   )
                 : _buildStaticBikePreviewSurface(theme),
           ),

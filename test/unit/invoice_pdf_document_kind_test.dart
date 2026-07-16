@@ -20,53 +20,60 @@ void main() {
       );
     });
 
-    test('quotation PDF never presents an invoice or payment balance',
-        () async {
-      final quotation = _documentFixture().copyWith(
-        subtotal: 100000,
-        total: 90000,
-      );
-      final pdf = InvoicePdfGenerator.buildDocumentPDF(
-        quotation,
-        const <String, String>{'single': 'Oxford Merak 1'},
-        documentKind: InvoicePdfDocumentKind.quotation,
-        validUntil: DateTime(2026, 7, 30),
-        discountAmount: 10000,
-      );
+    test(
+      'quotation PDF never presents an invoice or payment balance',
+      () async {
+        final quotation = _documentFixture().copyWith(
+          subtotal: 100000,
+          total: 90000,
+        );
+        final pdf = InvoicePdfGenerator.buildDocumentPDF(
+          quotation,
+          const <String, String>{'single': 'Oxford Merak 1'},
+          documentKind: InvoicePdfDocumentKind.quotation,
+          validUntil: DateTime(2026, 7, 30),
+          discountAmount: 10000,
+        );
 
-      final bytes = await pdf.save();
-      final extracted = _extractText(bytes);
+        final bytes = await pdf.save();
+        final extracted = _extractText(bytes);
 
-      expect(extracted, contains('PRESUPUESTO'));
-      expect(extracted, contains('Presupuesto para'));
-      expect(extracted, contains('Fecha del presupuesto'));
-      expect(extracted, contains('Válido hasta'));
-      expect(extracted, contains('Total presupuesto'));
-      expect(extracted, contains('Descuento'));
-      expect(extracted, contains('Este presupuesto no constituye una factura'));
-      expect(extracted, isNot(contains('Facturar a')));
-      expect(extracted, isNot(contains('Fecha de la factura')));
-      expect(extracted, isNot(contains('Saldo adeudado')));
-      expect(extracted, isNot(contains('Pago realizado')));
-    });
+        expect(extracted, contains('PRESUPUESTO'));
+        expect(extracted, contains('Presupuesto para'));
+        expect(extracted, contains('Fecha del presupuesto'));
+        expect(extracted, contains('Válido hasta'));
+        expect(extracted, contains('Total presupuesto'));
+        expect(extracted, contains('Descuento'));
+        expect(
+          extracted,
+          contains('Este presupuesto no constituye una factura'),
+        );
+        expect(extracted, isNot(contains('Facturar a')));
+        expect(extracted, isNot(contains('Fecha de la factura')));
+        expect(extracted, isNot(contains('Saldo adeudado')));
+        expect(extracted, isNot(contains('Pago realizado')));
+      },
+    );
 
-    test('default PDF remains an invoice with its existing balance wording',
-        () async {
-      final invoice = _documentFixture();
-      final pdf = InvoicePdfGenerator.buildDocumentPDF(
-        invoice,
-        const <String, String>{'single': 'Oxford Merak 1'},
-      );
+    test(
+      'default PDF remains an invoice with its existing balance wording',
+      () async {
+        final invoice = _documentFixture();
+        final pdf = InvoicePdfGenerator.buildDocumentPDF(
+          invoice,
+          const <String, String>{'single': 'Oxford Merak 1'},
+        );
 
-      final bytes = await pdf.save();
-      final extracted = _extractText(bytes);
+        final bytes = await pdf.save();
+        final extracted = _extractText(bytes);
 
-      expect(extracted, contains('Facturar a'));
-      expect(extracted, contains('Fecha de la factura'));
-      expect(extracted, contains('Saldo adeudado'));
-      expect(extracted, contains('Pago realizado'));
-      expect(extracted, isNot(contains('PRESUPUESTO')));
-    });
+        expect(extracted, contains('Facturar a'));
+        expect(extracted, contains('Fecha de la factura'));
+        expect(extracted, contains('Saldo adeudado'));
+        expect(extracted, contains('Pago realizado'));
+        expect(extracted, isNot(contains('PRESUPUESTO')));
+      },
+    );
   });
 }
 
@@ -98,10 +105,9 @@ Invoice _documentFixture() {
 String _extractText(List<int> bytes) {
   final document = syncfusion.PdfDocument(inputBytes: bytes);
   try {
-    return syncfusion.PdfTextExtractor(document)
-        .extractText()
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return syncfusion.PdfTextExtractor(
+      document,
+    ).extractText().replaceAll(RegExp(r'\s+'), ' ').trim();
   } finally {
     document.dispose();
   }

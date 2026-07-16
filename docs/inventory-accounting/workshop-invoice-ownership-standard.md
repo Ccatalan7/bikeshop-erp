@@ -74,7 +74,11 @@ Historical corrections are outside this control and require independently proven
   of invoice-owned truth. Workshop saves cannot write invoice tax directly.
 - Invoice/job line synchronization preserves `mechanic_job_items.id` through
   both directions and applies a diff/upsert. It must not delete/recreate all
-  items because tasks and per-bike attribution depend on those stable IDs.
+  items because tasks and per-bike attribution depend on those stable IDs. The
+  invoice JSON is only a mirror of physical bicycle attribution: an omitted,
+  blank or JSON-null `job_bike_id` preserves the existing value for that same
+  stable item, while an explicit value must reference a bicycle linked to the
+  same workshop job and tenant or the transaction fails.
 - Active job removal is soft delete. It must never cascade-delete the linked
   invoice or its financial evidence.
 - Historical repair is explicit, idempotent, audited and database-admin-only.
@@ -112,6 +116,82 @@ Historical corrections are outside this control and require independently proven
   display/search labels only because historical invoice numbers are not unique.
   New duplicate sales invoice numbers are rejected, but existing duplicates
   remain valid historical documents and are isolated by UUID.
+
+## Deployed workshop-mode hardening — 2026-07-16
+
+The following migrations are represented in the canonical schema and are
+deployed, registered and read back in production. Before deployment, two fresh
+canonical rebuilds each passed 52 pgTAP files/1.210 assertions. The post-write
+health check has zero critical failures; the 22 historical negative-stock rows
+remain a known operational warning rather than an inferred repair target:
+
+- `20260716030000_harden_quotation_approval_contract.sql` keeps quotations
+  non-posting, freezes/revalidates the approved commercial snapshot and blocks
+  unsafe direct mode transitions. It defines functions before requesting a
+  short `ACCESS EXCLUSIVE NOWAIT` DDL window (`lock_timeout = 750ms`,
+  `statement_timeout = 20s`), so contention aborts the whole transaction rather
+  than waiting behind business traffic.
+- `20260716035000_normalize_quotation_non_posting_candidate.sql` is the only
+  data repair in this slice. Under `SHARE ROW EXCLUSIVE NOWAIT`, it accepts only
+  the frozen one-row `PG-00468` fingerprint, normalizes its non-posting totals
+  and appends immutable evidence. Zero candidates is a replay-safe success;
+  drift aborts. It never creates or replays invoice, payment, stock or journal
+  effects, and `PG-00455` is explicitly outside its candidate set.
+- `20260716040000_add_mechanic_job_intake_classification_command.sql` resolves
+  only `mode_needs_review` service/warranty rows through an idempotent,
+  tenant-safe, append-only event. The client reuses one operation key through
+  lost-ACK readback/replay. Classification itself cannot create or change an
+  invoice, payment, stock movement or journal.
+- `20260716050000_harden_online_manual_payment_trace_linkage.sql` resolves the
+  completed invoice/payment child traces by their exact deterministic operation
+  keys instead of a `created_at` window. A missing or incomplete child aborts
+  the parent confirmation atomically, preserving a closed trace graph even if
+  the database clock is corrected backwards.
+- `20260716060000_preserve_workshop_invoice_bike_attribution.sql` replaces only
+  `sync_invoice_items_to_job`: it preserves stable physical `job_bike_id` when
+  invoice JSON omits the mirror and rejects invalid/cross-job/cross-tenant
+  explicit references. It has **no backfill** and performs no historical data
+  rewrite when installed.
+
+Deployed contract `20260716070000_harden_warranty_source_object_contract.sql`
+has **no backfill**. It makes a warranty claim inherit the canonical
+bicycle/component intake of its original job and rejects stale UI objects
+before any covered/not-covered financial decision. It replaces a view,
+functions and row guards but performs no business-row DML when installed. The
+decision locks the linked invoice in the payment-integrity order: invoice paid
+status, positive paid amount, or an active payment blocks entering or leaving
+`covered`; an already-`not_covered` paid historical decision remains an audited
+no-op and refund/reversal stays invoice-owned. It also
+replaces the shared job-to-invoice sync and guarded billable-invoice command so
+an existing invoice is always locked before its job. Payment validates an exact
+commercial snapshot first. Once settlement starts, both job and invoice
+commercial rows, payments, stock and journals are exact no-ops; ordinary saves
+never become a hidden historical cleanup. This preserves legacy technical
+metadata and avoids both financial rewrites and late false save failures.
+
+Deployed contract `20260716080000_add_canonical_mechanic_job_status_transition.sql`
+also has **no backfill**. It replaces client-owned status/timestamp writes with
+one replay-safe server command and append-only receipt. The command locks a
+linked invoice before its job, permits paid normal services to continue their
+operational lifecycle, and blocks a covered-warranty status transition before
+its invoice posting/reversal trigger when paid status, positive paid amount or
+an active payment exists. Same-state requests are durable no-op receipts and
+ordinary job saves omit lifecycle columns entirely.
+
+Deployed contract `20260716090000_complete_non_warranty_nested_invoice_traces.sql`
+closes each ordinary service/component invoice trace root created inside a job
+status transition before restoring its parent context. A covered warranty
+retains the child root only when an exact transaction-local tenant/job/invoice
+marker identifies the explicit invoice-owned inventory/cost writer that will
+complete it. The migration replaces the warranty lifecycle and trace-frame
+restorer functions only and performs no business-row rewrite or historical
+trace backfill.
+
+The only backfill, `20260716035000`, matched and updated exactly PG-00468,
+appended its immutable event and left PG-00455 unchanged. The before/after
+business fingerprint stayed at 747 sales payments totaling CLP 18.130.590,
+2.489 stock movements and 2.160 balanced journals totaling CLP 74.607.147,70
+on each side. No target-job stock or journal evidence was created.
 
 The reviewed production repairs on 2026-07-15 produced this evidence:
 

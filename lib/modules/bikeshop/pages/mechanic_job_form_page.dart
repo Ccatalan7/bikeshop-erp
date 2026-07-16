@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../modules/ai_assistant/services/ai_service.dart';
 import '../../../modules/crm/models/crm_models.dart';
@@ -28,6 +29,7 @@ import '../config/diagnosis_field_definitions.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../services/bike_product_compatibility_service.dart';
 import '../services/bikeshop_service.dart';
+import '../services/mechanic_job_form_persistence_policy.dart';
 import '../services/smart_task_service.dart';
 import '../services/service_wizard_service.dart';
 import '../widgets/bikeshop_multi_select_picker_field.dart';
@@ -829,6 +831,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   List<MechanicJobServiceWarranty> _warrantySources = [];
   MechanicJobServiceWarranty? _selectedWarrantySource;
   MechanicJobWarrantyClaim? _warrantyClaim;
+  bool _isLoadingWarrantySourceObject = false;
+  String? _warrantySourceObjectError;
+  int _warrantySourceSelectionEpoch = 0;
+  String? _pendingWarrantyRegistrationOperationKey;
+  String? _pendingWarrantyDecisionOperationKey;
+  String? _pendingWarrantyDecisionFingerprint;
+  String? _pendingStatusTransitionOperationKey;
+  String? _pendingStatusTransitionFingerprint;
+  final _warrantySaveCheckpoint = MechanicJobWarrantySaveCheckpoint();
+  bool _isLoadingWarrantySources = false;
+  String? _warrantySourcesLoadError;
+  String? _warrantyClaimLoadError;
+  String? _exactWarrantySourceLoadError;
+  bool _warrantyClaimLoadCompleted = false;
   QuotationStatus? _quotationStatus;
   DateTime? _quotationValidUntil;
 
@@ -863,9 +879,86 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   final List<({Uint8List bytes, String name})> _newImages = [];
   bool _isUploadingImage = false;
   String? _linkedInvoiceNumber;
+  bool _linkedInvoiceHasActivePayments = false;
+  bool _linkedInvoicePaymentStateUnknown = false;
 
   // Edit mode
   MechanicJob? _existingJob;
+  String? _existingJobLoadError;
+
+  QuotationStatus get _effectiveQuotationStatus =>
+      _existingJob?.effectiveQuotationStatus ??
+      _quotationStatus ??
+      QuotationStatus.pending;
+
+  /// Once a quotation leaves pending, its accepted/rejected commercial
+  /// snapshot is changed only through the audited table actions. This keeps a
+  /// normal form save from silently rewriting the proposal that was shown to
+  /// the customer.
+  bool get _isFinalQuotationReadOnly =>
+      widget.jobId != null &&
+      _existingJob?.workflowKind == JobWorkflowKind.quotation &&
+      (_existingJob?.quotationStatus ?? QuotationStatus.pending) !=
+          QuotationStatus.pending;
+
+  /// The accepted quotation itself is immutable. Once the audited conversion
+  /// has produced a normal billable service, that service remains editable;
+  /// the original accepted values live in the append-only event snapshot.
+  bool get _isPaymentProtectedCommercialSnapshotLocked =>
+      shouldProtectJobCommercialSnapshot(
+        existingJob: _existingJob,
+        linkedInvoiceHasActivePayments: _linkedInvoiceHasActivePayments,
+        linkedInvoicePaymentStateUnknown: _linkedInvoicePaymentStateUnknown,
+      );
+
+  bool get _isCommercialSnapshotLocked =>
+      _isFinalQuotationReadOnly || _isPaymentProtectedCommercialSnapshotLocked;
+
+  /// Paid normal services may still move through their operational lifecycle.
+  /// Only a final quotation or a covered warranty whose settlement cannot be
+  /// proven safe blocks the status control; the server repeats this guard.
+  bool get _isStatusTransitionLocked =>
+      _jobType == JobType.sale ||
+      _isFinalQuotationReadOnly ||
+      (_jobType == JobType.warranty &&
+          (_warrantyOutcome ?? _existingJob?.warrantyOutcome) ==
+              WarrantyOutcome.covered &&
+          _warrantyCoverageNeedsFinancialReview);
+
+  bool get _hasConvertedQuotationHistory => _existingJob?.convertedAt != null;
+
+  bool get _hasBlockingWarrantyLoadFailure =>
+      _jobType == JobType.warranty &&
+      (_isLoadingWarrantySources ||
+          !_warrantyClaimLoadCompleted ||
+          _warrantySourcesLoadError != null ||
+          _warrantyClaimLoadError != null ||
+          _exactWarrantySourceLoadError != null);
+
+  bool _warrantyCoverageNeedsReason(
+    MechanicJobServiceWarranty? selectedSource,
+  ) {
+    final claim = _warrantyClaim;
+    if (claim != null &&
+        claim.sourceJobId != null &&
+        claim.sourceJobId == selectedSource?.jobId) {
+      // Eligibility is frozen when the claim is registered. A later extension
+      // or expiry of the source warranty must not rewrite that historical
+      // decision contract in the form.
+      return claim.eligibility != WarrantyEligibility.withinWindow;
+    }
+    return selectedSource?.state != ServiceWarrantyState.active;
+  }
+
+  bool get _warrantyCoverageNeedsFinancialReview =>
+      _linkedInvoiceHasActivePayments || _linkedInvoicePaymentStateUnknown;
+
+  bool get _canSaveJob =>
+      !_isLoading &&
+      !_isSaving &&
+      !_isFinalQuotationReadOnly &&
+      _existingJobLoadError == null &&
+      !_hasBlockingWarrantyLoadFailure;
 
   QuotationStatus get _effectiveQuotationStatus =>
       _existingJob?.effectiveQuotationStatus ??
@@ -897,6 +990,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     // Prevent a blank/partial form from flashing before the async edit load starts.
     // This avoids the "form opens fast, then shows loader again" flicker.
     _isLoading = true;
+    _warrantyClaimLoadCompleted = widget.jobId == null;
     // Defer initialization to avoid "setState() or markNeedsBuild() called during build"
     // when services trigger notifyListeners() synchronously
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialData());
@@ -1022,20 +1116,144 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          if (widget.jobId != null) {
+            _existingJobLoadError =
+                'No se pudieron cargar los catálogos y datos necesarios para editar esta ficha con seguridad.';
+          }
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar datos: $e')),
-        );
+        if (widget.jobId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al cargar datos: $e')),
+          );
+        }
       }
     }
   }
 
+  Future<
+      ({
+        String? invoiceNumber,
+        bool hasActivePayments,
+        bool paymentStateUnknown,
+      })> _readLinkedInvoiceFinancialState({
+    required DatabaseService databaseService,
+    required MechanicJob job,
+  }) async {
+    final invoiceId = job.invoiceId?.trim();
+    if (invoiceId == null || invoiceId.isEmpty) {
+      return (
+        invoiceNumber: null,
+        hasActivePayments: false,
+        paymentStateUnknown: false,
+      );
+    }
+
+    var hasActivePayments = job.isPaid;
+    try {
+      final invoiceData = await databaseService.selectById(
+        'sales_invoices',
+        invoiceId,
+      );
+      if (invoiceData == null) {
+        return (
+          invoiceNumber: null,
+          hasActivePayments: hasActivePayments,
+          paymentStateUnknown: true,
+        );
+      }
+
+      final invoiceNumber = invoiceData['invoice_number']?.toString();
+      final rawPaidAmount = invoiceData['paid_amount'];
+      final paidAmount = rawPaidAmount is num
+          ? rawPaidAmount.toDouble()
+          : double.tryParse(rawPaidAmount?.toString() ?? '') ?? 0;
+      hasActivePayments = hasActivePayments ||
+          invoiceData['status']?.toString().toLowerCase() == 'paid' ||
+          paidAmount > 0.01;
+
+      // Invoice mirrors can lag behind the payment ledger. The active rows are
+      // queried directly both on load and again immediately before saving.
+      final activePayments = await databaseService.supabase
+          .from('sales_payments')
+          .select('id')
+          .eq('invoice_id', invoiceId)
+          .isFilter('deleted_at', null)
+          .gt('amount', 0)
+          .limit(1);
+      hasActivePayments = hasActivePayments || activePayments.isNotEmpty;
+
+      return (
+        invoiceNumber: invoiceNumber,
+        hasActivePayments: hasActivePayments,
+        paymentStateUnknown: false,
+      );
+    } catch (error) {
+      debugPrint(
+        '⚠️ Could not prove linked invoice/payment state for $invoiceId: $error',
+      );
+      return (
+        invoiceNumber: null,
+        hasActivePayments: hasActivePayments,
+        paymentStateUnknown: true,
+      );
+    }
+  }
+
+  /// Best-effort recovery for the narrow race where a payment commits after
+  /// the form preflight but before all multi-request job writes finish.
+  ///
+  /// Never run this for an unconfirmed/unpaid failure. This recovery only
+  /// confirms that financial evidence now exists; paid invoice and job
+  /// commercial rows remain guarded and are not projected over one another.
+  Future<bool> _reconcileConfirmedPaymentRaceAfterSaveFailure(
+    String jobId,
+  ) async {
+    if (!mounted || jobId.isEmpty) return false;
+    try {
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+      final databaseService =
+          Provider.of<DatabaseService>(context, listen: false);
+      final latestJob = await bikeshopService.getJobById(jobId);
+      if (latestJob?.invoiceId == null) return false;
+      final state = await _readLinkedInvoiceFinancialState(
+        databaseService: databaseService,
+        job: latestJob!,
+      );
+      if (state.paymentStateUnknown || !state.hasActivePayments) return false;
+
+      await bikeshopService.syncJobToInvoice(jobId);
+      await bikeshopService.syncBikeMemoryFromJob(jobId);
+      _linkedInvoiceNumber = state.invoiceNumber;
+      _linkedInvoiceHasActivePayments = state.hasActivePayments;
+      _linkedInvoicePaymentStateUnknown = false;
+      return true;
+    } catch (reconcileError) {
+      debugPrint(
+        '⚠️ Could not reconcile confirmed payment race for $jobId: $reconcileError',
+      );
+      return false;
+    }
+  }
+
   Future<void> _loadExistingJob() async {
+    if (mounted) {
+      setState(() {
+        _existingJobLoadError = null;
+        _warrantyClaimLoadError = null;
+        _exactWarrantySourceLoadError = null;
+        _warrantyClaimLoadCompleted = false;
+      });
+    }
     try {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
       final inventoryService =
           Provider.of<InventoryService>(context, listen: false);
+      final databaseService =
+          Provider.of<DatabaseService>(context, listen: false);
+      final customerService =
+          Provider.of<CustomerService>(context, listen: false);
 
       debugPrint('🔍 Loading job with ID: ${widget.jobId}');
       final job = await bikeshopService.getJobById(widget.jobId!);
@@ -1053,18 +1271,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       debugPrint('✅ Job loaded: ${job.jobNumber}');
 
-      String? linkedInvoiceNumber;
-      if (job.invoiceId != null) {
-        try {
-          final invoiceData =
-              await Provider.of<DatabaseService>(context, listen: false)
-                  .selectById('sales_invoices', job.invoiceId!);
-          linkedInvoiceNumber = invoiceData?['invoice_number']?.toString();
-        } catch (e) {
-          debugPrint(
-              '⚠️ Could not load linked invoice number for ${job.invoiceId}: $e');
-        }
-      }
+      final linkedInvoiceState = await _readLinkedInvoiceFinancialState(
+        databaseService: databaseService,
+        job: job,
+      );
 
       // Load customer and bikes
       // Ensure customer is in our list (might not be in the initial top 50)
@@ -1072,8 +1282,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       try {
         customer = _customers.firstWhere((c) => c.id == job.customerId);
       } catch (_) {
-        customer = await Provider.of<CustomerService>(context, listen: false)
-            .getCustomerById(job.customerId);
+        customer = await customerService.getCustomerById(job.customerId);
         if (customer != null && mounted) {
           setState(() {
             _customers = [customer!, ..._customers];
@@ -1081,20 +1290,77 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      if (customer != null) {
-        await _selectCustomer(customer);
+      if (customer == null) {
+        throw StateError(
+          'No se pudo cargar el cliente exacto asociado al trabajo.',
+        );
       }
 
-      // Load all related job data in parallel
+      await _selectCustomer(
+        customer,
+        loadWarrantySources: job.jobType == JobType.warranty,
+      );
+
+      // Only core job aggregates are critical for every mode. Warranty claim
+      // reads are isolated below so a projection outage cannot break ordinary
+      // service, quotation, or component editing.
       final relatedResults = await Future.wait([
         bikeshopService.getJobItems(job.id!),
         bikeshopService.getJobBikes(job.id!, forceRefresh: true),
-        bikeshopService.getWarrantyClaim(job.id!),
       ]);
 
       final allItems = relatedResults[0] as List<MechanicJobItem>;
       final jobBikes = relatedResults[1] as List<MechanicJobBike>;
-      final warrantyClaim = relatedResults[2] as MechanicJobWarrantyClaim?;
+      MechanicJobWarrantyClaim? warrantyClaim;
+      if (job.jobType == JobType.warranty) {
+        try {
+          warrantyClaim = await bikeshopService.getWarrantyClaim(job.id!);
+          _warrantyClaimLoadCompleted = true;
+        } catch (error) {
+          _warrantyClaimLoadError =
+              'No se pudo confirmar el vínculo histórico de esta garantía.';
+          debugPrint('Error loading warranty claim ${job.id}: $error');
+        }
+      } else {
+        _warrantyClaimLoadCompleted = true;
+      }
+
+      MechanicJobServiceWarranty? exactWarrantySource;
+      final sourceJobId = warrantyClaim?.sourceJobId;
+      if (sourceJobId != null && sourceJobId.trim().isNotEmpty) {
+        exactWarrantySource = _warrantySources
+            .where((source) => source.jobId == sourceJobId)
+            .firstOrNull;
+        if (exactWarrantySource == null) {
+          try {
+            exactWarrantySource = await bikeshopService
+                .getServiceWarrantySourceByJobId(sourceJobId);
+            if (exactWarrantySource == null ||
+                exactWarrantySource.customerId != job.customerId) {
+              _exactWarrantySourceLoadError =
+                  'No se pudo recuperar el trabajo original exacto de esta garantía.';
+              exactWarrantySource = null;
+            }
+          } catch (error) {
+            _exactWarrantySourceLoadError =
+                'No se pudo recuperar el trabajo original exacto de esta garantía.';
+            debugPrint(
+                'Error loading exact warranty source $sourceJobId: $error');
+          }
+        }
+        if (exactWarrantySource != null &&
+            !_warrantySources
+                .any((source) => source.jobId == exactWarrantySource!.jobId)) {
+          _warrantySources = [exactWarrantySource, ..._warrantySources];
+        }
+        if (exactWarrantySource != null) {
+          // A linked claim needs its exact immutable source, not the optional
+          // list of other candidates. Do not block normal editing merely
+          // because that broader selector query failed after exact readback
+          // succeeded; the source is locked and cannot be changed anyway.
+          _warrantySourcesLoadError = null;
+        }
+      }
       debugPrint('📦 Loaded ${jobBikes.length} job bikes');
 
       // Load tax treatment from job
@@ -1248,6 +1514,42 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             .catchError((_) => null);
       }
 
+      Future<_JobPartItem> buildLoadedPartItem(MechanicJobItem item) async {
+        final product = await getProductForItem(item);
+        final wizardProfile =
+            await getWizardProfileForLoadedItem(item, product);
+        return _JobPartItem(
+          id: item.id,
+          product: product,
+          name: item.productName,
+          isCatalogProduct: product != null ||
+              item.productId != null ||
+              item.serviceProductId != null,
+          isServiceItem: item.itemType == 'service' ||
+              item.serviceProductId != null ||
+              product?.isService == true,
+          quantity: item.quantity.toInt(),
+          unitPrice: item.unitPrice,
+          location: item.location,
+          notes: item.notes,
+          wizardAnswers: item.serviceConfigurationData == null ||
+                  item.serviceConfigurationData!.isEmpty
+              ? null
+              : Map<String, dynamic>.from(item.serviceConfigurationData!),
+          wizardProfile: wizardProfile,
+        );
+      }
+
+      JobSubject? loadedSubject = job.subjectData;
+      if (loadedSubject == null && job.subjectId != null) {
+        loadedSubject = await bikeshopService.getJobSubjectById(job.subjectId!);
+        if (loadedSubject == null) {
+          throw StateError(
+            'No se pudo cargar el componente exacto asociado al trabajo.',
+          );
+        }
+      }
+
       // Build bike tabs from job bikes data
       final List<_BikeTabData> loadedBikeTabs = [];
 
@@ -1257,11 +1559,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           // Use bike from local cache, or from the joined data loaded by getJobBikes()
           Bike? bike = _findBikeById(jobBike.bikeId);
           bike ??= jobBike.bike; // Fall back to bike loaded from join
+          bike ??= await bikeshopService.getBikeById(jobBike.bikeId);
 
           if (bike == null) {
-            debugPrint(
-                '⚠️ Bike ${jobBike.bikeId} not found for customer or in join data');
-            continue;
+            throw StateError(
+              'No se pudo cargar la bicicleta ${jobBike.bikeId} asociada al trabajo.',
+            );
           }
 
           // Make sure this bike is in _bikes for UI consistency
@@ -1292,29 +1595,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               allItems.where((item) => item.jobBikeId == jobBike.id).toList();
 
           for (final item in bikeItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            tab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
+            tab.partItems.add(await buildLoadedPartItem(item));
           }
 
           loadedBikeTabs.add(tab);
@@ -1328,35 +1609,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final orphanItems =
             allItems.where((item) => item.jobBikeId == null).toList();
         for (final item in orphanItems) {
-          final product = await getProductForItem(item);
-          final wizardProfile =
-              await getWizardProfileForLoadedItem(item, product);
-          generalTab.partItems.add(_JobPartItem(
-            id: item.id,
-            product: product,
-            name: item.productName,
-            isCatalogProduct: product != null ||
-                item.productId != null ||
-                item.serviceProductId != null,
-            isServiceItem: item.itemType == 'service' ||
-                item.serviceProductId != null ||
-                product?.isService == true,
-            quantity: item.quantity.toInt(),
-            unitPrice: item.unitPrice,
-            location: item.location,
-            notes: item.notes,
-            wizardAnswers: item.serviceConfigurationData == null ||
-                    item.serviceConfigurationData!.isEmpty
-                ? null
-                : Map<String, dynamic>.from(item.serviceConfigurationData!),
-            wizardProfile: wizardProfile,
-          ));
+          generalTab.partItems.add(await buildLoadedPartItem(item));
         }
         loadedBikeTabs.add(generalTab);
       } else {
         // Legacy single-bike job: create one tab from job data
-        final bike = _findBikeById(job.bikeId);
+        Bike? bike = _findBikeById(job.bikeId);
+        if (bike == null && job.bikeId != null) {
+          bike = await bikeshopService.getBikeById(job.bikeId!);
+        }
         if (bike != null) {
+          if (!_bikes.any((candidate) => candidate.id == bike!.id)) {
+            _bikes.add(bike);
+          }
           final tab = _BikeTabData(bike: bike);
 
           // Use job-level fields for the single bike
@@ -1368,73 +1633,74 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tab.requiresApproval = job.requiresApproval;
           tab.approvedByCustomer = job.approvedByCustomer;
 
-          // Load all items (no jobBikeId filtering for legacy)
-          for (final item in allItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            tab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
-          }
-
           loadedBikeTabs.add(tab);
 
-          // Also load orphan items (job_bike_id = null) into General tab for legacy jobs.
-          // These can arrive via invoice sync — ignore them means they get wiped on next save.
+          // A legacy job has no mechanic_job_bikes ownership record, so its
+          // lines cannot be truthfully attributed to this bicycle tab. Keep
+          // each row exactly once in General until staff explicitly changes
+          // it; duplicating the same stable id in both tabs caused the second
+          // save pass to silently reassign it back to job_bike_id = null.
           final legacyGeneralTab =
               _BikeTabData(isGeneralTab: true, tabId: 'general_tab');
-          final legacyOrphanItems =
-              allItems.where((item) => item.jobBikeId == null).toList();
-          for (final item in legacyOrphanItems) {
-            final product = await getProductForItem(item);
-            final wizardProfile =
-                await getWizardProfileForLoadedItem(item, product);
-            legacyGeneralTab.partItems.add(_JobPartItem(
-              id: item.id,
-              product: product,
-              name: item.productName,
-              isCatalogProduct: product != null ||
-                  item.productId != null ||
-                  item.serviceProductId != null,
-              isServiceItem: item.itemType == 'service' ||
-                  item.serviceProductId != null ||
-                  product?.isService == true,
-              quantity: item.quantity.toInt(),
-              unitPrice: item.unitPrice,
-              location: item.location,
-              notes: item.notes,
-              wizardAnswers: item.serviceConfigurationData == null ||
-                      item.serviceConfigurationData!.isEmpty
-                  ? null
-                  : Map<String, dynamic>.from(item.serviceConfigurationData!),
-              wizardProfile: wizardProfile,
-            ));
+          for (final item in allItems) {
+            legacyGeneralTab.partItems.add(await buildLoadedPartItem(item));
           }
           loadedBikeTabs.add(legacyGeneralTab);
           debugPrint(
-              '✅ Loaded legacy single-bike tab: ${bike.displayName} with ${tab.partItems.length} items, General tab: ${legacyGeneralTab.partItems.length} orphan items');
+              '✅ Loaded legacy single-bike tab: ${bike.displayName}; preserved ${legacyGeneralTab.partItems.length} unowned items once in General');
+        } else if (job.bikeId != null) {
+          throw StateError(
+            'No se pudo cargar la bicicleta exacta asociada al trabajo.',
+          );
+        }
+      }
+
+      final standalonePersistedItems = mechanicJobStandaloneItemsForForm(
+        persistedItems: allItems,
+        hasPhysicalBikeTabs: loadedBikeTabs.any((tab) => !tab.isGeneralTab),
+      );
+      final loadedStandaloneItems = <_JobPartItem>[];
+      for (final item in standalonePersistedItems) {
+        loadedStandaloneItems.add(await buildLoadedPartItem(item));
+      }
+
+      // Quotation conversion keeps the accepted narrative on mechanic_jobs and
+      // creates the first mechanic_job_bikes row as the new physical anchor.
+      // Hydrate only empty bike fields from that job-level history so the
+      // diagnosis remains visible without overwriting later bike-specific work.
+      if (job.convertedAt != null) {
+        final convertedPrimaryTab =
+            loadedBikeTabs.where((tab) => !tab.isGeneralTab).firstOrNull;
+        if (convertedPrimaryTab != null) {
+          convertedPrimaryTab.clientRequestController.text =
+              mechanicJobConvertedBikeNarrativeValue(
+            bikeValue: convertedPrimaryTab.clientRequestController.text,
+            jobValue: job.clientRequest,
+          );
+          convertedPrimaryTab.diagnosisController.text =
+              mechanicJobConvertedBikeNarrativeValue(
+            bikeValue: convertedPrimaryTab.diagnosisController.text,
+            jobValue: job.diagnosis,
+          );
+          convertedPrimaryTab.workRequestedController.text =
+              mechanicJobConvertedBikeNarrativeValue(
+            bikeValue: convertedPrimaryTab.workRequestedController.text,
+            jobValue: job.workPerformed,
+          );
+          convertedPrimaryTab.technicianNotesController.text =
+              mechanicJobConvertedBikeNarrativeValue(
+            bikeValue: convertedPrimaryTab.technicianNotesController.text,
+            jobValue: job.notes,
+          );
         }
       }
 
       if (mounted) {
+        for (final previousTab in _bikeTabs) {
+          if (!loadedBikeTabs.contains(previousTab)) {
+            previousTab.dispose();
+          }
+        }
         setState(() {
           _existingJob = job;
           _selectedCustomer = customer;
@@ -1454,7 +1720,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _selectedDeadline = job.deliveryDeadline;
           _selectedArrivalDate = job.arrivalDate;
           _taxTreatment = loadedTaxTreatment;
-          _linkedInvoiceNumber = linkedInvoiceNumber;
+          _linkedInvoiceNumber = linkedInvoiceState.invoiceNumber;
+          _linkedInvoiceHasActivePayments =
+              linkedInvoiceState.hasActivePayments;
+          _linkedInvoicePaymentStateUnknown =
+              linkedInvoiceState.paymentStateUnknown;
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text =
               job.estimatedDurationHours?.toString() ?? '';
@@ -1490,10 +1760,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
           // Load new job type fields
           _jobType = job.jobType;
-          if (job.subjectData != null) {
-            _selectedSubject = job.subjectData;
-            if (!_availableSubjects.any((s) => s.id == job.subjectData!.id)) {
-              _availableSubjects = [job.subjectData!, ..._availableSubjects];
+          if (loadedSubject != null) {
+            _selectedSubject = loadedSubject;
+            if (!_availableSubjects.any((s) => s.id == loadedSubject!.id)) {
+              _availableSubjects = [loadedSubject, ..._availableSubjects];
             }
           }
           if (job.subjectNotes != null && job.subjectNotes!.isNotEmpty) {
@@ -1501,15 +1771,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
           _warrantyOutcome = job.warrantyOutcome;
           _warrantyClaim = warrantyClaim;
-          _selectedWarrantySource = _warrantySources
-              .where((source) => source.jobId == warrantyClaim?.sourceJobId)
-              .firstOrNull;
+          _selectedWarrantySource = exactWarrantySource;
+          _warrantySaveCheckpoint.hydrate(
+            claim: warrantyClaim,
+            persistedOutcome: job.warrantyOutcome,
+          );
           _warrantyDecisionReasonController.text = warrantyClaim?.reason ?? '';
           _quotationStatus = job.quotationStatus;
           _quotationValidUntil = job.quotationValidUntil;
 
-          // Clear legacy items (now per-bike)
-          _partItems.clear();
+          // Subject-only quotation/component/warranty modes have no bicycle
+          // tabs. Keep their stable persisted line ids and full configuration
+          // in the job-level workbench so Save updates rather than deletes.
+          _partItems
+            ..clear()
+            ..addAll(loadedStandaloneItems);
           _serviceItems.clear();
 
           // Image URLs
@@ -1521,25 +1797,27 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     } catch (e) {
       debugPrint('❌ Error loading job: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al cargar trabajo: $e')),
-        );
+        setState(() {
+          _existingJobLoadError =
+              'No se pudo cargar la ficha completa. No se habilitó la edición para proteger sus datos.';
+        });
       }
     }
   }
 
-  Future<void> _selectCustomer(Customer customer) async {
+  Future<void> _selectCustomer(
+    Customer customer, {
+    bool loadWarrantySources = false,
+  }) async {
     final bikeshopService =
         Provider.of<BikeshopService>(context, listen: false);
     final customerChanged = _selectedCustomer?.id != customer.id;
 
-    // Load customer bikes
-    final results = await Future.wait([
-      bikeshopService.getBikes(customerId: customer.id),
-      bikeshopService.getServiceWarrantySources(customer.id!),
-    ]);
-    final bikes = results[0] as List<Bike>;
-    final warrantySources = results[1] as List<MechanicJobServiceWarranty>;
+    // Bicycle/customer loading is part of every job flow. Warranty history is
+    // deliberately separate: an unavailable warranty projection must not
+    // blank or block an ordinary service, quotation, or component form.
+    final bikes = await bikeshopService.getBikes(customerId: customer.id);
+    if (!mounted) return;
 
     if (customerChanged) {
       for (final tab in _bikeTabs) {
@@ -1559,14 +1837,72 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         // Every related object must belong to the selected customer. Keeping a
         // source job, bike, or component from the previous customer can create
         // an invalid warranty link even when the field looks visually empty.
+        _warrantySourceSelectionEpoch++;
         _selectedWarrantySource = null;
         _selectedSubject = null;
         _warrantyOutcome = WarrantyOutcome.pending;
         _warrantyDecisionReasonController.clear();
+        _isLoadingWarrantySourceObject = false;
+        _warrantySourceObjectError = null;
+        _warrantySourcesLoadError = null;
+        _warrantyClaimLoadError = null;
+        _exactWarrantySourceLoadError = null;
+        _warrantySources = [];
+        _warrantySaveCheckpoint.reset();
+        _pendingWarrantyRegistrationOperationKey = null;
+        _pendingWarrantyDecisionOperationKey = null;
+        _pendingWarrantyDecisionFingerprint = null;
         _bikeTabs.clear();
         _selectedBikeTabIndex = 0;
       }
     });
+
+    if (loadWarrantySources || _jobType == JobType.warranty) {
+      await _loadWarrantySourcesForSelectedCustomer();
+    }
+  }
+
+  Future<void> _loadWarrantySourcesForSelectedCustomer() async {
+    final customer = _selectedCustomer;
+    final customerId = customer?.id;
+    if (customerId == null || customerId.isEmpty) return;
+
+    setState(() {
+      _isLoadingWarrantySources = true;
+      _warrantySourcesLoadError = null;
+    });
+
+    try {
+      final sources = await Provider.of<BikeshopService>(
+        context,
+        listen: false,
+      ).getServiceWarrantySources(customerId);
+      if (!mounted || _selectedCustomer?.id != customerId) return;
+
+      setState(() {
+        final lockedSource = _warrantyClaim?.sourceJobId == null
+            ? null
+            : _selectedWarrantySource;
+        _warrantySources =
+            sources.where((source) => source.jobId != widget.jobId).toList();
+        if (lockedSource != null &&
+            !_warrantySources
+                .any((source) => source.jobId == lockedSource.jobId)) {
+          _warrantySources = [lockedSource, ..._warrantySources];
+        }
+      });
+    } catch (error) {
+      if (!mounted || _selectedCustomer?.id != customerId) return;
+      setState(() {
+        _warrantySourcesLoadError =
+            'No se pudieron cargar los trabajos originales disponibles.';
+      });
+      debugPrint('Error loading warranty sources: $error');
+    } finally {
+      if (mounted && _selectedCustomer?.id == customerId) {
+        setState(() => _isLoadingWarrantySources = false);
+      }
+    }
   }
 
   Future<Customer?> _createQuickCustomer(String name) async {
@@ -1653,8 +1989,118 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // BIKE TAB MANAGEMENT
   // ============================================================
 
+  bool get _hasPhysicalBikeTabs =>
+      _bikeTabs.any((tab) => !tab.isGeneralTab && tab.bike != null);
+
+  /// Moves every commercial line out of bicycle tabs before their
+  /// ficha/diagnosis context is intentionally removed. Stable instances and
+  /// IDs keep wizard answers and future invoice linkage intact.
+  void _moveBikeTabLinesToStandalone() {
+    final preserved = preserveMechanicJobModeLines<_JobPartItem>(
+      collections: <Iterable<_JobPartItem>>[
+        _partItems,
+        ..._bikeTabs.map((tab) => tab.partItems),
+      ],
+      stableIdOf: (item) => item.id,
+    );
+    for (final tab in _bikeTabs) {
+      tab.partItems.clear();
+    }
+    _partItems
+      ..clear()
+      ..addAll(preserved);
+    _selectedServiceIndex = null;
+  }
+
+  /// A physical bicycle uses its own diagnosis tab, while unassigned
+  /// products/services belong to the General tab. This is called whenever the
+  /// first bicycle is added so Quote/Component -> Service cannot strand lines
+  /// in the legacy standalone collection that the save path would ignore.
+  void _moveStandaloneLinesToGeneralTab() {
+    if (_partItems.isEmpty) return;
+    final generalTab = _bikeTabs.where((tab) => tab.isGeneralTab).firstOrNull;
+    if (generalTab == null) return;
+    final preserved = preserveMechanicJobModeLines<_JobPartItem>(
+      collections: <Iterable<_JobPartItem>>[
+        generalTab.partItems,
+        _partItems,
+      ],
+      stableIdOf: (item) => item.id,
+    );
+    generalTab.partItems
+      ..clear()
+      ..addAll(preserved);
+    _partItems.clear();
+    _selectedServiceIndex = null;
+  }
+
+  /// Quote/component intake keeps narrative at job level. When the user turns
+  /// that unsaved draft into a bicycle service, seed the first physical tab so
+  /// the same diagnosis remains visible after save/reload.
+  void _hydrateFirstBikeNarrativeFromStandalone(_BikeTabData tab) {
+    tab.clientRequestController.text = mechanicJobFirstBikeNarrativeValue(
+      bikeValue: tab.clientRequestController.text,
+      standaloneValue: _clientRequestController.text,
+    );
+    tab.diagnosisController.text = mechanicJobFirstBikeNarrativeValue(
+      bikeValue: tab.diagnosisController.text,
+      standaloneValue: _diagnosisController.text,
+    );
+    tab.workRequestedController.text = mechanicJobFirstBikeNarrativeValue(
+      bikeValue: tab.workRequestedController.text,
+      standaloneValue: _workSummaryController.text,
+    );
+    tab.technicianNotesController.text = mechanicJobFirstBikeNarrativeValue(
+      bikeValue: tab.technicianNotesController.text,
+      standaloneValue: _technicianNotesController.text,
+    );
+  }
+
+  void _clearSelectedBikeObject({bool discardPendingProfileEdits = false}) {
+    final removedBikeIds =
+        _bikeTabs.map((tab) => tab.bike?.id).whereType<String>().toSet();
+    final removedItemIds =
+        _bikeTabs.expand((tab) => tab.partItems).map((item) => item.id).toSet();
+
+    for (final tab in _bikeTabs) {
+      tab.dispose();
+    }
+    _bikeTabs.clear();
+    _selectedBike = null;
+    _selectedBikeTabIndex = 0;
+    _selectedBikeProfile = null;
+    _selectedBikeProfileLoadFailed = false;
+    _isLoadingSelectedBikeProfile = false;
+
+    for (final itemId in removedItemIds) {
+      _pendingServiceWizardAnswers.remove(itemId);
+    }
+    if (discardPendingProfileEdits) {
+      for (final bikeId in removedBikeIds) {
+        _pendingBikeProfileOverrides.remove(bikeId);
+      }
+    }
+  }
+
+  List<String> get _selectedPhysicalBikeIds => _bikeTabs
+      .where((tab) => !tab.isGeneralTab)
+      .map((tab) => tab.bike?.id)
+      .whereType<String>()
+      .toList(growable: false);
+
+  bool _warrantySourceObjectMatchesForm(
+    MechanicJobServiceWarranty source,
+  ) {
+    return source.physicalObject.matchesSelection(
+      selectedBikeIds: _selectedPhysicalBikeIds,
+      selectedSubjectId: _selectedSubject?.id,
+      selectedSubjectNotes: _subjectNotesController.text,
+    );
+  }
+
   /// Add a bike to the job (creates a new tab)
   void _addBikeTab(Bike bike) {
+    if (_isSaving || _isCommercialSnapshotLocked) return;
     // Check if bike already exists in tabs
     if (_bikeTabs.any((tab) => tab.bike?.id == bike.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1663,8 +2109,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
+    final isFirstPhysicalBike = !_hasPhysicalBikeTabs;
     setState(() {
       final newTab = _BikeTabData(bike: bike);
+      if (isFirstPhysicalBike) {
+        _hydrateFirstBikeNarrativeFromStandalone(newTab);
+      }
       final generalTabIndex = _bikeTabs.indexWhere((t) => t.isGeneralTab);
 
       if (generalTabIndex != -1) {
@@ -1678,6 +2128,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
         _selectedBikeTabIndex = _bikeTabs.length - 2;
       }
+
+      _moveStandaloneLinesToGeneralTab();
 
       // Also set legacy single bike (for backward compat)
       _selectedBike = bike;
@@ -1771,6 +2223,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   /// Remove a bike tab
   void _removeBikeTab(int index) {
+    if (_isSaving || _isCommercialSnapshotLocked) return;
     if (_bikeTabs[index].isGeneralTab) {
       return; // Prevent removing the General tab
     }
@@ -1822,9 +2275,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final effectiveProfile =
           _pendingBikeProfileOverrides[bike.id!] ?? profile;
       final tabForBike = _bikeTabForBike(bike);
-      final originalPartItems = tabForBike == null
-          ? null
-          : List<_JobPartItem>.from(tabForBike.partItems);
       final hydratedPartItems = tabForBike == null
           ? null
           : await _hydrateDefaultServiceLocationsForTab(
@@ -1845,13 +2295,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ..addAll(hydratedPartItems);
         }
       });
-
-      if (originalPartItems != null && hydratedPartItems != null) {
-        unawaited(_persistHydratedServiceLocationBackfill(
-          originalPartItems,
-          hydratedPartItems,
-        ));
-      }
     } catch (e) {
       debugPrint('⚠️ Error loading selected bike profile: $e');
       if (mounted && _selectedBike?.id == bike?.id) {
@@ -2132,6 +2575,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   /// Show bike selector to add a bike
   Future<void> _showAddBikeSelector() async {
+    if (_isSaving || _isCommercialSnapshotLocked) return;
     if (_selectedCustomer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Primero seleccione un cliente')),
@@ -2370,6 +2814,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _subtotal - _discountAmount;
   }
 
+  bool get _hasSaleCatalogProduct => _partItems.any(
+        (item) =>
+            item.isCatalogProduct &&
+            !item.isServiceItem &&
+            item.product?.id.isNotEmpty == true,
+      );
+
+  bool get _saleHasUnsupportedLines =>
+      _serviceItems.isNotEmpty ||
+      _partItems.any(
+        (item) =>
+            item.isServiceItem ||
+            !item.isCatalogProduct ||
+            item.product?.id.isNotEmpty != true,
+      );
+
   /// Maps StatusPhase to JobStatus for legacy compatibility
   JobStatus _mapPhaseToJobStatus(StatusPhase phase) {
     switch (phase) {
@@ -2510,7 +2970,54 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
+  Future<bool> _confirmDiagnosisOnlyAfterFinancialStateChange() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('La factura cambió mientras editabas'),
+        content: Text(
+          _jobType == JobType.sale
+              ? _linkedInvoiceHasActivePayments
+                  ? 'Se registró un abono en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios ni descuento. Sí puedes guardar la nota del acuerdo de pago.'
+                  : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales. Sí puedes guardar la nota del acuerdo de pago.'
+              : _linkedInvoiceHasActivePayments
+                  ? 'Se registró un pago en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios, descuento, estado ni objeto físico. Sí puedes guardar el diagnóstico y las notas operativas.'
+                  : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales ni de ciclo. Sí puedes guardar el diagnóstico y las notas operativas.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Volver sin guardar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              _jobType == JobType.sale
+                  ? 'Guardar solo nota'
+                  : 'Guardar solo diagnóstico',
+            ),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<void> _saveJob() async {
+    if (!_canSaveJob) {
+      if (_hasBlockingWarrantyLoadFailure || _existingJobLoadError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'La ficha todavía no tiene una lectura completa y confiable. Reintenta la carga antes de guardar.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     if (_isFinalQuotationReadOnly) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2533,8 +3040,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    final warrantyBikeId =
-        _selectedWarrantySource?.bikeId ?? _existingJob?.bikeId;
+    final selectedWarrantyObject = _selectedWarrantySource?.physicalObject;
+    final warrantyBikeId = selectedWarrantyObject?.isBike == true
+        ? selectedWarrantyObject?.bikeId
+        : (_selectedWarrantySource == null ? _existingJob?.bikeId : null);
     final requiresBike = _jobType == JobType.service ||
         (_jobType == JobType.warranty && warrantyBikeId != null);
 
@@ -2549,7 +3058,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     if (_jobType == JobType.warranty &&
-        widget.jobId == null &&
+        _warrantySaveCheckpoint.requiresSourceSelection &&
         _selectedWarrantySource == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2559,15 +3068,62 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
+    final warrantySource = _selectedWarrantySource;
+    if (_jobType == JobType.warranty && warrantySource != null) {
+      final object = warrantySource.physicalObject;
+      if (_isLoadingWarrantySourceObject) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Espera a que se confirme el objeto del trabajo original.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (_warrantySourceObjectError != null || !object.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _warrantySourceObjectError ??
+                  'Clasifique primero la recepción del trabajo original.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (!_warrantySourceObjectMatchesForm(warrantySource)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El objeto de la garantía no coincide exactamente con el trabajo original. Vuelva a seleccionarlo antes de guardar.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     final desiredWarrantyOutcome = _warrantyOutcome ?? WarrantyOutcome.pending;
-    final persistedWarrantyOutcome = _existingJob?.warrantyOutcome ??
-        _warrantyClaim?.outcome ??
-        WarrantyOutcome.pending;
-    final warrantyDecisionNeedsReason = desiredWarrantyOutcome !=
-            persistedWarrantyOutcome &&
-        (desiredWarrantyOutcome == WarrantyOutcome.notCovered ||
-            (desiredWarrantyOutcome == WarrantyOutcome.covered &&
-                _selectedWarrantySource?.state != ServiceWarrantyState.active));
+    final willRegisterWarrantyClaim = _jobType == JobType.warranty &&
+        _warrantySaveCheckpoint.needsRegistration(
+          _selectedWarrantySource?.jobId,
+        );
+    // Registration atomically normalizes the persisted outcome to pending.
+    // Use that authoritative post-registration state for reason validation;
+    // otherwise a legacy covered/not-covered mirror with no claim event could
+    // skip the decision that must be re-issued after linking its source.
+    final persistedWarrantyOutcome = willRegisterWarrantyClaim
+        ? WarrantyOutcome.pending
+        : _warrantySaveCheckpoint.confirmedOutcome ??
+            _existingJob?.warrantyOutcome ??
+            _warrantyClaim?.outcome ??
+            WarrantyOutcome.pending;
+    final warrantyDecisionNeedsReason =
+        desiredWarrantyOutcome != persistedWarrantyOutcome &&
+            (desiredWarrantyOutcome == WarrantyOutcome.notCovered ||
+                (desiredWarrantyOutcome == WarrantyOutcome.covered &&
+                    _warrantyCoverageNeedsReason(_selectedWarrantySource)));
     if (_jobType == JobType.warranty &&
         warrantyDecisionNeedsReason &&
         _warrantyDecisionReasonController.text.trim().isEmpty) {
@@ -2598,17 +3154,38 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    final requestedDiscountAmount = _discountAmount;
-    if (requestedDiscountAmount < 0 || requestedDiscountAmount > _subtotal) {
+    if (_jobType == JobType.sale && !_hasSaleCatalogProduct) {
+      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('El descuento no puede superar el subtotal.'),
+          content: Text(
+            'Agrega al menos un producto del catálogo para registrar la venta.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_jobType == JobType.sale && _saleHasUnsupportedLines) {
+      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La venta solo admite productos del catálogo; quita servicios o líneas personalizadas.',
+          ),
         ),
       );
       return;
     }
 
+    var protectPaymentCommercialSnapshot =
+        _isPaymentProtectedCommercialSnapshotLocked;
+    final wasPaymentProtectedAtSaveStart = protectPaymentCommercialSnapshot;
+    var requestedDiscountAmount = protectPaymentCommercialSnapshot
+        ? (_existingJob?.discountAmount ?? 0)
+        : _discountAmount;
+
     String? persistedJobId;
+    var warrantyDecisionManagedDocument = false;
 
     setState(() {
       _isSaving = true;
@@ -2618,6 +3195,66 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
       final taskService = Provider.of<SmartTaskService>(context, listen: false);
+
+      // Close the load-to-save race as much as the client can: payments may be
+      // registered by another worker while this form remains open. Re-read the
+      // invoice and active payment ledger after the save button is disabled and
+      // before any profile, job, line, invoice, stock or journal-affecting write.
+      final existingJob = _existingJob;
+      if (existingJob?.invoiceId != null) {
+        final databaseService =
+            Provider.of<DatabaseService>(context, listen: false);
+        final linkedInvoiceState = await _readLinkedInvoiceFinancialState(
+          databaseService: databaseService,
+          job: existingJob!,
+        );
+        if (!mounted) return;
+        _linkedInvoiceNumber = linkedInvoiceState.invoiceNumber;
+        _linkedInvoiceHasActivePayments = linkedInvoiceState.hasActivePayments;
+        _linkedInvoicePaymentStateUnknown =
+            linkedInvoiceState.paymentStateUnknown;
+        protectPaymentCommercialSnapshot =
+            _isPaymentProtectedCommercialSnapshotLocked;
+        requestedDiscountAmount = protectPaymentCommercialSnapshot
+            ? (existingJob.discountAmount)
+            : _discountAmount;
+      }
+
+      if (!wasPaymentProtectedAtSaveStart &&
+          protectPaymentCommercialSnapshot &&
+          !await _confirmDiagnosisOnlyAfterFinancialStateChange()) {
+        return;
+      }
+      if (!mounted) return;
+
+      if (_jobType == JobType.warranty &&
+          desiredWarrantyOutcome == WarrantyOutcome.covered &&
+          desiredWarrantyOutcome != persistedWarrantyOutcome &&
+          _warrantyCoverageNeedsFinancialReview) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _linkedInvoiceHasActivePayments
+                  ? 'Esta garantía tiene pagos vigentes. Revisa, revierte o reembolsa el pago desde la factura antes de marcarla como cubierta.'
+                  : 'No se pudo confirmar el estado de pago de la factura. Recarga la ficha antes de marcar la garantía como cubierta.',
+            ),
+            backgroundColor: Colors.orange.shade900,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+        return;
+      }
+
+      if (!protectPaymentCommercialSnapshot &&
+          (requestedDiscountAmount < 0 ||
+              requestedDiscountAmount > _subtotal)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('El descuento no puede superar el subtotal.'),
+          ),
+        );
+        return;
+      }
 
       await _persistPendingBikeProfileOverrides(bikeshopService);
 
@@ -2658,8 +3295,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         throw Exception('La primera bicicleta no tiene ID');
       }
 
-      // Get combined data from first bike tab for job-level fields (legacy)
-      final firstTab = _bikeTabs.isNotEmpty ? _bikeTabs.first : null;
+      // Under payment protection, only an already-persisted physical tab may
+      // contribute diagnosis to the legacy job mirror. A bike added during a
+      // payment race must not silently become the invoiced object's narrative.
+      final firstTab = protectPaymentCommercialSnapshot
+          ? _bikeTabs
+              .where((tab) =>
+                  !tab.isGeneralTab &&
+                  tab.jobBikeId != null &&
+                  tab.jobBikeId!.isNotEmpty)
+              .firstOrNull
+          : (_bikeTabs.isNotEmpty ? _bikeTabs.first : null);
 
       // Create MechanicJob object (job-level data)
       final job = MechanicJob(
@@ -2670,6 +3316,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         customerId: _selectedCustomer!.id!,
         bikeId: primaryBike?.id, // Nullable for non-bike jobs
         jobType: _jobType,
+        // Existing rows may carry a reviewed canonical classification that is
+        // more precise than the legacy job_type inference. New rows leave
+        // these null so the model derives both axes from the selected mode.
+        workflowKind: _existingJob?.workflowKind,
+        intakeKind: _existingJob?.intakeKind,
+        modeNeedsReview: _existingJob?.modeNeedsReview,
+        modeReviewReason: _existingJob?.modeReviewReason,
         subjectId:
             _jobType == JobType.itemService || _jobType == JobType.warranty
                 ? _selectedSubject?.id ?? _selectedWarrantySource?.subjectId
@@ -2678,13 +3331,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ? _subjectNotesController.text
             : null,
         warrantyOutcome: _jobType == JobType.warranty
-            ? (_existingJob?.warrantyOutcome ?? WarrantyOutcome.pending)
+            ? (_warrantySaveCheckpoint.confirmedOutcome ??
+                _existingJob?.warrantyOutcome ??
+                WarrantyOutcome.pending)
             : _warrantyOutcome,
         quotationStatus: _quotationStatus,
         quotationValidUntil: _quotationValidUntil,
         priority: _selectedPriority,
-        status: _selectedStatus,
-        statusId: _selectedCustomStatus?.id, // Custom status ID
+        // Covered-warranty lifecycle triggers post/reverse the internal
+        // invoice from status/status_id. A diagnosis-only save must therefore
+        // preserve both fields while financial evidence is protected.
+        status: protectPaymentCommercialSnapshot
+            ? (_existingJob?.status ?? _selectedStatus)
+            : _selectedStatus,
+        statusId: protectPaymentCommercialSnapshot
+            ? _existingJob?.statusId
+            : _selectedCustomStatus?.id,
         arrivalDate: _selectedArrivalDate,
         diagnosticDeadline: _existingJob?.diagnosticDeadline, // ✅ Preserve
         servicePackageId: _existingJob?.servicePackageId, // ✅ Preserve
@@ -2724,23 +3386,41 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             : (_technicianNotesController.text.trim().isNotEmpty
                 ? _technicianNotesController.text.trim()
                 : null),
-        deliveryDeadline: _selectedDeadline,
+        deliveryDeadline: _jobType == JobType.sale
+            ? _existingJob?.deliveryDeadline
+            : _selectedDeadline,
         requiresApproval: firstTab?.requiresApproval ?? _requiresApproval,
         isWarrantyJob:
             firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
-        // Lines are persisted in several requests. Apply the requested
-        // discount once the complete line set exists so an intermediate
-        // subtotal cannot reject an otherwise valid whole-job discount.
-        discountAmount: 0,
+        // A paid/part-paid linked invoice is immutable commercial evidence.
+        // Keep its exact monetary mirrors while allowing diagnosis/header-safe
+        // fields to save. Unpaid jobs apply discount after all line requests.
+        discountAmount: protectPaymentCommercialSnapshot
+            ? (_existingJob?.discountAmount ?? 0)
+            : 0,
         estimatedDurationHours:
             double.tryParse(_estimatedDurationController.text.trim()),
-        estimatedCost: 0,
-        finalCost: 0,
-        partsCost: 0,
-        laborCost: 0,
-        taxAmount: 0,
-        totalCost: 0,
-        taxTreatment: _taxTreatment,
+        estimatedCost: protectPaymentCommercialSnapshot
+            ? (_existingJob?.estimatedCost ?? 0)
+            : 0,
+        finalCost: protectPaymentCommercialSnapshot
+            ? (_existingJob?.finalCost ?? 0)
+            : 0,
+        partsCost: protectPaymentCommercialSnapshot
+            ? (_existingJob?.partsCost ?? 0)
+            : 0,
+        laborCost: protectPaymentCommercialSnapshot
+            ? (_existingJob?.laborCost ?? 0)
+            : 0,
+        taxAmount: protectPaymentCommercialSnapshot
+            ? (_existingJob?.taxAmount ?? 0)
+            : 0,
+        totalCost: protectPaymentCommercialSnapshot
+            ? (_existingJob?.totalCost ?? 0)
+            : 0,
+        taxTreatment: protectPaymentCommercialSnapshot
+            ? (_existingJob?.taxTreatment ?? _taxTreatment)
+            : _taxTreatment,
         invoiceId: _existingJob?.invoiceId,
         isInvoiced: _existingJob?.isInvoiced ?? false,
         isPaid: _existingJob?.isPaid ?? false,
@@ -2751,7 +3431,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (widget.jobId != null) {
         // Update existing job
-        await bikeshopService.updateJob(job, syncBikeMemory: false);
+        await bikeshopService.updateJob(
+          job,
+          syncBikeMemory: false,
+          protectCommercialSnapshot: protectPaymentCommercialSnapshot,
+        );
         jobId = widget.jobId!;
       } else {
         // Create new job
@@ -2760,16 +3444,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
       persistedJobId = jobId;
 
+      // Validate and register the warranty source before any line deletion or
+      // inventory/invoice-affecting persistence. A server-side rejection can
+      // now leave at most the recoverable job header, never a destructively
+      // half-updated set of products/services.
+      if (_jobType == JobType.warranty) {
+        final sourceJobId = _selectedWarrantySource?.jobId;
+        if (_warrantySaveCheckpoint.needsRegistration(sourceJobId)) {
+          _pendingWarrantyRegistrationOperationKey ??= const Uuid().v4();
+          await bikeshopService.registerWarrantyClaim(
+            warrantyJobId: jobId,
+            sourceJobId: sourceJobId!,
+            operationKey: _pendingWarrantyRegistrationOperationKey!,
+          );
+          _warrantySaveCheckpoint.confirmRegistration(sourceJobId);
+        }
+      }
+
       // ============================================================
       // MULTI-BIKE: Save each bike tab as MechanicJobBike + its items
       // ============================================================
 
-      final existingItemsForSave = widget.jobId == null
-          ? <MechanicJobItem>[]
-          : await bikeshopService.getJobItems(jobId);
-      final existingJobBikesForSave = widget.jobId == null
-          ? <MechanicJobBike>[]
-          : await bikeshopService.getJobBikes(jobId, forceRefresh: true);
+      // Always re-read the aggregate after header/claim persistence. Claim
+      // registration can create the canonical mechanic_job_bikes row even for
+      // a brand-new warranty; assuming a new form still has an empty aggregate
+      // would attempt to insert that same (job, bike) relationship twice.
+      final existingItemsForSave = await bikeshopService.getJobItems(jobId);
+      final existingJobBikesForSave =
+          await bikeshopService.getJobBikes(jobId, forceRefresh: true);
       final existingItemById = <String, MechanicJobItem>{
         for (final item in existingItemsForSave)
           if (item.id != null && item.id!.isNotEmpty) item.id!: item,
@@ -2870,9 +3572,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
         if (tab.isGeneralTab) {
           // Save General tab parts with jobBikeId = null
-          for (final item in tab.partItems) {
-            if (item.name.isEmpty) continue; // Skip empty rows
-            await persistPartItem(item, null);
+          if (!protectPaymentCommercialSnapshot) {
+            for (final item in tab.partItems) {
+              if (item.name.isEmpty) continue; // Skip empty rows
+              await persistPartItem(item, null);
+            }
           }
           continue; // Skip MechanicJobBike creation
         }
@@ -2886,6 +3590,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final normalizedTabDiagnosisSheet =
             _normalizeDiagnosisSheetStatuses(tab.diagnosisSheet);
         final existingJobBike = existingJobBikeForTab(tab);
+        if (protectPaymentCommercialSnapshot && existingJobBike == null) {
+          debugPrint(
+            '🔒 Ignoring unpersisted bike ${tab.bike?.id} while the linked invoice is payment-protected.',
+          );
+          continue;
+        }
         final shouldPreserveExistingDiagnosisSheet =
             !normalizedTabDiagnosisSheet.hasMeaningfulData &&
                 existingJobBike?.diagnosisSheet.hasMeaningfulData == true;
@@ -2911,7 +3621,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           tenantId: tenantId,
           jobId: jobId,
           bikeId: tab.bike!.id!,
-          orderIndex: i,
+          orderIndex: protectPaymentCommercialSnapshot
+              ? (existingJobBike?.orderIndex ?? i)
+              : i,
+          statusId: existingJobBike?.statusId,
           diagnosis: tab.diagnosisController.text.trim().isEmpty
               ? null
               : tab.diagnosisController.text.trim(),
@@ -2933,9 +3646,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               : null,
           diagnosisSheet: normalizedDiagnosisSheet,
           diagnosisSheetUpdatedAt: diagnosisSheetUpdatedAt,
-          isWarrantyWork: tab.isWarrantyWork,
-          requiresApproval: tab.requiresApproval,
-          approvedByCustomer: tab.approvedByCustomer,
+          isWarrantyWork: protectPaymentCommercialSnapshot
+              ? (existingJobBike?.isWarrantyWork ?? tab.isWarrantyWork)
+              : tab.isWarrantyWork,
+          requiresApproval: protectPaymentCommercialSnapshot
+              ? (existingJobBike?.requiresApproval ?? tab.requiresApproval)
+              : tab.requiresApproval,
+          approvedByCustomer: protectPaymentCommercialSnapshot
+              ? (existingJobBike?.approvedByCustomer ?? tab.approvedByCustomer)
+              : tab.approvedByCustomer,
+          approvedAt: existingJobBike?.approvedAt,
+          imageUrls: existingJobBike?.imageUrls ?? const <String>[],
         );
 
         final savedJobBike = existingJobBike == null
@@ -2954,15 +3675,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         debugPrint(
             '✅ Saved job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
 
-        // Save this bike's parts/products
-        for (final item in tab.partItems) {
-          if (item.name.isEmpty) continue; // Skip empty rows
-          await persistPartItem(item, jobBikeId);
+        // Save this bike's parts/products only while the commercial snapshot
+        // remains editable. Diagnosis above is intentionally still writable.
+        if (!protectPaymentCommercialSnapshot) {
+          for (final item in tab.partItems) {
+            if (item.name.isEmpty) continue; // Skip empty rows
+            await persistPartItem(item, jobBikeId);
+          }
         }
       }
 
       // For non-service jobs (no bike tabs): save items from legacy _partItems
-      if (_bikeTabs.isEmpty && _partItems.isNotEmpty) {
+      if (!protectPaymentCommercialSnapshot &&
+          _bikeTabs.isEmpty &&
+          _partItems.isNotEmpty) {
         for (final item in _partItems) {
           if (item.name.isEmpty) continue;
           await persistPartItem(item, null);
@@ -2970,7 +3696,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       }
 
       // Add services (job-level, not per-bike for now)
-      for (final service in _serviceItems) {
+      for (final service in protectPaymentCommercialSnapshot
+          ? const <_JobServiceItem>[]
+          : _serviceItems) {
         final hoursWorked = service.hours;
         final hourlyRate = service.hourlyRate;
         final serviceProduct = service.serviceProduct;
@@ -3018,31 +3746,58 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Delete only rows that the user actually removed. Stable IDs keep
       // invoice links and mechanic_job_tasks attached to retained lines.
-      for (final existing in existingItemsForSave) {
-        final id = existing.id;
-        if (id != null && !retainedItemIds.contains(id)) {
-          await bikeshopService.deleteJobItem(
-            id,
-            syncBikeMemory: false,
-          );
+      if (!protectPaymentCommercialSnapshot) {
+        for (final existing in existingItemsForSave) {
+          final id = existing.id;
+          if (id != null && !retainedItemIds.contains(id)) {
+            await bikeshopService.deleteJobItem(
+              id,
+              syncBikeMemory: false,
+            );
+          }
         }
       }
-      for (final existing in existingJobBikesForSave) {
-        final id = existing.id;
-        if (id != null && !retainedJobBikeIds.contains(id)) {
-          await bikeshopService.removeBikeFromJob(
-            id,
-            syncBikeMemory: false,
-          );
+      if (!protectPaymentCommercialSnapshot) {
+        for (final existing in existingJobBikesForSave) {
+          final id = existing.id;
+          if (id != null && !retainedJobBikeIds.contains(id)) {
+            await bikeshopService.removeBikeFromJob(
+              id,
+              syncBikeMemory: false,
+            );
+          }
         }
       }
 
-      await bikeshopService.updateJobDiscount(
-        jobId,
-        requestedDiscountAmount,
-      );
+      if (!protectPaymentCommercialSnapshot) {
+        await bikeshopService.updateJobDiscount(
+          jobId,
+          requestedDiscountAmount,
+        );
+      }
 
-      await bikeshopService.syncBikeMemoryFromJob(jobId);
+      if (_jobType == JobType.warranty) {
+        if (_warrantySaveCheckpoint.needsDecision(desiredWarrantyOutcome)) {
+          final decisionReason =
+              _warrantyDecisionReasonController.text.trim().isEmpty
+                  ? null
+                  : _warrantyDecisionReasonController.text.trim();
+          final decisionFingerprint =
+              '${desiredWarrantyOutcome.dbValue}|${decisionReason ?? ''}';
+          if (_pendingWarrantyDecisionFingerprint != decisionFingerprint) {
+            _pendingWarrantyDecisionOperationKey = const Uuid().v4();
+            _pendingWarrantyDecisionFingerprint = decisionFingerprint;
+          }
+          await bikeshopService.decideWarrantyClaim(
+            warrantyJobId: jobId,
+            outcome: desiredWarrantyOutcome,
+            reason: decisionReason,
+            operationKey: _pendingWarrantyDecisionOperationKey!,
+          );
+          _warrantySaveCheckpoint.confirmDecision(desiredWarrantyOutcome);
+          warrantyDecisionManagedDocument = true;
+        }
+      }
 
       if (_jobType == JobType.warranty) {
         final sourceJobId = _selectedWarrantySource?.jobId;
@@ -3072,64 +3827,121 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         jobId: jobId,
       );
 
-      // Sync invoice AFTER all items are written.
-      // For brand new jobs, the DB may already have linked an invoice,
-      // so always re-read the saved job before deciding whether to sync or create.
-      final savedJob = await bikeshopService.getJobById(jobId);
-      final linkedInvoiceId = savedJob?.invoiceId;
-
-      // A quote is a proposal and a pending warranty is a claim under
-      // evaluation. Neither is a customer invoice. Service/component jobs are
-      // billable immediately; warranty decisions create their correct
-      // billable or internal document through the audited warranty command.
-      final shouldCreateInvoice = savedJob != null &&
-          (savedJob.jobType == JobType.service ||
-              savedJob.jobType == JobType.itemService);
-
-      if (linkedInvoiceId != null && savedJob?.jobType != JobType.quotation) {
-        // If there's an existing invoice, we still sync it just to keep it updated,
-        // (unless we want to delete it if it's a quotation now, but we'll assume
-        // quotes don't get invoices attached in the first place).
-        debugPrint('🔄 Syncing job to invoice: $linkedInvoiceId');
+      if (protectPaymentCommercialSnapshot) {
+        // Migration 070 makes this paid branch a strict commercial no-op. Keep
+        // the compatibility call, but do not claim that invoice lines are
+        // projected back into the job: both persisted records stay untouched.
         await bikeshopService.syncJobToInvoice(jobId);
         await _debugLogPegaInvoiceSnapshot(
-          'after_invoice_sync',
+          'after_protected_invoice_guard',
           jobId: jobId,
-          invoiceId: linkedInvoiceId,
+          invoiceId: _existingJob?.invoiceId,
         );
-      } else if (shouldCreateInvoice) {
-        debugPrint('🧾 No linked invoice yet, creating one after items save');
-        String? createdInvoiceId;
-        Object? lastInvoiceError;
-        for (var attempt = 1; attempt <= 2; attempt++) {
-          try {
-            createdInvoiceId =
-                await bikeshopService.createInvoiceFromJob(jobId);
-            lastInvoiceError = null;
-            break;
-          } catch (error) {
-            lastInvoiceError = error;
-            if (attempt < 2) {
-              await Future<void>.delayed(const Duration(milliseconds: 300));
+      } else if (!warrantyDecisionManagedDocument) {
+        // Sync invoice AFTER all items are written. A warranty decision owns
+        // its customer/internal document atomically, so running this generic
+        // projection immediately afterwards would duplicate that ownership.
+        final savedJob = await bikeshopService.getJobById(jobId);
+        final linkedInvoiceId = savedJob?.invoiceId;
+
+        final shouldCreateInvoice = savedJob != null &&
+            (savedJob.jobType == JobType.service ||
+                savedJob.jobType == JobType.itemService ||
+                savedJob.jobType == JobType.sale);
+
+        if (linkedInvoiceId != null && savedJob?.jobType != JobType.quotation) {
+          // If there's an existing invoice, we still sync it just to keep it updated,
+          // (unless we want to delete it if it's a quotation now, but we'll assume
+          // quotes don't get invoices attached in the first place).
+          debugPrint('🔄 Syncing job to invoice: $linkedInvoiceId');
+          await bikeshopService.syncJobToInvoice(jobId);
+          await _debugLogPegaInvoiceSnapshot(
+            'after_invoice_sync',
+            jobId: jobId,
+            invoiceId: linkedInvoiceId,
+          );
+        } else if (shouldCreateInvoice) {
+          debugPrint('🧾 No linked invoice yet, creating one after items save');
+          String? createdInvoiceId;
+          Object? lastInvoiceError;
+          for (var attempt = 1; attempt <= 2; attempt++) {
+            try {
+              createdInvoiceId =
+                  await bikeshopService.createInvoiceFromJob(jobId);
+              lastInvoiceError = null;
+              break;
+            } catch (error) {
+              lastInvoiceError = error;
+              if (attempt < 2) {
+                await Future<void>.delayed(const Duration(milliseconds: 300));
+              }
             }
           }
-        }
-        if (lastInvoiceError != null || createdInvoiceId == null) {
-          throw Exception(
-            'El trabajo quedó guardado, pero no se pudo confirmar su factura: $lastInvoiceError',
+          if (lastInvoiceError != null || createdInvoiceId == null) {
+            throw Exception(
+              'El trabajo quedó guardado, pero no se pudo confirmar su factura: $lastInvoiceError',
+            );
+          }
+          await _debugLogPegaInvoiceSnapshot(
+            'after_invoice_create',
+            jobId: jobId,
+            invoiceId: createdInvoiceId,
           );
+        } else {
+          debugPrint(
+              'ℹ️ Skipping customer invoice generation for JobType: ${savedJob?.jobType}, outcome: ${savedJob?.warrantyOutcome}');
         }
-        await _debugLogPegaInvoiceSnapshot(
-          'after_invoice_create',
-          jobId: jobId,
-          invoiceId: createdInvoiceId,
-        );
-      } else {
-        debugPrint(
-            'ℹ️ Skipping customer invoice generation for JobType: ${savedJob?.jobType}, outcome: ${savedJob?.warrantyOutcome}');
+      }
+
+      // Persisted lifecycle changes are deliberately last: the canonical RPC
+      // derives legacy status and timestamps from the database clock, and a
+      // covered warranty may post/reverse its invoice only after all accepted
+      // lines and invoice mirrors are final. Keep one operation key across a
+      // retry after a lost acknowledgement.
+      if (widget.jobId != null && !_isStatusTransitionLocked) {
+        final existingStatusId = _existingJob?.statusId;
+        final targetStatusId = _selectedCustomStatus?.id;
+        final needsCustomTransition = targetStatusId != null &&
+            targetStatusId.isNotEmpty &&
+            targetStatusId != existingStatusId;
+        final needsLegacyTransition =
+            targetStatusId == null && _existingJob?.status != _selectedStatus;
+        if (needsCustomTransition || needsLegacyTransition) {
+          final fingerprint = targetStatusId ?? _selectedStatus.dbValue;
+          if (_pendingStatusTransitionFingerprint != fingerprint) {
+            _pendingStatusTransitionFingerprint = fingerprint;
+            _pendingStatusTransitionOperationKey = const Uuid().v4();
+          }
+          final operationKey = _pendingStatusTransitionOperationKey!;
+          if (targetStatusId != null) {
+            await bikeshopService.transitionJobStatus(
+              jobId,
+              targetStatusId,
+              operationKey: operationKey,
+            );
+          } else {
+            await bikeshopService.transitionJobStatusByLegacyStatus(
+              jobId,
+              _selectedStatus,
+              operationKey: operationKey,
+            );
+          }
+        }
+      }
+
+      // Refresh bicycle memory only after the guarded commercial phase. When a
+      // payment exists, this reads the persisted job aggregate; it does not
+      // rewrite job lines from the invoice.
+      if (_jobType != JobType.sale) {
+        await bikeshopService.syncBikeMemoryFromJob(jobId);
       }
 
       if (mounted && context.mounted) {
+        _pendingWarrantyRegistrationOperationKey = null;
+        _pendingWarrantyDecisionOperationKey = null;
+        _pendingWarrantyDecisionFingerprint = null;
+        _pendingStatusTransitionOperationKey = null;
+        _pendingStatusTransitionFingerprint = null;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.jobId != null
@@ -3149,13 +3961,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
     } catch (e) {
-      if (mounted && context.mounted) {
+      final recoveryJobId = persistedJobId ?? widget.jobId;
+      final paymentRaceReconciled = !wasPaymentProtectedAtSaveStart &&
+          recoveryJobId != null &&
+          await _reconcileConfirmedPaymentRaceAfterSaveFailure(recoveryJobId);
+      if (!mounted) return;
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              persistedJobId != null && widget.jobId == null
-                  ? 'El trabajo quedó creado, pero una etapa posterior falló. Abriremos la ficha existente para evitar duplicarlo. Detalle: $e'
-                  : 'Error al guardar trabajo: $e',
+              paymentRaceReconciled
+                  ? 'Se confirmó un pago concurrente. La factura y el contenido comercial protegido se mantuvieron sin reescritura. Reabre la ficha para cargar el estado vigente antes de continuar. Detalle: $e'
+                  : persistedJobId != null && widget.jobId == null
+                      ? 'El trabajo quedó creado, pero una etapa posterior falló. Abriremos la ficha existente para evitar duplicarlo. Detalle: $e'
+                      : 'Error al guardar trabajo: $e',
             ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 10),
@@ -3416,7 +4235,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           Expanded(
             child: _isLoading
                 ? const Center(child: BrandedLoading())
-                : _buildForm(theme),
+                : _existingJobLoadError != null
+                    ? _buildExistingJobLoadFailure(theme)
+                    : _buildForm(theme),
           ),
         ],
       ),
@@ -3430,6 +4251,61 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
 
     return MainLayout(child: content);
+  }
+
+  Widget _buildExistingJobLoadFailure(ThemeData theme) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sync_problem_outlined,
+                    size: 42,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No se abrió una ficha parcial',
+                    style: theme.textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _existingJobLoadError!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => unawaited(_retryInitialData()),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reintentar carga completa'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _retryInitialData() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+      _existingJobLoadError = null;
+    });
+    await _loadInitialData();
   }
 
   Widget _buildHeader(ThemeData theme) {
@@ -4029,13 +4905,24 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   Widget _buildCommercialLockBanner(ThemeData theme) {
     final isFinalQuotation = _isFinalQuotationReadOnly;
+    final isFinanciallyProtected = _isPaymentProtectedCommercialSnapshotLocked;
     final statusLabel = _effectiveQuotationStatus.displayName.toLowerCase();
-    final title = isFinalQuotation
-        ? 'Presupuesto $statusLabel · solo lectura'
-        : 'Presupuesto original conservado';
-    final message = isFinalQuotation
-        ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
-        : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial del presupuesto.';
+    final title = isFinanciallyProtected
+        ? 'Historial financiero protegido'
+        : isFinalQuotation
+            ? 'Presupuesto $statusLabel · solo lectura'
+            : 'Presupuesto original conservado';
+    final message = isFinanciallyProtected
+        ? _jobType == JobType.sale
+            ? _linkedInvoiceHasActivePayments
+                ? 'La factura de esta venta tiene abonos vigentes. Puedes actualizar la nota del acuerdo; productos, precios, descuento, totales y factura quedan protegidos.'
+                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad solo puedes actualizar la nota del acuerdo hasta recargarla correctamente.'
+            : _linkedInvoiceHasActivePayments
+                ? 'La factura de este trabajo tiene pagos vigentes. Puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; productos, precios, descuento, totales y factura quedan protegidos. Una garantía cubierta requiere resolver primero el pago desde la factura.'
+                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
+        : isFinalQuotation
+            ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
+            : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial del presupuesto.';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -4049,7 +4936,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lock_clock_outlined,
+          Icon(
+              isFinanciallyProtected
+                  ? Icons.account_balance_outlined
+                  : Icons.lock_clock_outlined,
               color: theme.colorScheme.onSecondaryContainer),
           const SizedBox(width: 12),
           Expanded(
@@ -4220,7 +5110,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     final icon = tab.isGeneralTab
                         ? Icons.shopping_bag_outlined
                         : Icons.pedal_bike_outlined;
-                    final canClose = !_isFinalQuotationReadOnly &&
+                    final canClose = !_isCommercialSnapshotLocked &&
+                        _jobType != JobType.warranty &&
                         !tab.isGeneralTab &&
                         _bikeTabs.where((t) => !t.isGeneralTab).length > 1;
 
@@ -4241,7 +5132,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                       inactiveColor: onSurface,
                     );
                   }),
-                  if (!_isFinalQuotationReadOnly)
+                  if (!_isCommercialSnapshotLocked &&
+                      _jobType == JobType.service)
                     // Add bike button — vertically centered, subtle
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -4274,6 +5166,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   // CONFIRMATION DIALOGS
   // ============================================================
   void _confirmRemoveBike(int index, String bikeName) {
+    if (_isSaving || _isCommercialSnapshotLocked) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -4302,14 +5195,18 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   Widget _buildWorkbenchContent(ThemeData theme) {
-    final content = switch (_selectedWorkbenchTab) {
+    final effectiveTab = _jobType == JobType.sale &&
+            _selectedWorkbenchTab == _JobWorkbenchTab.diagnosis
+        ? _JobWorkbenchTab.general
+        : _selectedWorkbenchTab;
+    final content = switch (effectiveTab) {
       _JobWorkbenchTab.general => _buildGeneralSection(theme),
       _JobWorkbenchTab.diagnosis => _buildDiagnosisSection(theme),
       _JobWorkbenchTab.products => _buildPartsSection(),
     };
     final contentLocked = _isFinalQuotationReadOnly ||
         (_isCommercialSnapshotLocked &&
-            _selectedWorkbenchTab == _JobWorkbenchTab.products);
+            effectiveTab == _JobWorkbenchTab.products);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4339,21 +5236,25 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ),
           const SizedBox(width: 6),
-          Expanded(
-            child: _buildWorkbenchTabButton(
-              theme: theme,
-              tab: _JobWorkbenchTab.diagnosis,
-              icon: Icons.medical_information_outlined,
-              label: 'Diagnóstico',
+          if (_jobType != JobType.sale) ...[
+            Expanded(
+              child: _buildWorkbenchTabButton(
+                theme: theme,
+                tab: _JobWorkbenchTab.diagnosis,
+                icon: Icons.medical_information_outlined,
+                label: 'Diagnóstico',
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
+            const SizedBox(width: 6),
+          ],
           Expanded(
             child: _buildWorkbenchTabButton(
               theme: theme,
               tab: _JobWorkbenchTab.products,
               icon: Icons.shopping_basket_outlined,
-              label: 'Productos y Servicios',
+              label: _jobType == JobType.sale
+                  ? 'Productos y cobro'
+                  : 'Productos y Servicios',
             ),
           ),
         ],
@@ -4549,46 +5450,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         .getProfileForProduct(product!.id)
         .catchError((_) => null);
     return ServiceWizardService.normalizeProfile(profile);
-  }
-
-  Future<void> _persistHydratedServiceLocationBackfill(
-    List<_JobPartItem> previousItems,
-    List<_JobPartItem> hydratedItems,
-  ) async {
-    if (!mounted || previousItems.length != hydratedItems.length) {
-      return;
-    }
-
-    final databaseService = Provider.of<DatabaseService>(
-      context,
-      listen: false,
-    );
-    final persistedIdPattern = RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
-    );
-
-    for (var index = 0; index < hydratedItems.length; index++) {
-      final previousItem = previousItems[index];
-      final hydratedItem = hydratedItems[index];
-      if (previousItem.location == hydratedItem.location ||
-          hydratedItem.location == BikeMemoryLocation.none ||
-          !hydratedItem.isServiceItem ||
-          !persistedIdPattern.hasMatch(hydratedItem.id)) {
-        continue;
-      }
-
-      try {
-        await databaseService.update(
-          'mechanic_job_items',
-          hydratedItem.id,
-          {'location_key': hydratedItem.location.dbValue},
-        );
-      } catch (error) {
-        debugPrint(
-          '⚠️ Could not backfill service location for item ${hydratedItem.id}: $error',
-        );
-      }
-    }
   }
 
   BikeMemoryLocation _defaultServiceLocationForProfile(
@@ -8630,10 +9491,51 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final diagnosisCtrl =
         currentTab?.diagnosisController ?? _diagnosisController;
 
+    // Warranty diagnosis is always gated by the original job before looking
+    // at any tab. This prevents a stale Service tab from becoming the claim's
+    // technical record while the source is missing or still loading.
+    if (_jobType == JobType.warranty) {
+      final source = _selectedWarrantySource;
+      if (source == null) {
+        return _buildWarrantyDiagnosisPrerequisite(theme);
+      }
+      if (_isLoadingWarrantySourceObject) {
+        return _buildWarrantyDiagnosisPrerequisite(
+          theme,
+          title: 'Cargando objeto del trabajo original',
+          message:
+              'Espera a que se confirme la bicicleta o el componente antes de registrar el diagnóstico.',
+          icon: Icons.sync,
+        );
+      }
+      if (_warrantySourceObjectError != null ||
+          !source.physicalObject.isValid) {
+        return _buildWarrantyDiagnosisPrerequisite(
+          theme,
+          title: 'No se pudo confirmar el objeto recibido',
+          message: _warrantySourceObjectError ??
+              'Clasifica primero el trabajo original como bicicleta o componente.',
+          icon: Icons.error_outline,
+          isError: true,
+        );
+      }
+      if (!_warrantySourceObjectMatchesForm(source)) {
+        return _buildWarrantyDiagnosisPrerequisite(
+          theme,
+          title: 'Objeto del trabajo original no disponible',
+          message:
+              'Vuelve a General y reintenta la selección. No se habilitará un diagnóstico sobre otro objeto.',
+          icon: Icons.error_outline,
+          isError: true,
+        );
+      }
+      if (source.physicalObject.isComponent) {
+        return _buildNonBikeDiagnosisPanel(theme);
+      }
+    }
+
     if (currentTab == null) {
-      if (_jobType == JobType.itemService ||
-          _jobType == JobType.warranty ||
-          _jobType == JobType.quotation) {
+      if (_jobType == JobType.itemService || _jobType == JobType.quotation) {
         return _buildNonBikeDiagnosisPanel(theme);
       }
       return Container(
@@ -8694,10 +9596,61 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return _buildDiagnosisWorkspace(theme, currentTab, diagnosisCtrl);
   }
 
+  Widget _buildWarrantyDiagnosisPrerequisite(
+    ThemeData theme, {
+    String title = 'Selecciona el trabajo original',
+    String message =
+        'La garantía puede corresponder a una bicicleta completa o a un componente suelto. Elige primero el trabajo original para cargar el diagnóstico correcto.',
+    IconData icon = Icons.verified_user_outlined,
+    bool isError = false,
+  }) {
+    final color = isError ? theme.colorScheme.error : theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700, color: color),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNonBikeDiagnosisPanel(ThemeData theme) {
     final isQuotation = _jobType == JobType.quotation;
+    final subjectNotes = _subjectNotesController.text.trim();
     final subjectLabel = _selectedSubject?.name ??
-        (isQuotation ? 'presupuesto' : 'componente recibido');
+        (subjectNotes.isNotEmpty
+            ? subjectNotes
+            : (isQuotation ? 'presupuesto' : 'componente recibido'));
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -9053,7 +10006,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           Row(
             children: [
               Text(
-                '${diagnosisCtrl.text.trim().isEmpty ? 0 : diagnosisCtrl.text.trim().split(RegExp(r'\\s+')).length} palabras',
+                '${diagnosisCtrl.text.trim().isEmpty ? 0 : diagnosisCtrl.text.trim().split(RegExp(r'\s+')).length} palabras',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -12011,25 +12964,29 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   });
                   unawaited(_loadSelectedBikeProfile(_selectedBike));
                 },
-                onClose: _bikeTabs.length > 1
+                onClose: !_isCommercialSnapshotLocked &&
+                        _jobType == JobType.service &&
+                        _bikeTabs.length > 1
                     ? () => _confirmRemoveBike(index, tab.displayName)
                     : null,
               );
             }),
             // Add new tab button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: IconButton(
-                onPressed: _showAddBikeSelector,
-                icon: const Icon(Icons.add, size: 18),
-                tooltip: 'Agregar bicicleta',
-                style: IconButton.styleFrom(
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                  padding: const EdgeInsets.all(8),
-                  minimumSize: const Size(32, 32),
+            if (_jobType == JobType.service)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: IconButton(
+                  onPressed:
+                      _isCommercialSnapshotLocked ? null : _showAddBikeSelector,
+                  icon: const Icon(Icons.add, size: 18),
+                  tooltip: 'Agregar bicicleta',
+                  style: IconButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    padding: const EdgeInsets.all(8),
+                    minimumSize: const Size(32, 32),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -12040,8 +12997,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   // CUSTOMER + BIKE SECTION (original design)
   // ============================================================
   Widget _buildCustomerBikeSection() {
+    final warrantyObject = _selectedWarrantySource?.physicalObject;
     final warrantyHasBike = _jobType == JobType.warranty &&
-        (_selectedWarrantySource?.bikeId ?? _existingJob?.bikeId) != null;
+        ((warrantyObject?.isBike ?? false) ||
+            (_selectedWarrantySource == null && _existingJob?.bikeId != null));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -12076,18 +13035,31 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           // Custom bike dropdown with action buttons
           if (_selectedCustomer != null)
             PopupMenuButton<String>(
-              enabled: widget.jobId == null, // Disable in edit mode
+              enabled: widget.jobId == null &&
+                  _jobType == JobType.service, // Warranty object is inherited.
               child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Bicicleta *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.pedal_bike),
-                  suffixIcon: Icon(Icons.arrow_drop_down),
+                decoration: InputDecoration(
+                  labelText: _jobType == JobType.warranty
+                      ? 'Bicicleta del trabajo original'
+                      : 'Bicicleta *',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.pedal_bike),
+                  suffixIcon: _jobType == JobType.service
+                      ? const Icon(Icons.arrow_drop_down)
+                      : const Icon(Icons.lock_outline),
+                  helperText: _jobType == JobType.warranty
+                      ? 'Se hereda del trabajo original y no puede reemplazarse manualmente.'
+                      : null,
                 ),
                 child: Text(
-                  _selectedBike != null
-                      ? '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}'
-                      : 'Seleccione una bicicleta',
+                  _jobType == JobType.warranty && _isLoadingWarrantySourceObject
+                      ? 'Cargando bicicleta del trabajo original...'
+                      : _jobType == JobType.warranty &&
+                              _warrantySourceObjectError != null
+                          ? _warrantySourceObjectError!
+                          : _selectedBike != null
+                              ? '${_selectedBike!.displayName}${_selectedBike!.serialNumber != null ? ' (S/N: ${_selectedBike!.serialNumber})' : ''}'
+                              : 'Seleccione una bicicleta',
                   style: _selectedBike != null
                       ? null
                       : TextStyle(color: Colors.grey[600]),
@@ -12220,24 +13192,36 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               prefixIcon: Icon(Icons.build_outlined),
             ),
             child: Text(
-              _selectedWarrantySource?.subjectId != null
-                  ? (_selectedSubject?.name ??
-                      'Componente del trabajo original')
-                  : 'Selecciona el trabajo original en la sección de garantía',
+              _isLoadingWarrantySourceObject
+                  ? 'Cargando objeto del trabajo original...'
+                  : _warrantySourceObjectError != null
+                      ? _warrantySourceObjectError!
+                      : warrantyObject?.isComponent == true
+                          ? (_selectedSubject?.name ??
+                              warrantyObject?.subjectNotes ??
+                              'Componente del trabajo original')
+                          : 'Selecciona el trabajo original en la sección de garantía',
             ),
           ),
         ] else if (_jobType == JobType.itemService) ...[
-          _buildSubjectPicker(),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _subjectNotesController,
-            decoration: const InputDecoration(
-              labelText: 'Notas del ítem',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.notes),
-              hintText: 'Ej: Rueda trasera 26", número de serie...',
+          _lockFormContent(
+            Column(
+              children: [
+                _buildSubjectPicker(),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _subjectNotesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas del ítem',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.notes),
+                    hintText: 'Ej: Rueda trasera 26", número de serie...',
+                  ),
+                  maxLines: 2,
+                ),
+              ],
             ),
-            maxLines: 2,
+            locked: _isPaymentProtectedCommercialSnapshotLocked,
           ),
         ] else if (_jobType == JobType.quotation) ...[
           TextFormField(
@@ -12258,14 +13242,47 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
+        ] else if (_jobType == JobType.sale) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shopping_bag_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Venta / cobro · Sin bicicleta ni componente recibido',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
     );
   }
 
   Widget _buildGeneralSection(ThemeData theme) {
+    if (_jobType == JobType.sale) {
+      return _buildSaleGeneralSection(theme);
+    }
+
     // Get current bike tab (if any)
-    final currentTab = _currentBikeTab;
+    final selectedTab = _currentBikeTab;
+    final warrantySource = _selectedWarrantySource;
+    final currentTab = _jobType == JobType.warranty &&
+            (warrantySource == null ||
+                !_warrantySourceObjectMatchesForm(warrantySource))
+        ? null
+        : selectedTab;
 
     final workRequestedCtrl =
         currentTab?.workRequestedController ?? _workSummaryController;
@@ -12358,13 +13375,15 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           child: Text(status.displayName),
                         );
                       }).toList(),
-                      onChanged: (status) {
-                        if (status != null) {
-                          setState(() {
-                            _selectedStatus = status;
-                          });
-                        }
-                      },
+                      onChanged: _isStatusTransitionLocked
+                          ? null
+                          : (status) {
+                              if (status != null) {
+                                setState(() {
+                                  _selectedStatus = status;
+                                });
+                              }
+                            },
                     )
                   // Use custom statuses dropdown
                   : DropdownButtonFormField<JobStatusCustom>(
@@ -12393,16 +13412,18 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                           ),
                         );
                       }).toList(),
-                      onChanged: (status) {
-                        if (status != null) {
-                          setState(() {
-                            _selectedCustomStatus = status;
-                            // Also update the enum status for legacy compatibility
-                            _selectedStatus =
-                                _mapPhaseToJobStatus(status.phase);
-                          });
-                        }
-                      },
+                      onChanged: _isStatusTransitionLocked
+                          ? null
+                          : (status) {
+                              if (status != null) {
+                                setState(() {
+                                  _selectedCustomStatus = status;
+                                  // Also update the enum status for legacy compatibility
+                                  _selectedStatus =
+                                      _mapPhaseToJobStatus(status.phase);
+                                });
+                              }
+                            },
                     ),
             ),
           ],
@@ -12497,31 +13518,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         // ========== PER-BIKE FIELDS (from current tab) ==========
         if (currentTab == null) ...[
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.pedal_bike_outlined,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Agrega una bicicleta para habilitar la ficha de diagnóstico y el storage model.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildEmptyObjectGeneralNotice(theme),
         ] else if (currentTab.isGeneralTab) ...[
           const SizedBox(height: 16),
           Container(
@@ -12596,11 +13593,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 child: CheckboxListTile(
                   title: const Text('Requiere aprobación del cliente'),
                   value: requiresApproval,
-                  onChanged: (value) {
-                    setState(() {
-                      currentTab.requiresApproval = value ?? false;
-                    });
-                  },
+                  onChanged: _isPaymentProtectedCommercialSnapshotLocked
+                      ? null
+                      : (value) {
+                          setState(() {
+                            currentTab.requiresApproval = value ?? false;
+                          });
+                        },
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
               ),
@@ -12649,11 +13648,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     : CheckboxListTile(
                         title: const Text('Trabajo de garantía'),
                         value: isWarranty,
-                        onChanged: (value) {
-                          setState(() {
-                            currentTab.isWarrantyWork = value ?? false;
-                          });
-                        },
+                        onChanged: _isPaymentProtectedCommercialSnapshotLocked
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  currentTab.isWarrantyWork = value ?? false;
+                                });
+                              },
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
               ),
@@ -12677,13 +13678,186 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
+  Widget _buildSaleGeneralSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.jobId == null) ...[
+          _buildJobTypeSelector(),
+          const SizedBox(height: 16),
+        ] else ...[
+          _buildJobTypeBadge(),
+          const SizedBox(height: 16),
+        ],
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.28),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.payments_outlined, color: theme.colorScheme.primary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Registra los productos en la pestaña Productos y Servicios. '
+                  'La factura vinculada controla los abonos y el saldo; este '
+                  'trabajo no recibe un objeto ni usa estados mecánicos.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _technicianNotesController,
+          decoration: const InputDecoration(
+            labelText: 'Acuerdo de pago / nota interna (opcional)',
+            hintText: 'Ej.: abonará \$10.000 cada semana',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.notes_outlined),
+          ),
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyObjectGeneralNotice(ThemeData theme) {
+    var icon = Icons.pedal_bike_outlined;
+    var message =
+        'Agrega una bicicleta para habilitar la ficha técnica y el diagnóstico estructurado.';
+
+    if (_jobType == JobType.quotation) {
+      icon = Icons.description_outlined;
+      message =
+          'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir el presupuesto.';
+    } else if (_jobType == JobType.itemService) {
+      icon = Icons.build_circle_outlined;
+      message =
+          'Este trabajo recibe solo el componente. Registra sus hallazgos en Diagnóstico; no se crea ni se exige una bicicleta ficticia.';
+    } else if (_jobType == JobType.warranty) {
+      final source = _selectedWarrantySource;
+      if (source == null) {
+        icon = Icons.verified_user_outlined;
+        message =
+            'Selecciona el trabajo original para identificar si el cliente dejó una bicicleta completa o un componente y cargar el diagnóstico correcto.';
+      } else if (_isLoadingWarrantySourceObject) {
+        icon = Icons.sync;
+        message =
+            'Confirmando el objeto exacto del trabajo original. Espera antes de continuar.';
+      } else if (_warrantySourceObjectError != null ||
+          !source.physicalObject.isValid) {
+        icon = Icons.error_outline;
+        message = _warrantySourceObjectError ??
+            'Clasifica primero el trabajo original como bicicleta o componente.';
+      } else if (source.physicalObject.isComponent) {
+        icon = Icons.build_circle_outlined;
+        message =
+            'La garantía corresponde a un componente suelto. Registra sus hallazgos en Diagnóstico sin crear una bicicleta ficticia.';
+      } else {
+        message =
+            'La garantía corresponde a una bicicleta. Revisa el trabajo original si su ficha no se cargó antes de continuar.';
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ============================================================
   // JOB TYPE UI HELPERS
   // ============================================================
 
-  void _selectJobType(JobType type) {
+  Future<bool> _confirmModeSwitchRemovesBikeContext(JobType type) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Cambiar el tipo de trabajo?'),
+        content: Text(
+          'Al cambiar a ${type.displayName} se quitará la bicicleta seleccionada y su ficha/diagnóstico específico de esta creación. Los productos y servicios se conservarán en General para que no tengas que ingresarlos otra vez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mantener tipo actual'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Cambiar a ${type.displayName}'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _selectJobType(JobType type) async {
+    final previousType = _jobType;
+    if (previousType == type) return;
+
+    final removesBikeContext = mechanicJobModeSwitchRemovesBikeContext(
+      from: previousType,
+      to: type,
+      hasPhysicalBikeTabs: _hasPhysicalBikeTabs,
+    );
+    if (removesBikeContext &&
+        !await _confirmModeSwitchRemovesBikeContext(type)) {
+      return;
+    }
+    if (!mounted) return;
+
     setState(() {
+      if (removesBikeContext) {
+        _moveBikeTabLinesToStandalone();
+      }
+      _warrantySourceSelectionEpoch++;
+      _isLoadingWarrantySourceObject = false;
+      _warrantySourceObjectError = null;
+      _pendingWarrantyRegistrationOperationKey = null;
+      _pendingWarrantyDecisionOperationKey = null;
+      _pendingWarrantyDecisionFingerprint = null;
+      _warrantySaveCheckpoint.reset();
+
+      // A warranty never inherits the free-form bicycle/component selection
+      // of the previous mode. Its physical object is loaded exclusively from
+      // the original delivered job selected below.
+      if (type == JobType.warranty && previousType != JobType.warranty) {
+        _clearSelectedBikeObject(discardPendingProfileEdits: true);
+        _selectedWarrantySource = null;
+        _selectedSubject = null;
+      }
+
       _jobType = type;
+      if (type == JobType.sale) {
+        _selectedWorkbenchTab = _JobWorkbenchTab.general;
+      }
       _warrantyOutcome = null;
       _quotationStatus =
           type == JobType.quotation ? QuotationStatus.pending : null;
@@ -12692,11 +13866,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           : null;
 
       if (type != JobType.service && type != JobType.warranty) {
-        for (final tab in _bikeTabs) {
-          tab.dispose();
-        }
-        _bikeTabs.clear();
-        _selectedBike = null;
+        _clearSelectedBikeObject(discardPendingProfileEdits: true);
       }
 
       if (type != JobType.itemService) {
@@ -12713,12 +13883,22 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         _warrantyDecisionReasonController.clear();
       }
 
+      if (type == JobType.warranty) {
+        // Switching an already-loaded non-warranty job creates a new claim;
+        // there is no historical claim projection to hydrate for this mode.
+        _warrantyClaimLoadCompleted = true;
+      }
+
       final isWarrantyType = type == JobType.warranty;
       _isWarrantyJob = isWarrantyType;
       for (final tab in _bikeTabs) {
         tab.isWarrantyWork = isWarrantyType;
       }
     });
+
+    if (type == JobType.warranty && _selectedCustomer != null) {
+      unawaited(_loadWarrantySourcesForSelectedCustomer());
+    }
   }
 
   Widget _buildJobTypeSelector() {
@@ -12753,7 +13933,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => _selectJobType(type),
+                onTap: () => unawaited(_selectJobType(type)),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding:
@@ -12840,6 +14020,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         return 'Propuesta para enviar al cliente: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.';
       case JobType.warranty:
         return 'Reclamo vinculado a un trabajo entregado. La cobertura se decide y registra por separado.';
+      case JobType.sale:
+        return 'Venta de productos con factura y seguimiento de abonos. No recibe bicicleta ni componente.';
     }
   }
 
@@ -12901,6 +14083,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         return Icons.request_quote_outlined;
       case JobType.itemService:
         return Icons.build_circle_outlined;
+      case JobType.sale:
+        return Icons.shopping_bag_outlined;
     }
   }
 
@@ -13116,10 +14300,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   Widget _buildWarrantySection() {
     final theme = Theme.of(context);
     final selectedSource = _selectedWarrantySource;
-    final sourceLocked = _warrantyClaim?.sourceJobId != null;
+    final sourceLocked = _isPaymentProtectedCommercialSnapshotLocked ||
+        _warrantyClaim?.sourceJobId != null ||
+        _warrantySaveCheckpoint.registeredSourceJobId != null;
     final needsReason = _warrantyOutcome == WarrantyOutcome.notCovered ||
         (_warrantyOutcome == WarrantyOutcome.covered &&
-            selectedSource?.state != ServiceWarrantyState.active);
+            _warrantyCoverageNeedsReason(selectedSource));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -13132,6 +14318,31 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
         ),
         const SizedBox(height: 8),
+        if (_isLoadingWarrantySources) ...[
+          const LinearProgressIndicator(),
+          const SizedBox(height: 8),
+        ],
+        if (_warrantySourcesLoadError != null) ...[
+          _buildWarrantyLoadError(
+            _warrantySourcesLoadError!,
+            onRetry: _loadWarrantySourcesForSelectedCustomer,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_warrantyClaimLoadError != null) ...[
+          _buildWarrantyLoadError(
+            _warrantyClaimLoadError!,
+            onRetry: _retryExistingJobLoad,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_exactWarrantySourceLoadError != null) ...[
+          _buildWarrantyLoadError(
+            _exactWarrantySourceLoadError!,
+            onRetry: _retryExistingJobLoad,
+          ),
+          const SizedBox(height: 8),
+        ],
         DropdownButtonFormField<String>(
           key: ValueKey('warranty-source-${selectedSource?.jobId ?? 'none'}'),
           initialValue: selectedSource?.jobId,
@@ -13154,8 +14365,23 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     ),
                   ))
               .toList(),
-          onChanged: sourceLocked ? null : _selectWarrantySource,
+          onChanged: sourceLocked || _hasBlockingWarrantyLoadFailure
+              ? null
+              : (jobId) => unawaited(_selectWarrantySource(jobId)),
         ),
+        if (_isLoadingWarrantySourceObject) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ] else if (_warrantySourceObjectError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _warrantySourceObjectError!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         if (selectedSource != null) ...[
           const SizedBox(height: 10),
           _buildWarrantyEligibilityNotice(selectedSource),
@@ -13181,6 +14407,28 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ),
         ],
+        if (_warrantyCoverageNeedsFinancialReview &&
+            _warrantyOutcome != WarrantyOutcome.covered) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border.all(color: Colors.orange.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _linkedInvoiceHasActivePayments
+                  ? 'La factura tiene pagos vigentes. “Cubierto” queda bloqueado hasta revisar, reversar o reembolsar el pago desde la factura.'
+                  : 'No se pudo confirmar el estado de pago. Recarga la ficha antes de elegir “Cubierto”.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         DropdownButtonFormField<WarrantyOutcome>(
           key: ValueKey('warranty-outcome-${_warrantyOutcome?.dbValue}'),
@@ -13193,10 +14441,52 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           items: WarrantyOutcome.values
               .map((outcome) => DropdownMenuItem(
                     value: outcome,
-                    child: Text(outcome.displayName),
+                    enabled: !(outcome == WarrantyOutcome.covered &&
+                        _warrantyCoverageNeedsFinancialReview &&
+                        _warrantyOutcome != WarrantyOutcome.covered),
+                    child: Text(
+                      outcome == WarrantyOutcome.covered &&
+                              _warrantyCoverageNeedsFinancialReview &&
+                              _warrantyOutcome != WarrantyOutcome.covered
+                          ? '${outcome.displayName} · revisar factura'
+                          : outcome.displayName,
+                    ),
                   ))
               .toList(),
-          onChanged: (v) => setState(() => _warrantyOutcome = v),
+          onChanged: (v) => setState(() {
+            _warrantyOutcome = v;
+            _pendingWarrantyDecisionOperationKey = null;
+            _pendingWarrantyDecisionFingerprint = null;
+          }),
+        ),
+        if (needsReason) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _warrantyDecisionReasonController,
+            maxLines: 2,
+            onChanged: (_) {
+              _pendingWarrantyDecisionOperationKey = null;
+              _pendingWarrantyDecisionFingerprint = null;
+            },
+            decoration: InputDecoration(
+              labelText: _warrantyOutcome == WarrantyOutcome.covered
+                  ? 'Justificación de excepción *'
+                  : 'Motivo de rechazo *',
+              hintText: _warrantyOutcome == WarrantyOutcome.covered
+                  ? 'Por qué se acepta fuera de plazo o sin fecha confiable'
+                  : 'Hallazgo técnico o condición que no cubre la garantía',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.notes_outlined),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          'Si se cubre, los repuestos se respaldan en un documento interno: '
+          'descuenta inventario y registra el costo de garantía, sin venta ni IVA.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         if (needsReason) ...[
           const SizedBox(height: 12),
@@ -13227,6 +14517,49 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
+  Widget _buildWarrantyLoadError(
+    String message, {
+    required Future<void> Function() onRetry,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$message Guardar está bloqueado hasta confirmar esta información.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => unawaited(onRetry()),
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _retryExistingJobLoad() async {
+    if (widget.jobId == null || _isLoading) return;
+    setState(() => _isLoading = true);
+    await _loadExistingJob();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
   String _warrantySourceLabel(MechanicJobServiceWarranty source) {
     final deliveredAt = source.lastDeliveredAt?.toLocal();
     final dateLabel = deliveredAt == null
@@ -13237,28 +14570,187 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       ServiceWarrantyState.expired => 'vencida',
       ServiceWarrantyState.notStarted => 'sin ventana',
     };
-    return '${source.jobNumber ?? 'Trabajo'} · $dateLabel · $warrantyLabel';
+    final classificationLabel =
+        source.modeNeedsReview || !source.physicalObject.isValid
+            ? ' · clasificar recepción'
+            : source.physicalObject.isComponent
+                ? ' · componente'
+                : ' · bicicleta';
+    return '${source.jobNumber ?? 'Trabajo'} · $dateLabel · $warrantyLabel$classificationLabel';
   }
 
-  void _selectWarrantySource(String? jobId) {
+  bool get _hasWarrantySourceScopedDraft {
+    if (_bikeTabs.any((tab) => tab.partItems.isNotEmpty)) return true;
+    for (final tab in _bikeTabs.where((candidate) => !candidate.isGeneralTab)) {
+      if (tab.clientRequestController.text.trim().isNotEmpty ||
+          tab.diagnosisController.text.trim().isNotEmpty ||
+          tab.workRequestedController.text.trim().isNotEmpty ||
+          tab.technicianNotesController.text.trim().isNotEmpty ||
+          tab.diagnosisSheet.hasMeaningfulData) {
+        return true;
+      }
+      final bikeId = tab.bike?.id;
+      if (bikeId != null && _pendingBikeProfileOverrides.containsKey(bikeId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _confirmWarrantySourceContextReplacement() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Cambiar el trabajo original?'),
+        content: const Text(
+          'La bicicleta y el diagnóstico ingresado para el trabajo original actual pertenecen a ese objeto y se quitarán. Los productos y servicios se conservarán en General.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mantener trabajo actual'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cambiar trabajo original'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _selectWarrantySource(String? jobId) async {
     final source = _warrantySources
         .where((candidate) => candidate.jobId == jobId)
         .firstOrNull;
-    setState(() => _selectedWarrantySource = source);
+    if (_selectedWarrantySource?.jobId == source?.jobId) return;
+    final requiresConfirmation =
+        mechanicJobWarrantySourceChangeNeedsConfirmation(
+      currentSourceJobId: _selectedWarrantySource?.jobId,
+      nextSourceJobId: source?.jobId,
+      hasSourceScopedDraft: _hasWarrantySourceScopedDraft,
+    );
+    if (requiresConfirmation &&
+        !await _confirmWarrantySourceContextReplacement()) {
+      return;
+    }
+    if (!mounted) return;
 
-    final sourceBikeId = source?.bikeId;
-    if (sourceBikeId != null &&
-        !_bikeTabs.any((tab) => tab.bike?.id == sourceBikeId)) {
-      final bike = _findBikeById(sourceBikeId);
-      if (bike != null) _addBikeTab(bike);
+    final selectionEpoch = ++_warrantySourceSelectionEpoch;
+
+    setState(() {
+      // Commercial lines survive a source replacement, but diagnosis remains
+      // attached to the physical object the user explicitly agreed to remove.
+      _moveBikeTabLinesToStandalone();
+      _clearSelectedBikeObject(discardPendingProfileEdits: true);
+      _selectedSubject = null;
+      _subjectNotesController.clear();
+      _selectedWarrantySource = source;
+      _warrantySourceObjectError = null;
+      _isLoadingWarrantySourceObject = source != null;
+      _pendingWarrantyRegistrationOperationKey = null;
+      _pendingWarrantyDecisionOperationKey = null;
+      _pendingWarrantyDecisionFingerprint = null;
+    });
+
+    if (source == null) return;
+
+    final object = source.physicalObject;
+    if (!object.isValid) {
+      setState(() {
+        _isLoadingWarrantySourceObject = false;
+        _warrantySourceObjectError =
+            'El trabajo original no tiene una recepción física única. Clasifícalo primero como bicicleta o componente.';
+      });
+      return;
     }
 
-    final sourceSubjectId = source?.subjectId;
-    if (sourceSubjectId != null) {
-      final subject = _availableSubjects
-          .where((candidate) => candidate.id == sourceSubjectId)
-          .firstOrNull;
-      if (subject != null) setState(() => _selectedSubject = subject);
+    try {
+      final bikeshopService =
+          Provider.of<BikeshopService>(context, listen: false);
+      Bike? sourceBike;
+      JobSubject? sourceSubject;
+
+      if (object.isBike) {
+        sourceBike = _findBikeById(object.bikeId);
+        sourceBike ??= await bikeshopService.getBikeById(object.bikeId!);
+      } else if (object.subjectId != null) {
+        sourceSubject = _availableSubjects
+            .where((candidate) => candidate.id == object.subjectId)
+            .firstOrNull;
+        sourceSubject ??=
+            await bikeshopService.getJobSubjectById(object.subjectId!);
+      }
+
+      if (!mounted ||
+          selectionEpoch != _warrantySourceSelectionEpoch ||
+          _selectedWarrantySource?.jobId != source.jobId) {
+        return;
+      }
+
+      if (object.isBike) {
+        if (sourceBike == null || sourceBike.customerId != source.customerId) {
+          setState(() {
+            _isLoadingWarrantySourceObject = false;
+            _warrantySourceObjectError =
+                'No se pudo cargar la bicicleta exacta del trabajo original.';
+          });
+          return;
+        }
+
+        final warrantyTab = _BikeTabData(bike: sourceBike)
+          ..isWarrantyWork = true;
+        setState(() {
+          _bikeTabs
+            ..add(warrantyTab)
+            ..add(_BikeTabData(
+              isGeneralTab: true,
+              tabId: 'general_tab',
+            ));
+          _moveStandaloneLinesToGeneralTab();
+          _selectedBike = sourceBike;
+          _selectedBikeTabIndex = 0;
+          _isLoadingWarrantySourceObject = false;
+        });
+        unawaited(_loadSelectedBikeProfile(sourceBike));
+        return;
+      }
+
+      if (object.subjectId != null &&
+          (sourceSubject == null || sourceSubject.id != object.subjectId)) {
+        setState(() {
+          _isLoadingWarrantySourceObject = false;
+          _warrantySourceObjectError =
+              'No se pudo cargar el componente exacto del trabajo original.';
+        });
+        return;
+      }
+
+      final resolvedSubject = sourceSubject;
+      setState(() {
+        _selectedSubject = resolvedSubject;
+        _subjectNotesController.text = object.subjectNotes ?? '';
+        if (resolvedSubject != null &&
+            !_availableSubjects
+                .any((subject) => subject.id == resolvedSubject.id)) {
+          _availableSubjects = [resolvedSubject, ..._availableSubjects];
+        }
+        _isLoadingWarrantySourceObject = false;
+      });
+    } catch (error) {
+      if (!mounted ||
+          selectionEpoch != _warrantySourceSelectionEpoch ||
+          _selectedWarrantySource?.jobId != source.jobId) {
+        return;
+      }
+      setState(() {
+        _isLoadingWarrantySourceObject = false;
+        _warrantySourceObjectError =
+            'No se pudo confirmar el objeto del trabajo original. Reintenta antes de guardar.';
+      });
+      debugPrint('Error loading warranty source object: $error');
     }
   }
 
