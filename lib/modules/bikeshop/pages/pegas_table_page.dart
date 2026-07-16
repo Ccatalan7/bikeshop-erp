@@ -34,6 +34,8 @@ import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
 import '../services/mechanic_job_intake_classification_coordinator.dart';
 import '../services/mechanic_job_quotation_command_coordinator.dart';
+import '../services/mechanic_job_sale_classification_coordinator.dart';
+import '../services/mechanic_job_sale_ui_policy.dart';
 import '../services/mechanic_job_warranty_command_coordinator.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
@@ -289,6 +291,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       _pendingQuotationConversionAttempts = {};
   Map<String, Bike> _bikes = {};
   Map<String, Invoice> _invoices = {};
+  Map<String, List<MechanicJobItem>> _jobItemsMap = {};
   Map<String, String> _productImages = {};
   Map<String, List<MechanicJobBike>> _jobBikesMap = {}; // Multi-bike support
 
@@ -934,6 +937,13 @@ class _PegasTablePageState extends State<PegasTablePage>
     await _loadData();
   }
 
+  Future<void> _registerInvoicePayment(String invoiceId) async {
+    _markNeedsRefresh();
+    await context.push('/sales/invoices/$invoiceId/payment');
+    if (!mounted) return;
+    await _loadData(forceInvoiceRefresh: true);
+  }
+
   Future<void> _openInvoicePreview(
     String invoiceId, {
     Invoice? invoice,
@@ -1041,6 +1051,12 @@ class _PegasTablePageState extends State<PegasTablePage>
     return job.isPaid;
   }
 
+  bool _isSaleFullyPaid(MechanicJob job, {Invoice? invoice}) {
+    final resolvedInvoice =
+        invoice ?? (job.invoiceId != null ? _invoices[job.invoiceId] : null);
+    return isMechanicJobSaleFullyPaid(job, resolvedInvoice);
+  }
+
   bool _hasWarrantyPaymentEvidence(MechanicJob job) {
     final invoice = job.invoiceId == null ? null : _invoices[job.invoiceId];
     return job.isPaid ||
@@ -1095,6 +1111,17 @@ class _PegasTablePageState extends State<PegasTablePage>
       final bikes = results[2] as List<Bike>;
       final invoices = results[3] as List<Invoice>;
       final jobBikesMap = results[4] as Map<String, List<MechanicJobBike>>;
+      Map<String, List<MechanicJobItem>> jobItemsMap = const {};
+      try {
+        jobItemsMap = await _bikeshopService.getJobItemsForJobs(
+          jobs
+              .where((job) => job.isSaleWorkflow || job.modeNeedsReview)
+              .map((job) => job.id)
+              .whereType<String>(),
+        );
+      } catch (error) {
+        debugPrint('Could not load compact job item summaries: $error');
+      }
 
       final customerMap = _buildCustomerMap(customers);
       final bikeMap = _buildBikeMap(bikes);
@@ -1109,6 +1136,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _bikes = bikeMap;
           _invoices = invoiceMap;
           _jobBikesMap = jobBikesMap;
+          _jobItemsMap = jobItemsMap;
           _isLoading = false;
         });
         _applyFiltersAndSort();
@@ -1364,6 +1392,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
+          if (job.isSaleWorkflow) {
+            if (!isMechanicJobSaleActive(job, invoice)) return false;
+            break;
+          }
           // Activos: include Terminados/Finalizados.
           // Filter out only: Cancelados, and Entregados that are already paid.
           if (job.status == JobStatus.cancelado) return false;
@@ -1404,13 +1436,17 @@ class _PegasTablePageState extends State<PegasTablePage>
         final searchLower = _searchTerm.toLowerCase();
         final customer = _customers[job.customerId];
         final bike = _bikes[job.bikeId];
+        final itemText =
+            _jobItemsMap[job.id]?.map((item) => item.productName).join(' ') ??
+                '';
 
         final matches =
             (job.jobNumber ?? '').toLowerCase().contains(searchLower) ||
                 (customer?.name ?? '').toLowerCase().contains(searchLower) ||
                 (customer?.phone ?? '').toLowerCase().contains(searchLower) ||
                 (bike?.displayName ?? '').toLowerCase().contains(searchLower) ||
-                (job.clientRequest ?? '').toLowerCase().contains(searchLower);
+                (job.clientRequest ?? '').toLowerCase().contains(searchLower) ||
+                itemText.toLowerCase().contains(searchLower);
 
         if (!matches) return false;
       }
@@ -2380,6 +2416,14 @@ class _PegasTablePageState extends State<PegasTablePage>
           onPressed: () {
             _markNeedsRefresh();
             context.push('/taller/pegas/nueva?type=item_service');
+          },
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.shopping_bag_outlined, size: 18),
+          child: const Text('Venta / cobro'),
+          onPressed: () {
+            _markNeedsRefresh();
+            context.push('/taller/pegas/nueva?type=sale');
           },
         ),
       ],
@@ -3698,7 +3742,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
 
-    final isOverdue = job.deliveryDeadline != null &&
+    final isOverdue = !job.isSaleWorkflow &&
+        job.deliveryDeadline != null &&
         job.deliveryDeadline!.isBefore(DateTime.now()) &&
         job.status != JobStatus.finalizado &&
         job.status != JobStatus.entregado; // Also exclude delivered
@@ -3774,7 +3819,21 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ],
                     ),
                   ),
-                  _buildCompactStatusBadge(job.status),
+                  job.isSaleWorkflow
+                      ? _buildStatusBadge(
+                          label: mechanicJobSalePaymentLabel(
+                            job,
+                            job.invoiceId == null
+                                ? null
+                                : _invoices[job.invoiceId],
+                          ),
+                          accentColor: _isSaleFullyPaid(job)
+                              ? Colors.green
+                              : Colors.orange,
+                          maxWidth: 124,
+                          compact: true,
+                        )
+                      : _buildCompactStatusBadge(job.status),
                 ],
               ),
 
@@ -3782,8 +3841,23 @@ class _PegasTablePageState extends State<PegasTablePage>
               const Divider(height: 1),
               const SizedBox(height: 12),
 
-              // Bike & Diagnosis
-              if (bike != null)
+              // Physical object/details, or the commercial sale summary.
+              if (job.isSaleWorkflow) ...[
+                Row(
+                  children: [
+                    Icon(Icons.shopping_bag_outlined,
+                        size: 16, color: Colors.grey[700]),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Venta / cobro · Sin objeto recibido',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                _buildSaleProductSummary(job),
+              ] else if (bike != null)
                 Row(
                   children: [
                     Icon(Icons.pedal_bike, size: 16, color: Colors.grey[600]),
@@ -3797,7 +3871,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                     ),
                   ],
                 ),
-              if (job.diagnosis != null || job.clientRequest != null) ...[
+              if (!job.isSaleWorkflow &&
+                  (job.diagnosis != null || job.clientRequest != null)) ...[
                 const SizedBox(height: 4),
                 Text(
                   job.diagnosis ?? job.clientRequest ?? '',
@@ -3818,7 +3893,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     DateFormat('dd/MM', 'es_CL').format(job.arrivalDate),
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
-                  if (job.deliveryDeadline != null) ...[
+                  if (!job.isSaleWorkflow && job.deliveryDeadline != null) ...[
                     const SizedBox(width: 12),
                     Icon(job.isOverdue ? Icons.warning : Icons.event_available,
                         size: 14,
@@ -5122,6 +5197,40 @@ class _PegasTablePageState extends State<PegasTablePage>
         final jobId = job.id;
         final isExpanded = jobId != null && _expandedJobIds.contains(jobId);
 
+        if (job.isSaleWorkflow) {
+          return Row(
+            children: [
+              Icon(
+                Icons.shopping_bag_outlined,
+                size: 26,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Venta / cobro',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Sin objeto recibido',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
         // Per-bike detail row - show just the specific bike name
         if (isPerBikeDetail) {
           final bikeName = bike?.displayName ?? 'Sin nombre';
@@ -5467,6 +5576,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'diagnosis':
+        if (job.isSaleWorkflow) {
+          return _buildSaleProductSummary(job);
+        }
         // Per-bike detail: show per-bike data from MechanicJobBike
         if (isPerBikeDetail) {
           final invoice =
@@ -6312,7 +6424,32 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ],
                     ),
                   ),
-                if (job.workflowKind != JobWorkflowKind.quotation)
+                if (job.isSaleWorkflow &&
+                    job.invoiceId != null &&
+                    !_isSaleFullyPaid(job))
+                  const PopupMenuItem(
+                    value: 'register_payment',
+                    child: Row(
+                      children: [
+                        Icon(Icons.payments_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Registrar abono'),
+                      ],
+                    ),
+                  ),
+                if (job.isSaleWorkflow && job.invoiceId != null)
+                  const PopupMenuItem(
+                    value: 'view_invoice',
+                    child: Row(
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Ver factura'),
+                      ],
+                    ),
+                  ),
+                if (job.workflowKind != JobWorkflowKind.quotation &&
+                    !job.isSaleWorkflow)
                   const PopupMenuItem(
                     value: 'complete',
                     child: Row(
@@ -6343,6 +6480,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                   _showStatusMenu(job);
                 } else if (value == 'convert') {
                   _convertToService(job);
+                } else if (value == 'register_payment' &&
+                    job.invoiceId != null) {
+                  _registerInvoicePayment(job.invoiceId!);
+                } else if (value == 'view_invoice' && job.invoiceId != null) {
+                  _openInvoice(job.invoiceId!);
                 } else if (value == 'complete') {
                   _markJobAsComplete(job);
                 } else if (value == 'delete') {
@@ -6356,6 +6498,40 @@ class _PegasTablePageState extends State<PegasTablePage>
       default:
         return const Text('-');
     }
+  }
+
+  Widget _buildSaleProductSummary(MechanicJob job) {
+    final items = _jobItemsMap[job.id] ?? const <MechanicJobItem>[];
+    if (items.isEmpty) {
+      return Text(
+        'Productos no disponibles',
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+    final first = items.first;
+    final quantity = first.quantity == first.quantity.roundToDouble()
+        ? first.quantity.toStringAsFixed(0)
+        : first.quantity.toStringAsFixed(1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          '${first.productName} ×$quantity${items.length > 1 ? '  +${items.length - 1}' : ''}',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (job.notes?.trim().isNotEmpty == true)
+          Text(
+            job.notes!.trim(),
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    );
   }
 
   Widget _buildJobBikeSubRow({
@@ -6999,6 +7175,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                         icon: Icon(Icons.build_circle_outlined),
                         label: Text('Solo componente'),
                       ),
+                      ButtonSegment(
+                        value: JobIntakeKind.none,
+                        icon: Icon(Icons.shopping_bag_outlined),
+                        label: Text('Venta / cobro'),
+                      ),
                     ],
                     selected: {intakeKind},
                     onSelectionChanged: (selection) => setDialogState(() {
@@ -7044,7 +7225,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                         ),
                       ),
                     ],
-                  ] else ...[
+                  ] else if (intakeKind == JobIntakeKind.component) ...[
                     if (subjectCatalogError != null) ...[
                       Container(
                         width: double.infinity,
@@ -7111,6 +7292,20 @@ class _PegasTablePageState extends State<PegasTablePage>
                       onChanged: (_) => setDialogState(() {
                         validationMessage = null;
                       }),
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(context).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Clasifica este registro como una venta de productos '
+                        'sin bicicleta ni componente recibido. Sus productos, '
+                        'precios y pagos no se modificarán.',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -7210,15 +7405,26 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     _startLocalOperation();
     try {
-      final result = await _bikeshopService.classifyMechanicJobIntake(
-        jobId,
-        intakeKind: choice.intakeKind,
-        operationKey: attempt.operationKey,
-        bikeId: choice.bikeId,
-        subjectId: choice.subjectId,
-        subjectNotes: choice.subjectNotes,
-        reason: choice.reason,
-      );
+      final bool resultNeedsRefresh;
+      if (choice.intakeKind == JobIntakeKind.none) {
+        final result = await _bikeshopService.classifyMechanicJobAsSale(
+          jobId,
+          operationKey: attempt.operationKey,
+          reason: choice.reason,
+        );
+        resultNeedsRefresh = result.needsRefresh;
+      } else {
+        final result = await _bikeshopService.classifyMechanicJobIntake(
+          jobId,
+          intakeKind: choice.intakeKind,
+          operationKey: attempt.operationKey,
+          bikeId: choice.bikeId,
+          subjectId: choice.subjectId,
+          subjectNotes: choice.subjectNotes,
+          reason: choice.reason,
+        );
+        resultNeedsRefresh = result.needsRefresh;
+      }
       _pendingIntakeClassificationAttempts.remove(jobId);
 
       Object? refreshError;
@@ -7234,10 +7440,13 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
       }
       if (!mounted) return;
-      final classificationLabel = choice.intakeKind == JobIntakeKind.bike
-          ? 'bicicleta completa'
-          : 'solo componente';
-      final refreshPending = result.needsRefresh || refreshError != null;
+      final classificationLabel = switch (choice.intakeKind) {
+        JobIntakeKind.bike => 'bicicleta completa',
+        JobIntakeKind.component => 'solo componente',
+        JobIntakeKind.none => 'venta / cobro',
+        JobIntakeKind.unspecified => 'clasificación pendiente',
+      };
+      final refreshPending = resultNeedsRefresh || refreshError != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -7268,6 +7477,30 @@ class _PegasTablePageState extends State<PegasTablePage>
           SnackBar(
             content: const Text(
               'No se pudo confirmar el resultado. La clasificación puede haberse guardado; Reintentar reutiliza exactamente la misma operación y no crea otra.',
+            ),
+            backgroundColor: Colors.orange.shade900,
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'REINTENTAR',
+              textColor: Colors.white,
+              onPressed: () => unawaited(
+                _submitJobIntakeClassification(job, attempt),
+              ),
+            ),
+          ),
+        );
+      }
+    } on MechanicJobSaleClassificationOutcomeUnknown catch (error) {
+      debugPrint(
+        'Sale classification outcome remains unknown for $jobId with operation '
+        '${attempt.operationKey}: command=${error.commandError}; '
+        'readback=${error.readbackError}',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'No se pudo confirmar el resultado. La venta puede haberse guardado; Reintentar reutiliza exactamente la misma operación y no crea otra.',
             ),
             backgroundColor: Colors.orange.shade900,
             duration: const Duration(seconds: 10),
@@ -9184,6 +9417,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return Icons.build_circle;
       case JobType.service:
         return Icons.pedal_bike;
+      case JobType.sale:
+        return Icons.shopping_bag_outlined;
     }
   }
 
@@ -9887,7 +10122,9 @@ class _PegasTablePageState extends State<PegasTablePage>
   // ========== GANTT VIEW (Notion-style Timeline) ==========
 
   Widget _buildGanttView() {
-    final jobsWithDates = _filteredJobs.toList()
+    final jobsWithDates = _filteredJobs
+        .where((job) => !job.isSaleWorkflow)
+        .toList()
       ..sort((a, b) => a.arrivalDate.compareTo(b.arrivalDate));
 
     if (jobsWithDates.isEmpty) {

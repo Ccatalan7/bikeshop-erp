@@ -82,7 +82,8 @@ bool mechanicJobModeSwitchRemovesBikeContext({
   if (!hasPhysicalBikeTabs || from == to) return false;
   return to == JobType.quotation ||
       to == JobType.itemService ||
-      to == JobType.warranty;
+      to == JobType.warranty ||
+      to == JobType.sale;
 }
 
 /// Merges commercial lines while preserving their original instances and

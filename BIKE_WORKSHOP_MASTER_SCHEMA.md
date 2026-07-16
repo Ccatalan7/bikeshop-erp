@@ -2062,12 +2062,15 @@ PUBLIC, `anon`, and `service_role` do not. Across 070–100, 16 business-table
 counts and digests stayed identical after every migration; the final production
 health gate reports zero critical violations.
 
-The four familiar creation choices remain, but they no longer overload one
+The familiar single-table workflow now exposes five creation choices, but they
+do not overload one
 database concept. `mechanic_jobs.workflow_kind` is the commercial/lifecycle
-axis (`service`, `quotation`, `warranty`) and `intake_kind` is the physical
-receipt axis (`bike`, `component`, `unspecified`). Legacy `job_type` remains a
+axis (`service`, `quotation`, `warranty`, `sale`) and `intake_kind` is the physical
+receipt axis (`bike`, `component`, `none`, `unspecified`). Legacy `job_type` remains a
 compatibility facade: `service` means service + bike, `item_service` means
 service + component, while quotation and warranty keep their familiar values.
+For rollback compatibility a `sale/none` row also persists `job_type=service`;
+canonical consumers must use both axes.
 
 - `component` means the customer left only the loose component (for example a
   wheel to build or convert to tubular). It is not merely a label for a part being repaired
@@ -2080,6 +2083,11 @@ service + component, while quotation and warranty keep their familiar values.
 - a walk-in quotation may validly have `intake_kind = unspecified`: proposed
   products/services are planning rows only and create no invoice, stock
   movement, revenue, IVA, receivable, COGS, or payment entry.
+- a `sale/none` row means a real product sale tracked operationally in the same
+  workshop table without any bicycle or loose component received. It has no
+  diagnosis or service-warranty window and never contributes to bicycle or
+  component-intake counts. Its linked invoice remains the sole owner of stock,
+  tax, revenue, receivable, partial payments, balance, and journals.
 - `mechanic_job_mode_view` derives effective quotation expiry from
   `quotation_valid_until`; the clock does not mutate pending rows in the
   background. Status changes use the audited quotation command.
@@ -2113,7 +2121,7 @@ service + component, while quotation and warranty keep their familiar values.
   editable for later diagnosis or authorized additions; the accepted proposal
   stays immutable as historical evidence instead of freezing day-to-day work.
 - canonical clients never perform direct cross-workflow or quotation-status
-  writes: the four-mode selector is creation-only on every shared form host,
+  writes: the five-mode selector is creation-only on every shared form host,
   and table actions call the audited status/conversion commands. During the
   rollout of migration 030, a narrowly bounded compatibility bridge accepts an
   older client's status-only quotation update and its already-approved
@@ -2150,6 +2158,10 @@ service + component, while quotation and warranty keep their familiar values.
   same-tenant component subject or a manual component description, and records
   the actor, reason and immutable classification event. The command never
   creates or changes an invoice, payment, stock movement or journal entry.
+- product-only historical ambiguity is not enough to infer a sale. The sibling
+  `classify_mechanic_job_as_sale` command accepts only a reviewed service with
+  no physical anchors and proven product lines, appends the same immutable mode
+  receipt, and leaves invoice/payment/stock/journal evidence unchanged.
 - the classification coordinator creates one operation key per semantic
   attempt and retains it across transport-error readback and the only safe RPC
   replay. If neither the receipt nor authoritative job readback proves the

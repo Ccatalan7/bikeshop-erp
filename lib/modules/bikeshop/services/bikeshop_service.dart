@@ -8,6 +8,7 @@ import '../models/bikeshop_models.dart';
 import 'mechanic_job_form_persistence_policy.dart';
 import 'mechanic_job_intake_classification_coordinator.dart';
 import 'mechanic_job_quotation_command_coordinator.dart';
+import 'mechanic_job_sale_classification_coordinator.dart';
 import 'mechanic_job_status_transition_coordinator.dart';
 import 'mechanic_job_warranty_command_coordinator.dart';
 
@@ -3463,6 +3464,31 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Loads product summaries for a set of jobs in one query.
+  Future<Map<String, List<MechanicJobItem>>> getJobItemsForJobs(
+    Iterable<String> jobIds,
+  ) async {
+    final ids =
+        jobIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+    if (ids.isEmpty) return const <String, List<MechanicJobItem>>{};
+
+    try {
+      final data = await Supabase.instance.client
+          .from('mechanic_job_items')
+          .select()
+          .inFilter('job_id', ids.toList());
+      final result = <String, List<MechanicJobItem>>{};
+      for (final json in data as List) {
+        final item = MechanicJobItem.fromJson(json);
+        result.putIfAbsent(item.jobId, () => <MechanicJobItem>[]).add(item);
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) print('Error fetching job item summaries: $e');
+      rethrow;
+    }
+  }
+
   Future<MechanicJobItem> createJobItem(
     MechanicJobItem item, {
     bool syncBikeMemory = true,
@@ -4589,6 +4615,36 @@ class BikeshopService extends ChangeNotifier {
       // An uncertain response may still have committed. Always invalidate the
       // projections so realtime or the next explicit load cannot reuse stale
       // mode/bicycle counts.
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
+    }
+  }
+
+  /// Reclassifies an audited legacy row as a sale without inventing a physical
+  /// workshop intake. The server owns the atomic mode/event update.
+  Future<MechanicJobSaleClassificationResult> classifyMechanicJobAsSale(
+    String jobId, {
+    required String operationKey,
+    String? reason,
+  }) async {
+    final request = MechanicJobSaleClassificationRequest(
+      jobId: jobId,
+      operationKey: operationKey,
+      reason: reason,
+    );
+    final coordinator = MechanicJobSaleClassificationCoordinator(
+      send: (params) => _db.rpc(
+        'classify_mechanic_job_as_sale',
+        params: params,
+      ),
+      readback: getJobById,
+      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
+    );
+
+    try {
+      return await coordinator.execute(request);
+    } finally {
       invalidateJobsCache();
       invalidateJobBikesCache();
       _debouncedNotify();

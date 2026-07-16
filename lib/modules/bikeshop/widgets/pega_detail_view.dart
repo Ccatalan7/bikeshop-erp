@@ -147,6 +147,7 @@ class _PegaDetailViewState extends State<PegaDetailView>
   }
 
   Widget _buildDetailsTab() {
+    if (widget.job.isSaleWorkflow) return _buildSaleDetailsTab();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -313,6 +314,61 @@ class _PegaDetailViewState extends State<PegaDetailView>
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaleDetailsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildInfoCard(
+            'Tipo',
+            'Venta / cobro · Sin objeto recibido',
+            Icons.shopping_bag_outlined,
+            Colors.blue,
+          ),
+          const SizedBox(height: 20),
+          _buildSectionHeader('Información del Cliente'),
+          const SizedBox(height: 12),
+          if (widget.customer != null)
+            _buildCustomerDetails(widget.customer!)
+          else
+            const Text('Sin cliente asignado'),
+          if (widget.job.notes?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 20),
+            _buildSectionHeader('Acuerdo de pago / nota interna'),
+            const SizedBox(height: 12),
+            _buildContentBox(widget.job.notes!.trim()),
+          ],
+          const SizedBox(height: 20),
+          _buildSectionHeader('Productos'),
+          const SizedBox(height: 12),
+          if (widget.items.isEmpty)
+            const Text('Productos no disponibles')
+          else
+            ...widget.items.map(_buildProductItem),
+          if (widget.job.totalCost > 0) ...[
+            const SizedBox(height: 20),
+            _buildInfoCard(
+              'Total',
+              '\$${_calculateDisplayTotal().toStringAsFixed(0)}',
+              Icons.payments_outlined,
+              Colors.green,
+            ),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: widget.onEdit,
+              icon: const Icon(Icons.edit),
+              label: const Text('Editar venta'),
+            ),
           ),
         ],
       ),

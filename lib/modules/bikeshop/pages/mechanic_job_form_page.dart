@@ -918,6 +918,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// Only a final quotation or a covered warranty whose settlement cannot be
   /// proven safe blocks the status control; the server repeats this guard.
   bool get _isStatusTransitionLocked =>
+      _jobType == JobType.sale ||
       _isFinalQuotationReadOnly ||
       (_jobType == JobType.warranty &&
           (_warrantyOutcome ?? _existingJob?.warrantyOutcome) ==
@@ -2786,6 +2787,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return _subtotal - _discountAmount;
   }
 
+  bool get _hasSaleCatalogProduct => _partItems.any(
+        (item) =>
+            item.isCatalogProduct &&
+            !item.isServiceItem &&
+            item.product?.id.isNotEmpty == true,
+      );
+
+  bool get _saleHasUnsupportedLines =>
+      _serviceItems.isNotEmpty ||
+      _partItems.any(
+        (item) =>
+            item.isServiceItem ||
+            !item.isCatalogProduct ||
+            item.product?.id.isNotEmpty != true,
+      );
+
   /// Maps StatusPhase to JobStatus for legacy compatibility
   JobStatus _mapPhaseToJobStatus(StatusPhase phase) {
     switch (phase) {
@@ -2933,9 +2950,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('La factura cambió mientras editabas'),
         content: Text(
-          _linkedInvoiceHasActivePayments
-              ? 'Se registró un pago en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios, descuento, estado ni objeto físico. Sí puedes guardar el diagnóstico y las notas operativas.'
-              : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales ni de ciclo. Sí puedes guardar el diagnóstico y las notas operativas.',
+          _jobType == JobType.sale
+              ? _linkedInvoiceHasActivePayments
+                  ? 'Se registró un abono en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios ni descuento. Sí puedes guardar la nota del acuerdo de pago.'
+                  : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales. Sí puedes guardar la nota del acuerdo de pago.'
+              : _linkedInvoiceHasActivePayments
+                  ? 'Se registró un pago en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios, descuento, estado ni objeto físico. Sí puedes guardar el diagnóstico y las notas operativas.'
+                  : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales ni de ciclo. Sí puedes guardar el diagnóstico y las notas operativas.',
         ),
         actions: [
           TextButton(
@@ -2944,7 +2965,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Guardar solo diagnóstico'),
+            child: Text(
+              _jobType == JobType.sale
+                  ? 'Guardar solo nota'
+                  : 'Guardar solo diagnóstico',
+            ),
           ),
         ],
       ),
@@ -3097,6 +3122,29 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Describa qué producto o servicio desea cotizar'),
+        ),
+      );
+      return;
+    }
+
+    if (_jobType == JobType.sale && !_hasSaleCatalogProduct) {
+      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Agrega al menos un producto del catálogo para registrar la venta.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_jobType == JobType.sale && _saleHasUnsupportedLines) {
+      setState(() => _selectedWorkbenchTab = _JobWorkbenchTab.products);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La venta solo admite productos del catálogo; quita servicios o líneas personalizadas.',
+          ),
         ),
       );
       return;
@@ -3311,7 +3359,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             : (_technicianNotesController.text.trim().isNotEmpty
                 ? _technicianNotesController.text.trim()
                 : null),
-        deliveryDeadline: _selectedDeadline,
+        deliveryDeadline: _jobType == JobType.sale
+            ? _existingJob?.deliveryDeadline
+            : _selectedDeadline,
         requiresApproval: firstTab?.requiresApproval ?? _requiresApproval,
         isWarrantyJob:
             firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
@@ -3746,7 +3796,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
         final shouldCreateInvoice = savedJob != null &&
             (savedJob.jobType == JobType.service ||
-                savedJob.jobType == JobType.itemService);
+                savedJob.jobType == JobType.itemService ||
+                savedJob.jobType == JobType.sale);
 
         if (linkedInvoiceId != null && savedJob?.jobType != JobType.quotation) {
           // If there's an existing invoice, we still sync it just to keep it updated,
@@ -3831,7 +3882,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // Refresh bicycle memory only after the guarded commercial phase. When a
       // payment exists, this reads the persisted job aggregate; it does not
       // rewrite job lines from the invoice.
-      await bikeshopService.syncBikeMemoryFromJob(jobId);
+      if (_jobType != JobType.sale) {
+        await bikeshopService.syncBikeMemoryFromJob(jobId);
+      }
 
       if (mounted && context.mounted) {
         _pendingWarrantyRegistrationOperationKey = null;
@@ -4810,9 +4863,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ? 'Presupuesto $statusLabel · solo lectura'
             : 'Presupuesto original conservado';
     final message = isFinanciallyProtected
-        ? _linkedInvoiceHasActivePayments
-            ? 'La factura de este trabajo tiene pagos vigentes. Puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; productos, precios, descuento, totales y factura quedan protegidos. Una garantía cubierta requiere resolver primero el pago desde la factura.'
-            : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
+        ? _jobType == JobType.sale
+            ? _linkedInvoiceHasActivePayments
+                ? 'La factura de esta venta tiene abonos vigentes. Puedes actualizar la nota del acuerdo; productos, precios, descuento, totales y factura quedan protegidos.'
+                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad solo puedes actualizar la nota del acuerdo hasta recargarla correctamente.'
+            : _linkedInvoiceHasActivePayments
+                ? 'La factura de este trabajo tiene pagos vigentes. Puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; productos, precios, descuento, totales y factura quedan protegidos. Una garantía cubierta requiere resolver primero el pago desde la factura.'
+                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
         : isFinalQuotation
             ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
             : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial del presupuesto.';
@@ -5088,14 +5145,18 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   Widget _buildWorkbenchContent(ThemeData theme) {
-    final content = switch (_selectedWorkbenchTab) {
+    final effectiveTab = _jobType == JobType.sale &&
+            _selectedWorkbenchTab == _JobWorkbenchTab.diagnosis
+        ? _JobWorkbenchTab.general
+        : _selectedWorkbenchTab;
+    final content = switch (effectiveTab) {
       _JobWorkbenchTab.general => _buildGeneralSection(theme),
       _JobWorkbenchTab.diagnosis => _buildDiagnosisSection(theme),
       _JobWorkbenchTab.products => _buildPartsSection(),
     };
     final contentLocked = _isFinalQuotationReadOnly ||
         (_isCommercialSnapshotLocked &&
-            _selectedWorkbenchTab == _JobWorkbenchTab.products);
+            effectiveTab == _JobWorkbenchTab.products);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5125,21 +5186,25 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ),
           const SizedBox(width: 6),
-          Expanded(
-            child: _buildWorkbenchTabButton(
-              theme: theme,
-              tab: _JobWorkbenchTab.diagnosis,
-              icon: Icons.medical_information_outlined,
-              label: 'Diagnóstico',
+          if (_jobType != JobType.sale) ...[
+            Expanded(
+              child: _buildWorkbenchTabButton(
+                theme: theme,
+                tab: _JobWorkbenchTab.diagnosis,
+                icon: Icons.medical_information_outlined,
+                label: 'Diagnóstico',
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
+            const SizedBox(width: 6),
+          ],
           Expanded(
             child: _buildWorkbenchTabButton(
               theme: theme,
               tab: _JobWorkbenchTab.products,
               icon: Icons.shopping_basket_outlined,
-              label: 'Productos y Servicios',
+              label: _jobType == JobType.sale
+                  ? 'Productos y cobro'
+                  : 'Productos y Servicios',
             ),
           ),
         ],
@@ -13127,12 +13192,39 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
+        ] else if (_jobType == JobType.sale) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.shopping_bag_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Venta / cobro · Sin bicicleta ni componente recibido',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
     );
   }
 
   Widget _buildGeneralSection(ThemeData theme) {
+    if (_jobType == JobType.sale) {
+      return _buildSaleGeneralSection(theme);
+    }
+
     // Get current bike tab (if any)
     final selectedTab = _currentBikeTab;
     final warrantySource = _selectedWarrantySource;
@@ -13536,6 +13628,56 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
+  Widget _buildSaleGeneralSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.jobId == null) ...[
+          _buildJobTypeSelector(),
+          const SizedBox(height: 16),
+        ] else ...[
+          _buildJobTypeBadge(),
+          const SizedBox(height: 16),
+        ],
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.28),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.18),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.payments_outlined, color: theme.colorScheme.primary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Registra los productos en la pestaña Productos y Servicios. '
+                  'La factura vinculada controla los abonos y el saldo; este '
+                  'trabajo no recibe un objeto ni usa estados mecánicos.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _technicianNotesController,
+          decoration: const InputDecoration(
+            labelText: 'Acuerdo de pago / nota interna (opcional)',
+            hintText: 'Ej.: abonará \$10.000 cada semana',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.notes_outlined),
+          ),
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
   Widget _buildEmptyObjectGeneralNotice(ThemeData theme) {
     var icon = Icons.pedal_bike_outlined;
     var message =
@@ -13663,6 +13805,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       }
 
       _jobType = type;
+      if (type == JobType.sale) {
+        _selectedWorkbenchTab = _JobWorkbenchTab.general;
+      }
       _warrantyOutcome = null;
       _quotationStatus =
           type == JobType.quotation ? QuotationStatus.pending : null;
@@ -13825,6 +13970,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         return 'Propuesta para enviar al cliente: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.';
       case JobType.warranty:
         return 'Reclamo vinculado a un trabajo entregado. La cobertura se decide y registra por separado.';
+      case JobType.sale:
+        return 'Venta de productos con factura y seguimiento de abonos. No recibe bicicleta ni componente.';
     }
   }
 
@@ -13886,6 +14033,8 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         return Icons.request_quote_outlined;
       case JobType.itemService:
         return Icons.build_circle_outlined;
+      case JobType.sale:
+        return Icons.shopping_bag_outlined;
     }
   }
 

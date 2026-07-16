@@ -35281,5 +35281,7 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Keep the tenant-scoped expense dashboard RPC authenticated-only even when
 -- hosted Supabase default privileges directly grant new functions to API roles.
 \ir ../migrations/20260716100000_restrict_expense_period_details_acl.sql
+\ir ../migrations/20260716110000_add_mechanic_job_sale_collection_mode.sql
+\ir ../migrations/20260716111000_classify_pg00465_sale_collection.sql
 
 commit;

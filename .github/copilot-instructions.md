@@ -265,8 +265,9 @@ workflow UI changes.
 ## Workshop Job Mode Guardrail
 
 - The canonical job-mode contract is orthogonal: `workflow_kind` owns
-  service/quotation/warranty behavior and `intake_kind` owns whether the shop
-  actually received a bicycle, only a loose component, or no object yet.
+  service/quotation/warranty/sale behavior and `intake_kind` owns whether the
+  shop actually received a bicycle, only a loose component, no object by
+  design, or has not classified the intake yet.
   `job_type` remains a backwards-compatible facade; do not build new financial
   or bicycle-count logic from it alone.
 - A component intake means the customer left only that component. It must not
@@ -274,6 +275,19 @@ workflow UI changes.
 - A quotation is non-posting planning state. It may contain proposed
   `mechanic_job_items`, but it must not link an invoice or create stock,
   revenue, IVA, receivable, COGS, journal, or payment effects.
+- A workshop `sale/none` row is an operational collection wrapper for a real
+  product sale where the customer left no bicycle or loose component. Its
+  persisted legacy facade remains `job_type = service` for rollback safety.
+  It must not expose diagnosis, enter bicycle/component counts, start a service
+  warranty, or create a parallel payment schedule. Its linked sales invoice
+  exclusively owns products, stock, revenue, IVA, receivable, partial payments,
+  balance and accounting. A partially paid sale remains active; it leaves the
+  active workshop list when the authoritative invoice is fully paid.
+- Never infer that every product-only job without a bicycle is a sale. Resolve
+  an ambiguous historical row through the audited
+  `classify_mechanic_job_as_sale` command (or an exact one-row fingerprinted
+  repair), preserving all existing invoice, payment, inventory and journal
+  evidence byte-for-byte.
 - Quotation decisions use `transition_mechanic_job_quotation`; approved quotes
   convert through `convert_mechanic_job_to_billable`. Billable document creation
   uses `create_billable_invoice_from_mechanic_job`. Do not restore client-side

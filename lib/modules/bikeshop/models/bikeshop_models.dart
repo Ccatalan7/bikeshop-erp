@@ -2226,7 +2226,13 @@ enum JobType {
   service,
   warranty,
   quotation,
-  itemService;
+  itemService,
+
+  /// UI-only facade for a product sale tracked in the workshop jobs table.
+  ///
+  /// The legacy `job_type` database column remains `service`; the canonical
+  /// `workflow_kind = sale` value is what distinguishes this mode on read.
+  sale;
 
   String get displayName {
     switch (this) {
@@ -2238,6 +2244,8 @@ enum JobType {
         return 'Presupuesto';
       case JobType.itemService:
         return 'Componente';
+      case JobType.sale:
+        return 'Venta / cobro';
     }
   }
 
@@ -2251,6 +2259,8 @@ enum JobType {
         return 'quotation';
       case JobType.itemService:
         return 'item_service';
+      case JobType.sale:
+        return 'service';
     }
   }
 
@@ -2262,6 +2272,8 @@ enum JobType {
         return JobType.quotation;
       case 'item_service':
         return JobType.itemService;
+      case 'sale':
+        return JobType.sale;
       default:
         return JobType.service;
     }
@@ -2270,14 +2282,15 @@ enum JobType {
 
 /// Canonical lifecycle axis for a workshop record.
 ///
-/// [JobType] remains the backwards-compatible four-button UI/database value,
-/// while this enum answers the independent question "which workflow is this
-/// record currently following?". In particular, a component repair is still
-/// a service workflow.
+/// [JobType] remains the backwards-compatible UI facade while this enum answers
+/// the independent question "which workflow is this record currently
+/// following?". In particular, a component repair is still a service workflow,
+/// and a sale keeps `job_type = service` while persisting `workflow_kind = sale`.
 enum JobWorkflowKind {
   service,
   quotation,
-  warranty;
+  warranty,
+  sale;
 
   String get dbValue => name;
 
@@ -2289,6 +2302,8 @@ enum JobWorkflowKind {
         return 'Presupuesto';
       case JobWorkflowKind.warranty:
         return 'Garantía';
+      case JobWorkflowKind.sale:
+        return 'Venta / cobro';
     }
   }
 
@@ -2300,6 +2315,8 @@ enum JobWorkflowKind {
         return JobWorkflowKind.quotation;
       case 'warranty':
         return JobWorkflowKind.warranty;
+      case 'sale':
+        return JobWorkflowKind.sale;
       default:
         return null;
     }
@@ -2314,6 +2331,8 @@ enum JobWorkflowKind {
       case JobType.service:
       case JobType.itemService:
         return JobWorkflowKind.service;
+      case JobType.sale:
+        return JobWorkflowKind.sale;
     }
   }
 
@@ -2332,7 +2351,8 @@ enum JobWorkflowKind {
 enum JobIntakeKind {
   bike,
   component,
-  unspecified;
+  unspecified,
+  none;
 
   String get dbValue => name;
 
@@ -2344,6 +2364,8 @@ enum JobIntakeKind {
         return 'Componente';
       case JobIntakeKind.unspecified:
         return 'Sin clasificar';
+      case JobIntakeKind.none:
+        return 'Sin objeto recibido';
     }
   }
 
@@ -2355,6 +2377,8 @@ enum JobIntakeKind {
         return JobIntakeKind.component;
       case 'unspecified':
         return JobIntakeKind.unspecified;
+      case 'none':
+        return JobIntakeKind.none;
       default:
         return null;
     }
@@ -2369,6 +2393,7 @@ enum JobIntakeKind {
     String? subjectId,
     String? subjectNotes,
   }) {
+    if (jobType == JobType.sale) return JobIntakeKind.none;
     if (jobType == JobType.itemService) return JobIntakeKind.component;
     if (bikeId != null && bikeId.trim().isNotEmpty) {
       return JobIntakeKind.bike;
@@ -2417,6 +2442,9 @@ bool _jobModeNeedsReview({
     case JobType.warranty:
       return workflowKind != JobWorkflowKind.warranty ||
           intakeKind == JobIntakeKind.unspecified;
+    case JobType.sale:
+      return workflowKind != JobWorkflowKind.sale ||
+          intakeKind != JobIntakeKind.none;
   }
 }
 
@@ -2663,7 +2691,8 @@ class MechanicJobWarrantySourceObject {
   final String? subjectId;
   final String? subjectNotes;
 
-  bool get isValid => intakeKind != JobIntakeKind.unspecified;
+  bool get isValid =>
+      intakeKind == JobIntakeKind.bike || intakeKind == JobIntakeKind.component;
   bool get isBike => intakeKind == JobIntakeKind.bike;
   bool get isComponent => intakeKind == JobIntakeKind.component;
 
@@ -2918,8 +2947,8 @@ class MechanicJob {
   final String?
       bikeId; // nullable: item_service / quotation / warranty jobs may not have a bike
   final String? servicePackageId;
-  // Legacy four-button mode plus its canonical independent workflow/intake
-  // axes. The axes are what downstream counting and lifecycle logic consume.
+  // Legacy job_type facade plus its canonical independent workflow/intake axes.
+  // The axes are what downstream counting and lifecycle logic consume.
   final JobType jobType;
   final JobWorkflowKind workflowKind;
   final JobIntakeKind intakeKind;
@@ -3093,13 +3122,15 @@ class MechanicJob {
           JobSubject.fromJson(json['subject'] as Map<String, dynamic>);
     }
 
-    final jobType = JobType.fromDbValue(json['job_type']?.toString());
+    final legacyJobType = JobType.fromDbValue(json['job_type']?.toString());
     final bikeId = json['bike_id']?.toString();
     final subjectId = json['subject_id']?.toString();
     final subjectNotes = json['subject_notes']?.toString();
     final workflowKind =
         JobWorkflowKind.tryFromDbValue(json['workflow_kind']?.toString()) ??
-            JobWorkflowKind.fromLegacyJobType(jobType);
+            JobWorkflowKind.fromLegacyJobType(legacyJobType);
+    final jobType =
+        workflowKind == JobWorkflowKind.sale ? JobType.sale : legacyJobType;
     final intakeKind =
         JobIntakeKind.tryFromDbValue(json['intake_kind']?.toString()) ??
             JobIntakeKind.fromLegacyJobType(
@@ -3437,6 +3468,8 @@ class MechanicJob {
   bool get isQuotationWorkflow => workflowKind == JobWorkflowKind.quotation;
 
   bool get isWarrantyWorkflow => workflowKind == JobWorkflowKind.warranty;
+
+  bool get isSaleWorkflow => workflowKind == JobWorkflowKind.sale;
 
   bool get isBillableServiceWorkflow => workflowKind == JobWorkflowKind.service;
 

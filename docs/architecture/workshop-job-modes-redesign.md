@@ -35,7 +35,8 @@ Esa mezcla provoca actualmente:
 
 ## 2. Resultado esperado
 
-Los trabajadores seguirán viendo los cuatro accesos conocidos:
+Los trabajadores seguirán usando la misma ficha y tabla, ahora con cinco
+accesos explícitos:
 
 | Opción visible | Significado operativo | Factura | Inventario / contabilidad |
 |---|---|---|---|
@@ -43,6 +44,7 @@ Los trabajadores seguirán viendo los cuatro accesos conocidos:
 | Componente | El cliente dejó solo una rueda, horquilla u otro componente | Sí, sin aumentar el contador de bicicletas | Propiedad exclusiva de la factura |
 | Presupuesto | Propuesta comercial; todavía no existe recepción de un objeto ni obligación de cobro | No | No reserva, descuenta ni contabiliza stock |
 | Garantía | Reclamo vinculado a un trabajo entregado previamente | Solo respaldo interno si está cubierta; factura cobrable si no está cubierta | La factura asociada sigue siendo el único dueño del movimiento y asiento |
+| Venta / cobro | Venta de producto registrada en la tabla sin bicicleta ni componente recibido | Sí; admite abonos parciales | Propiedad exclusiva de la factura y sus pagos |
 
 No se agregará otra columna permanente a la tabla. La diferencia se comunicará
 en los chips, íconos, textos secundarios, menús y acciones existentes.
@@ -52,8 +54,8 @@ en los chips, íconos, textos secundarios, menús y acciones existentes.
 Se conservará `job_type` por compatibilidad, pero se introducirán dos ejes
 canónicos aditivos:
 
-- `workflow_kind`: `service`, `quotation` o `warranty`;
-- `intake_kind`: `bike`, `component` o `unspecified`.
+- `workflow_kind`: `service`, `quotation`, `warranty` o `sale`;
+- `intake_kind`: `bike`, `component`, `none` o `unspecified`.
 
 Mapeo compatible:
 
@@ -63,6 +65,7 @@ Mapeo compatible:
 | `item_service` | `service` | `component` |
 | `quotation` | `quotation` | `unspecified`, hasta su conversión |
 | `warranty` | `warranty` | heredado del trabajo original |
+| `service` (fachada compatible) | `sale` | `none` |
 
 Se agregarán además:
 
@@ -180,6 +183,17 @@ Los eventos cubrirán como mínimo:
 6. Conservar siempre el trabajo original, la ventana evaluada, el actor, la
    decisión y la justificación.
 
+### 5.5 Venta / cobro
+
+1. Seleccionar cliente y al menos un producto de catálogo.
+2. Guardar sin bicicleta, componente, diagnóstico ni planificación mecánica.
+3. Crear la factura normal; stock, ingreso, IVA, cuenta por cobrar y pagos
+   continúan siendo propiedad exclusiva de ella.
+4. Registrar cada abono desde el panel de pago existente. Un saldo parcial
+   mantiene la venta en `Activos`; saldo cero la retira de esa vista.
+5. Un texto como “$10.000 semanal” es una nota operativa, nunca un segundo
+   ledger de cuotas.
+
 ## 6. Diseño de la tabla única
 
 No se agregan columnas. Se reutilizan las existentes así:
@@ -188,12 +202,14 @@ No se agregan columnas. Se reutilizan las existentes así:
   - bicicleta real: ícono y nombre habitual;
   - componente: ícono de herramienta y nombre del componente;
   - presupuesto: ícono de documento y descripción resumida;
+  - venta/cobro: ícono de venta, producto resumido y `Sin objeto recibido`;
   - ambiguo legado: texto explícito `Clasificación pendiente`, nunca `—`.
 - `Estado`: mantiene el estado operativo y añade un sublabel compacto para el
   estado comercial o de garantía cuando corresponde.
 - `Factura`:
   - presupuesto: chip `Presupuesto` que descarga/abre su PDF;
   - servicio/componente: estado real de la factura;
+  - venta/cobro: estado real, abono y saldo de la misma factura;
   - garantía cubierta: `Respaldo interno`;
   - garantía pendiente: `En evaluación`, sin fingir que existe una factura.
 - menú `⋮`:
@@ -211,10 +227,12 @@ Los contadores quedan definidos así:
 - `Ítems`: trabajos de componente;
 - `Presupuestos`: `workflow_kind = quotation`;
 - `Garantías`: reclamos de garantía activos según su fase operativa.
+- `Ventas / cobros`: `workflow_kind = sale`; no incrementan los contadores de
+  bicicletas, ítems recibidos ni garantías.
 
 ## 7. Formulario y navegación
 
-- Mantener los cuatro botones y el layout general conocido.
+- Mantener el layout general conocido y mostrar los cinco modos.
 - Agregar una explicación de una línea bajo cada modo seleccionado.
 - Mostrar únicamente campos pertinentes al modo.
 - El selector de tipo se bloquea después de guardar; los cambios de obligación
@@ -228,6 +246,9 @@ Los contadores quedan definidos así:
   cliente; para componente acepta un sujeto activo del tenant o una descripción
   manual. La acción admite una razón de auditoría y llama al comando idempotente
   `classify_mechanic_job_intake`.
+- Para una venta sin objeto, la misma revisión llama al comando hermano
+  `classify_mechanic_job_as_sale`; nunca convierte todos los casos ambiguos por
+  inferencia.
 - Si falla la carga opcional del catálogo de componentes, la descripción manual
   sigue disponible. Ningún error de catálogo convierte ni borra el trabajo.
 - En errores o respuestas inciertas, mantener el formulario y datos visibles;
@@ -281,6 +302,8 @@ No debe incluir:
 - Un presupuesto no crea reservas contables implícitas ni stock comprometido.
 - La conversión copia las líneas preservando sus IDs técnicos y luego usa el
   bridge bidireccional existente con la factura.
+- `sale/none` usa exactamente el mismo bridge, pago parcial y ledger de factura;
+  no crea tablas paralelas de saldo, inventario o contabilidad.
 
 ## 10. Backfill y compatibilidad histórica
 
@@ -371,7 +394,7 @@ Hallazgos de producción que guían el backfill inicial (snapshot 2026-07-15):
    y asientos.
 2. Aplicar migración aditiva local y ejecutar pgTAP focalizado y suite completa.
 3. Ejecutar analyzer/tests Flutter y tests de arquitectura.
-4. Verificar los cuatro modos en browser local por el camino normal del
+4. Verificar los cinco modos en browser local por el camino normal del
    trabajador.
 5. Aplicar la migración en producción mediante el runbook autorizado.
 6. Ejecutar invariantes posteriores y comparar el fingerprint.
@@ -472,7 +495,7 @@ evidencia. Una falla de migración revierte la transacción completa.
 
 El rediseño está terminado solo cuando:
 
-- los cuatro modos funcionan de punta a punta en la tabla única;
+- los cinco modos funcionan de punta a punta en la tabla única;
 - presupuesto tiene PDF propio y nunca se presenta como factura;
 - conversión es atómica, auditable e idempotente;
 - componente representa una recepción física sin bicicleta y no altera el

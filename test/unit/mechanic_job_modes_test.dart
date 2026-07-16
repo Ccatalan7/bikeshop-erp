@@ -25,6 +25,26 @@ Map<String, dynamic> _baseJobJson({
 
 void main() {
   group('canonical workshop mode axes', () {
+    test('sale uses canonical axes while keeping the legacy service facade',
+        () {
+      final job = MechanicJob.fromJson({
+        ..._baseJobJson(jobType: 'service'),
+        'workflow_kind': 'sale',
+        'intake_kind': 'none',
+        'mode_needs_review': false,
+      });
+
+      expect(job.jobType, JobType.sale);
+      expect(job.workflowKind, JobWorkflowKind.sale);
+      expect(job.intakeKind, JobIntakeKind.none);
+      expect(job.requiresBike, isFalse);
+      expect(job.modeNeedsReview, isFalse);
+      expect(job.toJson(forUpdate: true)['job_type'], 'service');
+      expect(job.toJson(forUpdate: true)['workflow_kind'], 'sale');
+      expect(job.toJson(forUpdate: true)['intake_kind'], 'none');
+      expect(JobType.fromDbValue('sale'), JobType.sale);
+    });
+
     test('component repair is a service workflow without bicycle intake', () {
       final job = MechanicJob.fromJson({
         ..._baseJobJson(jobType: 'item_service', subjectId: 'subject-wheel'),

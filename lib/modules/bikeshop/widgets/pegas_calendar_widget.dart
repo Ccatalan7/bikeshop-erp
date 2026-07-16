@@ -317,6 +317,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   List<MechanicJob> _getJobsForDate(DateTime date) {
     return _jobs.where((job) {
+      if (job.isSaleWorkflow) return false;
       final matchesDelivery = _isSameDay(job.deliveryDeadline, date);
       final matchesDiagnostic = _isSameDay(job.diagnosticDeadline, date);
       return matchesDelivery || matchesDiagnostic;
