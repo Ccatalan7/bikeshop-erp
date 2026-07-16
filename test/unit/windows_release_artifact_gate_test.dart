@@ -61,6 +61,18 @@ void main() {
     expect(workflow, contains('--target "\$GITHUB_SHA"'));
   });
 
+  test('release publication binds GitHub CLI to the repository explicitly', () {
+    expect(workflow, contains('GH_REPO: \${{ github.repository }}'));
+    expect(
+      workflow,
+      contains('gh release view "\$RELEASE_TAG" --repo "\$GH_REPO"'),
+    );
+    expect(
+      RegExp(r'--repo "\$GH_REPO"').allMatches(workflow).length,
+      greaterThanOrEqualTo(3),
+    );
+  });
+
   test('developer publish helper opts into the guarded publish run', () {
     expect(publishHelper, contains('-f publish_release=true'));
     expect(publishHelper, contains("-notlike 'Windows publish*'"));

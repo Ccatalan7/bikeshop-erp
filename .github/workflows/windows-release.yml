@@ -235,6 +235,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           ZIP_NAME: ${{ needs.build.outputs.zip_name }}
           APP_VERSION: ${{ needs.build.outputs.app_version }}
@@ -254,10 +255,13 @@ jobs:
           Source commit: $GITHUB_SHA
           EOF
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist/* --clobber
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* \
+              --repo "$GH_REPO" \
+              --clobber
           else
             gh release create "$RELEASE_TAG" dist/* \
+              --repo "$GH_REPO" \
               --target "$GITHUB_SHA" \
               --title "Vinabike ERP Windows $APP_VERSION ($GITHUB_RUN_NUMBER)" \
               --notes-file "$notes_file"
