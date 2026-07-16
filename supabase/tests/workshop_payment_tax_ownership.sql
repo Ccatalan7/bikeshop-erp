@@ -876,7 +876,7 @@ where tenant_id = '99942000-0000-4000-8000-000000000001';
 
 select set_config('app.allow_legacy_duplicate_invoice_number', 'true', true);
 alter table public.sales_invoices
-  drop constraint sales_invoices_tenant_id_invoice_number_key;
+  drop constraint if exists sales_invoices_tenant_id_invoice_number_key;
 insert into public.sales_invoices(
   id, tenant_id, invoice_number, status, date,
   subtotal, net_amount, iva_amount, total, paid_amount, balance,

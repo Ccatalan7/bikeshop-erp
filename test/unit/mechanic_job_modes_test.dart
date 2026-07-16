@@ -182,6 +182,9 @@ void main() {
       final source = File(
         'lib/modules/bikeshop/services/bikeshop_service.dart',
       ).readAsStringSync();
+      final quotationCoordinator = File(
+        'lib/modules/bikeshop/services/mechanic_job_quotation_command_coordinator.dart',
+      ).readAsStringSync();
 
       final invoiceStart = source.indexOf(
         'Future<String> createInvoiceFromJob',
@@ -191,14 +194,14 @@ void main() {
         invoiceStart,
       );
       final conversionStart = source.indexOf(
-        'Future<MechanicJob> convertToBillableJob',
+        'Future<MechanicJobQuotationCommandResult> convertToBillableJob',
       );
       final conversionEnd = source.indexOf(
-        '/// Records a warranty decision',
+        '/// Updates quotation state',
         conversionStart,
       );
       final quotationStart = source.indexOf(
-        'Future<void> updateQuotationStatus',
+        'Future<MechanicJobQuotationCommandResult> updateQuotationStatus',
       );
       final quotationEnd = source.indexOf('@override', quotationStart);
 
@@ -217,18 +220,45 @@ void main() {
         invoiceCommand,
         contains("'create_billable_invoice_from_mechanic_job'"),
       );
-      expect(conversionCommand, contains("'convert_mechanic_job_to_billable'"));
+      expect(
+        quotationCoordinator,
+        contains("'convert_mechanic_job_to_billable'"),
+      );
       expect(
         conversionCommand,
-        contains("'p_operation_key': const Uuid().v4()"),
+        contains('required String operationKey'),
       );
+      expect(conversionCommand, contains('operationKey: operationKey'));
       expect(conversionCommand, isNot(contains("from('mechanic_jobs')")));
-      expect(quotationCommand, contains("'transition_mechanic_job_quotation'"));
+      expect(
+        source,
+        isNot(contains('Future<void> updateWarrantyOutcome(')),
+        reason:
+            'Warranty decisions must receive a durable caller-owned operation key.',
+      );
+      expect(
+        quotationCoordinator,
+        contains("'transition_mechanic_job_quotation'"),
+      );
       expect(
         quotationCommand,
-        contains("'p_operation_key': const Uuid().v4()"),
+        contains('required String operationKey'),
       );
-      expect(quotationCommand, isNot(contains("from('mechanic_jobs')")));
+      expect(quotationCommand, contains('operationKey: operationKey'));
+      expect(
+        source,
+        contains(".from('mechanic_job_mode_events')"),
+      );
+      expect(source, contains(".eq('job_id', jobId)"));
+      expect(source, contains(".eq('tenant_id', tenantId)"));
+      expect(
+        quotationCommand,
+        contains('_quotationCommandCoordinator.execute(request)'),
+      );
+      expect(
+        quotationCommand,
+        isNot(contains(".update({'quotation_status'")),
+      );
     },
   );
 }

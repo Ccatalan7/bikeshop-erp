@@ -117,12 +117,13 @@ Historical corrections are outside this control and require independently proven
   New duplicate sales invoice numbers are rejected, but existing duplicates
   remain valid historical documents and are isolated by UUID.
 
-## Pending workshop-mode hardening — 2026-07-16
+## Deployed workshop-mode hardening — 2026-07-16
 
-The following release-candidate migrations are represented in the canonical
-schema but remain **pending in production**. None may be reported as active
-until the final repeatable gate, live fingerprint, per-migration readback and
-employee-path smoke have passed:
+The following migrations are represented in the canonical schema and are
+deployed, registered and read back in production. Before deployment, two fresh
+canonical rebuilds each passed 52 pgTAP files/1.210 assertions. The post-write
+health check has zero critical failures; the 22 historical negative-stock rows
+remain a known operational warning rather than an inferred repair target:
 
 - `20260716030000_harden_quotation_approval_contract.sql` keeps quotations
   non-posting, freezes/revalidates the approved commercial snapshot and blocks
@@ -151,6 +152,46 @@ employee-path smoke have passed:
   invoice JSON omits the mirror and rejects invalid/cross-job/cross-tenant
   explicit references. It has **no backfill** and performs no historical data
   rewrite when installed.
+
+Deployed contract `20260716070000_harden_warranty_source_object_contract.sql`
+has **no backfill**. It makes a warranty claim inherit the canonical
+bicycle/component intake of its original job and rejects stale UI objects
+before any covered/not-covered financial decision. It replaces a view,
+functions and row guards but performs no business-row DML when installed. The
+decision locks the linked invoice in the payment-integrity order: invoice paid
+status, positive paid amount, or an active payment blocks entering or leaving
+`covered`; an already-`not_covered` paid historical decision remains an audited
+no-op and refund/reversal stays invoice-owned. It also
+replaces the shared job-to-invoice sync and guarded billable-invoice command so
+an existing invoice is always locked before its job. Payment validates an exact
+commercial snapshot first. Once settlement starts, both job and invoice
+commercial rows, payments, stock and journals are exact no-ops; ordinary saves
+never become a hidden historical cleanup. This preserves legacy technical
+metadata and avoids both financial rewrites and late false save failures.
+
+Deployed contract `20260716080000_add_canonical_mechanic_job_status_transition.sql`
+also has **no backfill**. It replaces client-owned status/timestamp writes with
+one replay-safe server command and append-only receipt. The command locks a
+linked invoice before its job, permits paid normal services to continue their
+operational lifecycle, and blocks a covered-warranty status transition before
+its invoice posting/reversal trigger when paid status, positive paid amount or
+an active payment exists. Same-state requests are durable no-op receipts and
+ordinary job saves omit lifecycle columns entirely.
+
+Deployed contract `20260716090000_complete_non_warranty_nested_invoice_traces.sql`
+closes each ordinary service/component invoice trace root created inside a job
+status transition before restoring its parent context. A covered warranty
+retains the child root only when an exact transaction-local tenant/job/invoice
+marker identifies the explicit invoice-owned inventory/cost writer that will
+complete it. The migration replaces the warranty lifecycle and trace-frame
+restorer functions only and performs no business-row rewrite or historical
+trace backfill.
+
+The only backfill, `20260716035000`, matched and updated exactly PG-00468,
+appended its immutable event and left PG-00455 unchanged. The before/after
+business fingerprint stayed at 747 sales payments totaling CLP 18.130.590,
+2.489 stock movements and 2.160 balanced journals totaling CLP 74.607.147,70
+on each side. No target-job stock or journal evidence was created.
 
 The reviewed production repairs on 2026-07-15 produced this evidence:
 

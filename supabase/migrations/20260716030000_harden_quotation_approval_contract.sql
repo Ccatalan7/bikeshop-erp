@@ -1,4 +1,6 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: functions, active-bike guards, event constraint and
+-- all four replacement triggers were read back after the transaction committed.
 --
 -- Purpose:
 --   1. Keep workshop quotations non-posting and non-taxed until their

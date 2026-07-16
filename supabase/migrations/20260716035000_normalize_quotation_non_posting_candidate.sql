@@ -1,4 +1,7 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: exactly PG-00468 matched and was normalized; its
+-- immutable event exists, PG-00455 was unchanged, and payment/stock/journal
+-- fingerprints were identical before and after.
 --
 -- Purpose:
 --   Normalize only the independently inspected PG-00468 quotation after the

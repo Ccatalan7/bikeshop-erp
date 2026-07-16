@@ -1,4 +1,6 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: exact invoice/payment operation-key lookup and the
+-- completed-child requirement were read back; no wall-clock range remains.
 --
 -- Manual online-payment confirmation already creates deterministic, unique
 -- child operation keys. Resolve those exact identities instead of comparing

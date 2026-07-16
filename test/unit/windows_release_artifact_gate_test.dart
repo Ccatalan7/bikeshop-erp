@@ -1,0 +1,82 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  late String workflow;
+  late String integrityWorkflow;
+  late String publishHelper;
+  late String distributionRunbook;
+
+  setUpAll(() {
+    workflow = File('.github/workflows/windows-release.yml').readAsStringSync();
+    integrityWorkflow =
+        File('.github/workflows/erp-integrity-gate.yml').readAsStringSync();
+    publishHelper =
+        File('scripts/publish_windows_update.ps1').readAsStringSync();
+    distributionRunbook =
+        File('docs/WINDOWS_DESKTOP_DISTRIBUTION.md').readAsStringSync();
+  });
+
+  test('manual Windows dispatch fails safe as artifact-only by default', () {
+    expect(
+      workflow,
+      contains(RegExp(
+        r'publish_release:\s*\n'
+        r'\s+description:.*\n'
+        r'\s+required: true\s*\n'
+        r'\s+type: boolean\s*\n'
+        r'\s+default: false',
+      )),
+    );
+    expect(workflow, contains('permissions:\n  contents: read'));
+    expect(
+      workflow,
+      contains(
+        "if: \${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}",
+      ),
+    );
+
+    final publishJob = workflow.indexOf('\n  publish:');
+    final artifactUpload = workflow.indexOf('actions/upload-artifact@v4');
+    final releaseMutation = workflow.indexOf('gh release create');
+    final releaseUpload = workflow.indexOf('gh release upload');
+    expect(publishJob, greaterThan(artifactUpload));
+    expect(releaseMutation, greaterThan(publishJob));
+    expect(releaseUpload, greaterThan(publishJob));
+    expect(
+      workflow.substring(0, publishJob),
+      isNot(contains('gh release ')),
+    );
+    expect(RegExp(r'environment: Production').allMatches(workflow).length, 1);
+    expect(RegExp(r'contents: write').allMatches(workflow).length, 1);
+  });
+
+  test('Windows artifacts are built from and identify the exact run SHA', () {
+    expect(workflow, contains('ref: \${{ github.sha }}'));
+    expect(integrityWorkflow, contains('ref: \${{ github.sha }}'));
+    expect(workflow, contains('windows-release-manifest.json'));
+    expect(workflow, contains('commit = \$env:GITHUB_SHA'));
+    expect(workflow, contains('sha256sum --check'));
+    expect(workflow, contains('--target "\$GITHUB_SHA"'));
+  });
+
+  test('developer publish helper opts into the guarded publish run', () {
+    expect(publishHelper, contains('-f publish_release=true'));
+    expect(publishHelper, contains("-notlike 'Windows publish*'"));
+  });
+
+  test('CI validates the Windows bundle without contacting production', () {
+    expect(
+      workflow,
+      contains('Validate Windows runtime bundle without launching it'),
+    );
+    expect(workflow, contains("'vinabike_erp.exe'"));
+    expect(workflow, contains("'flutter_windows.dll'"));
+    expect(workflow.toLowerCase(), isNot(contains('start-process')));
+    expect(
+      distributionRunbook,
+      contains('initializes the production Supabase fallback'),
+    );
+  });
+}

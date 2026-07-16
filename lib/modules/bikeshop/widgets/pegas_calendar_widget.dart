@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For WhatsApp icon
+import 'package:uuid/uuid.dart';
 
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
@@ -363,6 +364,11 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     }
     return _getStatusText(job.status);
   }
+
+  bool _isJobCurrentlyDelivered(MechanicJob job) =>
+      job.status == JobStatus.entregado ||
+      job.customStatus?.triggersDelivery == true ||
+      job.customStatus?.code.trim().toLowerCase() == 'entregado';
 
   String _getStatusText(JobStatus status) {
     switch (status) {
@@ -884,7 +890,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   isHighlighted:
                       _isSameDay(job.deliveryDeadline, _selectedDate),
                   isOverdue: job.deliveryDeadline!.isBefore(DateTime.now()) &&
-                      job.status != JobStatus.entregado,
+                      !_isJobCurrentlyDelivered(job),
                 ),
               ],
             ],
@@ -1646,35 +1652,26 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       MechanicJob job, JobStatusCustom newStatus) async {
     if (newStatus.id == job.statusId) return;
 
-    final jobStatusService = context.read<JobStatusService>();
-
     try {
-      final success =
-          await jobStatusService.updateJobStatus(job.id!, newStatus.id!);
-
-      if (success) {
-        setState(() {
-          _selectedJob = job.copyWith(
-            statusId: newStatus.id,
-            customStatus: newStatus,
-            statusUpdatedAt: DateTime.now(),
+      await context.read<BikeshopService>().transitionJobStatus(
+            job.id!,
+            newStatus.id!,
+            operationKey: const Uuid().v4(),
           );
-        });
-
-        if (_useExternalData) {
-          widget.onRefreshNeeded?.call();
-        } else {
-          await _loadJobs();
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Estado cambiado a ${newStatus.name}'),
-              backgroundColor: newStatus.colorValue,
-            ),
-          );
-        }
+      if (_useExternalData) {
+        widget.onRefreshNeeded?.call();
+      } else {
+        await _loadJobs();
+      }
+      if (mounted) {
+        final refreshed = _jobs.where((item) => item.id == job.id).firstOrNull;
+        if (refreshed != null) setState(() => _selectedJob = refreshed);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Estado cambiado a ${newStatus.name}'),
+            backgroundColor: newStatus.colorValue,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

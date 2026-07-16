@@ -431,6 +431,10 @@ insert into public.sales_invoices(
     ))
   );
 
+-- Link deliberately malformed fixtures without invoking the deployed
+-- invoice-to-job bridge yet; the assertions below exercise that command
+-- explicitly and prove that each invalid mirror is rejected atomically.
+select set_config('app.syncing_job_to_invoice', 'true', true);
 update public.mechanic_jobs
 set invoice_id = case id
       when '99616600-0000-4000-8000-000000000063'::uuid
@@ -442,6 +446,7 @@ where id in (
   '99616600-0000-4000-8000-000000000063',
   '99616600-0000-4000-8000-000000000064'
 );
+select set_config('app.syncing_job_to_invoice', '', true);
 
 select throws_ok(
   $$select public.sync_invoice_items_to_job(

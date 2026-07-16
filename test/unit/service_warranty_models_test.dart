@@ -84,4 +84,78 @@ void main() {
       );
     },
   );
+
+  test('warranty source object replaces bike with component exactly', () {
+    const bikeSource = MechanicJobServiceWarranty(
+      jobId: 'source-bike',
+      customerId: 'customer-1',
+      bikeId: 'bike-1',
+      jobType: JobType.service,
+      intakeKind: JobIntakeKind.bike,
+    );
+    const componentSource = MechanicJobServiceWarranty(
+      jobId: 'source-component',
+      customerId: 'customer-1',
+      subjectId: 'subject-wheel',
+      jobType: JobType.itemService,
+      intakeKind: JobIntakeKind.component,
+    );
+
+    var selection = bikeSource.physicalObject;
+    expect(selection.isBike, isTrue);
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const ['bike-1'],
+      ),
+      isTrue,
+    );
+
+    selection = componentSource.physicalObject;
+    expect(selection.bikeId, isNull);
+    expect(selection.subjectId, 'subject-wheel');
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const [],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isTrue,
+    );
+    expect(
+      selection.matchesSelection(
+        selectedBikeIds: const ['bike-1'],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isFalse,
+      reason: 'a previous bicycle must never survive a component source',
+    );
+  });
+
+  test('warranty source object follows canonical intake over provenance ids',
+      () {
+    const missingSource = MechanicJobServiceWarranty(
+      jobId: 'source-missing',
+      customerId: 'customer-1',
+      jobType: JobType.service,
+    );
+    const mixedSource = MechanicJobServiceWarranty(
+      jobId: 'source-mixed',
+      customerId: 'customer-1',
+      bikeId: 'bike-1',
+      subjectId: 'subject-wheel',
+      jobType: JobType.itemService,
+      intakeKind: JobIntakeKind.component,
+    );
+
+    expect(missingSource.physicalObject.isValid, isFalse);
+    expect(mixedSource.physicalObject.isComponent, isTrue);
+    expect(mixedSource.physicalObject.bikeId, isNull);
+    expect(mixedSource.physicalObject.subjectId, 'subject-wheel');
+    expect(
+      mixedSource.physicalObject.matchesSelection(
+        selectedBikeIds: const [],
+        selectedSubjectId: 'subject-wheel',
+      ),
+      isTrue,
+    );
+  });
 }

@@ -1,8 +1,8 @@
 # Rediseño integral de modos de trabajo del taller
 
-**Estado:** release candidate parcialmente desplegado. La base 010/020 está
-activa en producción; las migraciones 030/035/040/050/060 y su cliente
-permanecen pendientes del gate final.
+**Estado:** contrato de base 010–100 desplegado, registrado y verificado en
+producción. El cliente rediseñado permanece pendiente de commit/publicación
+coordinada y smoke del binario exacto.
 
 **Fecha:** 2026-07-16
 
@@ -70,6 +70,8 @@ Se agregarán además:
 - `mode_review_reason`: explica por qué no se puede clasificar automáticamente;
 - un ledger append-only de eventos de modo y presupuesto, con actor, timestamp
   de servidor, clave idempotente, motivo y snapshot del registro/ítems.
+- un ledger append-only separado para cada transición operativa de estado, con
+  estado anterior/nuevo, actor, timestamp de servidor, request y resultado.
 
 Los eventos cubrirán como mínimo:
 
@@ -118,6 +120,10 @@ Los eventos cubrirán como mínimo:
     vacía o contiene `null`. Un valor explícito solo es válido si referencia una
     bicicleta vinculada al mismo trabajo y tenant; cualquier otro valor aborta
     la transacción.
+15. Los cambios operativos de estado usan un único comando idempotente que
+    deriva `status`, `status_id` y timestamps en el servidor. Guardar la ficha
+    no reenvía esas columnas; una garantía cubierta con evidencia de pago falla
+    antes de ejecutar efectos financieros.
 
 ## 5. Flujos de usuario
 
@@ -314,6 +320,33 @@ deliberadamente:
 - `20260716060000_preserve_workshop_invoice_bike_attribution.sql` reemplaza una
   función de sincronización y no contiene backfill: no reescribe el JSON de
   facturas ni la atribución histórica.
+- `20260716070000_harden_warranty_source_object_contract.sql` reemplaza la
+  vista/RPC de garantía, los dos entrypoints compartidos y agrega guards de
+  snapshot/pago; no contiene ningún backfill ni DML de negocio al instalar.
+  Expone `intake_kind` y hereda exactamente bicicleta o componente. Los caminos
+  RPC bloquean factura antes que trabajo, igual que pagos. Estado pagado,
+  `paid_amount` positivo o pago activo impiden entrar o salir de `Cubierto`.
+  Tras cualquier historia financiera, el sync genérico conserva byte por byte
+  ambos lados comerciales, pagos, stock y asientos: nunca limpia historia
+  antigua de forma implícita.
+- `20260716080000_add_canonical_mechanic_job_status_transition.sql` crea el
+  ledger inmutable y el comando exact-key de estado. No contiene backfill ni
+  DML de negocio al instalar. Bloquea factura antes que trabajo, usa el reloj
+  del servidor y convierte un cambio al mismo estado en un recibo no-op sin
+  disparar triggers de ciclo de vida.
+- `20260716090000_complete_non_warranty_nested_invoice_traces.sql` reemplaza
+  dos funciones de trigger existentes. El ciclo de garantía publica y restaura
+  un marcador transaccional exacto de tenant/trabajo/factura; el restaurador de
+  trazas completa en la misma transacción las raíces creadas por estados de
+  servicio/componente y conserva abierta únicamente la raíz que coincide con
+  ese marcador de garantía cubierta, porque todavía debe adjuntar stock/costo
+  desde su escritor invoice-owned. No reescribe filas de negocio ni ejecuta
+  backfill histórico.
+- `20260716100000_restrict_expense_period_details_acl.sql` corrige el privilegio
+  explícito que los defaults de Supabase podían conservar para `anon` y
+  `service_role` sobre el RPC `SECURITY DEFINER` del drill-down de gastos. Es
+  DDL de permisos solamente: conserva `authenticated`, no lee ni modifica filas
+  de negocio y no ejecuta backfill.
 
 Hallazgos de producción que guían el backfill inicial (snapshot 2026-07-15):
 
@@ -321,6 +354,9 @@ Hallazgos de producción que guían el backfill inicial (snapshot 2026-07-15):
 - dos trabajos de componente correctamente excluidos del contador;
 - un presupuesto canónico sin factura;
 - siete garantías con historia financiera heredada;
+- `PG-00248`: garantía pendiente con factura pagada; su factura debe seguir
+  visible y permanecer inmutable hasta una decisión/reverso financiero
+  explícito, nunca repararse mediante backfill;
 - `PG-00397`: evidencia suficiente de rueda/componente;
 - `PG-00455`: presupuesto válido que no debe ser modificado por 030;
 - `PG-00468`: único candidato conocido para la normalización acotada de 030;
@@ -347,18 +383,33 @@ Estado del rollout al 2026-07-16:
 - `20260716010000_redesign_mechanic_job_modes.sql`: desplegada y registrada;
 - `20260716020000_repair_nested_invoice_trace_context.sql`: desplegada,
   registrada y verificada con trazas completas;
-- `20260716030000_harden_quotation_approval_contract.sql`: **pendiente**;
+- `20260716030000_harden_quotation_approval_contract.sql`: desplegada,
+  registrada y leída de vuelta;
 - `20260716035000_normalize_quotation_non_posting_candidate.sql`:
-  **pendiente**;
+  desplegada y registrada; normalizó exactamente `PG-00468`, conservó
+  `PG-00455` y no cambió pagos, stock ni asientos;
 - `20260716040000_add_mechanic_job_intake_classification_command.sql`:
-  **pendiente**;
+  desplegada, registrada y verificada mediante RPC/ACL/guards;
 - `20260716050000_harden_online_manual_payment_trace_linkage.sql`:
-  **pendiente**;
+  desplegada, registrada y verificada sin correlación por reloj;
 - `20260716060000_preserve_workshop_invoice_bike_attribution.sql`:
-  **pendiente**;
-- cliente aislado con `Revisar modo` y contrato 030/035/040/050/060:
-  **pendiente de publicación**, después de las migraciones y del smoke normal
-  del trabajador.
+  desplegada, registrada y verificada; no ejecutó backfill;
+- `20260716070000_harden_warranty_source_object_contract.sql`: desplegada,
+  registrada y leída de vuelta; seis guards, RPC y ACL confirmados, sin
+  cambios en filas de negocio;
+- `20260716080000_add_canonical_mechanic_job_status_transition.sql`: desplegada,
+  registrada y leída de vuelta; ledger vacío al instalar, trigger inmutable,
+  RPC autenticado y lock de 750 ms confirmados;
+- `20260716090000_complete_non_warranty_nested_invoice_traces.sql`: desplegada,
+  registrada y leída de vuelta; publicador/consumidor del marcador exacto y
+  cierre de raíz ordinaria confirmados, sin trazas antiguas iniciadas;
+- `20260716100000_restrict_expense_period_details_acl.sql`: desplegada,
+  registrada y leída de vuelta; `authenticated` conserva `EXECUTE` y PUBLIC,
+  `anon` y `service_role` quedan bloqueados;
+- cliente aislado con `Revisar modo` y contrato
+  030/035/040/050/060/070/080/090/100:
+  **pendiente de publicación y smoke normal del trabajador**. La base ya es
+  compatible tanto con el cliente anterior como con el nuevo.
 
 No se eliminarán columnas ni funciones legadas durante esta fase. La reversión
 de UI puede hacerse sin perder datos; los eventos append-only permanecen como
@@ -386,6 +437,12 @@ evidencia. Una falla de migración revierte la transacción completa.
   factura no lo informa, y rechaza referencias explícitas inválidas o de otro
   trabajo/tenant;
 - garantía cubierta/no cubierta mantiene los invariantes existentes;
+- transición de estado deriva mirror/timestamps en el servidor, reusa la misma
+  clave ante ACK perdido y no altera pagos, stock ni asientos de un servicio
+  normal pagado;
+- cada update anidado de factura de servicio/componente deja una raíz de traza
+  completada; garantía cubierta conserva su raíz hasta que su escritor adjunta
+  los efectos de stock/costo y la completa;
 - eventos son inmutables y tenant-scoped;
 - backfill no cambia pagos, totales, stock ni balance de asientos.
 
@@ -422,6 +479,8 @@ El rediseño está terminado solo cuando:
   contador;
 - garantía conserva origen, plazo, decisión, motivo y respaldo financiero
   correcto;
+- tabla, lista, calendario y formularios usan el mismo comando de estado y no
+  existen escritores cliente directos de `mechanic_jobs.status`;
 - no hay divergencia entre trabajo, factura, inventario, pago y contabilidad;
 - el backfill de producción está aplicado y verificado con invariantes antes y
   después;
@@ -439,16 +498,15 @@ El rediseño está terminado solo cuando:
 - La reparación `20260716020000_repair_nested_invoice_trace_context.sql` también
   está desplegada. El readback confirmó cero raíces de operación incompletas y
   totales de stock, pagos y asientos sin cambios.
-- La migración 030 endurece aprobación/conversión de presupuestos: congela y
+- La migración 030 desplegada endurece aprobación/conversión de presupuestos: congela y
   vuelve a validar el snapshot comercial, valida sujetos activos del tenant y
-  mantiene un puente estrecho y auditado para clientes anteriores. Sigue
-  **pendiente en producción**. Instala sus funciones antes de solicitar una
+  mantiene un puente estrecho y auditado para clientes anteriores. Instala sus funciones antes de solicitar una
   ventana DDL mínima `ACCESS EXCLUSIVE NOWAIT`, de modo que contención operativa
-  causa un aborto limpio en vez de una espera que congele el taller.
-- La migración 035 contiene por separado la reparación acotada. Su único
-  candidato conocido es `PG-00468` y debe volver a comparar el fingerprint
-  exacto justo antes de escribir; `PG-00455` permanece como presupuesto válido
-  y no debe cambiar. Su lock `SHARE ROW EXCLUSIVE NOWAIT` permite lecturas y el
+  causa un aborto limpio en vez de una espera que congele el taller. El readback
+  confirmó las funciones, guards, constraint y cuatro triggers.
+- La migración 035 ejecutó por separado la reparación acotada. Comparó el
+  fingerprint exacto y normalizó únicamente `PG-00468`; `PG-00455` permaneció
+  como presupuesto válido sin cambios. Su lock `SHARE ROW EXCLUSIVE NOWAIT` permitió lecturas y el
   postflight exige evidencia inmutable y cero efectos financieros reejecutados.
 - La migración 040 y la UI `Revisar modo` resuelven solo registros
   `mode_needs_review` mediante un comando idempotente. Bicicleta exige propiedad
@@ -460,16 +518,42 @@ El rediseño está terminado solo cuando:
   operaciones hijas de factura/pago por su identidad determinística exacta y
   aborta atómicamente si falta una traza completa. No usa comparaciones de reloj
   o `created_at`, que pueden retroceder durante una corrección del host.
-- La migración 060 preserva el `job_bike_id` existente solo para el mismo ítem
+- La migración 060 desplegada preserva el `job_bike_id` existente solo para el mismo ítem
   estable cuando la factura omite el espejo; un ID explícito debe pertenecer al
   mismo trabajo/tenant. Es un reemplazo de función sin backfill ni cambios de
   datos al instalarse.
-- Existen contratos focalizados para estos comportamientos. El gate completo
-  repetible, el readback de cada migración y el smoke del camino normal del
-  trabajador siguen siendo requisitos previos; esta documentación no registra
-  un resultado final hasta que esa ejecución termine.
+- La migración 070 desplegada mantiene garantía, pago y sync bajo el mismo orden
+  de locks; sus RPC que esperan filas fijan `lock_timeout = 750ms` como
+  configuración de función, no solo durante la instalación.
+- La migración 080 desplegada centraliza todas las superficies de estado en un
+  RPC idempotente y ledger inmutable, sin backfill. El portal cliente conserva
+  historia de taller de solo lectura; se retiraron sus dos escritores directos
+  no ruteados en vez de debilitar la autorización del comando de empleados.
+- La migración 090 desplegada cierra la raíz contable anidada de cada cambio de
+  estado de servicio/componente, sin inventar movimientos o asientos, y deja la
+  garantía cubierta bajo su finalizador financiero explícito. Es reemplazo de
+  función sin reparación histórica.
+- La validación de release no usó staging ni una base reconstruida desde
+  `core_schema.sql`. Un dump read-only fresco del `public` productivo
+  (`xzdvtzdqjeyqxnkqprtf`, SHA-256
+  `8763682235c79cda166c9fa8c54a40db56ba23412bc5e5d046ccff94a041d608`)
+  se restauró en una base efímera; sobre ella se aplicaron solo 070–100 y los
+  15 contratos de taller/factura/pago/IVA/inventario/contabilidad aprobaron
+  594 assertions. Las mismas cuatro migraciones también se aplicaron
+  directamente al esquema live dentro de una transacción finalizada con
+  `ROLLBACK` antes del despliegue real.
+- En producción, el fingerprint de 16 tablas conservó exactamente los mismos
+  counts y digests después de cada migración. El health final quedó con cero
+  fallas críticas; conserva 22 existencias negativas históricas como
+  advertencia operativa conocida. El snapshot de pagos conserva 400 trabajos
+  enlazados, 194 diferencias exclusivamente históricas/pagadas y cero
+  diferencias abiertas o cobrables.
+- El fingerprint productivo posterior conservó 747 pagos por CLP 18.130.590,
+  2.489 movimientos y 2.160 asientos balanceados por CLP 74.607.147,70. La
+  normalización no creó ninguna de esas evidencias ni modificó sus totales.
 - El frontend vive en la rama aislada `codex/workshop-job-modes-release`, basada
   en `0b245de4`, para no incorporar cambios concurrentes del worktree operativo.
-  No debe publicarse hasta completar el gate de base de datos, aplicar y leer de
-  vuelta 030/035/040/050/060 y verificar por el camino normal del trabajador la
-  conversión de presupuesto y la clasificación `Revisar modo`.
+  Su dependencia de base ya está satisfecha; el recorrido local del trabajador
+  cubrió servicio, presupuesto, componente y garantía. Falta publicar el commit
+  exacto y verificar el artefacto distribuido, sin mezclar cambios del worktree
+  operativo.

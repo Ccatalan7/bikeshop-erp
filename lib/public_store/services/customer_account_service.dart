@@ -837,41 +837,4 @@ class CustomerAccountService extends ChangeNotifier {
             s['approved_by_customer'] != true)
         .toList();
   }
-
-  /// Approve a service estimate
-  Future<void> approveServiceEstimate(String jobId) async {
-    try {
-      await _supabase.from('mechanic_jobs').update({
-        'approved_by_customer': true,
-        'approved_at': DateTime.now().toIso8601String(),
-        'status': 'EN_CURSO', // Move to in progress after approval
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', jobId);
-
-      await loadServiceHistory();
-    } catch (e) {
-      _error = 'Error al aprobar el presupuesto: $e';
-      debugPrint(_error);
-      rethrow;
-    }
-  }
-
-  /// Reject a service estimate (will be handled as cancellation)
-  Future<void> rejectServiceEstimate(String jobId, String? reason) async {
-    try {
-      await _supabase.from('mechanic_jobs').update({
-        'approved_by_customer': false,
-        'approved_at': DateTime.now().toIso8601String(),
-        'status': 'CANCELADO',
-        'notes': reason ?? 'Presupuesto rechazado por el cliente',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', jobId);
-
-      await loadServiceHistory();
-    } catch (e) {
-      _error = 'Error al rechazar el presupuesto: $e';
-      debugPrint(_error);
-      rethrow;
-    }
-  }
 }

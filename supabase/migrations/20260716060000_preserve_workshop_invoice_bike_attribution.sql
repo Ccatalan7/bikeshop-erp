@@ -1,4 +1,6 @@
--- Deployment status: PENDING.
+-- Deployment status: DEPLOYED to production xzdvtzdqjeyqxnkqprtf on 2026-07-16.
+-- Deployment verification: stable-item attribution preservation, explicit
+-- same-job/tenant validation and ACLs were read back; no data backfill ran.
 --
 -- A sales invoice owns commercial and financial truth, but it does not own
 -- which physical bicycle received a workshop line. Historical invoice JSON

@@ -20,7 +20,6 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/hover_zoom_image.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
-import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
 import '../../crm/models/crm_models.dart';
@@ -34,6 +33,8 @@ import '../../ai_assistant/services/ai_assistant_context_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/job_status_service.dart';
 import '../services/mechanic_job_intake_classification_coordinator.dart';
+import '../services/mechanic_job_quotation_command_coordinator.dart';
+import '../services/mechanic_job_warranty_command_coordinator.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
@@ -75,6 +76,18 @@ class _JobConversionChoice {
   final String? subjectId;
   final String? reason;
   final bool createBike;
+
+  bool matches(_JobConversionChoice other) =>
+      targetType == other.targetType &&
+      bikeId == other.bikeId &&
+      subjectId == other.subjectId &&
+      _normalized(reason) == _normalized(other.reason) &&
+      createBike == other.createBike;
+
+  static String? _normalized(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
 }
 
 class _JobIntakeClassificationChoice {
@@ -93,6 +106,21 @@ class _JobIntakeClassificationChoice {
   final String? reason;
 }
 
+class _PendingWarrantyDecisionAttempt {
+  const _PendingWarrantyDecisionAttempt({
+    required this.outcome,
+    required this.reason,
+    required this.operationKey,
+  });
+
+  final WarrantyOutcome outcome;
+  final String? reason;
+  final String operationKey;
+
+  bool matches(WarrantyOutcome nextOutcome, String? nextReason) =>
+      outcome == nextOutcome && reason == nextReason;
+}
+
 class _PendingJobIntakeClassificationAttempt {
   const _PendingJobIntakeClassificationAttempt({
     required this.choice,
@@ -101,6 +129,33 @@ class _PendingJobIntakeClassificationAttempt {
 
   final _JobIntakeClassificationChoice choice;
   final String operationKey;
+}
+
+class _PendingQuotationTransitionAttempt {
+  const _PendingQuotationTransitionAttempt({
+    required this.status,
+    required this.reason,
+    required this.operationKey,
+  });
+
+  final QuotationStatus status;
+  final String? reason;
+  final String operationKey;
+
+  bool matches(QuotationStatus nextStatus, String? nextReason) =>
+      status == nextStatus && reason == nextReason;
+}
+
+class _PendingQuotationConversionAttempt {
+  const _PendingQuotationConversionAttempt({
+    required this.choice,
+    required this.operationKey,
+  });
+
+  final _JobConversionChoice choice;
+  final String operationKey;
+
+  bool matches(_JobConversionChoice nextChoice) => choice.matches(nextChoice);
 }
 
 class _HoverCardTooltip extends StatefulWidget {
@@ -215,7 +270,6 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   late BikeshopService _bikeshopService;
   late CustomerService _customerService;
-  late DatabaseService _databaseService;
   late JobStatusService _jobStatusService;
   late SalesService _salesService;
   late AIAssistantContextService _aiAssistantContextService;
@@ -227,6 +281,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   final Set<String> _generatingQuotationPdfIds = <String>{};
   final Map<String, _PendingJobIntakeClassificationAttempt>
       _pendingIntakeClassificationAttempts = {};
+  final Map<String, _PendingWarrantyDecisionAttempt>
+      _pendingWarrantyDecisionAttempts = {};
+  final Map<String, _PendingQuotationTransitionAttempt>
+      _pendingQuotationTransitionAttempts = {};
+  final Map<String, _PendingQuotationConversionAttempt>
+      _pendingQuotationConversionAttempts = {};
   Map<String, Bike> _bikes = {};
   Map<String, Invoice> _invoices = {};
   Map<String, String> _productImages = {};
@@ -333,7 +393,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _databaseService = Provider.of<DatabaseService>(context, listen: false);
     _bikeshopService = Provider.of<BikeshopService>(context, listen: false);
     _customerService = Provider.of<CustomerService>(context, listen: false);
     _jobStatusService = Provider.of<JobStatusService>(context, listen: false);
@@ -451,41 +510,8 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   bool _isJobCurrentlyDelivered(MechanicJob job) {
     return job.status == JobStatus.entregado ||
+        job.customStatus?.triggersDelivery == true ||
         job.customStatus?.code.trim().toLowerCase() == 'entregado';
-  }
-
-  DateTime? _deliveredAtForStatus(JobStatus status, DateTime? currentValue) {
-    if (status != JobStatus.entregado) return null;
-    return currentValue ?? DateTime.now();
-  }
-
-  DateTime? _completedAtForStatus(JobStatus status, DateTime? currentValue) {
-    if (status == JobStatus.finalizado || status == JobStatus.entregado) {
-      return currentValue ?? DateTime.now();
-    }
-    return currentValue;
-  }
-
-  DateTime? _deliveredAtForCustomStatus(
-    JobStatusCustom status,
-    DateTime? currentValue,
-  ) {
-    final isDeliveryStatus = status.triggersDelivery ||
-        status.code.trim().toLowerCase() == 'entregado';
-    if (!isDeliveryStatus) return null;
-    return currentValue ?? DateTime.now();
-  }
-
-  DateTime? _completedAtForCustomStatus(
-    JobStatusCustom status,
-    DateTime? currentValue,
-  ) {
-    final isCompletionStatus = status.triggersCompletion ||
-        status.triggersDelivery ||
-        status.code.trim().toLowerCase() == 'finalizado' ||
-        status.code.trim().toLowerCase() == 'entregado';
-    if (isCompletionStatus) return currentValue ?? DateTime.now();
-    return currentValue;
   }
 
   Color _statusFilterColor(String value) {
@@ -1015,6 +1041,13 @@ class _PegasTablePageState extends State<PegasTablePage>
     return job.isPaid;
   }
 
+  bool _hasWarrantyPaymentEvidence(MechanicJob job) {
+    final invoice = job.invoiceId == null ? null : _invoices[job.invoiceId];
+    return job.isPaid ||
+        invoice?.status == InvoiceStatus.paid ||
+        (invoice?.paidAmount ?? 0) > 0.01;
+  }
+
   bool get _canUseFreshInstantCache =>
       _bikeshopService.isJobsCacheFresh &&
       _customerService.isCustomersCacheFresh &&
@@ -1022,7 +1055,11 @@ class _PegasTablePageState extends State<PegasTablePage>
       _bikeshopService.isJobBikesCacheFresh &&
       _salesService.isInvoicesCacheFresh;
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({
+    bool surfaceErrors = true,
+    bool rethrowErrors = false,
+    bool forceInvoiceRefresh = false,
+  }) async {
     // Only instant-render when all companion caches are still fresh.
     // Rendering from an expired jobs cache causes the stale first frame the user sees
     // before the full fetch corrects customer/bike names and row membership.
@@ -1046,7 +1083,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         _bikeshopService.getJobs(includeCompleted: true),
         _customerService.getCustomers(),
         _bikeshopService.getBikes(),
-        _loadInvoices(),
+        _loadInvoices(
+          forceRefresh: forceInvoiceRefresh,
+          throwOnError: rethrowErrors && forceInvoiceRefresh,
+        ),
         _bikeshopService.getAllJobBikes(), // Single query for all job bikes
       ]);
 
@@ -1076,18 +1116,29 @@ class _PegasTablePageState extends State<PegasTablePage>
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        if (surfaceErrors) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
+      if (rethrowErrors) rethrow;
     }
   }
 
-  Future<List<Invoice>> _loadInvoices() async {
+  Future<List<Invoice>> _loadInvoices({
+    bool forceRefresh = false,
+    bool throwOnError = false,
+  }) async {
     try {
-      await _salesService.loadInvoices();
+      await _salesService.loadInvoices(forceRefresh: forceRefresh);
+      final error = _salesService.invoiceError;
+      if (throwOnError && error != null) {
+        throw StateError(error);
+      }
       return _salesService.cachedInvoices.toList();
-    } catch (e) {
+    } catch (_) {
+      if (throwOnError) rethrow;
       return [];
     }
   }
@@ -1330,7 +1381,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         case 'completed':
           // Completed = only complete phase with finalizado status
           if (jobPhase != StatusPhase.complete ||
-              job.status == JobStatus.entregado ||
+              isDelivered ||
               job.status == JobStatus.cancelado) {
             return false;
           }
@@ -1920,44 +1971,33 @@ class _PegasTablePageState extends State<PegasTablePage>
   //  See separate chunk below.)
 
   Future<void> _updateJobStatus(JobStatus newStatus) async {
+    final job = _selectedJob;
+    if (job?.id == null) return;
     _startLocalOperation();
-    setState(() {
-      final index = _jobs.indexWhere((j) => j.id == _selectedJob!.id);
-      if (index != -1) {
-        final job = _jobs[index];
-        _jobs[index] = job.copyWith(
-          status: newStatus,
-          completedAt: _completedAtForStatus(newStatus, job.completedAt),
-          deliveredAt: _deliveredAtForStatus(newStatus, job.deliveredAt),
-          updatedAt: DateTime.now(),
-        );
-        _selectedJob = _jobs[index];
-      }
-      _applyFiltersAndSort();
-    });
-
     try {
-      final updatedJob = _selectedJob!.copyWith(
-        status: newStatus,
-        completedAt:
-            _completedAtForStatus(newStatus, _selectedJob!.completedAt),
-        deliveredAt:
-            _deliveredAtForStatus(newStatus, _selectedJob!.deliveredAt),
+      await _bikeshopService.transitionJobStatusByLegacyStatus(
+        job!.id!,
+        newStatus,
+        operationKey: const Uuid().v4(),
       );
-      await _databaseService.update(
-        'mechanic_jobs',
-        updatedJob.id!,
-        updatedJob.toJson(),
-      );
+      await _loadData();
       if (mounted) {
-        await _loadJobDetails(_selectedJob!);
+        final refreshed = _jobs.where((item) => item.id == job.id).firstOrNull;
+        if (refreshed != null) {
+          await _loadJobDetails(refreshed);
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Estado actualizado a ${newStatus.displayName}')),
+        );
       }
     } catch (e) {
+      await _loadData();
       if (mounted) {
-        await _loadData();
-        if (_selectedJob != null) {
-          await _loadJobDetails(_selectedJob!);
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo confirmar el estado: $e')),
+        );
       }
     } finally {
       _endLocalOperation();
@@ -1995,60 +2035,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 }
               }
             },
-            onStatusChange: (newStatus) async {
-              // Same logic as desktop...
-              _startLocalOperation();
-              setState(() {
-                final index = _jobs.indexWhere((j) => j.id == _selectedJob!.id);
-                if (index != -1) {
-                  // ... update job logic
-                  final job = _jobs[index];
-                  _jobs[index] = job.copyWith(
-                    status: newStatus,
-                    completedAt: _completedAtForStatus(
-                      newStatus,
-                      job.completedAt,
-                    ),
-                    deliveredAt:
-                        _deliveredAtForStatus(newStatus, job.deliveredAt),
-                    updatedAt: DateTime.now(),
-                  );
-                  _selectedJob = _jobs[index];
-                }
-                _applyFiltersAndSort();
-              });
-
-              try {
-                final updatedJob = _selectedJob!.copyWith(
-                  status: newStatus,
-                  completedAt: _completedAtForStatus(
-                    newStatus,
-                    _selectedJob!.completedAt,
-                  ),
-                  deliveredAt: _deliveredAtForStatus(
-                    newStatus,
-                    _selectedJob!.deliveredAt,
-                  ),
-                );
-                await _databaseService.update(
-                  'mechanic_jobs',
-                  updatedJob.id!,
-                  updatedJob.toJson(),
-                );
-                if (mounted) {
-                  await _loadJobDetails(_selectedJob!);
-                }
-              } catch (e) {
-                if (mounted) {
-                  await _loadData();
-                  if (_selectedJob != null) {
-                    await _loadJobDetails(_selectedJob!);
-                  }
-                }
-              } finally {
-                _endLocalOperation();
-              }
-            },
+            onStatusChange: _updateJobStatus,
             onItemRemoved: (itemId) async {
               // Same logic...
               try {
@@ -2167,62 +2154,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                     }
                   }
                 },
-                onStatusChange: (newStatus) async {
-                  // Start local operation to suppress reload from service notification
-                  _startLocalOperation();
-
-                  // Optimistic update
-                  setState(() {
-                    final index =
-                        _jobs.indexWhere((j) => j.id == _selectedJob!.id);
-                    if (index != -1) {
-                      final job = _jobs[index];
-                      _jobs[index] = job.copyWith(
-                        status: newStatus,
-                        completedAt:
-                            _completedAtForStatus(newStatus, job.completedAt),
-                        deliveredAt:
-                            _deliveredAtForStatus(newStatus, job.deliveredAt),
-                        updatedAt: DateTime.now(),
-                      );
-                      _selectedJob = _jobs[index];
-                    }
-                    _applyFiltersAndSort();
-                  });
-
-                  // Save in background
-                  try {
-                    final updatedJob = _selectedJob!.copyWith(
-                      status: newStatus,
-                      completedAt: _completedAtForStatus(
-                        newStatus,
-                        _selectedJob!.completedAt,
-                      ),
-                      deliveredAt: _deliveredAtForStatus(
-                        newStatus,
-                        _selectedJob!.deliveredAt,
-                      ),
-                    );
-                    await _databaseService.update(
-                      'mechanic_jobs',
-                      updatedJob.id!,
-                      updatedJob.toJson(),
-                    );
-                    if (mounted) {
-                      await _loadJobDetails(_selectedJob!);
-                    }
-                  } catch (e) {
-                    // Revert on error
-                    if (mounted) {
-                      await _loadData();
-                      if (_selectedJob != null) {
-                        await _loadJobDetails(_selectedJob!);
-                      }
-                    }
-                  } finally {
-                    _endLocalOperation();
-                  }
-                },
+                onStatusChange: _updateJobStatus,
                 onItemRemoved: (itemId) async {
                   try {
                     await _bikeshopService.deleteJobItem(itemId);
@@ -5807,10 +5739,12 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (job.workflowKind == JobWorkflowKind.warranty) {
           final outcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
 
-          // A pending claim is not a customer invoice. Older rows may still
-          // retain an internal draft while a decision is being reconsidered;
-          // keep that implementation detail out of the operational table.
-          if (outcome == WarrantyOutcome.pending) {
+          // A normal pending claim has no customer invoice. If historical
+          // financial evidence does exist, it is never hidden: the generic
+          // invoice chip below remains authoritative and opens the document.
+          if (outcome == WarrantyOutcome.pending &&
+              job.invoiceId == null &&
+              !job.isInvoiced) {
             return Tooltip(
               message:
                   'La garantía sigue en evaluación. Todavía no existe un cobro para el cliente.',
@@ -6104,7 +6038,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
 
         final invoice = job.invoiceId != null ? _invoices[job.invoiceId] : null;
-        final status = invoice?.status ?? InvoiceStatus.draft;
+        final status = invoice?.status ??
+            (job.isPaid ? InvoiceStatus.paid : InvoiceStatus.draft);
 
         // Define colors and labels for each status
         Color bgColor;
@@ -7288,7 +7223,10 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       Object? refreshError;
       try {
-        await _loadData();
+        await _loadData(
+          surfaceErrors: false,
+          rethrowErrors: true,
+        );
       } catch (error) {
         refreshError = error;
         debugPrint(
@@ -7859,44 +7797,163 @@ class _PegasTablePageState extends State<PegasTablePage>
       return;
     }
 
+    final existingAttempt = _pendingQuotationConversionAttempts[jobId];
+    final attempt = existingAttempt != null && existingAttempt.matches(choice)
+        ? existingAttempt
+        : _PendingQuotationConversionAttempt(
+            choice: choice,
+            operationKey: const Uuid().v4(),
+          );
+    _pendingQuotationConversionAttempts[jobId] = attempt;
+    await _submitQuotationConversion(job, attempt);
+  }
+
+  Future<void> _submitQuotationConversion(
+    MechanicJob job,
+    _PendingQuotationConversionAttempt attempt,
+  ) async {
+    final jobId = job.id?.trim();
+    if (jobId == null || jobId.isEmpty) return;
+    // A snackbar from an earlier uncertain choice can remain visible after the
+    // worker has submitted a different bicycle/component. Never let that stale
+    // closure replay the superseded operation and win the conversion race.
+    if (!identical(_pendingQuotationConversionAttempts[jobId], attempt)) {
+      return;
+    }
+    final choice = attempt.choice;
+
     _startLocalOperation();
     try {
-      final updated = await _bikeshopService.convertToBillableJob(
+      final result = await _bikeshopService.convertToBillableJob(
         jobId,
         targetType: choice.targetType,
         reason: choice.reason,
         bikeId: choice.bikeId,
         subjectId: choice.subjectId,
+        operationKey: attempt.operationKey,
       );
-      await _loadData();
+      final receiptInvoiceId = result.invoiceId;
+      var updated = job.copyWith(
+        jobType: choice.targetType,
+        workflowKind: JobWorkflowKind.service,
+        intakeKind: choice.targetType == JobType.itemService
+            ? JobIntakeKind.component
+            : JobIntakeKind.bike,
+        bikeId: choice.targetType == JobType.service ? choice.bikeId : null,
+        subjectId:
+            choice.targetType == JobType.itemService ? choice.subjectId : null,
+        quotationStatus: null,
+        convertedAt: DateTime.now(),
+        modeNeedsReview: false,
+        modeReviewReason: null,
+        warrantyOutcome: null,
+        invoiceId: receiptInvoiceId,
+        isInvoiced: receiptInvoiceId == null ? null : true,
+        isWarrantyJob: false,
+        updatedAt: DateTime.now(),
+      );
+      if (mounted) {
+        setState(() {
+          final index = _jobs.indexWhere((candidate) => candidate.id == jobId);
+          if (index != -1) _jobs[index] = updated;
+          if (_selectedJob?.id == jobId) _selectedJob = updated;
+          _applyFiltersAndSort();
+        });
+      }
+      if (identical(
+        _pendingQuotationConversionAttempts[jobId],
+        attempt,
+      )) {
+        _pendingQuotationConversionAttempts.remove(jobId);
+      }
+
+      Object? refreshError;
+      try {
+        await _loadData(
+          surfaceErrors: false,
+          rethrowErrors: true,
+          forceInvoiceRefresh: true,
+        );
+        updated = _jobs.cast<MechanicJob?>().firstWhere(
+                  (candidate) => candidate?.id == jobId,
+                  orElse: () => updated,
+                ) ??
+            updated;
+      } catch (error) {
+        // Conversion, invoice creation and the audit event were already
+        // confirmed by one exact receipt. A failed list refresh is only a
+        // projection problem and must not be shown as a rejected conversion.
+        refreshError = error;
+        debugPrint(
+          'Quotation conversion ${attempt.operationKey} was confirmed, '
+          'but table refresh failed: $error',
+        );
+      }
       if (!mounted) return;
+
       final targetLabel = choice.targetType == JobType.itemService
           ? 'componente cobrable'
           : 'servicio de bicicleta';
+      final refreshSuffix = refreshError == null
+          ? ''
+          : ' No se pudo refrescar la tabla; usa Actualizar para releer el cambio guardado.';
+      final invoiceId = result.invoiceId ?? updated.invoiceId;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              '${job.jobNumber} convertido a $targetLabel con factura creada'),
+            '${job.jobNumber} convertido a $targetLabel con factura creada.$refreshSuffix',
+          ),
           duration: const Duration(seconds: 8),
-          backgroundColor: Colors.green.shade700,
-          action: updated.invoiceId == null
+          backgroundColor: refreshError == null
+              ? Colors.green.shade700
+              : Colors.orange.shade800,
+          action: invoiceId == null
               ? null
               : SnackBarAction(
                   label: 'Abrir factura',
                   textColor: Colors.white,
-                  onPressed: () => _openInvoice(updated.invoiceId!),
+                  onPressed: () => _openInvoice(invoiceId),
                 ),
         ),
       );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo convertir el trabajo: $error'),
-            backgroundColor: Colors.red,
+    } on MechanicJobQuotationCommandOutcomeUnknown catch (error) {
+      debugPrint(
+        'Quotation conversion outcome remains unknown for $jobId with '
+        'operation ${attempt.operationKey}: $error',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No se pudo confirmar la conversión. Puede haberse guardado; Reintentar reutiliza exactamente la misma operación y no crea otra factura.',
           ),
-        );
+          backgroundColor: Colors.orange.shade900,
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(
+            label: 'REINTENTAR',
+            textColor: Colors.white,
+            onPressed: () => unawaited(
+              _submitQuotationConversion(job, attempt),
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (identical(
+        _pendingQuotationConversionAttempts[jobId],
+        attempt,
+      )) {
+        _pendingQuotationConversionAttempts.remove(jobId);
       }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'El servidor rechazó la conversión; no se confirmó ningún cambio: $error',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
     } finally {
       _endLocalOperation();
     }
@@ -7922,25 +7979,14 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
 
     if (confirmed == true && mounted) {
-      // Start local operation to suppress reload from realtime notifications
       _startLocalOperation();
-
-      // Optimistic update
-      setState(() {
-        final index = _jobs.indexWhere((j) => j.id == job.id);
-        if (index != -1) {
-          final updatedJob = _jobs[index];
-          _jobs[index] = updatedJob.copyWith(
-            status: JobStatus.finalizado,
-            completedAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-        }
-        _applyFiltersAndSort();
-      });
-
       try {
-        await _bikeshopService.updateJobStatus(job.id!, JobStatus.finalizado);
+        await _bikeshopService.transitionJobStatusByLegacyStatus(
+          job.id!,
+          JobStatus.finalizado,
+          operationKey: const Uuid().v4(),
+        );
+        await _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -8144,57 +8190,164 @@ class _PegasTablePageState extends State<PegasTablePage>
       builder: (dialogContext) => _StatusManagerDialog(
         job: job,
         jobStatusService: _jobStatusService,
+        warrantyPaymentReviewRequired: _hasWarrantyPaymentEvidence(job),
         onStatusSelected: (status) async {
           Navigator.pop(dialogContext);
           await _updateJobToCustomStatus(job, status);
         },
         onWarrantyOutcomeSelected: (outcome) async {
           Navigator.pop(dialogContext);
+          final currentOutcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
+          if (outcome == currentOutcome) return;
+          if (outcome == WarrantyOutcome.covered &&
+              _hasWarrantyPaymentEvidence(job)) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Esta garantía tiene pagos vigentes. Primero revisa, revierte o reembolsa el pago desde la factura; el historial financiero no se modificará desde este estado.',
+                ),
+                backgroundColor: Colors.orange.shade900,
+                duration: const Duration(seconds: 10),
+                action: job.invoiceId == null
+                    ? null
+                    : SnackBarAction(
+                        label: 'ABRIR FACTURA',
+                        textColor: Colors.white,
+                        onPressed: () => _openInvoice(job.invoiceId!),
+                      ),
+              ),
+            );
+            return;
+          }
           final reason = await _requestWarrantyDecisionReason(job, outcome);
           if (reason == null) return;
+          final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+          final existingAttempt = _pendingWarrantyDecisionAttempts[job.id!];
+          final attempt = existingAttempt != null &&
+                  existingAttempt.matches(outcome, normalizedReason)
+              ? existingAttempt
+              : _PendingWarrantyDecisionAttempt(
+                  outcome: outcome,
+                  reason: normalizedReason,
+                  operationKey: const Uuid().v4(),
+                );
+          _pendingWarrantyDecisionAttempts[job.id!] = attempt;
           _startLocalOperation();
           try {
-            await _bikeshopService.updateWarrantyOutcome(
-              job.id!,
-              outcome,
-              reason: reason.isEmpty ? null : reason,
+            final receipt = await _bikeshopService.decideWarrantyClaim(
+              warrantyJobId: job.id!,
+              outcome: outcome,
+              reason: normalizedReason,
+              operationKey: attempt.operationKey,
             );
             if (mounted) {
-              await _loadData();
+              final receiptInvoiceId = receipt['invoice_id']?.toString();
+              var updated = job.copyWith(
+                warrantyOutcome: outcome,
+                invoiceId: receiptInvoiceId,
+                isInvoiced: receiptInvoiceId == null ? null : true,
+                updatedAt: DateTime.now(),
+              );
+              setState(() {
+                final index =
+                    _jobs.indexWhere((candidate) => candidate.id == job.id);
+                if (index != -1) _jobs[index] = updated;
+                if (_selectedJob?.id == job.id) _selectedJob = updated;
+                _applyFiltersAndSort();
+              });
+              if (identical(
+                _pendingWarrantyDecisionAttempts[job.id!],
+                attempt,
+              )) {
+                _pendingWarrantyDecisionAttempts.remove(job.id!);
+              }
+              Object? refreshError;
+              try {
+                await _loadData(
+                  surfaceErrors: false,
+                  rethrowErrors: true,
+                  forceInvoiceRefresh: true,
+                );
+                updated = _jobs.cast<MechanicJob?>().firstWhere(
+                          (candidate) => candidate?.id == job.id,
+                          orElse: () => updated,
+                        ) ??
+                    updated;
+              } catch (error) {
+                // The command already returned an exact receipt. A projection
+                // refresh failure must not be reported as a rejected decision
+                // or trigger a second command with a new operation key.
+                refreshError = error;
+                debugPrint(
+                  'Warranty decision ${attempt.operationKey} was confirmed, '
+                  'but table refresh failed: $error',
+                );
+              }
               if (!mounted) return;
-              final updated = _jobs.cast<MechanicJob?>().firstWhere(
-                    (candidate) => candidate?.id == job.id,
-                    orElse: () => null,
-                  );
-              final message = switch (outcome) {
+              final confirmedMessage = switch (outcome) {
                 WarrantyOutcome.covered =>
                   'Garantía cubierta: respaldo interno actualizado.',
+                WarrantyOutcome.notCovered
+                    when _hasWarrantyPaymentEvidence(job) =>
+                  'Garantía no cubierta registrada: la factura pagada se conservó sin cambios.',
                 WarrantyOutcome.notCovered =>
                   'Garantía no cubierta: factura cobrable creada.',
                 WarrantyOutcome.pending => 'Garantía devuelta a evaluación.',
               };
+              final message = refreshError == null
+                  ? confirmedMessage
+                  : '$confirmedMessage No se pudo refrescar la tabla; usa Actualizar para releerla.';
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(message),
                   backgroundColor: outcome == WarrantyOutcome.notCovered
                       ? Colors.red.shade700
                       : Colors.green.shade700,
-                  action: updated?.invoiceId == null
+                  action: updated.invoiceId == null
                       ? null
                       : SnackBarAction(
                           label: outcome == WarrantyOutcome.covered
                               ? 'Abrir respaldo'
                               : 'Abrir factura',
                           textColor: Colors.white,
-                          onPressed: () => _openInvoice(updated!.invoiceId!),
+                          onPressed: () => _openInvoice(updated.invoiceId!),
                         ),
                 ),
               );
             }
-          } catch (e) {
+          } on MechanicJobWarrantyCommandOutcomeUnknown catch (error) {
+            debugPrint(
+              'Warranty decision outcome remains unknown for ${job.id} with '
+              'operation ${attempt.operationKey}: $error',
+            );
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Error: $e'), backgroundColor: Colors.red));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'No se pudo confirmar el resultado. La decisión puede haberse guardado; vuelve a elegir exactamente la misma opción y motivo para reutilizar la misma operación.',
+                  ),
+                  backgroundColor: Colors.orange.shade900,
+                  duration: const Duration(seconds: 10),
+                ),
+              );
+            }
+          } catch (error) {
+            if (identical(
+              _pendingWarrantyDecisionAttempts[job.id!],
+              attempt,
+            )) {
+              _pendingWarrantyDecisionAttempts.remove(job.id!);
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'El servidor rechazó la decisión; no se confirmó ningún cambio: $error',
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
             }
           } finally {
             _endLocalOperation();
@@ -8204,50 +8357,159 @@ class _PegasTablePageState extends State<PegasTablePage>
           Navigator.pop(dialogContext);
           final reason = await _requestQuotationStatusReason(job, qStatus);
           if (reason == null) return;
-          _startLocalOperation();
-          try {
-            await _bikeshopService.updateQuotationStatus(
-              job.id!,
-              qStatus,
-              reason: reason.isEmpty ? null : reason,
-            );
-            if (mounted) {
-              setState(() {
-                final index = _jobs.indexWhere((j) => j.id == job.id);
-                if (index != -1) {
-                  _jobs[index] = job.copyWith(
-                      quotationStatus: qStatus, updatedAt: DateTime.now());
-                }
-                _applyFiltersAndSort();
-              });
-              if (qStatus == QuotationStatus.approved) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text(
-                      'Presupuesto aprobado. Conviértelo cuando recibas la bicicleta o componente.',
-                    ),
-                    duration: const Duration(seconds: 8),
-                    action: SnackBarAction(
-                      label: 'Convertir ahora',
-                      onPressed: () => _convertToService(job.copyWith(
-                        quotationStatus: QuotationStatus.approved,
-                      )),
-                    ),
-                  ),
+          final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+          final existingAttempt = _pendingQuotationTransitionAttempts[job.id!];
+          final attempt = existingAttempt != null &&
+                  existingAttempt.matches(qStatus, normalizedReason)
+              ? existingAttempt
+              : _PendingQuotationTransitionAttempt(
+                  status: qStatus,
+                  reason: normalizedReason,
+                  operationKey: const Uuid().v4(),
                 );
-              }
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Error: $e'), backgroundColor: Colors.red));
-            }
-          } finally {
-            _endLocalOperation();
-          }
+          _pendingQuotationTransitionAttempts[job.id!] = attempt;
+          await _submitQuotationTransition(job, attempt);
         },
       ),
     );
+  }
+
+  Future<void> _submitQuotationTransition(
+    MechanicJob job,
+    _PendingQuotationTransitionAttempt attempt,
+  ) async {
+    final jobId = job.id?.trim();
+    if (jobId == null || jobId.isEmpty) return;
+    // Only the latest semantic status/reason choice may reach the server. An
+    // older uncertain snackbar must not revert a newer worker decision.
+    if (!identical(_pendingQuotationTransitionAttempts[jobId], attempt)) {
+      return;
+    }
+
+    _startLocalOperation();
+    try {
+      await _bikeshopService.updateQuotationStatus(
+        jobId,
+        attempt.status,
+        reason: attempt.reason,
+        operationKey: attempt.operationKey,
+      );
+
+      var updated = job.copyWith(
+        quotationStatus: attempt.status,
+        updatedAt: DateTime.now(),
+      );
+      if (mounted) {
+        setState(() {
+          final index = _jobs.indexWhere((candidate) => candidate.id == jobId);
+          if (index != -1) _jobs[index] = updated;
+          if (_selectedJob?.id == jobId) _selectedJob = updated;
+          _applyFiltersAndSort();
+        });
+      }
+      if (identical(
+        _pendingQuotationTransitionAttempts[jobId],
+        attempt,
+      )) {
+        _pendingQuotationTransitionAttempts.remove(jobId);
+      }
+
+      Object? refreshError;
+      try {
+        await _loadData(
+          surfaceErrors: false,
+          rethrowErrors: true,
+        );
+        updated = _jobs.cast<MechanicJob?>().firstWhere(
+                  (candidate) => candidate?.id == jobId,
+                  orElse: () => updated,
+                ) ??
+            updated;
+      } catch (error) {
+        // The command receipt already confirmed this transition. Projection
+        // refresh is a separate read and must never turn success into a red
+        // rejection or trigger a fresh operation key.
+        refreshError = error;
+        debugPrint(
+          'Quotation transition ${attempt.operationKey} was confirmed, '
+          'but table refresh failed: $error',
+        );
+      }
+      if (!mounted) return;
+
+      final refreshSuffix = refreshError == null
+          ? ''
+          : ' No se pudo refrescar la tabla; usa Actualizar para releer el cambio guardado.';
+      if (attempt.status == QuotationStatus.approved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Presupuesto aprobado. Conviértelo cuando recibas la bicicleta o componente.$refreshSuffix',
+            ),
+            duration: const Duration(seconds: 8),
+            backgroundColor: refreshError == null
+                ? Colors.green.shade700
+                : Colors.orange.shade800,
+            action: SnackBarAction(
+              label: 'Convertir ahora',
+              textColor: Colors.white,
+              onPressed: () => _convertToService(updated),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Estado del presupuesto actualizado.$refreshSuffix',
+            ),
+            backgroundColor: refreshError == null
+                ? Colors.green.shade700
+                : Colors.orange.shade800,
+          ),
+        );
+      }
+    } on MechanicJobQuotationCommandOutcomeUnknown catch (error) {
+      debugPrint(
+        'Quotation transition outcome remains unknown for $jobId with '
+        'operation ${attempt.operationKey}: $error',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No se pudo confirmar el cambio. Puede haberse guardado; Reintentar reutiliza exactamente la misma operación.',
+          ),
+          backgroundColor: Colors.orange.shade900,
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(
+            label: 'REINTENTAR',
+            textColor: Colors.white,
+            onPressed: () => unawaited(
+              _submitQuotationTransition(job, attempt),
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (identical(
+        _pendingQuotationTransitionAttempts[jobId],
+        attempt,
+      )) {
+        _pendingQuotationTransitionAttempts.remove(jobId);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'El servidor rechazó el cambio de presupuesto; no se confirmó ningún cambio: $error',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      _endLocalOperation();
+    }
   }
 
   Future<String?> _requestQuotationStatusReason(
@@ -8384,49 +8646,19 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _updateJobToCustomStatus(
       MechanicJob job, JobStatusCustom newStatus) async {
-    // Start local operation to suppress reload from realtime notifications
+    if (job.id == null ||
+        newStatus.id == null ||
+        newStatus.id == job.statusId) {
+      return;
+    }
     _startLocalOperation();
-
-    // Map custom status code to legacy JobStatus for backward compatibility
-    final legacyStatus = _mapCodeToLegacyStatus(newStatus.code);
-    final oldStatusId = job.statusId;
-    final oldStatus = job.status;
-    final oldCustomStatus = job.customStatus;
-
-    // Optimistic update
-    setState(() {
-      final index = _jobs.indexWhere((j) => j.id == job.id);
-      if (index != -1) {
-        _jobs[index] = job.copyWith(
-          statusId: newStatus.id,
-          customStatus: newStatus,
-          status: legacyStatus,
-          completedAt: _completedAtForCustomStatus(
-            newStatus,
-            job.completedAt,
-          ),
-          deliveredAt: _deliveredAtForCustomStatus(
-            newStatus,
-            job.deliveredAt,
-          ),
-          updatedAt: DateTime.now(),
-        );
-      }
-      _applyFiltersAndSort();
-    });
-
-    // Update in background
     try {
-      final success =
-          await _jobStatusService.updateJobStatus(job.id!, newStatus.id!);
-
-      if (!success) {
-        // Update returned false - revert the optimistic update
-        throw Exception('Error al guardar en la base de datos');
-      }
-
-      // Also invalidate bikeshop service cache to ensure fresh data on next load
-      _bikeshopService.invalidateJobsCache();
+      await _bikeshopService.transitionJobStatus(
+        job.id!,
+        newStatus.id!,
+        operationKey: const Uuid().v4(),
+      );
+      await _loadData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8437,21 +8669,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
       }
     } catch (e) {
-      // Revert on error
-      debugPrint(
-          '❌ [_updateJobToCustomStatus] Error: $e - reverting optimistic update');
+      await _loadData();
       if (mounted) {
-        setState(() {
-          final index = _jobs.indexWhere((j) => j.id == job.id);
-          if (index != -1) {
-            _jobs[index] = job.copyWith(
-              statusId: oldStatusId,
-              customStatus: oldCustomStatus,
-              status: oldStatus,
-            );
-          }
-          _applyFiltersAndSort();
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
@@ -8546,30 +8765,6 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
     } finally {
       _endLocalOperation();
-    }
-  }
-
-  /// Maps custom status code to legacy JobStatus enum for backward compatibility
-  JobStatus _mapCodeToLegacyStatus(String code) {
-    switch (code.toLowerCase()) {
-      case 'pendiente':
-        return JobStatus.pendiente;
-      case 'diagnostico':
-        return JobStatus.diagnostico;
-      case 'esperando_aprobacion':
-        return JobStatus.esperandoAprobacion;
-      case 'en_curso':
-        return JobStatus.enCurso;
-      case 'esperando_repuestos':
-        return JobStatus.esperandoRepuestos;
-      case 'finalizado':
-        return JobStatus.finalizado;
-      case 'entregado':
-        return JobStatus.entregado;
-      case 'cancelado':
-        return JobStatus.cancelado;
-      default:
-        return JobStatus.pendiente; // Default fallback
     }
   }
 
@@ -9221,49 +9416,31 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (newCustomStatus == null) return;
 
-    // Map to legacy status for backward compatibility
-    final legacyStatus = _mapCodeToLegacyStatus(newCustomStatus.code);
-
-    // Start local operation to suppress reload from realtime notifications
     _startLocalOperation();
-
-    // Optimistic update - update all selected jobs immediately
-    setState(() {
-      for (var job in selectedJobs) {
-        final index = _jobs.indexWhere((j) => j.id == job.id);
-        if (index != -1) {
-          _jobs[index] = job.copyWith(
-            statusId: newCustomStatus.id,
-            customStatus: newCustomStatus,
-            status: legacyStatus,
-            completedAt: _completedAtForCustomStatus(
-              newCustomStatus,
-              job.completedAt,
-            ),
-            deliveredAt: _deliveredAtForCustomStatus(
-              newCustomStatus,
-              job.deliveredAt,
-            ),
-            updatedAt: DateTime.now(),
-          );
-        }
-      }
-      _selectedJobIds.clear();
-      _applyFiltersAndSort();
-    });
-
-    // Save in background
+    var succeeded = 0;
+    final failures = <String>[];
     try {
       for (var job in selectedJobs) {
-        await _jobStatusService.updateJobStatus(job.id!, newCustomStatus.id!);
+        try {
+          await _bikeshopService.transitionJobStatus(
+            job.id!,
+            newCustomStatus.id!,
+            operationKey: const Uuid().v4(),
+          );
+          succeeded++;
+        } catch (error) {
+          failures.add('${job.jobNumber ?? job.id}: $error');
+        }
       }
+      await _loadData();
       if (mounted) {
+        setState(_selectedJobIds.clear);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                '${selectedJobs.length} trabajos actualizados a ${newCustomStatus.name}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
+            content: Text(failures.isEmpty
+                ? '$succeeded trabajos actualizados a ${newCustomStatus.name}'
+                : '$succeeded de ${selectedJobs.length} trabajos actualizados. La tabla fue recargada; ${failures.length} cambios no se confirmaron.'),
+            backgroundColor: failures.isEmpty ? Colors.green : Colors.orange,
           ),
         );
       }
@@ -10178,6 +10355,7 @@ class _StatusManagerDialog extends StatefulWidget {
   final Function(JobStatusCustom) onStatusSelected;
   final Future<void> Function(WarrantyOutcome)? onWarrantyOutcomeSelected;
   final Future<void> Function(QuotationStatus)? onQuotationStatusSelected;
+  final bool warrantyPaymentReviewRequired;
 
   const _StatusManagerDialog({
     required this.job,
@@ -10185,6 +10363,7 @@ class _StatusManagerDialog extends StatefulWidget {
     required this.onStatusSelected,
     this.onWarrantyOutcomeSelected,
     this.onQuotationStatusSelected,
+    this.warrantyPaymentReviewRequired = false,
   });
 
   @override
@@ -10393,6 +10572,25 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (widget.warrantyPaymentReviewRequired)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border.all(color: Colors.orange.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Hay pagos vigentes. Para aceptar la garantía como cubierta, primero revisa el pago desde la factura.',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange.shade900,
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
@@ -10408,6 +10606,8 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         Row(
           children: WarrantyOutcome.values.map((outcome) {
             final isSelected = outcome == current;
+            final isBlockedByPayment = widget.warrantyPaymentReviewRequired &&
+                outcome == WarrantyOutcome.covered;
             final Color color = switch (outcome) {
               WarrantyOutcome.covered => Colors.green,
               WarrantyOutcome.notCovered => Colors.red,
@@ -10424,7 +10624,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
                   onTap: widget.onWarrantyOutcomeSelected != null
-                      ? () => widget.onWarrantyOutcomeSelected!(outcome)
+                      ? (isSelected || isBlockedByPayment
+                          ? null
+                          : () => widget.onWarrantyOutcomeSelected!(outcome))
                       : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -10433,7 +10635,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? color.withValues(alpha: 0.15)
-                          : Colors.transparent,
+                          : isBlockedByPayment
+                              ? Colors.grey.shade100
+                              : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: isSelected ? color : Colors.grey.shade300,
@@ -10448,7 +10652,11 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                               ? Icons.check_circle
                               : Icons.radio_button_unchecked,
                           size: 18,
-                          color: isSelected ? color : Colors.grey,
+                          color: isSelected
+                              ? color
+                              : isBlockedByPayment
+                                  ? Colors.grey.shade400
+                                  : Colors.grey,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -10458,7 +10666,11 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? color : Colors.grey.shade600,
+                            color: isSelected
+                                ? color
+                                : isBlockedByPayment
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
                           ),
                           textAlign: TextAlign.center,
                         ),

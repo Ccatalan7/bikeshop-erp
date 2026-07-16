@@ -13,6 +13,12 @@ void main() {
     final service = File(
       'lib/modules/bikeshop/services/bikeshop_service.dart',
     ).readAsStringSync();
+    final quotationCoordinator = File(
+      'lib/modules/bikeshop/services/mechanic_job_quotation_command_coordinator.dart',
+    ).readAsStringSync();
+    final formPersistencePolicy = File(
+      'lib/modules/bikeshop/services/mechanic_job_form_persistence_policy.dart',
+    ).readAsStringSync();
     final registry = File(
       'docs/architecture/canonical-ui-surfaces.md',
     ).readAsStringSync();
@@ -29,6 +35,80 @@ void main() {
         'El cliente deja solo un componente. No aumenta el contador de bicicletas.',
       ),
     );
+    expect(
+      form,
+      contains(
+        'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir el presupuesto.',
+      ),
+    );
+    expect(
+      form,
+      contains(
+        'La garantía puede corresponder a una bicicleta completa o a un componente suelto. Elige primero el trabajo original para cargar el diagnóstico correcto.',
+      ),
+    );
+    expect(
+      form,
+      contains(
+        'Este trabajo recibe solo el componente. Registra sus hallazgos en Diagnóstico; no se crea ni se exige una bicicleta ficticia.',
+      ),
+    );
+    expect(form, contains('_clearSelectedBikeObject('));
+    expect(form, contains('_warrantySourceSelectionEpoch'));
+    expect(form, contains('_warrantySourceObjectMatchesForm('));
+    expect(form, contains('mechanicJobStandaloneItemsForForm('));
+    expect(form, contains('_warrantySaveCheckpoint.requiresSourceSelection'));
+    expect(form, contains('_warrantyCoverageNeedsReason('));
+    expect(form, contains('WarrantyEligibility.withinWindow'));
+    expect(form, contains('_warrantyCoverageNeedsFinancialReview'));
+    expect(
+      form,
+      contains(
+        'La factura tiene pagos vigentes. “Cubierto” queda bloqueado',
+      ),
+    );
+    expect(form, contains('getServiceWarrantySourceByJobId('));
+    expect(form, contains('_existingJobLoadError'));
+    expect(
+      form,
+      contains(
+        'final existingItemsForSave = await bikeshopService.getJobItems(jobId);',
+      ),
+      reason:
+          'A new bike warranty must re-read the canonical job-bike row created by registration before saving its aggregate.',
+    );
+    expect(
+      form,
+      isNot(contains('final existingItemsForSave = widget.jobId == null')),
+    );
+    expect(
+      form,
+      isNot(contains('_persistHydratedServiceLocationBackfill')),
+      reason:
+          'Opening a bicycle/job must hydrate in memory without silently writing a backfill.',
+    );
+    final exactWarrantyGuard = form.indexOf(
+      'if (!_warrantySourceObjectMatchesForm(warrantySource))',
+    );
+    final firstPersistence = form.indexOf(
+      'await _persistPendingBikeProfileOverrides(bikeshopService);',
+    );
+    expect(exactWarrantyGuard, greaterThanOrEqualTo(0));
+    expect(firstPersistence, greaterThan(exactWarrantyGuard));
+    expect(
+      form.indexOf(
+        'if (_jobType == JobType.warranty) {',
+        form.indexOf('Widget _buildDiagnosisSection'),
+      ),
+      lessThan(
+        form.indexOf(
+          'if (currentTab == null) {',
+          form.indexOf('Widget _buildDiagnosisSection'),
+        ),
+      ),
+      reason:
+          'Warranty source truth must gate diagnosis before any stale bike tab.',
+    );
     expect(form, contains('final shouldCreateInvoice ='));
     expect(form, contains('workflowKind: _existingJob?.workflowKind,'));
     expect(form, contains('intakeKind: _existingJob?.intakeKind,'));
@@ -37,8 +117,16 @@ void main() {
       form,
       contains('modeReviewReason: _existingJob?.modeReviewReason,'),
     );
-    expect(form, contains('final requestedDiscountAmount = _discountAmount;'));
-    expect(form, contains('discountAmount: 0,'));
+    expect(
+      form,
+      contains(
+        'var requestedDiscountAmount = protectPaymentCommercialSnapshot',
+      ),
+    );
+    expect(
+      form,
+      contains('discountAmount: protectPaymentCommercialSnapshot'),
+    );
     expect(form, contains('bikeshopService.updateJobDiscount('));
     expect(form, contains('El descuento no puede superar el subtotal.'));
     expect(form, contains('bikeshopService.createInvoiceFromJob(jobId)'));
@@ -54,15 +142,153 @@ void main() {
     expect(
       form,
       contains(
-        'bool get _isCommercialSnapshotLocked => _isFinalQuotationReadOnly;',
+        '_isPaymentProtectedCommercialSnapshotLocked',
       ),
       reason:
-          'The approved quotation is immutable, but its converted service must remain operationally editable.',
+          'Final quotations and every linked invoice with financial evidence protect their commercial snapshot.',
+    );
+    expect(form, contains(".from('sales_payments')"));
+    expect(form, contains(".isFilter('deleted_at', null)"));
+    expect(form, contains(".gt('amount', 0)"));
+    expect(form, contains('protectPaymentCommercialSnapshot'));
+    expect(
+      form,
+      contains(
+        'status: protectPaymentCommercialSnapshot',
+      ),
+      reason:
+          'The in-memory mirror remains stable while the protected update payload omits lifecycle columns entirely.',
+    );
+    expect(
+      form,
+      contains(
+        'statusId: protectPaymentCommercialSnapshot',
+      ),
+    );
+    expect(
+      form,
+      contains(
+        'onChanged: _isPaymentProtectedCommercialSnapshotLocked',
+      ),
+      reason:
+          'The status selector must not imply that a paid job lifecycle is editable.',
+    );
+    expect(
+      form,
+      contains(
+        'if (protectPaymentCommercialSnapshot)',
+      ),
+      reason:
+          'A paid job must run the invoice-authoritative reconciliation branch rather than mutable job-to-invoice projection.',
+    );
+    expect(
+      form,
+      contains('} else if (!warrantyDecisionManagedDocument) {'),
+    );
+    expect(
+      form,
+      contains('Historial financiero protegido'),
+      reason:
+          'Staff must understand why commercial fields are locked while diagnosis remains editable.',
+    );
+    expect(
+      form,
+      contains('La factura de este trabajo tiene pagos vigentes.'),
+      reason: 'Financial lock guidance must apply to normal services too.',
+    );
+    expect(
+      form,
+      contains('La factura cambió mientras editabas'),
+      reason:
+          'A payment discovered at save time must never silently discard commercial edits.',
+    );
+    expect(
+      form,
+      contains(
+        'protectCommercialSnapshot: protectPaymentCommercialSnapshot',
+      ),
+      reason:
+          'A protected form save must ask the service for a narrow diagnosis-only update.',
+    );
+    expect(service, contains('bool protectCommercialSnapshot = false'));
+    expect(
+      service,
+      contains('mechanicJobPaymentProtectedUpdatePayload(fullPayload)'),
+    );
+    for (final protectedColumn in [
+      "'status'",
+      "'status_id'",
+      "'diagnostic_sent_at'",
+      "'started_at'",
+      "'completed_at'",
+      "'delivered_at'",
+    ]) {
+      expect(
+        formPersistencePolicy,
+        contains(protectedColumn),
+        reason:
+            '$protectedColumn must be omitted so UPDATE OF lifecycle triggers cannot fire.',
+      );
+    }
+    expect(
+      form,
+      contains(
+          'if (protectPaymentCommercialSnapshot && existingJobBike == null)'),
+      reason:
+          'A payment race must not attach a newly selected physical object to the paid job.',
+    );
+    expect(
+      form,
+      contains('_hydrateFirstBikeNarrativeFromStandalone(newTab);'),
+      reason:
+          'Quote/component narrative must follow the first bicycle when an unsaved draft becomes a service.',
+    );
+    expect(
+      form,
+      contains('_confirmWarrantySourceContextReplacement()'),
+      reason:
+          'Changing a warranty source must explicitly acknowledge source-scoped diagnosis loss.',
+    );
+    expect(
+      form,
+      contains('mechanicJobWarrantySourceChangeNeedsConfirmation('),
+    );
+    expect(form, contains('_confirmModeSwitchRemovesBikeContext('));
+    expect(form, contains('_moveBikeTabLinesToStandalone();'));
+    expect(form, contains('_moveStandaloneLinesToGeneralTab();'));
+    expect(form, contains('if (job.convertedAt != null) {'));
+    expect(form, contains('mechanicJobConvertedBikeNarrativeValue('));
+    expect(
+      form,
+      contains(
+        'Los productos y servicios se conservarán en General para que no tengas que ingresarlos otra vez.',
+      ),
+      reason:
+          'Changing creation mode must explain the diagnosis loss and line preservation before it occurs.',
     );
     expect(form, contains('bool get _hasConvertedQuotationHistory'));
     expect(form, contains('onPressed: _canSaveJob ? _saveJob : null'));
     expect(form, contains('_lockFormContent(content, locked: contentLocked)'));
     expect(form, contains('enabled: !_isCommercialSnapshotLocked'));
+    expect(
+      form.indexOf('bikeshopService.syncBikeMemoryFromJob(jobId)'),
+      greaterThan(
+        form.indexOf('await bikeshopService.syncJobToInvoice(jobId);'),
+      ),
+      reason:
+          'Bike memory must reconcile only after the authoritative warranty/invoice phase.',
+    );
+    expect(
+      form,
+      contains('_reconcileConfirmedPaymentRaceAfterSaveFailure('),
+      reason:
+          'A confirmed payment race after partial writes must restore invoice truth before reporting the failure.',
+    );
+    expect(
+      form,
+      contains('state.paymentStateUnknown || !state.hasActivePayments'),
+      reason: 'Unpaid or uncertain partial saves must not be auto-reconciled.',
+    );
     expect(
       form,
       contains(
@@ -72,7 +298,34 @@ void main() {
 
     expect(table, contains('InvoicePdfGenerator.generateQuotationPDF('));
     expect(table, contains('final updatedJob = job.copyWith('));
-    expect(table, contains('_jobs[index] = updatedJob.copyWith('));
+    expect(table, contains('transitionJobStatusByLegacyStatus('));
+    expect(table, contains('transitionJobStatus('));
+    expect(table, contains('await _loadData();'));
+    expect(
+      table,
+      isNot(contains('_jobs[index] = updatedJob.copyWith(')),
+      reason:
+          'Status actions must reload server truth instead of inventing lifecycle timestamps in the table.',
+    );
+    expect(table, isNot(contains('_bikeshopService.updateJobStatus(')));
+    expect(table, isNot(contains('_jobStatusService.updateJobStatus(')));
+    expect(
+      table,
+      contains('job.customStatus?.triggersDelivery == true'),
+      reason:
+          'Active/completed filters must honor tenant delivery statuses, not only the legacy enum.',
+    );
+    expect(form, contains('bool get _isStatusTransitionLocked'));
+    expect(
+      form,
+      contains('widget.jobId != null && !_isStatusTransitionLocked'),
+    );
+    expect(
+      form,
+      contains('onChanged: _isStatusTransitionLocked'),
+      reason:
+          'Paid normal services remain operational; only the specific audited lifecycle guard locks status.',
+    );
     expect(table, contains('discountAmount: job.discountAmount'));
     expect(table, contains('_bikeshopService.convertToBillableJob('));
     expect(
@@ -87,6 +340,65 @@ void main() {
     );
     expect(table, contains("'Clasificación pendiente'"));
     expect(table, contains("'EN EVALUACIÓN'"));
+    expect(
+      table,
+      contains('outcome == WarrantyOutcome.pending &&'),
+      reason: 'Pending warranty UI must not hide a linked historical invoice.',
+    );
+    expect(table, contains('_pendingWarrantyDecisionAttempts'));
+    expect(table, contains('operationKey: attempt.operationKey'));
+    expect(table, contains('_pendingQuotationTransitionAttempts'));
+    expect(table, contains('_pendingQuotationConversionAttempts'));
+    expect(table, contains('Future<void> _submitQuotationTransition('));
+    expect(table, contains('Future<void> _submitQuotationConversion('));
+    expect(
+      table,
+      contains(
+        'if (!identical(_pendingQuotationConversionAttempts[jobId], attempt))',
+      ),
+      reason:
+          'A stale conversion retry must not override a newer bicycle/component choice.',
+    );
+    expect(
+      table,
+      contains(
+        'if (!identical(_pendingQuotationTransitionAttempts[jobId], attempt))',
+      ),
+      reason:
+          'A stale status retry must not revert a newer quotation decision.',
+    );
+    expect(
+      table,
+      contains('MechanicJobQuotationCommandOutcomeUnknown'),
+      reason:
+          'Unknown quotation outcomes must retain and replay the same semantic attempt.',
+    );
+    expect(
+      table,
+      contains('but table refresh failed'),
+      reason:
+          'A projection refresh failure must not be presented as a rejected command.',
+    );
+    expect(table, contains('bool rethrowErrors = false'));
+    expect(table, contains('if (rethrowErrors) rethrow;'));
+    expect(table, contains('forceInvoiceRefresh: true'));
+    expect(table, contains('if (outcome == currentOutcome) return;'));
+    expect(table, contains('_hasWarrantyPaymentEvidence(job)'));
+    expect(table, contains('warrantyPaymentReviewRequired:'));
+    expect(
+      table,
+      contains(
+        'Esta garantía tiene pagos vigentes. Primero revisa, revierte o reembolsa el pago desde la factura',
+      ),
+      reason:
+          'A paid historical warranty must expose its invoice and require financial review before becoming covered.',
+    );
+    expect(
+      table,
+      contains('MechanicJobWarrantyCommandOutcomeUnknown'),
+      reason:
+          'Lost acknowledgements must retain the exact warranty operation key.',
+    );
     expect(table, contains("'Cotizado: "));
     expect(table, contains('JobIntakeKind.bike'));
     expect(table, contains('_bikeshopService.createInvoiceFromJob(jobId)'));
@@ -98,8 +410,36 @@ void main() {
     );
 
     expect(service, contains("'create_billable_invoice_from_mechanic_job'"));
-    expect(service, contains("'transition_mechanic_job_quotation'"));
-    expect(service, contains("'convert_mechanic_job_to_billable'"));
+    expect(
+      quotationCoordinator,
+      contains("'transition_mechanic_job_quotation'"),
+    );
+    expect(
+      quotationCoordinator,
+      contains("'convert_mechanic_job_to_billable'"),
+    );
+    expect(
+      quotationCoordinator,
+      contains(
+          'MechanicJobQuotationCommandConfirmation.reconciledFromInvariant'),
+      reason:
+          'A lost same-state no-event acknowledgement needs a truthful invariant fallback.',
+    );
+    expect(
+      quotationCoordinator,
+      contains('request.kind != MechanicJobQuotationCommandKind.transition'),
+      reason:
+          'Conversion must never be confirmed from a mutable row projection alone.',
+    );
+    expect(service, contains(".from('mechanic_job_mode_events')"));
+    expect(service, contains(".eq('tenant_id', tenantId)"));
+    expect(service, contains(".eq('job_id', jobId)"));
+    expect(
+      service,
+      contains(
+        'Future<MechanicJobServiceWarranty?> getServiceWarrantySourceByJobId(',
+      ),
+    );
     expect(service, contains('Future<MechanicJob> updateJobDiscount('));
     expect(registry, contains('Workshop job create/edit'));
     expect(registry, contains('Workshop list actions'));
@@ -257,6 +597,8 @@ void main() {
       r'\ir ../migrations/20260716020000_repair_nested_invoice_trace_context.sql',
       r'\ir ../migrations/20260716030000_harden_quotation_approval_contract.sql',
       r'\ir ../migrations/20260716040000_add_mechanic_job_intake_classification_command.sql',
+      r'\ir ../migrations/20260716070000_harden_warranty_source_object_contract.sql',
+      r'\ir ../migrations/20260716080000_add_canonical_mechanic_job_status_transition.sql',
     ]) {
       expect(schema, contains(path));
     }

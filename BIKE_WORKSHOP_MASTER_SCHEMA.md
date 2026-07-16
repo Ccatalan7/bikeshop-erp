@@ -1958,12 +1958,39 @@ logical save action and refuses to turn missing connectivity into empty truth.
 - customer-owned form state is isolated: changing the customer on an unsaved
   job clears the previously selected bike, component, original warranty job,
   decision and reason before loading the new customer's eligible sources.
+- changing the original source on an unsaved warranty with source-scoped
+  diagnosis, ficha edits or lines requires explicit confirmation. Commercial
+  lines move to General before the old physical tab is removed; diagnosis is
+  intentionally discarded because it belongs to the replaced bicycle/object.
 - invoice ownership does not change. A covered claim uses its linked
   zero-customer-value invoice as the only inventory/accounting document. On
   completion it consumes products and posts debit `5115 Garantías de Servicio
   Técnico` / credit `1105 Inventarios` at catalog cost, with no revenue, IVA,
   receivable, or payment. Reopening or changing coverage reverses through the
   same invoice-owned path before any billable draft is rebuilt.
+- a warranty decision locks the linked invoice before checking financial
+  history. Paid status, positive `paid_amount`, or any active payment rejects
+  entering or leaving `covered`; an already-`not_covered` paid row may append
+  the same operational classification without rewriting the exact invoice,
+  payments, stock movements or journals. Financial reversal/refund remains an
+  invoice-panel action.
+- the job form verifies active `sales_payments` directly instead of trusting
+  only invoice mirrors, both when loading and immediately before a save. Every
+  persisted job with a paid/part-paid linked invoice, or whose linked payment
+  state cannot be read reliably, keeps diagnosis, bicycle ficha and
+  non-lifecycle operational fields editable but freezes the physical object,
+  products/services, prices, discount, totals, line deletion and generic
+  mutable job-to-invoice projection. The protected save still invokes the
+  migration-070 branch, which is an exact commercial no-op after financial
+  history so it cannot silently backfill legacy workshop metadata. Its narrow header
+  update omits `status`,
+  `status_id`, `diagnostic_sent_at`, `started_at`, `completed_at` and
+  `delivered_at` instead of resending equal values, because PostgreSQL
+  `UPDATE OF` lifecycle triggers fire whenever those columns are present and
+  can post or reverse invoice, stock and journal effects. Bicycle memory is
+  reconciled only after the authoritative warranty/invoice phase. This generic
+  fail-closed client guard complements the database-owned warranty decision
+  contract, whose `covered` action retains its additional payment rejection.
 - the legacy warranty backfill preserves known outcomes but does not guess the
   original job or replay historical inventory/accounting when evidence is
   incomplete.
@@ -1973,20 +2000,67 @@ logical save action and refuses to turn missing connectivity into empty truth.
 Deployment state (2026-07-16): the additive base contract in
 `20260716010000_redesign_mechanic_job_modes.sql` and the nested trace repair in
 `20260716020000_repair_nested_invoice_trace_context.sql` are deployed and
-verified in production. The stricter quotation contract in
-`20260716030000_harden_quotation_approval_contract.sql`, its isolated one-row
-normalization in
-`20260716035000_normalize_quotation_non_posting_candidate.sql`, the manual
-intake classification command in
-`20260716040000_add_mechanic_job_intake_classification_command.sql`, the exact
-online-payment child-trace linkage in
-`20260716050000_harden_online_manual_payment_trace_linkage.sql`, and the
-invoice-sync bicycle-attribution guard in
-`20260716060000_preserve_workshop_invoice_bike_attribution.sql` are implemented
-in the isolated release worktree but remain **pending in production** until the
-final repeatable release gate, pre-write fingerprint and per-migration
-post-write readback pass. The matching UI is therefore release-candidate
-behavior, not yet an employee-facing production guarantee.
+verified in production. The stricter quotation contract
+`20260716030000`, isolated one-row normalization `20260716035000`, manual
+intake classification command `20260716040000`, exact online-payment
+child-trace linkage `20260716050000`, and invoice-sync bicycle-attribution
+guard `20260716060000` were also deployed, registered and read back on
+2026-07-16. Release validation used a fresh read-only dump of the deployed
+production schema, never staging or a `core_schema.sql` bootstrap. The one-row migration changed
+only `PG-00468`; `PG-00455`, payments, stock movements and balanced journals
+were unchanged. The matching UI remains release-candidate behavior until its
+employee-path smoke and client publication finish; the database is already
+backwards compatible with the currently deployed client.
+
+The follow-up `20260716070000_harden_warranty_source_object_contract.sql` is a
+deployed and verified no-backfill contract. It exposes the original job's canonical
+`intake_kind`, review flag and component description in the warranty source
+view, and makes registration replace the claim's physical anchor exactly:
+bicycle intake inherits one bicycle, component intake inherits no received
+bicycle and the exact component/description. The decision RPC uses the same
+invoice lock order as payment integrity, blocks coverage with active payments
+and also treats paid invoice status or positive `paid_amount` as financial
+history. Entering or leaving `covered` is blocked once that evidence exists;
+reconfirming an already-`not_covered` outcome preserves both commercial sides.
+The shared job-to-invoice sync and existing-invoice retry use
+the same invoice-to-job order, bounded to 750 ms. Once payment history exists,
+the void sync RPC succeeds without rewriting either commercial projection; the
+client prevents those edits before save so operational diagnosis can still be
+updated without a late partial-save error. Payment registration itself rejects
+a stale job/invoice commercial snapshot before settlement. It was applied first
+to the production-derived disposable database, then in a live production
+rollback probe, and finally deployed with an unchanged business fingerprint.
+
+The companion `20260716080000_add_canonical_mechanic_job_status_transition.sql`
+is also deployed and verified without backfill. `transition_mechanic_job_status`
+serializes the linked invoice before the job, validates an active same-tenant
+custom status, derives the legacy status mirror and lifecycle timestamps from
+the database clock, and writes one immutable
+`mechanic_job_status_transition_events` receipt per exact operation key. A
+same-state request is a durable trigger-free no-op. Table, legacy list,
+calendar, routed form and embedded form all delegate to the same coordinator;
+ordinary persisted job saves omit status/lifecycle columns. Public-store
+customer history remains read-only: a future customer approval feature needs a
+separate ownership-validating command rather than a direct row update or a
+weakened employee RPC.
+
+The deployed `20260716090000_complete_non_warranty_nested_invoice_traces.sql` closes the
+accounting evidence seam exposed by those status effects. A nested sales-
+invoice update for an ordinary bicycle service or loose-component service now
+completes its own `inventory_accounting_operations` root before the parent
+trace frame is restored. A covered warranty is deliberately different: its
+child root stays active until the explicit invoice-owned stock/cost writer
+attaches and completes those effects. The migration replaces two existing
+trigger functions: the covered-warranty lifecycle publishes and restores an
+exact tenant/job/invoice transaction marker, and the trace-frame restorer
+defers only a child root matching that marker. It performs no business-row
+rewrite or historical backfill.
+
+The ACL-only `20260716100000_restrict_expense_period_details_acl.sql` is also
+deployed. Live read-back confirms `authenticated` retains `EXECUTE` while
+PUBLIC, `anon`, and `service_role` do not. Across 070–100, 16 business-table
+counts and digests stayed identical after every migration; the final production
+health gate reports zero critical violations.
 
 The four familiar creation choices remain, but they no longer overload one
 database concept. `mechanic_jobs.workflow_kind` is the commercial/lifecycle
@@ -2025,6 +2099,15 @@ service + component, while quotation and warranty keep their familiar values.
   tenant/customer bicycle or tenant subject, preserves the quotation snapshot
   in `mechanic_job_mode_events`, and optionally creates the one linked draft
   invoice in the same transaction.
+- conversion keeps the original quote narrative on `mechanic_jobs`. When its
+  new first physical `mechanic_job_bikes` row is still empty, the form hydrates
+  those empty request/diagnosis/work/notes fields from the job-level narrative;
+  any nonempty bicycle-specific value always wins. This keeps the approved
+  diagnosis visible without inventing a second durable store.
+- the same continuity applies before first save: changing an unsaved quotation
+  or component draft to bicycle service copies each nonempty standalone
+  request/diagnosis/work/notes value into the empty first bicycle tab, never
+  overwriting text already entered for that bicycle.
 - conversion re-verifies the current commercial snapshot against the latest
   approved event before it can commit. The resulting service remains normally
   editable for later diagnosis or authorized additions; the accepted proposal
@@ -2099,6 +2182,28 @@ service + component, while quotation and warranty keep their familiar values.
   attribution; an explicit ID must belong to the same job/tenant. The migration
   contains no backfill and does not rewrite historical invoice JSON or job
   items merely by being installed.
+- migration 070 replaces the service-warranty source view, registration and
+  decision RPCs, shared sync/billable commands, and adds payment/commercial
+  row guards. It uses canonical `intake_kind` rather than `bike_id`/`subject_id`
+  heuristics, rejects stale cross-source form objects and operation-key
+  collisions, and contains no historical data update or install-time financial
+  effect. An existing invoice is locked before its job, then the preflight
+  tenant/invoice link is revalidated, matching payment posting and preventing
+  the inverse-lock deadlock. Payment validates the shared commercial snapshot
+  while holding invoice then job. A paid/part-paid invoice, both commercial
+  mirrors, its payments, inventory and journals are exact sync no-ops; legacy
+  technical metadata is never rewritten as an implicit backfill.
+- migration 080 creates the append-only status-transition receipt ledger and
+  the exact-key `transition_mechanic_job_status` command. The server owns
+  `status`, `status_id`, `status_updated_at`, lifecycle timestamps and the
+  invoice-before-job lock order. It contains no business backfill; a paid
+  normal service may still advance operationally, while a covered warranty
+  with payment evidence fails before any posting or reversal trigger runs.
+- migration 090 completes ordinary service/component nested invoice trace roots
+  inside the same transaction and restores the exact parent frame. Covered-
+  warranty roots remain deferred to their explicit stock/cost finalizer. It
+  changes trigger logic only: no business rows, stock, journals or historical
+  traces are backfilled on installation.
 - an expired quotation can be approved outside its validity window only with a
   recorded reason. Conversion remains coherent: it accepts a timely approval
   or the latest audited late-approval event with that explicit reason, never a
@@ -2128,7 +2233,7 @@ This is the ordered queue a fresh agent should assume unless the user explicitly
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
-1. Finish the isolated workshop-mode release gate before exposing the new UI: re-read the exact production quotation candidate and business fingerprints, apply/register pending migrations `20260716030000`, `20260716035000`, `20260716040000`, `20260716050000`, and `20260716060000` in that order only if those proofs still match, verify zero unintended invoice/payment/stock/journal effects and read every migration back, then run the normal employee quote conversion and `Revisar modo` browser paths before publishing the matching client. Migration 035 is the only backfill; migration 060 has no backfill. Staging remains suspended/non-authoritative.
+1. Finish the client boundary of the isolated workshop-mode release: the five database migrations are deployed/registered/read back and the only backfill normalized exactly `PG-00468` with zero unintended payment/stock/journal effects. Run the normal employee quotation and `Revisar modo` browser paths against that live contract, publish exactly the gated client commit, and repeat the routed table/form/invoice smoke plus production health readback. Staging remains suspended/non-authoritative.
 2. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
 3. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
 4. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.

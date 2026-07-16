@@ -43,7 +43,15 @@ select lives_ok(
 
 select ok(
   not has_function_privilege(
+    'public',
+    'public.get_expense_period_details(timestamp with time zone, timestamp with time zone, boolean)',
+    'execute'
+  ) and not has_function_privilege(
     'anon',
+    'public.get_expense_period_details(timestamp with time zone, timestamp with time zone, boolean)',
+    'execute'
+  ) and not has_function_privilege(
+    'service_role',
     'public.get_expense_period_details(timestamp with time zone, timestamp with time zone, boolean)',
     'execute'
   ) and has_function_privilege(

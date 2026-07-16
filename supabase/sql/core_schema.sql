@@ -1,6 +1,16 @@
 -- Core data schema for Vinabike ERP.
 -- Run this script in the Supabase SQL editor to provision base tables.
 -- UUID columns default to gen_random_uuid(); ensure the extension is enabled first.
+-- Match Supabase's hosted public-schema defaults before provisioning objects.
+-- Object-specific REVOKE statements later in this snapshot remain authoritative.
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;
+
 -- CRITICAL: Drop ALL triggers on mechanic_job_items and mechanic_job_tasks
 -- that reference old task functions (cascade will remove dependencies)
 do $$
@@ -15884,6 +15894,8 @@ create table if not exists mechanic_jobs (
   -- Dates and timeline
   arrival_date timestamp with time zone not null default now(),
   deadline timestamp with time zone,
+  diagnostic_deadline timestamp with time zone,
+  diagnostic_sent_at timestamp with time zone,
   started_at timestamp with time zone,
   completed_at timestamp with time zone,
   delivered_at timestamp with time zone,
@@ -15938,6 +15950,13 @@ create table if not exists mechanic_jobs (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+-- Keep the canonical snapshot compatible with databases created before the
+-- diagnostic timeline fields were introduced by the historical standalone
+-- migration `20260207_add_diagnostic_deadline.sql`.
+alter table mechanic_jobs
+  add column if not exists diagnostic_deadline timestamp with time zone,
+  add column if not exists diagnostic_sent_at timestamp with time zone;
 
 -- Status backbone: mechanic_jobs.status_id (FK to job_statuses)
 alter table mechanic_jobs add column if not exists status_id uuid;
@@ -35248,5 +35267,19 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Preserve server-owned workshop bicycle attribution when historical invoice
 -- JSON omits it; reject explicit invalid or cross-job references.
 \ir ../migrations/20260716060000_preserve_workshop_invoice_bike_attribution.sql
+-- Canonical source-object inheritance for warranty claims; exposes intake,
+-- locks source/claim coherently, validates payment-ready commercial snapshots,
+-- preserves paid commercial history exactly and performs no business backfill.
+\ir ../migrations/20260716070000_harden_warranty_source_object_contract.sql
+-- Canonical idempotent mechanic-job status command and append-only receipt;
+-- server-owned lifecycle timestamps and covered-warranty payment guard.
+\ir ../migrations/20260716080000_add_canonical_mechanic_job_status_transition.sql
+-- Complete ordinary service/component invoice traces created by nested job
+-- status sync while retaining covered-warranty roots for their explicit
+-- invoice-owned stock and cost-journal writers.
+\ir ../migrations/20260716090000_complete_non_warranty_nested_invoice_traces.sql
+-- Keep the tenant-scoped expense dashboard RPC authenticated-only even when
+-- hosted Supabase default privileges directly grant new functions to API roles.
+\ir ../migrations/20260716100000_restrict_expense_period_details_acl.sql
 
 commit;

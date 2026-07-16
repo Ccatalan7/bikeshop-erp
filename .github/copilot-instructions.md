@@ -112,11 +112,93 @@ other integrations:
   a production credential or revoke an existing one before mapping consumers
   and proving the replacement.
 
+## Codex Browser Testing Contract (CRITICAL)
+
+For local ERP journeys, use Codex's in-app Browser by default. Use Chrome only
+when the user explicitly requests it or the workflow requires an existing
+Chrome profile, login, or extension.
+
+### One binding, one tab, one Flutter server
+
+- Select one browser binding and reuse it for the task. Re-select only after an
+  explicit disconnection; a stale tab is not evidence that the browser itself
+  disconnected.
+- Inspect existing tabs once and claim the matching ERP tab before creating a
+  new one. Reuse one tab and close temporary, duplicate, blank, login, and error
+  tabs as soon as they are no longer needed.
+- Run exactly one Flutter web server from the intended worktree, commit, entry
+  point, and backend target. Use fixed browser-test port `54330`; port `54321`
+  belongs to the local Supabase API and must never host Flutter.
+- Before starting Flutter, verify the listener on `54330`. Reuse the correct
+  server or stop the stale server gracefully, then use a PID file for the
+  replacement. Hot reload ordinary widget edits; hot restart routing/provider/
+  initialization changes; cold restart dependency, plugin, entry-point, or
+  `--dart-define` changes. Wait for terminal compilation confirmation before
+  interacting with the page.
+
+### Efficient interaction
+
+- Take one DOM snapshot after navigation, build stable locators, and reuse them
+  until the DOM materially changes. Prefer semantic labels and stable
+  attributes over coordinates.
+- Confirm locator uniqueness, perform the action, then collect only the
+  cheapest targeted state needed for the next decision. Use screenshots for
+  visual/layout evidence, not after every click.
+- Avoid fixed sleeps, repeated full screenshots/snapshots, redundant `goto` or
+  reload calls, and console/network/terminal polling after every action.
+- After two failed locator attempts, refresh the snapshot once. If no stable
+  hook exists, add a durable Flutter `Semantics` label or equivalent test
+  contract instead of continuing coordinate retries.
+
+### Mandatory cleanup
+
+- Finish browser work with exactly one `browser.tabs.finalize({ keep })` call as
+  the final browser action. Keep no tabs by default; keep exactly one
+  `deliverable` tab only when the user needs the finished page open, or exactly
+  one `handoff` tab when work is genuinely unfinished. Never preserve multiple
+  handoff tabs and never make a browser call after finalization.
+- Stop the Flutter server gracefully and confirm `54330` is no longer listening
+  when testing is complete, unless continued browser use was explicitly
+  requested. Close only duplicate ERP test tabs, never unrelated user tabs.
+
 ## Supabase Implementation Completion Gate
 
 Every Supabase/database implementation must also follow
 `docs/runbooks/STAGING_SUPABASE.md`, whose current environment status and safety
 rules override older staging wording elsewhere in this file.
+
+### Production Is The Compatibility Source Of Truth (CRITICAL)
+
+- The deployed production project `xzdvtzdqjeyqxnkqprtf` is the only canonical
+  source for current schema compatibility. The suspended staging project is
+  materially different and must never be used for release evidence, readiness
+  claims, migration compatibility testing, or browser acceptance testing.
+- `supabase/sql/core_schema.sql` is a required idempotent documentation/bootstrap
+  mirror. It is not evidence of what production currently contains and must not
+  be used as the baseline for a test that claims a migration or release will
+  work in production.
+- Before testing database changes, obtain a fresh, read-only schema dump from
+  the verified production project. Record its project ref, UTC timestamp, and
+  SHA-256 outside Git. Restore that dump into a disposable database that retains
+  compatible Supabase-managed schemas, then apply only the migrations that are
+  actually absent from production. Never rebuild this release-validation
+  database from `core_schema.sql`.
+- A production-derived disposable database proves application-schema and SQL
+  compatibility, but it does not by itself prove behavior against live data or
+  provider-managed configuration. Pair it with read-only production manifests,
+  invariants, migration-history checks, and post-deployment read-back.
+- When a behavior cannot be represented faithfully off-production, use the
+  smallest reviewed test directly against production only when the owner has
+  authorized production testing. Prefer `BEGIN`/`ROLLBACK`, fixed synthetic
+  identifiers, a dedicated test tenant, bounded lock/statement timeouts, and
+  tests that cannot emit webhooks, HTTP calls, messages, storage writes, or
+  other non-transactional side effects. If those guarantees cannot be proven,
+  do not run the mutating test; validate with read-only evidence and deploy the
+  backward-compatible change behind its documented guard instead.
+- Never say “100% representative”, “production-safe”, or “ready” based on
+  staging, a core-schema bootstrap, or a schema-only clone. State exactly which
+  layers were verified and reserve the final compatibility claim for live
+  production read-back and business-invariant checks.
 
 For each database-backed implementation, the agent must:
 
@@ -124,8 +206,9 @@ For each database-backed implementation, the agent must:
    evidence first.
 2. Represent schema/data behavior in an idempotent forward migration and mirror
    the same objects/logic in `supabase/sql/core_schema.sql`.
-3. Run the affected local pgTAP tests; run the full database gate at the
-   phase/release boundary or when the change has broad schema impact.
+3. Run affected pgTAP tests against a fresh production-derived disposable
+   database. A local suite bootstrapped from `core_schema.sql` may be used only
+   to maintain that snapshot and can never satisfy the production release gate.
 4. Execute the smallest reviewed migration/backfill against the intended live
    environment when that target is in scope and the task authorizes the write.
    Do not stop after creating SQL or after proving it only on a local database.
@@ -202,6 +285,17 @@ workflow UI changes.
   deployed client operational during rollout; it accepts no content drift,
   unapproved conversion, unresolved intake or expired approval without reason,
   and appends every accepted transition to the canonical event ledger.
+- Operational job status changes use `transition_mechanic_job_status`; table,
+  list, calendar and routed/embedded form surfaces must not update
+  `mechanic_jobs.status`, `status_id` or lifecycle timestamps directly. The RPC
+  derives the legacy mirror from the active tenant status, timestamps from the
+  database clock and appends an immutable exact-key receipt. An ordinary job
+  save omits those columns entirely so `UPDATE OF` triggers cannot run by
+  accident.
+- Public-store customer code is read-only for workshop status. Do not restore
+  the removed direct approve/reject writers. A future customer approval flow
+  requires its own ownership-validating server command and audit receipt; it
+  must not reuse an employee RPC by weakening tenant authorization.
 - An operation key replays only the exact same job, event type, and request
   payload. Reusing it for another transition must fail rather than returning an
   unrelated receipt.
@@ -451,7 +545,9 @@ The Windows ERP desktop app has an app-owned updater for non-technical coworker 
 
 Primary files:
 
-- `.github/workflows/windows-release.yml` builds and publishes the Windows release artifacts.
+- `.github/workflows/windows-release.yml` always builds, validates, packages,
+  checksums, and retains a Windows artifact. It publishes the coworker update
+  only when a manual dispatch explicitly sets `publish_release=true`.
 - `scripts/install_vinabike_erp.ps1` installs, prepares, applies, verifies, logs, and relaunches the Windows app.
 - `scripts/publish_windows_update.ps1` is the developer publish helper used by the VS Code task.
 - `.vscode/tasks.json` exposes `Publish Windows Update (all changes)` as a selectable build task.
@@ -505,7 +601,9 @@ The task runs `scripts/publish_windows_update.ps1`. Its current behavior is inte
 3. If staged changes exist, creates a commit automatically. If no message is passed, it generates a timestamped Windows update commit message.
 4. If no staged changes exist, skips the commit and publishes the current branch `HEAD`. This supports the Mac-to-Windows flow where changes were already committed or synced before running the task.
 5. Pushes the current branch.
-6. Triggers `.github/workflows/windows-release.yml` with `gh workflow run`.
+6. Triggers `.github/workflows/windows-release.yml` with
+   `publish_release=true`. A dispatch without that explicit input is a safe
+   artifact-only gate and cannot create a tag or GitHub Release.
 7. Waits for the GitHub Actions run.
 8. Prints elapsed build time on each poll and check-run annotations when a job fails before producing normal logs.
 9. Prints the latest releases after success.
@@ -515,6 +613,13 @@ Important consequences:
 
 - Anything visible in Source Control will be included. Clean or intentionally keep unrelated changes before running the task.
 - The `Production` environment uses explicit custom branch policies for `main` and `smartpegas1.0`; do not switch it back to protected-branches-only while Windows updates are intentionally published from `smartpegas1.0`.
+- Pushes and default manual dispatches run the full integrity/build/package
+  pipeline but remain artifact-only. They use read-only repository permission
+  and never expose an update to installed coworker apps.
+- Only the separate `publish` job has `contents: write`, enters the GitHub
+  `Production` environment, verifies the downloaded zip checksum again, and
+  creates or updates the release. Its guard requires both
+  `workflow_dispatch` and boolean `publish_release=true`.
 - A clean Source Control state is valid. In that case, the task publishes the already-committed branch head instead of failing.
 - The task does not need manual staging, manual commit, or a `YES` confirmation in the normal path.
 - The task is selectable, not default, so Firebase deploy tasks remain available from the same build-task menu.
@@ -577,12 +682,24 @@ For updater changes, verify as much of this as the environment allows:
 
 1. `dart analyze` the updater service/widget files.
 2. `PowerShell` parse `scripts/install_vinabike_erp.ps1` and `scripts/publish_windows_update.ps1`.
-3. Publish a Windows release through the VS Code task or `scripts/publish_windows_update.ps1`.
-4. Confirm GitHub Actions succeeds.
-5. Confirm `gh release list --repo Ccatalan7/bikeshop-erp --limit 3` shows the new latest release.
-6. Launch the installed Windows app, not a debug build.
-7. Confirm the app detects the update without a visible one-minute checking flicker, prepares it silently, shows `Actualizacion lista`, restarts, and displays the changed app behavior.
-8. Inspect `%LOCALAPPDATA%\VinabikeERP\current-release.json` after restart to confirm the installed tag advanced.
+3. Dispatch `Build Windows Desktop Release` with the default
+   `publish_release=false`; confirm the exact-SHA artifact-only gate succeeds
+   and inspect its zip, checksum, installer, and manifest.
+4. Publish through the VS Code task or `scripts/publish_windows_update.ps1`;
+   those paths explicitly pass `publish_release=true`.
+5. Confirm GitHub Actions succeeds and the publish run's `headSha` equals the
+   intended source commit.
+6. Confirm `gh release list --repo Ccatalan7/bikeshop-erp --limit 3` shows the new latest release targeting that commit.
+7. Launch the installed Windows app, not a debug build.
+8. Confirm the app detects the update without a visible one-minute checking flicker, prepares it silently, shows `Actualizacion lista`, restarts, and displays the changed app behavior.
+9. Inspect `%LOCALAPPDATA%\VinabikeERP\current-release.json` after restart to confirm the installed tag advanced.
+
+Do not process-launch the release executable inside GitHub Actions merely as a
+startup smoke. `lib/main.dart` initializes the production Supabase fallback and
+notification services before login, so that launch would contact production.
+The safe CI substitute checks the complete native runtime bundle without
+executing it; functional launch validation belongs on an installed canary after
+the artifact-only gate.
 
 ### macOS Future Path
 

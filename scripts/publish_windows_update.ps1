@@ -98,6 +98,11 @@ function Get-RunProperty {
             if ($null -eq $value) { $value = Get-ObjectProperty $Run 'created_at' }
             return $value
         }
+        'displayTitle' {
+            $value = Get-ObjectProperty $Run 'displayTitle'
+            if ($null -eq $value) { $value = Get-ObjectProperty $Run 'display_title' }
+            return $value
+        }
         default {
             return Get-ObjectProperty $Run $Name
         }
@@ -158,7 +163,7 @@ function Get-WindowsWorkflowRuns {
             --workflow "Build Windows Desktop Release" `
             --branch $Branch `
             --limit 20 `
-            --json databaseId,headSha,status,conclusion,url,createdAt
+            --json databaseId,headSha,status,conclusion,url,createdAt,displayTitle
 
         return @($runsJson | ConvertFrom-Json)
     }
@@ -257,6 +262,10 @@ function Find-TriggeredWorkflowRun {
     $parsedRuns = Get-WindowsWorkflowRuns -Branch $Branch
 
     foreach ($candidate in $parsedRuns) {
+        $candidateTitle = [string](Get-RunProperty $candidate 'displayTitle')
+        if ($candidateTitle -notlike 'Windows publish*') {
+            continue
+        }
         $candidateCreatedAt = Convert-ToUtcDateTimeOrNull (Get-RunProperty $candidate 'createdAt')
         if ($null -eq $candidateCreatedAt) {
             continue
@@ -268,6 +277,10 @@ function Find-TriggeredWorkflowRun {
     }
 
     foreach ($candidate in $parsedRuns) {
+        $candidateTitle = [string](Get-RunProperty $candidate 'displayTitle')
+        if ($candidateTitle -notlike 'Windows publish*') {
+            continue
+        }
         $candidateStatus = Get-ObjectProperty $candidate 'status'
         if ((Get-RunProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
             return $candidate
@@ -286,6 +299,10 @@ function Find-ActiveWorkflowRun {
     $parsedRuns = Get-WindowsWorkflowRuns -Branch $Branch
 
     foreach ($candidate in $parsedRuns) {
+        $candidateTitle = [string](Get-RunProperty $candidate 'displayTitle')
+        if ($candidateTitle -notlike 'Windows publish*') {
+            continue
+        }
         $candidateStatus = Get-ObjectProperty $candidate 'status'
         if ((Get-RunProperty $candidate 'headSha') -eq $HeadSha -and $candidateStatus -ne 'completed') {
             return $candidate
@@ -364,7 +381,10 @@ if ($run) {
 } else {
     Write-Step 'Triggering GitHub Actions Windows release workflow'
     $triggeredAt = (Get-Date).ToUniversalTime().AddSeconds(-5)
-    gh workflow run windows-release.yml --repo Ccatalan7/bikeshop-erp --ref $branch
+    gh workflow run windows-release.yml `
+        --repo Ccatalan7/bikeshop-erp `
+        --ref $branch `
+        -f publish_release=true
 
     $runLookupDeadline = (Get-Date).AddMinutes(5)
     Write-Step 'Finding GitHub Actions Windows release run'

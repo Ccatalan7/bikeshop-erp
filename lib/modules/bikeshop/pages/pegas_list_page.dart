@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -319,7 +320,12 @@ class _PegasListPageState extends State<PegasListPage> {
 
   Future<void> _updateJobStatus(MechanicJob job, JobStatus newStatus) async {
     try {
-      await _bikeshopService.updateJobStatus(job.id!, newStatus);
+      await _bikeshopService.transitionJobStatusByLegacyStatus(
+        job.id!,
+        newStatus,
+        operationKey: const Uuid().v4(),
+      );
+      await _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -328,8 +334,8 @@ class _PegasListPageState extends State<PegasListPage> {
           ),
         );
       }
-      _loadData();
     } catch (e) {
+      await _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

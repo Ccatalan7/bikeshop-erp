@@ -52,6 +52,19 @@ drop schema if exists public cascade;
 create schema public;
 grant all on schema public to postgres;
 grant all on schema public to public;
+grant usage on schema public to anon, authenticated, service_role;
+
+-- Match the standard Supabase public-schema defaults before applying the
+-- canonical snapshot. Applying these up front lets later object-specific
+-- REVOKE statements remain authoritative while keeping a fresh local rebuild
+-- behaviorally equivalent to the hosted project for PostgREST clients.
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;
+
 create extension if not exists pgcrypto with schema public;
 create extension if not exists pg_trgm with schema public;
 create extension if not exists unaccent with schema public;

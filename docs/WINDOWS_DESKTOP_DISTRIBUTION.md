@@ -4,8 +4,10 @@ This project distributes the Windows desktop app through GitHub Releases.
 
 The setup is intentionally free and low-friction:
 
-- GitHub Actions builds the Windows release zip.
-- The release zip is published as a GitHub Release asset.
+- GitHub Actions always builds, validates, packages, and checksums the Windows
+  release zip as a private workflow artifact.
+- The zip becomes a public GitHub Release asset only after an explicit manual
+  dispatch with `publish_release=true`.
 - A SHA256 file is published next to the zip.
 - `scripts/install_vinabike_erp.ps1` downloads the latest release, verifies the SHA256 checksum, installs into the current user's profile, and creates shortcuts.
 - The Flutter app checks for a newer Windows release after staff users enter the workspace.
@@ -26,17 +28,38 @@ After that, users open `Vinabike ERP` from the desktop or Start Menu. Future upd
 
 ## Publishing An Update
 
-Updates publish automatically when relevant app files are pushed to `main`.
+Relevant pushes to `main` and default manual dispatches run the complete
+artifact-only gate. They do not create a tag, GitHub Release, or coworker
+update.
 
-You can also publish manually:
+Validate a candidate without publishing it:
 
 1. Open GitHub Actions.
 2. Run `Build Windows Desktop Release`.
-3. Wait for the workflow to finish.
+3. Leave `publish_release` disabled.
+4. Wait for the workflow to finish and inspect the retained artifact, checksum,
+   installer, and exact-SHA manifest.
+
+Publish only after that evidence is accepted:
+
+1. Run `Build Windows Desktop Release` again.
+2. Explicitly enable `publish_release`.
+3. Confirm the run's source SHA, then wait for both the build and guarded
+   `Publish verified coworker update` job to finish.
+
+The developer helper and VS Code publish task pass
+`publish_release=true` explicitly. A forgotten input therefore fails safe as
+artifact-only instead of exposing an update.
 
 The workflow is pinned to the GitHub `windows-2022` runner so the Windows build uses the Visual Studio 2022 toolchain instead of whatever `windows-latest` points to that week. Release tags do not trigger this workflow; the workflow creates the release.
 
 The newest non-prerelease GitHub Release that contains `vinabike_erp_windows_*.zip`, its `.sha256` file, and `install_vinabike_erp.ps1` becomes the update source. The next time users open the app, the Flutter workspace prepares the update silently, then shows an update prompt only when the update is ready.
+
+The CI gate deliberately does not start `vinabike_erp.exe`: application startup
+initializes the production Supabase fallback and notifications before login.
+Instead it verifies that the executable, Flutter DLL, ICU data and Flutter
+assets exist, then packages and checksums them without credentials or production
+traffic. Perform the functional startup check on an installed Windows canary.
 
 ## Local Test Build
 
