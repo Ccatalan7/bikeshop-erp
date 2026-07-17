@@ -92,7 +92,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       _selectedBrand = null;
       _selectedSupplier = null;
     });
-    unawaited(_refreshCompatibilityIfNeeded());
+    unawaited(_reloadProductsForCurrentQuery());
     _updateOverlay();
     Future.delayed(const Duration(milliseconds: 80), () {
       if (mounted && _overlayEntry != null) _focusNode.requestFocus();
@@ -180,7 +180,18 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   Timer? _debounce;
   Map<String, ProductCompatibilityAssessment> _compatibilityByProductId = {};
   int _compatibilityRequestSerial = 0;
+  int _catalogRequestSerial = 0;
   String? _lastCompatibilitySignature;
+
+  ProductType? get _exclusiveProductTypeFilter {
+    if (_filterShowServices && !_filterShowProducts) {
+      return ProductType.service;
+    }
+    if (_filterShowProducts && !_filterShowServices) {
+      return ProductType.product;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -643,7 +654,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     selected: _filterShowProducts,
                     onSelected: (val) {
                       setState(() => _filterShowProducts = val);
-                      unawaited(_refreshCompatibilityIfNeeded());
+                      unawaited(_reloadProductsForCurrentQuery());
                       _updateOverlay();
                       _focusNode.requestFocus();
                     },
@@ -656,7 +667,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     selected: _filterShowServices,
                     onSelected: (val) {
                       setState(() => _filterShowServices = val);
-                      unawaited(_refreshCompatibilityIfNeeded());
+                      unawaited(_reloadProductsForCurrentQuery());
                       _updateOverlay();
                       _focusNode.requestFocus();
                     },
@@ -1327,23 +1338,44 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   Future<void> _loadProducts() async {
-    // Only load initial/recent products to show as defaults when user taps field
+    await _reloadProductsForCurrentQuery();
+  }
+
+  Future<void> _reloadProductsForCurrentQuery() async {
     if (!mounted) return;
+
+    final requestSerial = ++_catalogRequestSerial;
+    final productType = _exclusiveProductTypeFilter;
+    final showNoTypes = !_filterShowProducts && !_filterShowServices;
     setState(() => _isLoading = true);
+
     try {
-      final products = await _inventoryService.searchProducts('');
-      if (mounted) {
-        setState(() {
-          _allFetchedProducts = products;
-        });
-        unawaited(_refreshCompatibilityIfNeeded());
-        // Re-show overlay so clearing text immediately refreshes the dropdown
-        if (_focusNode.hasFocus) {
-          _showOverlay();
-        }
+      final products = showNoTypes
+          ? const <Product>[]
+          : await _inventoryService.searchProducts(
+              _controller.text,
+              limit: productType == ProductType.service ? 500 : 200,
+              productType: productType,
+            );
+      if (!mounted || requestSerial != _catalogRequestSerial) return;
+
+      setState(() {
+        _allFetchedProducts = products;
+        _selectedProduct = null;
+      });
+      await _refreshCompatibilityIfNeeded();
+      if (!mounted || requestSerial != _catalogRequestSerial) return;
+
+      if (_focusNode.hasFocus) {
+        _showOverlay();
+      } else {
+        _overlayEntry?.markNeedsBuild();
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && requestSerial == _catalogRequestSerial) {
+        setState(() => _isLoading = false);
+        _overlayEntry?.markNeedsBuild();
+      }
     }
   }
 
@@ -1357,22 +1389,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      if (!mounted) return;
-
-      setState(() => _isLoading = true);
-      try {
-        final results = await _inventoryService.searchProducts(value);
-        if (mounted) {
-          setState(() {
-            _allFetchedProducts = results;
-            _selectedProduct = null;
-          });
-          unawaited(_refreshCompatibilityIfNeeded());
-          _showOverlay();
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
+      await _reloadProductsForCurrentQuery();
     });
   }
 

@@ -545,6 +545,7 @@ class DatabaseService extends ChangeNotifier {
     List<String> searchTerms, {
     int limit = 50,
     String? selectColumns,
+    String? where,
   }) async {
     if (searchTerms.isEmpty || columns.isEmpty) return [];
 
@@ -553,6 +554,20 @@ class DatabaseService extends ChangeNotifier {
       dynamic query = selectColumns == null
           ? _client.from(table).select()
           : _client.from(table).select(selectColumns);
+
+      if (where != null && where.contains('=')) {
+        final parts = where.split('=');
+        final field = parts[0].trim();
+        final rawValue = parts.sublist(1).join('=').trim();
+        final dynamic value = int.tryParse(rawValue) ??
+            double.tryParse(rawValue) ??
+            (rawValue == 'true'
+                ? true
+                : rawValue == 'false'
+                    ? false
+                    : rawValue);
+        query = query.eq(field, value);
+      }
 
       var hasAppliedFilter = false;
 

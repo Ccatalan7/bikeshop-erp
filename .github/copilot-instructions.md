@@ -4560,6 +4560,10 @@ When creating **any autocomplete/search field**:
 3. Add 200ms delay before removing overlay on focus loss
 4. Wrap items in `InkWell` for reliable tap detection
 5. Use `MouseRegion` to keep overlay open on hover
+6. Treat a limited initial result set as a preview only. When a user selects an
+   exclusive server-backed classification such as `Productos` or `Servicios`,
+   include that classification in the database search; never filter a preview
+   page in memory and present it as the full matching catalog.
 
 When creating **any resizable panel**:
 1. Add width management to service (`ChangeNotifier`)

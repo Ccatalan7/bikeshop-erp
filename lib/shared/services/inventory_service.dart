@@ -413,10 +413,18 @@ class InventoryService extends ChangeNotifier {
         .replaceAll('ü', 'u');
   }
 
-  Future<List<Product>> searchProducts(String query, {int limit = 200}) async {
+  Future<List<Product>> searchProducts(
+    String query, {
+    int limit = 200,
+    ProductType? productType,
+  }) async {
     if (query.trim().isEmpty) {
       if (_hasLoaded && _products.isNotEmpty) {
-        return _products.take(limit).toList();
+        return _products
+            .where((product) =>
+                productType == null || product.productType == productType)
+            .take(limit)
+            .toList();
       }
 
       if (_db != null) {
@@ -424,6 +432,8 @@ class InventoryService extends ChangeNotifier {
           final data = await _db.select(
             'products',
             selectColumns: Product.listPreviewSelect,
+            where:
+                productType == null ? null : 'product_type=${productType.name}',
             orderBy: 'updated_at',
             descending: true,
             limit: limit,
@@ -440,7 +450,12 @@ class InventoryService extends ChangeNotifier {
         }
       }
 
-      return await getProducts();
+      final products = await getProducts();
+      return products
+          .where((product) =>
+              productType == null || product.productType == productType)
+          .take(limit)
+          .toList();
     }
 
     final normalizedQuery = _normalize(query);
@@ -450,7 +465,11 @@ class InventoryService extends ChangeNotifier {
         .toList();
 
     if (searchTerms.isEmpty) {
-      return await searchProducts('', limit: limit);
+      return await searchProducts(
+        '',
+        limit: limit,
+        productType: productType,
+      );
     }
 
     // If products are already in local memory, use accent-insensitive filter
@@ -458,6 +477,9 @@ class InventoryService extends ChangeNotifier {
     if (_hasLoaded && _products.isNotEmpty) {
       return _products
           .where((product) {
+            if (productType != null && product.productType != productType) {
+              return false;
+            }
             final searchableText = _normalize([
               product.name,
               product.sku,
@@ -490,6 +512,8 @@ class InventoryService extends ChangeNotifier {
           searchTerms,
           limit: limit,
           selectColumns: Product.listPreviewSelect,
+          where:
+              productType == null ? null : 'product_type=${productType.name}',
         );
 
         final List<Product> results = [];
@@ -510,6 +534,9 @@ class InventoryService extends ChangeNotifier {
     final products = await getProducts();
     return products
         .where((product) {
+          if (productType != null && product.productType != productType) {
+            return false;
+          }
           final searchableText = _normalize([
             product.name,
             product.sku,

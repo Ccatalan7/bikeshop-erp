@@ -626,6 +626,7 @@ The existing generic product spec engine should therefore be used progressively,
 - prefer ranked suggestions over heavy validation when data is incomplete
 - let extended detail improve matching later without breaking the same backbone
 - first-wave UI consumers may be advisory ranking surfaces, such as shared product autocompletes in workshop flows, before the system grows into stronger validation gates
+- the shared workshop product autocomplete may keep a bounded mixed-catalog preview for fast opening, but exclusive product/service filters and subsequent typed searches must carry `product_type` into the catalog query; a preview page is never the authoritative universe for compatibility ranking or visible filter counts
 - when product spec coverage is sparse, products with no detailed spec rows should remain neutral unless a controlled coarse technical-family mapping already proves an obvious incompatibility
 - compatibility hints in workshop suggestion UI should be driven first by `bike_profiles.technical_profile.values`, then by `product_spec_values` / `spec_definitions.key`, and may use `category_tech_mappings.technical_family` as a coarse fallback; they must not be driven by raw `products.category_name` or page-local keyword matching
 - ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already works with known counts, diameters, widths, tooth ranges, and driver families
