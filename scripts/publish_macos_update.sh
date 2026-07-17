@@ -140,7 +140,7 @@ step 'Verifying published macOS release evidence'
 release_json="$(gh release list \
   --repo "$REPO" \
   --limit 30 \
-  --json tagName,targetCommitish,createdAt \
+  --json tagName,createdAt \
   | jq -c '[.[] | select(.tagName | startswith("macos-v"))] | first')"
 release_tag="$(jq -r '.tagName // empty' <<< "$release_json")"
 if [[ -z "$release_tag" ]]; then
