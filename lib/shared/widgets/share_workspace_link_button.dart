@@ -41,7 +41,7 @@ class ShareWorkspaceLinkButton extends StatelessWidget {
     if (workspace == null) return null;
 
     return RouteShareService.buildForRoute(
-      route: workspace.currentRoute,
+      route: workspace.shareRoute,
       title: workspace.title,
     );
   }

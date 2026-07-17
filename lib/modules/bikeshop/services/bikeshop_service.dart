@@ -2843,6 +2843,7 @@ class BikeshopService extends ChangeNotifier {
 
       jobs = await _hydrateJobSubjects(jobs);
       jobs = await _hydrateServiceWarranties(jobs);
+      jobs = await _hydrateJobTimeMetrics(jobs);
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         final searchLower = searchTerm.toLowerCase();
@@ -2895,6 +2896,7 @@ class BikeshopService extends ChangeNotifier {
         MechanicJob.fromJson(data),
       ]);
       hydrated = await _hydrateServiceWarranties(hydrated);
+      hydrated = await _hydrateJobTimeMetrics(hydrated);
       return hydrated.isNotEmpty ? hydrated.first : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
@@ -2960,6 +2962,48 @@ class BikeshopService extends ChangeNotifier {
     } catch (error) {
       if (kDebugMode) {
         print('⚠️ Service-warranty projection unavailable: $error');
+      }
+      return jobs;
+    }
+  }
+
+  /// Hydrates the canonical read-only lifecycle projection in one batch.
+  ///
+  /// The UI must never fall back to recomputing the legacy timers from mutable
+  /// job columns when this projection is unavailable: that would silently
+  /// reintroduce the same false durations this read model replaces.
+  Future<List<MechanicJob>> _hydrateJobTimeMetrics(
+    List<MechanicJob> jobs,
+  ) async {
+    final jobIds = jobs
+        .map((job) => job.id)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (jobIds.isEmpty) return jobs;
+
+    try {
+      final raw = await _db.rpc(
+        'get_mechanic_job_time_metrics',
+        params: {'p_job_ids': jobIds},
+      );
+      final rows = raw as List<dynamic>? ?? const [];
+      final byJobId = <String, MechanicJobTimeMetrics>{};
+      for (final rawRow in rows) {
+        final metrics = MechanicJobTimeMetrics.fromJson(
+          Map<String, dynamic>.from(rawRow as Map),
+        );
+        if (metrics.jobId.isNotEmpty) {
+          byJobId[metrics.jobId] = metrics;
+        }
+      }
+
+      return jobs
+          .map((job) => job.copyWith(timeMetrics: byJobId[job.id]))
+          .toList(growable: false);
+    } catch (error) {
+      if (kDebugMode) {
+        print('⚠️ Canonical job-time projection unavailable: $error');
       }
       return jobs;
     }

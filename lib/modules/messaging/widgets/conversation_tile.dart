@@ -182,7 +182,7 @@ class _ConversationTileState extends State<ConversationTile> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildContextPills(
+                          child: _buildAnimatedContextPills(
                             conv,
                             prominent: hasUnread,
                           ),
@@ -376,13 +376,71 @@ class _ConversationTileState extends State<ConversationTile> {
     return const SizedBox.shrink();
   }
 
+  Widget _buildAnimatedContextPills(
+    Conversation conv, {
+    required bool prominent,
+  }) {
+    final signature = _contextPillSignature(conv);
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.centerLeft,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        reverseDuration: const Duration(milliseconds: 130),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        ),
+        transitionBuilder: (child, animation) {
+          final offset = Tween<Offset>(
+            begin: const Offset(0, 0.08),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: offset, child: child),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey(signature),
+          child: _buildContextPills(conv, prominent: prominent),
+        ),
+      ),
+    );
+  }
+
+  String _contextPillSignature(Conversation conv) {
+    final hint = conv.contextHint;
+    if (hint == null) return 'none';
+    return [
+      hint.jobId,
+      hint.jobNumber,
+      hint.jobStatus,
+      hint.jobStatusColor,
+      hint.bikeId,
+      hint.bikeName,
+      hint.purchaseInvoiceId,
+      hint.purchaseInvoiceNumber,
+      hint.purchaseInvoiceStatus,
+      hint.supplierId,
+    ].map((value) => value?.trim() ?? '').join('|');
+  }
+
   Widget _buildMiniContextPill({
     required String label,
     required Color color,
     bool prominent = false,
   }) {
     final theme = Theme.of(context);
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
       constraints: const BoxConstraints(maxWidth: 178),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(

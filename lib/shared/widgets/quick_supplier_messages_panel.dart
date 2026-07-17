@@ -51,9 +51,7 @@ class _QuickSupplierMessagesPanelState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
-        context
-            .read<ChatProvider>()
-            .loadConversations(refreshContextHints: true),
+        context.read<ChatProvider>().refreshConversationContextHints(),
       );
       unawaited(_loadSupplierData());
     });
@@ -165,9 +163,9 @@ class _QuickSupplierMessagesPanelState
 
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
-    await context
-        .read<ChatProvider>()
-        .loadConversations(refreshContextHints: true);
+    final provider = context.read<ChatProvider>();
+    await provider.loadConversations(refreshContextHints: false);
+    await provider.refreshConversationContextHints();
     await _loadSupplierData();
     if (mounted) {
       setState(() => _isRefreshing = false);

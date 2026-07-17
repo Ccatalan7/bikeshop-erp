@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:vinabike_erp/modules/accounting/widgets/accounting_dashboard_section.dart';
 
 import '../widgets/main_layout.dart';
+import '../widgets/strategic_dashboard_deck.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -81,7 +81,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             if (_showWelcomeBanner) const SizedBox(height: 32),
 
-            const AccountingDashboardSection(),
+            const StrategicDashboardDeck(),
 
             const SizedBox(height: 32),
 

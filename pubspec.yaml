@@ -67,6 +67,7 @@ dependencies:
   path: ^1.9.1
   mime: ^2.0.0
   shared_preferences: ^2.2.3
+  flutter_secure_storage: ^10.3.1
   sqflite: ^2.3.0  # Local SQLite for email caching
   audioplayers: ^6.0.0  # For notification sounds
   csv: ^5.1.1

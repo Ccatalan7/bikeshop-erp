@@ -58,14 +58,18 @@ The newest non-prerelease GitHub Release that contains `vinabike_erp_windows_*.z
 The CI gate deliberately does not start `vinabike_erp.exe`: application startup
 initializes the production Supabase fallback and notifications before login.
 Instead it verifies that the executable, Flutter DLL, ICU data and Flutter
-assets exist, then packages and checksums them without credentials or production
-traffic. Perform the functional startup check on an installed Windows canary.
+assets exist, including the generated Univer spreadsheet engine, then packages
+and checksums them without credentials or production traffic. The release job
+regenerates that ignored web bundle from `package-lock.json` on its own clean
+runner. Perform the functional startup check on an installed Windows canary.
 
 ## Local Test Build
 
 On a Windows machine:
 
 ```powershell
+npm ci
+npm run build:spreadsheet-engine
 flutter pub get
 flutter build windows --release
 Compress-Archive -LiteralPath build\windows\x64\runner\Release -DestinationPath build\vinabike_erp_windows_test.zip -Force

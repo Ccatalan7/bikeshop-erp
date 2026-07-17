@@ -601,11 +601,64 @@ When this appears:
 - Treat it as machine-local unless the repo explicitly sets those variables.
 - Do not add repo code workarounds for this warning without evidence that it affects the app binary or causes a real build failure.
 
-## Windows Desktop Auto-Update Runbook
+## Desktop Auto-Update Runbooks
 
-The Windows ERP desktop app has an app-owned updater for non-technical coworker installs. This is currently **Windows-only**. Do not assume it applies to macOS, web, Android, iOS, or Flutter debug runs.
+The ERP desktop app has app-owned update paths for non-technical coworker
+installs on Windows and macOS. They share the Flutter prompt and guarded GitHub
+publication model, but their installers are platform-specific. Do not assume
+either path applies to web, Android, iOS, or Flutter debug runs.
 
-### Current Architecture
+### macOS Internal Update Architecture
+
+macOS internal releases intentionally avoid a paid Apple Developer dependency.
+They are not Developer ID signed or Apple-notarized. Instead, the operator opts
+into the internal channel once, and every update is verified against a dedicated
+Ed25519 release key before the bundle-specific quarantine attribute is removed.
+Never disable Gatekeeper globally, never use `spctl --master-disable`, and never
+remove quarantine from an unverified download or a broad directory.
+
+Primary files:
+
+- `.github/workflows/macos-release.yml` builds, validates, packages, and retains
+  the artifact. Only an explicit `publish_release=true` dispatch enters the
+  protected `Production` job, signs the manifest, and publishes a coworker
+  update.
+- `scripts/install_vinabike_erp_macos.sh` is the one-time installer and the
+  per-user background prepare/apply/rollback worker.
+- `scripts/macos/macos_update_allowed_signers` contains only the public update
+  signing key. The private key belongs in the GitHub Actions secret
+  `MACOS_UPDATE_SIGNING_KEY` scoped to the protected `Production` environment
+  and the approved local credential store, never Git or a repository-level
+  secret available to artifact-only builds.
+- `scripts/publish_macos_update.sh` is the developer publish helper used by the
+  `Publish macOS Update (all changes)` VS Code task.
+- `docs/MACOS_DESKTOP_DISTRIBUTION.md` is the coworker and operator runbook.
+
+The stable app path is `~/Applications/Vinabike ERP.app`; never pin a bundle
+under `build/macos/...` to the Dock. The sandboxed Flutter app writes prepare
+and apply requests in its container. A per-user LaunchAgent verifies the signed
+manifest, archive SHA-256, bundle ID, bundle versions, and macOS code seal before
+performing an atomic swap. It preserves the last app as a rollback candidate and
+relaunches only after the swap.
+
+Published version tags match `macos-v*`. A prerelease alias named
+`macos-latest` exposes only the current signed manifest, its SSH signature, and
+the verified installer script at stable URLs. Cleanup may target old
+`macos-v*` releases only; it must never delete `macos-latest`, Windows releases,
+or unrelated tags.
+
+The installed app is gated by `!kDebugMode && Platform.isMacOS`, so debug runs
+never request or apply coworker updates. A future paid Developer ID migration
+may replace the internal trust bootstrap with notarization, but it must preserve
+the stable install path, signed release evidence, rollback, and no-VS-Code user
+experience.
+
+The generated Univer spreadsheet bundles are ignored by Git. The integrity,
+Windows release, and macOS release jobs must each run `npm ci` and
+`npm run build:spreadsheet-engine` in their own clean runner before invoking a
+Flutter build; output from one job is not implicitly available to another.
+
+### Windows Current Architecture
 
 Primary files:
 
@@ -616,12 +669,14 @@ Primary files:
 - `scripts/publish_windows_update.ps1` is the developer publish helper used by the VS Code task.
 - `.vscode/tasks.json` exposes `Publish Windows Update (all changes)` as a selectable build task.
 - `lib/shared/services/desktop_update_service.dart` conditionally exports the desktop updater service.
-- `lib/shared/services/desktop_update_service_io.dart` contains the Windows updater implementation.
-- `lib/shared/services/desktop_update_service_stub.dart` keeps non-IO/non-Windows targets inert.
+- `lib/shared/services/desktop_update_service_io.dart` contains the Windows and
+  macOS desktop updater coordination.
+- `lib/shared/services/desktop_update_service_stub.dart` keeps non-IO targets
+  inert.
 - `lib/shared/widgets/desktop_update_prompt.dart` shows the in-app update prompt and progress states.
 - `lib/main.dart` registers `DesktopUpdateService` and overlays `DesktopUpdatePrompt`.
 
-The updater is intentionally gated to installed Windows release builds:
+The Windows updater path is intentionally gated to installed Windows release builds:
 
 ```dart
 !kDebugMode && Platform.isWindows

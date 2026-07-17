@@ -1606,6 +1606,7 @@ class AppRouter {
               erp.loadLibrary(),
               () => erp.MechanicJobFormPage(
                 customerId: state.uri.queryParameters['customer_id'],
+                initialBikeId: state.uri.queryParameters['bike_id'],
                 initialJobType: state.uri.queryParameters['type'],
               ),
             );

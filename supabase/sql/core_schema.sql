@@ -5903,6 +5903,20 @@ begin
   where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6205');
   v_count := v_count + (case when found then 1 else 0 end);
 
+  insert into accounts (tenant_id, code, name, type, category, description, is_active)
+  select p_tenant_id, '6207', 'Servicios Digitales', 'expense', 'operatingExpense',
+    'Software, plataformas, infraestructura web y otros servicios digitales', true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6207');
+  v_count := v_count + (case when found then 1 else 0 end);
+
+  insert into accounts (tenant_id, code, name, type, category, description, parent_id, is_active)
+  select p_tenant_id, '6207-01', 'Dominios y Hosting', 'expense', 'operatingExpense',
+    'Registro y renovación de dominios, DNS, hosting y alojamiento web',
+    (select id from accounts where tenant_id = p_tenant_id and code = '6207' limit 1),
+    true
+  where not exists (select 1 from accounts where tenant_id = p_tenant_id and code = '6207-01');
+  v_count := v_count + (case when found then 1 else 0 end);
+
   -- EXPENSES - Marketing
   insert into accounts (tenant_id, code, name, type, category, description, is_active)
   select p_tenant_id, '6301', 'Marketing y Publicidad', 'expense', 'operatingExpense',
@@ -8660,6 +8674,8 @@ begin
     return 'Mantención y Reparaciones';
   elsif v_base_code = '6205' then
     return 'Suministros de Oficina';
+  elsif v_base_code in ('6207', '620700') then
+    return 'Servicios Digitales';
   end if;
 
   if v_base_code = '6301' then
@@ -8698,6 +8714,9 @@ begin
   end if;
   if v_name like '%arriendo%' then
     return 'Arriendo';
+  end if;
+  if v_name like '%dominio%' or v_name like '%hosting%' or v_name like '%servicio digital%' or v_name like '%software%' or v_name like '%infraestructura web%' then
+    return 'Servicios Digitales';
   end if;
   if v_name like '%internet%' or v_name like '%telefon%' then
     return 'Telefonía e Internet';
@@ -8796,6 +8815,106 @@ where parent_account.tenant_id = ec.tenant_id
     ec.default_account_id is distinct from parent_account.id
     or coalesce(ec.description, '') = ''
   );
+
+create or replace function public.seed_digital_services_expense_classification(
+  p_tenant_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_parent_account_id uuid;
+  v_domain_account_id uuid;
+begin
+  if p_tenant_id is null then
+    return;
+  end if;
+
+  v_parent_account_id := public.ensure_account(
+    p_tenant_id,
+    '6207',
+    'Servicios Digitales',
+    'expense',
+    'operatingExpense',
+    'Software, plataformas, infraestructura web y otros servicios digitales',
+    null
+  );
+
+  v_domain_account_id := public.ensure_account(
+    p_tenant_id,
+    '6207-01',
+    'Dominios y Hosting',
+    'expense',
+    'operatingExpense',
+    'Registro y renovación de dominios, DNS, hosting y alojamiento web',
+    '6207'
+  );
+
+  perform public.ensure_expense_category(
+    p_tenant_id,
+    'Servicios Digitales',
+    'Dominios, hosting, software, plataformas e infraestructura digital',
+    v_parent_account_id
+  );
+
+  update public.expense_categories
+     set description =
+           'Dominios, hosting, software, plataformas e infraestructura digital',
+         default_account_id = v_parent_account_id,
+         default_tax_rate = 0,
+         updated_at = now()
+   where tenant_id = p_tenant_id
+     and lower(name) = lower('Servicios Digitales');
+
+  update public.accounts
+     set parent_id = v_parent_account_id,
+         updated_at = now()
+   where tenant_id = p_tenant_id
+     and id = v_domain_account_id
+     and parent_id is distinct from v_parent_account_id;
+end;
+$$;
+
+revoke all on function public.seed_digital_services_expense_classification(uuid)
+  from public, anon, authenticated;
+grant execute on function public.seed_digital_services_expense_classification(uuid)
+  to service_role;
+
+do $$
+declare
+  tenant_row record;
+begin
+  for tenant_row in select id from public.tenants loop
+    perform public.seed_digital_services_expense_classification(tenant_row.id);
+  end loop;
+end;
+$$;
+
+create or replace function public.handle_new_tenant_digital_expense_classification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.seed_digital_services_expense_classification(new.id);
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_new_tenant_digital_expense_classification()
+  from public, anon, authenticated;
+grant execute on function public.handle_new_tenant_digital_expense_classification()
+  to service_role;
+
+drop trigger if exists trg_seed_digital_expense_classification
+  on public.tenants;
+create trigger trg_seed_digital_expense_classification
+  after insert on public.tenants
+  for each row
+  execute function public.handle_new_tenant_digital_expense_classification();
 
 -- Add composite FK for expense_categories.default_account_id (tenant-scoped)
 do $$ begin
@@ -28067,6 +28186,7 @@ declare
   v_actor_tenant_id uuid;
   v_next_number integer;
   v_max_existing integer := 0;
+  v_max_journal_reference integer := 0;
   v_prefix text;
   v_table_name text;
   v_column_name text;
@@ -28141,6 +28261,20 @@ begin
     using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
   end if;
 
+  if p_document_type = 'expense' then
+    select coalesce(
+      max((substring(entry.source_reference from '([0-9]+)$'))::integer),
+      0
+    )
+    into v_max_journal_reference
+    from public.journal_entries entry
+    where entry.tenant_id = p_tenant_id
+      and entry.source_module = 'expenses'
+      and entry.source_reference ~ ('^' || v_prefix || '-[0-9]+$');
+
+    v_max_existing := greatest(v_max_existing, v_max_journal_reference);
+  end if;
+
   -- Insert or update sequence (atomic operation)
   insert into document_sequences (tenant_id, document_type, last_number)
   values (p_tenant_id, p_document_type, greatest(v_max_existing, 0) + 1)
@@ -28175,6 +28309,7 @@ declare
   v_actor_tenant_id uuid;
   v_current_number integer;
   v_max_existing integer := 0;
+  v_max_journal_reference integer := 0;
   v_next_number integer;
   v_prefix text;
   v_table_name text;
@@ -28249,6 +28384,20 @@ begin
     using p_tenant_id, '^' || v_prefix || '-[0-9]+$';
   end if;
 
+  if p_document_type = 'expense' then
+    select coalesce(
+      max((substring(entry.source_reference from '([0-9]+)$'))::integer),
+      0
+    )
+    into v_max_journal_reference
+    from public.journal_entries entry
+    where entry.tenant_id = p_tenant_id
+      and entry.source_module = 'expenses'
+      and entry.source_reference ~ ('^' || v_prefix || '-[0-9]+$');
+
+    v_max_existing := greatest(v_max_existing, v_max_journal_reference);
+  end if;
+
   -- Get current sequence value (or 0 if none)
   select coalesce(last_number, 0) into v_current_number
   from document_sequences
@@ -28265,6 +28414,31 @@ end;
 $$;
 
 grant execute on function public.preview_next_document_number(uuid, text, text) to authenticated;
+
+-- Deleted legacy expenses can leave valid journal evidence behind. Keep the
+-- expense sequence above those preserved references so they are never reused.
+with journal_maximums as (
+  select
+    entry.tenant_id,
+    max((substring(entry.source_reference from '([0-9]+)$'))::integer)
+      as max_number
+  from public.journal_entries entry
+  where entry.source_module = 'expenses'
+    and entry.source_reference ~ '^GTO-[0-9]+$'
+  group by entry.tenant_id
+)
+update public.document_sequences sequence
+set last_number = greatest(sequence.last_number, maximum.max_number),
+    updated_at = now()
+from journal_maximums maximum
+where sequence.tenant_id = maximum.tenant_id
+  and sequence.document_type = 'expense'
+  and sequence.last_number < maximum.max_number;
+
+comment on function public.get_next_document_number(uuid, text, text) is
+  'Issues tenant-scoped document numbers and prevents expense references from colliding with preserved expense journals.';
+comment on function public.preview_next_document_number(uuid, text, text) is
+  'Previews tenant-scoped document numbers, including preserved expense journal references in the high-water mark.';
 
 -- =====================================================
 -- FACTORY RESET CONFIGURATIONS
@@ -35290,5 +35464,17 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Approved standalone product quotations become sale/none wrappers and one
 -- linked invoice without inventing workshop intake.
 \ir ../migrations/20260717030000_convert_approved_quotation_to_sale.sql
+-- Strategic dashboard: auditable workshop flow, capacity, service/product
+-- economics, inventory movement, and explicit actual labor-hour capture.
+\ir ../migrations/20260717040000_add_strategic_workshop_metrics.sql
+-- Expense headers, lines, payments, accrual journals, and payment journals
+-- share the same operation/checkpoint trace without rewriting history.
+\ir ../migrations/20260717050000_trace_expense_accounting_operations.sql
+-- Provenance-aware workshop lifecycle metrics and explicit product/service/
+-- unclassified sales separation. Historical job rows are not rewritten.
+\ir ../migrations/20260717060000_rebuild_workshop_time_metrics.sql
+-- Prevent preserved legacy expense journals from colliding with newly issued
+-- GTO numbers and make UUID document lineage authoritative in expense traces.
+\ir ../migrations/20260717080000_prevent_expense_number_journal_collisions.sql
 
 commit;

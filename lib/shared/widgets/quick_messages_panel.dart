@@ -51,9 +51,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
-        context
-            .read<ChatProvider>()
-            .loadConversations(refreshContextHints: true),
+        context.read<ChatProvider>().refreshConversationContextHints(),
       );
     });
   }
@@ -184,9 +182,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Future<void> _refresh() async {
     setState(() => _isRefreshing = true);
-    await context
-        .read<ChatProvider>()
-        .loadConversations(refreshContextHints: true);
+    final provider = context.read<ChatProvider>();
+    await provider.loadConversations(refreshContextHints: false);
+    await provider.refreshConversationContextHints();
     if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
       await _loadWhatsAppContacts();
     }

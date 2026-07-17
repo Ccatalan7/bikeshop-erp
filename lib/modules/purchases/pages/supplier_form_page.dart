@@ -58,6 +58,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
   PaymentTerms _paymentTerms = PaymentTerms.net30;
   TaxTreatment _defaultTaxTreatment = TaxTreatment.taxIncluded;
   bool _isActive = true;
+  bool _showPortalPassword = false;
 
   bool _isSaving = false;
   bool _isLoading = true;
@@ -564,7 +565,11 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             ),
             const SizedBox(height: 12),
             _buildCredentialRow('Usuario:', _portalUsernameController.text),
-            _buildCredentialRow('Clave:', _portalPasswordController.text),
+            _buildCredentialRow(
+              'Clave:',
+              _portalPasswordController.text,
+              isSecret: true,
+            ),
             const SizedBox(height: 24),
             const Text(
               'Vendedor Asignado',
@@ -612,8 +617,13 @@ class _SupplierFormPageState extends State<SupplierFormPage>
     );
   }
 
-  Widget _buildCredentialRow(String label, String value) {
+  Widget _buildCredentialRow(
+    String label,
+    String value, {
+    bool isSecret = false,
+  }) {
     if (value.isEmpty) return const SizedBox.shrink();
+    final displayValue = isSecret && !_showPortalPassword ? '••••••••' : value;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -625,11 +635,29 @@ class _SupplierFormPageState extends State<SupplierFormPage>
           ),
           Expanded(
             child: Text(
-              value,
+              displayValue,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (isSecret)
+            IconButton(
+              icon: Icon(
+                _showPortalPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 16,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: _showPortalPassword
+                  ? 'Ocultar contraseña'
+                  : 'Mostrar contraseña',
+              onPressed: () {
+                setState(() => _showPortalPassword = !_showPortalPassword);
+              },
+            ),
+          if (isSecret) const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.copy, size: 16),
             padding: EdgeInsets.zero,
@@ -1036,6 +1064,7 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             Expanded(
               child: TextFormField(
                 controller: _portalUsernameController,
+                autofillHints: const [AutofillHints.username],
                 decoration: const InputDecoration(
                   labelText: 'Usuario / Rut de Acceso',
                   prefixIcon: Icon(Icons.person),
@@ -1046,9 +1075,28 @@ class _SupplierFormPageState extends State<SupplierFormPage>
             Expanded(
               child: TextFormField(
                 controller: _portalPasswordController,
-                decoration: const InputDecoration(
+                obscureText: !_showPortalPassword,
+                enableSuggestions: false,
+                autocorrect: false,
+                autofillHints: const [AutofillHints.password],
+                decoration: InputDecoration(
                   labelText: 'Contraseña Portal',
-                  prefixIcon: Icon(Icons.password),
+                  prefixIcon: const Icon(Icons.password),
+                  suffixIcon: IconButton(
+                    tooltip: _showPortalPassword
+                        ? 'Ocultar contraseña'
+                        : 'Mostrar contraseña',
+                    icon: Icon(
+                      _showPortalPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    onPressed: () {
+                      setState(
+                        () => _showPortalPassword = !_showPortalPassword,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

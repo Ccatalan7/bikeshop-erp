@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 class DesktopUpdateInfo {
   final String tag;
@@ -32,7 +34,8 @@ class DesktopUpdateService extends ChangeNotifier {
   DesktopUpdateInfo? _availableUpdate;
   String? _errorMessage;
 
-  bool get isSupported => !kDebugMode && Platform.isWindows;
+  bool get isSupported =>
+      !kDebugMode && (Platform.isWindows || Platform.isMacOS);
   bool get isChecking => _isChecking;
   bool get isPreparing => _isPreparing;
   bool get isUpdating => _isUpdating;
@@ -52,14 +55,21 @@ class DesktopUpdateService extends ChangeNotifier {
 
     if (force && revealDismissed) {
       _dismissed = false;
+      if (Platform.isMacOS) {
+        await _clearMacosPreparationFailureForRetry();
+      }
     }
     _isChecking = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final latest = await _fetchLatestWindowsRelease();
-      final installedTag = await _readInstalledReleaseTag();
+      final latest = Platform.isMacOS
+          ? await _fetchLatestMacosRelease()
+          : await _fetchLatestWindowsRelease();
+      final installedTag = Platform.isMacOS
+          ? await _readInstalledMacosReleaseTag()
+          : await _readInstalledReleaseTag();
       final isCurrentRelease =
           installedTag == latest.tag || _currentBuildTag == latest.tag;
 
@@ -68,8 +78,15 @@ class DesktopUpdateService extends ChangeNotifier {
           _dismissed = false;
         }
         _availableUpdate = latest;
-        _isUpdateReady = await _readPreparedReleaseTag() == latest.tag;
-        if (!_isUpdateReady) {
+        _isUpdateReady = Platform.isMacOS
+            ? await _readPreparedMacosReleaseTag() == latest.tag
+            : await _readPreparedReleaseTag() == latest.tag;
+        if (Platform.isMacOS) {
+          _errorMessage = await _readMacosUpdateError(latest.tag);
+        }
+        final hasMacosPreparationError =
+            Platform.isMacOS && _errorMessage != null;
+        if (!_isUpdateReady && !hasMacosPreparationError) {
           _prepareUpdateInBackground(latest);
         }
       } else {
@@ -79,7 +96,7 @@ class DesktopUpdateService extends ChangeNotifier {
       _hasChecked = true;
     } catch (error, stackTrace) {
       _errorMessage = 'No se pudo revisar actualizaciones.';
-      debugPrint('Windows update check failed: $error\n$stackTrace');
+      debugPrint('Desktop update check failed: $error\n$stackTrace');
     } finally {
       _isChecking = false;
       notifyListeners();
@@ -88,6 +105,11 @@ class DesktopUpdateService extends ChangeNotifier {
 
   Future<void> startUpdate() async {
     if (!isSupported) return;
+
+    if (Platform.isMacOS) {
+      await _startMacosUpdate();
+      return;
+    }
 
     _isUpdating = true;
     _errorMessage = null;
@@ -229,6 +251,70 @@ class DesktopUpdateService extends ChangeNotifier {
     throw StateError('No Windows release asset was found.');
   }
 
+  Future<DesktopUpdateInfo> _fetchLatestMacosRelease() async {
+    final uri =
+        Uri.parse('https://api.github.com/repos/$_repo/releases?per_page=100');
+    final response = await http.get(
+      uri,
+      headers: const {'User-Agent': 'VinabikeERP-Updater'},
+    );
+
+    if (response.statusCode != 200) {
+      throw StateError(
+        'GitHub releases request failed with ${response.statusCode}.',
+      );
+    }
+
+    final releases = jsonDecode(response.body) as List<dynamic>;
+    for (final releaseValue in releases) {
+      final release = releaseValue as Map<String, dynamic>;
+      if (release['draft'] == true || release['prerelease'] == true) {
+        continue;
+      }
+
+      final tag = release['tag_name']?.toString() ?? '';
+      if (!tag.startsWith('macos-v')) continue;
+
+      final assets = release['assets'];
+      if (assets is! List) continue;
+
+      Map<String, dynamic>? zipAsset;
+      Map<String, dynamic>? installerAsset;
+      var hasManifest = false;
+      var hasManifestSignature = false;
+      for (final assetValue in assets) {
+        final asset = assetValue as Map<String, dynamic>;
+        final name = asset['name']?.toString() ?? '';
+        if (RegExp(r'^vinabike_erp_macos_.*\.zip$').hasMatch(name)) {
+          zipAsset = asset;
+        } else if (name == 'install_vinabike_erp_macos.sh') {
+          installerAsset = asset;
+        } else if (name == 'macos-release-manifest.json') {
+          hasManifest = true;
+        } else if (name == 'macos-release-manifest.json.sig') {
+          hasManifestSignature = true;
+        }
+      }
+
+      if (zipAsset == null ||
+          installerAsset == null ||
+          !hasManifest ||
+          !hasManifestSignature) {
+        continue;
+      }
+
+      return DesktopUpdateInfo(
+        tag: tag,
+        releaseName: release['name']?.toString() ?? 'macOS release',
+        assetName: zipAsset['name']?.toString() ?? '',
+        installerDownloadUrl:
+            installerAsset['browser_download_url']?.toString() ?? '',
+      );
+    }
+
+    throw StateError('No verified macOS release asset was found.');
+  }
+
   Future<String?> _readInstalledReleaseTag() async {
     final installRoot = _installRoot;
     if (installRoot == null) return null;
@@ -261,6 +347,121 @@ class DesktopUpdateService extends ChangeNotifier {
     }
   }
 
+  Future<Directory> _macosUpdateCoordinationDirectory() async {
+    final applicationSupport = await getApplicationSupportDirectory();
+    final directory = Directory(path.join(applicationSupport.path, 'updates'));
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  Future<String?> _readInstalledMacosReleaseTag() async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    return _readTagFromJsonFile(
+      File(path.join(directory.path, 'current-release.json')),
+    );
+  }
+
+  Future<String?> _readPreparedMacosReleaseTag() async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    return _readTagFromJsonFile(
+      File(path.join(directory.path, 'prepared-release.json')),
+    );
+  }
+
+  Future<String?> _readTagFromJsonFile(File file) async {
+    if (!await file.exists()) return null;
+
+    try {
+      final state =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return state['tag_name']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _readMacosUpdateError(String tag) async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    final errorFile = File(path.join(directory.path, 'update-error.json'));
+    if (!await errorFile.exists()) return null;
+
+    try {
+      final state =
+          jsonDecode(await errorFile.readAsString()) as Map<String, dynamic>;
+      final errorTag = state['tag_name']?.toString();
+      if (errorTag != tag && errorTag != 'unknown') return null;
+      final message = state['message']?.toString().trim() ?? '';
+      return message.isEmpty
+          ? 'No se pudo preparar la actualización.'
+          : message;
+    } catch (_) {
+      return 'No se pudo preparar la actualización.';
+    }
+  }
+
+  Future<void> _clearMacosPreparationFailureForRetry() async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    for (final name in const [
+      'update-error.json',
+      'prepare-request.json',
+    ]) {
+      final file = File(path.join(directory.path, name));
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
+
+  Future<void> _requestMacosPreparation(DesktopUpdateInfo update) async {
+    final directory = await _macosUpdateCoordinationDirectory();
+    final requestFile = File(path.join(directory.path, 'prepare-request.json'));
+    final existingTag = await _readTagFromJsonFile(requestFile);
+    if (existingTag == update.tag) return;
+
+    await requestFile.writeAsString(
+      jsonEncode({
+        'tag_name': update.tag,
+        'requested_at': DateTime.now().toUtc().toIso8601String(),
+      }),
+      flush: true,
+    );
+  }
+
+  Future<void> _startMacosUpdate() async {
+    _isUpdating = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final update = _availableUpdate ?? await _fetchLatestMacosRelease();
+      final preparedTag = await _readPreparedMacosReleaseTag();
+      if (preparedTag != update.tag) {
+        throw StateError('The macOS update is not prepared yet.');
+      }
+
+      final directory = await _macosUpdateCoordinationDirectory();
+      final requestFile = File(path.join(directory.path, 'apply-request.json'));
+      await requestFile.writeAsString(
+        jsonEncode({
+          'tag_name': update.tag,
+          'process_id': pid,
+          'requested_at': DateTime.now().toUtc().toIso8601String(),
+        }),
+        flush: true,
+      );
+
+      // The per-user LaunchAgent watches this request, waits for this process
+      // to exit, swaps the verified app bundle, and relaunches it.
+      exit(0);
+    } catch (error, stackTrace) {
+      _isUpdating = false;
+      _errorMessage = 'No se pudo iniciar la actualización.';
+      debugPrint('macOS update start failed: $error\n$stackTrace');
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> _downloadInstaller(
     File installer, {
     required String downloadUrl,
@@ -289,16 +490,26 @@ class DesktopUpdateService extends ChangeNotifier {
 
     Future<void>(() async {
       try {
-        await _prepareUpdate(update);
+        if (Platform.isMacOS) {
+          await _requestMacosPreparation(update);
+        } else {
+          await _prepareUpdate(update);
+        }
         if (_availableUpdate?.tag == update.tag) {
-          _isUpdateReady = true;
-          _errorMessage = null;
+          if (Platform.isMacOS) {
+            _isUpdateReady = await _readPreparedMacosReleaseTag() == update.tag;
+          } else {
+            _isUpdateReady = true;
+          }
+          if (_isUpdateReady) {
+            _errorMessage = null;
+          }
         }
       } catch (error, stackTrace) {
         if (_availableUpdate?.tag == update.tag) {
           _errorMessage = 'No se pudo preparar la actualización.';
         }
-        debugPrint('Windows update prepare failed: $error\n$stackTrace');
+        debugPrint('Desktop update prepare failed: $error\n$stackTrace');
       } finally {
         if (_preparingTag == update.tag) {
           _isPreparing = false;

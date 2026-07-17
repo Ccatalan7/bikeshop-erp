@@ -1,0 +1,322 @@
+name: Build macOS Desktop Release
+
+run-name: >-
+  macOS ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
+  · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "assets/**"
+      - "lib/**"
+      - "macos/**"
+      - "packages/**"
+      - "web/spreadsheet_engine/**"
+      - "package.json"
+      - "package-lock.json"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "scripts/install_vinabike_erp_macos.sh"
+      - "scripts/macos/**"
+      - ".github/workflows/erp-integrity-gate.yml"
+      - ".github/workflows/macos-release.yml"
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the verified artifact as the coworker update
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release-${{ github.ref }}-${{ inputs.publish_release == true && 'publish' || 'artifact' }}
+  cancel-in-progress: true
+
+jobs:
+  integrity:
+    uses: ./.github/workflows/erp-integrity-gate.yml
+
+  build:
+    needs: integrity
+    name: Build, verify, and package macOS app
+    runs-on: macos-15
+    outputs:
+      app_version: ${{ steps.meta.outputs.app_version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      zip_name: ${{ steps.meta.outputs.zip_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node for the spreadsheet engine
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+
+      - name: Build packaged spreadsheet engine
+        run: |
+          npm ci
+          npm run build:spreadsheet-engine
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.5"
+          channel: stable
+          cache: true
+
+      - name: Show macOS toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          flutter doctor -v
+
+      - name: Clean generated Flutter build state
+        run: flutter clean
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Compute release metadata
+        id: meta
+        run: |
+          set -euo pipefail
+
+          version_value="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -1)"
+          if [[ -z "$version_value" ]]; then
+            echo 'Could not read version from pubspec.yaml.' >&2
+            exit 1
+          fi
+
+          short_version="${version_value%%+*}"
+          safe_version="$(printf '%s' "$short_version" | tr -c '0-9A-Za-z._-' '_')"
+          release_tag="macos-v${safe_version}-${GITHUB_RUN_NUMBER}"
+          zip_name="vinabike_erp_macos_${safe_version}-${GITHUB_RUN_NUMBER}.zip"
+
+          {
+            echo "app_version=$short_version"
+            echo "release_tag=$release_tag"
+            echo "zip_name=$zip_name"
+            echo "bundle_version=$GITHUB_RUN_NUMBER"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build macOS release
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          APP_VERSION: ${{ steps.meta.outputs.app_version }}
+          BUNDLE_VERSION: ${{ steps.meta.outputs.bundle_version }}
+        run: |
+          flutter build macos --release \
+            --build-name="$APP_VERSION" \
+            --build-number="$BUNDLE_VERSION" \
+            --dart-define=VINABIKE_BUILD_TAG="$RELEASE_TAG"
+
+      - name: Validate macOS application bundle without launching it
+        id: validate
+        run: |
+          set -euo pipefail
+
+          app='build/macos/Build/Products/Release/vinabike_erp.app'
+          info="$app/Contents/Info.plist"
+          executable="$app/Contents/MacOS/vinabike_erp"
+          spreadsheet_asset="$app/Contents/Frameworks/App.framework/Resources/flutter_assets/web/spreadsheet_engine/univer.bundle.js"
+
+          test -d "$app"
+          test -f "$info"
+          test -x "$executable"
+          test -s "$spreadsheet_asset"
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$info")" = 'com.vinabike.vinabikeErp'
+          test "$(plutil -extract CFBundleVersion raw -o - "$info")" = '${{ steps.meta.outputs.bundle_version }}'
+          test "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" = '${{ steps.meta.outputs.app_version }}'
+          codesign --verify --deep --strict "$app"
+
+          architectures="$(lipo -archs "$executable")"
+          case " $architectures " in
+            *' arm64 '*) ;;
+            *) echo "macOS bundle is missing arm64: $architectures" >&2; exit 1 ;;
+          esac
+
+      - name: Package app and assemble release metadata
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          ZIP_NAME: ${{ steps.meta.outputs.zip_name }}
+          APP_VERSION: ${{ steps.meta.outputs.app_version }}
+          BUNDLE_VERSION: ${{ steps.meta.outputs.bundle_version }}
+        run: |
+          set -euo pipefail
+
+          dist="$GITHUB_WORKSPACE/dist"
+          package_root="$RUNNER_TEMP/vinabike-macos-package"
+          source_app='build/macos/Build/Products/Release/vinabike_erp.app'
+          packaged_app="$package_root/Vinabike ERP.app"
+          mkdir -p "$dist" "$package_root"
+
+          ditto "$source_app" "$packaged_app"
+          codesign --verify --deep --strict "$packaged_app"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$packaged_app" "$dist/$ZIP_NAME"
+
+          archive_sha="$(shasum -a 256 "$dist/$ZIP_NAME" | awk '{print $1}')"
+          installer_name='install_vinabike_erp_macos.sh'
+          installer_sha="$(shasum -a 256 "scripts/$installer_name" | awk '{print $1}')"
+          cp "scripts/$installer_name" "$dist/$installer_name"
+          chmod 755 "$dist/$installer_name"
+          printf '%s  %s\n' "$archive_sha" "$ZIP_NAME" > "$dist/$ZIP_NAME.sha256"
+
+          archive_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$ZIP_NAME"
+          installer_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$installer_name"
+          jq -n \
+            --arg tag_name "$RELEASE_TAG" \
+            --arg app_name 'Vinabike ERP.app' \
+            --arg bundle_id 'com.vinabike.vinabikeErp' \
+            --arg bundle_version "$BUNDLE_VERSION" \
+            --arg short_version "$APP_VERSION" \
+            --arg archive_name "$ZIP_NAME" \
+            --arg archive_url "$archive_url" \
+            --arg archive_sha256 "$archive_sha" \
+            --arg installer_url "$installer_url" \
+            --arg installer_sha256 "$installer_sha" \
+            --arg commit "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg built_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+            '{
+              tag_name: $tag_name,
+              app_name: $app_name,
+              bundle_id: $bundle_id,
+              bundle_version: $bundle_version,
+              short_version: $short_version,
+              archive_name: $archive_name,
+              archive_url: $archive_url,
+              archive_sha256: $archive_sha256,
+              installer_url: $installer_url,
+              installer_sha256: $installer_sha256,
+              commit: $commit,
+              run_id: $run_id,
+              built_at: $built_at
+            }' > "$dist/macos-release-manifest.json"
+
+          jq -e \
+            --arg tag "$RELEASE_TAG" \
+            --arg archive "$ZIP_NAME" \
+            '.tag_name == $tag and .archive_name == $archive' \
+            "$dist/macos-release-manifest.json" >/dev/null
+          (cd "$dist" && shasum -a 256 --check "$ZIP_NAME.sha256")
+
+      - name: Upload verified workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vinabike-erp-macos
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    needs: build
+    name: Publish verified coworker update
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out release verification material
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Download verified macOS artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: vinabike-erp-macos
+          path: dist
+
+      - name: Sign metadata and reverify release evidence before publication
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.MACOS_UPDATE_SIGNING_KEY }}
+        working-directory: dist
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$UPDATE_SIGNING_KEY" ]]; then
+            echo 'The Production MACOS_UPDATE_SIGNING_KEY is not configured.' >&2
+            exit 1
+          fi
+
+          signing_key="$RUNNER_TEMP/vinabike-macos-update-ed25519"
+          trap 'rm -f "$signing_key"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$signing_key"
+          chmod 600 "$signing_key"
+          ssh-keygen -Y sign \
+            -f "$signing_key" \
+            -n vinabike-macos-release \
+            macos-release-manifest.json
+          ssh-keygen -Y verify \
+            -f ../scripts/macos/macos_update_allowed_signers \
+            -I vinabike-release \
+            -n vinabike-macos-release \
+            -s macos-release-manifest.json.sig \
+            < macos-release-manifest.json
+          sha256sum --check '${{ needs.build.outputs.zip_name }}.sha256'
+
+      - name: Publish immutable version and refresh stable update metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          APP_VERSION: ${{ needs.build.outputs.app_version }}
+        run: |
+          set -euo pipefail
+
+          notes_file="$RUNNER_TEMP/macos-release-notes.md"
+          cat > "$notes_file" <<EOF
+          Vinabike ERP macOS internal desktop release.
+
+          One-time per-user install:
+
+              curl -fsSL https://github.com/$GH_REPO/releases/download/macos-latest/install_vinabike_erp_macos.sh -o /tmp/install_vinabike_erp_macos.sh
+              bash /tmp/install_vinabike_erp_macos.sh
+
+          The installer and background updater verify a signed manifest, SHA-256,
+          bundle identifier, bundle version, and macOS code seal before replacing
+          the stable app at ~/Applications/Vinabike ERP.app.
+
+          Source commit: $GITHUB_SHA
+          EOF
+
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --repo "$GH_REPO" --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --repo "$GH_REPO" \
+              --target "$GITHUB_SHA" \
+              --title "Vinabike ERP macOS $APP_VERSION ($GITHUB_RUN_NUMBER)" \
+              --notes-file "$notes_file"
+          fi
+
+          if ! gh release view macos-latest --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release create macos-latest \
+              --repo "$GH_REPO" \
+              --target "$GITHUB_SHA" \
+              --title 'Vinabike ERP macOS update metadata' \
+              --notes 'Stable signed metadata consumed by the per-user updater.' \
+              --prerelease
+          fi
+
+          gh release upload macos-latest \
+            dist/macos-release-manifest.json \
+            dist/macos-release-manifest.json.sig \
+            dist/install_vinabike_erp_macos.sh \
+            --repo "$GH_REPO" \
+            --clobber

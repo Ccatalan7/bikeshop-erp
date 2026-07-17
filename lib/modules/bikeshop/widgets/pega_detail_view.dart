@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../crm/models/crm_models.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../models/bikeshop_models.dart';
+import 'job_time_metrics_widget.dart';
 import 'tasks_tab_view.dart';
 
 class PegaDetailView extends StatefulWidget {
@@ -226,10 +227,10 @@ class _PegaDetailViewState extends State<PegaDetailView>
           ),
           const SizedBox(height: 24),
 
-          // KPI Section
-          _buildSectionHeader('Indicadores de Tiempo (KPIs)'),
+          // Canonical lifecycle evidence shared with the workshop table.
+          _buildSectionHeader('Tiempos del trabajo'),
           const SizedBox(height: 12),
-          _buildKPISection(),
+          JobTimeMetricsPanel(job: widget.job),
           const SizedBox(height: 24),
 
           // Received object information
@@ -1000,169 +1001,5 @@ class _PegaDetailViewState extends State<PegaDetailView>
       onItemRemoved: proposalIsFinal ? null : widget.onItemRemoved,
       onAddItemPressed: proposalIsFinal ? null : widget.onAddItemPressed,
     );
-  }
-
-  Widget _buildKPISection() {
-    final now = DateTime.now();
-    final job = widget.job;
-
-    // 1. Diagnostic Duration (Arrival -> Diagnostic Sent)
-    String diagDuration = '-';
-    String diagLabel = 'Pendiente';
-    Color diagColor = Colors.grey;
-
-    if (job.diagnosticSentAt != null) {
-      final d = job.diagnosticSentAt!.difference(job.arrivalDate);
-      diagDuration = _formatDuration(d);
-      diagLabel = 'Completado';
-      diagColor = Colors.blue;
-    } else if (job.diagnosticDeadline != null &&
-        job.diagnosticDeadline!.isBefore(now)) {
-      final d = now.difference(job.arrivalDate);
-      diagDuration = _formatDuration(d);
-      diagLabel = 'Atrasado';
-      diagColor = Colors.red;
-    } else {
-      final d = now.difference(job.arrivalDate);
-      diagDuration = _formatDuration(d);
-      diagLabel = 'En curso';
-      diagColor = Colors.orange;
-    }
-
-    // 2. Workshop Duration (Started -> Completed)
-    String shopDuration = '-';
-    String shopLabel = 'No iniciado';
-    Color shopColor = Colors.grey;
-
-    if (job.startedAt != null) {
-      if (job.completedAt != null) {
-        final d = job.completedAt!.difference(job.startedAt!);
-        shopDuration = _formatDuration(d);
-        shopLabel = 'Completado';
-        shopColor = Colors.green;
-      } else {
-        final d = now.difference(job.startedAt!);
-        shopDuration = _formatDuration(d);
-        shopLabel = 'En curso';
-        shopColor = Colors.blue;
-      }
-    }
-
-    // 3. Total Duration (Arrival -> Delivered)
-    String totalDuration = '-';
-    String totalLabel = 'En curso';
-    Color totalColor = Colors.purple;
-
-    if (job.deliveredAt != null) {
-      final d = job.deliveredAt!.difference(job.arrivalDate);
-      totalDuration = _formatDuration(d);
-      totalLabel = 'Final';
-      totalColor = Colors.purple;
-    } else {
-      final d = now.difference(job.arrivalDate);
-      totalDuration = _formatDuration(d);
-      totalLabel = 'Actual'; // Running total
-      totalColor = Colors.purple.shade300;
-    }
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildKPICard(
-                'Diagnóstico',
-                diagDuration,
-                Icons.assignment_turned_in,
-                diagColor,
-                subtitle: diagLabel,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildKPICard(
-                'Taller',
-                shopDuration,
-                Icons.build,
-                shopColor,
-                subtitle: shopLabel,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildKPICard(
-                'Total',
-                totalDuration,
-                Icons.timer,
-                totalColor,
-                subtitle: totalLabel,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKPICard(String title, String value, IconData icon, Color color,
-      {String? subtitle}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: color,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color: color.withValues(alpha: 0.8),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatDuration(Duration d) {
-    if (d.isNegative) return '0h 0m';
-    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
-    return '${d.inHours}h ${d.inMinutes % 60}m';
   }
 }

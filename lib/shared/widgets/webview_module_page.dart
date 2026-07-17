@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -15,12 +16,21 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../modules/purchases/services/purchase_service.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
+import '../services/auth_service.dart';
+import '../services/browser_credential_vault.dart';
+import '../services/browser_profile_service.dart';
+import '../services/browser_site_memory_service.dart';
+import '../services/browser_supplier_credential_resolver.dart';
+import '../services/browser_supplier_portal_catalog.dart';
 import '../services/document_relay_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
 import '../services/workspace_manager.dart';
+import '../utils/browser_omnibox.dart';
+import '../utils/browser_credential_autofill.dart';
 import '../utils/file_download.dart';
 
 /// Persistent browser workspace - loads a website as a first-class workspace.
@@ -50,38 +60,43 @@ class WebViewModulePage extends StatefulWidget {
 
 class _WebViewModulePageState extends State<WebViewModulePage>
     with AutomaticKeepAliveClientMixin {
-  static const _webkitUserAgent =
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 '
-      '(KHTML, like Gecko) Version/17.0 Safari/605.1.15';
-  static const _iosUserAgent =
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
-      'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
-      'Mobile/15E148 Safari/604.1';
-  static const _androidUserAgent =
-      'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-  static const _edgeUserAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
   static const _windowsRuntimeUrl =
       'https://developer.microsoft.com/en-us/microsoft-edge/webview2/';
   static const _historyPrefsKey = 'vinabike_browser_history_v1';
   static const _bookmarkPrefsKey = 'vinabike_browser_bookmarks_v1';
+  static const _permissionPrefsKey = 'vinabike_browser_permissions_v1';
   static const _pageInteractionHandlerName = 'VinabikeBrowserPageInteraction';
   static const _maxHistoryEntries = 120;
   static const _maxBookmarkEntries = 80;
+  static final Map<String, Future<void>> _historyWriteTails = {};
   static const _suggestionDelay = Duration(milliseconds: 180);
   static const _suggestionTimeout = Duration(milliseconds: 1200);
   static const _downloadTimeout = Duration(seconds: 45);
+  static final _credentialAutofillUserScripts =
+      UnmodifiableListView<UserScript>([
+    UserScript(
+      groupName: 'VinabikeCredentialCapture',
+      source: browserCredentialCaptureUserScript,
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
+      forMainFrameOnly: true,
+    ),
+  ]);
 
   InAppWebViewController? _controller;
   WebViewEnvironment? _webViewEnvironment;
   final GlobalKey _browserViewportKey =
       GlobalKey(debugLabel: 'browser viewport');
   final DocumentRelayService _documentRelayService = DocumentRelayService();
+  final BrowserCredentialVault _credentialVault =
+      BrowserCredentialVault.instance;
   final TextEditingController _addressController = TextEditingController();
   final FocusNode _addressFocusNode = FocusNode();
   bool _didSelectAddressForFocus = false;
+  TextEditingValue _lastAddressEditingValue = TextEditingValue.empty;
+  String? _inlineCompletionQuery;
+  TextRange? _inlineCompletionRange;
+  String? _inlineCompletionNavigationUrl;
+  bool _isApplyingInlineCompletion = false;
 
   Uri? _initialUri;
   Uri? _nativeInitialUri;
@@ -109,12 +124,19 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Timer? _suggestionTimer;
   Timer? _hideSuggestionsTimer;
   List<_BrowserHistoryEntry> _historyEntries = const [];
+  List<BrowserSiteMemoryEntry> _siteEntries = const [];
+  List<BrowserSupplierPortalEntry> _supplierPortalEntries = const [];
   List<_BrowserBookmarkEntry> _bookmarkEntries = const [];
   List<String> _searchSuggestions = const [];
   String _activeSuggestionQuery = '';
   bool _isFetchingSuggestions = false;
   bool _showAddressSuggestions = false;
+  final Set<String> _automaticCredentialSubmitAttempts = {};
+  final Set<String> _credentialAutofillInFlight = {};
+  final Set<String> _credentialSavedFeedbackOrigins = {};
+  final Set<String> _insecureCredentialFeedbackOrigins = {};
   String? _registeredScreenshotWorkspaceId;
+  late final String _browserProfileIdentity;
 
   @override
   bool get wantKeepAlive => true;
@@ -125,19 +147,6 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
-  }
-
-  String get _userAgent {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return _androidUserAgent;
-    }
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return _iosUserAgent;
-    }
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      return _edgeUserAgent;
-    }
-    return _webkitUserAgent;
   }
 
   double _browserZoom(BuildContext context) {
@@ -179,6 +188,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         needInitialFocus: true,
         pageZoom: browserZoom,
         safeBrowsingEnabled: true,
+        saveFormData: true,
         sharedCookiesEnabled: true,
         thirdPartyCookiesEnabled: true,
         textZoom: (browserZoom * 100).round(),
@@ -186,7 +196,6 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         useHybridComposition: true,
         useOnDownloadStart: true,
         useWideViewPort: true,
-        userAgent: _userAgent,
         verticalScrollBarEnabled: true,
       );
 
@@ -249,9 +258,13 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   @override
   void initState() {
     super.initState();
+    _browserProfileIdentity =
+        context.read<AuthService>().currentUser?.id ?? 'anonymous';
+    _lastAddressEditingValue = _addressController.value;
     _addressController.addListener(_handleAddressTextChanged);
     _addressFocusNode.addListener(_handleAddressFocusChanged);
     unawaited(_loadBrowserHistory());
+    unawaited(_loadSupplierPortalCatalog());
     unawaited(_loadBrowserBookmarks());
     unawaited(_loadDocumentRelayAvailability());
     unawaited(_prepareBrowser());
@@ -269,13 +282,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _suggestionTimer?.cancel();
     _hideSuggestionsTimer?.cancel();
     _windowsTrackpadScrollTimer?.cancel();
-    unawaited(_webViewEnvironment?.dispose());
     _addressController.removeListener(_handleAddressTextChanged);
     _addressFocusNode.removeListener(_handleAddressFocusChanged);
     _addressController.dispose();
     _addressFocusNode.dispose();
     super.dispose();
   }
+
+  String _profilePrefsKey(String baseKey) =>
+      '$baseKey::$_browserProfileIdentity';
 
   void _registerScreenshotContext() {
     Workspace? workspace;
@@ -315,6 +330,23 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       // The provider tree can be gone during app shutdown.
     }
     _registeredScreenshotWorkspaceId = null;
+  }
+
+  void _publishBrowserWorkspaceState({
+    required String url,
+    String? title,
+  }) {
+    final workspaceId = _registeredScreenshotWorkspaceId;
+    if (workspaceId == null || !mounted) return;
+    try {
+      context.read<WorkspaceManager>().updateBrowserWorkspaceState(
+            workspaceId,
+            url: url,
+            title: title,
+          );
+    } catch (_) {
+      // The workspace provider can disappear during app shutdown.
+    }
   }
 
   Future<Uint8List?> _takeBrowserScreenshot() async {
@@ -376,8 +408,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       }
 
       if (defaultTargetPlatform == TargetPlatform.windows) {
-        final runtimeVersion = await WebViewEnvironment.getAvailableVersion();
-        if (runtimeVersion == null) {
+        _webViewEnvironment = await BrowserProfileService.environmentForUser(
+          _browserProfileIdentity,
+        );
+        if (_webViewEnvironment == null) {
           _finishInitialization(
             message:
                 'Microsoft Edge WebView2 Runtime no está instalado en este equipo.',
@@ -385,12 +419,6 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           );
           return;
         }
-
-        _webViewEnvironment = await WebViewEnvironment.create(
-          settings: WebViewEnvironmentSettings(
-            allowSingleSignOnUsingOSPrimaryAccount: true,
-          ),
-        );
       }
 
       _finishInitialization(loading: !shouldLoadThroughRelay);
@@ -504,9 +532,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   }
 
   Future<void> _loadAddress(String input) async {
+    final inlineNavigationUrl = _inlineCompletionQuery != null &&
+            _inlineCompletionNavigationUrl != null &&
+            input.trim() == _addressController.text.trim()
+        ? _inlineCompletionNavigationUrl
+        : null;
+    _clearInlineAddressCompletion();
     _hideAddressSuggestions();
 
-    final uri = _normalizeAddress(input);
+    final uri = _normalizeAddress(inlineNavigationUrl ?? input);
     if (uri == null) {
       setState(() {
         _lastErrorMessage = 'No pude entender esa dirección web.';
@@ -581,6 +615,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         await _showBrowserLibraryDialog(_BrowserLibraryKind.bookmarks);
       case _BrowserMenuAction.clearData:
         await _confirmClearBrowserData();
+      case _BrowserMenuAction.forgetSiteCredentials:
+        await _confirmForgetCurrentSiteCredentials();
       case _BrowserMenuAction.openInChrome:
         await _openCurrentInChrome();
       case _BrowserMenuAction.openExternal:
@@ -604,6 +640,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   void _syncAddressField(String url) {
     if (_addressFocusNode.hasFocus) return;
     if (_addressController.text == url) return;
+    _clearInlineAddressCompletion();
     _addressController.text = url;
   }
 
@@ -612,12 +649,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     if (_addressFocusNode.hasFocus) {
       _hideSuggestionsTimer?.cancel();
       _didSelectAddressForFocus = false;
+      unawaited(_loadBrowserHistory());
+      unawaited(_loadSupplierPortalCatalog());
       _queueAddressSuggestions(_addressController.text);
       _selectAddressTextAfterFocus();
       setState(() => _showAddressSuggestions = true);
     } else {
       _suggestionTimer?.cancel();
       _hideSuggestionsTimer?.cancel();
+      _clearInlineAddressCompletion();
       _hideSuggestionsTimer = Timer(const Duration(milliseconds: 160), () {
         if (!mounted || _addressFocusNode.hasFocus) return;
         setState(() => _showAddressSuggestions = false);
@@ -627,11 +667,111 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   }
 
   void _handleAddressTextChanged() {
-    if (!_addressFocusNode.hasFocus) return;
-    _queueAddressSuggestions(_addressController.text);
+    final currentValue = _addressController.value;
+    final previousValue = _lastAddressEditingValue;
+    _lastAddressEditingValue = currentValue;
+
+    if (_isApplyingInlineCompletion) return;
+    if (!_addressFocusNode.hasFocus) {
+      _clearInlineAddressCompletion();
+      return;
+    }
+
+    final previousInlineQuery = _inlineCompletionQuery;
+    final removedSelectedCompletion = previousInlineQuery != null &&
+        _hasActiveInlineCompletion(previousValue) &&
+        currentValue.text == previousInlineQuery &&
+        currentValue.selection.isCollapsed &&
+        currentValue.selection.extentOffset == currentValue.text.length;
+    final textChanged = currentValue.text != previousValue.text;
+
+    if (!textChanged) {
+      if (!_hasActiveInlineCompletion(currentValue)) {
+        _clearInlineAddressCompletion();
+      }
+      if (mounted) setState(() => _showAddressSuggestions = true);
+      return;
+    }
+
+    final userQuery = currentValue.text;
+    _clearInlineAddressCompletion();
+
+    final selectionAtEnd = currentValue.selection.isCollapsed &&
+        currentValue.selection.extentOffset == currentValue.text.length;
+    final editCanComplete = !removedSelectedCompletion &&
+        selectionAtEnd &&
+        (!previousValue.selection.isCollapsed ||
+            currentValue.text.length >= previousValue.text.length);
+    if (editCanComplete) {
+      _applyInlineAddressCompletion(userQuery);
+    }
+
+    _queueAddressSuggestions(userQuery);
     if (mounted) {
       setState(() => _showAddressSuggestions = true);
     }
+  }
+
+  bool _hasActiveInlineCompletion(TextEditingValue value) {
+    final query = _inlineCompletionQuery;
+    final range = _inlineCompletionRange;
+    if (query == null || range == null || !range.isValid) return false;
+    return value.text.toLowerCase().startsWith(query.toLowerCase()) &&
+        value.selection.start == range.start &&
+        value.selection.end == range.end;
+  }
+
+  void _clearInlineAddressCompletion() {
+    _inlineCompletionQuery = null;
+    _inlineCompletionRange = null;
+    _inlineCompletionNavigationUrl = null;
+  }
+
+  String get _addressSuggestionQuery =>
+      (_inlineCompletionQuery ?? _addressController.text).trim();
+
+  bool _applyInlineAddressCompletion(String query) {
+    if (!_addressFocusNode.hasFocus ||
+        !_addressController.selection.isCollapsed ||
+        _addressController.selection.extentOffset !=
+            _addressController.text.length) {
+      return false;
+    }
+
+    final normalizedQuery = normalizeBrowserHostForMatch(query);
+    final rankedPrefixSites =
+        _rankedAddressSiteMatches(normalizedQuery).where((site) {
+      final normalizedHost = normalizeBrowserHostForMatch(site.host);
+      return normalizedHost.startsWith(normalizedQuery);
+    }).toList(growable: false);
+    final completion = browserInlineHostCompletion(
+      query: query,
+      rankedHosts: rankedPrefixSites.map((site) => site.host),
+    );
+    if (completion == null || rankedPrefixSites.isEmpty) return false;
+
+    final selection = TextSelection(
+      baseOffset: completion.selectionStart,
+      extentOffset: completion.selectionEnd,
+    );
+    _inlineCompletionQuery = query;
+    _inlineCompletionRange = TextRange(
+      start: completion.selectionStart,
+      end: completion.selectionEnd,
+    );
+    _inlineCompletionNavigationUrl = rankedPrefixSites.first.url;
+    _isApplyingInlineCompletion = true;
+    try {
+      final completedValue = TextEditingValue(
+        text: completion.value,
+        selection: selection,
+      );
+      _addressController.value = completedValue;
+      _lastAddressEditingValue = completedValue;
+    } finally {
+      _isApplyingInlineCompletion = false;
+    }
+    return true;
   }
 
   void _selectAddressTextAfterFocus() {
@@ -705,7 +845,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       final response = await http.get(uri).timeout(_suggestionTimeout);
       if (!mounted ||
           !_addressFocusNode.hasFocus ||
-          _addressController.text.trim() != query) {
+          _addressSuggestionQuery != query) {
         return;
       }
 
@@ -757,18 +897,50 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   Future<void> _loadBrowserHistory() async {
     try {
+      final storageKey = _profilePrefsKey(_historyPrefsKey);
+      await (_historyWriteTails[storageKey] ?? Future<void>.value());
       final prefs = await SharedPreferences.getInstance();
-      final encoded = prefs.getStringList(_historyPrefsKey) ?? const [];
+      final encoded = prefs.getStringList(storageKey) ?? const [];
       final entries = <_BrowserHistoryEntry>[];
       for (final item in encoded) {
         final entry = _BrowserHistoryEntry.tryDecode(item);
         if (entry != null) entries.add(entry);
       }
       entries.sort((a, b) => b.visitedAt.compareTo(a.visitedAt));
+
+      var sites = await BrowserSiteMemoryService.load(
+        _browserProfileIdentity,
+      );
+      final hasLegacyRootOnlySite = sites.any(
+        (site) => site.lastUrl == site.origin,
+      );
+      if (entries.isNotEmpty && (sites.isEmpty || hasLegacyRootOnlySite)) {
+        sites = await BrowserSiteMemoryService.mergeFromHistory(
+          userId: _browserProfileIdentity,
+          history: entries
+              .map(
+                (entry) => BrowserVisitedPage(
+                  url: entry.url,
+                  title: entry.title,
+                  visitedAt: entry.visitedAt,
+                ),
+              )
+              .toList(growable: false),
+        );
+      }
       if (!mounted) return;
       setState(() {
         _historyEntries = entries.take(_maxHistoryEntries).toList();
+        _siteEntries = sites;
       });
+      if (_addressFocusNode.hasFocus &&
+          _inlineCompletionQuery == null &&
+          _addressController.selection.isCollapsed &&
+          _addressController.selection.extentOffset ==
+              _addressController.text.length &&
+          _applyInlineAddressCompletion(_addressController.text)) {
+        setState(() => _showAddressSuggestions = true);
+      }
     } catch (error) {
       if (kDebugMode) {
         debugPrint('🌐 Browser history load skipped: $error');
@@ -776,10 +948,40 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  Future<void> _loadSupplierPortalCatalog() async {
+    if (!mounted) return;
+    try {
+      final suppliers = await context.read<PurchaseService>().getSuppliers(
+            activeOnly: true,
+          );
+      final entries = buildBrowserSupplierPortalCatalog(suppliers);
+      if (!mounted) return;
+      setState(() => _supplierPortalEntries = entries);
+      if (_addressFocusNode.hasFocus &&
+          _inlineCompletionQuery == null &&
+          _addressController.selection.isCollapsed &&
+          _addressController.selection.extentOffset ==
+              _addressController.text.length &&
+          _applyInlineAddressCompletion(_addressController.text)) {
+        setState(() => _showAddressSuggestions = true);
+      }
+    } on ProviderNotFoundException {
+      // Some isolated browser hosts do not install the purchases provider.
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 Supplier portal catalog load skipped: ${error.runtimeType}',
+        );
+      }
+    }
+  }
+
   Future<void> _recordBrowserHistory(WebUri? url, {String? title}) async {
     if (url == null) return;
     final uri = Uri.tryParse(url.toString());
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    if (uri == null ||
+        uri.host.isEmpty ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
       return;
     }
 
@@ -791,34 +993,60 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       visitedAt: DateTime.now(),
     );
 
-    final nextEntries = <_BrowserHistoryEntry>[
-      entry,
-      ..._historyEntries.where((candidate) => candidate.url != value),
-    ].take(_maxHistoryEntries).toList(growable: false);
+    final storageKey = _profilePrefsKey(_historyPrefsKey);
+    final previousWrite =
+        _historyWriteTails[storageKey] ?? Future<void>.value();
+    final write = previousWrite.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final storedEntries = <_BrowserHistoryEntry>[];
+        for (final item
+            in prefs.getStringList(storageKey) ?? const <String>[]) {
+          final storedEntry = _BrowserHistoryEntry.tryDecode(item);
+          if (storedEntry != null) storedEntries.add(storedEntry);
+        }
+        final nextEntries = <_BrowserHistoryEntry>[
+          entry,
+          ...storedEntries.where((candidate) => candidate.url != value),
+        ].take(_maxHistoryEntries).toList(growable: false);
 
-    if (mounted) {
-      setState(() => _historyEntries = nextEntries);
-    } else {
-      _historyEntries = nextEntries;
-    }
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _historyPrefsKey,
-        nextEntries.map((entry) => entry.encode()).toList(growable: false),
-      );
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('🌐 Browser history save skipped: $error');
+        await prefs.setStringList(
+          storageKey,
+          nextEntries.map((entry) => entry.encode()).toList(growable: false),
+        );
+        final nextSites = await BrowserSiteMemoryService.recordVisit(
+          userId: _browserProfileIdentity,
+          url: value,
+          title: entry.title,
+          visitedAt: entry.visitedAt,
+        );
+        if (mounted) {
+          setState(() {
+            _historyEntries = nextEntries;
+            _siteEntries = nextSites;
+          });
+        } else {
+          _historyEntries = nextEntries;
+          _siteEntries = nextSites;
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('🌐 Browser history save skipped: $error');
+        }
       }
+    });
+    _historyWriteTails[storageKey] = write;
+    await write;
+    if (identical(_historyWriteTails[storageKey], write)) {
+      _historyWriteTails.remove(storageKey);
     }
   }
 
   Future<void> _loadBrowserBookmarks() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final encoded = prefs.getStringList(_bookmarkPrefsKey) ?? const [];
+      final encoded =
+          prefs.getStringList(_profilePrefsKey(_bookmarkPrefsKey)) ?? const [];
       final entries = <_BrowserBookmarkEntry>[];
       for (final item in encoded) {
         final entry = _BrowserBookmarkEntry.tryDecode(item);
@@ -842,7 +1070,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
-        _bookmarkPrefsKey,
+        _profilePrefsKey(_bookmarkPrefsKey),
         entries.map((entry) => entry.encode()).toList(growable: false),
       );
     } catch (error) {
@@ -869,6 +1097,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Future<void> _toggleCurrentBookmark() async {
     final value = _currentBookmarkableUrl();
     if (value == null) return;
+    await _loadBrowserBookmarks();
+    if (!mounted) return;
 
     final existingIndex =
         _bookmarkEntries.indexWhere((entry) => entry.url == value);
@@ -908,6 +1138,13 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   Future<void> _showBrowserLibraryDialog(_BrowserLibraryKind kind) async {
     final isBookmarks = kind == _BrowserLibraryKind.bookmarks;
+    if (isBookmarks) {
+      await _loadBrowserBookmarks();
+    } else {
+      await _loadBrowserHistory();
+    }
+    if (!mounted) return;
+
     final entries = isBookmarks
         ? _bookmarkEntries
             .map(
@@ -1019,6 +1256,154 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     if (uri != null) await _loadUri(uri);
   }
 
+  Future<PermissionResponse> _requestSitePermission(
+    PermissionRequest request,
+  ) async {
+    if (request.resources.isEmpty) {
+      return PermissionResponse(action: PermissionResponseAction.DENY);
+    }
+
+    final origin = request.origin.toString();
+    final stored = await _loadSitePermissionDecisions();
+    final resourceKeys = request.resources
+        .map((resource) => '$origin|${resource.toString()}')
+        .toList(growable: false);
+    final storedDecisions = resourceKeys
+        .map((key) => stored[key])
+        .whereType<String>()
+        .toList(growable: false);
+
+    if (storedDecisions.contains('deny')) {
+      return PermissionResponse(
+        resources: const [],
+        action: PermissionResponseAction.DENY,
+      );
+    }
+
+    if (storedDecisions.length == resourceKeys.length) {
+      return PermissionResponse(
+        resources: request.resources,
+        action: PermissionResponseAction.GRANT,
+      );
+    }
+
+    if (!mounted) {
+      return PermissionResponse(action: PermissionResponseAction.DENY);
+    }
+
+    final decision = await showDialog<_BrowserPermissionDecision>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final originUri = Uri.tryParse(origin);
+        final site =
+            originUri?.host.isNotEmpty == true ? originUri!.host : origin;
+        final resources =
+            request.resources.map(_permissionResourceLabel).toSet().join(', ');
+        return AlertDialog(
+          title: const Text('Permiso del sitio'),
+          content: Text(
+            '$site solicita acceso a $resources. '
+            'Los permisos permanentes se guardan sólo en este perfil del ERP.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _BrowserPermissionDecision.denyAlways,
+              ),
+              child: const Text('Bloquear'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _BrowserPermissionDecision.allowOnce,
+              ),
+              child: const Text('Permitir una vez'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _BrowserPermissionDecision.allowAlways,
+              ),
+              child: const Text('Permitir siempre'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final resolved = decision ?? _BrowserPermissionDecision.denyOnce;
+    if (resolved == _BrowserPermissionDecision.allowAlways ||
+        resolved == _BrowserPermissionDecision.denyAlways) {
+      final storedValue =
+          resolved == _BrowserPermissionDecision.allowAlways ? 'allow' : 'deny';
+      for (final key in resourceKeys) {
+        stored[key] = storedValue;
+      }
+      await _saveSitePermissionDecisions(stored);
+    }
+
+    final allow = resolved == _BrowserPermissionDecision.allowAlways ||
+        resolved == _BrowserPermissionDecision.allowOnce;
+    return PermissionResponse(
+      resources: allow ? request.resources : const [],
+      action: allow
+          ? PermissionResponseAction.GRANT
+          : PermissionResponseAction.DENY,
+    );
+  }
+
+  Future<Map<String, String>> _loadSitePermissionDecisions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded =
+        prefs.getString(_profilePrefsKey(_permissionPrefsKey)) ?? '';
+    if (encoded.isEmpty) return <String, String>{};
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map) return <String, String>{};
+      return decoded.map(
+        (key, value) => MapEntry(key.toString(), value.toString()),
+      );
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
+  Future<void> _saveSitePermissionDecisions(
+    Map<String, String> decisions,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _profilePrefsKey(_permissionPrefsKey),
+      jsonEncode(decisions),
+    );
+  }
+
+  String _permissionResourceLabel(PermissionResourceType resource) {
+    switch (resource.toString()) {
+      case 'CAMERA':
+        return 'la cámara';
+      case 'MICROPHONE':
+        return 'el micrófono';
+      case 'CAMERA_AND_MICROPHONE':
+        return 'la cámara y el micrófono';
+      case 'GEOLOCATION':
+        return 'tu ubicación';
+      case 'CLIPBOARD_READ':
+        return 'el portapapeles';
+      case 'NOTIFICATIONS':
+        return 'las notificaciones';
+      case 'MIDI_SYSEX':
+        return 'dispositivos MIDI';
+      case 'FILE_READ_WRITE':
+        return 'archivos y carpetas';
+      case 'LOCAL_FONTS':
+        return 'las fuentes locales';
+      case 'AUTOPLAY':
+        return 'la reproducción automática';
+      default:
+        return 'recursos protegidos';
+    }
+  }
+
   Future<void> _confirmClearBrowserData() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1026,8 +1411,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         return AlertDialog(
           title: const Text('Limpiar datos del navegador'),
           content: const Text(
-            'Esto borra cache, cookies e inicios de sesión del navegador interno. '
-            'Tus marcadores y recientes se mantienen.',
+            'Esto borra caché, cookies, inicios de sesión, credenciales '
+            'guardadas localmente y permisos de sitios. Tus marcadores, '
+            'recientes y las credenciales de fichas de proveedores se '
+            'mantienen.',
           ),
           actions: [
             TextButton(
@@ -1049,9 +1436,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   Future<void> _clearBrowserData() async {
     try {
-      await InAppWebViewController.clearAllCache(includeDiskFiles: true);
-      await CookieManager.instance().deleteAllCookies();
-      await WebStorageManager.instance().deleteAllData();
+      await BrowserProfileService.clearWebsiteData(
+        userId: _browserProfileIdentity,
+      );
+      try {
+        await _credentialVault.clearUser(_browserProfileIdentity);
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            '🌐 Local credential vault unavailable: ${error.runtimeType}',
+          );
+        }
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_profilePrefsKey(_permissionPrefsKey));
       await _controller?.reload();
       _showBrowserSnack('Datos del navegador interno limpiados.');
     } catch (error) {
@@ -1413,11 +1811,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     Uri uri,
     DownloadStartRequest request,
   ) async {
-    final headers = <String, String>{
-      'User-Agent': request.userAgent?.trim().isNotEmpty == true
-          ? request.userAgent!.trim()
-          : _userAgent,
-    };
+    final headers = <String, String>{};
+    final requestUserAgent = request.userAgent?.trim();
+    if (requestUserAgent?.isNotEmpty == true) {
+      headers['User-Agent'] = requestUserAgent!;
+    }
 
     final cookieHeader = await _cookieHeaderFor(WebUri.uri(uri));
     if (cookieHeader.isNotEmpty) {
@@ -1547,21 +1945,40 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   List<_BrowserAddressSuggestion> _addressSuggestions() {
     if (!_showAddressSuggestions) return const [];
 
-    final query = _addressController.text.trim();
+    final query = _addressSuggestionQuery;
     final normalizedQuery = query.toLowerCase();
     final suggestions = <_BrowserAddressSuggestion>[];
     final seen = <String>{};
 
     void add(_BrowserAddressSuggestion suggestion) {
-      final key = suggestion.value.toLowerCase();
+      final key =
+          suggestion.value.toLowerCase().replaceFirst(RegExp(r'/$'), '');
       if (seen.add(key)) suggestions.add(suggestion);
     }
 
     if (query.isEmpty) {
+      for (final site in _rankedAddressSiteMatches('').take(8)) {
+        add(_BrowserAddressSuggestion.addressSite(site));
+      }
       for (final entry in _historyEntries.take(8)) {
         add(_BrowserAddressSuggestion.history(entry));
       }
-      return suggestions;
+      return suggestions.take(10).toList(growable: false);
+    }
+
+    final siteMatches = _rankedAddressSiteMatches(query);
+    for (final site in siteMatches.take(6)) {
+      add(_BrowserAddressSuggestion.addressSite(site));
+    }
+
+    final historyMatches = _historyEntries.where((entry) {
+      return entry.title.toLowerCase().contains(normalizedQuery) ||
+          entry.host.toLowerCase().contains(normalizedQuery) ||
+          entry.url.toLowerCase().contains(normalizedQuery);
+    });
+
+    for (final entry in historyMatches.take(4)) {
+      add(_BrowserAddressSuggestion.history(entry));
     }
 
     if (!_looksLikeDirectAddress(query)) {
@@ -1571,17 +1988,66 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       }
     }
 
-    final historyMatches = _historyEntries.where((entry) {
-      return entry.title.toLowerCase().contains(normalizedQuery) ||
-          entry.host.toLowerCase().contains(normalizedQuery) ||
-          entry.url.toLowerCase().contains(normalizedQuery);
-    });
+    return suggestions.take(10).toList(growable: false);
+  }
 
-    for (final entry in historyMatches.take(8)) {
-      add(_BrowserAddressSuggestion.history(entry));
+  List<_BrowserAddressSiteCandidate> _rankedAddressSiteMatches(String query) {
+    final sitesByHost = <String, _BrowserAddressSiteCandidate>{};
+
+    for (final portal in _supplierPortalEntries) {
+      sitesByHost[normalizeBrowserHostForMatch(portal.host)] =
+          _BrowserAddressSiteCandidate.supplier(portal);
+    }
+    for (final site in _siteEntries) {
+      final key = normalizeBrowserHostForMatch(site.host);
+      final supplierCandidate = sitesByHost[key];
+      final visitedCandidate = _BrowserAddressSiteCandidate.visited(site);
+      if (supplierCandidate != null &&
+          !_hasUsefulBrowserPath(visitedCandidate.url) &&
+          _hasUsefulBrowserPath(supplierCandidate.url)) {
+        continue;
+      }
+      sitesByHost[key] = visitedCandidate;
     }
 
-    return suggestions.take(10).toList(growable: false);
+    final siteMatches = sitesByHost.values.where((site) {
+      return browserSiteMatchRank(
+            query: query,
+            host: site.host,
+            title: site.title,
+            url: site.url,
+          ) >=
+          0;
+    }).toList(growable: false);
+    siteMatches.sort((a, b) {
+      final rankA = browserSiteMatchRank(
+        query: query,
+        host: a.host,
+        title: a.title,
+        url: a.url,
+      );
+      final rankB = browserSiteMatchRank(
+        query: query,
+        host: b.host,
+        title: b.title,
+        url: b.url,
+      );
+      final rankComparison = rankA.compareTo(rankB);
+      if (rankComparison != 0) return rankComparison;
+      final sourceComparison = a.source.index.compareTo(b.source.index);
+      if (sourceComparison != 0) return sourceComparison;
+      final visitComparison = b.visitCount.compareTo(a.visitCount);
+      if (visitComparison != 0) return visitComparison;
+      final recentComparison = b.lastVisitedAt.compareTo(a.lastVisitedAt);
+      if (recentComparison != 0) return recentComparison;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return siteMatches;
+  }
+
+  bool _hasUsefulBrowserPath(String value) {
+    final uri = Uri.tryParse(value);
+    return uri != null && uri.path.isNotEmpty && uri.path != '/';
   }
 
   Future<void> _openAddressSuggestion(
@@ -1648,6 +2114,263 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  Future<bool> _saveSubmittedBrowserCredential(List<dynamic> arguments) async {
+    if (arguments.isEmpty || arguments.first is! Map) return false;
+    final payload = arguments.first as Map;
+    final origin = BrowserCredentialVault.normalizeOrigin(
+      payload['origin']?.toString(),
+    );
+    final username = payload['username']?.toString() ?? '';
+    final password = payload['password']?.toString() ?? '';
+    final currentOrigin = BrowserCredentialVault.normalizeOrigin(_currentUrl);
+    if (origin == null ||
+        currentOrigin != origin ||
+        username.trim().isEmpty ||
+        username.length > 512 ||
+        password.isEmpty ||
+        password.length > 4096) {
+      return false;
+    }
+
+    try {
+      final supplierCredential = await _supplierCredentialForOrigin(origin);
+      if (supplierCredential != null &&
+          supplierCredential.username == username.trim() &&
+          supplierCredential.password == password) {
+        await _deleteLocalCredential(origin);
+        return true;
+      }
+
+      await _credentialVault.save(
+        userId: _browserProfileIdentity,
+        origin: origin,
+        username: username,
+        password: password,
+      );
+      if (mounted && _credentialSavedFeedbackOrigins.add(origin)) {
+        final host = Uri.parse(origin).host;
+        _showBrowserSnack(
+          'Credenciales de $host guardadas de forma segura.',
+        );
+      }
+      return true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser credential save skipped: $error');
+      }
+      return false;
+    }
+  }
+
+  Future<void> _autofillSavedBrowserCredential(
+    InAppWebViewController controller,
+    WebUri? loadedUrl,
+  ) async {
+    final origin = normalizeSupplierBrowserOrigin(
+      loadedUrl?.toString(),
+    );
+    if (origin == null || !_credentialAutofillInFlight.add(origin)) return;
+
+    try {
+      final liveUrlBeforeDetection = await controller.getUrl();
+      if (normalizeSupplierBrowserOrigin(
+            liveUrlBeforeDetection?.toString(),
+          ) !=
+          origin) {
+        return;
+      }
+      final loginFormResult = await controller.evaluateJavascript(
+        source: browserLoginFormDetectionScript,
+      );
+      final hasLoginForm = loginFormResult == true ||
+          loginFormResult?.toString().toLowerCase() == 'true';
+      if (!hasLoginForm) return;
+
+      final supplierCredential = await _supplierCredentialForOrigin(origin);
+      final secureOrigin = BrowserCredentialVault.normalizeOrigin(origin);
+      if (supplierCredential == null && secureOrigin == null) return;
+      // The supplier record is the primary source and must keep working even
+      // when a native secure-storage plugin is temporarily unavailable after
+      // hot reload/restart. The local vault is an optional fallback only.
+      final vaultCredential = secureOrigin == null
+          ? null
+          : await _localCredentialForOrigin(secureOrigin);
+      final useVault = vaultCredential != null &&
+          (supplierCredential == null ||
+              vaultCredential.updatedAt.isAfter(
+                supplierCredential.updatedAt,
+              ));
+      final username =
+          useVault ? vaultCredential.username : supplierCredential?.username;
+      final password =
+          useVault ? vaultCredential.password : supplierCredential?.password;
+      if (username == null || password == null) return;
+
+      final liveUrl = await controller.getUrl();
+      if (normalizeSupplierBrowserOrigin(liveUrl?.toString()) != origin) {
+        return;
+      }
+
+      final mayAutoSubmit =
+          !_automaticCredentialSubmitAttempts.contains(origin);
+      final result = await controller.evaluateJavascript(
+        source: browserCredentialFillScript(
+          expectedOrigin: origin,
+          username: username,
+          password: password,
+          autoSubmit: mayAutoSubmit,
+          allowInsecureSupplierOrigin:
+              secureOrigin == null && supplierCredential != null,
+        ),
+      );
+      if (result?.toString().contains('filled-insecure') == true &&
+          mounted &&
+          _insecureCredentialFeedbackOrigins.add(origin)) {
+        _showBrowserSnack(
+          'Credenciales completadas. Este portal envía el acceso por HTTP; '
+          'confirma el ingreso manualmente.',
+        );
+      }
+      if (mayAutoSubmit &&
+          result?.toString().contains('filled-and-submitted') == true) {
+        _automaticCredentialSubmitAttempts.add(origin);
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser credential autofill skipped: $error');
+      }
+    } finally {
+      _credentialAutofillInFlight.remove(origin);
+    }
+  }
+
+  Future<BrowserSupplierCredential?> _supplierCredentialForOrigin(
+    String origin,
+  ) async {
+    if (!mounted) return null;
+    try {
+      final suppliers = await context.read<PurchaseService>().getSuppliers(
+            activeOnly: true,
+          );
+      return resolveSupplierCredentialForOrigin(
+        suppliers: suppliers,
+        origin: origin,
+      );
+    } on ProviderNotFoundException {
+      return null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 Supplier credential lookup skipped: ${error.runtimeType}',
+        );
+      }
+      return null;
+    }
+  }
+
+  Future<BrowserSavedCredential?> _localCredentialForOrigin(
+    String origin,
+  ) async {
+    try {
+      return await _credentialVault.load(
+        userId: _browserProfileIdentity,
+        origin: origin,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 Local credential vault unavailable: ${error.runtimeType}',
+        );
+      }
+      return null;
+    }
+  }
+
+  Future<bool> _deleteLocalCredential(String origin) async {
+    try {
+      await _credentialVault.delete(
+        userId: _browserProfileIdentity,
+        origin: origin,
+      );
+      return true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 Local credential vault unavailable: ${error.runtimeType}',
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _confirmForgetCurrentSiteCredentials() async {
+    final origin = normalizeSupplierBrowserOrigin(_currentUrl);
+    if (origin == null) {
+      _showBrowserSnack('Este sitio no admite credenciales guardadas.');
+      return;
+    }
+    final supplierCredential = await _supplierCredentialForOrigin(origin);
+    if (supplierCredential != null) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Credenciales del proveedor'),
+          content: Text(
+            'El acceso para ${supplierCredential.supplierName} proviene de '
+            'su ficha de proveedor. Para detener el ingreso automático, '
+            'elimina allí el usuario o la contraseña del portal.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final credential = await _localCredentialForOrigin(origin);
+    if (credential == null) {
+      _showBrowserSnack('No hay credenciales guardadas para este sitio.');
+      return;
+    }
+    if (!mounted) return;
+
+    final host = Uri.parse(origin).host;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Olvidar credenciales'),
+        content: Text(
+          'Se eliminarán del llavero el usuario y la contraseña guardados '
+          'para $host.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Olvidar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final deleted = await _deleteLocalCredential(origin);
+    if (!deleted) {
+      _showBrowserSnack('No pude acceder al llavero del sistema.');
+      return;
+    }
+    _automaticCredentialSubmitAttempts.remove(origin);
+    _credentialSavedFeedbackOrigins.remove(origin);
+    _showBrowserSnack('Credenciales de $host eliminadas.');
+  }
+
   void _setCurrentUrl(WebUri? url) {
     if (url == null) return;
     final value = url.toString();
@@ -1660,6 +2383,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _currentUrl = displayValue;
     });
     _syncAddressField(displayValue);
+    _publishBrowserWorkspaceState(url: displayValue, title: _pageTitle);
   }
 
   Uri? _normalizeAddress(String input, {String? baseUrl}) {
@@ -1740,7 +2464,22 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final url = createWindowAction.request.url;
     if (url == null) return false;
 
-    if (_canLoadInsideWebView(url)) {
+    final requestMethod = createWindowAction.request.method?.toUpperCase();
+    final canRecreateAsNavigation =
+        (requestMethod == null || requestMethod == 'GET') &&
+            createWindowAction.request.body == null;
+    if ((url.scheme == 'http' || url.scheme == 'https') &&
+        canRecreateAsNavigation) {
+      final workspaceId = context.read<WorkspaceManager>().openBrowserWorkspace(
+            url.toString(),
+            title: url.host,
+          );
+      if (workspaceId == null) {
+        _showBrowserSnack(
+          'No se pudo abrir otra pestaña. Cierra una pestaña e inténtalo de nuevo.',
+        );
+      }
+    } else if (_canLoadInsideWebView(url)) {
       await controller.loadUrl(urlRequest: createWindowAction.request);
     } else {
       await _openExternalUrl(url.toString());
@@ -1806,6 +2545,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             child: InAppWebView(
               key: ValueKey('browser-${widget.url}'),
               webViewEnvironment: _webViewEnvironment,
+              initialUserScripts: _credentialAutofillUserScripts,
               initialUrlRequest: _urlRequest(initialUri),
               initialSettings: _browserSettings(browserZoom),
               onWebViewCreated: (controller) {
@@ -1816,6 +2556,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     _clearAddressFocusFromPageInteraction();
                     return null;
                   },
+                );
+                controller.addJavaScriptHandler(
+                  handlerName: browserCredentialCaptureHandlerName,
+                  callback: _saveSubmittedBrowserCredential,
                 );
                 unawaited(_installPageInteractionBridge(controller));
                 unawaited(_applyBrowserZoom(browserZoom));
@@ -1843,8 +2587,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 });
                 _setCurrentUrl(url);
                 _pageTitle = await controller.getTitle();
+                _publishBrowserWorkspaceState(
+                  url: _currentUrl,
+                  title: _pageTitle,
+                );
                 unawaited(_recordBrowserHistory(url, title: _pageTitle));
                 if (mounted) setState(() {});
+                unawaited(
+                  _autofillSavedBrowserCredential(controller, url),
+                );
                 unawaited(_installPageInteractionBridge(controller));
                 unawaited(_applyBrowserZoom(browserZoom));
                 unawaited(_refreshNavigationState());
@@ -1861,6 +2612,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 setState(() {
                   _pageTitle = title;
                 });
+                if (_currentUrl.isNotEmpty) {
+                  _publishBrowserWorkspaceState(
+                    url: _currentUrl,
+                    title: title,
+                  );
+                }
               },
               onUpdateVisitedHistory: (controller, url, isReload) {
                 if (!mounted) return;
@@ -1891,19 +2648,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                   unawaited(_recoverCurrentDocumentThroughRelay(failedUrl));
                 }
               },
-              onPermissionRequest: (controller, request) async {
-                return PermissionResponse(
-                  resources: request.resources,
-                  action: PermissionResponseAction.GRANT,
-                );
-              },
+              onPermissionRequest: (controller, request) =>
+                  _requestSitePermission(request),
               shouldOverrideUrlLoading: _handleNavigation,
               onCreateWindow: _handleCreateWindow,
               onDownloadStartRequest: (controller, request) {
                 unawaited(_handleDownloadStart(request));
               },
               onConsoleMessage: (controller, consoleMessage) {
-                debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+                if (kDebugMode) {
+                  debugPrint('🌐 Web workspace: ${consoleMessage.message}');
+                }
               },
             ),
           ),
@@ -2711,6 +3466,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       ),
                     ),
                     PopupMenuItem(
+                      value: _BrowserMenuAction.forgetSiteCredentials,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(Icons.key_off_outlined),
+                        title: Text('Olvidar credenciales del sitio'),
+                      ),
+                    ),
+                    PopupMenuItem(
                       value: _BrowserMenuAction.clearData,
                       child: ListTile(
                         dense: true,
@@ -3024,12 +3787,66 @@ class _BrowserPlaceEntry {
 
 enum _BrowserLibraryKind { recent, bookmarks }
 
+enum _BrowserPermissionDecision {
+  denyOnce,
+  denyAlways,
+  allowOnce,
+  allowAlways,
+}
+
 enum _BrowserMenuAction {
   recent,
   bookmarks,
+  forgetSiteCredentials,
   clearData,
   openInChrome,
   openExternal,
+}
+
+enum _BrowserAddressSiteSource { visited, supplier }
+
+class _BrowserAddressSiteCandidate {
+  const _BrowserAddressSiteCandidate({
+    required this.host,
+    required this.title,
+    required this.url,
+    required this.source,
+    required this.visitCount,
+    required this.lastVisitedAt,
+  });
+
+  factory _BrowserAddressSiteCandidate.visited(
+    BrowserSiteMemoryEntry entry,
+  ) {
+    return _BrowserAddressSiteCandidate(
+      host: entry.host,
+      title: entry.title,
+      url: entry.lastUrl,
+      source: _BrowserAddressSiteSource.visited,
+      visitCount: entry.visitCount,
+      lastVisitedAt: entry.lastVisitedAt,
+    );
+  }
+
+  factory _BrowserAddressSiteCandidate.supplier(
+    BrowserSupplierPortalEntry entry,
+  ) {
+    return _BrowserAddressSiteCandidate(
+      host: entry.host,
+      title: entry.supplierName,
+      url: entry.url,
+      source: _BrowserAddressSiteSource.supplier,
+      visitCount: 0,
+      lastVisitedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
+
+  final String host;
+  final String title;
+  final String url;
+  final _BrowserAddressSiteSource source;
+  final int visitCount;
+  final DateTime lastVisitedAt;
 }
 
 class _BrowserAddressSuggestion {
@@ -3063,6 +3880,23 @@ class _BrowserAddressSuggestion {
       subtitle: entry.host,
       value: entry.url,
       icon: Icons.history,
+    );
+  }
+
+  factory _BrowserAddressSuggestion.addressSite(
+    _BrowserAddressSiteCandidate entry,
+  ) {
+    final isSupplier = entry.source == _BrowserAddressSiteSource.supplier;
+    return _BrowserAddressSuggestion._(
+      label: normalizeBrowserHostForMatch(entry.host),
+      subtitle: entry.title,
+      value: entry.url,
+      icon: isSupplier ? Icons.storefront_outlined : Icons.language,
+      badge: isSupplier
+          ? 'Proveedor'
+          : entry.visitCount > 1
+              ? 'Visitado ${entry.visitCount}×'
+              : 'Visitado',
     );
   }
 }

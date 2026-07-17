@@ -309,15 +309,7 @@ class ExpenseService extends ChangeNotifier {
 
       if (saved.postingStatus == ExpensePostingStatus.posted) {
         await _databaseService.rpc(
-          'recalculate_expense_totals',
-          params: {'p_expense_id': saved.id},
-        );
-        await _databaseService.rpc(
-          'delete_expense_journal_entry',
-          params: {'p_expense_id': saved.id},
-        );
-        await _databaseService.rpc(
-          'create_expense_journal_entry',
+          'rebuild_expense_journal_entry',
           params: {'p_expense_id': saved.id},
         );
       }

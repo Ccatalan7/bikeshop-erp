@@ -10,14 +10,46 @@ void main() {
       customerId: 'customer-1',
       arrivalDate: arrival,
       estimatedDurationHours: 2.5,
+      actualLaborHours: 3.25,
       taxAmount: 1900,
       taxTreatment: TaxTreatment.taxIncluded,
     ).toJson();
 
     expect(payload['estimated_duration_hours'], 2.5);
+    expect(payload['actual_labor_hours'], 3.25);
     expect(payload.containsKey('tax_amount'), isFalse);
     expect(payload.containsKey('tax_treatment'), isFalse);
     expect(DateTime.parse(payload['arrival_date'] as String), arrival.toUtc());
+  });
+
+  test('job time evidence is parsed but never written back to the job row', () {
+    final job = MechanicJob.fromJson({
+      'id': 'job-1',
+      'tenant_id': 'tenant-1',
+      'customer_id': 'customer-1',
+      'arrival_date': '2026-07-01T13:00:00Z',
+      'created_at': '2026-07-01T13:00:00Z',
+      'updated_at': '2026-07-03T18:00:00Z',
+      'time_metrics': {
+        'job_id': 'job-1',
+        'started_at': '2026-07-01T15:00:00Z',
+        'start_source': 'legacy_timeline',
+        'completed_at': '2026-07-02T18:00:00Z',
+        'completion_source': 'recorded_timestamp',
+        'first_delivered_at': '2026-07-03T18:00:00Z',
+        'delivery_source': 'legacy_timeline',
+        'current_is_completed': true,
+        'current_is_delivered': true,
+        'reopened_after_delivery': false,
+        'quality_flags': ['start_reconstructed_from_timeline'],
+      },
+    });
+
+    expect(job.timeMetrics?.startedAt, DateTime.parse('2026-07-01T15:00:00Z'));
+    expect(job.timeMetrics?.hasReconstructedEvidence, isTrue);
+    expect(job.timeMetrics?.qualityFlags,
+        contains('start_reconstructed_from_timeline'));
+    expect(job.toJson().containsKey('time_metrics'), isFalse);
   });
 
   test('legacy fractional diagnosis wear is normalized to percent', () {

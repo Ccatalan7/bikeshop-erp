@@ -59,6 +59,13 @@ void main() {
     expect(workflow, contains('commit = \$env:GITHUB_SHA'));
     expect(workflow, contains('sha256sum --check'));
     expect(workflow, contains('--target "\$GITHUB_SHA"'));
+    expect(workflow, contains('npm run build:spreadsheet-engine'));
+    expect(
+      workflow,
+      contains(
+        r'data\flutter_assets\web\spreadsheet_engine\univer.bundle.js',
+      ),
+    );
   });
 
   test('release publication binds GitHub CLI to the repository explicitly', () {

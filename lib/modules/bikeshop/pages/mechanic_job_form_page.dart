@@ -736,6 +736,7 @@ class _ServiceWizardDialogConfig {
 class MechanicJobFormPage extends StatefulWidget {
   final String? jobId; // Null for new job, ID for editing
   final String? customerId; // Pre-select customer if provided
+  final String? initialBikeId; // Pre-select an active bike owned by customer
   final String?
       initialJobType; // Pre-select type: 'service'|'warranty'|'quotation'|'item_service'
   final bool isEmbedded;
@@ -746,6 +747,7 @@ class MechanicJobFormPage extends StatefulWidget {
     super.key,
     this.jobId,
     this.customerId,
+    this.initialBikeId,
     this.initialJobType,
     this.isEmbedded = false,
     this.onSaved,
@@ -774,6 +776,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Form controllers (job-level)
   final _discountController = TextEditingController(text: '0');
   final _estimatedDurationController = TextEditingController();
+  final _actualLaborHoursController = TextEditingController();
 
   // ============================================================
   // MULTI-BIKE STATE
@@ -992,6 +995,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _technicianNotesController.dispose();
     _discountController.dispose();
     _estimatedDurationController.dispose();
+    _actualLaborHoursController.dispose();
     _subjectNotesController.dispose();
     _warrantyDecisionReasonController.dispose();
     _partAutocompleteFocus.dispose();
@@ -1098,6 +1102,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _customers.where((c) => c.id == widget.customerId).firstOrNull;
         if (customer != null) {
           await _selectCustomer(customer);
+          final initialBike = _findBikeById(widget.initialBikeId);
+          if (initialBike != null &&
+              initialBike.isActive &&
+              initialBike.customerId == customer.id) {
+            _addBikeTab(initialBike);
+          }
         }
       }
 
@@ -1722,6 +1732,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text =
               job.estimatedDurationHours?.toString() ?? '';
+          _actualLaborHoursController.text =
+              job.actualLaborHours?.toString() ?? '';
 
           // Set bike tabs (multi-bike or legacy single-bike)
           _bikeTabs.clear();
@@ -3407,8 +3419,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         discountAmount: protectPaymentCommercialSnapshot
             ? (_existingJob?.discountAmount ?? 0)
             : 0,
-        estimatedDurationHours:
-            double.tryParse(_estimatedDurationController.text.trim()),
+        estimatedDurationHours: double.tryParse(
+          _estimatedDurationController.text.trim().replaceAll(',', '.'),
+        ),
+        actualLaborHours: double.tryParse(
+          _actualLaborHoursController.text.trim().replaceAll(',', '.'),
+        ),
         estimatedCost: protectPaymentCommercialSnapshot
             ? (_existingJob?.estimatedCost ?? 0)
             : 0,
@@ -13449,6 +13465,46 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     ),
                   ),
                 ),
+                SizedBox(
+                  width: width,
+                  child: TextFormField(
+                    controller: _estimatedDurationController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d{0,4}([\.,]\d{0,2})?$'),
+                      ),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Horas estimadas',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.timer_outlined),
+                      suffixText: 'h',
+                    ),
+                  ),
+                ),
+                if (_existingJob != null)
+                  SizedBox(
+                    width: width,
+                    child: TextFormField(
+                      controller: _actualLaborHoursController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d{0,4}([\.,]\d{0,2})?$'),
+                        ),
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Horas reales',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.handyman_outlined),
+                        suffixText: 'h',
+                        helperText: 'Tiempo efectivo del mecánico',
+                      ),
+                    ),
+                  ),
               ],
             );
           },

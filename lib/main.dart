@@ -333,10 +333,22 @@ class VinabikeApp extends StatelessWidget {
           navigationService.initialize();
           return navigationService;
         }),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<AuthService, WorkspaceManager>(
           create: (_) => WorkspaceManager(
             initialBrowserUrl: _initialBrowserUrl,
+            sessionIdentity: Supabase.instance.client.auth.currentUser?.id,
           ),
+          update: (_, authService, workspaceManager) {
+            final manager = workspaceManager ??
+                WorkspaceManager(
+                  initialBrowserUrl: _initialBrowserUrl,
+                  sessionIdentity: authService.currentUser?.id,
+                );
+            unawaited(
+              manager.setSessionIdentity(authService.currentUser?.id),
+            );
+            return manager;
+          },
         ),
 
         // Messaging service (global for chat sidebar in all modules)
@@ -759,6 +771,13 @@ class VinabikeApp extends StatelessWidget {
                                       children: workspaceManager
                                           .workspaceStackOrder
                                           .map((workspace) {
+                                        if (!workspace.isHydrated) {
+                                          return SizedBox.shrink(
+                                            key: ValueKey(
+                                              'dormant-${workspace.id}',
+                                            ),
+                                          );
+                                        }
                                         return _WorkspaceRouterView(
                                           key: ValueKey(workspace.id),
                                           workspace: workspace,
@@ -812,12 +831,16 @@ class _WorkspaceDeepLinkBridge extends StatefulWidget {
       _WorkspaceDeepLinkBridgeState();
 }
 
-class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge> {
+class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
+    with WidgetsBindingObserver {
   StreamSubscription<String>? _routeSubscription;
+  late final WorkspaceManager _workspaceManager;
 
   @override
   void initState() {
     super.initState();
+    _workspaceManager = context.read<WorkspaceManager>();
+    WidgetsBinding.instance.addObserver(this);
 
     if (kIsWeb) return;
 
@@ -834,8 +857,20 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_workspaceManager.flushBrowserSession());
     _routeSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(_workspaceManager.flushBrowserSession());
+    }
   }
 
   void _openSharedRoute(String route) {
@@ -980,6 +1015,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
 
       if (!appearanceService.rightToolbarOverContent) {
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(child: _buildWorkspaceRouter()),
             toolbar,

@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('shared links from pinned workspaces create a return milestone', () {
     final manager = WorkspaceManager();
     final chatWorkspaceId = manager.activeWorkspace!.id;

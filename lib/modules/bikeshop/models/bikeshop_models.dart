@@ -2944,6 +2944,75 @@ class JobSubject {
 // MECHANIC JOB MODEL
 // ============================================================
 
+/// Read-only lifecycle evidence used by workshop time indicators.
+///
+/// This projection is deliberately not persisted by [MechanicJob.toJson].
+/// Historical milestones may be reconstructed from an append-only event, but
+/// their [source] and [qualityFlags] always make that provenance explicit.
+class MechanicJobTimeMetrics {
+  const MechanicJobTimeMetrics({
+    required this.jobId,
+    this.approvalDecisionAt,
+    this.approvalDecision,
+    this.approvalSource,
+    this.startedAt,
+    this.startSource,
+    this.completedAt,
+    this.completionSource,
+    this.firstDeliveredAt,
+    this.deliverySource,
+    required this.currentIsCompleted,
+    required this.currentIsDelivered,
+    required this.reopenedAfterDelivery,
+    this.qualityFlags = const [],
+  });
+
+  final String jobId;
+  final DateTime? approvalDecisionAt;
+  final String? approvalDecision;
+  final String? approvalSource;
+  final DateTime? startedAt;
+  final String? startSource;
+  final DateTime? completedAt;
+  final String? completionSource;
+  final DateTime? firstDeliveredAt;
+  final String? deliverySource;
+  final bool currentIsCompleted;
+  final bool currentIsDelivered;
+  final bool reopenedAfterDelivery;
+  final List<String> qualityFlags;
+
+  factory MechanicJobTimeMetrics.fromJson(Map<String, dynamic> json) {
+    return MechanicJobTimeMetrics(
+      jobId: json['job_id']?.toString() ?? '',
+      approvalDecisionAt: _parseDateNullable(json['approval_decision_at']),
+      approvalDecision: json['approval_decision']?.toString(),
+      approvalSource: json['approval_source']?.toString(),
+      startedAt: _parseDateNullable(json['started_at']),
+      startSource: json['start_source']?.toString(),
+      completedAt: _parseDateNullable(json['completed_at']),
+      completionSource: json['completion_source']?.toString(),
+      firstDeliveredAt: _parseDateNullable(json['first_delivered_at']),
+      deliverySource: json['delivery_source']?.toString(),
+      currentIsCompleted: json['current_is_completed'] as bool? ?? false,
+      currentIsDelivered: json['current_is_delivered'] as bool? ?? false,
+      reopenedAfterDelivery: json['reopened_after_delivery'] as bool? ?? false,
+      qualityFlags: (json['quality_flags'] as List<dynamic>? ?? const [])
+          .map((flag) => flag.toString())
+          .toList(growable: false),
+    );
+  }
+
+  bool get hasReconstructedEvidence =>
+      sourceWasReconstructed(approvalSource) ||
+      sourceWasReconstructed(startSource) ||
+      sourceWasReconstructed(completionSource) ||
+      sourceWasReconstructed(deliverySource);
+
+  static bool sourceWasReconstructed(String? source) =>
+      source == 'legacy_timeline' || source == 'legacy_current_state';
+}
+
 class MechanicJob {
   final String? id;
   final String tenantId;
@@ -2992,6 +3061,7 @@ class MechanicJob {
   final double laborCost;
   final double discountAmount;
   final double? estimatedDurationHours;
+  final double? actualLaborHours;
   final double taxAmount;
   final double totalCost;
   final TaxTreatment taxTreatment; // ← Add this field
@@ -3003,6 +3073,7 @@ class MechanicJob {
   final bool requiresApproval;
   final bool approvedByCustomer;
   final DateTime? approvedAt;
+  final MechanicJobTimeMetrics? timeMetrics; // hydrated read model, not stored
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -3056,6 +3127,7 @@ class MechanicJob {
     this.laborCost = 0,
     this.discountAmount = 0,
     this.estimatedDurationHours,
+    this.actualLaborHours,
     this.taxAmount = 0,
     this.totalCost = 0,
     this.taxTreatment = TaxTreatment.noTax, // ← Add default
@@ -3067,6 +3139,7 @@ class MechanicJob {
     this.requiresApproval = false,
     this.approvedByCustomer = false,
     this.approvedAt,
+    this.timeMetrics,
     this.imageUrls = const [],
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -3214,6 +3287,9 @@ class MechanicJob {
       estimatedDurationHours: json['estimated_duration_hours'] == null
           ? null
           : double.tryParse(json['estimated_duration_hours'].toString()),
+      actualLaborHours: json['actual_labor_hours'] == null
+          ? null
+          : double.tryParse(json['actual_labor_hours'].toString()),
       taxAmount: double.tryParse(json['tax_amount']?.toString() ?? '0') ?? 0,
       totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0,
       taxTreatment: json['tax_treatment'] == 'tax_included'
@@ -3227,6 +3303,11 @@ class MechanicJob {
       requiresApproval: json['requires_approval'] as bool? ?? false,
       approvedByCustomer: json['approved_by_customer'] as bool? ?? false,
       approvedAt: _parseDateNullable(json['approved_at']),
+      timeMetrics: json['time_metrics'] is Map
+          ? MechanicJobTimeMetrics.fromJson(
+              Map<String, dynamic>.from(json['time_metrics'] as Map),
+            )
+          : null,
       imageUrls: json['image_urls'] != null
           ? List<String>.from(json['image_urls'] as List)
           : [],
@@ -3288,6 +3369,7 @@ class MechanicJob {
       // Don't include parts_cost, labor_cost, total_cost - these are calculated by database triggers
       'discount_amount': discountAmount,
       'estimated_duration_hours': estimatedDurationHours,
+      'actual_labor_hours': actualLaborHours,
       // Tax fields are invoice-owned mirrors. They can only be changed from
       // the payment terminal together with the linked invoice.
       'invoice_id': invoiceId,
@@ -3358,6 +3440,7 @@ class MechanicJob {
     double? laborCost,
     double? discountAmount,
     double? estimatedDurationHours,
+    double? actualLaborHours,
     double? taxAmount,
     double? totalCost,
     TaxTreatment? taxTreatment,
@@ -3369,6 +3452,7 @@ class MechanicJob {
     bool? requiresApproval,
     bool? approvedByCustomer,
     DateTime? approvedAt,
+    Object? timeMetrics = _sentinel,
     List<String>? imageUrls,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -3453,6 +3537,7 @@ class MechanicJob {
       discountAmount: discountAmount ?? this.discountAmount,
       estimatedDurationHours:
           estimatedDurationHours ?? this.estimatedDurationHours,
+      actualLaborHours: actualLaborHours ?? this.actualLaborHours,
       taxAmount: taxAmount ?? this.taxAmount,
       totalCost: totalCost ?? this.totalCost,
       taxTreatment: taxTreatment ?? this.taxTreatment,
@@ -3464,6 +3549,9 @@ class MechanicJob {
       requiresApproval: requiresApproval ?? this.requiresApproval,
       approvedByCustomer: approvedByCustomer ?? this.approvedByCustomer,
       approvedAt: approvedAt ?? this.approvedAt,
+      timeMetrics: timeMetrics == _sentinel
+          ? this.timeMetrics
+          : timeMetrics as MechanicJobTimeMetrics?,
       imageUrls: imageUrls ?? this.imageUrls,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

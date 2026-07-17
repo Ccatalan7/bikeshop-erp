@@ -20,6 +20,17 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Set up Node for packaged web assets
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+
+      - name: Build packaged spreadsheet engine
+        run: |
+          npm ci
+          npm run build:spreadsheet-engine
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:

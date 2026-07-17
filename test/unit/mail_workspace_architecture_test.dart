@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/mail/utils/email_link_transform.dart';
 import 'package:vinabike_erp/modules/mail/widgets/compose_email_dialog.dart';
 
 void main() {
@@ -67,13 +68,56 @@ void main() {
     expect(compose, contains('bcc: _bccController.text.trim()'));
     expect(compose, contains('onPressed: _canSend ? _send : null'));
     expect(compose, contains('_requestClose'));
-    expect(detail, contains('_emailBodyRendererVersion = 8'));
+    expect(detail, contains('_emailBodyRendererVersion = 9'));
     expect(detail, contains('BoxConstraints(maxWidth: 960)'));
     expect(detail, contains("'overflow-wrap': 'break-word'"));
+    expect(detail, contains('linkifyBareEmailUrls'));
+    expect(detail, contains("path: '/tools/web'"));
+    expect(detail, contains('openRouteInWorkspace(route)'));
     expect(detail, contains('Abrir en Planillas'));
     expect(detail, contains('SpreadsheetFileHandoffService.instance'));
     expect(detail, contains('.importBytes('));
     expect(detail, contains('Leyendo archivo...'));
     expect(detail, contains('Guardando planilla...'));
+  });
+
+  test('bare email URLs become visible links without nesting existing links',
+      () {
+    final linked = linkifyBareEmailUrls(
+      'Para continuar: https://clientes.nic.cl/pago?id=8432751.',
+    );
+    expect(linked, contains('class="vinabike-auto-link"'));
+    expect(
+      linked,
+      contains('href="https://clientes.nic.cl/pago?id=8432751"'),
+    );
+    expect(linked, endsWith('</a>.'));
+
+    const existing = '<a href="https://clientes.nic.cl/pago">Pinche AQUÍ</a>';
+    expect(linkifyBareEmailUrls(existing), existing);
+
+    final gmailPlainText = linkifyBareEmailUrls(
+      '<pre>https://clientes.nic.cl/restaurar?id=8432751</pre>',
+    );
+    expect(gmailPlainText, contains('class="vinabike-auto-link"'));
+    expect(gmailPlainText, startsWith('<pre><a '));
+
+    final encodedGmailPlainText = linkifyBareEmailUrls(
+      '<pre>https:&#47;&#47;clientes.nic.cl/restaurar?id=8432751&amp;paso=1</pre>',
+    );
+    expect(encodedGmailPlainText, contains('class="vinabike-auto-link"'));
+    expect(
+      encodedGmailPlainText,
+      contains(
+        'href="https://clientes.nic.cl/restaurar?id=8432751&amp;paso=1"',
+      ),
+    );
+  });
+
+  test('email URL linkification does not alter attributes or script content',
+      () {
+    const content = '<div data-url="https://example.com/raw">Texto</div>'
+        '<script>const url = "https://example.com/script";</script>';
+    expect(linkifyBareEmailUrls(content), content);
   });
 }

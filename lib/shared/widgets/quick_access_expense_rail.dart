@@ -25,6 +25,7 @@ import '../services/ocr_file_handoff_service.dart';
 import '../services/payment_method_service.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
+import '../services/quick_expense_receipt_parser.dart';
 import '../services/tenant_service.dart';
 import '../services/veryfi_adapter.dart';
 import '../services/veryfi_proxy_service.dart';
@@ -48,6 +49,7 @@ class _QuickExpenseOcrResult {
     this.description,
     this.utilityKind,
     this.isTransportExpense = false,
+    this.isDigitalInfrastructureExpense = false,
     this.paymentMethodHint,
     this.sourceSupplierId,
     this.sourceSupplierName,
@@ -59,33 +61,10 @@ class _QuickExpenseOcrResult {
   final String? description;
   final _UtilityExpenseKind? utilityKind;
   final bool isTransportExpense;
+  final bool isDigitalInfrastructureExpense;
   final String? paymentMethodHint;
   final String? sourceSupplierId;
   final String? sourceSupplierName;
-}
-
-class _ParsedPaymentReceipt {
-  const _ParsedPaymentReceipt({
-    this.supplierName,
-    this.identifier,
-    this.total,
-    this.date,
-    this.dueDate,
-    this.transactionNumber,
-    this.authorizationCode,
-    this.cub,
-    this.paymentMethod,
-  });
-
-  final String? supplierName;
-  final String? identifier;
-  final double? total;
-  final DateTime? date;
-  final DateTime? dueDate;
-  final String? transactionNumber;
-  final String? authorizationCode;
-  final String? cub;
-  final String? paymentMethod;
 }
 
 class QuickAccessExpenseRail extends StatefulWidget {
@@ -123,6 +102,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   late final OcrFileHandoffService _ocrFileHandoffService;
   final PDFParserService _pdfParserService = PDFParserService();
   final VeryfiProxyService _veryfiProxyService = VeryfiProxyService();
+  final QuickExpenseReceiptParser _quickExpenseReceiptParser =
+      const QuickExpenseReceiptParser();
 
   bool _isExpanded = false;
   bool _isLoading = true;
@@ -718,12 +699,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
     if (pickedDate == null || !mounted) return;
     setState(() => _expenseDate = pickedDate);
-  }
-
-  void _applyAmountPreset(int amount) {
-    setState(() {
-      _amountController.text = _numberFormat.format(amount);
-    });
   }
 
   void _selectCategory(ExpenseCategory category) {
@@ -1610,7 +1585,8 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   ) {
     if (extension != 'pdf') return true;
     if (_looksLikePaymentReceipt(parsedInvoice.rawText)) return false;
-    if (_isGenericReceiptSupplier(parsedInvoice.supplierName)) {
+    if (_quickExpenseReceiptParser
+        .isGenericSupplierName(parsedInvoice.supplierName)) {
       return parsedInvoice.total == null && parsedInvoice.date == null;
     }
     return parsedInvoice.total == null &&
@@ -1626,7 +1602,10 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }) {
     final rawText = parsedInvoice.rawText;
     if (_looksLikePaymentReceipt(rawText)) {
-      final receipt = _parsePaymentReceipt(rawText);
+      final receipt = _quickExpenseReceiptParser.parse(
+        rawText,
+        fileName: fileName,
+      );
       final supplierName = receipt.supplierName ??
           parsedInvoice.supplierName ??
           _supplierNameFromFileName(fileName);
@@ -1640,9 +1619,14 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
       final descriptionParts = <String>[
         'Pago ${supplierName ?? 'servicio'}',
-        if (receipt.identifier != null) 'ID ${receipt.identifier}',
+        if (receipt.purchaseDescription != null)
+          receipt.purchaseDescription!
+        else if (receipt.identifier != null)
+          'ID ${receipt.identifier}',
         if (receipt.dueDate != null)
           'vence ${DateFormat('dd/MM/yyyy', 'es_CL').format(receipt.dueDate!)}',
+        if (receipt.authorizationCode != null)
+          'autorización ${receipt.authorizationCode}',
       ];
 
       return _QuickExpenseOcrResult(
@@ -1660,6 +1644,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         description: descriptionParts.join(' · '),
         utilityKind: utilityKind,
         isTransportExpense: isTransportExpense,
+        isDigitalInfrastructureExpense: receipt.isDomainService,
         paymentMethodHint: receipt.paymentMethod,
         sourceSupplierId: sourceSupplierId,
         sourceSupplierName: sourceSupplierName,
@@ -1680,218 +1665,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   bool _looksLikePaymentReceipt(String rawText) {
-    final text = _receiptSearchText(rawText);
-    final hasReceiptWords =
-        (text.contains('comprobante') && text.contains('pago')) ||
-            text.contains('estado de pago');
-
-    return hasReceiptWords &&
-        (text.contains('total pagado') ||
-            text.contains('medio de pago') ||
-            text.contains('estado de pago') ||
-            text.contains('no de comprobante') ||
-            text.contains('n de comprobante') ||
-            text.contains('n cliente') ||
-            text.contains('monto') ||
-            text.contains('suministro electrico'));
-  }
-
-  _ParsedPaymentReceipt _parsePaymentReceipt(String rawText) {
-    String? matchText(RegExp pattern) {
-      final match = pattern.firstMatch(rawText);
-      final value = match?.group(1)?.trim();
-      if (value == null || _isReceiptLabelText(value)) return null;
-      return value;
-    }
-
-    final normalizedText = _normalizeSearchText(rawText);
-    final receiptText = _receiptSearchText(rawText);
-    final isCgeReceipt = receiptText.contains('cge') ||
-        receiptText.contains('suministro electrico');
-    final rowMatch = RegExp(
-      r'^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .&-]+?)\s+([A-Za-z0-9.-]+)\s+\$?\s*([\d.,]+)\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s+([A-Za-z0-9.-]+)\s*$',
-      multiLine: true,
-    ).firstMatch(rawText);
-
-    final amountValuePattern = RegExp(
-      r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,8})(?!\d)',
-      caseSensitive: false,
-    );
-    final idValuePattern = RegExp(
-      r'([A-Za-z0-9.-]{4,})',
-      caseSensitive: false,
-    );
-    final referenceValuePattern = RegExp(
-      r'([A-Za-z0-9.-]{8,})',
-      caseSensitive: false,
-    );
-
-    final supplierName = isCgeReceipt
-        ? 'CGE'
-        : rowMatch?.group(1)?.trim() ??
-            (normalizedText.contains('cge') ? 'CGE' : null);
-    final identifier = rowMatch?.group(2)?.trim() ??
-        matchText(RegExp(
-          r'N[°º]\s*Cliente\s*:\s*([A-Za-z0-9.-]+)',
-          caseSensitive: false,
-        )) ??
-        _extractReceiptValue(
-          rawText,
-          const ['n cliente', 'no cliente'],
-          valuePattern: idValuePattern,
-        );
-    final rowTotal = rowMatch?.group(3)?.trim();
-    final dueDate = rowMatch?.group(4)?.trim();
-    final authorization = rowMatch?.group(5)?.trim();
-    final receiptDate = matchText(RegExp(
-          r'Fecha\s+de\s+Comprobante\s*:\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
-          caseSensitive: false,
-        )) ??
-        matchText(RegExp(
-          r'\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s*,\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\b',
-          caseSensitive: false,
-        ));
-
-    return _ParsedPaymentReceipt(
-      supplierName: supplierName,
-      identifier: identifier,
-      total: _parseOptionalAmount(
-        matchText(RegExp(r'TOTAL\s+PAGADO\s*:\s*\$?\s*([\d.,]+)',
-                caseSensitive: false)) ??
-            matchText(
-                RegExp(r'Monto\s*:\s*\$?\s*([\d.,]+)', caseSensitive: false)) ??
-            _extractReceiptValue(
-              rawText,
-              const ['monto', 'monto total', 'total pagado'],
-              valuePattern: amountValuePattern,
-              lookAheadLines: 5,
-            ) ??
-            rowTotal ??
-            matchText(
-                RegExp(r'TOTAL\s*:\s*\$?\s*([\d.,]+)', caseSensitive: false)),
-      ),
-      date: _parseOptionalDate(
-        receiptDate ??
-            matchText(RegExp(r'Fecha\s*:\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
-                caseSensitive: false)),
-      ),
-      dueDate: _parseOptionalDate(dueDate),
-      transactionNumber: matchText(
-            RegExp(
-              r'N[°º]\s*de\s*transacci[oó]n\s*:\s*([A-Za-z0-9.-]+)',
-              caseSensitive: false,
-            ),
-          ) ??
-          matchText(
-            RegExp(
-              r'N[°º]\s*de\s*Comprobante\s*:\s*([A-Za-z0-9.-]+)',
-              caseSensitive: false,
-            ),
-          ) ??
-          _extractReceiptValue(
-            rawText,
-            const [
-              'n de comprobante',
-              'no de comprobante',
-              'numero de comprobante',
-            ],
-            valuePattern: referenceValuePattern,
-            lookAheadLines: 5,
-          ),
-      authorizationCode: authorization,
-      cub: matchText(
-          RegExp(r'CUB\s*:\s*([A-Za-z0-9.-]+)', caseSensitive: false)),
-      paymentMethod: matchText(RegExp(
-            r'Medio\s+de\s+pago\s*:\s*([A-Za-z0-9 ._-]+)',
-            caseSensitive: false,
-          )) ??
-          matchText(RegExp(
-            r'(?:Tarjeta|Cr[eé]dito|D[eé]bito)\s*[:\-]?\s*([A-Za-z0-9 ._-]*)',
-            caseSensitive: false,
-          )) ??
-          (isCgeReceipt ? 'card' : null),
-    );
-  }
-
-  String _receiptSearchText(String value) {
-    return _normalizeSearchText(value)
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
-
-  String? _extractReceiptValue(
-    String rawText,
-    List<String> labels, {
-    RegExp? valuePattern,
-    int lookAheadLines = 3,
-  }) {
-    final normalizedLabels = labels.map(_receiptSearchText).toList();
-    final lines = rawText
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final normalizedLine = _receiptSearchText(line);
-      if (!normalizedLabels.any(normalizedLine.contains)) continue;
-
-      final colonIndex = line.indexOf(RegExp(r'[:：]'));
-      if (colonIndex >= 0 && colonIndex < line.length - 1) {
-        final sameLineValue = _matchReceiptValue(
-          line.substring(colonIndex + 1),
-          valuePattern,
-        );
-        if (sameLineValue != null) return sameLineValue;
-      }
-
-      final lastLookAheadLine = (i + lookAheadLines).clamp(0, lines.length - 1);
-      for (var j = i + 1; j <= lastLookAheadLine; j++) {
-        final nextValue = _matchReceiptValue(lines[j], valuePattern);
-        if (nextValue != null) return nextValue;
-      }
-    }
-
-    return null;
-  }
-
-  String? _matchReceiptValue(String value, RegExp? valuePattern) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty || _isReceiptLabelText(trimmed)) return null;
-
-    if (valuePattern == null) return trimmed;
-    final match = valuePattern.firstMatch(trimmed);
-    if (match == null) return null;
-    return match.group(match.groupCount >= 1 ? 1 : 0)?.trim();
-  }
-
-  bool _isReceiptLabelText(String value) {
-    final text = _receiptSearchText(value);
-    if (text.isEmpty) return true;
-
-    const labels = [
-      'servicio',
-      'fecha de comprobante',
-      'n de comprobante',
-      'no de comprobante',
-      'numero de comprobante',
-      'monto',
-      'estado de pago',
-      'oficina virtual',
-      'comprobante de pago',
-    ];
-
-    return labels.any((label) => text == label);
-  }
-
-  bool _isGenericReceiptSupplier(String? value) {
-    final text = _receiptSearchText(value ?? '');
-    return text == 'servicio' ||
-        text == 'servicio suministro electrico' ||
-        text == 'comprobante de pago' ||
-        text == 'oficina virtual';
+    return _quickExpenseReceiptParser.looksLikePaymentReceipt(rawText);
   }
 
   void _applyOcrData(ParsedInvoice parsedInvoice) {
@@ -1922,6 +1696,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     }
 
     final resolvedAccount = _resolveTransportAccount(ocrResult) ??
+        _resolveDigitalInfrastructureAccount(ocrResult) ??
         _resolveUtilityAccount(ocrResult);
     final resolvedCategory = _resolveCategoryForAccount(resolvedAccount);
     final paymentMethod = _resolvePaymentMethodFromHint(
@@ -2012,32 +1787,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       return 'jpg';
     }
     return '';
-  }
-
-  double? _parseOptionalAmount(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final amount = _parseAmount(value);
-    return amount <= 0 ? null : amount;
-  }
-
-  DateTime? _parseOptionalDate(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final match =
-        RegExp(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})').firstMatch(value);
-    if (match == null) return null;
-
-    var day = int.tryParse(match.group(1)!);
-    var month = int.tryParse(match.group(2)!);
-    var year = int.tryParse(match.group(3)!);
-    if (day == null || month == null || year == null) return null;
-    if (month > 12 && day <= 12) {
-      final parsedMonth = day;
-      day = month;
-      month = parsedMonth;
-    }
-    if (year < 100) year += 2000;
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    return DateTime(year, month, day);
   }
 
   String? _supplierNameFromFileName(String fileName) {
@@ -2137,6 +1886,32 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     return null;
   }
 
+  Account? _resolveDigitalInfrastructureAccount(
+    _QuickExpenseOcrResult result,
+  ) {
+    if (!result.isDigitalInfrastructureExpense) return null;
+
+    for (final code in const [
+      QuickExpenseReceiptParser.domainExpenseAccountCode,
+    ]) {
+      for (final account in _accounts) {
+        if (account.code == code) return account;
+      }
+    }
+
+    for (final account in _accounts) {
+      final normalized = _normalizeSearchText(
+        '${account.name} ${account.description ?? ''}',
+      );
+      if (normalized.contains('dominio') ||
+          normalized.contains('hosting') ||
+          normalized.contains('alojamiento web')) {
+        return account;
+      }
+    }
+    return null;
+  }
+
   Account? _resolveTransportAccount(_QuickExpenseOcrResult result) {
     if (!result.isTransportExpense) return null;
 
@@ -2198,6 +1973,16 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         normalized.contains('electric') ||
         normalized.contains('energia')) {
       return 'Servicios Básicos';
+    }
+
+    if (code == '6207' ||
+        code == '6207-01' ||
+        normalized.contains('dominio') ||
+        normalized.contains('hosting') ||
+        normalized.contains('servicio digital') ||
+        normalized.contains('software') ||
+        normalized.contains('infraestructura web')) {
+      return QuickExpenseReceiptParser.domainExpenseCategoryName;
     }
 
     if (code == '6402' ||
@@ -2552,20 +2337,27 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
     return _buildQuickOcrPanelDropTarget(
       theme,
-      SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 18, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(theme),
-            const SizedBox(height: 18),
-            _buildStats(theme),
-            const SizedBox(height: 18),
-            _buildFormCard(theme),
-            const SizedBox(height: 18),
-            _buildRecentExpenses(theme),
-          ],
-        ),
+      Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(theme),
+                  const SizedBox(height: 14),
+                  _buildStats(theme),
+                  const SizedBox(height: 22),
+                  _buildFormCard(theme),
+                  const SizedBox(height: 26),
+                  _buildRecentExpenses(theme),
+                ],
+              ),
+            ),
+          ),
+          _buildSubmitBar(theme),
+        ],
       ),
     );
   }
@@ -2657,257 +2449,283 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   Widget _buildHeader(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(
-              Icons.bolt_rounded,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Nuevo gasto',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _bannerMessage ?? 'Listo para registrar',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton.outlined(
-            tooltip: 'Recargar',
-            onPressed: _isLoading ? null : () => _loadData(refresh: true),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-          ),
-          const SizedBox(width: 6),
-          IconButton.filledTonal(
-            tooltip: 'Abrir módulo completo',
-            onPressed: _isSaving
-                ? null
-                : () => context.push('/accounting/expenses/new'),
-            icon: const Icon(Icons.open_in_full_rounded, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
+    final accent = theme.colorScheme.primary;
 
-  Widget _buildStats(ThemeData theme) {
     return Row(
       children: [
-        Expanded(
-          child: _StatCard(
-            label: 'Hoy',
-            value: _currencyFormat.format(_todayExpenseTotal),
-            icon: Icons.today_rounded,
-            accentColor: const Color(0xFF0F766E),
+        SizedBox(
+          width: 4,
+          height: 42,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(99),
+            ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
-          child: _StatCard(
-            label: 'Mes',
-            value: _currencyFormat.format(_monthExpenseTotal),
-            icon: Icons.insights_rounded,
-            accentColor: theme.colorScheme.primary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nuevo gasto',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _bannerMessage ?? 'Listo para registrar',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatCard(
-            label: 'Pendientes',
-            value: _pendingExpenseCount == 0
-                ? '0'
-                : '$_pendingExpenseCount · ${_currencyFormat.format(_pendingBalanceTotal)}',
-            icon: Icons.schedule_rounded,
-            accentColor: const Color(0xFFD97706),
-          ),
+        IconButton(
+          tooltip: 'Recargar',
+          onPressed: _isLoading ? null : () => _loadData(refresh: true),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          visualDensity: VisualDensity.compact,
+        ),
+        IconButton(
+          tooltip: 'Abrir módulo completo',
+          onPressed:
+              _isSaving ? null : () => context.push('/accounting/expenses/new'),
+          icon: const Icon(Icons.arrow_outward_rounded, size: 18),
+          visualDensity: VisualDensity.compact,
         ),
       ],
     );
   }
 
-  Widget _buildSmartTemplates(ThemeData theme) {
-    final visibleTemplates = _templates.take(8).toList(growable: false);
-
+  Widget _buildStats(ThemeData theme) {
+    final divider = theme.colorScheme.outlineVariant.withValues(alpha: 0.45);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+        color: theme.colorScheme.primary.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.12 : 0.055,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _ExpenseMetric(
+                label: 'Hoy',
+                value: _currencyFormat.format(_todayExpenseTotal),
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1, color: divider),
+            Expanded(
+              child: _ExpenseMetric(
+                label: 'Este mes',
+                value: _currencyFormat.format(_monthExpenseTotal),
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1, color: divider),
+            Expanded(
+              child: _ExpenseMetric(
+                label: 'Pendientes',
+                value: _pendingExpenseCount == 0
+                    ? 'Ninguno'
+                    : '$_pendingExpenseCount · ${_currencyFormat.format(_pendingBalanceTotal)}',
+                accentColor: const Color(0xFFC26A12),
+              ),
+            ),
+          ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.auto_fix_high_rounded,
-                size: 17,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  'Plantillas inteligentes',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
+    );
+  }
+
+  Widget _buildSmartTemplates(ThemeData theme) {
+    final visibleTemplates = _templates.take(8).toList(growable: false);
+    final appliedTemplate = _appliedTemplate;
+    final templateTitle = appliedTemplate?.name ??
+        (visibleTemplates.isEmpty
+            ? 'Crear primera plantilla'
+            : 'Usar plantilla');
+    final templateSubtitle = appliedTemplate == null
+        ? (visibleTemplates.isEmpty
+            ? 'Guarda los datos que repites con frecuencia'
+            : '${visibleTemplates.length} disponibles')
+        : _templateAppliedLabel(appliedTemplate);
+
+    return Row(
+      children: [
+        Expanded(
+          child: PopupMenuButton<ExpenseTemplate>(
+            enabled: !_isSaving && visibleTemplates.isNotEmpty,
+            tooltip: 'Elegir plantilla',
+            offset: const Offset(0, 48),
+            onSelected: _applyTemplate,
+            itemBuilder: (context) => visibleTemplates
+                .map(
+                  (template) => PopupMenuItem<ExpenseTemplate>(
+                    value: template,
+                    child: Row(
+                      children: [
+                        Icon(
+                          _appliedTemplate?.id == template.id
+                              ? Icons.check_rounded
+                              : template.reviewIsOverdue ||
+                                      template.reviewIsSoon
+                                  ? Icons.notification_important_outlined
+                                  : template.linkPurchaseInvoice
+                                      ? Icons.link_rounded
+                                      : Icons.bolt_rounded,
+                          size: 18,
+                          color: _appliedTemplate?.id == template.id
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            template.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              IconButton.outlined(
-                tooltip: 'Escanear gasto con OCR',
-                onPressed: _isSaving ? null : _openExpenseOcrDialog,
-                icon: const Icon(Icons.document_scanner_outlined, size: 18),
-              ),
-              const SizedBox(width: 6),
-              IconButton.filledTonal(
-                tooltip: _appliedTemplate == null
-                    ? 'Guardar plantilla'
-                    : 'Editar plantilla aplicada',
-                onPressed: _isSaving || _isSavingTemplate
-                    ? null
-                    : (_appliedTemplate == null
-                        ? _saveCurrentAsTemplate
-                        : _editAppliedTemplate),
-                icon: _isSavingTemplate
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        _appliedTemplate == null
-                            ? Icons.save_as_outlined
-                            : Icons.edit_note_rounded,
-                        size: 18,
-                      ),
-              ),
-            ],
-          ),
-          if (_appliedTemplate != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                )
+                .toList(),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 54),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.25),
-                ),
+                color: appliedTemplate == null
+                    ? theme.colorScheme.surfaceContainerLow
+                    : theme.colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
                   Icon(
-                    Icons.check_circle_outline_rounded,
-                    size: 16,
+                    appliedTemplate == null
+                        ? Icons.bolt_outlined
+                        : Icons.check_circle_outline_rounded,
+                    size: 20,
                     color: theme.colorScheme.primary,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      _templateAppliedLabel(_appliedTemplate!),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.primary,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          templateTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          templateSubtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Editar plantilla',
-                    onPressed: _editAppliedTemplate,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Quitar plantilla aplicada',
-                    onPressed: _clearAppliedTemplate,
-                    icon: const Icon(Icons.close_rounded, size: 16),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Eliminar plantilla',
-                    onPressed: _deleteAppliedTemplate,
-                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                  Icon(
+                    visibleTemplates.isEmpty
+                        ? Icons.add_rounded
+                        : Icons.expand_more_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
             ),
-          ],
-          if (visibleTemplates.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: visibleTemplates
-                  .map(
-                    (template) => ChoiceChip(
-                      label: Text(
-                        template.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      selected: _appliedTemplate?.id == template.id,
-                      avatar: Icon(
-                        template.reviewIsOverdue || template.reviewIsSoon
-                            ? Icons.notification_important_outlined
-                            : template.linkPurchaseInvoice
-                                ? Icons.link_rounded
-                                : Icons.bolt_rounded,
-                        size: 15,
-                      ),
-                      onSelected:
-                          _isSaving ? null : (_) => _applyTemplate(template),
-                    ),
-                  )
-                  .toList(),
+          ),
+        ),
+        const SizedBox(width: 6),
+        if (_isSavingTemplate)
+          const SizedBox.square(
+            dimension: 40,
+            child: Padding(
+              padding: EdgeInsets.all(10),
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-          ] else ...[
-            const SizedBox(height: 8),
-            Text(
-              'Configura una vez un gasto frecuente y guárdalo como plantilla.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
+          )
+        else
+          PopupMenuButton<String>(
+            enabled: !_isSaving,
+            tooltip: 'Opciones de plantilla',
+            onSelected: (action) {
+              switch (action) {
+                case 'save':
+                  _saveCurrentAsTemplate();
+                  break;
+                case 'edit':
+                  _editAppliedTemplate();
+                  break;
+                case 'clear':
+                  _clearAppliedTemplate();
+                  break;
+                case 'delete':
+                  _deleteAppliedTemplate();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              if (appliedTemplate == null)
+                const PopupMenuItem(
+                  value: 'save',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.save_as_outlined),
+                    title: Text('Guardar esta captura'),
+                  ),
+                )
+              else ...[
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Editar plantilla'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.close_rounded),
+                    title: Text('Dejar de usarla'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_outline_rounded),
+                    title: Text('Eliminar plantilla'),
+                  ),
+                ),
+              ],
+            ],
+            icon: const Icon(Icons.more_horiz_rounded),
+          ),
+      ],
     );
   }
 
@@ -2958,82 +2776,120 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   Widget _buildPurchaseInvoiceLinkField(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(12),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: _linkToPurchaseInvoice
+            ? theme.colorScheme.primary.withValues(alpha: 0.07)
+            : theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-        ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            value: _linkToPurchaseInvoice,
-            onChanged: _isSaving
-                ? null
-                : (value) => setState(() {
-                      _linkToPurchaseInvoice = value;
-                      if (!value) {
-                        _selectedPurchaseInvoice = null;
-                        _isPurchaseInvoicePickerOpen = false;
-                        _purchaseInvoiceSearchController.clear();
-                        if (_descriptionWasAutoGenerated) {
-                          _setDescriptionText('');
-                        }
-                      } else {
-                        _applyLinkedInvoiceDescription();
-                      }
-                    }),
-            title: Text(
-              'Vincular a factura de compra',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w900,
+          Row(
+            children: [
+              Icon(
+                Icons.link_rounded,
+                size: 19,
+                color: _linkToPurchaseInvoice
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
-            ),
-            subtitle: Text(
-              'Para fletes, importaciones o costos asociados a una compra.',
-              style: theme.textTheme.bodySmall,
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Relacionar con una compra',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Sólo para fletes, importaciones y costos asociados',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _linkToPurchaseInvoice,
+                onChanged: _isSaving
+                    ? null
+                    : (value) => setState(() {
+                          _linkToPurchaseInvoice = value;
+                          if (!value) {
+                            _selectedPurchaseInvoice = null;
+                            _isPurchaseInvoicePickerOpen = false;
+                            _purchaseInvoiceSearchController.clear();
+                            if (_descriptionWasAutoGenerated) {
+                              _setDescriptionText('');
+                            }
+                          } else {
+                            _applyLinkedInvoiceDescription();
+                          }
+                        }),
+              ),
+            ],
           ),
-          if (_linkToPurchaseInvoice) ...[
-            const SizedBox(height: 10),
-            _buildPurchaseInvoicePicker(theme),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              key: ValueKey('expense-link-kind-$_selectedLinkKind'),
-              initialValue: _selectedLinkKind,
-              isExpanded: true,
-              decoration: _fieldDecoration(
-                theme,
-                label: 'Tipo de vínculo',
-                icon: Icons.link_rounded,
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'delivery',
-                  child: Text('Entrega / transporte'),
-                ),
-                DropdownMenuItem(
-                  value: 'import_cost',
-                  child: Text('Costo de importación'),
-                ),
-                DropdownMenuItem(
-                  value: 'general',
-                  child: Text('Relacionado'),
-                ),
-              ],
-              onChanged: _isSaving
-                  ? null
-                  : (value) => setState(() {
-                        _selectedLinkKind = value ?? 'general';
-                        _applyLinkedInvoiceDescription();
-                      }),
-            ),
-          ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 190),
+            curve: Curves.easeOutCubic,
+            child: !_linkToPurchaseInvoice
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                      children: [
+                        _buildPurchaseInvoicePicker(theme),
+                        const SizedBox(height: 10),
+                        _buildLabeledField(
+                          theme,
+                          label: 'Tipo de vínculo',
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey(
+                              'expense-link-kind-$_selectedLinkKind',
+                            ),
+                            initialValue: _selectedLinkKind,
+                            isExpanded: true,
+                            decoration: _fieldDecoration(
+                              theme,
+                              label: 'Seleccionar vínculo',
+                              icon: Icons.alt_route_rounded,
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'delivery',
+                                child: Text('Entrega / transporte'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'import_cost',
+                                child: Text('Costo de importación'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'general',
+                                child: Text('Relacionado'),
+                              ),
+                            ],
+                            onChanged: _isSaving
+                                ? null
+                                : (value) => setState(() {
+                                      _selectedLinkKind = value ?? 'general';
+                                      _applyLinkedInvoiceDescription();
+                                    }),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
         ],
       ),
     );
@@ -3441,67 +3297,108 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   Widget _buildFormCard(ThemeData theme) {
     final supplierSuggestions = _supplierSuggestions.toList(growable: false);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.42),
+    final categoryField = _buildLabeledField(
+      theme,
+      label: 'Categoría',
+      child: DropdownButtonFormField<ExpenseCategory>(
+        key: ValueKey('expense-category-${_selectedCategory?.id ?? 'none'}'),
+        initialValue: _selectedCategory,
+        isExpanded: true,
+        decoration: _fieldDecoration(
+          theme,
+          label: 'Sin categoría',
+          icon: Icons.sell_outlined,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Captura rápida',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
+        items: [
+          const DropdownMenuItem<ExpenseCategory>(
+            value: null,
+            child: Text('Sin categoría'),
+          ),
+          ..._categories.map(
+            (category) => DropdownMenuItem<ExpenseCategory>(
+              value: category,
+              child: Text(
+                category.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          _buildQuickOcrDropZone(theme),
-          const SizedBox(height: 12),
-          SegmentedButton<ExpenseDocumentType>(
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: WidgetStatePropertyAll(
-                theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+        ],
+        onChanged: _isSaving
+            ? null
+            : (category) {
+                if (category == null) {
+                  setState(() => _selectedCategory = null);
+                } else {
+                  _selectCategory(category);
+                }
+              },
+      ),
+    );
+    final paymentField = _buildLabeledField(
+      theme,
+      label: 'Medio de pago',
+      child: DropdownButtonFormField<PaymentMethod>(
+        key: ValueKey(
+          'expense-payment-${_selectedPaymentMethod?.id ?? 'none'}',
+        ),
+        initialValue: _selectedPaymentMethod,
+        isExpanded: true,
+        decoration: _fieldDecoration(
+          theme,
+          label: 'Seleccionar medio',
+          icon: Icons.account_balance_outlined,
+        ),
+        items: _paymentMethods
+            .map(
+              (method) => DropdownMenuItem<PaymentMethod>(
+                value: method,
+                child: Text(
+                  method.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-            segments: const [
-              ButtonSegment<ExpenseDocumentType>(
-                value: ExpenseDocumentType.invoice,
-                icon: Icon(Icons.receipt_long_outlined, size: 15),
-                label: Text('Factura'),
-              ),
-              ButtonSegment<ExpenseDocumentType>(
-                value: ExpenseDocumentType.receipt,
-                icon: Icon(Icons.point_of_sale_outlined, size: 15),
-                label: Text('Boleta'),
-              ),
-              ButtonSegment<ExpenseDocumentType>(
-                value: ExpenseDocumentType.reimbursement,
-                icon: Icon(Icons.replay_circle_filled_outlined, size: 15),
-                label: Text('Reembolso'),
-              ),
-            ],
-            selected: {_documentType},
-            onSelectionChanged: _isSaving
-                ? null
-                : (selection) {
-                    setState(() {
-                      _documentType = selection.first;
-                    });
-                  },
-          ),
-          const SizedBox(height: 12),
-          _buildSmartTemplates(theme),
-          const SizedBox(height: 14),
-          TextField(
+            )
+            .toList(),
+        onChanged: _isSaving
+            ? null
+            : (method) => setState(
+                  () => _selectedPaymentMethodId = method?.id,
+                ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeading(
+          theme,
+          icon: Icons.document_scanner_outlined,
+          title: 'Captura',
+          subtitle: 'Escanea un comprobante o ingresa los datos a mano',
+        ),
+        const SizedBox(height: 12),
+        _buildQuickOcrDropZone(theme),
+        const SizedBox(height: 10),
+        _buildDocumentTypeSelector(theme),
+        const SizedBox(height: 10),
+        _buildSmartTemplates(theme),
+        const SizedBox(height: 26),
+        _buildSectionHeading(
+          theme,
+          icon: Icons.edit_note_rounded,
+          title: 'Datos del gasto',
+          subtitle: _hasIva
+              ? 'La factura se desglosará automáticamente con IVA 19%'
+              : 'Este documento se registrará sin IVA',
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledField(
+          theme,
+          label: 'Monto total',
+          child: TextField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: false),
             inputFormatters: [
@@ -3509,63 +3406,48 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
             ],
             onChanged: (_) => _handleFormValueChanged(),
             style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
-            decoration: InputDecoration(
-              labelText: 'Monto total',
-              hintText: '45.000',
-              prefixIcon: const Icon(Icons.payments_outlined),
-              suffixText: 'CLP',
-              filled: true,
-              fillColor: theme.colorScheme.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+            decoration: _fieldDecoration(
+              theme,
+              label: '45.000',
+              icon: Icons.payments_outlined,
+            ).copyWith(suffixText: 'CLP'),
           ),
-          const SizedBox(height: 9),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [10000, 25000, 50000, 100000]
-                .map(
-                  (amount) => ChoiceChip(
-                    label: Text(_currencyFormat.format(amount)),
-                    selected: _totalAmount == amount,
-                    onSelected:
-                        _isSaving ? null : (_) => _applyAmountPreset(amount),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 12),
-          TextField(
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledField(
+          theme,
+          label: 'Descripción',
+          child: TextField(
             controller: _descriptionController,
             maxLines: 2,
-            decoration: InputDecoration(
-              labelText: 'Descripción',
-              hintText: 'Ej: compra de insumos, combustible, mensajería...',
-              prefixIcon: const Padding(
-                padding: EdgeInsets.only(bottom: 28),
-                child: Icon(Icons.notes_rounded),
-              ),
-              filled: true,
-              fillColor: theme.colorScheme.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+            decoration: _fieldDecoration(
+              theme,
+              label: 'Insumos, combustible, mensajería…',
+              icon: Icons.notes_rounded,
             ),
           ),
-          const SizedBox(height: 14),
-          _buildFormSectionLabel(theme, 'Clasificación'),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<Account>(
+        ),
+        const SizedBox(height: 26),
+        _buildSectionHeading(
+          theme,
+          icon: Icons.account_tree_outlined,
+          title: 'Clasificación contable',
+          subtitle: 'Define dónde y cómo se contabiliza',
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledField(
+          theme,
+          label: 'Cuenta de gasto',
+          child: DropdownButtonFormField<Account>(
             key: ValueKey('expense-account-${_selectedAccount?.id ?? 'none'}'),
             initialValue: _selectedAccount,
             isExpanded: true,
             decoration: _fieldDecoration(
               theme,
-              label: 'Cuenta de gasto',
+              label: 'Seleccionar cuenta',
               icon: Icons.account_balance_wallet_outlined,
             ),
             items: _accounts
@@ -3584,87 +3466,31 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                 ? null
                 : (account) => setState(() => _selectedAccount = account),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<ExpenseCategory>(
-                  key: ValueKey(
-                    'expense-category-${_selectedCategory?.id ?? 'none'}',
-                  ),
-                  initialValue: _selectedCategory,
-                  isExpanded: true,
-                  decoration: _fieldDecoration(
-                    theme,
-                    label: 'Categoría',
-                    icon: Icons.sell_outlined,
-                  ),
-                  items: [
-                    const DropdownMenuItem<ExpenseCategory>(
-                      value: null,
-                      child: Text('Sin categoría'),
-                    ),
-                    ..._categories.map(
-                      (category) => DropdownMenuItem<ExpenseCategory>(
-                        value: category,
-                        child: Text(
-                          category.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: _isSaving
-                      ? null
-                      : (category) {
-                          if (category == null) {
-                            setState(() => _selectedCategory = null);
-                          } else {
-                            _selectCategory(category);
-                          }
-                        },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<PaymentMethod>(
-                  key: ValueKey(
-                    'expense-payment-${_selectedPaymentMethod?.id ?? 'none'}',
-                  ),
-                  initialValue: _selectedPaymentMethod,
-                  isExpanded: true,
-                  decoration: _fieldDecoration(
-                    theme,
-                    label: 'Pago',
-                    icon: Icons.account_balance_outlined,
-                  ),
-                  items: _paymentMethods
-                      .map(
-                        (method) => DropdownMenuItem<PaymentMethod>(
-                          value: method,
-                          child: Text(method.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _isSaving
-                      ? null
-                      : (method) => setState(
-                            () => _selectedPaymentMethodId = method?.id,
-                          ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _buildFormSectionLabel(theme, 'Proveedor y documento'),
-          const SizedBox(height: 8),
-          TextField(
+        ),
+        const SizedBox(height: 12),
+        _buildResponsivePair(
+          first: categoryField,
+          second: paymentField,
+        ),
+        const SizedBox(height: 26),
+        _buildSectionHeading(
+          theme,
+          icon: Icons.inventory_2_outlined,
+          title: 'Respaldo',
+          subtitle: 'Proveedor, fecha y referencia del documento',
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledField(
+          theme,
+          label: 'Proveedor',
+          optional: true,
+          child: TextField(
             controller: _supplierController,
-            decoration: InputDecoration(
-              labelText: 'Proveedor opcional',
-              hintText: 'Buscar por nombre, RUT o teléfono',
-              prefixIcon: const Icon(Icons.storefront_outlined),
+            decoration: _fieldDecoration(
+              theme,
+              label: 'Buscar por nombre, RUT o teléfono',
+              icon: Icons.storefront_outlined,
+            ).copyWith(
               suffixIcon: _selectedSupplier != null
                   ? IconButton(
                       onPressed: _isSaving ? null : _clearSupplier,
@@ -3672,11 +3498,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                       tooltip: 'Quitar proveedor',
                     )
                   : null,
-              filled: true,
-              fillColor: theme.colorScheme.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             onChanged: (_) {
               if (_selectedSupplier != null &&
@@ -3686,154 +3507,354 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
               setState(() {});
             },
           ),
-          if (_selectedSupplier != null) ...[
-            const SizedBox(height: 8),
-            _buildSelectedSupplier(theme),
-          ] else if (supplierSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color:
-                      theme.colorScheme.outlineVariant.withValues(alpha: 0.38),
-                ),
-              ),
-              child: Column(
-                children: supplierSuggestions
-                    .map(
-                      (supplier) => ListTile(
-                        dense: true,
-                        minLeadingWidth: 0,
-                        leading: CircleAvatar(
-                          radius: 16,
-                          backgroundColor:
-                              theme.colorScheme.primary.withValues(alpha: 0.12),
-                          child: Icon(
-                            Icons.person_2_outlined,
-                            size: 16,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        title: Text(
-                          supplier.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          _supplierSubtitle(supplier).isEmpty
-                              ? supplier.rut ?? supplier.phone ?? 'Sin RUT'
-                              : _supplierSubtitle(supplier),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: _selectedSupplier?.id == supplier.id
-                            ? Icon(
-                                Icons.check_circle,
-                                color: theme.colorScheme.primary,
-                                size: 18,
-                              )
-                            : null,
-                        onTap:
-                            _isSaving ? null : () => _selectSupplier(supplier),
-                      ),
-                    )
-                    .toList(),
+        ),
+        if (_selectedSupplier != null) ...[
+          const SizedBox(height: 8),
+          _buildSelectedSupplier(theme),
+        ] else if (supplierSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.38),
               ),
             ),
-          ],
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isSaving ? null : _pickExpenseDate,
-                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
-                  label: Text(_formatDate(_expenseDate)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+            child: Column(
+              children: supplierSuggestions
+                  .map(
+                    (supplier) => ListTile(
+                      dense: true,
+                      minLeadingWidth: 0,
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor:
+                            theme.colorScheme.primary.withValues(alpha: 0.12),
+                        child: Icon(
+                          Icons.person_2_outlined,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      title: Text(
+                        supplier.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        _supplierSubtitle(supplier).isEmpty
+                            ? supplier.rut ?? supplier.phone ?? 'Sin RUT'
+                            : _supplierSubtitle(supplier),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: _selectedSupplier?.id == supplier.id
+                          ? Icon(
+                              Icons.check_circle,
+                              color: theme.colorScheme.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: _isSaving ? null : () => _selectSupplier(supplier),
                     ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _buildResponsivePair(
+          first: _buildLabeledField(
+            theme,
+            label: 'Fecha',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isSaving ? null : _pickExpenseDate,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant
+                          .withValues(alpha: 0.45),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        _formatDate(_expenseDate),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _referenceController,
-                  decoration: _fieldDecoration(
-                    theme,
-                    label: 'Referencia',
-                    hint: 'N° doc',
-                    icon: Icons.tag_outlined,
-                  ),
+            ),
+          ),
+          second: _buildLabeledField(
+            theme,
+            label: 'Referencia',
+            optional: true,
+            child: TextField(
+              controller: _referenceController,
+              decoration: _fieldDecoration(
+                theme,
+                label: 'N° documento',
+                icon: Icons.tag_outlined,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildPurchaseInvoiceLinkField(theme),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeading(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 19, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _buildPurchaseInvoiceLinkField(theme),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Column(
-              children: [
-                _SummaryRow(
-                  label: 'Neto',
-                  value: _currencyFormat.format(_netAmount),
-                ),
-                const SizedBox(height: 8),
-                _SummaryRow(
-                  label: _hasIva ? 'IVA 19%' : 'IVA',
-                  value: _currencyFormat.format(_ivaAmount),
-                  highlight: _hasIva,
-                ),
-                const SizedBox(height: 8),
-                _SummaryRow(
-                  label: 'Total a contabilizar',
-                  value: _currencyFormat.format(_totalAmount),
-                  emphasize: true,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _hasIva
-                      ? 'El monto ingresado incluye IVA y se desglosa automáticamente.'
-                      : 'El monto se registrará sin impuestos en esta captura rápida.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDocumentTypeSelector(ThemeData theme) {
+    const types = [
+      ExpenseDocumentType.invoice,
+      ExpenseDocumentType.receipt,
+      ExpenseDocumentType.reimbursement,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        children: [
+          for (final type in types)
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isSaving
+                      ? null
+                      : () => setState(() => _documentType = type),
+                  borderRadius: BorderRadius.circular(8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 170),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: _documentType == type
+                          ? theme.colorScheme.surface
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: _documentType == type
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          switch (type) {
+                            ExpenseDocumentType.invoice =>
+                              Icons.receipt_long_outlined,
+                            ExpenseDocumentType.receipt =>
+                              Icons.point_of_sale_outlined,
+                            ExpenseDocumentType.reimbursement =>
+                              Icons.replay_outlined,
+                            ExpenseDocumentType.ticket =>
+                              Icons.confirmation_number_outlined,
+                            ExpenseDocumentType.other =>
+                              Icons.description_outlined,
+                          },
+                          size: 15,
+                          color: _documentType == type
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            switch (type) {
+                              ExpenseDocumentType.invoice => 'Factura',
+                              ExpenseDocumentType.receipt => 'Boleta',
+                              ExpenseDocumentType.reimbursement => 'Reembolso',
+                              ExpenseDocumentType.ticket => 'Ticket',
+                              ExpenseDocumentType.other => 'Otro',
+                            },
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: _documentType == type
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurfaceVariant,
+                              fontWeight: _documentType == type
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResponsivePair({
+    required Widget first,
+    required Widget second,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 350) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 12), second],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 10),
+            Expanded(child: second),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSubmitBar(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.045),
+            blurRadius: 14,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _hasIva ? 'Total · IVA incluido' : 'Total',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child: Text(
+                    _currencyFormat.format(_totalAmount),
+                    key: ValueKey(_totalAmount),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                if (_hasIva && _totalAmount > 0)
+                  Text(
+                    'Neto ${_currencyFormat.format(_netAmount)} · IVA ${_currencyFormat.format(_ivaAmount)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isSaving ? null : _saveQuickExpense,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check_circle_outline_rounded),
-              label:
-                  Text(_isSaving ? 'Registrando...' : 'Registrar gasto ahora'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : _saveQuickExpense,
+            icon: _isSaving
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_rounded, size: 19),
+            label: Text(_isSaving ? 'Registrando…' : 'Registrar'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(128, 46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
@@ -3844,54 +3865,61 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   Widget _buildQuickOcrDropZone(ThemeData theme) {
     final colorScheme = theme.colorScheme;
-    final accentColor =
-        _isDraggingOcrFile ? colorScheme.primary : colorScheme.outlineVariant;
     final bgColor = _isDraggingOcrFile
-        ? colorScheme.primary.withValues(alpha: 0.08)
-        : colorScheme.surface;
+        ? colorScheme.primary.withValues(alpha: 0.14)
+        : colorScheme.primary.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.12 : 0.065,
+          );
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap:
             _isSaving || _isProcessingOcrFile ? null : _pickQuickExpenseOcrFile,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.all(12),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.fromLTRB(13, 12, 11, 12),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  accentColor.withValues(alpha: _isDraggingOcrFile ? 1 : 0.7),
-              width: _isDraggingOcrFile ? 1.6 : 1,
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: _isDraggingOcrFile
+                ? Border.all(color: colorScheme.primary, width: 1.5)
+                : null,
           ),
           child: Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(11),
-                ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
                 child: _isProcessingOcrFile
-                    ? const Padding(
-                        padding: EdgeInsets.all(9),
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const SizedBox.square(
+                        key: ValueKey('ocr-progress'),
+                        dimension: 38,
+                        child: Padding(
+                          padding: EdgeInsets.all(9),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       )
-                    : Icon(
-                        _isDraggingOcrFile
-                            ? Icons.file_download_outlined
-                            : Icons.document_scanner_outlined,
-                        color: colorScheme.primary,
-                        size: 20,
+                    : Container(
+                        key: ValueKey(_isDraggingOcrFile),
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isDraggingOcrFile
+                              ? Icons.file_download_outlined
+                              : Icons.document_scanner_outlined,
+                          color: colorScheme.primary,
+                          size: 20,
+                        ),
                       ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 11),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3903,7 +3931,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -3912,24 +3940,31 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
                           ? (_ocrFileName ?? 'Procesando archivo...')
                           : _isDraggingOcrFile
                               ? 'Suelta el archivo para analizarlo'
-                              : 'PDF o imagen · rellena proveedor, monto, fecha y cuenta',
-                      maxLines: 1,
+                              : 'PDF o imagen · completa monto, fecha y proveedor',
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: _isDraggingOcrFile
                             ? FontWeight.w700
-                            : FontWeight.w500,
+                            : FontWeight.w400,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(
-                Icons.add_rounded,
-                color: colorScheme.onSurfaceVariant,
-                size: 20,
+              IconButton(
+                tooltip: 'Abrir escáner con vista previa',
+                visualDensity: VisualDensity.compact,
+                onPressed: _isSaving || _isProcessingOcrFile
+                    ? null
+                    : _openExpenseOcrDialog,
+                icon: Icon(
+                  Icons.center_focus_strong_outlined,
+                  color: colorScheme.primary,
+                  size: 19,
+                ),
               ),
             ],
           ),
@@ -3938,13 +3973,39 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     );
   }
 
-  Widget _buildFormSectionLabel(ThemeData theme, String label) {
-    return Text(
-      label,
-      style: theme.textTheme.labelLarge?.copyWith(
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.82),
-        fontWeight: FontWeight.w900,
-      ),
+  Widget _buildLabeledField(
+    ThemeData theme, {
+    required String label,
+    required Widget child,
+    bool optional = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (optional) ...[
+              const SizedBox(width: 5),
+              Text(
+                'opcional',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant
+                      .withValues(alpha: 0.72),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
     );
   }
 
@@ -3954,14 +4015,31 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
     required IconData icon,
     String? hint,
   }) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(
+        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+      ),
+    );
     return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: Icon(icon),
+      hintText: hint ?? label,
+      prefixIcon: Icon(
+        icon,
+        size: 19,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      prefixIconConstraints: const BoxConstraints(minWidth: 44),
       filled: true,
-      fillColor: theme.colorScheme.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+      fillColor: theme.colorScheme.surfaceContainerLowest,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+      border: border,
+      enabledBorder: border,
+      disabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(
+          color: theme.colorScheme.primary,
+          width: 1.4,
+        ),
       ),
     );
   }
@@ -3975,9 +4053,6 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.22),
-        ),
       ),
       child: Row(
         children: [
@@ -4024,141 +4099,127 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
   }
 
   Widget _buildRecentExpenses(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Recientes',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => context.push('/accounting/expenses'),
-                child: const Text('Ver todos'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (_recentExpenses.isEmpty)
+    final recent = _recentExpenses.take(5).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.history_rounded,
+              size: 19,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 9),
             Text(
-              'Todavía no hay gastos recientes para mostrar.',
+              'Últimos gastos',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => context.push('/accounting/expenses'),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              child: const Text('Ver todos'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (recent.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 28, top: 4),
+            child: Text(
+              'Los gastos registrados aparecerán aquí.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-            )
-          else
-            Column(
-              children: _recentExpenses
-                  .map(
-                    (expense) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: expense.id == null
-                            ? null
-                            : () => context
-                                .push('/accounting/expenses/${expense.id}'),
-                        child: Ink(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: theme.colorScheme.outlineVariant
-                                  .withValues(alpha: 0.28),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary
-                                      .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  Icons.receipt_outlined,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      expense.notes ??
-                                          expense.reference ??
-                                          expense.expenseNumber,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style:
-                                          theme.textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      [
-                                        expense.expenseNumber,
-                                        expense.supplierName,
-                                        _paymentStatusLabel(
-                                            expense.paymentStatus),
-                                      ]
-                                          .whereType<String>()
-                                          .where((value) => value.isNotEmpty)
-                                          .join(' · '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _currencyFormat.format(expense.totalAmount),
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _formatDate(expense.issueDate),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+            ),
+          )
+        else
+          for (var index = 0; index < recent.length; index++) ...[
+            _buildRecentExpenseRow(theme, recent[index]),
+            if (index < recent.length - 1)
+              Divider(
+                height: 1,
+                indent: 46,
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
+          ],
+      ],
+    );
+  }
+
+  Widget _buildRecentExpenseRow(ThemeData theme, Expense expense) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: expense.id == null
+            ? null
+            : () => context.push('/accounting/expenses/${expense.id}'),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.09),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.receipt_long_outlined,
+                  color: theme.colorScheme.primary,
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      expense.notes ??
+                          expense.reference ??
+                          expense.expenseNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  )
-                  .toList(),
-            ),
-        ],
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        expense.supplierName,
+                        _paymentStatusLabel(expense.paymentStatus),
+                        _formatDate(expense.issueDate),
+                      ]
+                          .whereType<String>()
+                          .where((value) => value.isNotEmpty)
+                          .join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _currencyFormat.format(expense.totalAmount),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -4205,106 +4266,49 @@ class _RailButton extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+class _ExpenseMetric extends StatelessWidget {
+  const _ExpenseMetric({
     required this.label,
     required this.value,
-    required this.icon,
-    required this.accentColor,
+    this.accentColor,
   });
 
   final String label;
   final String value;
-  final IconData icon;
-  final Color accentColor;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.24),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
-            child: Icon(icon, color: accentColor, size: 18),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 3),
           Text(
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleSmall?.copyWith(
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: accentColor ?? theme.colorScheme.onSurface,
               fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-    this.emphasize = false,
-  });
-
-  final String label;
-  final String value;
-  final bool highlight;
-  final bool emphasize;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = emphasize
-        ? theme.colorScheme.primary
-        : highlight
-            ? const Color(0xFFFF8F00)
-            : theme.colorScheme.onSurface;
-
-    return Row(
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: emphasize ? color : theme.colorScheme.onSurfaceVariant,
-            fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 }

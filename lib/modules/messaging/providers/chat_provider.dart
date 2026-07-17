@@ -3,8 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/user_management_service.dart';
+import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
+import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../services/conversation_context_hint_cache.dart';
 import '../services/messaging_service.dart';
 import '../../../shared/services/notification_service.dart';
 
@@ -64,6 +67,8 @@ class _OutgoingConversationPreview {
 
 class ChatProvider extends ChangeNotifier {
   final MessagingService _service = MessagingService();
+  final ConversationContextHintCache _contextHintCache =
+      ConversationContextHintCache();
   final UserManagementService? _userService;
 
   // State
@@ -85,6 +90,14 @@ class ChatProvider extends ChangeNotifier {
   bool _isLoadingConversations = false;
   bool _hasPendingConversationRefresh = false;
   bool _pendingConversationRefreshNeedsContextHints = false;
+  String? _pendingConversationRefreshType;
+  Completer<void>? _activeConversationLoadCompleter;
+  Completer<void>? _pendingConversationRefreshCompleter;
+  Future<void>? _contextHintCacheLoadFuture;
+  Future<void>? _contextHintsRefreshFuture;
+  final Map<String, ConversationContextHint> _cachedContextHints = {};
+  String? _contextHintCacheTenantId;
+  String? _contextHintCacheUserId;
   String? _activeConversationId;
 
   // Subscriptions
@@ -94,6 +107,7 @@ class ChatProvider extends ChangeNotifier {
   Timer? _conversationsRefreshTimer;
   Timer? _conversationsFollowUpRefreshTimer;
   Timer? _messagesRetryTimer;
+  Timer? _contextHintCachePersistTimer;
   int _messagesRetryAttempt = 0;
   static const int _maxMessageStreamRetryAttempts = 4;
 
@@ -295,8 +309,64 @@ class ChatProvider extends ChangeNotifier {
       });
 
   ChatProvider([this._userService]) {
+    _contextHintCacheLoadFuture = _loadContextHintCache();
     _loadUserCache();
     _initConversationsListener();
+  }
+
+  Future<void> _loadContextHintCache() async {
+    final userId = _service.currentUserId;
+    final tenantService = TenantService();
+    final tenantId =
+        tenantService.currentTenantId ?? await tenantService.getTenantId();
+    if (userId == null ||
+        userId.isEmpty ||
+        tenantId == null ||
+        tenantId.isEmpty) {
+      return;
+    }
+
+    _contextHintCacheUserId = userId;
+    _contextHintCacheTenantId = tenantId;
+    final cached = await _contextHintCache.read(
+      tenantId: tenantId,
+      userId: userId,
+    );
+    _cachedContextHints
+      ..clear()
+      ..addAll(cached);
+
+    if (_conversations.isNotEmpty && cached.isNotEmpty) {
+      _conversations = _mergeCachedContextHints(_conversations);
+      notifyListeners();
+    }
+  }
+
+  void _scheduleContextHintCachePersist() {
+    final tenantId = _contextHintCacheTenantId;
+    final userId = _contextHintCacheUserId;
+    if (tenantId == null || userId == null) return;
+
+    _contextHintCachePersistTimer?.cancel();
+    _contextHintCachePersistTimer = Timer(
+      const Duration(milliseconds: 180),
+      () => unawaited(_persistContextHintCache(tenantId, userId)),
+    );
+  }
+
+  Future<void> _persistContextHintCache(
+    String tenantId,
+    String userId,
+  ) async {
+    try {
+      await _contextHintCache.write(
+        tenantId: tenantId,
+        userId: userId,
+        hints: Map.unmodifiable(_cachedContextHints),
+      );
+    } catch (error) {
+      debugPrint('⚠️ Could not persist messaging context hints: $error');
+    }
   }
 
   /// Load user cache for resolving names
@@ -616,14 +686,22 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Load conversations list
+  /// Load conversation previews and unread state. A concurrent caller now
+  /// waits for the coalesced follow-up read instead of returning prematurely.
   Future<void> loadConversations({
     String? type,
     bool refreshContextHints = true,
   }) async {
-    // Don't set global loading here to avoid screen flickering on updates
+    // Don't set global loading here to avoid screen flickering on updates.
     if (_isLoadingConversations) {
+      if (!_hasPendingConversationRefresh) {
+        _pendingConversationRefreshType = type;
+      } else if (_pendingConversationRefreshType != type) {
+        _pendingConversationRefreshType = null;
+      }
       _pendingConversationRefreshNeedsContextHints |= refreshContextHints;
+      final pendingCompleter =
+          _pendingConversationRefreshCompleter ??= Completer<void>();
       _debugInboxSync(
         'loadConversations:queued',
         details: {
@@ -636,7 +714,7 @@ class ChatProvider extends ChangeNotifier {
         },
       );
       _hasPendingConversationRefresh = true;
-      return;
+      return pendingCompleter.future;
     }
 
     final startedAt = DateTime.now();
@@ -652,17 +730,22 @@ class ChatProvider extends ChangeNotifier {
     );
 
     _isLoadingConversations = true;
+    final activeLoadCompleter = Completer<void>();
+    _activeConversationLoadCompleter = activeLoadCompleter;
     try {
-      final newConversations = await _service.getConversations(
+      final conversationsFuture = _service.getConversations(
         type: type,
         includeContextHints: refreshContextHints,
       );
+      await _contextHintCacheLoadFuture;
+      final newConversations = await conversationsFuture;
+      if (refreshContextHints) {
+        _replaceCachedContextHints(newConversations);
+      }
       _conversations = _applyOutgoingConversationPreviews(
         _applyIncomingConversationPreviews(
           _applyLocalReadOverrides(
-            refreshContextHints
-                ? newConversations
-                : _mergeCachedContextHints(newConversations),
+            _mergeCachedContextHints(newConversations),
           ),
         ),
       );
@@ -678,7 +761,6 @@ class ChatProvider extends ChangeNotifier {
       );
       notifyListeners();
 
-      // Refresh cache if needed
       if (_userCache.isEmpty) await _loadUserCache();
     } catch (e) {
       _debugInboxSync(
@@ -689,63 +771,185 @@ class ChatProvider extends ChangeNotifier {
       debugPrint('❌ Error loading conversations: $e');
     } finally {
       _isLoadingConversations = false;
+      if (identical(_activeConversationLoadCompleter, activeLoadCompleter)) {
+        _activeConversationLoadCompleter = null;
+      }
+      if (!activeLoadCompleter.isCompleted) activeLoadCompleter.complete();
+
       if (_hasPendingConversationRefresh) {
         _hasPendingConversationRefresh = false;
+        final pendingType = _pendingConversationRefreshType;
+        _pendingConversationRefreshType = null;
         final pendingNeedsContextHints =
             _pendingConversationRefreshNeedsContextHints;
         _pendingConversationRefreshNeedsContextHints = false;
+        final pendingCompleter = _pendingConversationRefreshCompleter;
+        _pendingConversationRefreshCompleter = null;
         _debugInboxSync(
           'loadConversations:runQueued',
-          details: {'refreshContextHints': pendingNeedsContextHints},
+          details: {
+            'type': pendingType ?? 'all',
+            'refreshContextHints': pendingNeedsContextHints,
+          },
         );
-        _scheduleConversationRefresh(
-          const Duration(milliseconds: 80),
-          pendingNeedsContextHints,
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 80), () async {
+            try {
+              await loadConversations(
+                type: pendingType,
+                refreshContextHints: pendingNeedsContextHints,
+              );
+            } finally {
+              if (pendingCompleter != null && !pendingCompleter.isCompleted) {
+                pendingCompleter.complete();
+              }
+            }
+          }),
         );
       }
     }
   }
 
+  /// Refresh only the derived job, bike, invoice, and supplier context.
+  /// Repeated callers share one authoritative refresh.
+  Future<void> refreshConversationContextHints() {
+    final activeRefresh = _contextHintsRefreshFuture;
+    if (activeRefresh != null) return activeRefresh;
+
+    final refresh = _refreshConversationContextHints();
+    _contextHintsRefreshFuture = refresh;
+    unawaited(
+      refresh.whenComplete(() {
+        if (identical(_contextHintsRefreshFuture, refresh)) {
+          _contextHintsRefreshFuture = null;
+        }
+      }),
+    );
+    return refresh;
+  }
+
+  Future<void> _refreshConversationContextHints() async {
+    final activeConversationLoad = _activeConversationLoadCompleter?.future;
+    if (activeConversationLoad != null) await activeConversationLoad;
+    if (_conversations.isEmpty) {
+      await loadConversations(refreshContextHints: false);
+    }
+
+    final snapshot = List<Conversation>.of(_conversations);
+    if (snapshot.isEmpty) return;
+    final snapshotIds = snapshot.map((conversation) => conversation.id).toSet();
+    final startedAt = DateTime.now();
+    _debugInboxSync(
+      'refreshContextHints:start',
+      details: {'rows': snapshot.length},
+    );
+
+    try {
+      final hints = await _service.getConversationContextHints(snapshot);
+      var changed = false;
+      _conversations = _conversations.map((conversation) {
+        if (!snapshotIds.contains(conversation.id)) return conversation;
+        final hint = hints[conversation.id];
+        // A missing row can also mean one of the best-effort enrichment reads
+        // failed. Keep the last truthful hint until the server returns an
+        // explicit replacement (including a customer-only hint).
+        if (hint == null) return conversation;
+        if (mapEquals(
+          conversation.contextHint?.toJson(),
+          hint.toJson(),
+        )) {
+          return conversation;
+        }
+        changed = true;
+        return _withContextHint(conversation, hint);
+      }).toList(growable: false);
+
+      for (final entry in hints.entries) {
+        _cachedContextHints[entry.key] = entry.value;
+      }
+      _scheduleContextHintCachePersist();
+      if (changed) notifyListeners();
+      _debugInboxSync(
+        'refreshContextHints:applied',
+        startedAt: startedAt,
+        details: {'rows': hints.length, 'changed': changed},
+      );
+    } catch (error) {
+      _debugInboxSync(
+        'refreshContextHints:error',
+        startedAt: startedAt,
+        details: {'error': error},
+      );
+      debugPrint('❌ Error refreshing conversation context hints: $error');
+    }
+  }
+
+  void _replaceCachedContextHints(List<Conversation> conversations) {
+    final conversationIds =
+        conversations.map((conversation) => conversation.id).toSet();
+    _cachedContextHints.removeWhere(
+      (conversationId, _) => !conversationIds.contains(conversationId),
+    );
+    for (final conversation in conversations) {
+      final hint = conversation.contextHint;
+      if (hint != null) {
+        _cachedContextHints[conversation.id] = hint;
+      }
+    }
+    _scheduleContextHintCachePersist();
+  }
+
   List<Conversation> _mergeCachedContextHints(
     List<Conversation> conversations,
   ) {
-    if (_conversations.isEmpty) return conversations;
-
-    final cachedById = {
+    final currentById = {
       for (final conversation in _conversations) conversation.id: conversation,
     };
 
     return conversations.map((conversation) {
       if (conversation.contextHint != null) return conversation;
 
-      final cached = cachedById[conversation.id];
-      final cachedHint = cached?.contextHint;
+      final current = currentById[conversation.id];
+      final cachedHint =
+          current?.contextHint ?? _cachedContextHints[conversation.id];
       if (cachedHint == null) return conversation;
 
-      return Conversation(
-        id: conversation.id,
-        type: conversation.type,
-        channel: conversation.channel,
-        status: conversation.status,
-        title: conversation.title,
-        contextType: conversation.contextType,
-        contextId: conversation.contextId,
-        updatedAt: conversation.updatedAt,
-        lastMessageAt: conversation.lastMessageAt,
-        staffLastReadAt: conversation.staffLastReadAt,
-        lastMessageContent: conversation.lastMessageContent,
-        lastMessageType: conversation.lastMessageType,
-        lastMessageMetadata: conversation.lastMessageMetadata,
-        lastMessageIsMine: conversation.lastMessageIsMine,
-        lastMessageDirection: conversation.lastMessageDirection,
-        lastMessageExternalStatus: conversation.lastMessageExternalStatus,
-        unreadCount: conversation.unreadCount,
-        participantIds: conversation.participantIds,
-        createdBy: conversation.createdBy,
-        creatorName: conversation.creatorName ?? cached?.creatorName,
-        contextHint: cachedHint,
+      return _withContextHint(
+        conversation,
+        cachedHint,
+        creatorName: conversation.creatorName ?? current?.creatorName,
       );
     }).toList(growable: false);
+  }
+
+  Conversation _withContextHint(
+    Conversation conversation,
+    ConversationContextHint? contextHint, {
+    String? creatorName,
+  }) {
+    return Conversation(
+      id: conversation.id,
+      type: conversation.type,
+      channel: conversation.channel,
+      status: conversation.status,
+      title: conversation.title,
+      contextType: conversation.contextType,
+      contextId: conversation.contextId,
+      updatedAt: conversation.updatedAt,
+      lastMessageAt: conversation.lastMessageAt,
+      staffLastReadAt: conversation.staffLastReadAt,
+      lastMessageContent: conversation.lastMessageContent,
+      lastMessageType: conversation.lastMessageType,
+      lastMessageMetadata: conversation.lastMessageMetadata,
+      lastMessageIsMine: conversation.lastMessageIsMine,
+      lastMessageDirection: conversation.lastMessageDirection,
+      lastMessageExternalStatus: conversation.lastMessageExternalStatus,
+      unreadCount: conversation.unreadCount,
+      participantIds: conversation.participantIds,
+      createdBy: conversation.createdBy,
+      creatorName: creatorName ?? conversation.creatorName,
+      contextHint: contextHint,
+    );
   }
 
   /// Open a conversation and subscribe to updates
@@ -1740,6 +1944,7 @@ class ChatProvider extends ChangeNotifier {
     _conversationsRefreshTimer?.cancel();
     _conversationsFollowUpRefreshTimer?.cancel();
     _messagesRetryTimer?.cancel();
+    _contextHintCachePersistTimer?.cancel();
     _messagesSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
     _notificationSubscription?.cancel();

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'browser_profile_service.dart';
+
 class AuthService extends ChangeNotifier {
   AuthService() {
     _session = _client.auth.currentSession;
@@ -12,6 +14,7 @@ class AuthService extends ChangeNotifier {
     // Wait for the auth state change listener to fire first
 
     _subscription = _client.auth.onAuthStateChange.listen((data) async {
+      final previousUserId = _currentUser?.id;
       _session = data.session;
       _currentUser = data.session?.user;
       _isInitializing = false; // Now we can set it to false
@@ -26,8 +29,14 @@ class AuthService extends ChangeNotifier {
 
       // Check access profiles on sign in
       if (data.event == AuthChangeEvent.signedIn && _currentUser != null) {
+        if (previousUserId != null && previousUserId != _currentUser!.id) {
+          await BrowserProfileService.clearWebsiteData(
+            userId: previousUserId,
+          );
+        }
         await _loadAccessProfiles();
       } else if (data.event == AuthChangeEvent.signedOut) {
+        await BrowserProfileService.clearWebsiteData(userId: previousUserId);
         _staffProfile = null;
         _workerProfile = null;
         _isStaffProfileLoaded = false;
@@ -210,7 +219,9 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final signingOutUserId = _currentUser?.id;
     await _client.auth.signOut();
+    await BrowserProfileService.clearWebsiteData(userId: signingOutUserId);
     _staffProfile = null;
     _workerProfile = null;
     _isStaffProfileLoaded = false;

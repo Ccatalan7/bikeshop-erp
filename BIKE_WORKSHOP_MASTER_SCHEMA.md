@@ -1904,6 +1904,72 @@ Brake example:
 
 This strengthens centralization because diagnosis, service guidance, product suggestions, and bike memory all operate on one component-centric visit model instead of parallel questionnaires.
 
+## Strategic workshop KPI read model (2026-07-17)
+
+The dashboard consumes one tenant-scoped database read model,
+`get_strategic_dashboard_metrics(start, end)`. It does not copy workshop truth
+into a reporting table and it does not infer missing historical events. Every
+ratio returns its sample or coverage so the UI can render `sin muestra` rather
+than a false zero.
+
+The workshop table and every shared job-detail host consume a second read-only
+projection, `get_mechanic_job_time_metrics(job_ids)`. It resolves the earliest
+credible start and completion from recorded timestamps or the historical
+status bitácora and stops the full cycle only at the first append-only delivery
+event. Every milestone carries its source and quality flags. This is
+non-destructive reconstruction: it never backfills `started_at`, `completed_at`
+or `delivered_at`, never uses reception as a fake workshop start, and never
+turns `diagnosis_added` into proof that a diagnostic was sent. A terminal job
+without enough evidence remains `Sin dato`; a later reopened job still exposes
+its first delivery.
+
+The operational clocks remain deliberately distinct:
+
+- business open hours come from the database-backed
+  `website_settings.business_hours_json` schedule in America/Santiago;
+- mechanic attendance person-hours come from `attendances`, limited to active
+  employees whose job title begins with `Mecánico`;
+- productive hours come only from the nullable
+  `mechanic_jobs.actual_labor_hours` entered on the canonical routed/embedded
+  job form. Historical nulls are preserved and are not replaced with status
+  elapsed time;
+- lifecycle cycle time continues to use the canonical proposal decision,
+  started/completed fields and first immutable delivery event. Time in the
+  process includes waiting; it is not presented as technician labor.
+
+`actual_labor_hours` is an operational total only. It does not post payroll,
+revenue, tax, accounting or inventory, and it remains editable as an
+operational field even when a linked invoice has payment evidence. Estimated
+and real hours are entered together under `Recepción y compromiso` so future
+estimate accuracy and productive utilization have an explicit source.
+
+Economic classification is line-based:
+
+- service lines are those explicitly marked with `is_service=true` or
+  `item_type=service` and represent the work delivered by the mechanic;
+- product/repuesto/accesorio lines require an explicit false service flag or a
+  product-like `item_type`;
+- a line without either piece of evidence remains `Sin clasificar`, contributes
+  to the total and classification-coverage denominator, and is never silently
+  counted as a product or service;
+- tax-included invoices allocate their authoritative net amount across lines
+  before comparing categories;
+- product gross margin uses the historical `cost` snapshot stored on each
+  invoice line and reports cost coverage. Missing-cost lines are excluded from
+  the margin instead of being treated as free inventory;
+- service contribution is workshop service sales minus mechanic cost. Mechanic
+  cost prefers included `payroll_voucher_lines`, separates paid and pending
+  payroll, and falls back to attendance multiplied by the configured employee
+  hourly rate only when no payroll line covers the period. This is explicitly
+  a labor contribution, not net business profit: products, IVA, general
+  expenses and owner compensation remain outside it.
+
+The capacity KPI therefore compares three different denominators without
+collapsing them: store clock-hours, mechanic person-hours and job labor-hours.
+Per-mechanic attribution is shown only when `mechanic_jobs.assigned_to` actually
+links to an active mechanic; otherwise the dashboard labels the result as a
+team-level reading.
+
 ## Recent Continuity Note (2026-07-15)
 
 - workshop tax is now invoice-owned and employee-controlled only at the shared
@@ -1918,7 +1984,7 @@ This strengthens centralization because diagnosis, service guidance, product sug
   item IDs preserve mechanic task parents, invoice line identity, per-bike
   attribution and structured diagnosis through ordinary edits.
 - the job editor force-refreshes job-bike aggregates on open, persists
-  `estimated_duration_hours`, serializes timestamps as UTC, and normalizes
+  `estimated_duration_hours` and explicit `actual_labor_hours`, serializes timestamps as UTC, and normalizes
   legacy 0..1 diagnosis wear fractions to the canonical 0..100 percentage.
 - active job removal is a soft delete that preserves the invoice and accounting
   evidence. A linked invoice load failure is an explicit retry state and can no
@@ -1979,6 +2045,31 @@ This strengthens centralization because diagnosis, service guidance, product sug
 This strengthens the backbone by keeping visit diagnosis and executed work on
 stable workshop entities while one invoice/payment boundary owns all financial
 classification and posting.
+
+## Recent Continuity Note (2026-07-17 Quick Bicycle Finder)
+
+- the right-toolbar `QuickBikeFinderPanel` is a bounded read/navigation surface;
+  it does not own bicycle identity, technical profile, diagnosis, or workshop
+  persistence and always opens the canonical client bicycle record.
+- its default view is recent active bicycles rather than the complete historical
+  register. One scope menu exposes bicycles in the workshop, under warranty,
+  with history, archived, or all; a typed search still reaches archived records
+  and normalizes punctuation in telephone, serial, and QR values.
+- search terms use AND semantics across the bicycle and its customer, so a query
+  such as `Oxford Felipe 5497` may resolve each token from a different related
+  field. Accent and punctuation differences are ignored, one small alphabetic
+  typo is tolerated, and telephone/numeric identifiers remain exact.
+- every result has one primary record action and one contextual workshop action:
+  open the newest active job or start a new job. Customer access is secondary,
+  and the previous duplicated per-owner bicycle expansion is removed.
+- `/taller/pegas/nueva?customer_id=...&bike_id=...` now carries the bicycle
+  through `app_router.dart` into `MechanicJobFormPage`. The form selects it only
+  after loading the customer and verifying that the bicycle is active and owned
+  by that customer; archived or mismatched bicycles cannot be injected into a
+  new job.
+- this change adds no parallel bicycle truth or database projection. Aggregate
+  bicycle/profile writes remain exclusively behind `save_bike_aggregate` and
+  the existing canonical editor.
 
 ## Recent Continuity Note (2026-07-14)
 

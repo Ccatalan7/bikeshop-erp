@@ -854,6 +854,52 @@ class MessagingService {
     return result;
   }
 
+  /// Refreshes only the derived business context shown beside inbox rows.
+  /// Conversation previews and unread counts have their own faster read path.
+  Future<Map<String, ConversationContextHint>> getConversationContextHints(
+    List<Conversation> conversations,
+  ) async {
+    final conversationIds =
+        conversations.map((conversation) => conversation.id).toList();
+    final contextsByConversation = <String, List<Map<String, dynamic>>>{};
+    if (conversationIds.isNotEmpty) {
+      try {
+        final contextRows = await _client
+            .from('conversation_contexts')
+            .select(
+              'conversation_id, context_type, context_id, is_primary',
+            )
+            .inFilter('conversation_id', conversationIds);
+        for (final rawContext in contextRows as List) {
+          final context = _rowMap(rawContext);
+          final conversationId = _text(context['conversation_id']);
+          if (conversationId == null) continue;
+          contextsByConversation
+              .putIfAbsent(conversationId, () => [])
+              .add(context);
+        }
+      } catch (error) {
+        debugPrint('⚠️ Error loading conversation context links: $error');
+      }
+    }
+
+    final rows = conversations
+        .map(
+          (conversation) => <String, dynamic>{
+            'id': conversation.id,
+            'type': conversation.type,
+            'channel': conversation.channel,
+            'created_by': conversation.createdBy,
+            'context_type': conversation.contextType,
+            'context_id': conversation.contextId,
+            'conversation_contexts':
+                contextsByConversation[conversation.id] ?? const [],
+          },
+        )
+        .toList(growable: false);
+    return await _fetchContextHintsForConversations(rows);
+  }
+
   Future<void> _addCurrentUserAsParticipant({
     required String conversationId,
     required String userId,

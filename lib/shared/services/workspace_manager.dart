@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/web_url.dart';
 
 import 'package:go_router/go_router.dart';
@@ -7,6 +11,11 @@ import 'package:go_router/go_router.dart';
 const double workspaceMinDrawerWidth = 200.0;
 const double workspaceMaxDrawerWidth = 400.0;
 const double workspaceDefaultDrawerWidth = 280.0;
+
+const _browserWorkspaceSessionPrefsKey =
+    'vinabike_browser_workspace_session_v1';
+const _browserWorkspaceSessionVersion = 1;
+const _browserWorkspacePersistDelay = Duration(milliseconds: 250);
 
 const _initialWorkspaceRouteRoots = <String>[
   '/mail',
@@ -51,6 +60,20 @@ String? resolveInitialWorkspaceRoute(String? browserUrl) {
 
 String workspaceRoutePath(String route) {
   return Uri.tryParse(route)?.path ?? route.split('?').first;
+}
+
+String buildBrowserWorkspaceRoute({
+  required String url,
+  String? title,
+}) {
+  final cleanTitle = title?.trim();
+  return Uri(
+    path: '/tools/web',
+    queryParameters: {
+      'url': url,
+      if (cleanTitle != null && cleanTitle.isNotEmpty) 'name': cleanTitle,
+    },
+  ).toString();
 }
 
 String inferWorkspaceModuleRoot(String route) {
@@ -303,6 +326,9 @@ class Workspace {
   final List<String> routeHistory;
   int routeHistoryIndex;
   bool isApplyingHistoryNavigation;
+  String? browserUrl;
+  String? browserTitle;
+  bool isHydrated;
 
   Workspace({
     required this.id,
@@ -313,6 +339,9 @@ class Workspace {
     this.isResizingDrawer = false,
     this.isPinned = false,
     this.pinnedRouteRoot,
+    this.browserUrl,
+    this.browserTitle,
+    this.isHydrated = true,
   })  : currentRoute = initialRoute,
         navigatorKey = GlobalKey<NavigatorState>(),
         routeHistory = [initialRoute],
@@ -324,6 +353,21 @@ class Workspace {
 
   String get moduleRoot =>
       pinnedRouteRoot ?? inferWorkspaceModuleRoot(currentRoute);
+
+  bool get isBrowserWorkspace =>
+      workspaceRoutePath(currentRoute) == '/tools/web' ||
+      workspaceRoutePath(initialRoute) == '/tools/web';
+
+  String get shareRoute {
+    final url = browserUrl;
+    if (!isBrowserWorkspace || url == null || url.isEmpty) {
+      return currentRoute;
+    }
+    return buildBrowserWorkspaceRoute(
+      url: url,
+      title: browserTitle ?? title,
+    );
+  }
 
   bool allowsRoute(String route) {
     if (!isPinned) return true;
@@ -352,6 +396,14 @@ class WorkspaceManager extends ChangeNotifier {
   int _activeIndex = 0;
   bool _isInitialized = false;
   bool _isAIPanelOpen = false;
+  String _sessionIdentity;
+  Timer? _browserSessionPersistTimer;
+  Future<void> _browserSessionPersistTail = Future.value();
+  Future<void> _sessionIdentityChangeTail = Future.value();
+  late Future<void> _browserSessionReady;
+  bool _isRestoringBrowserSession = true;
+  int _sessionGeneration = 0;
+  int _workspaceIdSequence = 0;
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
   List<Workspace> get workspaceStackOrder => List.unmodifiable(
@@ -373,13 +425,17 @@ class WorkspaceManager extends ChangeNotifier {
   String get workspaceStackSignature => _workspaceStackOrderIds.join('|');
   bool get isInitialized => _isInitialized;
   bool get isAIPanelOpen => _isAIPanelOpen;
+  Future<void> get browserSessionReady => _browserSessionReady;
 
   Workspace? workspaceById(String id) {
     final index = _workspaces.indexWhere((workspace) => workspace.id == id);
     return index == -1 ? null : _workspaces[index];
   }
 
-  WorkspaceManager({String? initialBrowserUrl}) {
+  WorkspaceManager({
+    String? initialBrowserUrl,
+    String? sessionIdentity,
+  }) : _sessionIdentity = _normalizeSessionIdentity(sessionIdentity) {
     debugPrint(
         '🏗️ [WorkspaceManager] Constructor called, checking initial URL');
 
@@ -399,16 +455,286 @@ class WorkspaceManager extends ChangeNotifier {
       }
     }
 
-    addWorkspace(title: initialTitle, initialRoute: initialRoute);
+    _addWorkspaceInternal(
+      title: initialTitle,
+      initialRoute: initialRoute,
+      activate: true,
+    );
     _isInitialized = true;
     debugPrint(
         '✅ [WorkspaceManager] Initialized with ${_workspaces.length} workspace(s)');
-    // Force a notification after initialization to ensure UI rebuilds
-    Future.microtask(() {
-      debugPrint(
-          '🔔 [WorkspaceManager] Calling notifyListeners() after microtask');
-      notifyListeners();
+    _browserSessionReady = _restoreBrowserSession(_sessionGeneration);
+  }
+
+  static String _normalizeSessionIdentity(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? 'anonymous' : normalized;
+  }
+
+  String get _browserSessionStorageKey =>
+      '$_browserWorkspaceSessionPrefsKey::$_sessionIdentity';
+
+  String _newWorkspaceId() {
+    _workspaceIdSequence += 1;
+    return '${DateTime.now().microsecondsSinceEpoch}-$_workspaceIdSequence';
+  }
+
+  Workspace _addWorkspaceInternal({
+    required String title,
+    required String initialRoute,
+    required bool activate,
+    bool isPinned = false,
+    bool isHydrated = true,
+  }) {
+    final routeUri = Uri.tryParse(initialRoute);
+    final isBrowserRoute = routeUri?.path == '/tools/web';
+    final routeUrl = isBrowserRoute ? routeUri?.queryParameters['url'] : null;
+    final routeTitle =
+        isBrowserRoute ? routeUri?.queryParameters['name']?.trim() : null;
+
+    final workspace = Workspace(
+      id: _newWorkspaceId(),
+      title: title,
+      initialRoute: initialRoute,
+      isPinned: isPinned,
+      pinnedRouteRoot: isPinned ? inferWorkspaceModuleRoot(initialRoute) : null,
+      browserUrl: routeUrl,
+      browserTitle: routeTitle?.isNotEmpty == true ? routeTitle : title,
+      isHydrated: isHydrated,
+    );
+
+    _workspaces.add(workspace);
+    _workspaceStackOrderIds.add(workspace.id);
+    if (activate) {
+      _activeIndex = _workspaces.length - 1;
+      workspace.isHydrated = true;
+    }
+    return workspace;
+  }
+
+  Future<void> _restoreBrowserSession(int generation) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (generation != _sessionGeneration) return;
+
+      final encoded = prefs.getString(_browserSessionStorageKey);
+      if (encoded == null || encoded.isEmpty) return;
+
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map<String, dynamic> ||
+          decoded['version'] != _browserWorkspaceSessionVersion) {
+        return;
+      }
+
+      final storedTabs = decoded['tabs'];
+      if (storedTabs is! List) return;
+
+      final previouslyActiveId = activeWorkspace?.id;
+      final hadInitialBrowserWorkspace = _workspaces.any(
+        (workspace) => workspace.isBrowserWorkspace,
+      );
+      final canRestoreBrowserFocus = !hadInitialBrowserWorkspace &&
+          activeWorkspace?.initialRoute == '/dashboard' &&
+          activeWorkspace?.currentRoute == '/dashboard';
+      final existingUrls = _workspaces
+          .where((workspace) => workspace.isBrowserWorkspace)
+          .map(_browserUrlForWorkspace)
+          .whereType<String>()
+          .toSet();
+      final restored = <Workspace>[];
+
+      for (final value in storedTabs) {
+        if (_workspaces.length >= maxWorkspaces) break;
+        if (value is! Map) continue;
+
+        final url = value['url']?.toString().trim() ?? '';
+        final uri = Uri.tryParse(url);
+        if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+          continue;
+        }
+        if (existingUrls.remove(uri.toString())) continue;
+
+        final storedTitle = value['title']?.toString().trim() ?? '';
+        final title = storedTitle.isNotEmpty
+            ? storedTitle
+            : (uri.host.isNotEmpty ? uri.host : 'Navegador web');
+        final workspace = _addWorkspaceInternal(
+          title: title,
+          initialRoute: buildBrowserWorkspaceRoute(
+            url: uri.toString(),
+            title: title,
+          ),
+          activate: false,
+          isPinned: value['isPinned'] == true,
+          isHydrated: false,
+        );
+        restored.add(workspace);
+      }
+
+      if (restored.isNotEmpty) {
+        final pinned = _workspaces
+            .where((workspace) => workspace.isPinned)
+            .toList(growable: false);
+        final regular = _workspaces
+            .where((workspace) => !workspace.isPinned)
+            .toList(growable: false);
+        _workspaces
+          ..clear()
+          ..addAll(pinned)
+          ..addAll(regular);
+      }
+
+      if (canRestoreBrowserFocus &&
+          decoded['activeWasBrowser'] == true &&
+          restored.isNotEmpty) {
+        final storedIndex = decoded['activeBrowserIndex'];
+        final browserIndex = storedIndex is int
+            ? storedIndex.clamp(0, restored.length - 1)
+            : restored.length - 1;
+        final activeWorkspace = restored[browserIndex];
+        _activeIndex = _workspaces.indexOf(activeWorkspace);
+        activeWorkspace.isHydrated = true;
+      } else if (previouslyActiveId != null) {
+        final restoredActiveIndex = _workspaces.indexWhere(
+          (workspace) => workspace.id == previouslyActiveId,
+        );
+        if (restoredActiveIndex >= 0) {
+          _activeIndex = restoredActiveIndex;
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser workspace session restore skipped: $error');
+      }
+    } finally {
+      if (generation == _sessionGeneration) {
+        _isRestoringBrowserSession = false;
+        super.notifyListeners();
+      }
+    }
+  }
+
+  String? _browserUrlForWorkspace(Workspace workspace) {
+    final direct = workspace.browserUrl?.trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final route = Uri.tryParse(workspace.currentRoute);
+    final routeUrl = route?.path == '/tools/web'
+        ? route?.queryParameters['url']?.trim()
+        : null;
+    return routeUrl?.isNotEmpty == true ? routeUrl : null;
+  }
+
+  String _browserSessionPayload() {
+    final browserWorkspaces = _workspaces
+        .where((workspace) => workspace.isBrowserWorkspace)
+        .where((workspace) {
+      final url = _browserUrlForWorkspace(workspace);
+      final uri = url == null ? null : Uri.tryParse(url);
+      return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    }).toList(growable: false);
+    final active = activeWorkspace;
+    final activeBrowserIndex = active == null
+        ? -1
+        : browserWorkspaces
+            .indexWhere((workspace) => workspace.id == active.id);
+
+    return jsonEncode({
+      'version': _browserWorkspaceSessionVersion,
+      'activeWasBrowser': activeBrowserIndex >= 0,
+      'activeBrowserIndex': activeBrowserIndex,
+      'tabs': [
+        for (final workspace in browserWorkspaces)
+          {
+            'url': _browserUrlForWorkspace(workspace),
+            'title': workspace.browserTitle ?? workspace.title,
+            'isPinned': workspace.isPinned,
+          },
+      ],
     });
+  }
+
+  void _scheduleBrowserSessionPersist() {
+    if (_isRestoringBrowserSession || !_isInitialized) return;
+    _browserSessionPersistTimer?.cancel();
+    _browserSessionPersistTimer = Timer(
+      _browserWorkspacePersistDelay,
+      () => unawaited(flushBrowserSession()),
+    );
+  }
+
+  Future<void> flushBrowserSession() {
+    _browserSessionPersistTimer?.cancel();
+    _browserSessionPersistTimer = null;
+
+    final storageKey = _browserSessionStorageKey;
+    final payload = _browserSessionPayload();
+    final hasBrowserWorkspaces =
+        _workspaces.any((workspace) => workspace.isBrowserWorkspace);
+
+    _browserSessionPersistTail = _browserSessionPersistTail.then((_) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (hasBrowserWorkspaces) {
+          await prefs.setString(storageKey, payload);
+        } else {
+          await prefs.remove(storageKey);
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('🌐 Browser workspace session save skipped: $error');
+        }
+      }
+    });
+    return _browserSessionPersistTail;
+  }
+
+  Future<void> setSessionIdentity(String? value) {
+    final nextIdentity = _normalizeSessionIdentity(value);
+    final transition = _sessionIdentityChangeTail.then(
+      (_) => _applySessionIdentity(nextIdentity),
+    );
+    _sessionIdentityChangeTail = transition;
+    return transition;
+  }
+
+  Future<void> _applySessionIdentity(String nextIdentity) async {
+    if (nextIdentity == _sessionIdentity) {
+      await _browserSessionReady;
+      return;
+    }
+
+    await _browserSessionReady;
+    await flushBrowserSession();
+
+    _sessionGeneration += 1;
+    _sessionIdentity = nextIdentity;
+    _isRestoringBrowserSession = true;
+    _workspaces.clear();
+    _workspaceStackOrderIds.clear();
+    _activeIndex = 0;
+    _addWorkspaceInternal(
+      title: 'Dashboard',
+      initialRoute: '/dashboard',
+      activate: true,
+    );
+    super.notifyListeners();
+
+    _browserSessionReady = _restoreBrowserSession(_sessionGeneration);
+    await _browserSessionReady;
+  }
+
+  @override
+  void notifyListeners() {
+    _scheduleBrowserSessionPersist();
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _browserSessionPersistTimer?.cancel();
+    unawaited(flushBrowserSession());
+    super.dispose();
   }
 
   /// Add a new workspace tab
@@ -423,27 +749,80 @@ class WorkspaceManager extends ChangeNotifier {
       throw Exception('Maximum number of workspaces ($maxWorkspaces) reached');
     }
 
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final workspace = Workspace(
-      id: id,
+    final workspace = _addWorkspaceInternal(
       title: title,
       initialRoute: initialRoute,
+      activate: true,
     );
-
-    _workspaces.add(workspace);
-    _workspaceStackOrderIds.add(id);
-    _activeIndex = _workspaces.length - 1;
     debugPrint(
         '✅ [WorkspaceManager] Workspace added. Total: ${_workspaces.length}, Active: $_activeIndex');
     notifyListeners();
 
-    return id;
+    return workspace.id;
+  }
+
+  /// Opens a web page in a fresh ERP browser tab. Returns the new workspace
+  /// id, or `null` when the tab limit has been reached or the URL is invalid.
+  String? openBrowserWorkspace(
+    String url, {
+    String? title,
+  }) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    if (_workspaces.length >= maxWorkspaces) return null;
+
+    final cleanTitle = title?.trim();
+    final resolvedTitle = cleanTitle?.isNotEmpty == true
+        ? cleanTitle!
+        : (uri.host.isNotEmpty ? uri.host : 'Navegador web');
+    return addWorkspace(
+      title: resolvedTitle,
+      initialRoute: buildBrowserWorkspaceRoute(
+        url: uri.toString(),
+        title: resolvedTitle,
+      ),
+    );
+  }
+
+  /// Records the actual page loaded inside a browser workspace without
+  /// replacing its GoRouter route (which would destroy the live WebView).
+  void updateBrowserWorkspaceState(
+    String workspaceId, {
+    required String url,
+    String? title,
+  }) {
+    final workspace = workspaceById(workspaceId);
+    if (workspace == null || !workspace.isBrowserWorkspace) return;
+
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+
+    final cleanTitle = title?.trim();
+    final nextTitle = cleanTitle?.isNotEmpty == true
+        ? cleanTitle!
+        : (uri.host.isNotEmpty ? uri.host : workspace.title);
+    final boundedTitle = nextTitle.length <= 140
+        ? nextTitle
+        : '${nextTitle.substring(0, 137)}...';
+
+    final changed = workspace.browserUrl != uri.toString() ||
+        workspace.browserTitle != boundedTitle ||
+        workspace.title != boundedTitle;
+    if (!changed) return;
+
+    workspace.browserUrl = uri.toString();
+    workspace.browserTitle = boundedTitle;
+    workspace.title = boundedTitle;
+    notifyListeners();
   }
 
   /// Switch to a specific workspace by index
   void switchToWorkspace(int index) {
     if (index >= 0 && index < _workspaces.length) {
       _activeIndex = index;
+      _workspaces[index].isHydrated = true;
       notifyListeners();
     }
   }

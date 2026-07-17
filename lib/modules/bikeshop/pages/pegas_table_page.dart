@@ -41,6 +41,7 @@ import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
 import '../widgets/deadline_cell.dart';
+import '../widgets/job_time_metrics_widget.dart';
 import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
 import 'bike_form_dialog.dart';
@@ -260,15 +261,6 @@ class _PegasTablePageState extends State<PegasTablePage>
   // Keep this page alive to preserve state when navigating away
   @override
   bool get wantKeepAlive => true;
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _formatDuration(Duration d) {
-    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
-    return '${d.inHours}h ${d.inMinutes % 60}m';
-  }
 
   late BikeshopService _bikeshopService;
   late CustomerService _customerService;
@@ -843,9 +835,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       ),
       ColumnConfig(
         id: 'kpi',
-        label: 'Tiempos',
-        width: 100,
-        minWidth: 90,
+        label: 'Flujo',
+        width: 132,
+        minWidth: 120,
         visible: true,
         sortable: false,
       ),
@@ -5209,87 +5201,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'kpi':
-        // Compact KPI indicators with Duration Tooltips
-        final now = DateTime.now();
-
-        // 1. Diagnostic Duration
-        final diagDone = job.diagnosticSentAt != null;
-        String diagMsg;
-        Color diagColor;
-
-        if (diagDone) {
-          final d = job.diagnosticSentAt!.difference(job.arrivalDate);
-          diagMsg =
-              'Diagnóstico: ${_formatDuration(d)} (Enviado el ${_formatDate(job.diagnosticSentAt!)})';
-          diagColor = Colors.blue;
-        } else if (job.diagnosticDeadline != null &&
-            job.diagnosticDeadline!.isBefore(now)) {
-          final d = now.difference(job.arrivalDate);
-          diagMsg = 'Diagnóstico Atrasado: ${_formatDuration(d)} esperando';
-          diagColor = Colors.red;
-        } else {
-          final d = now.difference(job.arrivalDate);
-          diagMsg = 'Diagnóstico Pendiente: ${_formatDuration(d)} esperando';
-          diagColor = Colors.orange;
-        }
-
-        // 2. Shop Duration
-        final shopStarted = job.startedAt != null;
-        final shopDone = job.completedAt != null;
-        String shopMsg;
-        Color shopColor;
-
-        if (shopDone && job.startedAt != null) {
-          final d = job.completedAt!.difference(job.startedAt!);
-          shopMsg = 'Taller: ${_formatDuration(d)} (Completado)';
-          shopColor = Colors.green;
-        } else if (shopDone) {
-          // If completed but skip started, use arrival date as fallback for duration
-          final d = job.completedAt!.difference(job.arrivalDate);
-          shopMsg = 'Taller: ${_formatDuration(d)} (Completado sin inicio)';
-          shopColor = Colors.green;
-        } else if (shopStarted) {
-          final d = now.difference(job.startedAt!);
-          shopMsg = 'Taller En Curso: ${_formatDuration(d)}';
-          shopColor = Colors.blue;
-        } else {
-          shopMsg = 'Taller: No iniciado';
-          shopColor = Colors.grey.shade300;
-        }
-
-        // 3. Total Duration
-        final delivered = job.deliveredAt != null;
-        String totalMsg;
-        Color totalColor;
-
-        if (delivered) {
-          final d = job.deliveredAt!.difference(job.arrivalDate);
-          totalMsg = 'Total: ${_formatDuration(d)} (Entregado)';
-          totalColor = Colors.purple;
-        } else {
-          final d = now.difference(job.arrivalDate);
-          totalMsg = 'Total Actual: ${_formatDuration(d)}';
-          totalColor = Colors.grey.shade300;
-        }
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Tooltip(
-              message: diagMsg,
-              child:
-                  Icon(Icons.assignment_turned_in, size: 16, color: diagColor),
-            ),
-            Tooltip(
-              message: shopMsg,
-              child: Icon(Icons.build_circle, size: 16, color: shopColor),
-            ),
-            Tooltip(
-              message: totalMsg,
-              child: Icon(Icons.timer, size: 16, color: totalColor),
-            ),
-          ],
-        );
+        return CompactJobTimeMetrics(job: job);
 
       case 'id':
         return const Text('-');

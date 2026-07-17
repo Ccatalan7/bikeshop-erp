@@ -128,7 +128,8 @@ void main() {
     expect(source, contains('_confirmConflictReload'));
   });
 
-  test('technical bike wizard isolates dropdown state and scrolls its map', () {
+  test('technical bike wizard isolates dropdowns and bounds its desktop map',
+      () {
     final source = File(
       'lib/modules/bikeshop/pages/bike_form_dialog.dart',
     ).readAsStringSync();
@@ -140,10 +141,12 @@ void main() {
     expect(
       source,
       contains(
-        'SingleChildScrollView(\n'
-        '                    child: _buildTechnicalSchemaNavigator(',
+        'Expanded(\n'
+        '            child: showTechnicalControls\n'
+        '                ? _buildTechnicalSchemaNavigator(',
       ),
     );
+    expect(source, contains('fitControllerToAvailableHeight: true'));
   });
 
   test('database snapshot and service expose the shared atomic contract', () {

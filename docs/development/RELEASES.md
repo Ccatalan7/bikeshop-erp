@@ -19,7 +19,7 @@ feature/current line → pull request to protected main → integrity + preview
   invariant dashboard. A critical violation fails the release record without
   attempting an automatic data repair.
 
-Firebase rollback uses the previous Hosting release. Windows rollback uses the previous signed/checksummed artifact. Database rollback follows the database backup/restore runbook and must not improvise destructive reverse SQL.
+Firebase rollback uses the previous Hosting release. Windows rollback uses the previous signed/checksummed artifact. macOS internal rollback restores the previous verified bundle retained under the per-user updater support directory. Database rollback follows the database backup/restore runbook and must not improvise destructive reverse SQL.
 
 For a Firebase rollback, select the last release whose retained evidence and
 post-deploy checks passed, restore it through Firebase Hosting release history,
