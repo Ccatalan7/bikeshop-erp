@@ -1,0 +1,22 @@
+name: Build macOS Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the verified artifact as the coworker update
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    name: Default-branch registry shim
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Dispatch this workflow with ref smartpegas1.0 to use the release implementation from that branch."
+          test "${{ inputs.publish_release }}" = "false"
