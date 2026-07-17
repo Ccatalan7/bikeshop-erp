@@ -35287,5 +35287,8 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Prevent approval of an empty workshop proposal; the immutable approval
 -- snapshot must contain at least one product or service line.
 \ir ../migrations/20260717020000_require_quotation_items_before_approval.sql
+-- Approved standalone product quotations become sale/none wrappers and one
+-- linked invoice without inventing workshop intake.
+\ir ../migrations/20260717030000_convert_approved_quotation_to_sale.sql
 
 commit;

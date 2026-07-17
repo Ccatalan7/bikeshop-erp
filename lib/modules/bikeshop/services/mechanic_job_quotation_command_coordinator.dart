@@ -77,6 +77,22 @@ class MechanicJobQuotationCommandRequest {
   String? get targetIntakeKind => switch (targetJobType) {
         'service' => 'bike',
         'item_service' => 'component',
+        'sale' => 'none',
+        _ => null,
+      };
+
+  String? get targetWorkflowKind => switch (targetJobType) {
+        'service' || 'item_service' => 'service',
+        'sale' => 'sale',
+        _ => null,
+      };
+
+  /// Sale is a canonical workflow while the legacy job_type facade remains
+  /// `service` for backwards compatibility.
+  String? get persistedTargetJobType => switch (targetJobType) {
+        'service' => 'service',
+        'item_service' => 'item_service',
+        'sale' => 'service',
         _ => null,
       };
 
@@ -115,8 +131,8 @@ class MechanicJobQuotationCommandRequest {
       case MechanicJobQuotationCommandKind.conversion:
         final eventId = _optional(response['event_id']?.toString());
         final invoiceId = _optional(response['invoice_id']?.toString());
-        return response['job_type']?.toString() == targetJobType &&
-            response['workflow_kind']?.toString() == 'service' &&
+        return response['job_type']?.toString() == persistedTargetJobType &&
+            response['workflow_kind']?.toString() == targetWorkflowKind &&
             response['intake_kind']?.toString() == targetIntakeKind &&
             eventId != null &&
             (shouldCreateInvoice == true
@@ -150,8 +166,8 @@ class MechanicJobQuotationCommandRequest {
             stored['create_invoice'] == shouldCreateInvoice &&
             _optional(stored['bike_id']?.toString()) == bikeId &&
             _optional(stored['subject_id']?.toString()) == subjectId &&
-            event['to_job_type']?.toString() == targetJobType &&
-            event['to_workflow_kind']?.toString() == 'service' &&
+            event['to_job_type']?.toString() == persistedTargetJobType &&
+            event['to_workflow_kind']?.toString() == targetWorkflowKind &&
             event['to_intake_kind']?.toString() == targetIntakeKind &&
             (shouldCreateInvoice == true
                 ? _optional(event['invoice_id']?.toString()) != null

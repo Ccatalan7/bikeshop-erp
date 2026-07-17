@@ -2177,8 +2177,10 @@ canonical consumers must use both axes.
   This default is never retroactively applied when loading an existing
   billable service. Converting a service budget reuses every persisted
   `mechanic_job_bikes` relationship and never asks the worker to replace the
-  received bicycle; only standalone Cotización uses the intake picker. The
-  approved `Presupuesto` chip in the table's existing invoice column exposes
+  received bicycle; only standalone Cotización chooses its approved outcome.
+  A product-only Cotización may become `sale/none` without inventing physical
+  intake; otherwise it uses the bicycle/component intake picker. The approved
+  `Presupuesto` chip in the table's existing invoice column exposes
   only `Descargar presupuesto` and `Facturar presupuesto`; the billing choice
   delegates to that same idempotent conversion command, while an unapproved
   proposal cannot expose the shortcut. Approval is rejected atomically when
@@ -2220,10 +2222,12 @@ canonical consumers must use both axes.
   a revision must first return to `pending` through the reasoned status RPC and
   then receive a new approval snapshot.
 - an approved quotation converts the same familiar table row atomically to
-  either bicycle service or component service. The command validates the
-  tenant/customer bicycle or tenant subject, preserves the quotation snapshot
-  in `mechanic_job_mode_events`, and optionally creates the one linked draft
-  invoice in the same transaction.
+  bicycle service, component service, or (only when every line is a catalog
+  product) `sale/none`. The command validates the selected physical object or
+  the absence of one, preserves the quotation snapshot in
+  `mechanic_job_mode_events`, and creates exactly one linked draft invoice in
+  the same transaction. The sale outcome never creates a bicycle, component,
+  diagnosis capacity, stock movement, tax entry or journal outside that invoice.
 - conversion keeps the original quote narrative on `mechanic_jobs`. When its
   new first physical `mechanic_job_bikes` row is still empty, the form hydrates
   those empty request/diagnosis/work/notes fields from the job-level narrative;

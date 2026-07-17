@@ -27,6 +27,18 @@ void main() {
         operationKey: operationKey,
       );
 
+  MechanicJobQuotationCommandRequest saleConversionRequest({
+    String operationKey = 'operation-sale-1',
+    String? reason,
+  }) =>
+      MechanicJobQuotationCommandRequest.conversion(
+        jobId: 'job-1',
+        targetJobType: 'sale',
+        createInvoice: true,
+        reason: reason,
+        operationKey: operationKey,
+      );
+
   Map<String, dynamic> transitionEvent({
     String operationKey = 'operation-1',
     String status = 'approved',
@@ -75,6 +87,16 @@ void main() {
         'quotation_status': null,
         'invoice_id': 'invoice-1',
         'event_id': 'event-1',
+      };
+
+  Map<String, dynamic> saleConversionResponse() => {
+        'job_id': 'job-1',
+        'job_type': 'service',
+        'workflow_kind': 'sale',
+        'intake_kind': 'none',
+        'quotation_status': null,
+        'invoice_id': 'invoice-sale-1',
+        'event_id': 'event-sale-1',
       };
 
   test('lost acknowledgement is reconciled from the exact event receipt',
@@ -130,6 +152,29 @@ void main() {
     expect(sent[1], sent[0]);
     expect(sent[0]['p_operation_key'], 'operation-1');
     expect(reads, 1);
+  });
+
+  test('product quotation conversion accepts canonical sale receipt', () async {
+    Map<String, dynamic>? sent;
+    final coordinator = MechanicJobQuotationCommandCoordinator(
+      send: (_, params) async {
+        sent = Map<String, dynamic>.from(params);
+        return saleConversionResponse();
+      },
+      readback: (_, __) async => null,
+      readInvariant: (_) async => false,
+      isOutcomeAmbiguous: (_) => false,
+    );
+
+    final result = await coordinator.execute(
+      saleConversionRequest(reason: 'Cliente compra los productos cotizados'),
+    );
+
+    expect(result.invoiceId, 'invoice-sale-1');
+    expect(sent?['p_target_job_type'], 'sale');
+    expect(sent?['p_bike_id'], isNull);
+    expect(sent?['p_subject_id'], isNull);
+    expect(sent?['p_create_invoice'], isTrue);
   });
 
   test('same-state transition survives a lost no-event acknowledgement',

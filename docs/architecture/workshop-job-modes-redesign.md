@@ -169,7 +169,9 @@ Los eventos cubrirán como mínimo:
 5. Registrar aprobación, rechazo o expiración mediante comando auditado.
    La aprobación congela un snapshot exacto de campos e ítems; para revisarlo
    se vuelve a `Pendiente` con motivo y se genera una aprobación nueva.
-6. Al aprobar y si el cliente trae el objeto, escoger qué recibió el taller:
+6. Al aprobar, escoger cómo continúa:
+   - `Venta`: disponible solo cuando todas las líneas son productos de catálogo;
+     no recibe bicicleta/componente y no admite servicios de taller;
    - `Bicicleta`: seleccionar/crear bicicleta del cliente;
    - `Componente`: seleccionar el componente recibido.
 7. Convertir atómicamente el mismo registro a trabajo cobrable, conservar el
@@ -234,7 +236,9 @@ No se agregan columnas. Se reutilizan las existentes así:
     La aprobación exige por contrato al menos una línea de producto/servicio,
     y cada cambio de estado, inicio de conversión o apertura de factura elimina
     cualquier aviso transitorio anterior antes de navegar;
-  - cotización: chip `Cotización` que descarga/abre su PDF;
+  - cotización: chip `Cotización`; al aprobar ofrece descargarla o convertirla.
+    `Venta` aparece solo para líneas de productos de catálogo y crea la factura
+    vinculada sin recepción; bicicleta/componente conservan su flujo habitual;
   - servicio/componente: estado real de la factura;
   - venta/cobro: estado real, abono y saldo de la misma factura;
   - garantía cubierta: `Respaldo interno`;
@@ -272,8 +276,9 @@ Los contadores quedan definidos así:
 - El presupuesto no permite cambiar arbitrariamente a `Aprobado` desde un
   dropdown que solo edita una columna: usa una acción con confirmación.
 - La conversión de un presupuesto de servicio confirma y reutiliza la(s)
-  bicicleta(s) ya vinculada(s), sin selector. Solo la Cotización solicita
-  bicicleta/componente dentro del mismo diálogo y valida propiedad del cliente.
+  bicicleta(s) ya vinculada(s), sin selector. Solo la Cotización abre el diálogo
+  con `Venta`, `Bicicleta` y `Componente`; `Venta` exige exclusivamente productos
+  de catálogo, y los otros destinos validan el objeto recibido y su propiedad.
 - `Revisar modo` solo aparece en registros conservadores marcados
   `mode_needs_review`. Para bicicleta lista únicamente bicicletas activas del
   cliente; para componente acepta un sujeto activo del tenant o una descripción
@@ -526,8 +531,8 @@ evidencia. Una falla de migración revierte la transacción completa.
 3. crear Servicio → Facturar ahora y comprobar el comportamiento histórico;
 4. crear componente sin bicicleta y comprobar contador/factura;
 5. crear Cotización, descargar PDF y comprobar ausencia de factura/stock;
-6. aprobar Cotización, elegir bicicleta o componente y confirmar una sola
-   factura;
+6. aprobar Cotización y confirmar sus tres salidas: venta de productos sin
+   recepción, bicicleta o componente; cada una debe crear una sola factura;
 7. crear garantía dentro y fuera de plazo, guardar justificación y comprobar
    respaldo interno o conversión cobrable;
 8. recargar cada registro y confirmar persistencia;

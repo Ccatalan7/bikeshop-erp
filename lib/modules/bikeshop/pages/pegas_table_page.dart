@@ -6330,7 +6330,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 job.id != null && _generatingQuotationPdfIds.contains(job.id);
             final isConverting = job.id != null &&
                 _pendingQuotationConversionAttempts.containsKey(job.id);
-            final canInvoiceApprovedBudget = job.isServiceBudget &&
+            final canConvertApprovedProposal =
                 job.effectiveQuotationStatus == QuotationStatus.approved;
             final isBusy = isGenerating || isConverting;
             final proposalChip = Container(
@@ -6370,7 +6370,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                       color: badgeColor,
                     ),
                   ),
-                  if (canInvoiceApprovedBudget) ...[
+                  if (canConvertApprovedProposal) ...[
                     const SizedBox(width: 2),
                     Icon(Icons.arrow_drop_down, size: 15, color: badgeColor),
                   ],
@@ -6378,10 +6378,12 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             );
 
-            if (canInvoiceApprovedBudget) {
+            if (canConvertApprovedProposal) {
               return PopupMenuButton<String>(
                 enabled: !isBusy,
-                tooltip: 'Descargar o facturar presupuesto',
+                tooltip: job.isServiceBudget
+                    ? 'Descargar o facturar presupuesto'
+                    : 'Descargar o convertir cotización',
                 position: PopupMenuPosition.under,
                 onSelected: (action) {
                   switch (action) {
@@ -6393,8 +6395,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                       break;
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
                     value: 'download_approved_budget',
                     child: Row(
                       children: [
@@ -6408,9 +6410,13 @@ class _PegasTablePageState extends State<PegasTablePage>
                     value: 'invoice_approved_budget',
                     child: Row(
                       children: [
-                        Icon(Icons.receipt_long_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Text('Facturar presupuesto'),
+                        const Icon(Icons.receipt_long_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          job.isServiceBudget
+                              ? 'Facturar presupuesto'
+                              : 'Facturar o convertir cotización',
+                        ),
                       ],
                     ),
                   ),
@@ -8064,6 +8070,20 @@ class _PegasTablePageState extends State<PegasTablePage>
       return;
     }
 
+    List<MechanicJobItem> conversionItems =
+        _jobItemsMap[jobId] ?? const <MechanicJobItem>[];
+    if (conversionItems.isEmpty) {
+      try {
+        conversionItems = await _bikeshopService.getJobItems(jobId);
+      } catch (error) {
+        debugPrint('Error loading quotation items for conversion: $error');
+      }
+    }
+    final canConvertAsSale = conversionItems.isNotEmpty &&
+        conversionItems.every(
+          (item) => item.itemType == 'product' && item.productId != null,
+        );
+
     List<JobSubject> subjects = const [];
     String? subjectCatalogError;
     try {
@@ -8106,9 +8126,11 @@ class _PegasTablePageState extends State<PegasTablePage>
         (hasExistingSubjectDescription
             ? existingDescriptionSubjectValue
             : null);
-    var targetType = selectedSubjectId != null || hasExistingSubjectDescription
-        ? JobType.itemService
-        : JobType.service;
+    var targetType = canConvertAsSale
+        ? JobType.sale
+        : selectedSubjectId != null || hasExistingSubjectDescription
+            ? JobType.itemService
+            : JobType.service;
     String? validationMessage;
     final reasonController = TextEditingController();
     const sourceLabel = 'cotización';
@@ -8129,7 +8151,8 @@ class _PegasTablePageState extends State<PegasTablePage>
                   Text(
                     '${job.jobNumber} conservará el historial del $sourceLabel y generará una sola factura en la misma operación.',
                   ),
-                  if (subjectCatalogError != null) ...[
+                  if (subjectCatalogError != null &&
+                      targetType != JobType.sale) ...[
                     const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
@@ -8151,17 +8174,23 @@ class _PegasTablePageState extends State<PegasTablePage>
                     ),
                   ],
                   const SizedBox(height: 16),
-                  Text('¿Qué dejó físicamente el cliente?',
+                  Text('¿Cómo continúa la cotización aprobada?',
                       style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   SegmentedButton<JobType>(
-                    segments: const [
+                    segments: [
                       ButtonSegment(
+                        value: JobType.sale,
+                        icon: const Icon(Icons.shopping_bag_outlined),
+                        label: const Text('Venta'),
+                        enabled: canConvertAsSale,
+                      ),
+                      const ButtonSegment(
                         value: JobType.service,
                         icon: Icon(Icons.pedal_bike_outlined),
                         label: Text('Bicicleta'),
                       ),
-                      ButtonSegment(
+                      const ButtonSegment(
                         value: JobType.itemService,
                         icon: Icon(Icons.build_circle_outlined),
                         label: Text('Componente'),
@@ -8173,8 +8202,48 @@ class _PegasTablePageState extends State<PegasTablePage>
                       validationMessage = null;
                     }),
                   ),
+                  if (!canConvertAsSale) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Venta se habilita cuando todas las líneas son productos de catálogo y no hay servicios.',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
-                  if (targetType == JobType.service) ...[
+                  if (targetType == JobType.sale) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF047857).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color:
+                              const Color(0xFF047857).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 18,
+                            color: Color(0xFF047857),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se recibirá bicicleta ni componente. Los productos pasarán a una factura de venta vinculada y la factura será la única dueña del inventario, impuestos y contabilidad.',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (targetType == JobType.service) ...[
                     DropdownButtonFormField<String>(
                       key: ValueKey('conversion-bike-$selectedBikeId'),
                       initialValue: selectedBikeId,
@@ -8313,16 +8382,18 @@ class _PegasTablePageState extends State<PegasTablePage>
                     ),
                   ],
                   const SizedBox(height: 12),
-                  const Row(
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.verified_outlined,
+                      const Icon(Icons.verified_outlined,
                           size: 16, color: Color(0xFF047857)),
-                      SizedBox(width: 7),
+                      const SizedBox(width: 7),
                       Expanded(
                         child: Text(
-                          'La conversión, el vínculo físico, el evento de auditoría y la factura se guardan juntos. Si algo falla, no se aplica nada.',
-                          style: TextStyle(fontSize: 12),
+                          targetType == JobType.sale
+                              ? 'La venta, su evento de auditoría y la factura vinculada se guardan juntos. Si algo falla, no se aplica nada.'
+                              : 'La conversión, el vínculo físico, el evento de auditoría y la factura se guardan juntos. Si algo falla, no se aplica nada.',
+                          style: const TextStyle(fontSize: 12),
                         ),
                       ),
                     ],
@@ -8363,16 +8434,28 @@ class _PegasTablePageState extends State<PegasTablePage>
                   dialogContext,
                   _JobConversionChoice(
                     targetType: targetType,
-                    bikeId: selectedBikeId,
-                    subjectId: selectedSubjectId,
+                    bikeId:
+                        targetType == JobType.service ? selectedBikeId : null,
+                    subjectId: targetType == JobType.itemService
+                        ? selectedSubjectId
+                        : null,
                     reason: reasonController.text.trim().isEmpty
                         ? null
                         : reasonController.text.trim(),
                   ),
                 );
               },
-              icon: const Icon(Icons.transform, size: 16),
-              label: const Text('Convertir y facturar'),
+              icon: Icon(
+                targetType == JobType.sale
+                    ? Icons.receipt_long_outlined
+                    : Icons.transform,
+                size: 16,
+              ),
+              label: Text(
+                targetType == JobType.sale
+                    ? 'Facturar como venta'
+                    : 'Convertir y facturar',
+              ),
             ),
           ],
         ),
@@ -8540,6 +8623,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         operationKey: attempt.operationKey,
       );
       final receiptInvoiceId = result.invoiceId;
+      final isSaleConversion = choice.targetType == JobType.sale;
       final convertedBikeId = choice.targetType == JobType.service
           ? job.isServiceBudget
               ? job.bikeId
@@ -8547,10 +8631,13 @@ class _PegasTablePageState extends State<PegasTablePage>
           : null;
       var updated = job.copyWith(
         jobType: choice.targetType,
-        workflowKind: JobWorkflowKind.service,
-        intakeKind: choice.targetType == JobType.itemService
-            ? JobIntakeKind.component
-            : JobIntakeKind.bike,
+        workflowKind:
+            isSaleConversion ? JobWorkflowKind.sale : JobWorkflowKind.service,
+        intakeKind: isSaleConversion
+            ? JobIntakeKind.none
+            : choice.targetType == JobType.itemService
+                ? JobIntakeKind.component
+                : JobIntakeKind.bike,
         bikeId: convertedBikeId,
         subjectId:
             choice.targetType == JobType.itemService ? choice.subjectId : null,
@@ -8609,7 +8696,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       final invoiceId = result.invoiceId ?? updated.invoiceId;
       final successMessage = job.isServiceBudget
           ? '${job.jobNumber} fue facturado conservando su recepción, ficha, diagnóstico y líneas en una sola factura.'
-          : '${job.jobNumber} se convirtió a ${choice.targetType == JobType.itemService ? 'componente cobrable' : 'servicio de bicicleta'} con una sola factura.';
+          : isSaleConversion
+              ? '${job.jobNumber} se facturó como venta de productos, sin recepción de bicicleta o componente.'
+              : '${job.jobNumber} se convirtió a ${choice.targetType == JobType.itemService ? 'componente cobrable' : 'servicio de bicicleta'} con una sola factura.';
       _showReplacingQuotationSnackBar(
         SnackBar(
           content: Text(

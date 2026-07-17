@@ -22,19 +22,20 @@ void main() {
     expect(table, contains('InvoicePdfGenerator.generateServiceBudgetPDF('));
     expect(table, contains('InvoicePdfGenerator.generateQuotationPDF('));
     expect(table, contains("? 'Facturar presupuesto'"));
-    expect(table, contains(": 'Convertir cotización'"));
+    expect(table, contains(": 'Facturar o convertir cotización'"));
     expect(
       table,
       contains(
         'job.effectiveQuotationStatus == QuotationStatus.approved',
       ),
       reason:
-          'The invoice-column shortcut must only offer billing after the service budget is approved.',
+          'The invoice-column shortcut must only offer conversion after the proposal is approved.',
     );
     expect(table, contains("value: 'download_approved_budget'"));
     expect(table, contains("Text('Descargar presupuesto')"));
     expect(table, contains("value: 'invoice_approved_budget'"));
-    expect(table, contains("Text('Facturar presupuesto')"));
+    expect(table, contains("? 'Facturar presupuesto'"));
+    expect(table, contains(": 'Facturar o convertir cotización'"));
     expect(
       table,
       contains('unawaited(_convertToService(job))'),
@@ -106,6 +107,39 @@ void main() {
       reason:
           'Editing a bike-backed service budget must keep the deployed quotation facade until audited conversion.',
     );
+  });
+
+  test('approved product quotation can become a linked product sale', () {
+    final table = File(
+      'lib/modules/bikeshop/pages/pegas_table_page.dart',
+    ).readAsStringSync();
+    final service = File(
+      'lib/modules/bikeshop/services/bikeshop_service.dart',
+    ).readAsStringSync();
+    final coordinator = File(
+      'lib/modules/bikeshop/services/mechanic_job_quotation_command_coordinator.dart',
+    ).readAsStringSync();
+
+    expect(table, contains('item.itemType == \'product\''));
+    expect(table, contains('item.productId != null'));
+    expect(table, contains('value: JobType.sale'));
+    expect(table, contains("label: const Text('Venta')"));
+    expect(table, contains("? 'Facturar como venta'"));
+    expect(
+      table,
+      contains(
+        'la factura será la única dueña del inventario, impuestos y contabilidad',
+      ),
+    );
+    expect(
+      service,
+      contains("targetType == JobType.sale ? 'sale' : targetType.dbValue"),
+      reason:
+          'The legacy job_type facade must not erase the explicit sale RPC target.',
+    );
+    expect(coordinator, contains("'sale' => 'none'"));
+    expect(coordinator, contains("'sale' => 'sale'"));
+    expect(coordinator, contains("'sale' => 'service'"));
   });
 
   test('service-budget conversion bypasses object picker and preserves bikes',

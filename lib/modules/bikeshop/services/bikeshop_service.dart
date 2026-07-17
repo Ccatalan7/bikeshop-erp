@@ -4661,10 +4661,11 @@ class BikeshopService extends ChangeNotifier {
   // JOB TYPE CONVERSION METHODS
   // ============================================================
 
-  /// Atomically converts an approved quotation into a billable bicycle or
-  /// component service. The server appends the audit event and, when requested,
-  /// creates the invoice in the same transaction. [operationKey] belongs to
-  /// the caller and must be reused until the exact outcome is confirmed.
+  /// Atomically converts an approved quotation into a billable bicycle
+  /// service, component service, or product-only sale. The server appends the
+  /// audit event and creates the invoice in the same transaction.
+  /// [operationKey] belongs to the caller and must be reused until the exact
+  /// outcome is confirmed.
   Future<MechanicJobQuotationCommandResult> convertToBillableJob(
     String jobId, {
     required JobType targetType,
@@ -4678,17 +4679,19 @@ class BikeshopService extends ChangeNotifier {
     if (normalizedJobId.isEmpty) {
       throw ArgumentError.value(jobId, 'jobId', 'Must not be empty');
     }
-    if (targetType != JobType.service && targetType != JobType.itemService) {
+    if (targetType != JobType.service &&
+        targetType != JobType.itemService &&
+        targetType != JobType.sale) {
       throw ArgumentError.value(
         targetType,
         'targetType',
-        'Only service and itemService are billable conversion targets',
+        'Only service, itemService and sale are billable conversion targets',
       );
     }
 
     final request = MechanicJobQuotationCommandRequest.conversion(
       jobId: normalizedJobId,
-      targetJobType: targetType.dbValue,
+      targetJobType: targetType == JobType.sale ? 'sale' : targetType.dbValue,
       reason: reason,
       createInvoice: createInvoice,
       bikeId: bikeId,
