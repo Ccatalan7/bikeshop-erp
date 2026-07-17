@@ -2119,9 +2119,10 @@ serializes the linked invoice before the job, validates an active same-tenant
 custom status, derives the legacy status mirror and lifecycle timestamps from
 the database clock, and writes one immutable
 `mechanic_job_status_transition_events` receipt per exact operation key. A
-same-state request is a durable trigger-free no-op. Table, legacy list,
-calendar, routed form and embedded form all delegate to the same coordinator;
-ordinary persisted job saves omit status/lifecycle columns. Public-store
+same-state request is a durable trigger-free no-op. Table, legacy list and
+calendar delegate to the same coordinator; routed and embedded forms do not
+offer a parallel status editor, and ordinary persisted job saves omit
+status/lifecycle columns. Public-store
 customer history remains read-only: a future customer approval feature needs a
 separate ownership-validating command rather than a direct row update or a
 weakened employee RPC.
@@ -2153,6 +2154,20 @@ compatibility facade: `service` means service + bike, `item_service` means
 service + component, while quotation and warranty keep their familiar values.
 For rollback compatibility a `sale/none` row also persists `job_type=service`;
 canonical consumers must use both axes.
+
+The employee UI has one explicit ownership boundary for these axes. The job
+form records reception truth: mode/document choice, customer and physical
+object, priority and promised dates, customer request, diagnosis, commercial
+lines, proposal validity, and warranty source. It does not expose parallel
+editors for operational status, proposal decision, or warranty coverage; those
+audited transitions belong to the existing `Estado` chip in the canonical
+table, which must look interactive and open the combined action surface. The
+legacy estimated-duration, work-summary, technician-note, approval, and
+per-bike warranty flag columns remain readable/preservable for compatibility,
+but are not rendered as duplicate intake controls. Requested work belongs to
+Products and Services and technical findings belong to Diagnosis. This UI
+boundary changes no invoice, inventory, tax, journal, or historical-data
+ownership.
 
 - `component` means the customer left only the loose component (for example a
   wheel to build or convert to tubular). It is not merely a label for a part being repaired

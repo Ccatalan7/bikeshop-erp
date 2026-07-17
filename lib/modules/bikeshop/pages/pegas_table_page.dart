@@ -3317,109 +3317,134 @@ class _PegasTablePageState extends State<PegasTablePage>
                 _buildJobTypeCounters(),
               ],
 
-              const Spacer(),
-
               // Stats - sum invoice totals, paid, and outstanding
               if (_filteredJobs.isNotEmpty)
-                Builder(builder: (context) {
-                  double totalSum = 0;
-                  double paidSum = 0;
-                  double budgetSum = 0;
-                  double quotationSum = 0;
-                  for (final job in _filteredJobs) {
-                    if (job.workflowKind == JobWorkflowKind.quotation) {
-                      if (job.isServiceBudget) {
-                        budgetSum += job.totalCost;
-                      } else {
-                        quotationSum += job.totalCost;
-                      }
-                      continue;
-                    }
-                    final invoice =
-                        job.invoiceId != null ? _invoices[job.invoiceId] : null;
-                    totalSum += invoice?.total ?? job.totalCost;
-                    paidSum += invoice?.paidAmount ?? 0;
-                  }
-                  final outstandingSum = totalSum - paidSum;
-                  final fmt =
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Total: ${fmt.format(totalSum)}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      if (paidSum > 0) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('·',
-                              style: TextStyle(
-                                  color: Colors.grey.shade400, fontSize: 16)),
-                        ),
-                        Text(
-                          'Pagado: ${fmt.format(paidSum)}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: _workshopSettledColor,
-                                  ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('·',
-                              style: TextStyle(
-                                  color: Colors.grey.shade400, fontSize: 16)),
-                        ),
-                        Text(
-                          'Por cobrar: ${fmt.format(outstandingSum)}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: outstandingSum > 0
-                                        ? Colors.orange.shade700
-                                        : _workshopSettledColor,
-                                  ),
-                        ),
-                      ],
-                      if (budgetSum > 0) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('·',
-                              style: TextStyle(
-                                  color: Colors.grey.shade400, fontSize: 16)),
-                        ),
-                        Text(
-                          'Presupuestado: ${fmt.format(budgetSum)}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.orange.shade700,
-                                  ),
-                        ),
-                      ],
-                      if (quotationSum > 0) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('·',
-                              style: TextStyle(
-                                  color: Colors.grey.shade400, fontSize: 16)),
-                        ),
-                        Text(
-                          'Cotizado: ${fmt.format(quotationSum)}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.orange.shade700,
-                                  ),
-                        ),
-                      ],
-                    ],
-                  );
-                }),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Builder(builder: (context) {
+                        double totalSum = 0;
+                        double paidSum = 0;
+                        double budgetSum = 0;
+                        double quotationSum = 0;
+                        for (final job in _filteredJobs) {
+                          if (job.workflowKind == JobWorkflowKind.quotation) {
+                            if (job.isServiceBudget) {
+                              budgetSum += job.totalCost;
+                            } else {
+                              quotationSum += job.totalCost;
+                            }
+                            continue;
+                          }
+                          final invoice = job.invoiceId != null
+                              ? _invoices[job.invoiceId]
+                              : null;
+                          totalSum += invoice?.total ?? job.totalCost;
+                          paidSum += invoice?.paidAmount ?? 0;
+                        }
+                        final outstandingSum = totalSum - paidSum;
+                        final fmt = NumberFormat.currency(
+                            symbol: '\$', decimalDigits: 0);
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Total: ${fmt.format(totalSum)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            if (paidSum > 0) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('·',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16)),
+                              ),
+                              Text(
+                                'Pagado: ${fmt.format(paidSum)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: _workshopSettledColor,
+                                    ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('·',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16)),
+                              ),
+                              Text(
+                                'Por cobrar: ${fmt.format(outstandingSum)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: outstandingSum > 0
+                                          ? Colors.orange.shade700
+                                          : _workshopSettledColor,
+                                    ),
+                              ),
+                            ],
+                            if (budgetSum > 0) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('·',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16)),
+                              ),
+                              Text(
+                                'Presupuestado: ${fmt.format(budgetSum)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.orange.shade700,
+                                    ),
+                              ),
+                            ],
+                            if (quotationSum > 0) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('·',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16)),
+                              ),
+                              Text(
+                                'Cotizado: ${fmt.format(quotationSum)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.orange.shade700,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        );
+                      }),
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
             ],
           ),
         ],
@@ -4400,6 +4425,14 @@ class _PegasTablePageState extends State<PegasTablePage>
                   ),
                 ),
               ),
+              if (onTap != null) ...[
+                const SizedBox(width: 3),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: compact ? 13 : 15,
+                  color: palette.foreground,
+                ),
+              ],
             ],
           ),
           if (timestamp != null) ...[
@@ -4462,12 +4495,15 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (onTap == null) return badge;
 
-    return _buildInteractiveTableField(
-      onTap: onTap,
-      accentColor: accentColor,
-      padding: EdgeInsets.zero,
-      borderRadius: radius,
-      child: badge,
+    return Tooltip(
+      message: 'Cambiar estado y ver acciones',
+      child: _buildInteractiveTableField(
+        onTap: onTap,
+        accentColor: accentColor,
+        padding: EdgeInsets.zero,
+        borderRadius: radius,
+        child: badge,
+      ),
     );
   }
 

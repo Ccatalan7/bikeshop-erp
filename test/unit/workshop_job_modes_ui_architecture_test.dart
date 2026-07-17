@@ -167,11 +167,9 @@ void main() {
     );
     expect(
       form,
-      contains(
-        'onChanged: _isPaymentProtectedCommercialSnapshotLocked',
-      ),
+      isNot(contains('DropdownButtonFormField<JobStatus>')),
       reason:
-          'The status selector must not imply that a paid job lifecycle is editable.',
+          'Operational lifecycle belongs to the table chip; the form must not expose a parallel status selector.',
     );
     expect(
       form,
@@ -321,10 +319,10 @@ void main() {
       contains('widget.jobId != null && !_isStatusTransitionLocked'),
     );
     expect(
-      form,
-      contains('onChanged: _isStatusTransitionLocked'),
+      table,
+      contains("message: 'Cambiar estado y ver acciones'"),
       reason:
-          'Paid normal services remain operational; only the specific audited lifecycle guard locks status.',
+          'Paid normal services remain operational through the canonical table action instead of a second form selector.',
     );
     expect(table, contains('discountAmount: job.discountAmount'));
     expect(table, contains('_bikeshopService.convertToBillableJob('));

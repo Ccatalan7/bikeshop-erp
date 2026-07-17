@@ -36,8 +36,14 @@ void main() {
     );
     expect(
       form,
-      contains("_isServiceBudget ? 'Estado operativo' : 'Estado'"),
+      contains(
+        'El estado operativo y las decisiones de presupuesto o garantía se cambian desde el chip Estado de la tabla.',
+      ),
+      reason:
+          'The form must explain the single lifecycle owner instead of rendering a second status editor.',
     );
+    expect(table, contains("message: 'Cambiar estado y ver acciones'"));
+    expect(table, contains('Icons.keyboard_arrow_down_rounded'));
     expect(logbook, contains('if (job.isServiceBudget)'));
     expect(logbook, contains('job.proposalStatusDisplayName'));
   });
@@ -61,17 +67,32 @@ void main() {
       reason:
           'The operational board must not create fake lanes for commercial-only rows.',
     );
-    expect(
-      form,
-      contains(
-        'if (_jobType != JobType.quotation && _jobType != JobType.sale)',
-      ),
-      reason:
-          'The form must not render a disabled-but-misleading workshop status selector for commercial-only modes.',
-    );
+    expect(form, isNot(contains('DropdownButtonFormField<JobStatus>')));
+    expect(form, isNot(contains('DropdownButtonFormField<JobStatusCustom>')));
     expect(
       table,
       contains('job.isSaleWorkflow ? null : () => _showStatusMenu(job)'),
+    );
+  });
+
+  test('job form keeps intake content and removes duplicate controls', () {
+    for (final duplicateLabel in const [
+      'Duración estimada (horas)',
+      'Trabajos a realizar',
+      'Notas del técnico',
+      'Requiere aprobación del cliente',
+      'Trabajo de garantía',
+      'Propuesta técnica',
+      'Notas internas del técnico',
+    ]) {
+      expect(form, isNot(contains(duplicateLabel)));
+    }
+    expect(form, contains("labelText: 'Solicitud del cliente'"));
+    expect(form, contains("'Recepción y compromiso'"));
+    expect(form, contains("'Vigente hasta \${DateFormat('dd/MM/yyyy')"));
+    expect(
+      form,
+      contains("'Se cambia desde Estado en la tabla'"),
     );
   });
 

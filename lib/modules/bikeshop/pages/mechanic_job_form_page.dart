@@ -817,7 +817,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   DateTime? _selectedDeadline;
   DateTime _selectedArrivalDate = DateTime.now(); // Arrival date (editable)
   bool _requiresApproval = false;
-  bool _isWarrantyJob = false;
   TaxTreatment _taxTreatment =
       TaxTreatment.noTax; // Default: no tax (matches sales invoice)
 
@@ -1750,7 +1749,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _technicianNotesController.text =
                 loadedBikeTabs.first.technicianNotesController.text;
             _requiresApproval = loadedBikeTabs.first.requiresApproval;
-            _isWarrantyJob = loadedBikeTabs.first.isWarrantyWork;
           }
 
           // Load new job type fields
@@ -2827,18 +2825,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             !item.isCatalogProduct ||
             item.product?.id.isNotEmpty != true,
       );
-
-  /// Maps StatusPhase to JobStatus for legacy compatibility
-  JobStatus _mapPhaseToJobStatus(StatusPhase phase) {
-    switch (phase) {
-      case StatusPhase.todo:
-        return JobStatus.pendiente;
-      case StatusPhase.inProgress:
-        return JobStatus.enCurso;
-      case StatusPhase.complete:
-        return JobStatus.finalizado;
-    }
-  }
 
   int get _debugLocalPersistablePartCount {
     return _bikeTabs.fold<int>(0, (sum, tab) {
@@ -9710,30 +9696,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                   : 'Hallazgos, mediciones, riesgos y condición de ingreso...',
             ),
           ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: _workSummaryController,
-            minLines: 3,
-            maxLines: 7,
-            decoration: InputDecoration(
-              labelText: isQuotation
-                  ? 'Propuesta técnica'
-                  : 'Trabajo solicitado / recomendado',
-              alignLabelWithHint: true,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: _technicianNotesController,
-            minLines: 2,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Notas internas del técnico',
-              alignLabelWithHint: true,
-              border: OutlineInputBorder(),
-            ),
-          ),
         ],
       ),
     );
@@ -13235,17 +13197,15 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               labelText: 'Producto / servicio a cotizar *',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.request_quote_outlined),
+              suffixIcon: Tooltip(
+                message:
+                    'Úsalo para consultas sin bicicleta recibida, aunque el producto todavía no exista en inventario.',
+                child: Icon(Icons.info_outline),
+              ),
               hintText:
                   'Ej: Shimano Deore 12v, bicicleta gravel talla M, servicio de mantención...',
             ),
             maxLines: 2,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Usa Cotización para consultas sin bicicleta recibida, incluso si el producto no existe aún en tu inventario.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
           ),
         ] else if (_jobType == JobType.sale) ...[
           Container(
@@ -13280,7 +13240,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       return _buildSaleGeneralSection(theme);
     }
 
-    // Get current bike tab (if any)
     final selectedTab = _currentBikeTab;
     final warrantySource = _selectedWarrantySource;
     final currentTab = _jobType == JobType.warranty &&
@@ -13288,29 +13247,23 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 !_warrantySourceObjectMatchesForm(warrantySource))
         ? null
         : selectedTab;
-
-    final workRequestedCtrl =
-        currentTab?.workRequestedController ?? _workSummaryController;
-    final techNotesCtrl =
-        currentTab?.technicianNotesController ?? _technicianNotesController;
-
-    // Checkbox states from current tab
-    final isWarranty = currentTab?.isWarrantyWork ?? _isWarrantyJob;
-    final requiresApproval = currentTab?.requiresApproval ?? _requiresApproval;
+    final requestController = currentTab != null && !currentTab.isGeneralTab
+        ? currentTab.clientRequestController
+        : _clientRequestController;
+    final requestKey = currentTab != null && !currentTab.isGeneralTab
+        ? 'clientRequest_${currentTab.tabId}'
+        : 'clientRequest_job';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ========== JOB TYPE SELECTOR ==========
         if (widget.jobId == null) ...[
           _buildJobTypeSelector(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
         ] else ...[
           _buildJobTypeBadge(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
         ],
-
-        // ========== WARRANTY TRACEABILITY BANNER ==========
         if (_existingJob?.convertedAt != null &&
             _existingJob?.warrantyOutcome == WarrantyOutcome.notCovered &&
             _jobType == JobType.service) ...[
@@ -13336,353 +13289,170 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
           const SizedBox(height: 16),
         ],
-
-        // ========== JOB-LEVEL FIELDS (same for all bikes) ==========
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<JobPriority>(
-                initialValue: _selectedPriority,
-                decoration: const InputDecoration(
-                  labelText: 'Prioridad',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.flag),
-                ),
-                items: JobPriority.values.map((priority) {
-                  return DropdownMenuItem(
-                    value: priority,
-                    child: Text(priority.displayName),
-                  );
-                }).toList(),
-                onChanged: (priority) {
-                  if (priority != null) {
-                    setState(() {
-                      _selectedPriority = priority;
-                    });
-                  }
-                },
-              ),
-            ),
-            if (_jobType != JobType.quotation && _jobType != JobType.sale) ...[
-              const SizedBox(width: 16),
-              Expanded(
-                child: _customStatuses.isEmpty
-                    // Fallback to enum dropdown if no custom statuses
-                    ? DropdownButtonFormField<JobStatus>(
-                        initialValue: _selectedStatus,
-                        decoration: InputDecoration(
-                          labelText:
-                              _isServiceBudget ? 'Estado operativo' : 'Estado',
-                          border: const OutlineInputBorder(),
-                          prefixIcon: const Icon(Icons.swap_horiz),
-                        ),
-                        items: JobStatus.values.map((status) {
-                          return DropdownMenuItem(
-                            value: status,
-                            child: Text(status.displayName),
-                          );
-                        }).toList(),
-                        onChanged: _isStatusTransitionLocked
-                            ? null
-                            : (status) {
-                                if (status != null) {
-                                  setState(() {
-                                    _selectedStatus = status;
-                                  });
-                                }
-                              },
-                      )
-                    // Use custom statuses dropdown
-                    : DropdownButtonFormField<JobStatusCustom>(
-                        initialValue: _selectedCustomStatus,
-                        decoration: InputDecoration(
-                          labelText:
-                              _isServiceBudget ? 'Estado operativo' : 'Estado',
-                          border: const OutlineInputBorder(),
-                          prefixIcon: const Icon(Icons.swap_horiz),
-                        ),
-                        items: _customStatuses.map((status) {
-                          return DropdownMenuItem(
-                            value: status,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  margin: const EdgeInsets.only(right: 8),
-                                  decoration: BoxDecoration(
-                                    color: status.colorValue,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                                Text(status.name),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: _isStatusTransitionLocked
-                            ? null
-                            : (status) {
-                                if (status != null) {
-                                  setState(() {
-                                    _selectedCustomStatus = status;
-                                    // Also update the enum status for legacy compatibility
-                                    _selectedStatus =
-                                        _mapPhaseToJobStatus(status.phase);
-                                  });
-                                }
-                              },
-                      ),
-              ),
-            ],
-          ],
+        if (_jobType != JobType.quotation) ...[
+          _buildReceptionPlanningSection(theme),
+          const SizedBox(height: 18),
+        ],
+        TextFormField(
+          key: ValueKey(requestKey),
+          controller: requestController,
+          decoration: const InputDecoration(
+            labelText: 'Solicitud del cliente',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.chat_bubble_outline),
+            hintText:
+                'Qué pidió el cliente al dejar el objeto o solicitar la cotización...',
+            alignLabelWithHint: true,
+          ),
+          minLines: 2,
+          maxLines: 4,
         ),
-        const SizedBox(height: 16),
-        // Arrival Date and Deadline Row
-        Row(
-          children: [
-            // Arrival Date (editable)
-            Expanded(
-              child: InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedArrivalDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 30)),
-                  );
-                  if (date != null) {
-                    setState(() {
-                      _selectedArrivalDate = date;
-                    });
-                  }
-                },
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Fecha de llegada',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.login),
-                  ),
-                  child: Text(
-                    DateFormat('dd/MM/yyyy').format(_selectedArrivalDate),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Deadline
-            Expanded(
-              child: InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDeadline ??
-                        DateTime.now().add(const Duration(days: 7)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) {
-                    setState(() {
-                      _selectedDeadline = date;
-                    });
-                  }
-                },
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Fecha de entrega',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today),
-                  ),
-                  child: Text(
-                    _selectedDeadline != null
-                        ? DateFormat('dd/MM/yyyy').format(_selectedDeadline!)
-                        : 'Seleccionar fecha',
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        // Estimated Duration
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _estimatedDurationController,
-                decoration: const InputDecoration(
-                  labelText: 'Duración estimada (horas)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.access_time),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                ],
-              ),
-            ),
-          ],
-        ),
-
-        // ========== PER-BIKE FIELDS (from current tab) ==========
-        if (currentTab == null) ...[
-          const SizedBox(height: 16),
+        if (currentTab == null &&
+            (_jobType == JobType.service || _jobType == JobType.warranty)) ...[
+          const SizedBox(height: 12),
           _buildEmptyObjectGeneralNotice(theme),
-        ] else if (currentTab.isGeneralTab) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
+        ],
+        if (_jobType == JobType.warranty) ...[
+          const SizedBox(height: 18),
+          _buildWarrantySection(),
+        ],
+        if (_isProposalWorkflow) ...[
+          const SizedBox(height: 18),
+          _buildQuotationSection(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildReceptionPlanningSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 18,
+              color: theme.colorScheme.primary,
             ),
-            child: Row(
+            const SizedBox(width: 8),
+            Text(
+              'Recepción y compromiso',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message:
+                  'El estado operativo y las decisiones de presupuesto o garantía se cambian desde el chip Estado de la tabla.',
+              child: Icon(
+                Icons.info_outline,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 12.0;
+            final columns = constraints.maxWidth >= 840
+                ? 3
+                : constraints.maxWidth >= 520
+                    ? 2
+                    : 1;
+            final width =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
               children: [
-                Icon(
-                  Icons.info_outline,
-                  color: theme.colorScheme.onSurfaceVariant,
+                SizedBox(
+                  width: width,
+                  child: DropdownButtonFormField<JobPriority>(
+                    initialValue: _selectedPriority,
+                    decoration: const InputDecoration(
+                      labelText: 'Prioridad',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.flag_outlined),
+                    ),
+                    items: JobPriority.values
+                        .map(
+                          (priority) => DropdownMenuItem(
+                            value: priority,
+                            child: Text(priority.displayName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (priority) {
+                      if (priority != null) {
+                        setState(() => _selectedPriority = priority);
+                      }
+                    },
+                  ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'La pestaña General / Venta conserva cargos huérfanos o ventas sueltas. El diagnóstico estructurado se registra por bicicleta.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                SizedBox(
+                  width: width,
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedArrivalDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 30)),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedArrivalDate = date);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Ingreso',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.login),
+                      ),
+                      child: Text(
+                        DateFormat('dd/MM/yyyy').format(_selectedArrivalDate),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: width,
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDeadline ??
+                            DateTime.now().add(const Duration(days: 7)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedDeadline = date);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Entrega comprometida',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.event_available_outlined),
+                      ),
+                      child: Text(
+                        _selectedDeadline == null
+                            ? 'Sin fecha'
+                            : DateFormat('dd/MM/yyyy')
+                                .format(_selectedDeadline!),
+                      ),
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-        ] else ...[
-          // Using keys to force widget recreation when tab changes
-          const SizedBox(height: 16),
-          TextFormField(
-            key: ValueKey('clientRequest_${currentTab.tabId}'),
-            controller: currentTab.clientRequestController,
-            decoration: const InputDecoration(
-              labelText: 'Solicitud del cliente',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.comment),
-              hintText: 'Ej: Ruidos en la cadena, frenos suaves...',
-            ),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            key: ValueKey('workRequested_${currentTab.tabId}'),
-            controller: workRequestedCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Trabajos a realizar',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.build),
-              hintText:
-                  'Ej: Cambio de cadena, ajuste de frenos, lubricación...',
-            ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            key: ValueKey('techNotes_${currentTab.tabId}'),
-            controller: techNotesCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Notas del técnico',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.notes),
-              hintText: 'Notas internas...',
-            ),
-            maxLines: 2,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            key: ValueKey('checkboxes_${currentTab.tabId}'),
-            children: [
-              Expanded(
-                child: CheckboxListTile(
-                  title: const Text('Requiere aprobación del cliente'),
-                  value: requiresApproval,
-                  onChanged: _isPaymentProtectedCommercialSnapshotLocked
-                      ? null
-                      : (value) {
-                          setState(() {
-                            currentTab.requiresApproval = value ?? false;
-                          });
-                        },
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-              ),
-              Expanded(
-                child: _jobType == JobType.warranty
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primaryContainer
-                              .withValues(alpha: 0.45),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.18),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.verified_user_outlined,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Este ingreso se tratará como garantía de servicio',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : CheckboxListTile(
-                        title: const Text('Trabajo de garantía'),
-                        value: isWarranty,
-                        onChanged: _isPaymentProtectedCommercialSnapshotLocked
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  currentTab.isWarrantyWork = value ?? false;
-                                });
-                              },
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-              ),
-            ],
-          ),
-          // ========== END PER-BIKE FIELDS ==========
-        ],
-
-        // ========== SPECIAL TYPE FIELDS ==========
-        // Warranty outcome
-        if (_jobType == JobType.warranty) ...[
-          const SizedBox(height: 16),
-          _buildWarrantySection(),
-        ],
-        // Quotation status + validity
-        if (_isProposalWorkflow) ...[
-          const SizedBox(height: 16),
-          _buildQuotationSection(),
-        ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -13698,31 +13468,29 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           _buildJobTypeBadge(),
           const SizedBox(height: 16),
         ],
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.18),
+        Row(
+          children: [
+            Icon(Icons.payments_outlined,
+                size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(
+              'Seguimiento del cobro',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.payments_outlined, color: theme.colorScheme.primary),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Registra los productos en la pestaña Productos y Servicios. '
-                  'La factura vinculada controla los abonos y el saldo; este '
-                  'trabajo no recibe un objeto ni usa estados mecánicos.',
-                ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message:
+                  'Agrega los productos en Productos y Servicios. La factura vinculada controla abonos, saldo, inventario, impuestos y contabilidad.',
+              child: Icon(
+                Icons.info_outline,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         TextFormField(
           controller: _technicianNotesController,
           decoration: const InputDecoration(
@@ -13905,7 +13673,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       }
 
       final isWarrantyType = type == JobType.warranty;
-      _isWarrantyJob = isWarrantyType;
       for (final tab in _bikeTabs) {
         tab.isWarrantyWork = isWarrantyType;
       }
@@ -13935,12 +13702,25 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '¿Cómo se cobrará este servicio?',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: colors.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Text(
+              'Documento inicial',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: _serviceCommercialPath.description,
+              child: Icon(
+                Icons.info_outline,
+                size: 16,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Semantics(
@@ -13967,32 +13747,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 150),
-          child: Row(
-            key: ValueKey(_serviceCommercialPath),
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                _serviceCommercialPath == ServiceCommercialPath.budgetFirst
-                    ? Icons.lock_clock_outlined
-                    : Icons.link_outlined,
-                size: 16,
-                color: colors.onSurfaceVariant,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  _serviceCommercialPath.description,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -14004,12 +13758,25 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Tipo de Trabajo',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Text(
+              'Tipo de trabajo',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: _jobTypeDescription(_jobType),
+              child: Icon(
+                Icons.info_outline,
+                size: 16,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -14025,85 +13792,61 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             final borderColor =
                 isSelected ? colorScheme.primary : colorScheme.outlineVariant;
 
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => unawaited(_selectJobType(type)),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: borderColor,
-                      width: 1,
+            return Tooltip(
+              message: _jobTypeDescription(type),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => unawaited(_selectJobType(type)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: borderColor,
+                        width: 1,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                  color: colorScheme.primary
+                                      .withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2))
+                            ]
+                          : null,
                     ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                                color:
-                                    colorScheme.primary.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2))
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _jobTypeIcon(type),
-                        size: 16,
-                        color: textColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        type.displayName,
-                        style: theme.textTheme.labelLarge?.copyWith(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _jobTypeIcon(type),
+                          size: 16,
                           color: textColor,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.w500,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Text(
+                          type.displayName,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: textColor,
+                            fontWeight:
+                                isSelected ? FontWeight.bold : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             );
           }).toList(),
         ),
-        const SizedBox(height: 10),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 160),
-          child: Container(
-            key: ValueKey(_jobType),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 17, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _jobTypeDescription(_jobType),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
         if (_jobType == JobType.service) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           _buildServiceCommercialPathSelector(theme),
         ],
       ],
@@ -14135,44 +13878,38 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ? 'El modo no se cambia en esta ficha. Aprueba, rechaza, reabre o convierte la cotización mediante las acciones auditadas de la tabla.'
             : 'El modo y la recepción quedan fijos al crear el registro. Las conversiones válidas se realizan mediante acciones auditadas de la tabla.';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.34),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.20),
+    return Tooltip(
+      message: explanation,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.34),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.20),
+          ),
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(_jobTypeIcon(_jobType),
-              size: 18, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
+        child: Row(
+          children: [
+            Icon(_jobTypeIcon(_jobType),
+                size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 2),
-                Text(explanation, style: theme.textTheme.bodySmall),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: _handleCancel,
-            icon: const Icon(Icons.open_in_new, size: 15),
-            label: const Text('Acciones'),
-          ),
-        ],
+            Icon(
+              Icons.info_outline,
+              size: 16,
+              color: theme.colorScheme.primary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -14248,9 +13985,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           labelText: 'Ítem / Componente (opcional)',
           border: const OutlineInputBorder(),
           prefixIcon: Icon(_jobTypeIcon(_jobType)),
-          suffixIcon: widget.jobId == null ? const Icon(Icons.search) : null,
-          helperText:
-              'Busca en el catálogo o usa la descripción manual de abajo.',
+          suffixIcon: widget.jobId == null
+              ? const Tooltip(
+                  message:
+                      'Busca en el catálogo o usa la descripción manual de abajo.',
+                  child: Icon(Icons.search),
+                )
+              : null,
         ),
         child: Text(
           _selectedSubject?.name ?? 'Buscar componente...',
@@ -14408,21 +14149,42 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final sourceLocked = _isPaymentProtectedCommercialSnapshotLocked ||
         _warrantyClaim?.sourceJobId != null ||
         _warrantySaveCheckpoint.registeredSourceJobId != null;
-    final needsReason = _warrantyOutcome == WarrantyOutcome.notCovered ||
-        (_warrantyOutcome == WarrantyOutcome.covered &&
-            _warrantyCoverageNeedsReason(selectedSource));
+    final outcome = _warrantyOutcome ?? WarrantyOutcome.pending;
+    final outcomeColor = switch (outcome) {
+      WarrantyOutcome.covered => const Color(0xFF059669),
+      WarrantyOutcome.notCovered => const Color(0xFFDC2626),
+      WarrantyOutcome.pending => const Color(0xFFD97706),
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Garantía de servicio',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Icon(
+              Icons.verified_user_outlined,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Origen de la garantía',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message:
+                  'La decisión de cobertura se cambia desde el chip Estado de la tabla. Si se cubre, los repuestos descuentan inventario y registran costo de garantía sin venta ni IVA.',
+              child: Icon(
+                Icons.info_outline,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_isLoadingWarrantySources) ...[
           const LinearProgressIndicator(),
           const SizedBox(height: 8),
@@ -14456,9 +14218,17 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             labelText: 'Trabajo original *',
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.history),
-            helperText: sourceLocked
-                ? 'El vínculo queda bloqueado para preservar la trazabilidad.'
-                : 'Selecciona el trabajo cuya reparación está siendo reclamada.',
+            suffixIcon: sourceLocked
+                ? const Tooltip(
+                    message:
+                        'El vínculo está bloqueado para preservar la trazabilidad.',
+                    child: Icon(Icons.lock_outline),
+                  )
+                : const Tooltip(
+                    message:
+                        'Selecciona el trabajo cuya reparación está siendo reclamada.',
+                    child: Icon(Icons.info_outline),
+                  ),
           ),
           items: _warrantySources
               .map((source) => DropdownMenuItem<String>(
@@ -14513,7 +14283,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
         ],
         if (_warrantyCoverageNeedsFinancialReview &&
-            _warrantyOutcome != WarrantyOutcome.covered) ...[
+            outcome != WarrantyOutcome.covered) ...[
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -14535,88 +14305,40 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
         ],
         const SizedBox(height: 12),
-        DropdownButtonFormField<WarrantyOutcome>(
-          key: ValueKey('warranty-outcome-${_warrantyOutcome?.dbValue}'),
-          initialValue: _warrantyOutcome ?? WarrantyOutcome.pending,
-          decoration: const InputDecoration(
-            labelText: 'Decisión',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.verified_user_outlined),
-          ),
-          items: WarrantyOutcome.values
-              .map((outcome) => DropdownMenuItem(
-                    value: outcome,
-                    enabled: !(outcome == WarrantyOutcome.covered &&
-                        _warrantyCoverageNeedsFinancialReview &&
-                        _warrantyOutcome != WarrantyOutcome.covered),
-                    child: Text(
-                      outcome == WarrantyOutcome.covered &&
-                              _warrantyCoverageNeedsFinancialReview &&
-                              _warrantyOutcome != WarrantyOutcome.covered
-                          ? '${outcome.displayName} · revisar factura'
-                          : outcome.displayName,
-                    ),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() {
-            _warrantyOutcome = v;
-            _pendingWarrantyDecisionOperationKey = null;
-            _pendingWarrantyDecisionFingerprint = null;
-          }),
-        ),
-        if (needsReason) ...[
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _warrantyDecisionReasonController,
-            maxLines: 2,
-            onChanged: (_) {
-              _pendingWarrantyDecisionOperationKey = null;
-              _pendingWarrantyDecisionFingerprint = null;
-            },
-            decoration: InputDecoration(
-              labelText: _warrantyOutcome == WarrantyOutcome.covered
-                  ? 'Justificación de excepción *'
-                  : 'Motivo de rechazo *',
-              hintText: _warrantyOutcome == WarrantyOutcome.covered
-                  ? 'Por qué se acepta fuera de plazo o sin fecha confiable'
-                  : 'Hallazgo técnico o condición que no cubre la garantía',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.notes_outlined),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Tooltip(
+              message:
+                  'Cambiar desde la columna Estado de la tabla de trabajos.',
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: outcomeColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: outcomeColor.withValues(alpha: 0.38),
+                  ),
+                ),
+                child: Text(
+                  'Cobertura: ${outcome.displayName}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: outcomeColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        Text(
-          'Si se cubre, los repuestos se respaldan en un documento interno: '
-          'descuenta inventario y registra el costo de garantía, sin venta ni IVA.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        if (needsReason) ...[
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _warrantyDecisionReasonController,
-            maxLines: 2,
-            decoration: InputDecoration(
-              labelText: _warrantyOutcome == WarrantyOutcome.covered
-                  ? 'Justificación de excepción *'
-                  : 'Motivo de rechazo *',
-              hintText: _warrantyOutcome == WarrantyOutcome.covered
-                  ? 'Por qué se acepta fuera de plazo o sin fecha confiable'
-                  : 'Hallazgo técnico o condición que no cubre la garantía',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.notes_outlined),
+            Text(
+              'Se cambia desde Estado en la tabla',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        Text(
-          'Si se cubre, los repuestos se respaldan en un documento interno: '
-          'descuenta inventario y registra el costo de garantía, sin venta ni IVA.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          ],
         ),
       ],
     );
@@ -14807,6 +14529,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
         final warrantyTab = _BikeTabData(bike: sourceBike)
           ..isWarrantyWork = true;
+        _hydrateFirstBikeNarrativeFromStandalone(warrantyTab);
         setState(() {
           _bikeTabs
             ..add(warrantyTab)
@@ -14913,112 +14636,91 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Estado de $_proposalDocumentLabelLower',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: 'Estado',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.request_quote_outlined),
-                  helperText:
-                      'Se cambia desde la acción auditada de $_proposalDocumentLabelLower.',
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: statusColor.withValues(alpha: 0.38),
-                      ),
-                    ),
-                    child: Text(
-                      status.displayName,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            Icon(
+              Icons.request_quote_outlined,
+              size: 18,
+              color: theme.colorScheme.primary,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: InkWell(
-                onTap: _isFinalQuotationReadOnly
-                    ? null
-                    : () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          initialDate: _quotationValidUntil ??
-                              DateTime.now().add(const Duration(days: 30)),
-                          firstDate: DateTime.now(),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (date != null) {
-                          setState(() => _quotationValidUntil = date);
-                        }
-                      },
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Válido hasta',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.event_outlined),
-                  ),
-                  child: Text(
-                    _quotationValidUntil != null
-                        ? DateFormat('dd/MM/yyyy').format(_quotationValidUntil!)
-                        : 'Sin fecha límite',
-                    style: _quotationValidUntil != null
-                        ? null
-                        : TextStyle(color: Colors.grey[600]),
-                  ),
-                ),
+            const SizedBox(width: 8),
+            Text(
+              _proposalDocumentLabel,
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message:
+                  'Mientras esté pendiente no crea factura, pago, salida de stock ni asiento contable. El estado se cambia desde el chip Estado de la tabla.',
+              child: Icon(
+                Icons.info_outline,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.30),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.description_outlined,
-                  size: 18, color: Color(0xFFB45309)),
-              const SizedBox(width: 8),
-              Expanded(
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Tooltip(
+              message:
+                  'Cambiar desde la columna Estado de la tabla de trabajos.',
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.38),
+                  ),
+                ),
                 child: Text(
-                  'Se puede guardar y descargar como $_proposalDocumentLabelLower. No genera factura, pago, salida de stock ni asiento contable hasta aprobar y facturar.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF92400E),
+                  'Estado: ${status.displayName}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isFinalQuotationReadOnly
+                  ? null
+                  : () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _quotationValidUntil ??
+                            DateTime.now().add(const Duration(days: 30)),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) {
+                        setState(() => _quotationValidUntil = date);
+                      }
+                    },
+              icon: const Icon(Icons.event_outlined, size: 17),
+              label: Text(
+                _quotationValidUntil == null
+                    ? 'Sin vencimiento'
+                    : 'Vigente hasta ${DateFormat('dd/MM/yyyy').format(_quotationValidUntil!)}',
+              ),
+            ),
+            Tooltip(
+              message:
+                  'Después de esta fecha, un $_proposalDocumentLabelLower pendiente aparece vencido. Puedes extenderla antes de registrar la decisión del cliente.',
+              child: Icon(
+                Icons.help_outline,
+                size: 17,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ],
     );
