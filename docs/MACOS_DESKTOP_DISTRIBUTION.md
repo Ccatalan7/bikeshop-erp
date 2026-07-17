@@ -59,6 +59,13 @@ GitHub Actions job inside the protected `Production` environment can access the
 private `MACOS_UPDATE_SIGNING_KEY` and sign it. Artifact-only builds cannot use
 the key. The repository and every installed updater contain only the public key.
 
+The sandboxed app and the per-user LaunchAgent exchange only update request and
+state JSON files under `~/Library/Application Support/VinabikeERP/coordination`.
+The release entitlements grant the app a home-relative read/write exception for
+`/Library/Application Support/VinabikeERP/` and no broader filesystem path. This
+avoids asking a background LaunchAgent to mutate the app's protected sandbox
+container while keeping the rest of App Sandbox enabled.
+
 The installer rejects the release unless all of these pass:
 
 1. SSH/Ed25519 manifest signature.
@@ -81,16 +88,19 @@ Updater code, downloads, logs, and rollback state live under:
 ~/Library/Application Support/VinabikeERP
 ```
 
-The sandbox coordination state lives under the app container's Application
-Support directory in `updates/`.
+The app and its LaunchAgent share update coordination state under:
+
+```text
+~/Library/Application Support/VinabikeERP/coordination
+```
 
 Useful files:
 
 - `updater.log`: verification, preparation, install, and rollback events.
 - `launch-agent.log`: background process output.
-- `prepared-release.json`: release waiting for the user to restart.
-- `current-release.json`: installed release tag.
-- `update-error.json`: user-facing preparation/apply failure.
+- `coordination/prepared-release.json`: release waiting for the user to restart.
+- `coordination/current-release.json`: installed release tag.
+- `coordination/update-error.json`: user-facing preparation/apply failure.
 - `rollback/Vinabike ERP.previous.app`: previous working bundle.
 
 If the new app does not remain running after replacement, the updater restores

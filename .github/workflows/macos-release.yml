@@ -140,6 +140,11 @@ jobs:
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" = '${{ steps.meta.outputs.app_version }}'
           codesign --verify --deep --strict "$app"
 
+          embedded_entitlements="$RUNNER_TEMP/vinabike-release-entitlements.plist"
+          codesign -d --entitlements :- "$app" > "$embedded_entitlements" 2>/dev/null
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$embedded_entitlements")" = true
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "$embedded_entitlements")" = '/Library/Application Support/VinabikeERP/'
+
           architectures="$(lipo -archs "$executable")"
           case " $architectures " in
             *' arm64 '*) ;;

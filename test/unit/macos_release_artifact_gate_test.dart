@@ -10,6 +10,7 @@ void main() {
   late String publishHelper;
   late String runbook;
   late String infoPlist;
+  late String releaseEntitlements;
 
   setUpAll(() {
     workflow = File('.github/workflows/macos-release.yml').readAsStringSync();
@@ -23,6 +24,8 @@ void main() {
     publishHelper = File('scripts/publish_macos_update.sh').readAsStringSync();
     runbook = File('docs/MACOS_DESKTOP_DISTRIBUTION.md').readAsStringSync();
     infoPlist = File('macos/Runner/Info.plist').readAsStringSync();
+    releaseEntitlements =
+        File('macos/Runner/Release.entitlements').readAsStringSync();
   });
 
   test('manual macOS dispatch fails safe as artifact-only by default', () {
@@ -67,6 +70,12 @@ void main() {
     expect(workflow, contains('archive_sha256'));
     expect(workflow, contains('--target "\$GITHUB_SHA"'));
     expect(workflow, contains('macos-latest'));
+    expect(
+      workflow,
+      contains(
+        'com.apple.security.temporary-exception.files.home-relative-path.read-write:0',
+      ),
+    );
   });
 
   test('all clean builds generate the packaged spreadsheet engine', () {
@@ -119,8 +128,21 @@ void main() {
       contains('_clearMacosPreparationFailureForRetry'),
     );
     expect(updaterService, contains("errorTag != 'unknown'"));
+    expect(updaterService, contains("'VinabikeERP'"));
+    expect(updaterService, contains("'coordination'"));
     expect(installer, contains('<key>WatchPaths</key>'));
     expect(installer, contains(r'${USER_HOME}/Applications'));
+    expect(installer, contains(r'${SUPPORT_ROOT}/coordination'));
+    expect(
+      releaseEntitlements,
+      contains(
+        'com.apple.security.temporary-exception.files.home-relative-path.read-write',
+      ),
+    );
+    expect(
+      releaseEntitlements,
+      contains('/Library/Application Support/VinabikeERP/'),
+    );
     expect(infoPlist, contains('<string>Viñabike ERP</string>'));
   });
 

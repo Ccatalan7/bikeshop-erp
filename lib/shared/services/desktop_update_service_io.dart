@@ -348,10 +348,47 @@ class DesktopUpdateService extends ChangeNotifier {
   }
 
   Future<Directory> _macosUpdateCoordinationDirectory() async {
-    final applicationSupport = await getApplicationSupportDirectory();
-    final directory = Directory(path.join(applicationSupport.path, 'updates'));
+    final userHome = await _macosUserHomeDirectory();
+    final directory = Directory(
+      path.join(
+        userHome,
+        'Library',
+        'Application Support',
+        'VinabikeERP',
+        'coordination',
+      ),
+    );
     await directory.create(recursive: true);
     return directory;
+  }
+
+  Future<String> _macosUserHomeDirectory() async {
+    final environmentHome = Platform.environment['HOME']?.trim();
+    if (environmentHome != null && environmentHome.isNotEmpty) {
+      return _userHomeFromMacosPath(environmentHome);
+    }
+
+    final applicationSupport = await getApplicationSupportDirectory();
+    return _userHomeFromMacosPath(applicationSupport.path);
+  }
+
+  String _userHomeFromMacosPath(String candidate) {
+    const containerMarker = '/Library/Containers/';
+    final containerIndex = candidate.indexOf(containerMarker);
+    if (containerIndex > 0) {
+      return candidate.substring(0, containerIndex);
+    }
+
+    const applicationSupportMarker = '/Library/Application Support/';
+    final applicationSupportIndex = candidate.indexOf(
+      applicationSupportMarker,
+    );
+    if (applicationSupportIndex > 0) {
+      return candidate.substring(0, applicationSupportIndex);
+    }
+
+    if (path.isAbsolute(candidate)) return candidate;
+    throw StateError('Could not resolve the macOS user home directory.');
   }
 
   Future<String?> _readInstalledMacosReleaseTag() async {
