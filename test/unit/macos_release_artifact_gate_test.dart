@@ -111,7 +111,13 @@ void main() {
     );
     expect(
       installer.indexOf(r'write_release_state "$CURRENT_STATE" "$TAG_NAME"'),
-      greaterThan(installer.indexOf('launch_installed_app')),
+      lessThan(installer.indexOf('if ! launch_installed_app; then')),
+    );
+    expect(
+      installer,
+      contains(
+        r'write_release_state "$CURRENT_STATE" "$previous_current_tag"',
+      ),
     );
   });
 

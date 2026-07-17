@@ -397,11 +397,18 @@ launch_installed_app() {
 apply_prepared_release() {
   local requested_tag=''
   local process_id='0'
+  local previous_current_tag=''
   if [[ -f "$APPLY_REQUEST" ]]; then
     requested_tag="$(json_value "$APPLY_REQUEST" tag_name 2>/dev/null || true)"
     process_id="$(json_value "$APPLY_REQUEST" process_id 2>/dev/null || printf '0')"
   elif [[ -f "$PREPARED_STATE" ]]; then
     requested_tag="$(json_value "$PREPARED_STATE" tag_name)"
+  fi
+
+  if [[ -f "$CURRENT_STATE" ]]; then
+    previous_current_tag="$(json_value "$CURRENT_STATE" tag_name 2>/dev/null || true)"
+  elif [[ -f "${SUPPORT_ROOT}/current-release.json" ]]; then
+    previous_current_tag="$(json_value "${SUPPORT_ROOT}/current-release.json" tag_name 2>/dev/null || true)"
   fi
 
   if [[ -z "$requested_tag" ]]; then
@@ -450,11 +457,25 @@ apply_prepared_release() {
 
   rm -f "$APPLY_REQUEST" "$PREPARED_STATE" "${SUPPORT_ROOT}/prepared-release.json" "$ERROR_STATE"
 
+  # Publish the installed tag before opening the replacement bundle. The app
+  # checks for updates immediately at startup; writing this state afterwards
+  # leaves a short window where it can rediscover the release just installed.
+  write_release_state "$CURRENT_STATE" "$TAG_NAME"
+  write_release_state "${SUPPORT_ROOT}/current-release.json" "$TAG_NAME"
+
   if [[ "${VINABIKE_SKIP_LAUNCH:-NO}" != 'YES' ]]; then
     if ! launch_installed_app; then
       safe_remove_tree "$APP_PATH"
       if [[ -d "$rollback_app" ]]; then
         mv "$rollback_app" "$APP_PATH"
+      fi
+      if [[ -n "$previous_current_tag" ]]; then
+        write_release_state "$CURRENT_STATE" "$previous_current_tag"
+        write_release_state "${SUPPORT_ROOT}/current-release.json" "$previous_current_tag"
+      else
+        rm -f "$CURRENT_STATE" "${SUPPORT_ROOT}/current-release.json"
+      fi
+      if [[ -d "$APP_PATH" ]]; then
         /usr/bin/open "$APP_PATH" || true
       fi
       write_error_state 'La versión nueva no abrió y se restauró la anterior.'
@@ -463,8 +484,6 @@ apply_prepared_release() {
     fi
   fi
 
-  write_release_state "$CURRENT_STATE" "$TAG_NAME"
-  write_release_state "${SUPPORT_ROOT}/current-release.json" "$TAG_NAME"
   prune_stale_prepared_releases ''
 
   log "Installed and launched Vinabike ERP $TAG_NAME."
