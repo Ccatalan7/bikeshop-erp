@@ -227,7 +227,12 @@ No se agregan columnas. Se reutilizan las existentes así:
 - `Estado`: mantiene el estado operativo y añade un sublabel compacto para el
   estado comercial o de garantía cuando corresponde.
 - `Factura`:
-  - presupuesto de servicio: chip `Presupuesto` que descarga/abre su PDF;
+  - presupuesto de servicio: el chip `Presupuesto` descarga su PDF mientras
+    está pendiente; una vez aprobado abre un menú compacto con `Descargar
+    presupuesto` y `Facturar presupuesto`. Facturar reutiliza el comando
+    auditado/idempotente de conversión y nunca crea una segunda ruta de factura.
+    La aprobación exige por contrato al menos una línea de producto/servicio,
+    y cada cambio de estado reemplaza cualquier aviso transitorio anterior;
   - cotización: chip `Cotización` que descarga/abre su PDF;
   - servicio/componente: estado real de la factura;
   - venta/cobro: estado real, abono y saldo de la misma factura;

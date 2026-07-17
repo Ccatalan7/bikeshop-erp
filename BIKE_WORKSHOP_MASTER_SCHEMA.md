@@ -2177,7 +2177,14 @@ canonical consumers must use both axes.
   This default is never retroactively applied when loading an existing
   billable service. Converting a service budget reuses every persisted
   `mechanic_job_bikes` relationship and never asks the worker to replace the
-  received bicycle; only standalone Cotización uses the intake picker.
+  received bicycle; only standalone Cotización uses the intake picker. The
+  approved `Presupuesto` chip in the table's existing invoice column exposes
+  only `Descargar presupuesto` and `Facturar presupuesto`; the billing choice
+  delegates to that same idempotent conversion command, while an unapproved
+  proposal cannot expose the shortcut. Approval is rejected atomically when
+  the proposal has no product/service lines. Every newer proposal-status
+  result replaces older transient feedback, so an earlier approval message
+  cannot survive after the proposal has been reopened as pending.
 - billable conversion keeps one enforced invoice relationship:
   `mechanic_jobs.invoice_id -> sales_invoices.id`. Both directions navigate
   that same key (direct from job, reverse lookup from invoice); a duplicate

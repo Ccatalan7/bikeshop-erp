@@ -23,6 +23,35 @@ void main() {
     expect(table, contains('InvoicePdfGenerator.generateQuotationPDF('));
     expect(table, contains("? 'Facturar presupuesto'"));
     expect(table, contains(": 'Convertir cotización'"));
+    expect(
+      table,
+      contains(
+        'job.effectiveQuotationStatus == QuotationStatus.approved',
+      ),
+      reason:
+          'The invoice-column shortcut must only offer billing after the service budget is approved.',
+    );
+    expect(table, contains("value: 'download_approved_budget'"));
+    expect(table, contains("Text('Descargar presupuesto')"));
+    expect(table, contains("value: 'invoice_approved_budget'"));
+    expect(table, contains("Text('Facturar presupuesto')"));
+    expect(
+      table,
+      contains('unawaited(_convertToService(job))'),
+      reason:
+          'The chip must reuse the audited idempotent conversion instead of creating a parallel invoice path.',
+    );
+    expect(table, contains('void _showReplacingQuotationSnackBar('));
+    expect(table, contains('messenger.clearSnackBars();'));
+    expect(table, contains('messenger.removeCurrentSnackBar();'));
+    expect(
+      RegExp(r'_showReplacingQuotationSnackBar\(\s*SnackBar\(')
+          .allMatches(table)
+          .length,
+      greaterThanOrEqualTo(4),
+      reason:
+          'Every quotation transition outcome must replace stale status feedback instead of queueing behind it.',
+    );
     final invoiceAction = table.indexOf(
       'Future<void> _createInvoiceForJob(MechanicJob job)',
     );

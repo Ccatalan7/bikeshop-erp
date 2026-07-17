@@ -35284,5 +35284,8 @@ grant select on public.stock_movements_ledger_view to authenticated;
 -- Protect the authoritative job when a linked draft invoice is deleted from
 -- Sales, and freeze the received-bike aggregate after a proposal decision.
 \ir ../migrations/20260717010000_protect_linked_workshop_invoice_deletion.sql
+-- Prevent approval of an empty workshop proposal; the immutable approval
+-- snapshot must contain at least one product or service line.
+\ir ../migrations/20260717020000_require_quotation_items_before_approval.sql
 
 commit;

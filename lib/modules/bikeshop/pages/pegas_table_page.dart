@@ -6325,46 +6325,103 @@ class _PegasTablePageState extends State<PegasTablePage>
             final badgeColor = _proposalStatusColor(job);
             final isGenerating =
                 job.id != null && _generatingQuotationPdfIds.contains(job.id);
+            final isConverting = job.id != null &&
+                _pendingQuotationConversionAttempts.containsKey(job.id);
+            final canInvoiceApprovedBudget = job.isServiceBudget &&
+                job.effectiveQuotationStatus == QuotationStatus.approved;
+            final isBusy = isGenerating || isConverting;
+            final proposalChip = Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: badgeColor.withValues(alpha: 0.4),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isBusy)
+                    SizedBox(
+                      width: 13,
+                      height: 13,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.8,
+                        color: badgeColor,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.picture_as_pdf_outlined,
+                      size: 13,
+                      color: badgeColor,
+                    ),
+                  const SizedBox(width: 4),
+                  Text(
+                    job.proposalDocumentLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: badgeColor,
+                    ),
+                  ),
+                  if (canInvoiceApprovedBudget) ...[
+                    const SizedBox(width: 2),
+                    Icon(Icons.arrow_drop_down, size: 15, color: badgeColor),
+                  ],
+                ],
+              ),
+            );
+
+            if (canInvoiceApprovedBudget) {
+              return PopupMenuButton<String>(
+                enabled: !isBusy,
+                tooltip: 'Descargar o facturar presupuesto',
+                position: PopupMenuPosition.under,
+                onSelected: (action) {
+                  switch (action) {
+                    case 'download_approved_budget':
+                      unawaited(_downloadQuotationPdf(job));
+                      break;
+                    case 'invoice_approved_budget':
+                      unawaited(_convertToService(job));
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'download_approved_budget',
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Descargar presupuesto'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'invoice_approved_budget',
+                    child: Row(
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Facturar presupuesto'),
+                      ],
+                    ),
+                  ),
+                ],
+                child: proposalChip,
+              );
+            }
+
             return _buildInteractiveTableField(
-              onTap: isGenerating ? null : () => _downloadQuotationPdf(job),
+              onTap: isBusy ? null : () => _downloadQuotationPdf(job),
               accentColor: badgeColor,
               padding: EdgeInsets.zero,
               borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: badgeColor.withValues(alpha: 0.4), width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isGenerating)
-                      SizedBox(
-                        width: 13,
-                        height: 13,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.8,
-                          color: badgeColor,
-                        ),
-                      )
-                    else
-                      Icon(Icons.picture_as_pdf_outlined,
-                          size: 13, color: badgeColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      job.proposalDocumentLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: badgeColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: proposalChip,
             );
           }
 
@@ -9105,7 +9162,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         final approvedMessage = job.isServiceBudget
             ? 'Presupuesto aprobado. Puedes facturarlo conservando la recepción y sus fichas ya guardadas.'
             : 'Cotización aprobada. Conviértela cuando recibas la bicicleta o componente.';
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showReplacingQuotationSnackBar(
           SnackBar(
             content: Text(
               '$approvedMessage$refreshSuffix',
@@ -9124,7 +9181,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       } else {
         final stateOwner =
             job.isServiceBudget ? 'del presupuesto' : 'de la cotización';
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showReplacingQuotationSnackBar(
           SnackBar(
             content: Text(
               'Estado $stateOwner actualizado.$refreshSuffix',
@@ -9141,7 +9198,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         'operation ${attempt.operationKey}: $error',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: const Text(
             'No se pudo confirmar el cambio. Puede haberse guardado; Reintentar reutiliza exactamente la misma operación.',
@@ -9165,7 +9222,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         _pendingQuotationTransitionAttempts.remove(jobId);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: Text(
             'El servidor rechazó el cambio de ${job.proposalDocumentLabelLower}; no se confirmó ningún cambio: $error',
@@ -9176,6 +9233,16 @@ class _PegasTablePageState extends State<PegasTablePage>
     } finally {
       _endLocalOperation();
     }
+  }
+
+  void _showReplacingQuotationSnackBar(SnackBar snackBar) {
+    final messenger = ScaffoldMessenger.of(context);
+    // ScaffoldMessenger otherwise queues status messages and carries them
+    // across routes. A previous "approved" action must never remain visible
+    // after the same proposal has already been reopened as pending.
+    messenger.clearSnackBars();
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(snackBar);
   }
 
   Future<String?> _requestQuotationStatusReason(
