@@ -2184,7 +2184,8 @@ canonical consumers must use both axes.
   proposal cannot expose the shortcut. Approval is rejected atomically when
   the proposal has no product/service lines. Every newer proposal-status
   result replaces older transient feedback, so an earlier approval message
-  cannot survive after the proposal has been reopened as pending.
+  cannot survive after the proposal has been reopened as pending, conversion
+  begins, or the linked invoice route opens.
 - billable conversion keeps one enforced invoice relationship:
   `mechanic_jobs.invoice_id -> sales_invoices.id`. Both directions navigate
   that same key (direct from job, reverse lookup from invoice); a duplicate

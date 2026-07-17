@@ -939,6 +939,9 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _openInvoice(String invoiceId) async {
+    // Route-level ScaffoldMessenger state survives navigation. Workshop
+    // proposal feedback is no longer relevant once the linked invoice opens.
+    _clearQuotationSnackBars();
     _markNeedsRefresh();
     await context
         .push('/sales/invoices/$invoiceId/edit?returnTo=/taller/pegas');
@@ -8041,11 +8044,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   Future<void> _convertToService(MechanicJob job) async {
     final jobId = job.id;
     if (jobId == null || jobId.isEmpty) return;
+    _clearQuotationSnackBars();
 
     if (job.isQuotationWorkflow &&
         job.effectiveQuotationStatus != QuotationStatus.approved) {
       final article = job.isServiceBudget ? 'el' : 'la';
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: Text(
             'Primero aprueba $article ${job.proposalDocumentLabelLower} desde la acción de estado.',
@@ -8405,7 +8409,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     };
     if (persistedBikeIds.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: const Text(
             'Este presupuesto no conserva una bicicleta recibida válida. Actualiza la tabla y revisa el trabajo antes de facturar.',
@@ -8606,7 +8610,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       final successMessage = job.isServiceBudget
           ? '${job.jobNumber} fue facturado conservando su recepción, ficha, diagnóstico y líneas en una sola factura.'
           : '${job.jobNumber} se convirtió a ${choice.targetType == JobType.itemService ? 'componente cobrable' : 'servicio de bicicleta'} con una sola factura.';
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: Text(
             '$successMessage$refreshSuffix',
@@ -8630,7 +8634,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         'operation ${attempt.operationKey}: $error',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: const Text(
             'No se pudo confirmar la conversión. Puede haberse guardado; Reintentar reutiliza exactamente la misma operación y no crea otra factura.',
@@ -8654,7 +8658,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         _pendingQuotationConversionAttempts.remove(jobId);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showReplacingQuotationSnackBar(
         SnackBar(
           content: Text(
             'El servidor rechazó la conversión; no se confirmó ningún cambio: $error',
@@ -9236,13 +9240,18 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   void _showReplacingQuotationSnackBar(SnackBar snackBar) {
+    _clearQuotationSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
+  void _clearQuotationSnackBars() {
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     // ScaffoldMessenger otherwise queues status messages and carries them
     // across routes. A previous "approved" action must never remain visible
     // after the same proposal has already been reopened as pending.
     messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
-    messenger.showSnackBar(snackBar);
   }
 
   Future<String?> _requestQuotationStatusReason(

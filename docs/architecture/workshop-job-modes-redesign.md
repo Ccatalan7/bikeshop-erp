@@ -232,7 +232,8 @@ No se agregan columnas. Se reutilizan las existentes así:
     presupuesto` y `Facturar presupuesto`. Facturar reutiliza el comando
     auditado/idempotente de conversión y nunca crea una segunda ruta de factura.
     La aprobación exige por contrato al menos una línea de producto/servicio,
-    y cada cambio de estado reemplaza cualquier aviso transitorio anterior;
+    y cada cambio de estado, inicio de conversión o apertura de factura elimina
+    cualquier aviso transitorio anterior antes de navegar;
   - cotización: chip `Cotización` que descarga/abre su PDF;
   - servicio/componente: estado real de la factura;
   - venta/cobro: estado real, abono y saldo de la misma factura;

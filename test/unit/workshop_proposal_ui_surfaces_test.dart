@@ -42,8 +42,25 @@ void main() {
           'The chip must reuse the audited idempotent conversion instead of creating a parallel invoice path.',
     );
     expect(table, contains('void _showReplacingQuotationSnackBar('));
+    expect(table, contains('void _clearQuotationSnackBars()'));
     expect(table, contains('messenger.clearSnackBars();'));
     expect(table, contains('messenger.removeCurrentSnackBar();'));
+    expect(
+      table,
+      contains(
+        "_clearQuotationSnackBars();\n    _markNeedsRefresh();",
+      ),
+      reason:
+          'Opening the linked invoice must remove workshop proposal feedback before route navigation.',
+    );
+    expect(
+      table,
+      contains(
+        "if (jobId == null || jobId.isEmpty) return;\n    _clearQuotationSnackBars();",
+      ),
+      reason:
+          'Starting conversion must immediately remove the obsolete approval action.',
+    );
     expect(
       RegExp(r'_showReplacingQuotationSnackBar\(\s*SnackBar\(')
           .allMatches(table)
