@@ -2165,6 +2165,33 @@ canonical consumers must use both axes.
 - a walk-in quotation may validly have `intake_kind = unspecified`: proposed
   products/services are planning rows only and create no invoice, stock
   movement, revenue, IVA, receivable, COGS, or payment entry.
+- the quotation workflow has two explicit customer-facing projections. A row
+  with `intake_kind = bike` is `Servicio · Presupuesto`: the bicycle, ficha,
+  diagnosis and proposed lines stay on the same job, while invoice, tax, stock,
+  receivable and accounting remain absent until approval/conversion. A row
+  without bicycle custody is `Cotización`. The database retains the compatible
+  `job_type = quotation` facade for both so older clients continue treating
+  them as non-billable; canonical clients derive the label from both axes.
+- a new `Servicio` form defaults to `Presupuestar primero`, while
+  `Facturar ahora` explicitly preserves the existing immediate-invoice path.
+  This default is never retroactively applied when loading an existing
+  billable service. Converting a service budget reuses every persisted
+  `mechanic_job_bikes` relationship and never asks the worker to replace the
+  received bicycle; only standalone Cotización uses the intake picker.
+- billable conversion keeps one enforced invoice relationship:
+  `mechanic_jobs.invoice_id -> sales_invoices.id`. Both directions navigate
+  that same key (direct from job, reverse lookup from invoice); a duplicate
+  writable inverse column is intentionally avoided because it would create a
+  second source of truth and break legacy restore/delete clients.
+- a linked workshop invoice cannot be deleted directly from Sales. The FK uses
+  `ON DELETE RESTRICT` and the former invoice-to-job cascade is retired, so a
+  draft invoice can never silently erase its authoritative workshop ficha.
+  Any eligible cleanup starts from the job and still passes the invoice's
+  payment/accounting deletion guards.
+- after a service-budget decision leaves `pending`, its
+  `mechanic_job_bikes` aggregate (received bikes, ficha and diagnosis) is
+  database-immutable until the audited proposal command reopens it. The
+  conversion command may only replay its idempotent no-op upsert.
 - a `sale/none` row means a real product sale tracked operationally in the same
   workshop table without any bicycle or loose component received. It has no
   diagnosis or service-warranty window and never contributes to bicycle or

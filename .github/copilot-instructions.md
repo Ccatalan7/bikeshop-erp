@@ -156,6 +156,18 @@ Chrome profile, login, or extension.
   initialization changes; cold restart dependency, plugin, entry-point, or
   `--dart-define` changes. Wait for terminal compilation confirmation before
   interacting with the page.
+- Use `http://localhost:54330` as the canonical local smoke-test origin and do
+  not alternate it with `127.0.0.1` during a run. Browser caches and service
+  workers are origin-scoped: an older worker on `127.0.0.1` can display a stale
+  ERP bundle even while the current Flutter process is compiling the intended
+  checkout. Before accepting browser evidence, verify a UI marker introduced
+  by the current change. If the marker is stale despite terminal compilation,
+  stop the server, perform a cold rebuild only after that evidence, restart the
+  same port, and reload on the canonical `localhost` origin. If that origin is
+  still stale, close and recreate the single test tab or unregister its local
+  service worker through supported browser tooling; do not accumulate fallback
+  tabs. Never treat a screenshot from a demonstrably cached origin as release
+  evidence.
 
 ### Efficient interaction
 
@@ -293,9 +305,16 @@ workflow UI changes.
   or bicycle-count logic from it alone.
 - A component intake means the customer left only that component. It must not
   count as a received bicycle even if a related bike is retained as provenance.
-- A quotation is non-posting planning state. It may contain proposed
-  `mechanic_job_items`, but it must not link an invoice or create stock,
-  revenue, IVA, receivable, COGS, journal, or payment effects.
+- A quotation workflow is non-posting planning state. In the UI it has two
+  explicit meanings: `Servicio · Presupuestar primero` when the shop already
+  received a bicycle (`intake_kind = bike`), and `Cotización` when no physical
+  object was received. Both may contain proposed `mechanic_job_items`, but
+  neither may link an invoice or create stock, revenue, IVA, receivable, COGS,
+  journal, or payment effects. A new bicycle service defaults to the first
+  path; `Facturar ahora` preserves the established immediate-invoice path.
+  For backwards compatibility the database may normalize the service-budget
+  facade to `job_type = quotation`; canonical UI and financial guards must use
+  `workflow_kind` plus `intake_kind`, never that facade alone.
 - A workshop `sale/none` row is an operational collection wrapper for a real
   product sale where the customer left no bicycle or loose component. Its
   persisted legacy facade remains `job_type = service` for rollback safety.
@@ -315,6 +334,16 @@ workflow UI changes.
   mode updates followed by a separate best-effort invoice call. The historical
   `create_invoice_from_mechanic_job` RPC is only a guarded compatibility alias;
   never expose or call its private `_internal` builder directly.
+- Converting `Servicio · Presupuesto` reuses its persisted bicycle/ficha and
+  never asks the worker to choose another object. Converting standalone
+  `Cotización` keeps the explicit bicycle/component intake picker. Both paths
+  must atomically create exactly one invoice and leave one tenant-scoped strong
+  relationship. Its canonical source of truth is
+  `mechanic_jobs.invoice_id -> sales_invoices.id`; invoice-to-job navigation is
+  the reverse lookup over that same foreign key. Do not add a second writable
+  inverse pointer unless every legacy client, backup/restore path, hard-delete
+  path and recovery script has first been migrated and proven, because two
+  pointers can drift and are not stronger than one enforced relationship.
 - New clients must never depend on direct quotation status/workflow writes.
   The database's narrowly bounded legacy bridge exists only to keep an older
   deployed client operational during rollout; it accepts no content drift,

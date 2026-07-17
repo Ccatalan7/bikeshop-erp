@@ -388,6 +388,32 @@ class SalesService extends ChangeNotifier {
   }
 
   Future<void> deleteInvoice(String invoiceId) async {
+    Map<String, dynamic>? linkedJob;
+    try {
+      final response = await _databaseService.supabase
+          .from('mechanic_jobs')
+          .select('id, job_number')
+          .eq('invoice_id', invoiceId)
+          .maybeSingle();
+      if (response != null) {
+        linkedJob = Map<String, dynamic>.from(response);
+      }
+    } catch (_) {
+      throw Exception(
+        'No se pudo verificar si esta factura pertenece a un trabajo. Recarga e inténtalo nuevamente.',
+      );
+    }
+
+    if (linkedJob != null) {
+      final jobNumber = linkedJob['job_number']?.toString().trim();
+      final label = jobNumber == null || jobNumber.isEmpty
+          ? 'un trabajo de taller'
+          : 'el trabajo $jobNumber';
+      throw Exception(
+        'Esta factura pertenece a $label y no se puede eliminar por separado. Adminístrala desde la ficha del trabajo.',
+      );
+    }
+
     try {
       await _databaseService.delete(_invoicesCollection, invoiceId);
       _invoices.removeWhere((invoice) => invoice.id == invoiceId);
@@ -395,7 +421,7 @@ class SalesService extends ChangeNotifier {
       AccountingDashboardSection.invalidateCache();
       notifyListeners();
     } catch (e) {
-      throw Exception('No se pudo eliminar la factura.');
+      throw Exception('No se pudo eliminar la factura: $e');
     }
   }
 

@@ -18,6 +18,9 @@ class PegaDetailView extends StatefulWidget {
   final Function(MechanicJobItem)? onItemAdded;
   final Function(String itemId)? onItemRemoved;
   final VoidCallback? onAddItemPressed; // NEW: Trigger parent's add item dialog
+  final VoidCallback? onProposalDocumentPressed;
+  final VoidCallback? onProposalStatusPressed;
+  final VoidCallback? onProposalConvertPressed;
 
   const PegaDetailView({
     super.key,
@@ -32,6 +35,9 @@ class PegaDetailView extends StatefulWidget {
     this.onItemAdded,
     this.onItemRemoved,
     this.onAddItemPressed, // NEW
+    this.onProposalDocumentPressed,
+    this.onProposalStatusPressed,
+    this.onProposalConvertPressed,
   });
 
   @override
@@ -110,8 +116,12 @@ class _PegaDetailViewState extends State<PegaDetailView>
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit),
-                  tooltip: 'Editar',
-                  onPressed: widget.onEdit,
+                  tooltip: widget.job.hasFinalProposalDecision
+                      ? 'Reabre ${widget.job.proposalDocumentLabelLower} para editar'
+                      : 'Editar',
+                  onPressed: widget.job.hasFinalProposalDecision
+                      ? null
+                      : widget.onEdit,
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -148,6 +158,9 @@ class _PegaDetailViewState extends State<PegaDetailView>
 
   Widget _buildDetailsTab() {
     if (widget.job.isSaleWorkflow) return _buildSaleDetailsTab();
+    if (widget.job.isStandaloneQuotation) {
+      return _buildStandaloneQuotationDetailsTab();
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -158,8 +171,8 @@ class _PegaDetailViewState extends State<PegaDetailView>
             children: [
               Expanded(
                 child: _buildInfoCard(
-                  'Estado',
-                  widget.job.status.displayName,
+                  'Estado operativo',
+                  _operationalStatusSummary(widget.job),
                   Icons.info_outline,
                   _getStatusColor(widget.job.status),
                 ),
@@ -175,6 +188,15 @@ class _PegaDetailViewState extends State<PegaDetailView>
               ),
             ],
           ),
+          if (widget.job.isServiceBudget) ...[
+            const SizedBox(height: 12),
+            _buildInfoCard(
+              'Estado comercial',
+              widget.job.proposalStatusDisplayName,
+              Icons.request_quote_outlined,
+              _getProposalStatusColor(widget.job),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Dates row
@@ -210,10 +232,21 @@ class _PegaDetailViewState extends State<PegaDetailView>
           _buildKPISection(),
           const SizedBox(height: 24),
 
-          // Bike information
-          _buildSectionHeader('Información de la Bicicleta'),
+          // Received object information
+          _buildSectionHeader(
+            widget.job.isComponentIntake
+                ? 'Componente recibido'
+                : 'Información de la Bicicleta',
+          ),
           const SizedBox(height: 12),
-          if (widget.bike != null)
+          if (widget.job.isComponentIntake)
+            _buildInfoCard(
+              'Componente',
+              widget.job.subjectDisplayName ?? 'Componente recibido',
+              Icons.build_outlined,
+              Colors.blueGrey,
+            )
+          else if (widget.bike != null)
             _buildBikeDetails(widget.bike!)
           else
             const Text('Sin bicicleta asignada'),
@@ -278,45 +311,198 @@ class _PegaDetailViewState extends State<PegaDetailView>
 
           // Cost information - simplified to just show total
           if (widget.job.totalCost > 0) ...[
-            _buildSectionHeader('Costos'),
+            _buildSectionHeader(
+              widget.job.isServiceBudget ? 'Presupuesto' : 'Costos',
+            ),
             const SizedBox(height: 12),
             _buildInfoCard(
-              'Total',
+              widget.job.isServiceBudget ? 'Total presupuestado' : 'Total',
               '\$${_calculateDisplayTotal().toStringAsFixed(0)}',
-              Icons.attach_money,
-              Colors.green,
+              widget.job.isServiceBudget
+                  ? Icons.request_quote_outlined
+                  : Icons.attach_money,
+              widget.job.isServiceBudget ? Colors.orange : Colors.green,
             ),
             const SizedBox(height: 24),
           ],
 
           // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: widget.onEdit,
-                  icon: const Icon(Icons.edit),
-                  label: const Text('Editar Trabajo'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: OutlinedButton.icon(
+          if (widget.job.isServiceBudget)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildProposalActions(),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
                   onPressed: () => _showStatusChangeDialog(context),
                   icon: const Icon(Icons.sync),
-                  label: const Text('Cambiar Estado'),
+                  label: const Text('Cambiar estado operativo'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: widget.onEdit,
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Editar Trabajo'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showStatusChangeDialog(context),
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Cambiar Estado'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandaloneQuotationDetailsTab() {
+    final notes = widget.job.subjectNotes?.trim();
+    final request = widget.job.clientRequest?.trim();
+    final description = (notes?.isNotEmpty ?? false)
+        ? notes!
+        : (request?.isNotEmpty ?? false)
+            ? request!
+            : 'Sin descripción comercial registrada';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildInfoCard(
+            'Tipo',
+            'Cotización · Sin objeto recibido',
+            Icons.request_quote_outlined,
+            Colors.orange,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoCard(
+                  'Estado',
+                  widget.job.statusDisplayName,
+                  Icons.info_outline,
+                  _getProposalStatusColor(widget.job),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildInfoCard(
+                  'Válida hasta',
+                  widget.job.quotationValidUntil == null
+                      ? 'Sin vencimiento'
+                      : DateFormat('dd/MM/yyyy')
+                          .format(widget.job.quotationValidUntil!),
+                  Icons.event_outlined,
+                  Colors.grey,
+                ),
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          _buildSectionHeader('Información del Cliente'),
+          const SizedBox(height: 12),
+          if (widget.customer != null)
+            _buildCustomerDetails(widget.customer!)
+          else
+            const Text('Sin cliente asignado'),
+          const SizedBox(height: 24),
+          _buildSectionHeader('Descripción comercial'),
+          const SizedBox(height: 12),
+          _buildContentBox(description),
+          const SizedBox(height: 24),
+          _buildSectionHeader('Productos y servicios cotizados'),
+          const SizedBox(height: 12),
+          if (widget.items.isEmpty)
+            const Text('Sin líneas cotizadas')
+          else
+            ...widget.items.map(_buildProductItem),
+          if (widget.job.totalCost > 0) ...[
+            const SizedBox(height: 12),
+            _buildInfoCard(
+              'Total cotizado',
+              '\$${_calculateDisplayTotal().toStringAsFixed(0)}',
+              Icons.request_quote_outlined,
+              Colors.orange,
+            ),
+          ],
+          const SizedBox(height: 24),
+          _buildProposalActions(),
         ],
       ),
+    );
+  }
+
+  Widget _buildProposalActions() {
+    final job = widget.job;
+    final canConvert =
+        job.effectiveQuotationStatus == QuotationStatus.approved &&
+            widget.onProposalConvertPressed != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            OutlinedButton.icon(
+              onPressed: widget.onProposalDocumentPressed,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: Text('Descargar ${job.proposalDocumentLabelLower}'),
+            ),
+            OutlinedButton.icon(
+              onPressed: widget.onProposalStatusPressed,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: Text('Gestionar ${job.proposalDocumentLabelLower}'),
+            ),
+            OutlinedButton.icon(
+              onPressed: job.hasFinalProposalDecision ? null : widget.onEdit,
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(
+                job.hasFinalProposalDecision
+                    ? 'Solo lectura · reabre para editar'
+                    : 'Editar ${job.proposalDocumentLabelLower}',
+              ),
+            ),
+          ],
+        ),
+        if (canConvert) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: widget.onProposalConvertPressed,
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: Text(
+              job.isServiceBudget
+                  ? 'Facturar presupuesto'
+                  : 'Convertir cotización',
+            ),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -733,12 +919,26 @@ class _PegaDetailViewState extends State<PegaDetailView>
   }
 
   double _calculateDisplayTotal() {
+    // Proposal totals are server-derived from authoritative lines after the
+    // staged discount. They intentionally use no-tax classification because
+    // no invoice exists yet, so the legacy noTax display branch would otherwise
+    // add the undiscounted parts/labor subtotal back together.
+    if (widget.job.isQuotationWorkflow) {
+      return widget.job.totalCost;
+    }
     // If tax treatment is 'noTax', we should display the sum of parts + labor
     // effectively ignoring any tax calculation that might be in totalCost
     if (widget.job.taxTreatment == TaxTreatment.noTax) {
       return widget.job.partsCost + widget.job.laborCost;
     }
     return widget.job.totalCost;
+  }
+
+  String _operationalStatusSummary(MechanicJob job) {
+    final updatedAt = job.statusUpdatedAt;
+    if (updatedAt == null) return job.statusDisplayName;
+    return '${job.statusDisplayName}\nActualizado '
+        '${DateFormat('dd/MM/yyyy HH:mm').format(updatedAt.toLocal())}';
   }
 
   Color _getStatusColor(JobStatus status) {
@@ -762,6 +962,15 @@ class _PegaDetailViewState extends State<PegaDetailView>
     }
   }
 
+  Color _getProposalStatusColor(MechanicJob job) {
+    return switch (job.effectiveQuotationStatus) {
+      QuotationStatus.pending => Colors.orange,
+      QuotationStatus.approved => Colors.green,
+      QuotationStatus.rejected => Colors.red,
+      QuotationStatus.expired => Colors.grey,
+    };
+  }
+
   Color _getPriorityColor(JobPriority priority) {
     switch (priority) {
       case JobPriority.urgente:
@@ -782,13 +991,14 @@ class _PegaDetailViewState extends State<PegaDetailView>
   Widget _buildTasksTab() {
     // Use new TasksTabView with SmartTaskService
     // We pass externalItems to avoid re-fetching and to ensure immediate updates without destroying state
+    final proposalIsFinal = widget.job.hasFinalProposalDecision;
     return TasksTabView(
       jobId: widget.job.id!,
-      readOnly: false,
+      readOnly: proposalIsFinal,
       externalItems: widget.items,
-      onItemAdded: widget.onItemAdded,
-      onItemRemoved: widget.onItemRemoved,
-      onAddItemPressed: widget.onAddItemPressed,
+      onItemAdded: proposalIsFinal ? null : widget.onItemAdded,
+      onItemRemoved: proposalIsFinal ? null : widget.onItemRemoved,
+      onAddItemPressed: proposalIsFinal ? null : widget.onAddItemPressed,
     );
   }
 

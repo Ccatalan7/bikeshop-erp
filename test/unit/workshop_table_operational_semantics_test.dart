@@ -1,0 +1,143 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  late String table;
+  late String form;
+  late String logbook;
+
+  setUpAll(() {
+    table = File(
+      'lib/modules/bikeshop/pages/pegas_table_page.dart',
+    ).readAsStringSync();
+    form = File(
+      'lib/modules/bikeshop/pages/mechanic_job_form_page.dart',
+    ).readAsStringSync();
+    logbook = File(
+      'lib/modules/bikeshop/pages/client_logbook_page.dart',
+    ).readAsStringSync();
+  });
+
+  test('service budgets retain operational state and commercial sublabel', () {
+    expect(table, contains('job.proposalStatusDisplayName'));
+    expect(table, contains('_operationalStatusColor(job)'));
+    expect(
+      table,
+      contains("? 'Estado operativo y presupuesto'"),
+      reason:
+          'The same status dialog must expose both independent axes for a bike-backed budget.',
+    );
+    expect(
+      table,
+      contains('if (!widget.job.isStandaloneQuotation)'),
+      reason:
+          'A service budget remains eligible for the operational status list.',
+    );
+    expect(
+      form,
+      contains("_isServiceBudget ? 'Estado operativo' : 'Estado'"),
+    );
+    expect(logbook, contains('if (job.isServiceBudget)'));
+    expect(logbook, contains('job.proposalStatusDisplayName'));
+  });
+
+  test('commercial-only rows cannot enter the operational lifecycle', () {
+    expect(
+      table,
+      contains(
+        'bool _usesOperationalLifecycle(MechanicJob job) =>\n      !job.isSaleWorkflow && !job.isStandaloneQuotation;',
+      ),
+    );
+    expect(
+      table,
+      contains('requestedJobs.where(_usesOperationalLifecycle).toList()'),
+      reason:
+          'Bulk status changes must skip both standalone quotations and sales.',
+    );
+    expect(
+      table,
+      contains('_filteredJobs.where(_usesOperationalLifecycle).toList()'),
+      reason:
+          'The operational board must not create fake lanes for commercial-only rows.',
+    );
+    expect(
+      form,
+      contains(
+        'if (_jobType != JobType.quotation && _jobType != JobType.sale)',
+      ),
+      reason:
+          'The form must not render a disabled-but-misleading workshop status selector for commercial-only modes.',
+    );
+    expect(
+      table,
+      contains('job.isSaleWorkflow ? null : () => _showStatusMenu(job)'),
+    );
+  });
+
+  test('derived proposal expiry is not offered as a fake pending transition',
+      () {
+    expect(
+      table,
+      contains(
+        'stored == QuotationStatus.pending && current == QuotationStatus.expired',
+      ),
+    );
+    expect(table, contains('final isDisabled = qStatus == stored ||'));
+    expect(
+      table,
+      contains('abre la ficha y extiende “Válido hasta”'),
+      reason:
+          'A date-derived expiry is resolved by extending validity, not by recording pending->pending.',
+    );
+  });
+
+  test('counts and object labels reflect physical intake truth', () {
+    final breakdownStart = table.indexOf(
+      'List<_BicycleStatusBreakdownEntry> _buildBicycleStatusBreakdown()',
+    );
+    final breakdownEnd = table.indexOf(
+      'Widget _buildDataTable()',
+      breakdownStart,
+    );
+    expect(breakdownStart, greaterThanOrEqualTo(0));
+    expect(breakdownEnd, greaterThan(breakdownStart));
+    final breakdown = table.substring(breakdownStart, breakdownEnd);
+    expect(breakdown, contains("_jobBikesMap[job.id ?? ''] ?? const []"));
+    expect(
+      breakdown,
+      isNot(contains('job.bikeId')),
+      reason:
+          'Only canonical mechanic_job_bikes rows may increase the bicycle counter.',
+    );
+
+    expect(table, contains("'Ventas / cobros', sales"));
+    expect(table, contains("'quotations_closed'"));
+    expect(table, contains("return 'Cotizaciones cerradas';"));
+    expect(
+      table,
+      contains(
+        'job.isStandaloneQuotation &&\n              (job.effectiveQuotationStatus == QuotationStatus.rejected',
+      ),
+      reason:
+          'Rejected or expired standalone quotations leave the active operational queue.',
+    );
+    expect(table, contains("return 'Componente recibido';"));
+    expect(table, contains('_componentObjectLabel(job)'));
+    expect(logbook, contains('job.isComponentIntake'));
+    expect(logbook, contains("'Componente recibido'"));
+  });
+
+  test('standalone quotation history uses its requested description', () {
+    expect(
+      logbook,
+      contains(
+        'final requestSummary = job.isStandaloneQuotation\n        ? job.subjectNotes?.trim()',
+      ),
+    );
+    expect(
+      logbook,
+      contains("requestSummary?.isNotEmpty == true ? requestSummary! : '—'"),
+    );
+  });
+}

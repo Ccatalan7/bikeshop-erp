@@ -26,7 +26,7 @@ void main() {
     expect(
       form,
       contains(
-        'Propuesta para enviar al cliente: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.',
+        'Cotización sin bicicleta ni componente recibido: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.',
       ),
     );
     expect(
@@ -38,7 +38,7 @@ void main() {
     expect(
       form,
       contains(
-        'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir el presupuesto.',
+        'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir la cotización.',
       ),
     );
     expect(
@@ -110,8 +110,8 @@ void main() {
           'Warranty source truth must gate diagnosis before any stale bike tab.',
     );
     expect(form, contains('final shouldCreateInvoice ='));
-    expect(form, contains('workflowKind: _existingJob?.workflowKind,'));
-    expect(form, contains('intakeKind: _existingJob?.intakeKind,'));
+    expect(form, contains('workflowKind: _existingJob?.workflowKind ??'));
+    expect(form, contains('intakeKind: _existingJob?.intakeKind ??'));
     expect(form, contains('modeNeedsReview: _existingJob?.modeNeedsReview,'));
     expect(
       form,
@@ -134,7 +134,7 @@ void main() {
     expect(form, contains('bool get _isFinalQuotationReadOnly'));
     expect(
       form,
-      contains('_existingJob?.quotationStatus ?? QuotationStatus.pending'),
+      contains('_existingJob?.hasFinalProposalDecision ?? false'),
       reason:
           'A derived expiry must not trap a still-pending quote; staff can extend its validity before a customer decision.',
     );
@@ -333,10 +333,15 @@ void main() {
       contains('job.effectiveQuotationStatus == QuotationStatus.approved'),
     );
     expect(table, contains("value: 'quotation_status'"));
-    expect(table, contains("'Aprobar o rechazar'"));
+    expect(table, contains('job.proposalDocumentLabelLower'));
     expect(
       table,
-      contains('Primero aprueba el presupuesto desde la acción de estado.'),
+      contains("final article = job.isServiceBudget ? 'el' : 'la';"),
+    );
+    expect(table, contains('await _confirmServiceBudgetConversion(job);'));
+    expect(
+      table,
+      contains('const _JobConversionChoice(targetType: JobType.service)'),
     );
     expect(table, contains("'Clasificación pendiente'"));
     expect(table, contains("'EN EVALUACIÓN'"));
@@ -443,7 +448,8 @@ void main() {
     expect(service, contains('Future<MechanicJob> updateJobDiscount('));
     expect(registry, contains('Workshop job create/edit'));
     expect(registry, contains('Workshop list actions'));
-    expect(registry, contains('quotation PDF/status/conversion'));
+    expect(registry, contains('downloads a PRESUPUESTO PDF'));
+    expect(registry, contains('downloads a COTIZACIÓN PDF'));
   });
 
   test('ambiguous intake is resolved from the table by an audited command', () {

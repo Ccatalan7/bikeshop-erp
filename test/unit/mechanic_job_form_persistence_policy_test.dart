@@ -3,6 +3,103 @@ import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/modules/bikeshop/services/mechanic_job_form_persistence_policy.dart';
 
 void main() {
+  group('service commercial path', () {
+    test('new bicycle services default to a non-posting budget workflow', () {
+      expect(
+        mechanicJobCreationWorkflowKind(
+          jobType: JobType.service,
+          serviceCommercialPath: ServiceCommercialPath.budgetFirst,
+        ),
+        JobWorkflowKind.quotation,
+      );
+      expect(
+        mechanicJobCreationIntakeKind(
+          jobType: JobType.service,
+          bikeId: 'bike-1',
+        ),
+        JobIntakeKind.bike,
+      );
+    });
+
+    test('facturar ahora retains the established billable service workflow',
+        () {
+      expect(
+        mechanicJobCreationWorkflowKind(
+          jobType: JobType.service,
+          serviceCommercialPath: ServiceCommercialPath.invoiceNow,
+        ),
+        JobWorkflowKind.service,
+      );
+    });
+
+    test('service budget keeps the deployed quotation compatibility facade',
+        () {
+      expect(
+        mechanicJobPersistedJobType(
+          jobType: JobType.service,
+          serviceCommercialPath: ServiceCommercialPath.budgetFirst,
+        ),
+        JobType.quotation,
+      );
+      expect(
+        mechanicJobPersistedJobType(
+          jobType: JobType.service,
+          serviceCommercialPath: ServiceCommercialPath.invoiceNow,
+        ),
+        JobType.service,
+      );
+    });
+
+    test('existing billable services never inherit the new budget default', () {
+      final existing = MechanicJob(
+        id: 'service-1',
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+        jobType: JobType.service,
+        workflowKind: JobWorkflowKind.service,
+        intakeKind: JobIntakeKind.bike,
+        bikeId: 'bike-1',
+      );
+
+      expect(
+        mechanicJobServiceCommercialPathForExisting(existing),
+        ServiceCommercialPath.invoiceNow,
+      );
+    });
+
+    test('existing bike-backed proposal restores as a service budget', () {
+      final existing = MechanicJob(
+        id: 'budget-1',
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+        jobType: JobType.quotation,
+        workflowKind: JobWorkflowKind.quotation,
+        intakeKind: JobIntakeKind.bike,
+        bikeId: 'bike-1',
+      );
+
+      expect(
+        mechanicJobServiceCommercialPathForExisting(existing),
+        ServiceCommercialPath.budgetFirst,
+      );
+    });
+
+    test('standalone quotation remains a proposal without inferred custody',
+        () {
+      expect(
+        mechanicJobCreationWorkflowKind(
+          jobType: JobType.quotation,
+          serviceCommercialPath: ServiceCommercialPath.budgetFirst,
+        ),
+        JobWorkflowKind.quotation,
+      );
+      expect(
+        mechanicJobCreationIntakeKind(jobType: JobType.quotation),
+        JobIntakeKind.unspecified,
+      );
+    });
+  });
+
   group('linked-invoice commercial snapshot protection', () {
     MechanicJob warrantyJob() => MechanicJob(
           id: 'warranty-1',

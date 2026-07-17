@@ -25,23 +25,32 @@ enum InvoicePdfExportMode {
 enum InvoicePdfDocumentKind {
   invoice,
   quotation,
+  serviceBudget,
 }
 
 extension InvoicePdfDocumentKindX on InvoicePdfDocumentKind {
+  bool get isProposal => this != InvoicePdfDocumentKind.invoice;
+
   String get label {
     switch (this) {
       case InvoicePdfDocumentKind.invoice:
         return 'Factura';
       case InvoicePdfDocumentKind.quotation:
+        return 'Cotización';
+      case InvoicePdfDocumentKind.serviceBudget:
         return 'Presupuesto';
     }
   }
+
+  String get labelLower => label.toLowerCase();
 
   String fileNameFor(String documentNumber) {
     switch (this) {
       case InvoicePdfDocumentKind.invoice:
         return 'factura_$documentNumber.pdf';
       case InvoicePdfDocumentKind.quotation:
+        return 'cotizacion_$documentNumber.pdf';
+      case InvoicePdfDocumentKind.serviceBudget:
         return 'presupuesto_$documentNumber.pdf';
     }
   }
@@ -51,6 +60,8 @@ extension InvoicePdfDocumentKindX on InvoicePdfDocumentKind {
       case InvoicePdfDocumentKind.invoice:
         return 'factura_$documentNumber';
       case InvoicePdfDocumentKind.quotation:
+        return 'cotizacion_$documentNumber';
+      case InvoicePdfDocumentKind.serviceBudget:
         return 'presupuesto_$documentNumber';
     }
   }
@@ -270,10 +281,34 @@ class InvoicePdfGenerator {
     );
   }
 
+  /// Generates a non-posting customer budget for a bicycle already received
+  /// by the workshop. It is deliberately distinct from a standalone
+  /// [generateQuotationPDF], whose commercial proposal has no received object.
+  static Future<pw.Document> generateServiceBudgetPDF(
+    BuildContext context,
+    Invoice budget,
+    Map<String, String> resolvedBikeNames, {
+    DateTime? validUntil,
+    double discountAmount = 0,
+    List<InvoiceDiagnosisNarrative> diagnosisNarratives =
+        const <InvoiceDiagnosisNarrative>[],
+  }) {
+    return generateInvoicePDF(
+      context,
+      budget,
+      resolvedBikeNames,
+      documentKind: InvoicePdfDocumentKind.serviceBudget,
+      validUntil: validUntil ?? budget.dueDate,
+      discountAmount: discountAmount,
+      diagnosisNarratives: diagnosisNarratives,
+    );
+  }
+
   /// Public synchronous builder used by non-UI integrations and focused PDF
   /// contract tests. Existing UI callers should normally use
-  /// [generateInvoicePDF] or [generateQuotationPDF] so the configured logo is
-  /// resolved automatically.
+  /// [generateInvoicePDF], [generateQuotationPDF] or
+  /// [generateServiceBudgetPDF] so the configured logo is resolved
+  /// automatically.
   static pw.Document buildDocumentPDF(
     Invoice invoice,
     Map<String, String> resolvedBikeNames, {
@@ -301,7 +336,8 @@ class InvoicePdfGenerator {
             validUntil: validUntil,
           ),
           ..._buildBikeBanner(invoice, resolvedBikeNames, documentKind),
-          _buildItemsTable(invoice, resolvedBikeNames),
+          ..._buildProposalDescription(invoice, documentKind),
+          _buildItemsTable(invoice, resolvedBikeNames, documentKind),
           pw.SizedBox(height: 18),
           _buildTotals(
             invoice,
@@ -327,6 +363,59 @@ class InvoicePdfGenerator {
 
   static String quotationDocumentNameFor(String quotationNumber) =>
       InvoicePdfDocumentKind.quotation.documentNameFor(quotationNumber);
+
+  static String serviceBudgetFileNameFor(String budgetNumber) =>
+      InvoicePdfDocumentKind.serviceBudget.fileNameFor(budgetNumber);
+
+  static String serviceBudgetDocumentNameFor(String budgetNumber) =>
+      InvoicePdfDocumentKind.serviceBudget.documentNameFor(budgetNumber);
+
+  static List<pw.Widget> _buildProposalDescription(
+    Invoice invoice,
+    InvoicePdfDocumentKind documentKind,
+  ) {
+    if (documentKind != InvoicePdfDocumentKind.quotation) {
+      return const <pw.Widget>[];
+    }
+
+    final description = (invoice.workDescription?.trim().isNotEmpty ?? false)
+        ? invoice.workDescription!.trim()
+        : invoice.reference?.trim();
+    if (description == null || description.isEmpty) {
+      return const <pw.Widget>[];
+    }
+
+    return <pw.Widget>[
+      pw.Container(
+        width: double.infinity,
+        margin: const pw.EdgeInsets.only(bottom: 12),
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey100,
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Descripción de la cotización',
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey800,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              _cleanPdfText(description),
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
 
   static Future<pw.ImageProvider?> _loadLogoImage(BuildContext context) async {
     try {
@@ -531,9 +620,9 @@ class InvoicePdfGenerator {
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
-            if (documentKind == InvoicePdfDocumentKind.quotation) ...[
+            if (documentKind.isProposal) ...[
               pw.Text(
-                'PRESUPUESTO',
+                documentKind.label.toUpperCase(),
                 style: pw.TextStyle(
                   fontSize: 17,
                   fontWeight: pw.FontWeight.bold,
@@ -553,8 +642,8 @@ class InvoicePdfGenerator {
             ),
             pw.SizedBox(height: 6),
             pw.Text(
-              documentKind == InvoicePdfDocumentKind.quotation
-                  ? 'Total presupuesto'
+              documentKind.isProposal
+                  ? 'Total ${documentKind.labelLower}'
                   : 'Saldo adeudado',
               style: const pw.TextStyle(
                 fontSize: 9,
@@ -564,9 +653,7 @@ class InvoicePdfGenerator {
             pw.SizedBox(height: 1),
             pw.Text(
               ChileanUtils.formatCurrency(
-                documentKind == InvoicePdfDocumentKind.quotation
-                    ? invoice.total
-                    : invoice.balance,
+                documentKind.isProposal ? invoice.total : invoice.balance,
               ),
               style: pw.TextStyle(
                 fontSize: 12,
@@ -585,7 +672,7 @@ class InvoicePdfGenerator {
     InvoicePdfDocumentKind documentKind, {
     DateTime? validUntil,
   }) {
-    final isQuotation = documentKind == InvoicePdfDocumentKind.quotation;
+    final isProposal = documentKind.isProposal;
     final effectiveValidUntil = validUntil ?? invoice.dueDate;
 
     return pw.Row(
@@ -596,7 +683,7 @@ class InvoicePdfGenerator {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              isQuotation ? 'Presupuesto para' : 'Facturar a',
+              isProposal ? '${documentKind.label} para' : 'Facturar a',
               style: pw.TextStyle(
                 fontSize: 9,
                 fontWeight: pw.FontWeight.bold,
@@ -629,10 +716,14 @@ class InvoicePdfGenerator {
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             _buildMetaLine(
-              isQuotation ? 'Fecha del presupuesto' : 'Fecha de la factura',
+              isProposal
+                  ? documentKind == InvoicePdfDocumentKind.serviceBudget
+                      ? 'Fecha del presupuesto'
+                      : 'Fecha de la cotización'
+                  : 'Fecha de la factura',
               ChileanUtils.formatDate(invoice.date),
             ),
-            if (isQuotation)
+            if (isProposal)
               _buildMetaLine(
                 'Válido hasta',
                 effectiveValidUntil == null
@@ -680,13 +771,20 @@ class InvoicePdfGenerator {
     Map<String, String> resolvedBikeNames,
     InvoicePdfDocumentKind documentKind,
   ) {
-    final bikeNames = _collectBikeNames(invoice, resolvedBikeNames);
+    // A standalone quotation represents a commercial inquiry before the shop
+    // receives an object. Even if a caller accidentally supplies a stale bike
+    // map, the PDF must not claim custody of that bicycle.
+    if (documentKind == InvoicePdfDocumentKind.quotation) {
+      return const [];
+    }
+    final bikeNames = documentKind == InvoicePdfDocumentKind.serviceBudget
+        ? _collectReceivedBikeNames(invoice, resolvedBikeNames)
+        : _collectBikeNames(invoice, resolvedBikeNames);
     if (bikeNames.isEmpty) {
       return const [];
     }
 
     final isMultiBike = bikeNames.length > 1;
-    final isQuotation = documentKind == InvoicePdfDocumentKind.quotation;
     return [
       pw.SizedBox(height: 14),
       pw.Column(
@@ -694,11 +792,11 @@ class InvoicePdfGenerator {
         children: [
           pw.Text(
             isMultiBike
-                ? (isQuotation
-                    ? 'Bicicletas cotizadas'
+                ? (documentKind == InvoicePdfDocumentKind.serviceBudget
+                    ? 'Bicicletas recibidas'
                     : 'Bicicletas en servicio')
-                : (isQuotation
-                    ? 'Bicicleta cotizada'
+                : (documentKind == InvoicePdfDocumentKind.serviceBudget
+                    ? 'Bicicleta recibida'
                     : 'Bicicleta en servicio'),
             style: pw.TextStyle(
               fontSize: 10,
@@ -750,8 +848,13 @@ class InvoicePdfGenerator {
   static pw.Widget _buildItemsTable(
     Invoice invoice,
     Map<String, String> resolvedBikeNames,
+    InvoicePdfDocumentKind documentKind,
   ) {
-    final groups = _groupItemsByBike(invoice, resolvedBikeNames);
+    final groups = documentKind == InvoicePdfDocumentKind.quotation
+        ? <_PdfInvoiceGroup>[
+            _PdfInvoiceGroup(label: '')..items.addAll(invoice.items),
+          ]
+        : _groupItemsByBike(invoice, resolvedBikeNames);
     final showBikeHeaders = groups.length > 1;
     var itemIndex = 0;
 
@@ -889,7 +992,7 @@ class InvoicePdfGenerator {
     InvoicePdfDocumentKind documentKind, {
     double discountAmount = 0,
   }) {
-    final isQuotation = documentKind == InvoicePdfDocumentKind.quotation;
+    final isProposal = documentKind.isProposal;
 
     return pw.Row(
       children: [
@@ -899,7 +1002,7 @@ class InvoicePdfGenerator {
           child: pw.Column(
             children: [
               _buildPdfTotalRow('Subtotal', invoice.subtotal),
-              if (isQuotation && discountAmount > 0) ...[
+              if (isProposal && discountAmount > 0) ...[
                 pw.Divider(thickness: 0.3, color: PdfColors.grey400),
                 _buildPdfTotalRow('Descuento', -discountAmount),
               ],
@@ -909,11 +1012,11 @@ class InvoicePdfGenerator {
               ],
               pw.Divider(thickness: 0.3, color: PdfColors.grey400),
               _buildPdfTotalRow('Total', invoice.total, isTotal: true),
-              if (!isQuotation && invoice.paidAmount > 0) ...[
+              if (!isProposal && invoice.paidAmount > 0) ...[
                 pw.Divider(thickness: 0.3, color: PdfColors.grey400),
                 _buildPdfTotalRow('Pago realizado', -invoice.paidAmount),
               ],
-              if (!isQuotation) ...[
+              if (!isProposal) ...[
                 pw.Divider(thickness: 1, color: PdfColors.grey800),
                 _buildPdfTotalRow(
                   'Saldo adeudado',
@@ -943,8 +1046,10 @@ class InvoicePdfGenerator {
       ),
       pw.SizedBox(height: 6),
       pw.Text(
-        documentKind == InvoicePdfDocumentKind.quotation
-            ? 'Se adjunta el diagnóstico narrativo asociado al presupuesto.'
+        documentKind.isProposal
+            ? documentKind == InvoicePdfDocumentKind.serviceBudget
+                ? 'Se adjunta el diagnóstico narrativo asociado al presupuesto.'
+                : 'Se adjunta el diagnóstico narrativo asociado a la cotización.'
             : 'Se adjunta el diagnóstico narrativo asociado al servicio facturado.',
         style: const pw.TextStyle(
           fontSize: 9,
@@ -1114,8 +1219,10 @@ class InvoicePdfGenerator {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            documentKind == InvoicePdfDocumentKind.quotation
-                ? 'Este presupuesto no constituye una factura. Sujeto a aprobación y disponibilidad.'
+            documentKind.isProposal
+                ? documentKind == InvoicePdfDocumentKind.serviceBudget
+                    ? 'Este presupuesto no constituye una factura. Sujeto a aprobación y disponibilidad.'
+                    : 'Esta cotización no constituye una factura ni acredita recepción de bicicleta o componente. Sujeta a aprobación y disponibilidad.'
                 : 'Gracias por su preferencia',
             style: pw.TextStyle(
               fontSize: 8,
@@ -1160,6 +1267,26 @@ class InvoicePdfGenerator {
     }
 
     return bikeNames;
+  }
+
+  static List<String> _collectReceivedBikeNames(
+    Invoice invoice,
+    Map<String, String> resolvedBikeNames,
+  ) {
+    final names = <String>[];
+    final seen = <String>{};
+
+    for (final entry in resolvedBikeNames.entries) {
+      if (entry.key == 'single') continue;
+      final name = entry.value.trim();
+      if (name.isNotEmpty && seen.add(name)) names.add(name);
+    }
+
+    for (final name in _collectBikeNames(invoice, resolvedBikeNames)) {
+      if (seen.add(name)) names.add(name);
+    }
+
+    return names;
   }
 
   static List<_PdfInvoiceGroup> _groupItemsByBike(

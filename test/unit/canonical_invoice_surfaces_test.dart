@@ -54,7 +54,79 @@ void main() {
       reason:
           'The invoice transaction trigger is the sole normal save synchronizer.',
     );
-    expect(salesService, contains('Future<void> triggerLinkedJobSync('));
+    for (final invoiceSurface in <String, String>{
+      'routed invoice form': form,
+      'embedded invoice editor': editor,
+    }.entries) {
+      final saveStart = invoiceSurface.value.indexOf(
+        'Future<void> _saveInvoice() async',
+      );
+      final saveEnd = invoiceSurface.value.indexOf(
+        'Future<void> _downloadInvoicePDF',
+        saveStart,
+      );
+      expect(saveStart, greaterThanOrEqualTo(0), reason: invoiceSurface.key);
+      expect(saveEnd, greaterThan(saveStart), reason: invoiceSurface.key);
+      final saveFlow = invoiceSurface.value.substring(saveStart, saveEnd);
+      expect(
+        saveFlow,
+        contains('createInvoiceFromJob('),
+        reason:
+            '${invoiceSurface.key} must use the guarded atomic command for job-context creation.',
+      );
+      final canonicalCommand = saveFlow.indexOf('createInvoiceFromJob(');
+      final manualValidation = saveFlow.indexOf(
+        'if (_selectedCustomer == null)',
+      );
+      final genericSave = saveFlow.indexOf('_salesService.saveInvoice(');
+      expect(
+        canonicalCommand,
+        lessThan(manualValidation),
+        reason:
+            '${invoiceSurface.key} must not require a second client-built invoice before invoking the job command.',
+      );
+      expect(
+        canonicalCommand,
+        lessThan(genericSave),
+        reason:
+            '${invoiceSurface.key} must choose the atomic job command before the generic invoice save.',
+      );
+      expect(
+        saveFlow.substring(canonicalCommand, manualValidation),
+        contains('return;'),
+        reason:
+            '${invoiceSurface.key} must leave the save flow after the job-context command.',
+      );
+      expect(
+        saveFlow,
+        isNot(contains(".from('mechanic_jobs')")),
+        reason:
+            '${invoiceSurface.key} must not create an invoice and then link the job client-side.',
+      );
+      expect(
+        saveFlow,
+        isNot(contains('triggerLinkedJobSync(')),
+        reason:
+            '${invoiceSurface.key} must not hide a best-effort post-save link/sync failure.',
+      );
+    }
+    expect(
+      form,
+      contains('_loadedInvoice?.id == null && widget.invoiceId == null'),
+      reason:
+          'Existing linked invoices must remain editable through their normal invoice save.',
+    );
+    expect(
+      editor,
+      contains('_loadedInvoice?.id == null && widget.invoiceId == null'),
+      reason:
+          'Existing embedded invoices must not be mistaken for new job-context creation.',
+    );
+    expect(
+      salesService,
+      contains('Future<Invoice> saveInvoice(Invoice invoice)'),
+      reason: 'Manual and existing invoices keep the normal save command.',
+    );
     expect(jobForm, isNot(contains('_updateInvoiceTaxTreatment(')));
     expect(
       File('lib/modules/sales/pages/invoice_detail_page.dart').existsSync(),

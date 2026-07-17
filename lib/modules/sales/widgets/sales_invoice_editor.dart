@@ -125,6 +125,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       TaxTreatment.noTax; // Default: no tax (cash/transfer common)
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
+  bool get _isCanonicalJobInvoiceCreation {
+    final jobId = widget.preselectedJobId?.trim();
+    return _currentInvoiceId == null && jobId != null && jobId.isNotEmpty;
+  }
+
   bool get _canEditFields => _status == InvoiceStatus.draft && _isEditing;
   bool get _canMarkAsSent =>
       _currentInvoiceId != null &&
@@ -1137,6 +1142,67 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   Future<void> _saveInvoice() async {
+    final jobIdForCanonicalCreation =
+        _loadedInvoice?.id == null && widget.invoiceId == null
+            ? widget.preselectedJobId?.trim()
+            : null;
+    if (jobIdForCanonicalCreation != null &&
+        jobIdForCanonicalCreation.isNotEmpty) {
+      setState(() => _isSaving = true);
+      try {
+        final invoiceId = await _bikeshopService.createInvoiceFromJob(
+          jobIdForCanonicalCreation,
+        );
+        final saved = await _salesService.fetchInvoice(
+          invoiceId,
+          refresh: true,
+        );
+        if (!mounted) return;
+
+        if (saved == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'La factura fue creada, pero el editor no pudo recargarla. Reintenta la carga.',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          widget.onSaved?.call();
+          return;
+        }
+
+        _applyInvoice(saved);
+        _clearDirty();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Factura del trabajo creada correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onSaved?.call();
+      } catch (e) {
+        debugPrint(
+          '❌ [SalesInvoiceEditor] Canonical job invoice command failed: $e',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No fue posible crear o confirmar la factura del trabajo: $e',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
+      }
+      return;
+    }
+
     // Validation Logic
     if (_selectedCustomer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1216,22 +1282,6 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
     try {
       final saved = await _salesService.saveInvoice(invoice);
-
-      // FIX: Link new invoice to the job if we have a preselectedJobId
-      // and we just created a NEW invoice (widget.invoiceId was null)
-      if (widget.preselectedJobId != null && widget.invoiceId == null) {
-        try {
-          final db = Provider.of<DatabaseService>(context, listen: false);
-          await db.update('mechanic_jobs', widget.preselectedJobId!, {
-            'invoice_id': saved.id,
-          });
-          if (saved.id != null) {
-            await _salesService.triggerLinkedJobSync(saved.id!);
-          }
-        } catch (e) {
-          debugPrint('❌ Failed to link/sync invoice to job: $e');
-        }
-      }
 
       if (!mounted) return;
 
@@ -1390,7 +1440,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 ? const Center(child: BrandedLoading())
                 : _loadError != null
                     ? _buildLoadError(theme)
-                    : _buildForm(theme),
+                    : _isCanonicalJobInvoiceCreation
+                        ? _buildCanonicalJobInvoiceCreation(theme)
+                        : _buildForm(theme),
           ),
         ],
       ),
@@ -1448,6 +1500,67 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 label: const Text('Reintentar carga'),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCanonicalJobInvoiceCreation(ThemeData theme) {
+    final reference = _referenceController.text.trim();
+    final jobLabel = reference.isEmpty ? 'seleccionado' : reference;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.link_outlined,
+                  size: 38,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Crear factura desde $jobLabel',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'La factura usará el cliente, las bicicletas y las líneas ya guardadas en el trabajo. Para cambiar productos, servicios, precios o descuento, edita primero esa ficha.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _saveInvoice,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.receipt_long_outlined),
+                  label: const Text('Crear factura vinculada'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1540,36 +1653,40 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     // Original Header Logic
     final invoiceNumber = _invoiceNumberController.text.trim();
     final hasExistingInvoice = _currentInvoiceId != null;
-    final title = invoiceNumber.isNotEmpty
-        ? 'Factura $invoiceNumber'
-        : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
+    final title = _isCanonicalJobInvoiceCreation
+        ? 'Facturar trabajo'
+        : invoiceNumber.isNotEmpty
+            ? 'Factura $invoiceNumber'
+            : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
 
-    final actionWidgets = <Widget>[
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.payments_outlined,
-                size: 16, color: theme.colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              ChileanUtils.formatCurrency(_total),
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w700,
+    final actionWidgets = _isCanonicalJobInvoiceCreation
+        ? _buildActionButtons()
+        : <Widget>[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.payments_outlined,
+                      size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    ChileanUtils.formatCurrency(_total),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-      _buildStatusChip(theme),
-      ..._buildActionButtons(),
-    ];
+            _buildStatusChip(theme),
+            ..._buildActionButtons(),
+          ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -1587,7 +1704,9 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Emite documentos auditables y con IVA integrado.',
+                  _isCanonicalJobInvoiceCreation
+                      ? 'La ficha de trabajo es la fuente de cliente, bicicletas y líneas.'
+                      : 'Emite documentos auditables y con IVA integrado.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1674,6 +1793,17 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
   }
 
   List<Widget> _buildActionButtons() {
+    if (_isCanonicalJobInvoiceCreation) {
+      return <Widget>[
+        AppButton(
+          text: 'Crear factura vinculada',
+          icon: Icons.receipt_long_outlined,
+          onPressed: _isSaving ? null : _saveInvoice,
+          isLoading: _isSaving,
+        ),
+      ];
+    }
+
     final actionButtons = <Widget>[];
 
     // -1. EXPAND BUTTON (Only in compact mode)

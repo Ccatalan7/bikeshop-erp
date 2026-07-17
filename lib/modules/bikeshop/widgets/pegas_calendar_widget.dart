@@ -317,7 +317,10 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   List<MechanicJob> _getJobsForDate(DateTime date) {
     return _jobs.where((job) {
-      if (job.isSaleWorkflow) return false;
+      // Calendar capacity only includes physically received workshop objects.
+      // A standalone quotation has no object in custody and must not reserve a
+      // diagnostic/delivery slot; a service budget does have a received bike.
+      if (job.isSaleWorkflow || job.isStandaloneQuotation) return false;
       final matchesDelivery = _isSameDay(job.deliveryDeadline, date);
       final matchesDiagnostic = _isSameDay(job.diagnosticDeadline, date);
       return matchesDelivery || matchesDiagnostic;
@@ -330,10 +333,20 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   /// Gets color for a job - prefers custom status color, falls back to legacy
   Color _getJobColor(MechanicJob job) {
+    if (job.isStandaloneQuotation) return _getProposalStatusColor(job);
     if (job.customStatus != null) {
       return job.customStatus!.colorValue;
     }
     return _getStatusColor(job.status);
+  }
+
+  Color _getProposalStatusColor(MechanicJob job) {
+    return switch (job.effectiveQuotationStatus) {
+      QuotationStatus.pending => Colors.orange,
+      QuotationStatus.approved => Colors.green,
+      QuotationStatus.rejected => Colors.red,
+      QuotationStatus.expired => Colors.grey,
+    };
   }
 
   /// Legacy status color mapping - matches database seeded values
@@ -360,6 +373,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   /// Gets status text - prefers custom status name, falls back to legacy
   String _getJobStatusText(MechanicJob job) {
+    if (job.isStandaloneQuotation) return job.proposalStatusDisplayName;
     if (job.customStatus != null) {
       return job.customStatus!.name;
     }
@@ -798,8 +812,12 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
 
   Widget _buildJobCard(MechanicJob job) {
     final statusColor = _getJobColor(job);
+    final proposalStatusColor = _getProposalStatusColor(job);
     final customerName = _customerNames[job.customerId] ?? 'Cliente';
     final bikeName = _bikeNames[job.bikeId];
+    final objectLabel = job.isComponentIntake
+        ? (job.subjectDisplayName ?? 'Componente recibido')
+        : bikeName ?? job.jobNumber ?? 'Sin #';
 
     return Card(
       elevation: 2,
@@ -830,7 +848,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      bikeName ?? job.jobNumber ?? 'Sin #',
+                      objectLabel,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -858,6 +876,16 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (job.isServiceBudget) ...[
+                const SizedBox(height: 4),
+                Text(
+                  job.proposalStatusDisplayName,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: proposalStatusColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
               if (job.clientRequest != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -950,14 +978,24 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           _buildSmartHeader(job),
 
           // TABS
-          const TabBar(
-            labelColor: Color(0xFF1A3A5C), // VinaBike Navy
+          TabBar(
+            labelColor: const Color(0xFF1A3A5C), // VinaBike Navy
             unselectedLabelColor: Colors.grey,
-            indicatorColor: Color(0xFFE65100), // VinaBike Orange
+            indicatorColor: const Color(0xFFE65100), // VinaBike Orange
             tabs: [
-              Tab(text: 'Info', icon: Icon(Icons.info_outline, size: 18)),
-              Tab(text: 'Tareas', icon: Icon(Icons.checklist, size: 18)),
-              Tab(text: 'Factura', icon: Icon(Icons.receipt_long, size: 18)),
+              const Tab(text: 'Info', icon: Icon(Icons.info_outline, size: 18)),
+              const Tab(text: 'Tareas', icon: Icon(Icons.checklist, size: 18)),
+              Tab(
+                text: job.isQuotationWorkflow
+                    ? job.proposalDocumentLabel
+                    : 'Factura',
+                icon: Icon(
+                  job.isQuotationWorkflow
+                      ? Icons.request_quote_outlined
+                      : Icons.receipt_long,
+                  size: 18,
+                ),
+              ),
             ],
           ),
 
@@ -967,7 +1005,9 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
               children: [
                 _buildInfoTab(job),
                 _buildTasksTab(job),
-                _buildInvoiceTab(job),
+                job.isQuotationWorkflow
+                    ? _buildProposalSummaryTab(job)
+                    : _buildInvoiceTab(job),
               ],
             ),
           ),
@@ -979,6 +1019,7 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
   Widget _buildSmartHeader(MechanicJob job) {
     final statusColor = _getJobColor(job);
     final statusText = _getJobStatusText(job);
+    final proposalStatusColor = _getProposalStatusColor(job);
     final serviceWarrantyText = _serviceWarrantyText(job);
 
     // Determine "Next Action" based on status
@@ -994,53 +1035,62 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     VoidCallback? onAction;
     Color actionColor = const Color(0xFFE65100); // Default Orange
 
-    // Smart Action Logic
-    if (job.status == JobStatus.pendiente) {
-      actionLabel = 'Comenzar Diagnóstico';
-      actionIcon = Icons.search;
-      onAction = () => _changeJobStatus(
-          job,
-          _findStatusByCode('DIAGNOSTICO') ??
-              JobStatusCustom(
-                  tenantId: '',
-                  name: 'Diagnóstico',
-                  code: 'DIAGNOSTICO',
-                  id: ''));
-    } else if (job.status == JobStatus.diagnostico) {
-      actionLabel = 'Enviar Presupuesto';
-      actionIcon = Icons.send; // WhatsApp icon ideally
-      actionColor = const Color(0xFF25D366); // WhatsApp Green
-      // Action: Send message (implemented later)
-    } else if (job.status == JobStatus.esperandoAprobacion) {
-      actionLabel = 'Aprobar y Comenzar';
-      actionIcon = Icons.play_arrow;
-      actionColor = Colors.green;
-      onAction = () => _changeJobStatus(
-          job,
-          _findStatusByCode('EN_CURSO') ??
-              JobStatusCustom(
-                  tenantId: '', name: 'En Curso', code: 'EN_CURSO', id: ''));
-    } else if (job.status == JobStatus.enCurso) {
-      actionLabel = 'Terminar Trabajo';
-      actionIcon = Icons.check_circle;
-      actionColor = Colors.blue;
-      onAction = () => _changeJobStatus(
-          job,
-          _findStatusByCode('FINALIZADO') ??
-              JobStatusCustom(
-                  tenantId: '',
-                  name: 'Finalizado',
-                  code: 'FINALIZADO',
-                  id: ''));
-    } else if (job.status == JobStatus.finalizado) {
-      actionLabel = 'Entregar Bicicleta';
-      actionIcon = Icons.handshake;
-      actionColor = Colors.purple;
-      onAction = () => _changeJobStatus(
-          job,
-          _findStatusByCode('ENTREGADO') ??
-              JobStatusCustom(
-                  tenantId: '', name: 'Entregado', code: 'ENTREGADO', id: ''));
+    // Only records with a physical workshop intake expose operational next
+    // actions. A service budget therefore keeps this lifecycle; a standalone
+    // quotation does not.
+    if (!job.isStandaloneQuotation && !job.isSaleWorkflow) {
+      if (job.status == JobStatus.pendiente) {
+        actionLabel = 'Comenzar Diagnóstico';
+        actionIcon = Icons.search;
+        onAction = () => _changeJobStatus(
+            job,
+            _findStatusByCode('DIAGNOSTICO') ??
+                JobStatusCustom(
+                    tenantId: '',
+                    name: 'Diagnóstico',
+                    code: 'DIAGNOSTICO',
+                    id: ''));
+      } else if (job.status == JobStatus.diagnostico) {
+        actionLabel = 'Enviar Presupuesto';
+        actionIcon = Icons.send; // WhatsApp icon ideally
+        actionColor = const Color(0xFF25D366); // WhatsApp Green
+        // Action: Send message (implemented later)
+      } else if (job.status == JobStatus.esperandoAprobacion) {
+        actionLabel = 'Aprobar y Comenzar';
+        actionIcon = Icons.play_arrow;
+        actionColor = Colors.green;
+        onAction = () => _changeJobStatus(
+            job,
+            _findStatusByCode('EN_CURSO') ??
+                JobStatusCustom(
+                    tenantId: '', name: 'En Curso', code: 'EN_CURSO', id: ''));
+      } else if (job.status == JobStatus.enCurso) {
+        actionLabel = 'Terminar Trabajo';
+        actionIcon = Icons.check_circle;
+        actionColor = Colors.blue;
+        onAction = () => _changeJobStatus(
+            job,
+            _findStatusByCode('FINALIZADO') ??
+                JobStatusCustom(
+                    tenantId: '',
+                    name: 'Finalizado',
+                    code: 'FINALIZADO',
+                    id: ''));
+      } else if (job.status == JobStatus.finalizado) {
+        actionLabel = job.isComponentIntake
+            ? 'Entregar Componente'
+            : 'Entregar Bicicleta';
+        actionIcon = Icons.handshake;
+        actionColor = Colors.purple;
+        onAction = () => _changeJobStatus(
+            job,
+            _findStatusByCode('ENTREGADO') ??
+                JobStatusCustom(
+                    tenantId: '',
+                    name: 'Entregado',
+                    code: 'ENTREGADO',
+                    id: ''));
+      }
     }
 
     return Container(
@@ -1054,43 +1104,11 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
         children: [
           Row(
             children: [
-              // STATUS DROPDOWN
-              PopupMenuButton<JobStatusCustom>(
-                onSelected: (newStatus) => _changeJobStatus(job, newStatus),
-                itemBuilder: (ctx) {
-                  final jobStatusService = ctx.read<JobStatusService>();
-                  return jobStatusService.statuses.map((status) {
-                    final isSelected = job.statusId == status.id;
-                    return PopupMenuItem<JobStatusCustom>(
-                      value: status,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: status.colorValue,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              status.name,
-                              style: TextStyle(
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: isSelected ? status.colorValue : null,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList();
-                },
-                child: Container(
+              // A standalone quotation has only a commercial lifecycle. A
+              // service budget keeps the normal workshop status control below
+              // and receives a separate commercial chip beside it.
+              if (job.isStandaloneQuotation)
+                Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -1118,12 +1136,103 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                           fontSize: 12,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.arrow_drop_down, size: 18, color: statusColor),
                     ],
                   ),
+                )
+              else
+                PopupMenuButton<JobStatusCustom>(
+                  onSelected: (newStatus) => _changeJobStatus(job, newStatus),
+                  itemBuilder: (ctx) {
+                    final jobStatusService = ctx.read<JobStatusService>();
+                    return jobStatusService.statuses.map((status) {
+                      final isSelected = job.statusId == status.id;
+                      return PopupMenuItem<JobStatusCustom>(
+                        value: status,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: status.colorValue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                status.name,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isSelected ? status.colorValue : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList();
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: statusColor, width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          statusText.toUpperCase(),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.arrow_drop_down,
+                            size: 18, color: statusColor),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              if (job.isServiceBudget)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: proposalStatusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: proposalStatusColor.withValues(alpha: 0.55),
+                      ),
+                    ),
+                    child: Text(
+                      job.proposalStatusDisplayName,
+                      style: TextStyle(
+                        color: proposalStatusColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
               if (serviceWarrantyText != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
@@ -1143,8 +1252,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                       ),
                     ],
                   ),
-                )
-              else if (job.statusUpdatedAt != null)
+                ),
+              if (!job.isStandaloneQuotation && job.statusUpdatedAt != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
                   child: Text(
@@ -1216,8 +1325,47 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Bike Info - Large and prominent
-          if (_bikeBrand != null || _bikeModel != null)
+          // Received object - bicycle or loose component.
+          if (job.isComponentIntake)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.build_outlined,
+                      size: 28, color: Colors.blue.shade800),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'COMPONENTE RECIBIDO',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          job.subjectDisplayName ?? 'Componente recibido',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (_bikeBrand != null || _bikeModel != null)
             InkWell(
               onTap: () {
                 if (_selectedBike != null) {
@@ -1404,11 +1552,14 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           // SMART EDITOR for Request, Diagnosis, Work, Notes
           SmartJobDetailsEditor(
             isInline: true,
+            readOnly: job.hasFinalProposalDecision,
             job: job,
             invoice:
                 null, // Calendar doesn't load full invoice usually, or we can fetch it if needed
             customerName: _customerName,
-            bikeName: '$_bikeBrand $_bikeModel',
+            bikeName: job.isComponentIntake
+                ? (job.subjectDisplayName ?? 'Componente recibido')
+                : '${_bikeBrand ?? ''} ${_bikeModel ?? ''}'.trim(),
             clientRequest: job.clientRequest,
             diagnosis: job.diagnosis,
             workPerformed: job.workPerformed,
@@ -1545,22 +1696,27 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     // This also ensures that when an invoice is saved (and _selectedJobItems refreshed), the tasks tab updates immediately.
     final List<MechanicJobItem>? jobItems =
         (job.id == _selectedJob?.id) ? _selectedJobItems : null;
+    final proposalIsFinal = job.hasFinalProposalDecision;
 
     return TasksTabView(
       jobId: job.id!,
-      readOnly: false,
+      readOnly: proposalIsFinal,
       externalItems: jobItems,
-      onItemAdded: (item) {
-        // Refresh items if needed
-        if (!_useExternalData) {
-          _loadJobDetails(job); // Reload details to update local state
-        }
-      },
-      onItemRemoved: (itemId) {
-        if (!_useExternalData) {
-          _loadJobDetails(job);
-        }
-      },
+      onItemAdded: proposalIsFinal
+          ? null
+          : (item) {
+              // Refresh items if needed
+              if (!_useExternalData) {
+                _loadJobDetails(job); // Reload details to update local state
+              }
+            },
+      onItemRemoved: proposalIsFinal
+          ? null
+          : (itemId) {
+              if (!_useExternalData) {
+                _loadJobDetails(job);
+              }
+            },
     );
   }
 
@@ -1583,6 +1739,60 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           _loadJobDetails(job);
         }
       },
+    );
+  }
+
+  Widget _buildProposalSummaryTab(MechanicJob job) {
+    final statusColor = _getProposalStatusColor(job);
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            job.proposalDocumentLabel,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              job.proposalStatusDisplayName,
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                .format(job.totalCost),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.orange.shade800,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          Text(
+            job.isServiceBudget ? 'Total presupuestado' : 'Total cotizado',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            job.isServiceBudget
+                ? 'Este presupuesto aún no ha generado una factura. Apruébalo y factúralo desde la tabla de trabajos para conservar la bicicleta, su ficha, diagnóstico y líneas.'
+                : 'Esta cotización aún no ha generado una factura. Gestiónala desde la tabla de trabajos.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
     );
   }
 

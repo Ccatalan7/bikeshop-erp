@@ -2241,7 +2241,7 @@ enum JobType {
       case JobType.warranty:
         return 'Garantía';
       case JobType.quotation:
-        return 'Presupuesto';
+        return 'Cotización';
       case JobType.itemService:
         return 'Componente';
       case JobType.sale:
@@ -2432,8 +2432,13 @@ bool _jobModeNeedsReview({
 }) {
   switch (jobType) {
     case JobType.service:
-      return workflowKind != JobWorkflowKind.service ||
-          intakeKind != JobIntakeKind.bike;
+      // A bicycle service can legitimately be saved as a non-posting
+      // customer budget before it is approved. The legacy job_type facade is
+      // normalized to `quotation` by the database, but the creation form uses
+      // the familiar Service choice while persisting these canonical axes.
+      return !((workflowKind == JobWorkflowKind.service ||
+              workflowKind == JobWorkflowKind.quotation) &&
+          intakeKind == JobIntakeKind.bike);
     case JobType.itemService:
       return workflowKind != JobWorkflowKind.service ||
           intakeKind != JobIntakeKind.component;
@@ -3467,6 +3472,37 @@ class MechanicJob {
 
   bool get isQuotationWorkflow => workflowKind == JobWorkflowKind.quotation;
 
+  /// A normal bicycle reception whose commercial document is still a
+  /// non-posting budget. It keeps the bicycle, ficha and diagnosis on this same
+  /// job and becomes billable only through the audited conversion command.
+  bool get isServiceBudget =>
+      isQuotationWorkflow && intakeKind == JobIntakeKind.bike;
+
+  /// A price inquiry where the shop did not receive the bicycle/component.
+  /// Historical rows may still use `unspecified`; new rows use `none`.
+  bool get isStandaloneQuotation => isQuotationWorkflow && !isServiceBudget;
+
+  /// Whether the stored proposal decision has left its editable pending state.
+  ///
+  /// This intentionally uses the persisted status rather than the clock-derived
+  /// effective expiry: an overdue pending proposal may still be edited or have
+  /// its validity extended, while approved/rejected/explicitly-expired content
+  /// is protected by the database snapshot guards.
+  bool get hasFinalProposalDecision =>
+      isQuotationWorkflow &&
+      (quotationStatus ?? QuotationStatus.pending) != QuotationStatus.pending;
+
+  /// Customer-facing name for the same non-posting workflow in its two
+  /// operational contexts.
+  String get proposalDocumentLabel =>
+      isServiceBudget ? 'Presupuesto' : 'Cotización';
+
+  String get proposalDocumentLabelLower =>
+      isServiceBudget ? 'presupuesto' : 'cotización';
+
+  String get proposalStatusDisplayName =>
+      '$proposalDocumentLabel ${effectiveQuotationStatus.displayName}';
+
   bool get isWarrantyWorkflow => workflowKind == JobWorkflowKind.warranty;
 
   bool get isSaleWorkflow => workflowKind == JobWorkflowKind.sale;
@@ -3477,10 +3513,10 @@ class MechanicJob {
 
   bool get isComponentIntake => intakeKind == JobIntakeKind.component;
 
-  /// A quotation becomes effectively expired at its validity instant without
-  /// requiring a clock-driven database update. Stored rejected/approved states
-  /// remain visible, while [canConvertQuotationAt] additionally enforces that
-  /// even an approved quotation is still inside its validity window.
+  /// A pending quotation becomes effectively expired at its validity instant
+  /// without requiring a clock-driven database update. A stored approval is an
+  /// audited decision and remains convertible even if the clock later passes
+  /// the validity instant; late approvals require their own audited reason.
   QuotationStatus effectiveQuotationStatusAt(DateTime now) {
     final stored = quotationStatus ?? QuotationStatus.pending;
     if (stored == QuotationStatus.pending && isQuotationPastValidityAt(now)) {
@@ -3499,9 +3535,7 @@ class MechanicJob {
   }
 
   bool canConvertQuotationAt(DateTime now) {
-    return isQuotationWorkflow &&
-        quotationStatus == QuotationStatus.approved &&
-        !isQuotationPastValidityAt(now);
+    return isQuotationWorkflow && quotationStatus == QuotationStatus.approved;
   }
 
   Duration? quotationTimeRemainingAt(DateTime now) {
@@ -3512,9 +3546,8 @@ class MechanicJob {
 
   /// Get the display name for the status (prefers custom status if available)
   String get statusDisplayName {
-    if (isQuotationWorkflow) {
-      final qStatus = effectiveQuotationStatus;
-      return 'Presupuesto ${qStatus.displayName}';
+    if (isStandaloneQuotation) {
+      return proposalStatusDisplayName;
     }
 
     final baseName = customStatus?.name ?? status.displayName;
@@ -3535,7 +3568,7 @@ class MechanicJob {
 
   /// Get the color for the status (prefers custom status if available)
   String get statusColor {
-    if (isQuotationWorkflow) {
+    if (isStandaloneQuotation) {
       final qStatus = effectiveQuotationStatus;
       switch (qStatus) {
         case QuotationStatus.pending:

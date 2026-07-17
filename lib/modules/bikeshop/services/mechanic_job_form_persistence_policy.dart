@@ -1,5 +1,82 @@
 import '../models/bikeshop_models.dart';
 
+/// Commercial path for a normal bicycle service at intake.
+///
+/// Both choices keep the same physical workshop record. [budgetFirst] uses the
+/// non-posting quotation workflow until the customer approves it;
+/// [invoiceNow] keeps the established immediate-invoice behavior.
+enum ServiceCommercialPath {
+  budgetFirst,
+  invoiceNow;
+
+  String get displayName => switch (this) {
+        ServiceCommercialPath.budgetFirst => 'Presupuestar primero',
+        ServiceCommercialPath.invoiceNow => 'Facturar ahora',
+      };
+
+  String get description => switch (this) {
+        ServiceCommercialPath.budgetFirst =>
+          'La bicicleta queda recibida, pero no se crea factura ni movimiento financiero hasta aprobar.',
+        ServiceCommercialPath.invoiceNow =>
+          'Crea la factura al guardar; ideal cuando el trabajo y su valor ya están acordados.',
+      };
+}
+
+/// Restores the persisted commercial path without applying the new-job
+/// default retroactively. Historical billable services therefore keep their
+/// immediate-invoice behavior when reopened.
+ServiceCommercialPath mechanicJobServiceCommercialPathForExisting(
+  MechanicJob job,
+) {
+  return job.isServiceBudget
+      ? ServiceCommercialPath.budgetFirst
+      : ServiceCommercialPath.invoiceNow;
+}
+
+/// Resolves the value written to the legacy `job_type` column.
+///
+/// Production normalizes every quotation workflow to `job_type = quotation`.
+/// Keeping that facade explicit is especially important while editing a
+/// bicycle-backed service budget: sending `service` would look like a direct
+/// quotation-to-service conversion and must be rejected by the database guard.
+JobType mechanicJobPersistedJobType({
+  required JobType jobType,
+  required ServiceCommercialPath serviceCommercialPath,
+}) {
+  if (jobType == JobType.service &&
+      serviceCommercialPath == ServiceCommercialPath.budgetFirst) {
+    return JobType.quotation;
+  }
+  return jobType;
+}
+
+/// Resolves the canonical workflow axis for a newly-created form.
+JobWorkflowKind mechanicJobCreationWorkflowKind({
+  required JobType jobType,
+  required ServiceCommercialPath serviceCommercialPath,
+}) {
+  if (jobType == JobType.service &&
+      serviceCommercialPath == ServiceCommercialPath.budgetFirst) {
+    return JobWorkflowKind.quotation;
+  }
+  return JobWorkflowKind.fromLegacyJobType(jobType);
+}
+
+/// Resolves the physical intake independently from the commercial path.
+JobIntakeKind mechanicJobCreationIntakeKind({
+  required JobType jobType,
+  String? bikeId,
+  String? subjectId,
+  String? subjectNotes,
+}) {
+  return JobIntakeKind.fromLegacyJobType(
+    jobType,
+    bikeId: bikeId,
+    subjectId: subjectId,
+    subjectNotes: subjectNotes,
+  );
+}
+
 /// A persisted job whose linked invoice has payment evidence is an accounting
 /// record, not an editable commercial draft.
 ///

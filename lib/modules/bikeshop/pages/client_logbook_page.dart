@@ -674,7 +674,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
         final bikeName = _bikeIndex[job.bikeId]?.displayName;
         final candidates = [
           job.jobNumber,
+          job.isQuotationWorkflow ? job.proposalDocumentLabel : null,
+          job.isStandaloneQuotation ? 'Sin objeto recibido' : null,
           job.clientRequest,
+          job.subjectNotes,
           job.diagnosis,
           job.workPerformed,
           job.notes,
@@ -704,7 +707,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
             cmp = (a.clientRequest ?? '').compareTo(b.clientRequest ?? '');
             break;
           case 'status':
-            cmp = a.status.displayName.compareTo(b.status.displayName);
+            cmp = a.statusDisplayName.compareTo(b.statusDisplayName);
             break;
           case 'date':
             cmp = a.arrivalDate.compareTo(b.arrivalDate);
@@ -960,14 +963,26 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   }
 
   Bike _getBikeForJob(MechanicJob job) {
-    if (job.bikeId == null) {
-      // Non-service job (warranty/quotation/item_service) — no bike
-      final label = job.subjectData?.name ?? job.jobType.displayName;
+    if (job.bikeId == null || job.isComponentIntake) {
+      // Display-only object label. A standalone quotation must never look like
+      // a bicycle was received by the workshop.
+      final subjectName = job.subjectData?.name.trim();
+      final subjectNotes = job.subjectNotes?.trim();
+      final label = job.isStandaloneQuotation
+          ? 'Cotización'
+          : job.isComponentIntake
+              ? (subjectName?.isNotEmpty == true
+                  ? subjectName!
+                  : subjectNotes?.isNotEmpty == true
+                      ? subjectNotes!
+                      : 'Componente recibido')
+              : job.subjectData?.name ?? job.jobType.displayName;
       return Bike(
         id: null,
         tenantId: '',
         customerId: job.customerId,
         brand: label,
+        model: job.isStandaloneQuotation ? 'Sin objeto recibido' : null,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
       );
@@ -3842,6 +3857,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
 
   Widget _buildJobTableRow(MechanicJob job, bool isEven, double tableWidth) {
     final bike = _getBikeForJob(job);
+    final requestSummary = job.isStandaloneQuotation
+        ? job.subjectNotes?.trim()
+        : job.clientRequest?.trim();
     final Color priorityColor;
     switch (job.priority) {
       case JobPriority.urgente:
@@ -3907,9 +3925,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               child: Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: Text(
-                  job.clientRequest?.isNotEmpty == true
-                      ? job.clientRequest!
-                      : '—',
+                  requestSummary?.isNotEmpty == true ? requestSummary! : '—',
                   style: TextStyle(fontSize: 13, color: Colors.grey[800]),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3920,7 +3936,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               width: _jobColStatus,
               child: Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: _buildStatusBadge(job.status),
+                child: _buildStatusBadge(job),
               ),
             ),
             SizedBox(
@@ -3934,13 +3950,23 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
               width: _jobColTotal,
               child: Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                      .format(_getJobDisplayTotal(job)),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13),
-                  textAlign: TextAlign.right,
-                  overflow: TextOverflow.ellipsis,
+                child: Tooltip(
+                  message: job.isQuotationWorkflow
+                      ? '${job.isServiceBudget ? 'Total presupuestado' : 'Total cotizado'}; todavía no es una cuenta por cobrar.'
+                      : 'Total del trabajo',
+                  child: Text(
+                    NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                        .format(_getJobDisplayTotal(job)),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: job.isQuotationWorkflow
+                          ? Colors.orange.shade800
+                          : null,
+                    ),
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
@@ -3977,55 +4003,102 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
   /// For noTax jobs, show partsCost + laborCost (net amount)
   /// For taxIncluded jobs, show totalCost (gross amount)
   double _getJobDisplayTotal(MechanicJob job) {
+    // Quotation workflows are deliberately no-tax before an invoice exists;
+    // totalCost is nevertheless their authoritative discounted proposal total.
+    if (job.isQuotationWorkflow) {
+      return job.totalCost;
+    }
     if (job.taxTreatment == TaxTreatment.noTax) {
       return job.partsCost + job.laborCost;
     }
     return job.totalCost;
   }
 
-  Widget _buildStatusBadge(JobStatus status) {
-    Color color;
-
-    switch (status) {
-      case JobStatus.pendiente:
-        color = Colors.grey;
-        break;
-      case JobStatus.diagnostico:
-        color = Colors.blue;
-        break;
-      case JobStatus.esperandoAprobacion:
-        color = Colors.amber;
-        break;
-      case JobStatus.esperandoRepuestos:
-        color = Colors.orange;
-        break;
-      case JobStatus.enCurso:
-        color = Colors.green;
-        break;
-      case JobStatus.finalizado:
-        color = Colors.teal;
-        break;
-      case JobStatus.entregado:
-        color = Colors.purple;
-        break;
-      case JobStatus.cancelado:
-        color = Colors.red;
-        break;
+  Widget _buildStatusBadge(MechanicJob job) {
+    if (job.isStandaloneQuotation) {
+      final color = switch (job.effectiveQuotationStatus) {
+        QuotationStatus.pending => Colors.orange,
+        QuotationStatus.approved => Colors.green,
+        QuotationStatus.rejected => Colors.red,
+        QuotationStatus.expired => Colors.grey,
+      };
+      return _statusBadgeContainer(job.statusDisplayName, color);
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        status.displayName,
-        style: TextStyle(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.bold,
+    final status = job.status;
+    final color =
+        job.customStatus?.colorValue ?? _operationalStatusColor(status);
+
+    if (job.isServiceBudget) {
+      final proposalColor = switch (job.effectiveQuotationStatus) {
+        QuotationStatus.pending => Colors.orange,
+        QuotationStatus.approved => Colors.green,
+        QuotationStatus.rejected => Colors.red,
+        QuotationStatus.expired => Colors.grey,
+      };
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _statusBadgeContainer(job.statusDisplayName, color),
+          const SizedBox(height: 3),
+          Text(
+            job.proposalStatusDisplayName,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: proposalColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      );
+    }
+
+    return _statusBadgeContainer(status.displayName, color);
+  }
+
+  Color _operationalStatusColor(JobStatus status) {
+    switch (status) {
+      case JobStatus.pendiente:
+        return Colors.grey;
+      case JobStatus.diagnostico:
+        return Colors.blue;
+      case JobStatus.esperandoAprobacion:
+        return Colors.amber;
+      case JobStatus.esperandoRepuestos:
+        return Colors.orange;
+      case JobStatus.enCurso:
+        return Colors.green;
+      case JobStatus.finalizado:
+        return Colors.teal;
+      case JobStatus.entregado:
+        return Colors.purple;
+      case JobStatus.cancelado:
+        return Colors.red;
+    }
+  }
+
+  Widget _statusBadgeContainer(String label, Color color) {
+    return Tooltip(
+      message: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

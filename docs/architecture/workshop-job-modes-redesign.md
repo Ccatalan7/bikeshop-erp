@@ -40,9 +40,9 @@ accesos explícitos:
 
 | Opción visible | Significado operativo | Factura | Inventario / contabilidad |
 |---|---|---|---|
-| Servicio | El cliente dejó una o más bicicletas | Sí, una vez guardados sus ítems | Propiedad exclusiva de la factura |
+| Servicio | El cliente dejó una o más bicicletas; el trabajador elige `Presupuestar primero` (default nuevo) o `Facturar ahora` | Solo al facturar ahora o al aprobar/convertir el presupuesto | Propiedad exclusiva de la factura cuando esta existe |
 | Componente | El cliente dejó solo una rueda, horquilla u otro componente | Sí, sin aumentar el contador de bicicletas | Propiedad exclusiva de la factura |
-| Presupuesto | Propuesta comercial; todavía no existe recepción de un objeto ni obligación de cobro | No | No reserva, descuenta ni contabiliza stock |
+| Cotización | Consulta comercial sin bicicleta ni componente recibido | No | No reserva, descuenta ni contabiliza stock |
 | Garantía | Reclamo vinculado a un trabajo entregado previamente | Solo respaldo interno si está cubierta; factura cobrable si no está cubierta | La factura asociada sigue siendo el único dueño del movimiento y asiento |
 | Venta / cobro | Venta de producto registrada en la tabla sin bicicleta ni componente recibido | Sí; admite abonos parciales | Propiedad exclusiva de la factura y sus pagos |
 
@@ -62,6 +62,7 @@ Mapeo compatible:
 | `job_type` legado | `workflow_kind` | `intake_kind` |
 |---|---|---|
 | `service` | `service` | `bike` |
+| `quotation` (fachada compatible de Servicio) | `quotation` | `bike` |
 | `item_service` | `service` | `component` |
 | `quotation` | `quotation` | `unspecified`, hasta su conversión |
 | `warranty` | `warranty` | heredado del trabajo original |
@@ -135,10 +136,16 @@ Los eventos cubrirán como mínimo:
 1. Seleccionar o crear cliente.
 2. Seleccionar o crear una o más bicicletas mediante la ficha canónica.
 3. Completar solicitud, diagnóstico, ficha técnica, productos y servicios.
-4. Guardar el agregado estable de trabajo, bicicletas e ítems.
-5. Crear o sincronizar la factura cobrable después de persistir los ítems.
-6. Inventario, IVA, ingreso, costo y pago se ejecutan únicamente desde la
-   factura y su panel de pago.
+4. Elegir la ruta comercial sin cambiar de ficha:
+   - `Presupuestar primero` (default solo para trabajos nuevos): guardar el
+     agregado estable de trabajo, bicicletas e ítems sin factura ni efectos
+     financieros; compartir un PDF **PRESUPUESTO** y, al aprobar, convertir el
+     mismo trabajo reutilizando sus bicicletas.
+   - `Facturar ahora`: crear o sincronizar la factura cobrable después de
+     persistir los ítems, conservando el comportamiento histórico.
+5. Inventario, IVA, ingreso, costo y pago se ejecutan únicamente desde la
+   factura y su panel de pago. Un servicio histórico cobrable nunca cambia al
+   nuevo default al volver a abrirse.
 
 ### 5.2 Componente
 
@@ -151,22 +158,34 @@ Los eventos cubrirán como mínimo:
 5. Mostrar el componente en la columna `Bicicleta`, pero excluirlo del contador
    de bicicletas y contarlo como `Ítem`.
 
-### 5.3 Presupuesto
+### 5.3 Cotización sin objeto recibido
 
 1. Seleccionar cliente y describir lo que se cotiza.
 2. Agregar productos/servicios propuestos, descuento y vigencia.
 3. Guardar siempre como `Pendiente`, sin factura ni movimientos financieros.
-4. Descargar/compartir un PDF titulado **PRESUPUESTO**, con número de trabajo,
+4. Descargar/compartir un PDF titulado **COTIZACIÓN**, con número de trabajo,
    vigencia, cliente, líneas y total; nunca debe decir `Factura` ni `Saldo
    adeudado`.
 5. Registrar aprobación, rechazo o expiración mediante comando auditado.
    La aprobación congela un snapshot exacto de campos e ítems; para revisarlo
    se vuelve a `Pendiente` con motivo y se genera una aprobación nueva.
-6. Al aprobar, escoger qué recibió el taller:
+6. Al aprobar y si el cliente trae el objeto, escoger qué recibió el taller:
    - `Bicicleta`: seleccionar/crear bicicleta del cliente;
    - `Componente`: seleccionar el componente recibido.
 7. Convertir atómicamente el mismo registro a trabajo cobrable, conservar el
-   snapshot original del presupuesto y generar la factura recién entonces.
+   snapshot original de la cotización y generar la factura recién entonces.
+
+La relación fuerte usa una sola fuente de verdad:
+`mechanic_jobs.invoice_id -> sales_invoices.id`. Desde el trabajo se abre la
+factura directamente y desde la factura se busca el trabajo por ese mismo FK;
+no se duplica el vínculo en una segunda columna susceptible a desincronizarse.
+Una factura vinculada tampoco puede borrarse por separado desde Ventas: el FK
+usa `ON DELETE RESTRICT` y no existe cascada factura→trabajo. Así, borrar un
+borrador nunca destruye silenciosamente la ficha autoritativa del taller.
+Al aprobar, rechazar o expirar explícitamente un presupuesto de servicio, la
+base de datos también congela sus filas `mechanic_job_bikes` (bicicleta
+recibida, ficha y diagnóstico) hasta que una reapertura auditada lo devuelva a
+`pending`.
 
 ### 5.4 Garantía
 
@@ -201,19 +220,23 @@ No se agregan columnas. Se reutilizan las existentes así:
 - `Bicicleta`:
   - bicicleta real: ícono y nombre habitual;
   - componente: ícono de herramienta y nombre del componente;
-  - presupuesto: ícono de documento y descripción resumida;
+  - presupuesto de servicio: la bicicleta real, porque sí fue recibida;
+  - cotización: ícono de documento, descripción resumida y `Sin objeto recibido`;
   - venta/cobro: ícono de venta, producto resumido y `Sin objeto recibido`;
   - ambiguo legado: texto explícito `Clasificación pendiente`, nunca `—`.
 - `Estado`: mantiene el estado operativo y añade un sublabel compacto para el
   estado comercial o de garantía cuando corresponde.
 - `Factura`:
-  - presupuesto: chip `Presupuesto` que descarga/abre su PDF;
+  - presupuesto de servicio: chip `Presupuesto` que descarga/abre su PDF;
+  - cotización: chip `Cotización` que descarga/abre su PDF;
   - servicio/componente: estado real de la factura;
   - venta/cobro: estado real, abono y saldo de la misma factura;
   - garantía cubierta: `Respaldo interno`;
   - garantía pendiente: `En evaluación`, sin fingir que existe una factura.
 - menú `⋮`:
-  - presupuesto: descargar PDF, aprobar/convertir, rechazar;
+  - propuesta: descargar el PDF con su nombre correcto, aprobar/convertir o
+    rechazar; el presupuesto reutiliza su bicicleta y solo la cotización abre
+    el selector de recepción;
   - garantía: resolver desde el chip de estado; una decisión no cubierta deja
     disponible su factura cobrable sin un segundo cambio de tipo;
   - registro ambiguo: `Revisar modo` abre la misma clasificación compacta que
@@ -225,7 +248,10 @@ Los contadores quedan definidos así:
 - `Bicicletas`: solo recepciones físicas con filas válidas en
   `mechanic_job_bikes`;
 - `Ítems`: trabajos de componente;
-- `Presupuestos`: `workflow_kind = quotation`;
+- `Presupuestos`: `workflow_kind = quotation AND intake_kind = bike`; también
+  cuentan sus bicicletas reales;
+- `Cotizaciones`: `workflow_kind = quotation AND intake_kind != bike`; no
+  consumen capacidad mecánica;
 - `Garantías`: reclamos de garantía activos según su fase operativa.
 - `Ventas / cobros`: `workflow_kind = sale`; no incrementan los contadores de
   bicicletas, ítems recibidos ni garantías.
@@ -239,8 +265,9 @@ Los contadores quedan definidos así:
   se hacen con acciones de conversión auditadas.
 - El presupuesto no permite cambiar arbitrariamente a `Aprobado` desde un
   dropdown que solo edita una columna: usa una acción con confirmación.
-- La conversión solicita bicicleta/componente dentro del mismo diálogo y
-  valida propiedad del cliente antes de confirmar.
+- La conversión de un presupuesto de servicio confirma y reutiliza la(s)
+  bicicleta(s) ya vinculada(s), sin selector. Solo la Cotización solicita
+  bicicleta/componente dentro del mismo diálogo y valida propiedad del cliente.
 - `Revisar modo` solo aparece en registros conservadores marcados
   `mode_needs_review`. Para bicicleta lista únicamente bicicletas activas del
   cliente; para componente acepta un sujeto activo del tenant o una descripción
@@ -260,21 +287,25 @@ Los contadores quedan definidos así:
 - La tabla, calendario, formulario routed y formulario embedded consumen los
   mismos servicios y read models.
 
-## 8. PDF de presupuesto
+## 8. PDF de propuesta
 
 Se reutilizará el generador visual de documentos comerciales con un tipo de
 documento explícito y default compatible para facturas.
 
-El presupuesto debe incluir:
+El tipo explícito decide el título: el servicio con bicicleta recibida genera
+**PRESUPUESTO** y la consulta sin objeto recibido genera **COTIZACIÓN**. Ambos
+deben incluir:
 
 - logo y datos de Viñabike;
-- título `PRESUPUESTO`;
+- título y nombre de archivo coherentes con el tipo;
 - número de trabajo/presupuesto;
 - fecha de emisión y `Válido hasta`;
 - cliente y RUT cuando exista;
 - descripción, cantidad, precio y total por línea;
 - subtotal, descuento y total propuesto;
-- texto claro de que no es una factura ni acredita pago/recepción.
+- texto claro de que no es una factura ni acredita pago; la Cotización tampoco
+  acredita recepción, mientras el Presupuesto puede identificar la bicicleta
+  que ya está en custodia del taller.
 
 No debe incluir:
 
@@ -442,8 +473,8 @@ evidencia. Una falla de migración revierte la transacción completa.
 
 ### Base de datos
 
-- presupuesto no puede vincular ni crear factura;
-- ítems de presupuesto no cambian stock/journals;
+- ninguna propuesta pendiente puede vincular ni crear factura;
+- ítems de presupuesto/cotización no cambian stock/journals;
 - conversión repetida con la misma clave devuelve replay sin duplicados;
 - servicio de bicicleta exige una bicicleta activa del cliente/tenant;
 - servicio de componente exige sujeto activo o descripción explícita y no
@@ -475,28 +506,34 @@ evidencia. Una falla de migración revierte la transacción completa.
 - estado efectivo de presupuesto expira por fecha sin perder el estado
   persistido/auditado;
 - tabla no muestra `—` para registros ambiguos;
-- contador de bicicletas excluye componentes y presupuestos;
+- contador de bicicletas incluye presupuestos con bicicleta recibida y excluye
+  componentes y cotizaciones sin objeto;
 - generador de factura conserva su output actual;
-- generador de presupuesto usa lenguaje correcto.
+- generador de presupuesto y cotización usa títulos mutuamente excluyentes.
 
 ### Browser
 
-1. crear y guardar servicio con cliente/bicicleta/diagnóstico/ítems;
-2. crear componente sin bicicleta y comprobar contador/factura;
-3. crear presupuesto, descargar PDF y comprobar ausencia de factura/stock;
-4. aprobar presupuesto, elegir bicicleta o componente y confirmar una sola
+1. crear y guardar Servicio → Presupuestar primero con cliente, bicicleta,
+   ficha, diagnóstico e ítems; comprobar ausencia de factura;
+2. aprobar/facturar ese presupuesto y confirmar que reutiliza la bicicleta y
+   crea una sola factura recíproca;
+3. crear Servicio → Facturar ahora y comprobar el comportamiento histórico;
+4. crear componente sin bicicleta y comprobar contador/factura;
+5. crear Cotización, descargar PDF y comprobar ausencia de factura/stock;
+6. aprobar Cotización, elegir bicicleta o componente y confirmar una sola
    factura;
-5. crear garantía dentro y fuera de plazo, guardar justificación y comprobar
+7. crear garantía dentro y fuera de plazo, guardar justificación y comprobar
    respaldo interno o conversión cobrable;
-6. recargar cada registro y confirmar persistencia;
-7. revisar consola, requests y terminal durante cada flujo.
+8. recargar cada registro y confirmar persistencia;
+9. revisar consola, requests y terminal durante cada flujo.
 
 ## 13. Definition of Done
 
 El rediseño está terminado solo cuando:
 
 - los cinco modos funcionan de punta a punta en la tabla única;
-- presupuesto tiene PDF propio y nunca se presenta como factura;
+- presupuesto y cotización tienen PDF propio, con nombre correcto, y nunca se
+  presentan como factura;
 - conversión es atómica, auditable e idempotente;
 - componente representa una recepción física sin bicicleta y no altera el
   contador;
@@ -574,9 +611,8 @@ El rediseño está terminado solo cuando:
 - El fingerprint productivo posterior conservó 747 pagos por CLP 18.130.590,
   2.489 movimientos y 2.160 asientos balanceados por CLP 74.607.147,70. La
   normalización no creó ninguna de esas evidencias ni modificó sus totales.
-- El frontend vive en la rama aislada `codex/workshop-job-modes-release`, basada
-  en `0b245de4`, para no incorporar cambios concurrentes del worktree operativo.
-  Su dependencia de base ya está satisfecha; el recorrido local del trabajador
-  cubrió servicio, presupuesto, componente y garantía. Falta publicar el commit
-  exacto y verificar el artefacto distribuido, sin mezclar cambios del worktree
-  operativo.
+- Todo trabajo del frontend se consolida directamente en el checkout operativo
+  `/Users/Claudio/Dev/bikeshop-erp`, rama `smartpegas1.0`. No se usan worktrees,
+  ramas aisladas ni sesiones debug de otra copia; antes de publicar se comprueba
+  que filesystem, VS Code, `HEAD` y `origin/smartpegas1.0` refieren al mismo
+  commit verificado.

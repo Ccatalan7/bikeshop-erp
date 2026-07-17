@@ -25,6 +25,64 @@ Map<String, dynamic> _baseJobJson({
 
 void main() {
   group('canonical workshop mode axes', () {
+    test('bike-backed quotation is presented as a service budget', () {
+      final job = MechanicJob.fromJson({
+        ..._baseJobJson(jobType: 'quotation', bikeId: 'bike-1'),
+        'workflow_kind': 'quotation',
+        'intake_kind': 'bike',
+        'mode_needs_review': false,
+        'quotation_status': 'pending',
+      });
+
+      expect(job.jobType, JobType.quotation);
+      expect(job.isServiceBudget, isTrue);
+      expect(job.isStandaloneQuotation, isFalse);
+      expect(job.proposalDocumentLabel, 'Presupuesto');
+      expect(job.statusDisplayName, 'Pendiente');
+      expect(job.proposalStatusDisplayName, 'Presupuesto Pendiente');
+      expect(job.modeNeedsReview, isFalse);
+    });
+
+    test('quotation without bike custody is presented as Cotización', () {
+      final job = MechanicJob.fromJson({
+        ..._baseJobJson(
+          jobType: 'quotation',
+          subjectNotes: 'Instalar una horquilla Fox 34',
+        ),
+        'workflow_kind': 'quotation',
+        'intake_kind': 'unspecified',
+        'mode_needs_review': false,
+        'quotation_status': 'pending',
+      });
+
+      expect(job.isServiceBudget, isFalse);
+      expect(job.isStandaloneQuotation, isTrue);
+      expect(job.proposalDocumentLabel, 'Cotización');
+      expect(job.statusDisplayName, 'Cotización Pendiente');
+    });
+
+    test(
+        'stored proposal decisions lock content but clock expiry alone does not',
+        () {
+      final approved = MechanicJob.fromJson({
+        ..._baseJobJson(jobType: 'quotation', bikeId: 'bike-1'),
+        'workflow_kind': 'quotation',
+        'intake_kind': 'bike',
+        'quotation_status': 'approved',
+      });
+      final overduePending = MechanicJob.fromJson({
+        ..._baseJobJson(jobType: 'quotation', bikeId: 'bike-1'),
+        'workflow_kind': 'quotation',
+        'intake_kind': 'bike',
+        'quotation_status': 'pending',
+        'quotation_valid_until': '2020-01-01T00:00:00Z',
+      });
+
+      expect(approved.hasFinalProposalDecision, isTrue);
+      expect(overduePending.effectiveQuotationStatus, QuotationStatus.expired);
+      expect(overduePending.hasFinalProposalDecision, isFalse);
+    });
+
     test('sale uses canonical axes while keeping the legacy service facade',
         () {
       final job = MechanicJob.fromJson({
@@ -178,7 +236,7 @@ void main() {
       },
     );
 
-    test('approved quotation must also be inside its validity window', () {
+    test('an audited approval remains convertible after validity passes', () {
       final quotation = MechanicJob(
         tenantId: 'tenant-1',
         customerId: 'customer-1',
@@ -188,7 +246,7 @@ void main() {
       );
 
       expect(quotation.canConvertQuotationAt(beforeExpiry), isTrue);
-      expect(quotation.canConvertQuotationAt(atExpiry), isFalse);
+      expect(quotation.canConvertQuotationAt(atExpiry), isTrue);
       expect(
         quotation.effectiveQuotationStatusAt(atExpiry),
         QuotationStatus.approved,

@@ -5,32 +5,142 @@ import 'package:vinabike_erp/shared/utils/invoice_pdf_generator.dart';
 
 void main() {
   group('Invoice PDF commercial document kind', () {
-    test('keeps invoice filenames and exposes quotation-specific helpers', () {
+    test('uses different names for invoice, quotation and service budget', () {
       expect(
         InvoicePdfDocumentKind.invoice.fileNameFor('FV-00809'),
         'factura_FV-00809.pdf',
       );
       expect(
         InvoicePdfGenerator.quotationFileNameFor('PG-00468'),
-        'presupuesto_PG-00468.pdf',
+        'cotizacion_PG-00468.pdf',
       );
       expect(
         InvoicePdfGenerator.quotationDocumentNameFor('PG-00468'),
-        'presupuesto_PG-00468',
+        'cotizacion_PG-00468',
+      );
+      expect(
+        InvoicePdfGenerator.serviceBudgetFileNameFor('PG-00465'),
+        'presupuesto_PG-00465.pdf',
+      );
+      expect(
+        InvoicePdfGenerator.serviceBudgetDocumentNameFor('PG-00465'),
+        'presupuesto_PG-00465',
       );
     });
 
     test(
-      'quotation PDF never presents an invoice or payment balance',
+      'standalone quotation has no received object, invoice or balance',
       () async {
         final quotation = _documentFixture().copyWith(
           subtotal: 100000,
           total: 90000,
+          workDescription: 'Instalación de horquilla Fox 34',
+          items: <InvoiceItem>[
+            InvoiceItem(
+              productName: 'Transmisión',
+              unitPrice: 60000,
+              jobBikeId: 'stale-job-bike-1',
+              bikeName: 'Oxford Merak 1',
+            ),
+            InvoiceItem(
+              productName: 'Frenos',
+              unitPrice: 40000,
+              jobBikeId: 'stale-job-bike-2',
+              bikeName: 'Trek Marlin 5',
+            ),
+          ],
         );
         final pdf = InvoicePdfGenerator.buildDocumentPDF(
           quotation,
-          const <String, String>{'single': 'Oxford Merak 1'},
+          const <String, String>{
+            'single': 'Oxford Merak 1',
+            'stale-job-bike-1': 'Oxford Merak 1',
+            'stale-job-bike-2': 'Trek Marlin 5',
+          },
           documentKind: InvoicePdfDocumentKind.quotation,
+          validUntil: DateTime(2026, 7, 30),
+          discountAmount: 10000,
+        );
+
+        final bytes = await pdf.save();
+        final extracted = _extractText(bytes);
+
+        expect(extracted, contains('COTIZACIÓN'));
+        expect(extracted, contains('Cotización para'));
+        expect(extracted, contains('Fecha de la cotización'));
+        expect(extracted, contains('Válido hasta'));
+        expect(extracted, contains('Total cotización'));
+        expect(extracted, contains('Descuento'));
+        expect(
+          extracted,
+          contains('Esta cotización no constituye una factura'),
+        );
+        expect(
+          extracted,
+          contains('ni acredita recepción de bicicleta o componente'),
+        );
+        expect(extracted, contains('Descripción de la cotización'));
+        expect(extracted, contains('Instalación de horquilla Fox 34'));
+        expect(extracted, isNot(contains('PRESUPUESTO')));
+        expect(extracted, isNot(contains('Bicicleta recibida')));
+        expect(extracted, isNot(contains('Oxford Merak 1')));
+        expect(extracted, isNot(contains('Trek Marlin 5')));
+        expect(extracted, isNot(contains('Facturar a')));
+        expect(extracted, isNot(contains('Fecha de la factura')));
+        expect(extracted, isNot(contains('Saldo adeudado')));
+        expect(extracted, isNot(contains('Pago realizado')));
+      },
+    );
+
+    test('quotation without catalog lines still explains what was requested',
+        () async {
+      final quotation = _documentFixture().copyWith(
+        items: const <InvoiceItem>[],
+        subtotal: 0,
+        total: 0,
+        workDescription: 'Limpieza completa de transmisión',
+      );
+      final pdf = InvoicePdfGenerator.buildDocumentPDF(
+        quotation,
+        const <String, String>{},
+        documentKind: InvoicePdfDocumentKind.quotation,
+      );
+
+      final extracted = _extractText(await pdf.save());
+      expect(extracted, contains('Descripción de la cotización'));
+      expect(extracted, contains('Limpieza completa de transmisión'));
+      expect(extracted, contains('COTIZACIÓN'));
+      expect(extracted, isNot(contains('Bicicleta recibida')));
+    });
+
+    test(
+      'service budget names every received bike and remains non-posting',
+      () async {
+        final budget = _documentFixture().copyWith(
+          subtotal: 120000,
+          total: 110000,
+          items: <InvoiceItem>[
+            InvoiceItem(
+              productName: 'Transmisión',
+              unitPrice: 70000,
+              lineTotal: 70000,
+              jobBikeId: 'job-bike-1',
+            ),
+            InvoiceItem(
+              productName: 'Frenos',
+              unitPrice: 50000,
+              lineTotal: 50000,
+              jobBikeId: 'job-bike-2',
+            ),
+          ],
+        );
+        final pdf = InvoicePdfGenerator.buildDocumentPDF(
+          budget,
+          const <String, String>{
+            'job-bike-1': 'Oxford Merak 1',
+            'job-bike-2': 'Trek Marlin 5',
+          },
+          documentKind: InvoicePdfDocumentKind.serviceBudget,
           validUntil: DateTime(2026, 7, 30),
           discountAmount: 10000,
         );
@@ -41,15 +151,15 @@ void main() {
         expect(extracted, contains('PRESUPUESTO'));
         expect(extracted, contains('Presupuesto para'));
         expect(extracted, contains('Fecha del presupuesto'));
-        expect(extracted, contains('Válido hasta'));
         expect(extracted, contains('Total presupuesto'));
-        expect(extracted, contains('Descuento'));
+        expect(extracted, contains('Bicicletas recibidas'));
+        expect(extracted, contains('Oxford Merak 1'));
+        expect(extracted, contains('Trek Marlin 5'));
         expect(
           extracted,
           contains('Este presupuesto no constituye una factura'),
         );
-        expect(extracted, isNot(contains('Facturar a')));
-        expect(extracted, isNot(contains('Fecha de la factura')));
+        expect(extracted, isNot(contains('COTIZACIÓN')));
         expect(extracted, isNot(contains('Saldo adeudado')));
         expect(extracted, isNot(contains('Pago realizado')));
       },
@@ -72,6 +182,7 @@ void main() {
         expect(extracted, contains('Saldo adeudado'));
         expect(extracted, contains('Pago realizado'));
         expect(extracted, isNot(contains('PRESUPUESTO')));
+        expect(extracted, isNot(contains('COTIZACIÓN')));
       },
     );
   });

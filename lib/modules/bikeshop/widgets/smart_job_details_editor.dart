@@ -37,6 +37,7 @@ class SmartJobDetailsEditor extends StatefulWidget {
     String? notes,
   }) onSave;
   final bool isInline;
+  final bool readOnly;
 
   const SmartJobDetailsEditor({
     super.key,
@@ -50,6 +51,7 @@ class SmartJobDetailsEditor extends StatefulWidget {
     this.invoice,
     this.jobBike,
     this.isInline = false,
+    this.readOnly = false,
     required this.onSave,
   });
 
@@ -108,7 +110,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
   }
 
   void _handleFocusChange() {
-    if (widget.isInline && !_focusNode.hasFocus) {
+    if (widget.isInline && !widget.readOnly && !_focusNode.hasFocus) {
       // Auto-save on blur
       _saveChanges();
     }
@@ -188,7 +190,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
 
     // Keep focus
     Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted && (_isOpen || widget.isInline)) {
+      if (mounted && !widget.readOnly && (_isOpen || widget.isInline)) {
         _focusNode.requestFocus();
       }
     });
@@ -460,9 +462,10 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                             child: TextField(
                               controller: _textController,
                               focusNode: _focusNode,
+                              readOnly: widget.readOnly,
                               maxLines: 8,
                               minLines: 5,
-                              autofocus: true,
+                              autofocus: !widget.readOnly,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: isDark
@@ -521,7 +524,9 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Click afuera para guardar',
+                                  widget.readOnly
+                                      ? 'Solo lectura · decisión comercial cerrada'
+                                      : 'Click afuera para guardar',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: isDark
@@ -532,30 +537,33 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                                 ),
                               ),
                               if (widget.job != null) ...[
-                                _SmartDetailsExportButton(
-                                  icon: Icons.add_task,
-                                  tooltip: 'Crear Tarea',
-                                  onTap: () {
-                                    // Close overlay first if it's open
-                                    if (!widget.isInline) _saveAndClose();
+                                if (!widget.readOnly) ...[
+                                  _SmartDetailsExportButton(
+                                    icon: Icons.add_task,
+                                    tooltip: 'Crear Tarea',
+                                    onTap: () {
+                                      // Close overlay first if it's open
+                                      if (!widget.isInline) _saveAndClose();
 
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => TaskFormDialog(
-                                        prefillJobId: widget.job?.id,
-                                        prefillJobNumber: widget.job?.jobNumber,
-                                        prefillCustomerId:
-                                            widget.job?.customerId,
-                                        prefillCustomerName:
-                                            widget.customerName,
-                                      ),
-                                    );
-                                  },
-                                  isDark: isDark,
-                                  iconColor:
-                                      Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => TaskFormDialog(
+                                          prefillJobId: widget.job?.id,
+                                          prefillJobNumber:
+                                              widget.job?.jobNumber,
+                                          prefillCustomerId:
+                                              widget.job?.customerId,
+                                          prefillCustomerName:
+                                              widget.customerName,
+                                        ),
+                                      );
+                                    },
+                                    isDark: isDark,
+                                    iconColor:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
                                 _SmartDetailsExportButton(
                                   icon: Icons.picture_as_pdf_outlined,
                                   tooltip: 'Exportar a PDF',
@@ -589,7 +597,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
     Overlay.of(context).insert(_overlayEntry!);
 
     Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted && _isOpen) {
+      if (mounted && _isOpen && !widget.readOnly) {
         _focusNode.requestFocus();
       }
     });
@@ -740,9 +748,10 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
             child: TextField(
               controller: _textController,
               focusNode: _focusNode,
+              readOnly: widget.readOnly,
               maxLines: isPopup ? 8 : (widget.isInline ? 12 : 8),
               minLines: isPopup ? 5 : 5,
-              autofocus: isPopup,
+              autofocus: isPopup && !widget.readOnly,
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey[200] : Colors.grey[800],
@@ -795,9 +804,11 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
             children: [
               Expanded(
                 child: Text(
-                  isPopup
-                      ? 'Click afuera para guardar'
-                      : 'Guardado automático al salir',
+                  widget.readOnly
+                      ? 'Solo lectura · decisión comercial cerrada'
+                      : isPopup
+                          ? 'Click afuera para guardar'
+                          : 'Guardado automático al salir',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey[500] : Colors.grey[500],
@@ -806,27 +817,29 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                 ),
               ),
               if (widget.job != null) ...[
-                _SmartDetailsExportButton(
-                  icon: Icons.add_task,
-                  tooltip: 'Crear Tarea',
-                  onTap: () {
-                    // Close overlay first if it's open
-                    if (!widget.isInline) _saveAndClose();
+                if (!widget.readOnly) ...[
+                  _SmartDetailsExportButton(
+                    icon: Icons.add_task,
+                    tooltip: 'Crear Tarea',
+                    onTap: () {
+                      // Close overlay first if it's open
+                      if (!widget.isInline) _saveAndClose();
 
-                    showDialog(
-                      context: context,
-                      builder: (context) => TaskFormDialog(
-                        prefillJobId: widget.job?.id,
-                        prefillJobNumber: widget.job?.jobNumber,
-                        prefillCustomerId: widget.job?.customerId,
-                        prefillCustomerName: widget.customerName,
-                      ),
-                    );
-                  },
-                  isDark: isDark,
-                  iconColor: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 4),
+                      showDialog(
+                        context: context,
+                        builder: (context) => TaskFormDialog(
+                          prefillJobId: widget.job?.id,
+                          prefillJobNumber: widget.job?.jobNumber,
+                          prefillCustomerId: widget.job?.customerId,
+                          prefillCustomerName: widget.customerName,
+                        ),
+                      );
+                    },
+                    isDark: isDark,
+                    iconColor: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 _SmartDetailsExportButton(
                   icon: Icons.picture_as_pdf_outlined,
                   tooltip: 'Exportar a PDF',
@@ -1173,6 +1186,7 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
   }
 
   void _saveChanges() {
+    if (widget.readOnly) return;
     _setCurrentFieldValue(_textController.text);
 
     final clientRequestChanged =

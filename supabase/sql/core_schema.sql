@@ -15927,7 +15927,7 @@ create table if not exists mechanic_jobs (
   total_cost numeric(12,2) not null default 0,
 
   -- Invoicing
-  invoice_id uuid references sales_invoices(id) on delete cascade, -- CHANGED: cascade delete instead of set null
+  invoice_id uuid references sales_invoices(id) on delete restrict,
   is_invoiced boolean not null default false,
   is_paid boolean not null default false,
 
@@ -15987,8 +15987,8 @@ comment on column mechanic_jobs.tax_treatment is
 -- Migration: Add missing columns to mechanic_jobs table
 do $$
 begin
-  -- CRITICAL: Update foreign key constraint for invoice_id (from SET NULL to CASCADE)
-  -- This ensures trabajo is deleted when invoice is deleted (bidirectional cascade)
+  -- A linked workshop invoice is owned by its job and cannot be deleted from
+  -- Sales while the authoritative job still exists.
   if exists (
     select 1 from information_schema.table_constraints
     where constraint_name = 'mechanic_jobs_invoice_id_fkey'
@@ -15996,8 +15996,8 @@ begin
   ) then
     alter table mechanic_jobs drop constraint mechanic_jobs_invoice_id_fkey;
     alter table mechanic_jobs add constraint mechanic_jobs_invoice_id_fkey
-      foreign key (invoice_id) references sales_invoices(id) on delete cascade;
-    raise notice '✅ Updated mechanic_jobs.invoice_id foreign key to ON DELETE CASCADE';
+      foreign key (invoice_id) references sales_invoices(id) on delete restrict;
+    raise notice '✅ Updated mechanic_jobs.invoice_id foreign key to ON DELETE RESTRICT';
   end if;
 
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'job_number') then
@@ -16075,7 +16075,7 @@ begin
     alter table mechanic_jobs add column total_cost numeric(12,2) not null default 0;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'invoice_id') then
-    alter table mechanic_jobs add column invoice_id uuid references sales_invoices(id) on delete cascade;
+    alter table mechanic_jobs add column invoice_id uuid references sales_invoices(id) on delete restrict;
   end if;
   if not exists (select 1 from information_schema.columns where table_name = 'mechanic_jobs' and column_name = 'is_invoiced') then
     alter table mechanic_jobs add column is_invoiced boolean not null default false;
@@ -17055,7 +17055,9 @@ exception
 end;
 $$;
 
--- Create triggers for BOTH directions
+-- Deleting a job retains the legacy guarded cleanup of an eligible draft
+-- invoice. The reverse trigger is intentionally retired: deleting an invoice
+-- from Sales must never erase the authoritative mechanic job.
 drop trigger if exists trg_delete_pega_cascade_invoice on mechanic_jobs cascade;
 create trigger trg_delete_pega_cascade_invoice
   after delete on mechanic_jobs
@@ -17063,10 +17065,6 @@ create trigger trg_delete_pega_cascade_invoice
   execute function public.cascade_delete_pega_invoice();
 
 drop trigger if exists trg_delete_invoice_cascade_pega on sales_invoices cascade;
-create trigger trg_delete_invoice_cascade_pega
-  after delete on sales_invoices
-  for each row
-  execute function public.cascade_delete_pega_invoice();
 
 -- Function: Auto-generate job number (PG-#####)
 -- Sequence for generating unique mechanic job numbers
@@ -35283,5 +35281,8 @@ grant select on public.stock_movements_ledger_view to authenticated;
 \ir ../migrations/20260716100000_restrict_expense_period_details_acl.sql
 \ir ../migrations/20260716110000_add_mechanic_job_sale_collection_mode.sql
 \ir ../migrations/20260716111000_classify_pg00465_sale_collection.sql
+-- Protect the authoritative job when a linked draft invoice is deleted from
+-- Sales, and freeze the received-bike aggregate after a proposal decision.
+\ir ../migrations/20260717010000_protect_linked_workshop_invoice_deletion.sql
 
 commit;

@@ -823,6 +823,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   // Job type and subject (for non-bike jobs: warranty, quotation, item_service)
   JobType _jobType = JobType.service;
+  ServiceCommercialPath _serviceCommercialPath =
+      ServiceCommercialPath.budgetFirst;
   JobSubject? _selectedSubject;
   List<JobSubject> _availableSubjects = [];
   final _subjectNotesController = TextEditingController();
@@ -845,8 +847,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   String? _warrantyClaimLoadError;
   String? _exactWarrantySourceLoadError;
   bool _warrantyClaimLoadCompleted = false;
-  QuotationStatus? _quotationStatus;
-  DateTime? _quotationValidUntil;
+  QuotationStatus? _quotationStatus = QuotationStatus.pending;
+  DateTime? _quotationValidUntil = DateTime.now().add(const Duration(days: 30));
+
+  bool get _isServiceBudget =>
+      _jobType == JobType.service &&
+      _serviceCommercialPath == ServiceCommercialPath.budgetFirst;
+
+  bool get _isProposalWorkflow =>
+      _jobType == JobType.quotation || _isServiceBudget;
+
+  String get _proposalDocumentLabel =>
+      _isServiceBudget ? 'Presupuesto' : 'Cotización';
+
+  String get _proposalDocumentLabelLower =>
+      _isServiceBudget ? 'presupuesto' : 'cotización';
 
   // Parts and services
   final List<_JobPartItem> _partItems = [];
@@ -896,10 +911,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// normal form save from silently rewriting the proposal that was shown to
   /// the customer.
   bool get _isFinalQuotationReadOnly =>
-      widget.jobId != null &&
-      _existingJob?.workflowKind == JobWorkflowKind.quotation &&
-      (_existingJob?.quotationStatus ?? QuotationStatus.pending) !=
-          QuotationStatus.pending;
+      widget.jobId != null && (_existingJob?.hasFinalProposalDecision ?? false);
 
   /// The accepted quotation itself is immutable. Once the audited conversion
   /// has produced a normal billable service, that service remains editable;
@@ -919,6 +931,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// proven safe blocks the status control; the server repeats this guard.
   bool get _isStatusTransitionLocked =>
       _jobType == JobType.sale ||
+      _jobType == JobType.quotation ||
       _isFinalQuotationReadOnly ||
       (_jobType == JobType.warranty &&
           (_warrantyOutcome ?? _existingJob?.warrantyOutcome) ==
@@ -1062,10 +1075,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
           if (widget.initialJobType != null && widget.jobId == null) {
             _jobType = JobType.fromDbValue(widget.initialJobType!);
-            if (_jobType == JobType.quotation) {
+            if (_jobType == JobType.service) {
+              _serviceCommercialPath = ServiceCommercialPath.budgetFirst;
+            }
+            if (_jobType == JobType.quotation || _isServiceBudget) {
               _quotationStatus = QuotationStatus.pending;
               _quotationValidUntil =
                   DateTime.now().add(const Duration(days: 30));
+            } else {
+              _quotationStatus = null;
+              _quotationValidUntil = null;
             }
           }
         });
@@ -1735,7 +1754,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           }
 
           // Load new job type fields
-          _jobType = job.jobType;
+          // The database deliberately keeps `job_type = quotation` so older
+          // clients cannot accidentally invoice a non-posting proposal. The
+          // canonical axes let this client restore a bicycle budget to the
+          // familiar Servicio form with its ficha and diagnosis intact.
+          _jobType = job.isServiceBudget ? JobType.service : job.jobType;
+          _serviceCommercialPath =
+              mechanicJobServiceCommercialPathForExisting(job);
           if (loadedSubject != null) {
             _selectedSubject = loadedSubject;
             if (!_availableSubjects.any((s) => s.id == loadedSubject!.id)) {
@@ -2992,10 +3017,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
 
     if (_isFinalQuotationReadOnly) {
+      final proposalLabel =
+          _existingJob?.proposalDocumentLabel ?? _proposalDocumentLabel;
+      final proposalSubject = proposalLabel == 'Presupuesto'
+          ? 'Este presupuesto'
+          : 'Esta cotización';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Este presupuesto está en solo lectura. Gestiona su estado desde la tabla de trabajos.',
+            '$proposalSubject está en solo lectura. Gestiona su estado desde la tabla de trabajos.',
           ),
         ),
       );
@@ -3108,10 +3138,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
-    if (_jobType == JobType.itemService && _selectedSubject == null) {
+    if (_jobType == JobType.itemService &&
+        _selectedSubject == null &&
+        _subjectNotesController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debe seleccionar un componente o ítem del catálogo'),
+          content: Text(
+            'Selecciona un componente del catálogo o descríbelo manualmente.',
+          ),
         ),
       );
       return;
@@ -3288,12 +3322,28 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
         customerId: _selectedCustomer!.id!,
         bikeId: primaryBike?.id, // Nullable for non-bike jobs
-        jobType: _jobType,
-        // Existing rows may carry a reviewed canonical classification that is
-        // more precise than the legacy job_type inference. New rows leave
-        // these null so the model derives both axes from the selected mode.
-        workflowKind: _existingJob?.workflowKind,
-        intakeKind: _existingJob?.intakeKind,
+        // Service budgets are presented as Servicio in the form, while the
+        // deployed rolling-compatible database facade remains `quotation`
+        // until the audited conversion command creates the invoice.
+        jobType: mechanicJobPersistedJobType(
+          jobType: _jobType,
+          serviceCommercialPath: _serviceCommercialPath,
+        ),
+        // The physical object and commercial stage are independent. A normal
+        // Servicio can therefore retain its bicycle/ficha/diagnosis while its
+        // workflow remains a non-posting proposal until approval.
+        workflowKind: _existingJob?.workflowKind ??
+            mechanicJobCreationWorkflowKind(
+              jobType: _jobType,
+              serviceCommercialPath: _serviceCommercialPath,
+            ),
+        intakeKind: _existingJob?.intakeKind ??
+            mechanicJobCreationIntakeKind(
+              jobType: _jobType,
+              bikeId: primaryBike?.id,
+              subjectId: _selectedSubject?.id,
+              subjectNotes: _subjectNotesController.text,
+            ),
         modeNeedsReview: _existingJob?.modeNeedsReview,
         modeReviewReason: _existingJob?.modeReviewReason,
         subjectId:
@@ -3308,8 +3358,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                 _existingJob?.warrantyOutcome ??
                 WarrantyOutcome.pending)
             : _warrantyOutcome,
-        quotationStatus: _quotationStatus,
-        quotationValidUntil: _quotationValidUntil,
+        quotationStatus: _isProposalWorkflow ? _quotationStatus : null,
+        quotationValidUntil: _isProposalWorkflow ? _quotationValidUntil : null,
         priority: _selectedPriority,
         // Covered-warranty lifecycle triggers post/reverse the internal
         // invoice from status/status_id. A diagnosis-only save must therefore
@@ -3795,11 +3845,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final linkedInvoiceId = savedJob?.invoiceId;
 
         final shouldCreateInvoice = savedJob != null &&
-            (savedJob.jobType == JobType.service ||
-                savedJob.jobType == JobType.itemService ||
-                savedJob.jobType == JobType.sale);
+            (savedJob.isSaleWorkflow ||
+                (savedJob.isBillableServiceWorkflow &&
+                    (savedJob.jobType == JobType.service ||
+                        savedJob.jobType == JobType.itemService)));
 
-        if (linkedInvoiceId != null && savedJob?.jobType != JobType.quotation) {
+        if (linkedInvoiceId != null &&
+            savedJob?.workflowKind != JobWorkflowKind.quotation) {
           // If there's an existing invoice, we still sync it just to keep it updated,
           // (unless we want to delete it if it's a quotation now, but we'll assume
           // quotes don't get invoices attached in the first place).
@@ -4857,11 +4909,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final isFinalQuotation = _isFinalQuotationReadOnly;
     final isFinanciallyProtected = _isPaymentProtectedCommercialSnapshotLocked;
     final statusLabel = _effectiveQuotationStatus.displayName.toLowerCase();
+    final proposalLabel =
+        _existingJob?.proposalDocumentLabel ?? _proposalDocumentLabel;
     final title = isFinanciallyProtected
         ? 'Historial financiero protegido'
         : isFinalQuotation
-            ? 'Presupuesto $statusLabel · solo lectura'
-            : 'Presupuesto original conservado';
+            ? '$proposalLabel $statusLabel · solo lectura'
+            : 'Propuesta original conservada';
     final message = isFinanciallyProtected
         ? _jobType == JobType.sale
             ? _linkedInvoiceHasActivePayments
@@ -4872,7 +4926,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
         : isFinalQuotation
             ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
-            : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial del presupuesto.';
+            : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial de la propuesta.';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -9600,7 +9654,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final subjectLabel = _selectedSubject?.name ??
         (subjectNotes.isNotEmpty
             ? subjectNotes
-            : (isQuotation ? 'presupuesto' : 'componente recibido'));
+            : (isQuotation ? 'cotización' : 'componente recibido'));
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -9623,7 +9677,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               Expanded(
                 child: Text(
                   isQuotation
-                      ? 'Evaluación previa del presupuesto'
+                      ? 'Evaluación previa de la cotización'
                       : 'Diagnóstico de $subjectLabel',
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
@@ -13162,10 +13216,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 TextFormField(
                   controller: _subjectNotesController,
                   decoration: const InputDecoration(
-                    labelText: 'Notas del ítem',
+                    labelText: 'Descripción manual del componente',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.notes),
-                    hintText: 'Ej: Rueda trasera 26", número de serie...',
+                    hintText:
+                        'Obligatoria solo si no seleccionaste catálogo. Ej.: Rueda trasera 26", número de serie...',
                   ),
                   maxLines: 2,
                 ),
@@ -13187,7 +13242,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
           const SizedBox(height: 8),
           Text(
-            'Usa presupuesto para cotizaciones nuevas, incluso si el producto no existe aún en tu inventario.',
+            'Usa Cotización para consultas sin bicicleta recibida, incluso si el producto no existe aún en tu inventario.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -13308,74 +13363,78 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                 },
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _customStatuses.isEmpty
-                  // Fallback to enum dropdown if no custom statuses
-                  ? DropdownButtonFormField<JobStatus>(
-                      initialValue: _selectedStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.swap_horiz),
-                      ),
-                      items: JobStatus.values.map((status) {
-                        return DropdownMenuItem(
-                          value: status,
-                          child: Text(status.displayName),
-                        );
-                      }).toList(),
-                      onChanged: _isStatusTransitionLocked
-                          ? null
-                          : (status) {
-                              if (status != null) {
-                                setState(() {
-                                  _selectedStatus = status;
-                                });
-                              }
-                            },
-                    )
-                  // Use custom statuses dropdown
-                  : DropdownButtonFormField<JobStatusCustom>(
-                      initialValue: _selectedCustomStatus,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.swap_horiz),
-                      ),
-                      items: _customStatuses.map((status) {
-                        return DropdownMenuItem(
-                          value: status,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: status.colorValue,
-                                  borderRadius: BorderRadius.circular(3),
+            if (_jobType != JobType.quotation && _jobType != JobType.sale) ...[
+              const SizedBox(width: 16),
+              Expanded(
+                child: _customStatuses.isEmpty
+                    // Fallback to enum dropdown if no custom statuses
+                    ? DropdownButtonFormField<JobStatus>(
+                        initialValue: _selectedStatus,
+                        decoration: InputDecoration(
+                          labelText:
+                              _isServiceBudget ? 'Estado operativo' : 'Estado',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.swap_horiz),
+                        ),
+                        items: JobStatus.values.map((status) {
+                          return DropdownMenuItem(
+                            value: status,
+                            child: Text(status.displayName),
+                          );
+                        }).toList(),
+                        onChanged: _isStatusTransitionLocked
+                            ? null
+                            : (status) {
+                                if (status != null) {
+                                  setState(() {
+                                    _selectedStatus = status;
+                                  });
+                                }
+                              },
+                      )
+                    // Use custom statuses dropdown
+                    : DropdownButtonFormField<JobStatusCustom>(
+                        initialValue: _selectedCustomStatus,
+                        decoration: InputDecoration(
+                          labelText:
+                              _isServiceBudget ? 'Estado operativo' : 'Estado',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.swap_horiz),
+                        ),
+                        items: _customStatuses.map((status) {
+                          return DropdownMenuItem(
+                            value: status,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: status.colorValue,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
                                 ),
-                              ),
-                              Text(status.name),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: _isStatusTransitionLocked
-                          ? null
-                          : (status) {
-                              if (status != null) {
-                                setState(() {
-                                  _selectedCustomStatus = status;
-                                  // Also update the enum status for legacy compatibility
-                                  _selectedStatus =
-                                      _mapPhaseToJobStatus(status.phase);
-                                });
-                              }
-                            },
-                    ),
-            ),
+                                Text(status.name),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: _isStatusTransitionLocked
+                            ? null
+                            : (status) {
+                                if (status != null) {
+                                  setState(() {
+                                    _selectedCustomStatus = status;
+                                    // Also update the enum status for legacy compatibility
+                                    _selectedStatus =
+                                        _mapPhaseToJobStatus(status.phase);
+                                  });
+                                }
+                              },
+                      ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 16),
@@ -13620,7 +13679,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           _buildWarrantySection(),
         ],
         // Quotation status + validity
-        if (_jobType == JobType.quotation) ...[
+        if (_isProposalWorkflow) ...[
           const SizedBox(height: 16),
           _buildQuotationSection(),
         ],
@@ -13686,7 +13745,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     if (_jobType == JobType.quotation) {
       icon = Icons.description_outlined;
       message =
-          'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir el presupuesto.';
+          'Puedes cotizar sin recibir una bicicleta. Registra la evaluación previa en Diagnóstico; no se crea ficha técnica, factura, stock ni contabilidad hasta convertir la cotización.';
     } else if (_jobType == JobType.itemService) {
       icon = Icons.build_circle_outlined;
       message =
@@ -13805,15 +13864,21 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       }
 
       _jobType = type;
+      if (type == JobType.service) {
+        // Most bicycle receptions begin with diagnosis + customer approval.
+        // Workers can still choose Facturar ahora explicitly below.
+        _serviceCommercialPath = ServiceCommercialPath.budgetFirst;
+      }
       if (type == JobType.sale) {
         _selectedWorkbenchTab = _JobWorkbenchTab.general;
       }
       _warrantyOutcome = null;
-      _quotationStatus =
-          type == JobType.quotation ? QuotationStatus.pending : null;
-      _quotationValidUntil = type == JobType.quotation
-          ? DateTime.now().add(const Duration(days: 30))
-          : null;
+      final isProposal = type == JobType.quotation ||
+          (type == JobType.service &&
+              _serviceCommercialPath == ServiceCommercialPath.budgetFirst);
+      _quotationStatus = isProposal ? QuotationStatus.pending : null;
+      _quotationValidUntil =
+          isProposal ? DateTime.now().add(const Duration(days: 30)) : null;
 
       if (type != JobType.service && type != JobType.warranty) {
         _clearSelectedBikeObject(discardPendingProfileEdits: true);
@@ -13849,6 +13914,87 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     if (type == JobType.warranty && _selectedCustomer != null) {
       unawaited(_loadWarrantySourcesForSelectedCustomer());
     }
+  }
+
+  void _selectServiceCommercialPath(ServiceCommercialPath path) {
+    if (widget.jobId != null || _serviceCommercialPath == path) return;
+    setState(() {
+      _serviceCommercialPath = path;
+      if (path == ServiceCommercialPath.budgetFirst) {
+        _quotationStatus = QuotationStatus.pending;
+        _quotationValidUntil ??= DateTime.now().add(const Duration(days: 30));
+      } else {
+        _quotationStatus = null;
+        _quotationValidUntil = null;
+      }
+    });
+  }
+
+  Widget _buildServiceCommercialPathSelector(ThemeData theme) {
+    final colors = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '¿Cómo se cobrará este servicio?',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Semantics(
+          label: 'Modalidad comercial del servicio',
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ServiceCommercialPath>(
+              segments: const [
+                ButtonSegment(
+                  value: ServiceCommercialPath.budgetFirst,
+                  icon: Icon(Icons.request_quote_outlined, size: 17),
+                  label: Text('Presupuestar primero'),
+                ),
+                ButtonSegment(
+                  value: ServiceCommercialPath.invoiceNow,
+                  icon: Icon(Icons.receipt_long_outlined, size: 17),
+                  label: Text('Facturar ahora'),
+                ),
+              ],
+              selected: {_serviceCommercialPath},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) =>
+                  _selectServiceCommercialPath(selection.first),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 150),
+          child: Row(
+            key: ValueKey(_serviceCommercialPath),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                _serviceCommercialPath == ServiceCommercialPath.budgetFirst
+                    ? Icons.lock_clock_outlined
+                    : Icons.link_outlined,
+                size: 16,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  _serviceCommercialPath.description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildJobTypeSelector() {
@@ -13956,6 +14102,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ),
         ),
+        if (_jobType == JobType.service) ...[
+          const SizedBox(height: 14),
+          _buildServiceCommercialPathSelector(theme),
+        ],
       ],
     );
   }
@@ -13963,11 +14113,11 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   String _jobTypeDescription(JobType type) {
     switch (type) {
       case JobType.service:
-        return 'El cliente deja una bicicleta. Al guardar se crea o sincroniza su factura.';
+        return 'El cliente deja una bicicleta. Elige si primero enviarás un presupuesto o si la factura debe crearse al guardar.';
       case JobType.itemService:
         return 'El cliente deja solo un componente. No aumenta el contador de bicicletas.';
       case JobType.quotation:
-        return 'Propuesta para enviar al cliente: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.';
+        return 'Cotización sin bicicleta ni componente recibido: genera PDF, pero no factura, stock ni contabilidad hasta aprobarla.';
       case JobType.warranty:
         return 'Reclamo vinculado a un trabajo entregado. La cobertura se decide y registra por separado.';
       case JobType.sale:
@@ -13977,9 +14127,13 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   Widget _buildJobTypeBadge() {
     final theme = Theme.of(context);
-    final explanation = _jobType == JobType.quotation
-        ? 'El modo no se cambia en esta ficha. Aprueba, rechaza, reabre o convierte el presupuesto mediante las acciones auditadas de la tabla.'
-        : 'El modo y la recepción quedan fijos al crear el registro. Las conversiones válidas se realizan mediante acciones auditadas de la tabla.';
+    final label =
+        _isServiceBudget ? 'Servicio · Presupuesto' : _jobType.displayName;
+    final explanation = _isServiceBudget
+        ? 'La bicicleta, ficha y diagnóstico ya pertenecen a este trabajo. Aprueba y factura el presupuesto mediante la acción auditada de la tabla.'
+        : _jobType == JobType.quotation
+            ? 'El modo no se cambia en esta ficha. Aprueba, rechaza, reabre o convierte la cotización mediante las acciones auditadas de la tabla.'
+            : 'El modo y la recepción quedan fijos al crear el registro. Las conversiones válidas se realizan mediante acciones auditadas de la tabla.';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -14001,7 +14155,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _jobType.displayName,
+                  label,
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w700,
@@ -14091,11 +14245,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: 'Ítem / Componente *',
+          labelText: 'Ítem / Componente (opcional)',
           border: const OutlineInputBorder(),
           prefixIcon: Icon(_jobTypeIcon(_jobType)),
           suffixIcon: widget.jobId == null ? const Icon(Icons.search) : null,
-          helperText: 'Busca en tu catálogo de componentes personalizados.',
+          helperText:
+              'Busca en el catálogo o usa la descripción manual de abajo.',
         ),
         child: Text(
           _selectedSubject?.name ?? 'Buscar componente...',
@@ -14759,7 +14914,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Estado del Presupuesto',
+          'Estado de $_proposalDocumentLabelLower',
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -14770,12 +14925,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           children: [
             Expanded(
               child: InputDecorator(
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Estado',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.request_quote_outlined),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.request_quote_outlined),
                   helperText:
-                      'Se cambia desde la acción auditada del presupuesto.',
+                      'Se cambia desde la acción auditada de $_proposalDocumentLabelLower.',
                 ),
                 child: Align(
                   alignment: Alignment.centerLeft,
@@ -14847,16 +15002,19 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               color: const Color(0xFFF59E0B).withValues(alpha: 0.30),
             ),
           ),
-          child: const Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.description_outlined,
+              const Icon(Icons.description_outlined,
                   size: 18, color: Color(0xFFB45309)),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Se puede guardar y descargar como presupuesto. No genera factura, pago, salida de stock ni asiento contable hasta convertirlo a un trabajo cobrable.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                  'Se puede guardar y descargar como $_proposalDocumentLabelLower. No genera factura, pago, salida de stock ni asiento contable hasta aprobar y facturar.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF92400E),
+                  ),
                 ),
               ),
             ],

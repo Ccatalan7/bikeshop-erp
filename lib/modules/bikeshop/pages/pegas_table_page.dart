@@ -451,6 +451,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         'delivered',
         'service_warranty_active',
         'warranty_completed',
+        'quotations_closed',
         'unpaid',
         'all',
       ];
@@ -469,6 +470,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'Garantía vigente';
       case 'warranty_completed':
         return 'Garantías cerradas';
+      case 'quotations_closed':
+        return 'Cotizaciones cerradas';
       case 'unpaid':
         return 'Sin pagar';
       case 'all':
@@ -490,6 +493,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return 'trabajos con garantía de servicio vigente';
       case 'warranty_completed':
         return 'trabajos de garantía completados';
+      case 'quotations_closed':
+        return 'cotizaciones cerradas';
       case 'unpaid':
         return 'trabajos sin pagar';
       case 'test':
@@ -531,6 +536,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return const Color(0xFF059669);
       case 'warranty_completed':
         return const Color(0xFF9333EA);
+      case 'quotations_closed':
+        return const Color(0xFF64748B);
       case 'unpaid':
         return const Color(0xFFEA580C);
       case 'all':
@@ -554,6 +561,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         return '🛡️';
       case 'warranty_completed':
         return '🛡️';
+      case 'quotations_closed':
+        return '📄';
       case 'unpaid':
         return '💵';
       case 'all':
@@ -1115,7 +1124,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       try {
         jobItemsMap = await _bikeshopService.getJobItemsForJobs(
           jobs
-              .where((job) => job.isSaleWorkflow || job.modeNeedsReview)
+              .where((job) =>
+                  job.isSaleWorkflow ||
+                  job.isQuotationWorkflow ||
+                  job.modeNeedsReview)
               .map((job) => job.id)
               .whereType<String>(),
         );
@@ -1396,6 +1408,11 @@ class _PegasTablePageState extends State<PegasTablePage>
             if (!isMechanicJobSaleActive(job, invoice)) return false;
             break;
           }
+          if (job.isStandaloneQuotation &&
+              (job.effectiveQuotationStatus == QuotationStatus.rejected ||
+                  job.effectiveQuotationStatus == QuotationStatus.expired)) {
+            return false;
+          }
           // Activos: include Terminados/Finalizados.
           // Filter out only: Cancelados, and Entregados that are already paid.
           if (job.status == JobStatus.cancelado) return false;
@@ -1409,6 +1426,13 @@ class _PegasTablePageState extends State<PegasTablePage>
           break;
         case 'warranty_completed':
           if (!isFinishedWarranty) return false;
+          break;
+        case 'quotations_closed':
+          if (!job.isStandaloneQuotation ||
+              (job.effectiveQuotationStatus != QuotationStatus.rejected &&
+                  job.effectiveQuotationStatus != QuotationStatus.expired)) {
+            return false;
+          }
           break;
         case 'completed':
           // Completed = only complete phase with finalizado status
@@ -1446,6 +1470,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                 (customer?.phone ?? '').toLowerCase().contains(searchLower) ||
                 (bike?.displayName ?? '').toLowerCase().contains(searchLower) ||
                 (job.clientRequest ?? '').toLowerCase().contains(searchLower) ||
+                (job.subjectNotes ?? '').toLowerCase().contains(searchLower) ||
                 itemText.toLowerCase().contains(searchLower);
 
         if (!matches) return false;
@@ -1648,6 +1673,18 @@ class _PegasTablePageState extends State<PegasTablePage>
         bike: _bikes[_selectedJob!.bikeId],
         items: _selectedJobItems,
         productImages: _productImages,
+        onProposalDocumentPressed: () {
+          final job = _selectedJob;
+          if (job != null) unawaited(_downloadQuotationPdf(job));
+        },
+        onProposalStatusPressed: () {
+          final job = _selectedJob;
+          if (job != null) _showStatusMenu(job);
+        },
+        onProposalConvertPressed: () {
+          final job = _selectedJob;
+          if (job != null) unawaited(_convertToService(job));
+        },
         onClose: () {
           setState(() {
             _selectedJob = null;
@@ -2053,6 +2090,18 @@ class _PegasTablePageState extends State<PegasTablePage>
             bike: _bikes[_selectedJob!.bikeId],
             items: _selectedJobItems,
             productImages: _productImages,
+            onProposalDocumentPressed: () {
+              final job = _selectedJob;
+              if (job != null) unawaited(_downloadQuotationPdf(job));
+            },
+            onProposalStatusPressed: () {
+              final job = _selectedJob;
+              if (job != null) _showStatusMenu(job);
+            },
+            onProposalConvertPressed: () {
+              final job = _selectedJob;
+              if (job != null) unawaited(_convertToService(job));
+            },
             onClose: () {
               setState(() {
                 _selectedJob = null;
@@ -2171,6 +2220,18 @@ class _PegasTablePageState extends State<PegasTablePage>
                 bike: _bikes[_selectedJob!.bikeId],
                 items: _selectedJobItems,
                 productImages: _productImages,
+                onProposalDocumentPressed: () {
+                  final job = _selectedJob;
+                  if (job != null) unawaited(_downloadQuotationPdf(job));
+                },
+                onProposalStatusPressed: () {
+                  final job = _selectedJob;
+                  if (job != null) _showStatusMenu(job);
+                },
+                onProposalConvertPressed: () {
+                  final job = _selectedJob;
+                  if (job != null) unawaited(_convertToService(job));
+                },
                 onClose: () {
                   setState(() {
                     _selectedJob = null;
@@ -2404,7 +2465,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         ),
         MenuItemButton(
           leadingIcon: const Icon(Icons.request_quote, size: 18),
-          child: const Text('Presupuesto'),
+          child: const Text('Cotización'),
           onPressed: () {
             _markNeedsRefresh();
             context.push('/taller/pegas/nueva?type=quotation');
@@ -3260,10 +3321,15 @@ class _PegasTablePageState extends State<PegasTablePage>
                 Builder(builder: (context) {
                   double totalSum = 0;
                   double paidSum = 0;
+                  double budgetSum = 0;
                   double quotationSum = 0;
                   for (final job in _filteredJobs) {
                     if (job.workflowKind == JobWorkflowKind.quotation) {
-                      quotationSum += job.totalCost;
+                      if (job.isServiceBudget) {
+                        budgetSum += job.totalCost;
+                      } else {
+                        quotationSum += job.totalCost;
+                      }
                       continue;
                     }
                     final invoice =
@@ -3316,6 +3382,22 @@ class _PegasTablePageState extends State<PegasTablePage>
                                   ),
                         ),
                       ],
+                      if (budgetSum > 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('·',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 16)),
+                        ),
+                        Text(
+                          'Presupuestado: ${fmt.format(budgetSum)}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade700,
+                                  ),
+                        ),
+                      ],
                       if (quotationSum > 0) ...[
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -3364,9 +3446,10 @@ class _PegasTablePageState extends State<PegasTablePage>
           j.customStatus?.phase ?? _inferPhaseFromLegacyStatus(j.status);
       return phase != StatusPhase.complete;
     }).length;
-    final quotations = _filteredJobs
-        .where((job) => job.workflowKind == JobWorkflowKind.quotation)
-        .length;
+    final quotations =
+        _filteredJobs.where((job) => job.isStandaloneQuotation).length;
+    final budgets = _filteredJobs.where((job) => job.isServiceBudget).length;
+    final sales = _filteredJobs.where((job) => job.isSaleWorkflow).length;
 
     Widget simpleCount(
       IconData icon,
@@ -3420,7 +3503,9 @@ class _PegasTablePageState extends State<PegasTablePage>
         ),
         simpleCount(Icons.build, 'Ítems', items),
         simpleCount(Icons.shield, 'Garantías', warranties),
+        simpleCount(Icons.request_quote_outlined, 'Presupuestos', budgets),
         simpleCount(Icons.description, 'Cotizaciones', quotations),
+        simpleCount(Icons.shopping_bag_outlined, 'Ventas / cobros', sales),
       ],
     );
   }
@@ -3591,21 +3676,16 @@ class _PegasTablePageState extends State<PegasTablePage>
     }
 
     for (final job in _filteredJobs) {
-      if (job.workflowKind == JobWorkflowKind.quotation ||
-          job.intakeKind != JobIntakeKind.bike) {
+      if (job.intakeKind != JobIntakeKind.bike) {
         continue;
       }
 
-      final jobBikes = _jobBikesMap[job.id ?? ''];
-      if (jobBikes != null && jobBikes.isNotEmpty) {
-        for (final jobBike in jobBikes) {
-          countStatus(
-            jobBike.customStatus?.name ?? job.statusDisplayName,
-            jobBike.customStatus?.colorValue ?? job.colorValue,
-          );
-        }
-      } else if (job.bikeId != null) {
-        countStatus(job.statusDisplayName, job.colorValue);
+      final jobBikes = _jobBikesMap[job.id ?? ''] ?? const [];
+      for (final jobBike in jobBikes) {
+        countStatus(
+          jobBike.customStatus?.name ?? job.statusDisplayName,
+          jobBike.customStatus?.colorValue ?? _operationalStatusColor(job),
+        );
       }
     }
 
@@ -3833,7 +3913,25 @@ class _PegasTablePageState extends State<PegasTablePage>
                           maxWidth: 124,
                           compact: true,
                         )
-                      : _buildCompactStatusBadge(job.status),
+                      : job.isStandaloneQuotation
+                          ? _buildStatusBadge(
+                              label: job.statusDisplayName,
+                              accentColor: _proposalStatusColor(job),
+                              maxWidth: 148,
+                              compact: true,
+                            )
+                          : _buildStatusBadge(
+                              label: job.statusDisplayName,
+                              accentColor: _operationalStatusColor(job),
+                              metaText: job.isServiceBudget
+                                  ? job.proposalStatusDisplayName
+                                  : _serviceWarrantyMeta(job),
+                              metaIcon: job.isServiceBudget
+                                  ? Icons.request_quote_outlined
+                                  : Icons.shield_outlined,
+                              maxWidth: 148,
+                              compact: true,
+                            ),
                 ],
               ),
 
@@ -3857,6 +3955,49 @@ class _PegasTablePageState extends State<PegasTablePage>
                 ),
                 const SizedBox(height: 5),
                 _buildSaleProductSummary(job),
+              ] else if (job.isStandaloneQuotation) ...[
+                Row(
+                  children: [
+                    Icon(Icons.request_quote_outlined,
+                        size: 16, color: Colors.grey[700]),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Cotización · Sin objeto recibido',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+                if (job.subjectNotes?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    job.subjectNotes!.trim(),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ] else if (job.isComponentIntake) ...[
+                Row(
+                  children: [
+                    Icon(Icons.build_circle_outlined,
+                        size: 16, color: Colors.grey[700]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _componentObjectLabel(job),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ] else if (bike != null)
                 Row(
                   children: [
@@ -3915,18 +4056,42 @@ class _PegasTablePageState extends State<PegasTablePage>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
+                        color: job.isQuotationWorkflow
+                            ? Colors.orange[50]
+                            : Colors.green[50],
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.green[100]!),
-                      ),
-                      child: Text(
-                        NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                            .format(job.totalCost),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green[700],
+                        border: Border.all(
+                          color: job.isQuotationWorkflow
+                              ? Colors.orange[100]!
+                              : Colors.green[100]!,
                         ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (job.isQuotationWorkflow)
+                            Text(
+                              job.isServiceBudget
+                                  ? 'Presupuestado'
+                                  : 'Cotizado',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.orange[800],
+                              ),
+                            ),
+                          Text(
+                            NumberFormat.currency(
+                                    symbol: '\$', decimalDigits: 0)
+                                .format(job.totalCost),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: job.isQuotationWorkflow
+                                  ? Colors.orange[800]
+                                  : Colors.green[700],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -3938,13 +4103,27 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
   }
 
-  Widget _buildCompactStatusBadge(JobStatus status) {
-    return _buildStatusBadge(
-      label: status.displayName,
-      accentColor: _getStatusColor(status),
-      maxWidth: 124,
-      compact: true,
-    );
+  Color _proposalStatusColor(MechanicJob job) {
+    return switch (job.effectiveQuotationStatus) {
+      QuotationStatus.pending => Colors.orange,
+      QuotationStatus.approved => Colors.green,
+      QuotationStatus.rejected => Colors.red,
+      QuotationStatus.expired => Colors.grey,
+    };
+  }
+
+  Color _operationalStatusColor(MechanicJob job) =>
+      job.customStatus?.colorValue ?? _getStatusColor(job.status);
+
+  bool _usesOperationalLifecycle(MechanicJob job) =>
+      !job.isSaleWorkflow && !job.isStandaloneQuotation;
+
+  String _componentObjectLabel(MechanicJob job) {
+    final subjectName = job.subjectData?.name.trim();
+    if (subjectName != null && subjectName.isNotEmpty) return subjectName;
+    final notes = job.subjectNotes?.trim();
+    if (notes != null && notes.isNotEmpty) return notes;
+    return 'Componente recibido';
   }
 
   Widget _buildCompactPriorityBadge(JobPriority priority) {
@@ -4220,20 +4399,47 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             ],
           ),
-          if (timestamp != null || metaText != null) ...[
+          if (timestamp != null) ...[
             const SizedBox(height: 3),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  metaText == null ? Icons.access_time_rounded : metaIcon,
+                  Icons.access_time_rounded,
                   size: compact ? 9 : 10,
                   color: palette.meta,
                 ),
                 const SizedBox(width: 3),
                 Flexible(
                   child: Text(
-                    metaText ?? _formatStatusTimestamp(timestamp!),
+                    _formatStatusTimestamp(timestamp),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 9 : 9.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.05,
+                      color: palette.meta,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (metaText != null) ...[
+            const SizedBox(height: 3),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  metaIcon,
+                  size: compact ? 9 : 10,
+                  color: palette.meta,
+                ),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    metaText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -5319,26 +5525,42 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
 
         // Non-bike job: show subject/item instead of bike
-        if (job.bikeId == null ||
+        if (job.isComponentIntake ||
+            job.bikeId == null ||
             (job.jobType == JobType.itemService && job.subjectData != null)) {
-          final subjectName = job.subjectData?.name ??
-              (job.subjectNotes?.trim().isNotEmpty == true
+          final subjectName = job.isStandaloneQuotation
+              ? 'Cotización · Sin objeto recibido'
+              : job.isComponentIntake
+                  ? _componentObjectLabel(job)
+                  : job.subjectData?.name ??
+                      (job.subjectNotes?.trim().isNotEmpty == true
+                          ? job.subjectNotes!.trim()
+                          : job.modeNeedsReview
+                              ? 'Clasificación pendiente'
+                              : 'Sin detalle de recepción');
+          final subjectNotes = job.isStandaloneQuotation
+              ? (job.subjectNotes?.trim().isNotEmpty == true
                   ? job.subjectNotes!.trim()
-                  : job.modeNeedsReview
-                      ? 'Clasificación pendiente'
-                      : job.jobType == JobType.quotation
-                          ? 'Presupuesto sin descripción'
-                          : 'Sin detalle de recepción');
-          final subjectNotes = (job.subjectData != null &&
-                  job.subjectNotes != null &&
-                  job.subjectNotes!.isNotEmpty)
-              ? job.subjectNotes
-              : job.modeNeedsReview
-                  ? job.modeReviewReason
-                  : null;
+                  : null)
+              : job.isComponentIntake
+                  ? (job.subjectData != null &&
+                          job.subjectNotes?.trim().isNotEmpty == true
+                      ? job.subjectNotes!.trim()
+                      : null)
+                  : (job.subjectData != null &&
+                          job.subjectNotes != null &&
+                          job.subjectNotes!.isNotEmpty)
+                      ? job.subjectNotes
+                      : job.modeNeedsReview
+                          ? job.modeReviewReason
+                          : null;
           final subjectIcon = job.modeNeedsReview
               ? Icons.warning_amber_rounded
-              : _jobTypeIcon(job.jobType);
+              : job.isStandaloneQuotation
+                  ? Icons.request_quote_outlined
+                  : job.isComponentIntake
+                      ? Icons.build_circle_outlined
+                      : _jobTypeIcon(job.jobType);
           final subjectColor = job.modeNeedsReview
               ? Colors.orange.shade700
               : Theme.of(context).colorScheme.secondary;
@@ -5348,7 +5570,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                 message: job.modeNeedsReview
                     ? (job.modeReviewReason ??
                         'Este registro histórico necesita completar su clasificación.')
-                    : job.jobType.displayName,
+                    : job.isQuotationWorkflow
+                        ? job.proposalDocumentLabel
+                        : job.jobType.displayName,
                 child: Icon(subjectIcon, size: 28, color: subjectColor),
               ),
               const SizedBox(width: 6),
@@ -5475,9 +5699,12 @@ class _PegasTablePageState extends State<PegasTablePage>
         if (isPerBikeDetail) {
           // Use per-bike status if set, otherwise fall back to job status
           final bikeStatus = jobBike.customStatus;
-          final statusColor =
-              bikeStatus != null ? bikeStatus.colorValue : job.colorValue;
+          final statusColor = bikeStatus != null
+              ? bikeStatus.colorValue
+              : _operationalStatusColor(job);
           final statusName = bikeStatus?.name ?? job.statusDisplayName;
+          final proposalMeta =
+              job.isServiceBudget ? job.proposalStatusDisplayName : null;
           return LayoutBuilder(
             builder: (context, constraints) {
               final chipWidth =
@@ -5488,10 +5715,11 @@ class _PegasTablePageState extends State<PegasTablePage>
                 child: _buildStatusBadge(
                   label: statusName,
                   accentColor: statusColor,
-                  timestamp:
-                      job.serviceWarranty == null ? jobBike.updatedAt : null,
-                  metaText: _serviceWarrantyMeta(job),
-                  metaIcon: Icons.shield_outlined,
+                  timestamp: jobBike.updatedAt,
+                  metaText: proposalMeta ?? _serviceWarrantyMeta(job),
+                  metaIcon: proposalMeta == null
+                      ? Icons.shield_outlined
+                      : Icons.request_quote_outlined,
                   onTap: () => _showBikeStatusMenu(job, jobBike),
                   maxWidth: chipWidth,
                 ),
@@ -5501,9 +5729,13 @@ class _PegasTablePageState extends State<PegasTablePage>
         }
 
         // Single bike job: show job-level status
-        final statusColor = job.colorValue;
+        final statusColor = job.isStandaloneQuotation
+            ? _proposalStatusColor(job)
+            : _operationalStatusColor(job);
         final statusName = job.statusDisplayName;
         final statusUpdatedAt = job.statusUpdatedAt;
+        final proposalMeta =
+            job.isServiceBudget ? job.proposalStatusDisplayName : null;
         return LayoutBuilder(
           builder: (context, constraints) {
             final chipWidth =
@@ -5514,10 +5746,12 @@ class _PegasTablePageState extends State<PegasTablePage>
               child: _buildStatusBadge(
                 label: statusName,
                 accentColor: statusColor,
-                timestamp: job.serviceWarranty == null ? statusUpdatedAt : null,
-                metaText: _serviceWarrantyMeta(job),
-                metaIcon: Icons.shield_outlined,
-                onTap: () => _showStatusMenu(job),
+                timestamp: job.isStandaloneQuotation ? null : statusUpdatedAt,
+                metaText: proposalMeta ?? _serviceWarrantyMeta(job),
+                metaIcon: proposalMeta == null
+                    ? Icons.shield_outlined
+                    : Icons.request_quote_outlined,
+                onTap: job.isSaleWorkflow ? null : () => _showStatusMenu(job),
                 maxWidth: chipWidth,
               ),
             );
@@ -5742,6 +5976,38 @@ class _PegasTablePageState extends State<PegasTablePage>
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
+            ),
+          );
+        }
+
+        if (job.isQuotationWorkflow) {
+          final fmt = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+          final totalLabel =
+              job.isServiceBudget ? 'Total presupuestado' : 'Total cotizado';
+          return Tooltip(
+            message:
+                '$totalLabel: ${fmt.format(job.totalCost)}\nDocumento no facturado; no es una cuenta por cobrar.',
+            waitDuration: const Duration(milliseconds: 350),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fmt.format(job.totalCost),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+                Text(
+                  job.isServiceBudget ? 'Presupuestado' : 'Cotizado',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -6053,22 +6319,10 @@ class _PegasTablePageState extends State<PegasTablePage>
             );
           }
 
-          // Quotation job: show quotation status chip
-          if (job.workflowKind == JobWorkflowKind.quotation) {
-            final qStatus = job.effectiveQuotationStatus;
-            final Color badgeColor;
-            switch (qStatus) {
-              case QuotationStatus.approved:
-                badgeColor = Colors.green;
-                break;
-              case QuotationStatus.rejected:
-              case QuotationStatus.expired:
-                badgeColor = Colors.red;
-                break;
-              case QuotationStatus.pending:
-                badgeColor = Colors.orange;
-                break;
-            }
+          // Non-posting proposal: its document noun depends on whether a
+          // bicycle is already in workshop custody.
+          if (job.isQuotationWorkflow) {
+            final badgeColor = _proposalStatusColor(job);
             final isGenerating =
                 job.id != null && _generatingQuotationPdfIds.contains(job.id);
             return _buildInteractiveTableField(
@@ -6101,7 +6355,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           size: 13, color: badgeColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Presupuesto',
+                      job.proposalDocumentLabel,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -6383,18 +6637,20 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ],
                     ),
                   ),
-                if (job.jobType == JobType.quotation)
-                  const PopupMenuItem(
+                if (job.isQuotationWorkflow)
+                  PopupMenuItem(
                     value: 'quotation_pdf',
                     child: Row(
                       children: [
-                        Icon(Icons.picture_as_pdf_outlined, size: 18),
-                        SizedBox(width: 8),
-                        Text('Descargar presupuesto'),
+                        const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Descargar ${job.proposalDocumentLabelLower}',
+                        ),
                       ],
                     ),
                   ),
-                if (job.workflowKind == JobWorkflowKind.quotation)
+                if (job.isQuotationWorkflow)
                   PopupMenuItem(
                     value: 'quotation_status',
                     child: Row(
@@ -6405,22 +6661,24 @@ class _PegasTablePageState extends State<PegasTablePage>
                           child: Text(
                             job.effectiveQuotationStatus ==
                                     QuotationStatus.pending
-                                ? 'Aprobar o rechazar'
-                                : 'Gestionar estado',
+                                ? 'Aprobar o rechazar ${job.proposalDocumentLabelLower}'
+                                : 'Gestionar ${job.proposalDocumentLabelLower}',
                           ),
                         ),
                       ],
                     ),
                   ),
-                if (job.workflowKind == JobWorkflowKind.quotation &&
+                if (job.isQuotationWorkflow &&
                     job.effectiveQuotationStatus == QuotationStatus.approved)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'convert',
                     child: Row(
                       children: [
-                        Icon(Icons.transform, size: 18),
-                        SizedBox(width: 8),
-                        Text('Convertir a cobrable'),
+                        const Icon(Icons.transform, size: 18),
+                        const SizedBox(width: 8),
+                        Text(job.isServiceBudget
+                            ? 'Facturar presupuesto'
+                            : 'Convertir cotización'),
                       ],
                     ),
                   ),
@@ -6448,8 +6706,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ],
                     ),
                   ),
-                if (job.workflowKind != JobWorkflowKind.quotation &&
-                    !job.isSaleWorkflow)
+                if (_usesOperationalLifecycle(job))
                   const PopupMenuItem(
                     value: 'complete',
                     child: Row(
@@ -7533,6 +7790,20 @@ class _PegasTablePageState extends State<PegasTablePage>
   Future<void> _createInvoiceForJob(MechanicJob job) async {
     final jobId = job.id;
     if (jobId == null || jobId.isEmpty) return;
+    if (job.isQuotationWorkflow) {
+      final action = job.isServiceBudget
+          ? 'aprueba y usa “Facturar presupuesto”'
+          : 'aprueba y usa “Convertir cotización”';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${job.proposalDocumentLabel} todavía no es una factura: $action.',
+          ),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+      return;
+    }
 
     _startLocalOperation();
     try {
@@ -7572,7 +7843,7 @@ class _PegasTablePageState extends State<PegasTablePage>
     final jobId = job.id;
     if (jobId == null ||
         jobId.isEmpty ||
-        job.jobType != JobType.quotation ||
+        !job.isQuotationWorkflow ||
         _generatingQuotationPdfIds.contains(jobId)) {
       return;
     }
@@ -7608,7 +7879,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       final documentNumber = (job.jobNumber?.trim().isNotEmpty ?? false)
           ? job.jobNumber!.trim()
           : jobId;
-      final quotation = Invoice(
+      final proposal = Invoice(
         tenantId: job.tenantId,
         customerId: customer?.id,
         invoiceNumber: documentNumber,
@@ -7620,32 +7891,56 @@ class _PegasTablePageState extends State<PegasTablePage>
         subtotal: gross,
         total: total.toDouble(),
         balance: 0,
+        bikeId: job.isServiceBudget ? job.bikeId : null,
         items: invoiceItems,
-        invoiceType: 'quotation',
+        invoiceType: job.isServiceBudget ? 'service_budget' : 'quotation',
         jobNumber: job.jobNumber,
         entryDate: job.arrivalDate,
         workDescription: job.subjectDisplayName,
         source: null,
       );
       final resolvedBikeNames = <String, String>{};
-      final bikeId = job.bikeId;
-      final bike = bikeId == null ? null : _bikes[bikeId];
-      if (bike != null) resolvedBikeNames['single'] = bike.displayName;
+      if (job.isServiceBudget) {
+        final jobBikes = _jobBikesMap[jobId] ?? const <MechanicJobBike>[];
+        for (final jobBike in jobBikes) {
+          final bike = jobBike.bike ?? _bikes[jobBike.bikeId];
+          final jobBikeId = jobBike.id?.trim();
+          if (bike != null && jobBikeId != null && jobBikeId.isNotEmpty) {
+            resolvedBikeNames[jobBikeId] = bike.displayName;
+          }
+        }
+        final primaryBike = job.bikeId == null ? null : _bikes[job.bikeId];
+        if (primaryBike != null) {
+          resolvedBikeNames['single'] = primaryBike.displayName;
+        }
+      }
+      if (!mounted) return;
 
-      final pdf = await InvoicePdfGenerator.generateQuotationPDF(
-        context,
-        quotation,
-        resolvedBikeNames,
-        validUntil: job.quotationValidUntil,
-        discountAmount: job.discountAmount,
-      );
+      final pdf = job.isServiceBudget
+          ? await InvoicePdfGenerator.generateServiceBudgetPDF(
+              context,
+              proposal,
+              resolvedBikeNames,
+              validUntil: job.quotationValidUntil,
+              discountAmount: job.discountAmount,
+            )
+          : await InvoicePdfGenerator.generateQuotationPDF(
+              context,
+              proposal,
+              const <String, String>{},
+              validUntil: job.quotationValidUntil,
+              discountAmount: job.discountAmount,
+            );
       final bytes = await pdf.save();
-      final fileName = InvoicePdfGenerator.quotationFileNameFor(documentNumber);
+      final fileName = job.isServiceBudget
+          ? InvoicePdfGenerator.serviceBudgetFileNameFor(documentNumber)
+          : InvoicePdfGenerator.quotationFileNameFor(documentNumber);
+      final documentLabel = job.proposalDocumentLabel;
 
       if (!kIsWeb &&
           (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
         final outputFile = await FilePicker.platform.saveFile(
-          dialogTitle: 'Guardar Presupuesto PDF',
+          dialogTitle: 'Guardar $documentLabel PDF',
           fileName: fileName,
           initialDirectory:
               await InvoicePdfGenerator.resolveDefaultSaveDirectory(),
@@ -7661,17 +7956,20 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Presupuesto PDF generado correctamente'),
+          SnackBar(
+            content: Text('$documentLabel PDF generado correctamente'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (error) {
       if (mounted) {
+        final article = job.isServiceBudget ? 'el' : 'la';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('No se pudo generar el presupuesto PDF: $error'),
+            content: Text(
+              'No se pudo generar $article ${job.proposalDocumentLabelLower} en PDF: $error',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -7687,15 +7985,21 @@ class _PegasTablePageState extends State<PegasTablePage>
     final jobId = job.id;
     if (jobId == null || jobId.isEmpty) return;
 
-    if (job.workflowKind == JobWorkflowKind.quotation &&
+    if (job.isQuotationWorkflow &&
         job.effectiveQuotationStatus != QuotationStatus.approved) {
+      final article = job.isServiceBudget ? 'el' : 'la';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Primero aprueba el presupuesto desde la acción de estado.',
+            'Primero aprueba $article ${job.proposalDocumentLabelLower} desde la acción de estado.',
           ),
         ),
       );
+      return;
+    }
+
+    if (job.isServiceBudget) {
+      await _confirmServiceBudgetConversion(job);
       return;
     }
 
@@ -7713,7 +8017,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         ..sort((a, b) => a.name.compareTo(b.name));
     } catch (error) {
       subjectCatalogError =
-          'No se pudo cargar el catálogo de componentes. Puedes continuar con una bicicleta o con la descripción manual ya guardada en el presupuesto; de lo contrario, cancela y vuelve a intentar.';
+          'No se pudo cargar el catálogo de componentes. Puedes continuar con una bicicleta o con la descripción manual ya guardada en la cotización; de lo contrario, cancela y vuelve a intentar.';
       debugPrint('Error loading conversion subjects: $error');
     }
     if (!mounted) return;
@@ -7746,8 +8050,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         : JobType.service;
     String? validationMessage;
     final reasonController = TextEditingController();
-    final sourceLabel =
-        job.jobType == JobType.warranty ? 'garantía' : 'presupuesto';
+    const sourceLabel = 'cotización';
 
     final choice = await showDialog<_JobConversionChoice>(
       context: context,
@@ -7914,7 +8217,7 @@ class _PegasTablePageState extends State<PegasTablePage>
                           Text(
                             subjectCatalogError != null
                                 ? 'No es seguro convertir como componente sin catálogo ni una descripción ya guardada.'
-                                : 'No hay componentes activos disponibles y este presupuesto no tiene una descripción manual utilizable.',
+                                : 'No hay componentes activos disponibles y esta cotización no tiene una descripción manual utilizable.',
                             style: TextStyle(
                               color: Colors.orange.shade900,
                               fontSize: 12,
@@ -8030,6 +8333,116 @@ class _PegasTablePageState extends State<PegasTablePage>
       return;
     }
 
+    await _startQuotationConversion(job, choice);
+  }
+
+  Future<void> _confirmServiceBudgetConversion(MechanicJob job) async {
+    final jobId = job.id?.trim();
+    if (jobId == null || jobId.isEmpty) return;
+
+    final persistedJobBikes = _jobBikesMap[jobId] ?? const <MechanicJobBike>[];
+    final persistedBikeIds = <String>{
+      for (final jobBike in persistedJobBikes)
+        if (jobBike.bikeId.trim().isNotEmpty) jobBike.bikeId.trim(),
+      if (job.bikeId?.trim().isNotEmpty == true) job.bikeId!.trim(),
+    };
+    if (persistedBikeIds.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Este presupuesto no conserva una bicicleta recibida válida. Actualiza la tabla y revisa el trabajo antes de facturar.',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+      return;
+    }
+
+    final bikeNames = <String>[];
+    for (final bikeId in persistedBikeIds) {
+      final jobBike = persistedJobBikes
+          .where((candidate) => candidate.bikeId == bikeId)
+          .firstOrNull;
+      final name = (jobBike?.bike ?? _bikes[bikeId])?.displayName.trim();
+      bikeNames.add(
+        name == null || name.isEmpty ? 'Bicicleta registrada' : name,
+      );
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.receipt_long_outlined, size: 28),
+        title: const Text('Facturar presupuesto'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${job.jobNumber ?? 'Este trabajo'} conservará su ficha, diagnóstico y líneas, y creará una sola factura.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                bikeNames.length == 1
+                    ? 'Bicicleta recibida'
+                    : 'Bicicletas recibidas',
+                style: Theme.of(dialogContext).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 6),
+              ...bikeNames.map(
+                (name) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.pedal_bike_outlined, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(name)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No se cambiará ni se volverá a seleccionar la recepción física.',
+                style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Crear factura'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // `bikeId: null` is intentional for this exact canonical source mode: the
+    // server preserves every persisted mechanic_job_bikes row and attribution.
+    await _startQuotationConversion(
+      job,
+      const _JobConversionChoice(targetType: JobType.service),
+    );
+  }
+
+  Future<void> _startQuotationConversion(
+    MechanicJob job,
+    _JobConversionChoice choice,
+  ) async {
+    final jobId = job.id?.trim();
+    if (jobId == null || jobId.isEmpty) return;
     final existingAttempt = _pendingQuotationConversionAttempts[jobId];
     final attempt = existingAttempt != null && existingAttempt.matches(choice)
         ? existingAttempt
@@ -8066,13 +8479,18 @@ class _PegasTablePageState extends State<PegasTablePage>
         operationKey: attempt.operationKey,
       );
       final receiptInvoiceId = result.invoiceId;
+      final convertedBikeId = choice.targetType == JobType.service
+          ? job.isServiceBudget
+              ? job.bikeId
+              : choice.bikeId
+          : null;
       var updated = job.copyWith(
         jobType: choice.targetType,
         workflowKind: JobWorkflowKind.service,
         intakeKind: choice.targetType == JobType.itemService
             ? JobIntakeKind.component
             : JobIntakeKind.bike,
-        bikeId: choice.targetType == JobType.service ? choice.bikeId : null,
+        bikeId: convertedBikeId,
         subjectId:
             choice.targetType == JobType.itemService ? choice.subjectId : null,
         quotationStatus: null,
@@ -8124,17 +8542,17 @@ class _PegasTablePageState extends State<PegasTablePage>
       }
       if (!mounted) return;
 
-      final targetLabel = choice.targetType == JobType.itemService
-          ? 'componente cobrable'
-          : 'servicio de bicicleta';
       final refreshSuffix = refreshError == null
           ? ''
           : ' No se pudo refrescar la tabla; usa Actualizar para releer el cambio guardado.';
       final invoiceId = result.invoiceId ?? updated.invoiceId;
+      final successMessage = job.isServiceBudget
+          ? '${job.jobNumber} fue facturado conservando su recepción, ficha, diagnóstico y líneas en una sola factura.'
+          : '${job.jobNumber} se convirtió a ${choice.targetType == JobType.itemService ? 'componente cobrable' : 'servicio de bicicleta'} con una sola factura.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${job.jobNumber} convertido a $targetLabel con factura creada.$refreshSuffix',
+            '$successMessage$refreshSuffix',
           ),
           duration: const Duration(seconds: 8),
           backgroundColor: refreshError == null
@@ -8418,6 +8836,16 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   void _showStatusMenu(MechanicJob job) {
+    if (job.isSaleWorkflow) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La venta se gestiona por el estado y los pagos de su factura; no tiene estado operativo de taller.',
+          ),
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (dialogContext) => _StatusManagerDialog(
@@ -8674,27 +9102,32 @@ class _PegasTablePageState extends State<PegasTablePage>
           ? ''
           : ' No se pudo refrescar la tabla; usa Actualizar para releer el cambio guardado.';
       if (attempt.status == QuotationStatus.approved) {
+        final approvedMessage = job.isServiceBudget
+            ? 'Presupuesto aprobado. Puedes facturarlo conservando la recepción y sus fichas ya guardadas.'
+            : 'Cotización aprobada. Conviértela cuando recibas la bicicleta o componente.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Presupuesto aprobado. Conviértelo cuando recibas la bicicleta o componente.$refreshSuffix',
+              '$approvedMessage$refreshSuffix',
             ),
             duration: const Duration(seconds: 8),
             backgroundColor: refreshError == null
                 ? Colors.green.shade700
                 : Colors.orange.shade800,
             action: SnackBarAction(
-              label: 'Convertir ahora',
+              label: job.isServiceBudget ? 'Facturar ahora' : 'Convertir ahora',
               textColor: Colors.white,
               onPressed: () => _convertToService(updated),
             ),
           ),
         );
       } else {
+        final stateOwner =
+            job.isServiceBudget ? 'del presupuesto' : 'de la cotización';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Estado del presupuesto actualizado.$refreshSuffix',
+              'Estado $stateOwner actualizado.$refreshSuffix',
             ),
             backgroundColor: refreshError == null
                 ? Colors.green.shade700
@@ -8735,7 +9168,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'El servidor rechazó el cambio de presupuesto; no se confirmó ningún cambio: $error',
+            'El servidor rechazó el cambio de ${job.proposalDocumentLabelLower}; no se confirmó ningún cambio: $error',
           ),
           backgroundColor: Colors.red.shade700,
         ),
@@ -8762,11 +9195,14 @@ class _PegasTablePageState extends State<PegasTablePage>
         isEarlyExpiry;
     if (!requiresReason) return '';
 
+    final proposalNoun = job.proposalDocumentLabelLower;
     final title = switch (status) {
-      QuotationStatus.rejected => 'Rechazar presupuesto',
-      QuotationStatus.approved => 'Aprobar presupuesto vencido',
-      QuotationStatus.pending => 'Reabrir presupuesto',
-      QuotationStatus.expired => 'Vencer presupuesto anticipadamente',
+      QuotationStatus.rejected => 'Rechazar $proposalNoun',
+      QuotationStatus.approved => job.isServiceBudget
+          ? 'Aprobar presupuesto vencido'
+          : 'Aprobar cotización vencida',
+      QuotationStatus.pending => 'Reabrir $proposalNoun',
+      QuotationStatus.expired => 'Vencer $proposalNoun anticipadamente',
     };
     final hint = switch (status) {
       QuotationStatus.rejected =>
@@ -9515,9 +9951,26 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   // Bulk update status
   Future<void> _bulkUpdateStatus() async {
-    final selectedJobs =
+    final requestedJobs =
         _filteredJobs.where((job) => _selectedJobIds.contains(job.id)).toList();
-    if (selectedJobs.isEmpty) return;
+    if (requestedJobs.isEmpty) return;
+
+    // Standalone quotations and sales have commercial/payment state rather
+    // than a workshop lifecycle. A mixed bulk selection updates only the
+    // physical workshop rows and reports exactly what was skipped.
+    final selectedJobs =
+        requestedJobs.where(_usesOperationalLifecycle).toList();
+    final skippedCommercialRows = requestedJobs.length - selectedJobs.length;
+    if (selectedJobs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La selección solo contiene cotizaciones o ventas, que no tienen estado operativo de taller.',
+          ),
+        ),
+      );
+      return;
+    }
 
     final statusesByPhase = _jobStatusService.statusesByPhase;
 
@@ -9672,9 +10125,10 @@ class _PegasTablePageState extends State<PegasTablePage>
         setState(_selectedJobIds.clear);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(failures.isEmpty
-                ? '$succeeded trabajos actualizados a ${newCustomStatus.name}'
-                : '$succeeded de ${selectedJobs.length} trabajos actualizados. La tabla fue recargada; ${failures.length} cambios no se confirmaron.'),
+            content: Text(
+              '${failures.isEmpty ? '$succeeded trabajos actualizados a ${newCustomStatus.name}' : '$succeeded de ${selectedJobs.length} trabajos actualizados. La tabla fue recargada; ${failures.length} cambios no se confirmaron.'}'
+              '${skippedCommercialRows == 0 ? '' : ' Se omitieron $skippedCommercialRows cotizaciones o ventas sin estado operativo.'}',
+            ),
             backgroundColor: failures.isEmpty ? Colors.green : Colors.orange,
           ),
         );
@@ -9722,6 +10176,8 @@ class _PegasTablePageState extends State<PegasTablePage>
       listenable: _jobStatusService,
       builder: (context, _) {
         final customStatuses = _jobStatusService.activeStatuses;
+        final operationalJobs =
+            _filteredJobs.where(_usesOperationalLifecycle).toList();
 
         if (customStatuses.isEmpty) {
           // Fallback to legacy statuses if no custom statuses
@@ -9738,7 +10194,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           final columns = <Widget>[];
           for (final status in legacyStatuses) {
             final jobsInStatus =
-                _filteredJobs.where((j) => j.status == status).toList();
+                operationalJobs.where((j) => j.status == status).toList();
             // Only show columns with jobs
             if (jobsInStatus.isNotEmpty) {
               columns.add(_buildLegacyBoardColumn(status, jobsInStatus));
@@ -9768,7 +10224,7 @@ class _PegasTablePageState extends State<PegasTablePage>
         // Use custom statuses - only show columns with jobs
         final columns = <Widget>[];
         for (final customStatus in customStatuses) {
-          final jobsInStatus = _filteredJobs
+          final jobsInStatus = operationalJobs
               .where((j) =>
                   j.statusId == customStatus.id ||
                   (j.statusId == null &&
@@ -9989,6 +10445,12 @@ class _PegasTablePageState extends State<PegasTablePage>
   Widget _buildBoardCard(MechanicJob job) {
     final customer = _customers[job.customerId];
     final bike = _bikes[job.bikeId];
+    final objectLabel = job.isComponentIntake
+        ? _componentObjectLabel(job)
+        : bike?.displayName ??
+            (job.modeNeedsReview
+                ? 'Clasificación pendiente'
+                : 'Sin objeto identificado');
     final isOverdue = job.deliveryDeadline != null &&
         job.deliveryDeadline!.isBefore(DateTime.now());
 
@@ -10059,7 +10521,7 @@ class _PegasTablePageState extends State<PegasTablePage>
               const SizedBox(height: 4),
               // Bike info
               Text(
-                bike?.displayName ?? 'Bici N/A',
+                objectLabel,
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[700],
@@ -10067,6 +10529,17 @@ class _PegasTablePageState extends State<PegasTablePage>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (job.isServiceBudget) ...[
+                const SizedBox(height: 4),
+                Text(
+                  job.proposalStatusDisplayName,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _proposalStatusColor(job),
+                  ),
+                ),
+              ],
               if (job.deliveryDeadline != null) ...[
                 const SizedBox(height: 8),
                 Row(
@@ -10123,7 +10596,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Widget _buildGanttView() {
     final jobsWithDates = _filteredJobs
-        .where((job) => !job.isSaleWorkflow)
+        .where(
+          (job) => !job.isSaleWorkflow && !job.isStandaloneQuotation,
+        )
         .toList()
       ..sort((a, b) => a.arrivalDate.compareTo(b.arrivalDate));
 
@@ -10755,9 +11230,13 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                     ? (_editingStatus != null
                         ? 'Editar Estado'
                         : 'Nuevo Estado')
-                    : 'Cambiar Estado'),
+                    : widget.job.isStandaloneQuotation
+                        ? 'Gestionar ${widget.job.proposalDocumentLabelLower}'
+                        : widget.job.isServiceBudget
+                            ? 'Estado operativo y presupuesto'
+                            : 'Cambiar Estado'),
               ),
-              if (!_isEditMode)
+              if (!_isEditMode && !widget.job.isStandaloneQuotation)
                 IconButton(
                   icon: const Icon(Icons.add_circle_outline, size: 22),
                   tooltip: 'Agregar estado',
@@ -10775,14 +11254,15 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                     children: [
                       if (widget.job.jobType == JobType.warranty)
                         _buildWarrantyOutcomeSection(),
-                      if (widget.job.jobType == JobType.quotation)
+                      if (widget.job.isQuotationWorkflow)
                         _buildQuotationStatusSection(),
                       if (widget.job.jobType == JobType.warranty ||
-                          widget.job.jobType == JobType.quotation)
+                          widget.job.isServiceBudget)
                         const Divider(height: 16),
-                      Flexible(
-                          child: _buildStatusList(
-                              statusesByPhase, currentStatusId)),
+                      if (!widget.job.isStandaloneQuotation)
+                        Flexible(
+                            child: _buildStatusList(
+                                statusesByPhase, currentStatusId)),
                     ],
                   ),
           ),
@@ -10924,7 +11404,10 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
   }
 
   Widget _buildQuotationStatusSection() {
+    final stored = widget.job.quotationStatus ?? QuotationStatus.pending;
     final current = widget.job.effectiveQuotationStatus;
+    final isExpiredByDate =
+        stored == QuotationStatus.pending && current == QuotationStatus.expired;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -10932,7 +11415,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Estado del Presupuesto',
+            widget.job.isServiceBudget
+                ? 'Estado del Presupuesto'
+                : 'Estado de la Cotización',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -10941,9 +11426,30 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
             ),
           ),
         ),
+        if (isExpiredByDate) ...[
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Text(
+              'La propuesta venció por fecha, pero sigue guardada como Pendiente. Para reactivarla, abre la ficha y extiende “Válido hasta”; no se registrará una transición ficticia.',
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontSize: 11,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
         Row(
           children: QuotationStatus.values.map((qStatus) {
             final isSelected = qStatus == current;
+            final isDisabled = qStatus == stored || qStatus == current;
             final Color color = switch (qStatus) {
               QuotationStatus.approved => Colors.green,
               QuotationStatus.rejected => Colors.red,
@@ -10955,7 +11461,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                 padding: const EdgeInsets.only(right: 4),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: widget.onQuotationStatusSelected != null
+                  onTap: widget.onQuotationStatusSelected != null && !isDisabled
                       ? () => widget.onQuotationStatusSelected!(qStatus)
                       : null,
                   child: AnimatedContainer(
@@ -10980,7 +11486,11 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                               ? Icons.check_circle
                               : Icons.radio_button_unchecked,
                           size: 16,
-                          color: isSelected ? color : Colors.grey,
+                          color: isSelected
+                              ? color
+                              : isDisabled
+                                  ? Colors.grey.shade300
+                                  : Colors.grey,
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -10990,7 +11500,11 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isSelected ? color : Colors.grey.shade600,
+                            color: isSelected
+                                ? color
+                                : isDisabled
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
                           ),
                           textAlign: TextAlign.center,
                         ),

@@ -2,7 +2,31 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(131);
+select plan(155);
+
+select is(
+  (
+    select constraint_definition.delete_rule
+    from information_schema.referential_constraints constraint_definition
+    where constraint_definition.constraint_schema = 'public'
+      and constraint_definition.constraint_name = 'mechanic_jobs_invoice_id_fkey'
+  ),
+  'RESTRICT',
+  'a linked workshop invoice cannot erase its authoritative job'
+);
+select has_trigger(
+  'public', 'mechanic_jobs', 'trg_delete_pega_cascade_invoice',
+  'job-originated draft cleanup keeps its guarded compatibility path'
+);
+select hasnt_trigger(
+  'public', 'sales_invoices', 'trg_delete_invoice_cascade_pega',
+  'Sales no longer has an invoice-to-job destructive cascade trigger'
+);
+select has_trigger(
+  'public', 'mechanic_job_bikes',
+  'trg_mechanic_job_bikes_guard_final_service_budget',
+  'a decided service budget freezes its received-bike aggregate'
+);
 
 select has_column(
   'public', 'mechanic_jobs', 'workflow_kind',
@@ -740,6 +764,214 @@ select is(
      and event_type = 'converted_to_billable'),
   1,
   'fresh-key retry does not append a second conversion event'
+);
+
+-- A normal workshop reception can begin as a non-posting service budget. The
+-- conversion must reuse its already-persisted bike aggregate when the client
+-- sends no replacement p_bike_id, preserving ficha, diagnosis and attribution.
+create temporary table mode_service_budget_finance_baseline as
+select
+  (select count(*)::integer from public.sales_invoices) as invoice_count,
+  (select count(*)::integer from public.stock_movements) as stock_count,
+  (select count(*)::integer from public.journal_entries) as journal_count;
+
+insert into public.mechanic_jobs(
+  id, tenant_id, customer_id, bike_id, job_number, job_type, workflow_kind,
+  intake_kind, quotation_status, quotation_valid_until, discount_amount,
+  client_request, diagnosis, status
+) values (
+  '99616000-0000-4000-8000-000000000090',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000011',
+  '99616000-0000-4000-8000-000000000031',
+  'MODE-SERVICE-BUDGET',
+  'quotation',
+  'quotation',
+  'bike',
+  'pending',
+  clock_timestamp() + interval '7 days',
+  500,
+  'Mantención completa solicitada',
+  'Transmisión requiere limpieza',
+  'PRESUPUESTO'
+);
+
+insert into public.mechanic_job_bikes(
+  id, tenant_id, job_id, bike_id, order_index, diagnosis, work_requested,
+  technician_notes, diagnosis_sheet_key, diagnosis_sheet_data
+) values (
+  '99616000-0000-4000-8000-000000000091',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000090',
+  '99616000-0000-4000-8000-000000000031',
+  0,
+  'Diagnóstico por bicicleta conservado',
+  'Limpieza y ajuste',
+  'No reemplazar cadena sin confirmar',
+  'workshop-v1',
+  jsonb_build_object('drivetrain', jsonb_build_object('status', 'dirty'))
+);
+
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, product_sku,
+  item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000092',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000090',
+  '99616000-0000-4000-8000-000000000091',
+  '99616000-0000-4000-8000-000000000051',
+  'Quoted Part',
+  'MODE-PART',
+  'product',
+  1,
+  9000
+);
+
+select is(
+  (select job_type from public.mechanic_jobs
+   where id = '99616000-0000-4000-8000-000000000090'),
+  'quotation',
+  'a service budget keeps the rolling-compatible quotation facade'
+);
+select is(
+  (select workflow_kind || '/' || intake_kind from public.mechanic_jobs
+   where id = '99616000-0000-4000-8000-000000000090'),
+  'quotation/bike',
+  'a service budget independently records proposal workflow and bike custody'
+);
+select is(
+  (select total_cost from public.mechanic_jobs
+   where id = '99616000-0000-4000-8000-000000000090'),
+  8500::numeric,
+  'a service budget total includes its staged discount'
+);
+select is(
+  (select count(*)::integer from public.sales_invoices),
+  (select invoice_count from mode_service_budget_finance_baseline),
+  'saving a service budget does not create an invoice'
+);
+select is(
+  (select count(*)::integer from public.stock_movements),
+  (select stock_count from mode_service_budget_finance_baseline),
+  'saving service-budget product lines creates no stock movement'
+);
+select is(
+  (select count(*)::integer from public.journal_entries),
+  (select journal_count from mode_service_budget_finance_baseline),
+  'saving service-budget product lines creates no accounting journal'
+);
+
+select is(
+  public.transition_mechanic_job_quotation(
+    '99616000-0000-4000-8000-000000000090',
+    'approved',
+    null,
+    '99616000-0000-4000-8000-000000000220'
+  )->>'quotation_status',
+  'approved',
+  'the service budget uses the same audited approval command'
+);
+
+select throws_ok(
+  $$update public.mechanic_job_bikes
+      set diagnosis = 'Mutación posterior a la aprobación'
+    where id = '99616000-0000-4000-8000-000000000091'$$,
+  '23514',
+  'Las bicicletas y fichas de un presupuesto decidido son inmutables; reabre la propuesta mediante el comando auditado.',
+  'an approved service budget protects its bicycle ficha and diagnosis'
+);
+
+create temporary table mode_service_budget_conversion as
+select public.convert_mechanic_job_to_billable(
+  '99616000-0000-4000-8000-000000000090',
+  'service',
+  null,
+  true,
+  null,
+  null,
+  '99616000-0000-4000-8000-000000000221'
+) as result;
+
+select is(
+  (select result->>'job_id' from mode_service_budget_conversion),
+  '99616000-0000-4000-8000-000000000090',
+  'service-budget conversion keeps the same workshop job identity'
+);
+select is(
+  (select workflow_kind || '/' || intake_kind from public.mechanic_jobs
+   where id = '99616000-0000-4000-8000-000000000090'),
+  'service/bike',
+  'approved service budget becomes a billable bike service in place'
+);
+select is(
+  (select count(*)::integer from public.sales_invoices invoice
+   join public.mechanic_jobs job on job.invoice_id = invoice.id
+   where job.id = '99616000-0000-4000-8000-000000000090'),
+  1,
+  'service-budget conversion creates exactly one linked invoice'
+);
+select is(
+  (select diagnosis from public.mechanic_job_bikes
+   where id = '99616000-0000-4000-8000-000000000091'),
+  'Diagnóstico por bicicleta conservado',
+  'service-budget conversion preserves the persisted bike diagnosis row'
+);
+select is(
+  (select diagnosis_sheet_data->'drivetrain'->>'status'
+   from public.mechanic_job_bikes
+   where id = '99616000-0000-4000-8000-000000000091'),
+  'dirty',
+  'service-budget conversion preserves structured ficha data'
+);
+select is(
+  (select job_bike_id from public.mechanic_job_items
+   where id = '99616000-0000-4000-8000-000000000092'),
+  '99616000-0000-4000-8000-000000000091'::uuid,
+  'service-budget conversion preserves existing line-to-bike attribution'
+);
+select is(
+  (select job.id::text from public.mechanic_jobs job
+   where job.invoice_id = (
+     select result->>'invoice_id' from mode_service_budget_conversion
+   )::uuid),
+  '99616000-0000-4000-8000-000000000090',
+  'invoice-to-job navigation resolves the same enforced foreign key in reverse'
+);
+select is(
+  (select count(*)::integer from public.sales_invoices),
+  (select invoice_count + 1 from mode_service_budget_finance_baseline),
+  'conversion adds only its one draft invoice'
+);
+select is(
+  (select count(*)::integer from public.stock_movements),
+  (select stock_count from mode_service_budget_finance_baseline),
+  'the converted draft invoice still posts no stock movement'
+);
+select is(
+  (select count(*)::integer from public.journal_entries),
+  (select journal_count from mode_service_budget_finance_baseline),
+  'the converted draft invoice still posts no accounting journal'
+);
+select is(
+  public.convert_mechanic_job_to_billable(
+    '99616000-0000-4000-8000-000000000090',
+    'service',
+    null,
+    true,
+    null,
+    null,
+    '99616000-0000-4000-8000-000000000221'
+  )->>'invoice_id',
+  (select result->>'invoice_id' from mode_service_budget_conversion),
+  'service-budget conversion replays without creating another invoice'
+);
+select is(
+  (select count(*)::integer from public.mechanic_job_mode_events
+   where job_id = '99616000-0000-4000-8000-000000000090'
+     and event_type = 'converted_to_billable'),
+  1,
+  'service-budget conversion appends exactly one immutable conversion event'
 );
 
 insert into public.mechanic_jobs(

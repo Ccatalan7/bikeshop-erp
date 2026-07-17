@@ -115,6 +115,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       TaxTreatment.noTax; // Default: no tax (cash/transfer common)
 
   String? get _currentInvoiceId => _loadedInvoice?.id ?? widget.invoiceId;
+  bool get _isCanonicalJobInvoiceCreation {
+    final jobId = (_linkedJobId ?? widget.preselectedJobId)?.trim();
+    return _currentInvoiceId == null && jobId != null && jobId.isNotEmpty;
+  }
+
   bool get _canEditFields => _status != InvoiceStatus.paid && _isEditing;
   bool get _canMarkAsSent =>
       _currentInvoiceId != null &&
@@ -1340,6 +1345,48 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       '💾 [InvoiceFormPage] Save tapped | invoiceId=${widget.invoiceId ?? _loadedInvoice?.id ?? 'NEW'} | lineEntries=${_lineEntries.length} | selectedCustomer=${_selectedCustomer?.id ?? 'null'}',
     );
 
+    final jobIdForCanonicalCreation =
+        _loadedInvoice?.id == null && widget.invoiceId == null
+            ? (_linkedJobId ?? widget.preselectedJobId)?.trim()
+            : null;
+    if (jobIdForCanonicalCreation != null &&
+        jobIdForCanonicalCreation.isNotEmpty) {
+      setState(() => _isSaving = true);
+      try {
+        final invoiceId = await context
+            .read<BikeshopService>()
+            .createInvoiceFromJob(jobIdForCanonicalCreation);
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Borrador del trabajo creado correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go('/sales/invoices/$invoiceId');
+      } catch (e) {
+        debugPrint(
+          '❌ [InvoiceFormPage] Canonical job invoice command failed: $e',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No fue posible crear o confirmar la factura del trabajo: $e',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
+      }
+      return;
+    }
+
     if (_selectedCustomer == null) {
       debugPrint('❌ [InvoiceFormPage] Save aborted: no selected customer');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1472,23 +1519,6 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
       if (!mounted) return;
 
-      // If this invoice was created from a mechanic job, write the link back
-      if (_linkedJobId != null &&
-          saved.id != null &&
-          widget.invoiceId == null) {
-        try {
-          final db = Provider.of<DatabaseService>(context, listen: false);
-          await db.supabase
-              .from('mechanic_jobs')
-              .update({'invoice_id': saved.id}).eq('id', _linkedJobId!);
-          await _salesService.triggerLinkedJobSync(saved.id!);
-          debugPrint(
-              '🔗 [InvoiceFormPage] Linked invoice ${saved.id} to job $_linkedJobId and triggered invoice→job sync');
-        } catch (e) {
-          debugPrint('⚠️ [InvoiceFormPage] Could not link invoice to job: $e');
-        }
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Borrador guardado correctamente'),
@@ -1547,7 +1577,9 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   ? const Center(child: BrandedLoading())
                   : _loadError != null
                       ? _buildLoadError(theme)
-                      : _buildForm(theme),
+                      : _isCanonicalJobInvoiceCreation
+                          ? _buildCanonicalJobInvoiceCreation(theme)
+                          : _buildForm(theme),
             ),
           ],
         ),
@@ -1597,6 +1629,85 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     );
   }
 
+  Widget _buildCanonicalJobInvoiceCreation(ThemeData theme) {
+    final jobLabel = _linkedJobNumber?.trim().isNotEmpty == true
+        ? _linkedJobNumber!.trim()
+        : 'seleccionado';
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.link_outlined,
+                  size: 42,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Crear factura desde el trabajo $jobLabel',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Cliente, bicicletas, productos, servicios, precios y descuento se tomarán de la ficha de trabajo. Así la factura queda vinculada y no se descartan cambios ingresados en una pantalla paralela.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Si necesitas modificar esos datos, edita primero el trabajo.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _saveInvoice,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.receipt_long_outlined),
+                  label: const Text('Crear factura vinculada'),
+                ),
+                if (_linkedJobId != null) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () =>
+                        context.push('/taller/pegas/${_linkedJobId!}'),
+                    icon: const Icon(Icons.open_in_new, size: 17),
+                    label: const Text('Volver al trabajo'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(ThemeData theme) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1604,9 +1715,11 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
         final invoiceNumber = _invoiceNumberController.text.trim();
         final hasExistingInvoice = _currentInvoiceId != null;
-        final title = invoiceNumber.isNotEmpty
-            ? 'Factura $invoiceNumber'
-            : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
+        final title = _isCanonicalJobInvoiceCreation
+            ? 'Facturar trabajo'
+            : invoiceNumber.isNotEmpty
+                ? 'Factura $invoiceNumber'
+                : (hasExistingInvoice ? 'Factura' : 'Nueva factura');
 
         final actionButtons = <Widget>[];
 
@@ -1616,6 +1729,15 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
               onPressed: _isLoading ? null : _initialize,
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
+            ),
+          );
+        } else if (_isCanonicalJobInvoiceCreation) {
+          actionButtons.add(
+            AppButton(
+              text: 'Crear factura vinculada',
+              icon: Icons.receipt_long_outlined,
+              onPressed: _isSaving ? null : _saveInvoice,
+              isLoading: _isSaving,
             ),
           );
         } else if (_canEditFields) {
