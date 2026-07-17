@@ -118,7 +118,7 @@ class _RightToolbarState extends State<RightToolbar> {
   String _toolTitle(ToolbarTool tool) {
     switch (tool) {
       case ToolbarTool.notifications:
-        return 'Notificaciones';
+        return 'Resumen diario';
       case ToolbarTool.newJob:
         return 'Nuevo Trabajo';
       case ToolbarTool.bikeFinder:

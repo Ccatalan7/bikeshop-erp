@@ -660,14 +660,29 @@ class NotificationService {
   final ValueNotifier<List<Map<String, dynamic>>> notificationsFeed =
       ValueNotifier<List<Map<String, dynamic>>>(const []);
 
-  /// Total unread notifications across all types.
+  /// Unread ERP alerts created during the current local business day.
+  ///
+  /// The right-toolbar badge is a prompt for today's attention, not a lifetime
+  /// inbox counter. Older unread rows remain available in the seven-day
+  /// briefing and can still be marked read, but no longer accumulate into a
+  /// permanent `99+` badge.
   final ValueNotifier<int> unreadNotificationsCount = ValueNotifier<int>(0);
 
   String? _notificationsTenantId;
 
   void _recomputeUnreadCount() {
-    final unread =
-        notificationsFeed.value.where((row) => row['read_at'] == null).length;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final unread = notificationsFeed.value.where((row) {
+      if (row['read_at'] != null) return false;
+      final createdAt = DateTime.tryParse(
+        row['created_at']?.toString() ?? '',
+      )?.toLocal();
+      return createdAt != null &&
+          !createdAt.isBefore(today) &&
+          createdAt.isBefore(tomorrow);
+    }).length;
     unreadNotificationsCount.value = unread;
   }
 

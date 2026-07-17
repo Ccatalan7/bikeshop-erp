@@ -188,6 +188,18 @@ replay, `bikes` + optional `bike_profiles`, and their save events in one
 transaction. `bike_aggregate_save_operations` is command/audit evidence only;
 technical truth remains exclusively in `bikes` and `bike_profiles`.
 
+## Operational Briefing Surfaces
+
+| Workflow / host | User entry point | Canonical implementation | Required shared behavior |
+|---|---|---|---|
+| Daily operational briefing | Right-toolbar bell and the slide-in notifications entry point | `NotificationsToolbarPanel` / `showNotificationsPanel`, both composing `_NotificationBriefing` in `notifications_panel.dart` | Default to the local calendar day with an explicit seven-day comparison; summarize workshop jobs, payments, online orders and stored files; surface unread mail and chat as attention items; show a bounded cross-module activity list rather than an unbounded inbox; route every summary and activity item through `WorkspaceManager` |
+| Notification attention badge | Collapsed right-toolbar bell | `NotificationService.unreadNotificationsCount` consumed by `RightToolbar` | Count unread ERP alerts from the current local business day only, so historical unread rows cannot create a permanent `99+` badge; older activity remains visible in the seven-day briefing and is not deleted |
+
+`NotificationService.notificationsFeed`, `MailAccountManager`, `ChatProvider`
+and `AppFileStorageService` remain the owners of their respective data. The
+briefing composes their read models and routes into the canonical modules; it
+does not create parallel email, chat, file or business-event persistence.
+
 ## File Library Surfaces
 
 | Workflow / host | User entry point | Canonical implementation | Required shared behavior |
