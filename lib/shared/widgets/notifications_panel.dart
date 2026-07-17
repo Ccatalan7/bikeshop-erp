@@ -246,55 +246,82 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      await Future.wait([
-                        _loadFiles(),
-                        _mail.backgroundRefresh(),
-                      ]);
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.035, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
                     },
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
-                      children: [
-                        _BriefingHeading(period: _period),
-                        const SizedBox(height: 12),
-                        _MetricsGrid(
-                          digest: digest,
-                          onNavigate: widget.onNavigate,
-                        ),
-                        const SizedBox(height: 16),
-                        _AttentionSection(
-                          unreadEmails: unreadEmails,
-                          unreadChats: unreadChats,
-                          operationalAlerts: digest.unreadAlertCount,
-                          onNavigate: widget.onNavigate,
-                        ),
-                        const SizedBox(height: 16),
-                        _FilesSection(
-                          period: _period,
-                          files: periodFiles,
-                          loading: _loadingFiles,
-                          hasError: _filesError != null,
-                          onRetry: _loadFiles,
-                          onNavigate: widget.onNavigate,
-                        ),
-                        const SizedBox(height: 16),
-                        _ActivitySection(
-                          items: activity,
-                          period: _period,
-                          onTap: (item) {
-                            final notificationId = item.notificationId;
-                            if (notificationId != null) {
-                              unawaited(
-                                _notifications
-                                    .markNotificationRead(notificationId),
-                              );
-                            }
-                            widget.onNavigate(item.route);
-                          },
-                        ),
-                      ],
+                    child: RefreshIndicator(
+                      key: ValueKey(_period),
+                      onRefresh: () async {
+                        await Future.wait([
+                          _loadFiles(),
+                          _mail.backgroundRefresh(),
+                        ]);
+                      },
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 24),
+                        children: [
+                          _BriefingHero(
+                            period: _period,
+                            items: activity,
+                          ),
+                          _MetricsRibbon(
+                            digest: digest,
+                            onNavigate: widget.onNavigate,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                            child: _AttentionSection(
+                              unreadEmails: unreadEmails,
+                              unreadChats: unreadChats,
+                              operationalAlerts: digest.unreadAlertCount,
+                              onNavigate: widget.onNavigate,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+                            child: _FilesSection(
+                              period: _period,
+                              files: periodFiles,
+                              loading: _loadingFiles,
+                              hasError: _filesError != null,
+                              onRetry: _loadFiles,
+                              onNavigate: widget.onNavigate,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                            child: _ActivitySection(
+                              items: activity,
+                              period: _period,
+                              onTap: (item) {
+                                final notificationId = item.notificationId;
+                                if (notificationId != null) {
+                                  unawaited(
+                                    _notifications.markNotificationRead(
+                                      notificationId,
+                                    ),
+                                  );
+                                }
+                                widget.onNavigate(item.route);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -350,7 +377,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           createdAt: email.receivedTime.toLocal(),
           route: '/mail',
           icon: Icons.mail_outline,
-          accent: const Color(0xFF4B5563),
+          accent: _mailAccent,
           unread: !email.isRead,
         ),
       );
@@ -370,7 +397,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           createdAt: lastMessageAt,
           route: '/chat',
           icon: Icons.chat_bubble_outline,
-          accent: const Color(0xFF4B5563),
+          accent: _chatAccent,
           unread: conversation.unreadCount > 0 ||
               (conversation.type == 'support' &&
                   conversation.status == 'pending'),
@@ -379,7 +406,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     }
 
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return items.take(12).toList(growable: false);
+    return items;
   }
 
   String _conversationName(Conversation conversation) {
@@ -390,6 +417,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     return conversation.channelLabel;
   }
 }
+
+const _jobsAccent = Color(0xFF2878B8);
+const _paymentsAccent = Color(0xFF2C8A62);
+const _ordersAccent = Color(0xFF7758A6);
+const _filesAccent = Color(0xFFC4772D);
+const _mailAccent = Color(0xFF3D6FA8);
+const _chatAccent = Color(0xFF7559A5);
+const _warningAccent = Color(0xFFC27A22);
 
 class _BriefingToolbar extends StatelessWidget {
   const _BriefingToolbar({
@@ -408,33 +443,19 @@ class _BriefingToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       child: Row(
         children: [
-          SegmentedButton<NotificationDigestPeriod>(
-            segments: const [
-              ButtonSegment(
-                value: NotificationDigestPeriod.today,
-                label: Text('Hoy'),
-              ),
-              ButtonSegment(
-                value: NotificationDigestPeriod.sevenDays,
-                label: Text('7 días'),
-              ),
-            ],
-            selected: {period},
-            showSelectedIcon: false,
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              textStyle: WidgetStatePropertyAll(
-                theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            onSelectionChanged: (selection) {
-              onPeriodChanged(selection.first);
-            },
+          _PeriodTab(
+            label: 'Hoy',
+            selected: period == NotificationDigestPeriod.today,
+            onTap: () => onPeriodChanged(NotificationDigestPeriod.today),
+          ),
+          const SizedBox(width: 18),
+          _PeriodTab(
+            label: '7 días',
+            selected: period == NotificationDigestPeriod.sevenDays,
+            onTap: () => onPeriodChanged(NotificationDigestPeriod.sevenDays),
           ),
           const Spacer(),
           if (unreadAlerts > 0)
@@ -442,8 +463,12 @@ class _BriefingToolbar extends StatelessWidget {
               message: 'Marcar alertas del ERP como leídas',
               child: TextButton.icon(
                 onPressed: onMarkAlertsRead,
-                icon: const Icon(Icons.done_all, size: 16),
-                label: Text('$unreadAlerts'),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.primary,
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.done_all, size: 17),
+                label: Text('$unreadAlerts nuevas'),
               ),
             ),
         ],
@@ -452,10 +477,59 @@ class _BriefingToolbar extends StatelessWidget {
   }
 }
 
-class _BriefingHeading extends StatelessWidget {
-  const _BriefingHeading({required this.period});
+class _PeriodTab extends StatelessWidget {
+  const _PeriodTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 7),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              style: (theme.textTheme.labelLarge ?? const TextStyle()).copyWith(
+                color: selected
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+              child: Text(label),
+            ),
+            const SizedBox(height: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: selected ? 28 : 0,
+              height: 2,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BriefingHero extends StatelessWidget {
+  const _BriefingHero({required this.period, required this.items});
 
   final NotificationDigestPeriod period;
+  final List<_BriefingActivityItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -463,169 +537,342 @@ class _BriefingHeading extends StatelessWidget {
     final todayLabel = MaterialLocalizations.of(context).formatFullDate(
       DateTime.now(),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          period == NotificationDigestPeriod.today
-              ? 'Briefing de hoy'
-              : 'Resumen de los últimos 7 días',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
+    final accent = theme.colorScheme.primary;
+    return Container(
+      color: accent.withValues(
+        alpha: theme.brightness == Brightness.dark ? 0.14 : 0.065,
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      period == NotificationDigestPeriod.today
+                          ? 'Hoy en Viñabike'
+                          : 'Pulso de la semana',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.25,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      period == NotificationDigestPeriod.today
+                          ? todayLabel
+                          : 'Los últimos siete días, en una mirada',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${items.length}',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'movimientos',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          period == NotificationDigestPeriod.today
-              ? todayLabel
-              : 'Actividad operativa consolidada',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          _ActivityPulse(period: period, items: items, accent: accent),
+        ],
+      ),
     );
   }
 }
 
-class _MetricsGrid extends StatelessWidget {
-  const _MetricsGrid({
-    required this.digest,
-    required this.onNavigate,
+class _ActivityPulse extends StatelessWidget {
+  const _ActivityPulse({
+    required this.period,
+    required this.items,
+    required this.accent,
   });
+
+  final NotificationDigestPeriod period;
+  final List<_BriefingActivityItem> items;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isToday = period == NotificationDigestPeriod.today;
+    final counts = List<int>.filled(isToday ? 6 : 7, 0);
+
+    for (final item in items) {
+      final local = item.createdAt.toLocal();
+      if (isToday) {
+        final index = (local.hour ~/ 4).clamp(0, 5);
+        counts[index]++;
+      } else {
+        final start = today.subtract(const Duration(days: 6));
+        final itemDay = DateTime(local.year, local.month, local.day);
+        final index = itemDay.difference(start).inDays;
+        if (index >= 0 && index < counts.length) counts[index]++;
+      }
+    }
+
+    var maxCount = 1;
+    for (final count in counts) {
+      if (count > maxCount) maxCount = count;
+    }
+    final labels = isToday
+        ? const ['00', '04', '08', '12', '16', '20']
+        : List<String>.generate(7, (index) {
+            final start = today.subtract(const Duration(days: 6));
+            return _weekdayLabel(start.add(Duration(days: index)).weekday);
+          });
+
+    return SizedBox(
+      height: 54,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var index = 0; index < counts.length; index++) ...[
+            if (index > 0) const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(
+                          begin: 0,
+                          end: counts[index] / maxCount,
+                        ),
+                        duration: Duration(milliseconds: 360 + (index * 35)),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) {
+                          return FractionallySizedBox(
+                            widthFactor: 1,
+                            heightFactor: 0.12 + (value * 0.88),
+                            alignment: Alignment.bottomCenter,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: accent.withValues(
+                                  alpha: counts[index] == 0 ? 0.12 : 0.72,
+                                ),
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(3),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    labels[index],
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 9,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricsRibbon extends StatelessWidget {
+  const _MetricsRibbon({required this.digest, required this.onNavigate});
 
   final NotificationDigestSnapshot digest;
   final void Function(String route) onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final itemWidth = (constraints.maxWidth - 8) / 2;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.65),
+          ),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _MetricCard(
-              width: itemWidth,
-              label: 'Trabajos nuevos',
-              value: '${digest.jobCount}',
-              detail: 'Taller',
-              icon: Icons.build_outlined,
-              onTap: () => onNavigate('/taller/pegas'),
+            Expanded(
+              child: _MetricRibbonItem(
+                label: 'Trabajos',
+                value: '${digest.jobCount}',
+                hint: 'nuevos',
+                icon: Icons.build_outlined,
+                accent: _jobsAccent,
+                onTap: () => onNavigate('/taller/pegas'),
+              ),
             ),
-            _MetricCard(
-              width: itemWidth,
-              label: 'Pagos recibidos',
-              value: digest.paymentTotal > 0
-                  ? ChileanUtils.formatCurrency(digest.paymentTotal)
-                  : r'$0',
-              detail: '${digest.paymentCount} movimientos',
-              icon: Icons.payments_outlined,
-              onTap: () => onNavigate('/sales/payments'),
+            const _MetricDivider(),
+            Expanded(
+              child: _MetricRibbonItem(
+                label: 'Pagos',
+                value: digest.paymentTotal > 0
+                    ? ChileanUtils.formatCurrency(digest.paymentTotal)
+                    : r'$0',
+                hint: '${digest.paymentCount} mov.',
+                icon: Icons.payments_outlined,
+                accent: _paymentsAccent,
+                onTap: () => onNavigate('/sales/payments'),
+              ),
             ),
-            _MetricCard(
-              width: itemWidth,
-              label: 'Pedidos online',
-              value: '${digest.onlineOrderCount}',
-              detail: 'Tienda web',
-              icon: Icons.shopping_bag_outlined,
-              onTap: () => onNavigate('/website/orders'),
+            const _MetricDivider(),
+            Expanded(
+              child: _MetricRibbonItem(
+                label: 'Pedidos',
+                value: '${digest.onlineOrderCount}',
+                hint: 'online',
+                icon: Icons.shopping_bag_outlined,
+                accent: _ordersAccent,
+                onTap: () => onNavigate('/website/orders'),
+              ),
             ),
-            _MetricCard(
-              width: itemWidth,
-              label: 'Archivos',
-              value: '${digest.fileCount}',
-              detail: 'Recibidos y guardados',
-              icon: Icons.folder_open_outlined,
-              onTap: () => onNavigate('/storage'),
+            const _MetricDivider(),
+            Expanded(
+              child: _MetricRibbonItem(
+                label: 'Archivos',
+                value: '${digest.fileCount}',
+                hint: 'guardados',
+                icon: Icons.folder_open_outlined,
+                accent: _filesAccent,
+                onTap: () => onNavigate('/storage'),
+              ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.width,
+class _MetricRibbonItem extends StatelessWidget {
+  const _MetricRibbonItem({
     required this.label,
     required this.value,
-    required this.detail,
+    required this.hint,
     required this.icon,
+    required this.accent,
     required this.onTap,
   });
 
-  final double width;
   final String label;
   final String value;
-  final String detail;
+  final String hint;
   final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      width: width,
-      child: Material(
-        color: theme.colorScheme.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.8)),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      icon,
-                      size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                alignment: Alignment.center,
+                child: Icon(icon, size: 15, color: accent),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 20,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+              Text(
+                hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 9,
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MetricDivider extends StatelessWidget {
+  const _MetricDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return VerticalDivider(
+      width: 1,
+      thickness: 1,
+      indent: 8,
+      endIndent: 8,
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.55),
     );
   }
 }
@@ -645,41 +892,85 @@ class _AttentionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final total = unreadEmails + unreadChats + operationalAlerts;
-    return _SectionSurface(
-      title: 'Requiere atención',
-      trailing: total > 0 ? '$total pendientes' : 'Todo al día',
-      child: total == 0
-          ? const _QuietState(
-              icon: Icons.check_circle_outline,
-              text: 'No hay pendientes en correo, chats ni alertas.',
+    final isClear = total == 0;
+    final accent = isClear ? _paymentsAccent : _warningAccent;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 12, 10, 8),
+      decoration: BoxDecoration(
+        color: accent.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.14 : 0.075,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                isClear ? Icons.check_circle_outline : Icons.bolt_outlined,
+                size: 19,
+                color: accent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isClear ? 'Todo al día' : 'Requiere atención',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                isClear ? 'Sin pendientes' : '$total pendientes',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (isClear)
+            const Padding(
+              padding: EdgeInsets.only(top: 8, bottom: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Correo, chats y alertas están revisados.'),
+              ),
             )
-          : Column(
-              children: [
-                if (unreadEmails > 0)
-                  _ActionRow(
-                    icon: Icons.mark_email_unread_outlined,
-                    label: 'Correos sin leer',
-                    count: unreadEmails,
-                    onTap: () => onNavigate('/mail'),
-                  ),
-                if (unreadChats > 0)
-                  _ActionRow(
-                    icon: Icons.mark_chat_unread_outlined,
-                    label: 'Mensajes pendientes',
-                    count: unreadChats,
-                    onTap: () => onNavigate('/chat'),
-                  ),
-                if (operationalAlerts > 0)
-                  _ActionRow(
-                    icon: Icons.notifications_active_outlined,
-                    label: 'Alertas operativas nuevas',
-                    count: operationalAlerts,
-                    onTap: () {},
-                    showChevron: false,
-                  ),
-              ],
-            ),
+          else ...[
+            const SizedBox(height: 6),
+            if (unreadEmails > 0)
+              _ActionRow(
+                icon: Icons.mark_email_unread_outlined,
+                label: 'Correos sin leer',
+                count: unreadEmails,
+                accent: _mailAccent,
+                onTap: () => onNavigate('/mail'),
+              ),
+            if (unreadChats > 0)
+              _ActionRow(
+                icon: Icons.mark_chat_unread_outlined,
+                label: 'Mensajes pendientes',
+                count: unreadChats,
+                accent: _chatAccent,
+                onTap: () => onNavigate('/chat'),
+              ),
+            if (operationalAlerts > 0)
+              _ActionRow(
+                icon: Icons.notifications_active_outlined,
+                label: 'Alertas operativas nuevas',
+                count: operationalAlerts,
+                accent: _warningAccent,
+                onTap: () {},
+                showChevron: false,
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -704,22 +995,28 @@ class _FilesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visibleFiles = files.take(4).toList(growable: false);
-    return _SectionSurface(
+    return _OpenSection(
       title: period == NotificationDigestPeriod.today
           ? 'Archivos de hoy'
           : 'Archivos de los últimos 7 días',
       trailing: loading ? 'Actualizando' : '${files.length}',
+      accent: _filesAccent,
       child: hasError
           ? _InlineError(
               message: 'No se pudo cargar el resumen de archivos.',
               onRetry: onRetry,
             )
           : loading && files.isEmpty
-              ? const LinearProgressIndicator(minHeight: 2)
+              ? LinearProgressIndicator(
+                  minHeight: 2,
+                  color: _filesAccent,
+                  backgroundColor: _filesAccent.withValues(alpha: 0.12),
+                )
               : files.isEmpty
                   ? const _QuietState(
                       icon: Icons.folder_open_outlined,
                       text: 'No se guardaron archivos en este período.',
+                      accent: _filesAccent,
                     )
                   : Column(
                       children: [
@@ -733,9 +1030,7 @@ class _FilesSection extends StatelessWidget {
                             alignment: Alignment.centerLeft,
                             child: TextButton(
                               onPressed: () => onNavigate('/storage'),
-                              child: Text(
-                                'Ver los ${files.length} archivos',
-                              ),
+                              child: Text('Ver los ${files.length} archivos'),
                             ),
                           ),
                       ],
@@ -757,24 +1052,34 @@ class _ActivitySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionSurface(
+    final visibleItems = items.take(12).toList(growable: false);
+    return _OpenSection(
       title: 'Actividad reciente',
       trailing: period == NotificationDigestPeriod.today ? 'Hoy' : '7 días',
-      child: items.isEmpty
+      accent: _jobsAccent,
+      child: visibleItems.isEmpty
           ? const _QuietState(
               icon: Icons.inbox_outlined,
               text: 'No hay actividad registrada en este período.',
+              accent: _jobsAccent,
             )
           : Column(
               children: [
-                for (final item in items)
-                  _ActivityRow(item: item, onTap: () => onTap(item)),
-                if (items.length == 12)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                for (var index = 0; index < visibleItems.length; index++)
+                  _ActivityRow(
+                    item: visibleItems[index],
+                    isLast: index == visibleItems.length - 1,
+                    onTap: () => onTap(visibleItems[index]),
+                  ),
+                if (items.length > visibleItems.length)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
                       'Se muestran las 12 novedades más recientes.',
-                      style: TextStyle(fontSize: 11),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                     ),
                   ),
               ],
@@ -783,56 +1088,55 @@ class _ActivitySection extends StatelessWidget {
   }
 }
 
-class _SectionSurface extends StatelessWidget {
-  const _SectionSurface({
+class _OpenSection extends StatelessWidget {
+  const _OpenSection({
     required this.title,
     required this.trailing,
+    required this.accent,
     required this.child,
   });
 
   final String title;
   final String trailing;
+  final Color accent;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.8)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Text(
-                  trailing,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 18,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(99),
+              ),
             ),
-          ),
-          Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.7)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-            child: child,
-          ),
-        ],
-      ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              trailing,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        child,
+      ],
     );
   }
 }
@@ -842,6 +1146,7 @@ class _ActionRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.count,
+    required this.accent,
     required this.onTap,
     this.showChevron = true,
   });
@@ -849,6 +1154,7 @@ class _ActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final int count;
+  final Color accent;
   final VoidCallback onTap;
   final bool showChevron;
 
@@ -857,29 +1163,33 @@ class _ActionRow extends StatelessWidget {
     final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(7),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(label, style: theme.textTheme.bodySmall),
+            Container(
+              width: 27,
+              height: 27,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 15, color: accent),
             ),
+            const SizedBox(width: 9),
+            Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
             Text(
               '$count',
               style: theme.textTheme.bodyMedium?.copyWith(
+                color: accent,
                 fontWeight: FontWeight.w700,
               ),
             ),
             if (showChevron) ...[
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              const SizedBox(width: 3),
+              Icon(Icons.chevron_right, size: 18, color: accent),
             ],
           ],
         ),
@@ -900,15 +1210,24 @@ class _FileRow extends StatelessWidget {
     final contextLabel = file.contextTitle?.trim();
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(7),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(
           children: [
-            Icon(
-              _iconForFile(file),
-              size: 18,
-              color: theme.colorScheme.onSurfaceVariant,
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: _filesAccent.withValues(alpha: 0.11),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                _iconForFile(file),
+                size: 16,
+                color: _filesAccent,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -950,81 +1269,114 @@ class _FileRow extends StatelessWidget {
 }
 
 class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({required this.item, required this.onTap});
+  const _ActivityRow({
+    required this.item,
+    required this.isLast,
+    required this.onTap,
+  });
 
   final _BriefingActivityItem item;
+  final bool isLast;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final rowHeight = item.subtitle.trim().isEmpty ? 46.0 : 58.0;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+      borderRadius: BorderRadius.circular(7),
+      child: SizedBox(
+        height: rowHeight,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: item.accent.withValues(alpha: 0.09),
-                borderRadius: BorderRadius.circular(7),
-              ),
-              alignment: Alignment.center,
-              child: Icon(item.icon, size: 16, color: item.accent),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            SizedBox(
+              width: 32,
+              child: Stack(
+                alignment: Alignment.topCenter,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight:
-                                item.unread ? FontWeight.w700 : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (item.unread)
-                        Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.only(left: 6),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (item.subtitle.trim().isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      item.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  if (!isLast)
+                    Positioned(
+                      top: 28,
+                      bottom: 0,
+                      child: Container(
+                        width: 1,
+                        color: item.accent.withValues(alpha: 0.25),
                       ),
                     ),
-                  ],
+                  Positioned(
+                    top: 8,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: item.accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: item.accent.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(item.icon, size: 14, color: item.accent),
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              _compactTime(item.createdAt),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 7, bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: item.unread
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (item.unread) ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: item.accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          _compactTime(item.createdAt),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (item.subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -1035,19 +1387,34 @@ class _ActivityRow extends StatelessWidget {
 }
 
 class _QuietState extends StatelessWidget {
-  const _QuietState({required this.icon, required this.text});
+  const _QuietState({
+    required this.icon,
+    required this.text,
+    this.accent,
+  });
 
   final IconData icon;
   final String text;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final resolvedAccent = accent ?? theme.colorScheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: resolvedAccent.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 15, color: resolvedAccent),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1080,6 +1447,25 @@ class _InlineError extends StatelessWidget {
         TextButton(onPressed: onRetry, child: const Text('Reintentar')),
       ],
     );
+  }
+}
+
+String _weekdayLabel(int weekday) {
+  switch (weekday) {
+    case DateTime.monday:
+      return 'L';
+    case DateTime.tuesday:
+      return 'M';
+    case DateTime.wednesday:
+      return 'X';
+    case DateTime.thursday:
+      return 'J';
+    case DateTime.friday:
+      return 'V';
+    case DateTime.saturday:
+      return 'S';
+    default:
+      return 'D';
   }
 }
 
