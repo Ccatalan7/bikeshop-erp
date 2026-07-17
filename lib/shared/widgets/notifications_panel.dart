@@ -137,6 +137,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   final AppFileStorageService _filesService = AppFileStorageService.instance;
 
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
+  _ActivityFilter _activityFilter = _ActivityFilter.all;
   List<AppStoredFile> _files = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
   bool _loadingFiles = true;
@@ -208,7 +209,13 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
             final periodFiles = _files
                 .where((file) => digest.contains(file.createdAt))
                 .toList(growable: false);
-            final activity = _buildActivity(rows, _mail.emails, chat, digest);
+            final activity = _buildActivity(
+              rows,
+              _mail.emails,
+              chat,
+              periodFiles,
+              digest,
+            );
             final unreadEmails = _mail.emails
                 .where(
                   (email) =>
@@ -307,6 +314,10 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             child: _ActivitySection(
                               items: activity,
                               period: _period,
+                              filter: _activityFilter,
+                              onFilterChanged: (filter) {
+                                setState(() => _activityFilter = filter);
+                              },
                               onTap: (item) {
                                 final notificationId = item.notificationId;
                                 if (notificationId != null) {
@@ -337,6 +348,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     List<Map<String, dynamic>> rows,
     List<Email> emails,
     ChatProvider chat,
+    List<AppStoredFile> files,
     NotificationDigestSnapshot digest,
   ) {
     final items = <_BriefingActivityItem>[];
@@ -357,6 +369,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
               : '/',
           icon: _iconForNotificationType(type),
           accent: _accentForNotificationType(type),
+          kind: _kindForNotificationType(type),
           unread: row['read_at'] == null,
           notificationId: row['id']?.toString(),
         ),
@@ -378,6 +391,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           route: '/mail',
           icon: Icons.mail_outline,
           accent: _mailAccent,
+          kind: _BriefingActivityKind.email,
           unread: !email.isRead,
         ),
       );
@@ -398,9 +412,28 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           route: '/chat',
           icon: Icons.chat_bubble_outline,
           accent: _chatAccent,
+          kind: _BriefingActivityKind.chat,
           unread: conversation.unreadCount > 0 ||
               (conversation.type == 'support' &&
                   conversation.status == 'pending'),
+        ),
+      );
+    }
+
+    for (final file in files) {
+      final contextLabel = file.contextTitle?.trim();
+      items.add(
+        _BriefingActivityItem(
+          title: file.fileName,
+          subtitle: contextLabel == null || contextLabel.isEmpty
+              ? file.sourceType
+              : contextLabel,
+          createdAt: file.createdAt.toLocal(),
+          route: '/storage',
+          icon: _iconForFile(file),
+          accent: _filesAccent,
+          kind: _BriefingActivityKind.file,
+          unread: false,
         ),
       );
     }
@@ -425,6 +458,125 @@ const _filesAccent = Color(0xFFC4772D);
 const _mailAccent = Color(0xFF3D6FA8);
 const _chatAccent = Color(0xFF7559A5);
 const _warningAccent = Color(0xFFC27A22);
+
+enum _BriefingActivityKind { job, payment, order, email, chat, file, alert }
+
+enum _ActivityFilter {
+  all,
+  jobs,
+  payments,
+  emails,
+  chats,
+  orders,
+  files,
+  alerts
+}
+
+extension _ActivityFilterPresentation on _ActivityFilter {
+  String get label {
+    switch (this) {
+      case _ActivityFilter.all:
+        return 'Todo';
+      case _ActivityFilter.jobs:
+        return 'Trabajos';
+      case _ActivityFilter.payments:
+        return 'Pagos';
+      case _ActivityFilter.emails:
+        return 'Correos';
+      case _ActivityFilter.chats:
+        return 'Chats';
+      case _ActivityFilter.orders:
+        return 'Pedidos';
+      case _ActivityFilter.files:
+        return 'Archivos';
+      case _ActivityFilter.alerts:
+        return 'Alertas';
+    }
+  }
+
+  String get emptyLabel {
+    switch (this) {
+      case _ActivityFilter.all:
+        return 'No hay actividad registrada en este período.';
+      case _ActivityFilter.jobs:
+        return 'No hay trabajos registrados en este período.';
+      case _ActivityFilter.payments:
+        return 'No hay pagos registrados en este período.';
+      case _ActivityFilter.emails:
+        return 'No hay correos registrados en este período.';
+      case _ActivityFilter.chats:
+        return 'No hay chats registrados en este período.';
+      case _ActivityFilter.orders:
+        return 'No hay pedidos registrados en este período.';
+      case _ActivityFilter.files:
+        return 'No hay archivos registrados en este período.';
+      case _ActivityFilter.alerts:
+        return 'No hay otras alertas en este período.';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _ActivityFilter.all:
+        return Icons.view_timeline_outlined;
+      case _ActivityFilter.jobs:
+        return Icons.build_outlined;
+      case _ActivityFilter.payments:
+        return Icons.payments_outlined;
+      case _ActivityFilter.emails:
+        return Icons.mail_outline;
+      case _ActivityFilter.chats:
+        return Icons.chat_bubble_outline;
+      case _ActivityFilter.orders:
+        return Icons.shopping_bag_outlined;
+      case _ActivityFilter.files:
+        return Icons.folder_open_outlined;
+      case _ActivityFilter.alerts:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  Color get accent {
+    switch (this) {
+      case _ActivityFilter.all:
+      case _ActivityFilter.jobs:
+        return _jobsAccent;
+      case _ActivityFilter.payments:
+        return _paymentsAccent;
+      case _ActivityFilter.emails:
+        return _mailAccent;
+      case _ActivityFilter.chats:
+        return _chatAccent;
+      case _ActivityFilter.orders:
+        return _ordersAccent;
+      case _ActivityFilter.files:
+        return _filesAccent;
+      case _ActivityFilter.alerts:
+        return _warningAccent;
+    }
+  }
+
+  bool includes(_BriefingActivityKind kind) {
+    switch (this) {
+      case _ActivityFilter.all:
+        return true;
+      case _ActivityFilter.jobs:
+        return kind == _BriefingActivityKind.job;
+      case _ActivityFilter.payments:
+        return kind == _BriefingActivityKind.payment;
+      case _ActivityFilter.emails:
+        return kind == _BriefingActivityKind.email;
+      case _ActivityFilter.chats:
+        return kind == _BriefingActivityKind.chat;
+      case _ActivityFilter.orders:
+        return kind == _BriefingActivityKind.order;
+      case _ActivityFilter.files:
+        return kind == _BriefingActivityKind.file;
+      case _ActivityFilter.alerts:
+        return kind == _BriefingActivityKind.alert;
+    }
+  }
+}
 
 class _BriefingToolbar extends StatelessWidget {
   const _BriefingToolbar({
@@ -1043,25 +1195,37 @@ class _ActivitySection extends StatelessWidget {
   const _ActivitySection({
     required this.items,
     required this.period,
+    required this.filter,
+    required this.onFilterChanged,
     required this.onTap,
   });
 
   final List<_BriefingActivityItem> items;
   final NotificationDigestPeriod period;
+  final _ActivityFilter filter;
+  final ValueChanged<_ActivityFilter> onFilterChanged;
   final ValueChanged<_BriefingActivityItem> onTap;
 
   @override
   Widget build(BuildContext context) {
-    final visibleItems = items.take(12).toList(growable: false);
+    final filteredItems = items
+        .where((item) => filter.includes(item.kind))
+        .toList(growable: false);
+    final visibleItems = filteredItems.take(12).toList(growable: false);
     return _OpenSection(
       title: 'Actividad reciente',
       trailing: period == NotificationDigestPeriod.today ? 'Hoy' : '7 días',
-      accent: _jobsAccent,
+      trailingWidget: _ActivityFilterMenu(
+        selected: filter,
+        items: items,
+        onSelected: onFilterChanged,
+      ),
+      accent: filter.accent,
       child: visibleItems.isEmpty
-          ? const _QuietState(
-              icon: Icons.inbox_outlined,
-              text: 'No hay actividad registrada en este período.',
-              accent: _jobsAccent,
+          ? _QuietState(
+              icon: filter.icon,
+              text: filter.emptyLabel,
+              accent: filter.accent,
             )
           : Column(
               children: [
@@ -1071,11 +1235,11 @@ class _ActivitySection extends StatelessWidget {
                     isLast: index == visibleItems.length - 1,
                     onTap: () => onTap(visibleItems[index]),
                   ),
-                if (items.length > visibleItems.length)
+                if (filteredItems.length > visibleItems.length)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Se muestran las 12 novedades más recientes.',
+                      'Se muestran los 12 movimientos más recientes.',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1088,18 +1252,141 @@ class _ActivitySection extends StatelessWidget {
   }
 }
 
+class _ActivityFilterMenu extends StatelessWidget {
+  const _ActivityFilterMenu({
+    required this.selected,
+    required this.items,
+    required this.onSelected,
+  });
+
+  final _ActivityFilter selected;
+  final List<_BriefingActivityItem> items;
+  final ValueChanged<_ActivityFilter> onSelected;
+
+  int _countFor(_ActivityFilter filter) {
+    return items.where((item) => filter.includes(item.kind)).length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFiltered = selected != _ActivityFilter.all;
+
+    return PopupMenuButton<_ActivityFilter>(
+      tooltip: 'Filtrar actividad',
+      initialValue: selected,
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 6),
+      elevation: 8,
+      color: theme.colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: theme.dividerColor.withValues(alpha: 0.65),
+        ),
+      ),
+      constraints: const BoxConstraints(minWidth: 205, maxWidth: 220),
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final filter in _ActivityFilter.values)
+          PopupMenuItem<_ActivityFilter>(
+            value: filter,
+            height: 42,
+            child: Row(
+              children: [
+                Icon(
+                  filter.icon,
+                  size: 17,
+                  color: filter == selected
+                      ? filter.accent
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    filter.label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: filter == selected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${_countFor(filter)}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 16,
+                  child: filter == selected
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: filter.accent,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Semantics(
+        button: true,
+        label: 'Filtrar actividad: ${selected.label}',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isFiltered ? selected.icon : Icons.filter_list_rounded,
+                size: 16,
+                color: isFiltered
+                    ? selected.accent
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                selected.label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: isFiltered
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: isFiltered ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 1),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OpenSection extends StatelessWidget {
   const _OpenSection({
     required this.title,
     required this.trailing,
     required this.accent,
     required this.child,
+    this.trailingWidget,
   });
 
   final String title;
   final String trailing;
   final Color accent;
   final Widget child;
+  final Widget? trailingWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -1126,12 +1413,13 @@ class _OpenSection extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              trailing,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            trailingWidget ??
+                Text(
+                  trailing,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
           ],
         ),
         const SizedBox(height: 9),
@@ -1282,7 +1570,7 @@ class _ActivityRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final rowHeight = item.subtitle.trim().isEmpty ? 46.0 : 58.0;
+    final rowHeight = item.subtitle.trim().isEmpty ? 46.0 : 72.0;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(7),
@@ -1477,6 +1765,7 @@ class _BriefingActivityItem {
     required this.route,
     required this.icon,
     required this.accent,
+    required this.kind,
     required this.unread,
     this.notificationId,
   });
@@ -1487,6 +1776,7 @@ class _BriefingActivityItem {
   final String route;
   final IconData icon;
   final Color accent;
+  final _BriefingActivityKind kind;
   final bool unread;
   final String? notificationId;
 }
@@ -1516,13 +1806,31 @@ IconData _iconForNotificationType(String type) {
   }
 }
 
+_BriefingActivityKind _kindForNotificationType(String type) {
+  switch (type) {
+    case 'mechanic_job_created':
+      return _BriefingActivityKind.job;
+    case 'sales_payment_received':
+      return _BriefingActivityKind.payment;
+    case 'online_order_created':
+      return _BriefingActivityKind.order;
+    default:
+      return _BriefingActivityKind.alert;
+  }
+}
+
 Color _accentForNotificationType(String type) {
   switch (type) {
+    case 'mechanic_job_created':
+      return _jobsAccent;
     case 'sales_payment_received':
+      return _paymentsAccent;
+    case 'online_order_created':
+      return _ordersAccent;
     case 'whatsapp_catalog_approved':
-      return const Color(0xFF2E7D32);
+      return _paymentsAccent;
     default:
-      return const Color(0xFF4B5563);
+      return _warningAccent;
   }
 }
 
