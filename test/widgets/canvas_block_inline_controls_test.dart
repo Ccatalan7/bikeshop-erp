@@ -119,25 +119,25 @@ void main() {
     expect(
         find.byKey(const ValueKey('rotation_handle_image-1')), findsOneWidget);
 
+    await tester.tap(find.byKey(const ValueKey('toolbar_more')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar_rotate_90')));
     await tester.pump();
     expect((latest.single['rotation'] as num).toDouble(), 90);
 
-    await tester.tap(find.byKey(const ValueKey('toolbar_more')));
+    await tester.tap(find.byKey(const ValueKey('toolbar_back')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('toolbar_arrange')));
     await tester.pump();
     expect(find.byKey(const ValueKey('toolbar_align_left')), findsOneWidget);
+    expect(find.byKey(const ValueKey('toolbar_send_to_back')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('toolbar_bring_to_front')), findsOneWidget);
     expect(find.byType(PopupMenuButton), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('toolbar_align_left')));
     await tester.pump();
     expect((latest.single['x'] as num).toDouble(), 0);
-
-    await tester.tap(find.byKey(const ValueKey('toolbar_layers')));
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey('toolbar_back_to_align')),
-      findsOneWidget,
-    );
     expect(tester.takeException(), isNull);
     await tester.pump(const Duration(milliseconds: 100));
   });
@@ -285,16 +285,31 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('toolbar_more')));
+    final arrange = find.byKey(const ValueKey('toolbar_arrange'));
+    await tester.ensureVisible(arrange);
     await tester.pump();
-    expect(find.byKey(const ValueKey('toolbar_align_left')), findsOneWidget);
+    await tester.tap(arrange);
+    await tester.pump();
+    final alignLeft = find.byKey(const ValueKey('toolbar_align_left'));
+    expect(alignLeft, findsOneWidget);
+    await tester.ensureVisible(alignLeft);
+    await tester.pump();
+    await tester.tap(alignLeft);
+    await tester.pump();
+    expect((latest.single['x'] as num).toDouble(), 0);
     expect(find.byType(PopupMenuButton), findsNothing);
     expect(find.byType(Tooltip), findsNothing);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('toolbar_back')));
+    final back = find.byKey(const ValueKey('toolbar_back'));
+    await tester.ensureVisible(back);
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('toolbar_delete')));
+    await tester.tap(back);
+    await tester.pump();
+    final delete = find.byKey(const ValueKey('toolbar_delete'));
+    await tester.ensureVisible(delete);
+    await tester.pump();
+    await tester.tap(delete);
     await tester.pump();
     expect(latest, isEmpty);
     expect(tester.takeException(), isNull);
