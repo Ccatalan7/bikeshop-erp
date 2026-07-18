@@ -31,8 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFF9A3412),
-                      Color(0xFFC2410C),
+                      Color(0xFF1565C0),
+                      Color(0xFF1976D2),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 child: Stack(
                   children: [
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -52,12 +52,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Sistema completo de gestión para tu tienda de bicicletas',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white,
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
                       ],
